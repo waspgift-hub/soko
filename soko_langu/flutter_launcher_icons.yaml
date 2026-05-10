@@ -1,0 +1,11 @@
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/soko_langu_logo.png"
+  web:
+    generate: true
+    background_color: "#4CAF50"
+  windows:
+    generate: true
+    image_path: "assets/soko_langu_logo.png"
+    icon_size: 48
