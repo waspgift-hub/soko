@@ -33,8 +33,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
         .where("participants", arrayContains: user.uid)
         .snapshots()
         .listen((convSnapshot) {
-      _rebuildNotifications(convSnapshot.docs);
-    });
+          _rebuildNotifications(convSnapshot.docs);
+        });
   }
 
   Future<void> _rebuildNotifications(
@@ -63,18 +63,20 @@ class _NotificationScreenState extends State<NotificationScreen> {
             ? (data['lastMessageTime'] as Timestamp).toDate()
             : DateTime.now();
 
-        notifications.add(NotificationItem(
-          id: 'chat_${doc.id}',
-          type: 'chat',
-          title: otherName,
-          body: lastMsg,
-          timestamp: lastTime,
-          otherUserId: otherId,
-          otherUserName: otherName,
-          otherUserImage: data['otherUserImage'] as String?,
-          isRead: false,
-          unreadCount: unread,
-        ));
+        notifications.add(
+          NotificationItem(
+            id: 'chat_${doc.id}',
+            type: 'chat',
+            title: otherName,
+            body: lastMsg,
+            timestamp: lastTime,
+            otherUserId: otherId,
+            otherUserName: otherName,
+            otherUserImage: data['otherUserImage'] as String?,
+            isRead: false,
+            unreadCount: unread,
+          ),
+        );
       }
     }
 
@@ -97,17 +99,19 @@ class _NotificationScreenState extends State<NotificationScreen> {
               : DateTime.now();
           final images = List<String>.from(data['images'] ?? []);
 
-          notifications.add(NotificationItem(
-            id: 'product_${doc.id}',
-            type: 'product',
-            title: data['sellerName'] ?? 'Seller',
-            body: data['name'] ?? '',
-            timestamp: created,
-            otherUserId: sellerId,
-            otherUserName: data['sellerName'] as String?,
-            productId: doc.id,
-            productImage: images.isNotEmpty ? images.first : null,
-          ));
+          notifications.add(
+            NotificationItem(
+              id: 'product_${doc.id}',
+              type: 'product',
+              title: data['sellerName'] ?? 'Seller',
+              body: data['name'] ?? '',
+              timestamp: created,
+              otherUserId: sellerId,
+              otherUserName: data['sellerName'] as String?,
+              productId: doc.id,
+              productImage: images.isNotEmpty ? images.first : null,
+            ),
+          );
         }
       } catch (_) {}
     }
@@ -124,38 +128,40 @@ class _NotificationScreenState extends State<NotificationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: Text(context.tr('notifications')),
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _notifications.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.notifications_none,
-                          size: 64, color: Colors.grey[400]),
-                      const SizedBox(height: 16),
-                      Text(
-                        context.tr('no_notifications'),
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.separated(
-                  itemCount: _notifications.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final notif = _notifications[index];
-                    return _buildNotificationTile(notif);
-                  },
+      appBar: AppBar(title: Text(context.tr('notifications'))),
+      body: SafeArea(
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _notifications.isEmpty
+            ? Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.notifications_none,
+                      size: 64,
+                      color: Colors.grey[400],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      context.tr('no_notifications'),
+                      style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                    ),
+                  ],
                 ),
+              )
+            : ListView.separated(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).padding.bottom + 20,
+                ),
+                itemCount: _notifications.length,
+                separatorBuilder: (_, _) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final notif = _notifications[index];
+                  return _buildNotificationTile(notif);
+                },
+              ),
+      ),
     );
   }
 
@@ -180,17 +186,16 @@ class _NotificationScreenState extends State<NotificationScreen> {
       title: Text(
         notif.title,
         style: TextStyle(
-          fontWeight: notif.unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
+          fontWeight: notif.unreadCount > 0
+              ? FontWeight.bold
+              : FontWeight.normal,
         ),
       ),
       subtitle: Text(
         notif.body,
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: Colors.grey[600],
-          fontSize: 13,
-        ),
+        style: TextStyle(color: Colors.grey[600], fontSize: 13),
       ),
       trailing: notif.unreadCount > 0
           ? Container(

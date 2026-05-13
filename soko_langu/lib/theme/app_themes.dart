@@ -11,14 +11,14 @@ ThemeData buildFreeTheme() {
   );
   return _base(Brightness.light).copyWith(
     colorScheme: scheme,
-    scaffoldBackgroundColor: Colors.white,
+    scaffoldBackgroundColor: const Color(0xFFF0F9F1),
     appBarTheme: AppBarTheme(
-      backgroundColor: Colors.white,
-      foregroundColor: scheme.onSurface,
+      backgroundColor: Colors.transparent,
+      foregroundColor: const Color(0xFF2D6A4F),
       elevation: 0,
       centerTitle: true,
-      titleTextStyle: TextStyle(
-        color: scheme.onSurface,
+      titleTextStyle: const TextStyle(
+        color: Color(0xFF2D6A4F),
         fontSize: 20,
         fontWeight: FontWeight.bold,
       ),
@@ -46,11 +46,11 @@ ThemeData buildFreeTheme() {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
     ),
     bottomNavigationBarTheme: BottomNavigationBarThemeData(
-      backgroundColor: Colors.white,
-      selectedItemColor: scheme.primary,
+      backgroundColor: const Color(0xFFF0F9F1),
+      selectedItemColor: const Color(0xFF2D6A4F),
       unselectedItemColor: Colors.grey[400],
       type: BottomNavigationBarType.fixed,
-      elevation: 8,
+      elevation: 0,
       selectedLabelStyle: const TextStyle(
         fontWeight: FontWeight.w600,
         fontSize: 12,
@@ -99,14 +99,14 @@ ThemeData buildSilverTheme() {
   );
   return _base(Brightness.light).copyWith(
     colorScheme: scheme,
-    scaffoldBackgroundColor: Colors.white,
+    scaffoldBackgroundColor: const Color(0xFFF0F9F1),
     appBarTheme: AppBarTheme(
-      backgroundColor: Colors.white,
-      foregroundColor: scheme.onSurface,
+      backgroundColor: Colors.transparent,
+      foregroundColor: const Color(0xFF2D6A4F),
       elevation: 0,
       centerTitle: true,
-      titleTextStyle: TextStyle(
-        color: scheme.onSurface,
+      titleTextStyle: const TextStyle(
+        color: Color(0xFF2D6A4F),
         fontSize: 20,
         fontWeight: FontWeight.bold,
       ),
@@ -135,11 +135,11 @@ ThemeData buildSilverTheme() {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
     ),
     bottomNavigationBarTheme: BottomNavigationBarThemeData(
-      backgroundColor: Colors.white,
-      selectedItemColor: scheme.primary,
+      backgroundColor: const Color(0xFFF0F9F1),
+      selectedItemColor: const Color(0xFF2D6A4F),
       unselectedItemColor: Colors.grey[400],
       type: BottomNavigationBarType.fixed,
-      elevation: 12,
+      elevation: 0,
       selectedLabelStyle: const TextStyle(
         fontWeight: FontWeight.w600,
         fontSize: 12,
@@ -188,14 +188,14 @@ ThemeData buildPremiumTheme() {
   );
   return _base(Brightness.light).copyWith(
     colorScheme: scheme,
-    scaffoldBackgroundColor: Colors.white,
+    scaffoldBackgroundColor: const Color(0xFFF0F9F1),
     appBarTheme: AppBarTheme(
-      backgroundColor: Colors.white,
-      foregroundColor: scheme.onSurface,
+      backgroundColor: Colors.transparent,
+      foregroundColor: const Color(0xFF2D6A4F),
       elevation: 0,
       centerTitle: true,
-      titleTextStyle: TextStyle(
-        color: scheme.onSurface,
+      titleTextStyle: const TextStyle(
+        color: Color(0xFF2D6A4F),
         fontSize: 22,
         fontWeight: FontWeight.bold,
       ),
@@ -224,11 +224,11 @@ ThemeData buildPremiumTheme() {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
     ),
     bottomNavigationBarTheme: BottomNavigationBarThemeData(
-      backgroundColor: Colors.white,
-      selectedItemColor: scheme.primary,
+      backgroundColor: const Color(0xFFF0F9F1),
+      selectedItemColor: const Color(0xFF2D6A4F),
       unselectedItemColor: Colors.grey[400],
       type: BottomNavigationBarType.fixed,
-      elevation: 16,
+      elevation: 0,
       selectedLabelStyle: const TextStyle(
         fontWeight: FontWeight.w700,
         fontSize: 12,

@@ -1,11 +1,11 @@
 package com.example.soko_langu
 
 import android.provider.MediaStore
-import io.flutter.embedding.android.FlutterActivity
+import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
-class MainActivity : FlutterActivity() {
+class MainActivity : AudioServiceActivity() {
     private val CHANNEL = "soko_lang/video_query"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {

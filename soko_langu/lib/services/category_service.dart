@@ -3,22 +3,29 @@ import '../models/category_model.dart';
 
 class CategoryService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  List<Category>? _cached;
+  Stream<List<Category>>? _cachedStream;
 
   // =========================
   // 📡 GET ALL CATEGORIES
   // =========================
   Stream<List<Category>> getCategories() {
-    return _db
-        .collection("categories")
-        .snapshots()
-        .map((snapshot) {
-          final cats = snapshot.docs
-              .map((doc) => Category.fromFirestore(doc))
-              .toList();
-          cats.sort((a, b) => a.order.compareTo(b.order));
-          return cats.where((c) => c.isActive).toList();
-        });
+    if (_cachedStream != null) return _cachedStream!;
+    _cachedStream = _db.collection("categories").snapshots().map((snapshot) {
+      if (snapshot.docs.isEmpty) {
+        return getDefaultCategories();
+      }
+      final cats = snapshot.docs
+          .map((doc) => Category.fromFirestore(doc))
+          .toList();
+      cats.sort((a, b) => a.order.compareTo(b.order));
+      _cached = cats.where((c) => c.isActive).toList();
+      return _cached!;
+    });
+    return _cachedStream!;
   }
+
+  List<Category> get cached => _cached ?? [];
 
   // =========================
   // 📦 GET CATEGORY BY ID

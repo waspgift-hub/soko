@@ -38,7 +38,6 @@ class ChatService {
 
       final conversationId = _getConversationId(sender.uid, receiverId);
 
-      // Add message
       await _db
           .collection("conversations")
           .doc(conversationId)
@@ -49,21 +48,72 @@ class ChatService {
             'content': content,
             'timestamp': FieldValue.serverTimestamp(),
             'isRead': false,
+            'isEdited': false,
             'productId': productId,
             'productName': productName,
           });
 
-      // Update conversation
       await _db.collection("conversations").doc(conversationId).set({
         'participants': [sender.uid, receiverId],
         'lastMessage': content,
         'lastMessageTime': FieldValue.serverTimestamp(),
-        'otherUserName': sender.displayName ?? sender.email ?? '',
-        'otherUserImage': sender.photoURL,
         'unreadCount': FieldValue.increment(1),
       }, SetOptions(merge: true));
     } catch (e) {
       throw Exception("Failed to send message: $e");
+    }
+  }
+
+  // =========================
+  // ✏️ EDIT MESSAGE
+  // =========================
+  Future<void> editMessage({
+    required String otherUserId,
+    required String messageId,
+    required String newContent,
+  }) async {
+    try {
+      final currentUser = _auth.currentUser;
+      if (currentUser == null) throw Exception("User not logged in");
+
+      final conversationId = _getConversationId(currentUser.uid, otherUserId);
+
+      await _db
+          .collection("conversations")
+          .doc(conversationId)
+          .collection("messages")
+          .doc(messageId)
+          .update({'content': newContent, 'isEdited': true});
+
+      await _db.collection("conversations").doc(conversationId).update({
+        'lastMessage': newContent,
+      });
+    } catch (e) {
+      throw Exception("Failed to edit message: $e");
+    }
+  }
+
+  // =========================
+  // 🗑️ DELETE MESSAGE (soft delete)
+  // =========================
+  Future<void> deleteMessage({
+    required String otherUserId,
+    required String messageId,
+  }) async {
+    try {
+      final currentUser = _auth.currentUser;
+      if (currentUser == null) throw Exception("User not logged in");
+
+      final conversationId = _getConversationId(currentUser.uid, otherUserId);
+
+      await _db
+          .collection("conversations")
+          .doc(conversationId)
+          .collection("messages")
+          .doc(messageId)
+          .update({'content': 'deleted', 'isEdited': false});
+    } catch (e) {
+      throw Exception("Failed to delete message: $e");
     }
   }
 
@@ -98,13 +148,72 @@ class ChatService {
     return _db
         .collection("conversations")
         .where("participants", arrayContains: currentUser.uid)
-        .orderBy("lastMessageTime", descending: true)
         .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
+        .map((snapshot) {
+          final list = snapshot.docs
               .map((doc) => Conversation.fromFirestore(doc))
-              .toList(),
-        );
+              .toList();
+          list.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
+          return list;
+        });
+  }
+
+  // =========================
+  // 🗑️ DELETE CONVERSATION
+  // =========================
+  Future<void> deleteConversation(String otherUserId) async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) throw Exception("Not logged in");
+    final conversationId = _getConversationId(currentUser.uid, otherUserId);
+
+    final messages = await _db
+        .collection("conversations")
+        .doc(conversationId)
+        .collection("messages")
+        .get();
+
+    final batch = _db.batch();
+    for (var msg in messages.docs) {
+      batch.delete(msg.reference);
+    }
+    batch.delete(_db.collection("conversations").doc(conversationId));
+    await batch.commit();
+  }
+
+  // =========================
+  // ✅ MARK MESSAGES AS READ
+  // =========================
+  // =========================
+  // ⌨️ TYPING INDICATOR
+  // =========================
+  Future<void> startTyping(String otherUserId) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+    final convId = _getConversationId(user.uid, otherUserId);
+    await _db.collection("conversations").doc(convId).set({
+      'typing_${user.uid}': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> stopTyping(String otherUserId) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+    final convId = _getConversationId(user.uid, otherUserId);
+    await _db.collection("conversations").doc(convId).update({
+      'typing_${user.uid}': null,
+    });
+  }
+
+  Stream<bool> typingStream(String otherUserId) {
+    final user = _auth.currentUser;
+    if (user == null) return Stream.value(false);
+    final convId = _getConversationId(user.uid, otherUserId);
+    return _db.collection("conversations").doc(convId).snapshots().map((snap) {
+      if (!snap.exists) return false;
+      final data = snap.data();
+      if (data == null) return false;
+      return data['typing_$otherUserId'] != null;
+    });
   }
 
   // =========================
@@ -131,7 +240,6 @@ class ChatService {
       }
       await batch.commit();
 
-      // Reset unread count
       await _db.collection("conversations").doc(conversationId).update({
         'unreadCount': 0,
       });

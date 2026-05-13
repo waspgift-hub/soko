@@ -17,6 +17,9 @@ class UserProfile {
   final Map<String, String> paymentNumbers;
   final String accountTier;
   final DateTime? premiumUntil;
+  final String shopBanner;
+  final String shopBannerColor;
+  final String shopAccentColor;
 
   UserProfile({
     required this.uid,
@@ -33,6 +36,9 @@ class UserProfile {
     this.paymentNumbers = const {},
     this.accountTier = 'free',
     this.premiumUntil,
+    this.shopBanner = '',
+    this.shopBannerColor = '',
+    this.shopAccentColor = '',
   });
 
   bool get isPaid => accountTier != 'free';
@@ -64,6 +70,9 @@ class UserProfile {
       paymentNumbers: Map<String, String>.from(data['paymentNumbers'] ?? {}),
       accountTier: tier,
       premiumUntil: until,
+      shopBanner: data['shopBanner'] ?? '',
+      shopBannerColor: data['shopBannerColor'] ?? '',
+      shopAccentColor: data['shopAccentColor'] ?? '',
     );
   }
 
@@ -84,6 +93,9 @@ class UserProfile {
     'premiumUntil': premiumUntil != null
         ? Timestamp.fromDate(premiumUntil!)
         : null,
+    'shopBanner': shopBanner,
+    'shopBannerColor': shopBannerColor,
+    'shopAccentColor': shopAccentColor,
   };
 }
 
@@ -221,6 +233,24 @@ class UserService {
         .count()
         .get();
     return snap.count ?? 0;
+  }
+
+  Future<List<UserProfile>> searchUsers(String query) async {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return [];
+    final snap = await _db.collection('users').get();
+    final results = snap.docs.where((doc) {
+      final name = (doc.data()['displayName'] as String? ?? '').toLowerCase();
+      final username = (doc.data()['username'] as String? ?? '').toLowerCase();
+      return name.contains(q) || username.contains(q);
+    });
+    return results
+        .map((doc) => UserProfile.fromMap(doc.id, doc.data()))
+        .toList();
+  }
+
+  Future<void> updateStorefront(String uid, Map<String, dynamic> data) async {
+    await _db.collection('users').doc(uid).update(data);
   }
 
   Future<void> autoDowngradeExpired(String uid) async {

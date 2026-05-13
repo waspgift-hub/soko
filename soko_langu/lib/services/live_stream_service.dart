@@ -5,6 +5,7 @@ class LiveStream {
   final String channelName;
   final String userId;
   final String userName;
+  final String userTier;
   final String productId;
   final String productName;
   final String? productImage;
@@ -15,6 +16,7 @@ class LiveStream {
     required this.channelName,
     required this.userId,
     required this.userName,
+    this.userTier = 'free',
     required this.productId,
     required this.productName,
     this.productImage,
@@ -27,6 +29,7 @@ class LiveStream {
       channelName: id,
       userId: data['userId'] ?? '',
       userName: data['userName'] ?? '',
+      userTier: data['userTier'] as String? ?? 'free',
       productId: data['productId'] ?? '',
       productName: data['productName'] ?? '',
       productImage: data['productImage'],
@@ -44,16 +47,19 @@ class LiveStreamService {
     required String productId,
     required String productName,
     String? productImage,
+    String? channelName,
   }) async {
     final user = _auth.currentUser;
     if (user == null) throw Exception('Not authenticated');
 
-    final channelName =
-        'live_${user.uid}_${DateTime.now().millisecondsSinceEpoch}';
+    channelName ??= 'live_${user.uid}_${DateTime.now().millisecondsSinceEpoch}';
 
+    final userDoc = await _db.collection('users').doc(user.uid).get();
+    final tier = userDoc.data()?['accountTier'] as String? ?? 'free';
     await _db.collection('live_streams').doc(channelName).set({
       'userId': user.uid,
       'userName': user.displayName ?? user.email ?? 'Seller',
+      'userTier': tier,
       'productId': productId,
       'productName': productName,
       'productImage': productImage,

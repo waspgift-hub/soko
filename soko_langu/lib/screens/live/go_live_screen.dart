@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -6,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../services/agora_config.dart';
 import '../../services/live_stream_service.dart';
 import '../../utils/helpers.dart';
+import '../../extensions/context_tr.dart';
 
 class GoLiveScreen extends StatefulWidget {
   final String productId;
@@ -29,7 +31,10 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
   bool _isMuted = false;
   bool _isCameraOn = true;
   bool _streamEnded = false;
+  bool _isStarting = false;
+  bool _engineReady = false;
   String? _channelName;
+  String? _prefetchedToken;
   final _chatScroll = ScrollController();
   int _reactionCount = 0;
 
@@ -37,6 +42,19 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
   void initState() {
     super.initState();
     _initAgora();
+    _prefetchToken();
+  }
+
+  Future<void> _prefetchToken() async {
+    try {
+      final channelName =
+          'live_${FirebaseAuth.instance.currentUser?.uid}_${DateTime.now().millisecondsSinceEpoch}';
+      _channelName = channelName;
+      _prefetchedToken = await getAgoraToken(
+        channelName: channelName,
+        role: 'broadcaster',
+      );
+    } catch (_) {}
   }
 
   @override
@@ -73,23 +91,46 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
         },
       ),
     );
+    if (mounted) setState(() => _engineReady = true);
   }
 
   Future<void> _startLive() async {
     if (_engine == null) return;
+    setState(() => _isStarting = true);
 
     try {
-      final channelName = await LiveStreamService().startLive(
-        productId: widget.productId,
-        productName: widget.productName,
-        productImage: widget.productImage,
-      );
-      _channelName = channelName;
+      final futures = <Future>[];
+      if (_channelName == null) {
+        futures.add(
+          LiveStreamService().startLive(
+            productId: widget.productId,
+            productName: widget.productName,
+            productImage: widget.productImage,
+          ),
+        );
+      } else {
+        futures.add(
+          LiveStreamService().startLive(
+            productId: widget.productId,
+            productName: widget.productName,
+            productImage: widget.productImage,
+            channelName: _channelName,
+          ),
+        );
+      }
 
-      final token = await getAgoraToken(
-        channelName: channelName,
-        role: 'broadcaster',
-      );
+      if (_prefetchedToken == null) {
+        futures.add(
+          getAgoraToken(channelName: _channelName ?? '', role: 'broadcaster'),
+        );
+      }
+
+      await Future.wait(futures);
+      final channelName = _channelName!;
+      final token =
+          _prefetchedToken ??
+          await getAgoraToken(channelName: channelName, role: 'broadcaster');
+
       await _engine?.joinChannel(
         token: token,
         channelId: channelName,
@@ -105,9 +146,10 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
       _listenReactions(channelName);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to start live: $e')));
+      setState(() => _isStarting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("${context.tr('failed_start_live')} $e")),
+      );
     }
   }
 
@@ -132,7 +174,7 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
 
   void _shareStream() {
     if (_channelName == null) return;
-    Share.share('Watch my live stream on Soko Langu! ${widget.productName}');
+    Share.share("${context.tr('share_live')} ${widget.productName}");
   }
 
   @override
@@ -146,37 +188,42 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
         final confirm = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('End Live?'),
+            title: Text(context.tr('end_live')),
             content: const Text(
               'Are you sure you want to end this live stream?',
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel'),
+                child: Text(context.tr('cancel')),
               ),
               ElevatedButton(
                 onPressed: () => Navigator.pop(ctx, true),
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                child: const Text('End', style: TextStyle(color: Colors.white)),
+                child: Text(
+                  context.tr('end_call'),
+                  style: const TextStyle(color: Colors.white),
+                ),
               ),
             ],
           ),
         );
         if (confirm == true && context.mounted) {
           await _endLive();
+          if (!context.mounted) return;
           Navigator.pop(context);
         }
       },
       child: Scaffold(
         backgroundColor: Colors.black,
+        resizeToAvoidBottomInset: true,
         body: SafeArea(
           child: Column(
             children: [
               Expanded(
                 child: Stack(
                   children: [
-                    if (_engine != null)
+                    if (_engineReady)
                       AgoraVideoView(
                         controller: VideoViewController(
                           rtcEngine: _engine!,
@@ -184,8 +231,14 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
                         ),
                       )
                     else
-                      const Center(
-                        child: CircularProgressIndicator(color: Colors.white),
+                      Center(
+                        child: Text(
+                          context.tr('preparing_camera'),
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 14,
+                          ),
+                        ),
                       ),
                     // Top bar
                     Positioned(
@@ -217,43 +270,51 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
   Widget _buildEndedScreen() {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.check_circle, color: Colors.green, size: 80),
-              const SizedBox(height: 20),
-              const Text(
-                'Stream Ended',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Your live stream for ${widget.productName} has ended.\nTotal reactions: $_reactionCount',
-                style: TextStyle(color: Colors.grey[400], fontSize: 14),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 32),
-              ElevatedButton.icon(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.arrow_back),
-                label: const Text('Go to Dashboard'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 32,
-                    vertical: 14,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).padding.bottom + 20,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.check_circle, color: Colors.green, size: 80),
+                  const SizedBox(height: 20),
+                  Text(
+                    context.tr('stream_ended'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Your live stream for ${widget.productName} has ended.\nTotal reactions: $_reactionCount',
+                    style: TextStyle(color: Colors.grey[400], fontSize: 14),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 32),
+                  ElevatedButton.icon(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.arrow_back),
+                    label: Text(context.tr('go_to_dashboard')),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 32,
+                        vertical: 14,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -283,7 +344,7 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
                   ),
                 ),
               Text(
-                _isLive ? 'LIVE' : 'Preview',
+                _isLive ? context.tr('live_tab') : 'Preview',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 12,
@@ -369,9 +430,11 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
   }
 
   Widget _buildPreLiveControls() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 24),
-      child: Column(
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 24),
+        child: Column(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -382,7 +445,7 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
               }),
               _ctrlBtn(
                 _isCameraOn ? Icons.videocam : Icons.videocam_off,
-                _isCameraOn ? 'Camera' : 'Off',
+                _isCameraOn ? context.tr('camera') : context.tr('off'),
                 () async {
                   await _engine?.muteLocalVideoStream(_isCameraOn);
                   setState(() => _isCameraOn = !_isCameraOn);
@@ -390,7 +453,7 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
               ),
               _ctrlBtn(
                 Icons.switch_camera,
-                'Switch',
+                context.tr('switch_camera'),
                 () => _engine?.switchCamera(),
               ),
             ],
@@ -399,20 +462,53 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
           SizedBox(
             width: double.infinity,
             height: 52,
-            child: ElevatedButton.icon(
-              onPressed: _startLive,
-              icon: const Icon(Icons.wifi_tethering),
-              label: const Text(
-                'Go Live Now',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-              ),
+            child: ElevatedButton(
+              onPressed: _isStarting ? null : _startLive,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,
                 foregroundColor: Colors.white,
+                disabledBackgroundColor: Colors.red.withValues(alpha: 0.5),
+                disabledForegroundColor: Colors.white70,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
               ),
+              child: _isStarting
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          context.tr('starting'),
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    )
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.wifi_tethering),
+                        const SizedBox(width: 8),
+                        Text(
+                          context.tr('go_live_now'),
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
             ),
           ),
         ],
@@ -422,7 +518,7 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
 
   Widget _buildChatSection() {
     return Container(
-      height: 200,
+      constraints: const BoxConstraints(maxHeight: 200),
       color: Colors.black87,
       child: Column(
         children: [
@@ -485,7 +581,7 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
                 const Icon(Icons.chat, color: Colors.white54, size: 16),
                 const SizedBox(width: 8),
                 Text(
-                  'Chat with viewers...',
+                  context.tr('chat_viewers'),
                   style: TextStyle(color: Colors.grey[500], fontSize: 13),
                 ),
               ],

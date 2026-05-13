@@ -12,8 +12,8 @@ class TransactionFeeBreakdown {
 
   TransactionFeeBreakdown({
     required this.productPrice,
-    this.processingFeePercent = 0.03,
-    this.platformFeePercent = 0.02,
+    this.processingFeePercent = 0,
+    this.platformFeePercent = 0,
   }) : processingFee = productPrice * processingFeePercent,
        platformFee = productPrice * platformFeePercent,
        totalFee = productPrice * (processingFeePercent + platformFeePercent),

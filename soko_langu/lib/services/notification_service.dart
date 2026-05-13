@@ -3,9 +3,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'api_config.dart';
+
+final FlutterLocalNotificationsPlugin localNotifications =
+    FlutterLocalNotificationsPlugin();
 
 class NotificationService {
   static const String _key = 'push_notifications_enabled';
@@ -14,6 +18,39 @@ class NotificationService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   static final GlobalKey<ScaffoldMessengerState> messengerKey =
       GlobalKey<ScaffoldMessengerState>();
+  static void Function(Map<String, dynamic> data)? onCallNotificationTap;
+
+  static Future<void> initLocalNotifications() async {
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
+    const iosSettings = DarwinInitializationSettings(
+      requestAlertPermission: false,
+      requestBadgePermission: false,
+      requestSoundPermission: false,
+    );
+    const settings = InitializationSettings(
+      android: androidSettings,
+      iOS: iosSettings,
+    );
+    await localNotifications.initialize(settings);
+
+    final androidChannel = AndroidNotificationChannel(
+      'incoming_calls',
+      'Incoming Calls',
+      description: 'Notifications for incoming voice and video calls',
+      importance: Importance.max,
+      playSound: true,
+      enableVibration: true,
+      showBadge: true,
+      enableLights: true,
+    );
+    await localNotifications
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.createNotificationChannel(androidChannel);
+  }
 
   Future<bool> isEnabled() async {
     final prefs = await SharedPreferences.getInstance();
@@ -33,6 +70,7 @@ class NotificationService {
         alert: true,
         badge: true,
         sound: true,
+        criticalAlert: true,
       );
 
       if (settings.authorizationStatus == AuthorizationStatus.authorized ||
@@ -44,6 +82,11 @@ class NotificationService {
 
         FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
         FirebaseMessaging.onBackgroundMessage(_backgroundHandler);
+        FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
+        final initialMsg = await _fcm.getInitialMessage();
+        if (initialMsg != null) {
+          _handleNotificationTap(initialMsg);
+        }
       }
     } catch (_) {}
   }
@@ -58,6 +101,10 @@ class NotificationService {
   }
 
   void _handleForegroundMessage(RemoteMessage message) {
+    final data = message.data;
+    if (data['type'] == 'call') {
+      return;
+    }
     final title = message.notification?.title ?? '';
     final body = message.notification?.body ?? '';
     if (title.isNotEmpty && messengerKey.currentContext != null) {
@@ -71,7 +118,51 @@ class NotificationService {
     }
   }
 
-  static Future<void> _backgroundHandler(RemoteMessage message) async {}
+  void _handleNotificationTap(RemoteMessage message) {
+    final data = message.data;
+    if (data['type'] == 'call' && onCallNotificationTap != null) {
+      onCallNotificationTap!(data);
+    }
+  }
+
+  static Future<void> _backgroundHandler(RemoteMessage message) async {
+    final data = message.data;
+    if (data['type'] == 'call') {
+      final title = data['callerName'] ?? 'Incoming Call';
+      final body = data['callType'] == 'video'
+          ? 'Incoming Video Call...'
+          : 'Incoming Voice Call...';
+      await localNotifications.show(
+        DateTime.now().millisecondsSinceEpoch % 100000,
+        '$title $body',
+        'Tap to answer',
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'incoming_calls',
+            'Incoming Calls',
+            channelDescription:
+                'Notifications for incoming voice and video calls',
+            importance: Importance.max,
+            priority: Priority.high,
+            playSound: true,
+            enableVibration: true,
+            channelShowBadge: true,
+            enableLights: true,
+            fullScreenIntent: true,
+            category: AndroidNotificationCategory.call,
+            visibility: NotificationVisibility.public,
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+            categoryIdentifier: 'incoming_call',
+          ),
+        ),
+        payload: jsonEncode(data),
+      );
+    }
+  }
 
   // =========================
   // 📤 SEND PUSH NOTIFICATION

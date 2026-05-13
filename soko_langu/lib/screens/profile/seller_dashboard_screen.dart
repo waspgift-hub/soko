@@ -14,6 +14,7 @@ import '../../models/transaction_model.dart';
 import '../live/go_live_screen.dart';
 import '../seller/earnings_dashboard.dart';
 import 'streamer_earnings_screen.dart';
+import 'shop_customization_screen.dart';
 
 class SellerDashboardScreen extends StatefulWidget {
   const SellerDashboardScreen({super.key});
@@ -32,121 +33,129 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     final user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(title: Text(context.tr('dashboard'))),
-      body: StreamBuilder<List<MarketplaceTransaction>>(
-        stream: _paymentService.getSellerTransactions(),
-        builder: (context, txSnap) {
-          final transactions = txSnap.data ?? [];
+      body: SafeArea(
+        child: StreamBuilder<List<MarketplaceTransaction>>(
+          stream: _paymentService.getSellerTransactions(),
+          builder: (context, txSnap) {
+            final transactions = txSnap.data ?? [];
 
-          return StreamBuilder<List<Order>>(
-            stream: _orderService.getReceivedOrders(),
-            builder: (context, orderSnap) {
-              final orders = orderSnap.data ?? [];
+            return StreamBuilder<List<Order>>(
+              stream: _orderService.getReceivedOrders(),
+              builder: (context, orderSnap) {
+                final orders = orderSnap.data ?? [];
 
-              return StreamBuilder<List<Product>>(
-                stream: _productService.getMyProducts(),
-                builder: (context, productSnap) {
-                  final productCount = productSnap.data?.length ?? 0;
-                  final pendingOrders = orders
-                      .where((o) => o.status == OrderStatus.pending)
-                      .length;
-                  final completedTx = transactions.where(
-                    (t) => t.status == TransactionStatus.completed,
-                  );
-                  final txRevenue = completedTx.fold<double>(
-                    0,
-                    (sum, t) => sum + t.sellerReceives,
-                  );
-                  final txCount = completedTx.length;
-                  return RefreshIndicator(
-                    onRefresh: () async => setState(() {}),
-                    child: ListView(
-                      padding: const EdgeInsets.all(16),
-                      children: [
-                        Row(
-                          children: [
-                            _statCard(
-                              context,
-                              Icons.inventory_2,
-                              productCount.toString(),
-                              context.tr('total_products'),
-                              Colors.blue,
-                            ),
-                            const SizedBox(width: 12),
-                            _statCard(
-                              context,
-                              Icons.receipt_long,
-                              '$txCount Sold',
-                              'Total Sales',
-                              Colors.orange,
-                            ),
-                          ],
+                return StreamBuilder<List<Product>>(
+                  stream: _productService.getMyProducts(),
+                  builder: (context, productSnap) {
+                    final productCount = productSnap.data?.length ?? 0;
+                    final pendingOrders = orders
+                        .where((o) => o.status == OrderStatus.pending)
+                        .length;
+                    final completedTx = transactions.where(
+                      (t) => t.status == TransactionStatus.completed,
+                    );
+                    final txRevenue = completedTx.fold<double>(
+                      0,
+                      (total, t) => total + t.sellerReceives,
+                    );
+                    final txCount = completedTx.length;
+                    return RefreshIndicator(
+                      onRefresh: () async => setState(() {}),
+                      child: ListView(
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          16,
+                          16,
+                          16 + MediaQuery.of(context).padding.bottom,
                         ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            _statCard(
-                              context,
-                              Icons.monetization_on,
-                              '\$${txRevenue.toStringAsFixed(2)}',
-                              'Amount Received',
-                              Colors.green,
-                            ),
-                            const SizedBox(width: 12),
-                            _statCard(
-                              context,
-                              Icons.hourglass_empty,
-                              pendingOrders.toString(),
-                              context.tr('pending'),
-                              Colors.red,
-                            ),
+                        children: [
+                          Row(
+                            children: [
+                              _statCard(
+                                context,
+                                Icons.inventory_2,
+                                productCount.toString(),
+                                context.tr('total_products'),
+                                Colors.blue,
+                              ),
+                              const SizedBox(width: 12),
+                              _statCard(
+                                context,
+                                Icons.receipt_long,
+                                '$txCount Sold',
+                                'Total Sales',
+                                Colors.orange,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              _statCard(
+                                context,
+                                Icons.monetization_on,
+                                '\$${txRevenue.toStringAsFixed(2)}',
+                                'Amount Received',
+                                Colors.green,
+                              ),
+                              const SizedBox(width: 12),
+                              _statCard(
+                                context,
+                                Icons.hourglass_empty,
+                                pendingOrders.toString(),
+                                context.tr('pending'),
+                                Colors.red,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          _buildEarningsCard(),
+                          const SizedBox(height: 16),
+                          _buildCustomizeShopButton(),
+                          const SizedBox(height: 16),
+                          _buildBoostButton(productSnap.data ?? []),
+                          const SizedBox(height: 16),
+                          _buildGoLiveButton(productSnap.data ?? []),
+                          const SizedBox(height: 16),
+                          _buildStreamerEarningsCard(),
+                          if (user?.email == 'admin@soko-langu.com') ...[
+                            const SizedBox(height: 16),
+                            _buildAdminSection(),
                           ],
-                        ),
-                        const SizedBox(height: 16),
-                        _buildEarningsCard(),
-                        const SizedBox(height: 16),
-                        _buildBoostButton(productSnap.data ?? []),
-                        const SizedBox(height: 16),
-                        _buildGoLiveButton(productSnap.data ?? []),
-                        const SizedBox(height: 16),
-                        _buildStreamerEarningsCard(),
-                        if (user?.email == 'admin@soko-langu.com') ...[
-                          const SizedBox(height: 16),
-                          _buildAdminSection(),
+                          if (transactions.isNotEmpty) ...[
+                            const SizedBox(height: 16),
+                            Text(
+                              'Transaction History',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 8),
+                            ...transactions
+                                .take(10)
+                                .map((tx) => _buildTransactionTile(tx)),
+                          ],
+                          if (orders.isNotEmpty) ...[
+                            const SizedBox(height: 16),
+                            Text(
+                              context.tr('recent_orders'),
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 8),
+                            ...orders
+                                .take(5)
+                                .map((order) => _buildOrderTile(order)),
+                          ],
                         ],
-                        if (transactions.isNotEmpty) ...[
-                          const SizedBox(height: 16),
-                          Text(
-                            'Transaction History',
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 8),
-                          ...transactions
-                              .take(10)
-                              .map((tx) => _buildTransactionTile(tx)),
-                        ],
-                        if (orders.isNotEmpty) ...[
-                          const SizedBox(height: 16),
-                          Text(
-                            context.tr('recent_orders'),
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 8),
-                          ...orders
-                              .take(5)
-                              .map((order) => _buildOrderTile(order)),
-                        ],
-                      ],
-                    ),
-                  );
-                },
-              );
-            },
-          );
-        },
+                      ),
+                    );
+                  },
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }
@@ -381,9 +390,9 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Streamer Earnings',
-                        style: TextStyle(
+                      Text(
+                        context.tr('streamer_earnings'),
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -409,6 +418,61 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildCustomizeShopButton() {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ShopCustomizationScreen()),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF2E7D32), Color(0xFF66BB6A)],
+          ),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white.withAlpha(40),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.store, color: Colors.white, size: 28),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Customize Shop',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Add banner & colors — Premium only',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.8),
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 18),
+          ],
+        ),
+      ),
     );
   }
 
@@ -438,9 +502,9 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Boost Listing',
-                    style: TextStyle(
+                  Text(
+                    context.tr('boost_listing'),
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -493,7 +557,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 height: 200,
                 child: ListView.separated(
                   itemCount: products.length,
-                  separatorBuilder: (_, __) => const Divider(),
+                  separatorBuilder: (_, _) => const Divider(),
                   itemBuilder: (_, i) {
                     final p = products[i];
                     final alreadyFeatured = p.isFeaturedValid;
@@ -549,10 +613,10 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
             const SizedBox(height: 12),
             TextField(
               controller: phoneController,
-              decoration: const InputDecoration(
-                labelText: 'Your M-Pesa/Airtel Phone',
+              decoration: InputDecoration(
+                labelText: context.tr('mpesa_phone'),
                 hintText: 'e.g. 0712345678',
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
               ),
               keyboardType: TextInputType.phone,
             ),
@@ -565,7 +629,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, phoneController.text.trim()),
-            child: const Text('Pay TZS 5,000'),
+            child: Text(context.tr('pay_boost')),
           ),
         ],
       ),
@@ -577,6 +641,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
+      if (!mounted) return;
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -595,6 +660,8 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
 
       if (mounted) Navigator.pop(context);
 
+      if (!mounted) return;
+
       final data = jsonDecode(resp.body);
       if (resp.statusCode == 200 && data['message'] != null) {
         ScaffoldMessenger.of(
@@ -607,9 +674,10 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       }
     } catch (e) {
       if (mounted) Navigator.pop(context);
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      ).showSnackBar(SnackBar(content: Text("${context.tr('error')}: $e")));
     }
   }
 
@@ -693,7 +761,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 height: 200,
                 child: ListView.separated(
                   itemCount: products.length,
-                  separatorBuilder: (_, __) => const Divider(),
+                  separatorBuilder: (_, _) => const Divider(),
                   itemBuilder: (_, i) {
                     final p = products[i];
                     return ListTile(

@@ -75,11 +75,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   Future<void> _loadStats() async {
     final stats = await _paymentService.getRevenueStats();
-    if (mounted)
+    if (mounted) {
       setState(() {
         _stats = stats;
         _loading = false;
       });
+    }
   }
 
   Future<void> _loadUsers() async {
@@ -140,7 +141,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text('Admin Panel'),
         bottom: TabBar(
@@ -154,7 +154,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           ],
         ),
       ),
-      body: TabBarView(
+      body: SafeArea(
+        child: TabBarView(
         controller: _tabController,
         children: [
           _buildUsersTab(),
@@ -188,6 +189,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           child: RefreshIndicator(
             onRefresh: _loadUsers,
             child: ListView.builder(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 8),
               itemCount: _users.length,
               itemBuilder: (_, i) {
                 final u = _users[i];
@@ -238,12 +240,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   ),
                 );
               },
-            ),
-          ),
         ),
-      ],
+        ),
+      ),
+      ),
+      ),
     );
   }
+}
 
   Future<void> _updateUser(String uid, String action) async {
     try {
@@ -286,8 +290,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   // PRODUCTS TAB
   // ============================================================
   Widget _buildProductsTab() {
-    if (_loadingProducts)
+    if (_loadingProducts) {
       return const Center(child: CircularProgressIndicator());
+    }
     return RefreshIndicator(
       onRefresh: _loadProducts,
       child: ListView.builder(
@@ -343,19 +348,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   Future<void> _updateProduct(String id, String action) async {
     try {
       Map<String, dynamic> body = {};
-      if (action == 'activate')
+      if (action == 'activate') {
         body = {'isActive': true};
-      else if (action == 'deactivate')
+      } else if (action == 'deactivate') {
         body = {'isActive': false};
-      else if (action == 'feature') {
+      } else if (action == 'feature') {
         body = {
           'isFeatured': true,
           'featuredUntil': Timestamp.fromDate(
             DateTime.now().add(const Duration(days: 30)),
           ),
         };
-      } else if (action == 'unfeature')
+      } else if (action == 'unfeature') {
         body = {'isFeatured': false, 'featuredUntil': null};
+      }
 
       await http.put(
         Uri.parse('${ApiConfig.baseUrl}/api/admin/products/$id'),

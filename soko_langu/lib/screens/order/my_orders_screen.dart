@@ -21,7 +21,6 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text(
           _showReceived
@@ -49,7 +48,8 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
           const SizedBox(width: 12),
         ],
       ),
-      body: StreamBuilder<List<Order>>(
+      body: SafeArea(
+        child: StreamBuilder<List<Order>>(
         stream: _showReceived
             ? _orderService.getReceivedOrders()
             : _orderService.getMyOrders(),
@@ -73,7 +73,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                   const SizedBox(height: 16),
                   Text(
                     _showReceived
-                        ? 'No received orders yet'
+                        ? context.tr('no_received_orders')
                         : context.tr('no_orders'),
                     style: TextStyle(
                       color: Theme.of(
@@ -87,7 +87,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
             );
           }
           return ListView.builder(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.fromLTRB(12, 12, 12, MediaQuery.of(context).padding.bottom + 12),
             itemCount: orders.length,
             itemBuilder: (context, index) {
               final order = orders[index];
@@ -125,7 +125,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                       const SizedBox(height: 4),
                       if (_showReceived)
                         Text(
-                          'Buyer: ${order.buyerName}',
+                          '${context.tr('buyer')}: ${order.buyerName}',
                           style: TextStyle(
                             color: Colors.grey[600],
                             fontSize: 13,
@@ -215,9 +215,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                               ),
                             ),
                             icon: const Icon(Icons.check_circle, size: 18),
-                            label: const Text(
-                              'Confirm — I Received the Payment',
-                            ),
+                            label: Text(context.tr('confirm_received_payment')),
                           ),
                         ),
                       ],
@@ -234,7 +232,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                               const SizedBox(width: 6),
                               Expanded(
                                 child: Text(
-                                  'Waiting for seller to confirm payment',
+                                  context.tr('waiting_seller_confirm'),
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: Colors.orange[700],
@@ -249,9 +247,11 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                 ),
               );
             },
-          );
-        },
+            );
+          },
+        ),
       ),
+      );
     );
   }
 
@@ -260,16 +260,14 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
       await _orderService.updateOrderStatus(orderId, OrderStatus.confirmed);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Payment confirmed! Order is now confirmed.'),
-          ),
+          SnackBar(content: Text(context.tr('payment_confirmed_success'))),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to confirm: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("${context.tr('confirm_failed')} $e")),
+        );
       }
     }
   }
@@ -333,7 +331,7 @@ class _ReviewButtonState extends State<_ReviewButton> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text("Write Review"),
+          title: Text(context.tr('write_review')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -354,9 +352,9 @@ class _ReviewButtonState extends State<_ReviewButton> {
               TextField(
                 controller: commentController,
                 maxLines: 3,
-                decoration: const InputDecoration(
-                  hintText: "Share your experience...",
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  hintText: context.tr('share_experience'),
+                  border: const OutlineInputBorder(),
                 ),
               ),
             ],
@@ -385,16 +383,16 @@ class _ReviewButtonState extends State<_ReviewButton> {
           orderId: widget.orderId,
         );
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text("Review submitted!")));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(context.tr('review_submitted'))),
+          );
           widget.onReviewed();
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(SnackBar(content: Text("Failed: $e")));
+          ).showSnackBar(SnackBar(content: Text("${context.tr('error')}: $e")));
         }
       } finally {
         if (mounted) setState(() => _loading = false);
@@ -415,7 +413,10 @@ class _ReviewButtonState extends State<_ReviewButton> {
           : TextButton.icon(
               onPressed: _writeReview,
               icon: const Icon(Icons.star_border, size: 14),
-              label: const Text("Rate", style: TextStyle(fontSize: 12)),
+              label: Text(
+                context.tr('rate'),
+                style: const TextStyle(fontSize: 12),
+              ),
               style: TextButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 minimumSize: Size.zero,

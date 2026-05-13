@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:local_auth/local_auth.dart';
 import '../../services/secure_storage_service.dart';
 import '../../extensions/context_tr.dart';
 
@@ -16,33 +15,11 @@ class LockScreen extends StatefulWidget {
 class _LockScreenState extends State<LockScreen> {
   final _pinController = TextEditingController();
   String? _error;
-  final _localAuth = LocalAuthentication();
-  bool _biometricEnabled = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkBiometric();
-  }
 
   @override
   void dispose() {
     _pinController.dispose();
     super.dispose();
-  }
-
-  Future<void> _checkBiometric() async {
-    final reason = context.tr('unlock_app');
-    try {
-      final useBio = await SecureStorageService.read('use_biometric') == 'true';
-      final canCheck = await _localAuth.canCheckBiometrics;
-      final supported = await _localAuth.isDeviceSupported();
-      if (mounted) setState(() => _biometricEnabled = useBio && (canCheck || supported));
-      if (_biometricEnabled) {
-        final authed = await _localAuth.authenticate(localizedReason: reason);
-        if (authed && mounted) widget.onUnlock();
-      }
-    } catch (_) {}
   }
 
   Future<void> _unlock() async {
@@ -58,52 +35,114 @@ class _LockScreenState extends State<LockScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.lock, size: 80, color: Colors.green[300]),
-              const SizedBox(height: 24),
-              Text(context.tr('enter_pin'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 24),
-              TextField(
-                controller: _pinController,
-                obscureText: true,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(6)],
-                decoration: InputDecoration(
-                  hintText: "******",
-                  border: const OutlineInputBorder(),
-                  errorText: _error,
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Colors.green[50],
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.lock,
+                        size: 56,
+                        color: Colors.green[400],
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    Text(
+                      context.tr('app_locked'),
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      context.tr('enter_pin_unlock'),
+                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                    ),
+                    const SizedBox(height: 32),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 40),
+                      child: TextField(
+                        controller: _pinController,
+                        obscureText: true,
+                        keyboardType: TextInputType.number,
+                        textAlign: TextAlign.center,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(6),
+                        ],
+                        decoration: InputDecoration(
+                          hintText: "• • • • • •",
+                          hintStyle: TextStyle(
+                            color: Colors.grey[300],
+                            letterSpacing: 12,
+                            fontSize: 32,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide(
+                              color: Colors.green,
+                              width: 2,
+                            ),
+                          ),
+                          errorText: _error,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 16,
+                          ),
+                        ),
+                        style: const TextStyle(
+                          fontSize: 28,
+                          letterSpacing: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        onSubmitted: (_) => _unlock(),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: 200,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 0,
+                        ),
+                        onPressed: _unlock,
+                        child: Text(
+                          context.tr('unlock'),
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 24, letterSpacing: 8),
-                onSubmitted: (_) => _unlock(),
               ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  onPressed: _unlock,
-                  child: Text(context.tr('unlock'),
-                      style: const TextStyle(color: Colors.white)),
-                ),
-              ),
-              if (_biometricEnabled)
-                IconButton(
-                  icon: Icon(Icons.fingerprint, size: 40, color: Colors.green[400]),
-                  onPressed: () => _checkBiometric(),
-                  tooltip: 'Fingerprint',
-                ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );

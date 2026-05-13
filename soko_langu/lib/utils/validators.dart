@@ -15,8 +15,9 @@ class Validators {
   static String? phone(String? value) {
     if (value == null || value.isEmpty) return 'Phone is required';
     final regex = RegExp(r'^0[67]\d{8}$');
-    if (!regex.hasMatch(value))
+    if (!regex.hasMatch(value)) {
       return 'Enter a valid Tanzanian phone (e.g. 0712345678)';
+    }
     return null;
   }
 

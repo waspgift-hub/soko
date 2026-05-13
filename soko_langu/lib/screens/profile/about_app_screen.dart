@@ -13,163 +13,193 @@ class AboutAppScreen extends StatelessWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const SizedBox(height: 30),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(
+            20,
+            20,
+            20,
+            20 + MediaQuery.of(context).padding.bottom,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const SizedBox(height: 30),
 
-            // Logo
-            ClipRRect(
-              borderRadius: BorderRadius.circular(25),
-              child: Image.asset(
-                'assets/soko_langu_logo.png',
-                width: 100,
-                height: 100,
-                fit: BoxFit.cover,
+              // Logo
+              ClipRRect(
+                borderRadius: BorderRadius.circular(25),
+                child: Image.asset(
+                  'assets/soko_langu_logo.png',
+                  width: 100,
+                  height: 100,
+                  fit: BoxFit.cover,
+                ),
               ),
-            ),
 
-            const SizedBox(height: 20),
+              const SizedBox(height: 20),
 
-            // App Name
-            const Text(
-              "Soko Langu",
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: Colors.green,
+              // App Name
+              Text(
+                context.tr('app_name'),
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green,
+                ),
               ),
-            ),
 
-            const SizedBox(height: 8),
+              const SizedBox(height: 8),
 
-            // Tagline
-            Text(
-              context.tr('tagline'),
-              style: TextStyle(fontSize: 16, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
-            ),
-
-            const SizedBox(height: 40),
-
-            // Version
-            _buildInfoCard(
-              context,
-              icon: Icons.info_outline,
-              title: context.tr('version_label'),
-              value: context.tr('version'),
-            ),
-
-            const SizedBox(height: 12),
-
-            // Soko Langu Team
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.grey[50],
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey[200]!),
+              // Tagline
+              Text(
+                context.tr('tagline'),
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.6),
+                ),
               ),
-              child: Row(
-                children: [
-                  const Icon(Icons.group, color: Colors.green, size: 24),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          context.tr('developer'),
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          "Gift Wapalila & Praygod Hassani",
-                          style: TextStyle(fontSize: 14, color: Colors.black87),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
 
-            const SizedBox(height: 12),
+              const SizedBox(height: 40),
 
-            // Contact Email
-            GestureDetector(
-              onTap: () async {
-                final uri = Uri.parse('mailto:langusoko@gmail.com');
-                if (await url.canLaunchUrl(uri)) {
-                  await url.launchUrl(uri);
-                }
-              },
-              child: _buildInfoCard(
+              // Version
+              _buildInfoCard(
                 context,
-                icon: Icons.email,
-                title: context.tr('contact_label'),
-                value: "langusoko@gmail.com",
-                isLink: true,
+                icon: Icons.info_outline,
+                title: context.tr('version_label'),
+                value: context.tr('version'),
               ),
-            ),
 
-            const SizedBox(height: 12),
+              const SizedBox(height: 12),
 
-            // Features
-            _buildInfoCard(
-              context,
-              icon: Icons.star,
-              title: context.tr('features'),
-              value: context.tr('features_text'),
-            ),
-
-            const SizedBox(height: 40),
-
-            // Gift message
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.green.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
-              ),
-              child: Column(
-                children: [
-                  const Text(
-                    "Asante",
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green,
+              // Soko Langu Team
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey[200]!),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.group, color: Colors.green, size: 24),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            context.tr('developer'),
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withValues(alpha: 0.6),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            "Gift Wapalila & Praygod Hassani",
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    "Tunashukuru kwa kutumia Soko Langu!\nMaoni yako yanatusaidia kuboresha.",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
 
-            const SizedBox(height: 30),
+              const SizedBox(height: 12),
 
-            // Copyright
-            Text(
-              context.tr('copyright'),
-              style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)),
-              textAlign: TextAlign.center,
-            ),
+              // Contact Email
+              GestureDetector(
+                onTap: () async {
+                  final uri = Uri.parse('mailto:langusoko@gmail.com');
+                  if (await url.canLaunchUrl(uri)) {
+                    await url.launchUrl(uri);
+                  }
+                },
+                child: _buildInfoCard(
+                  context,
+                  icon: Icons.email,
+                  title: context.tr('contact_label'),
+                  value: "langusoko@gmail.com",
+                  isLink: true,
+                ),
+              ),
 
-            const SizedBox(height: 20),
-          ],
+              const SizedBox(height: 12),
+
+              // Features
+              _buildInfoCard(
+                context,
+                icon: Icons.star,
+                title: context.tr('features'),
+                value: context.tr('features_text'),
+              ),
+
+              const SizedBox(height: 40),
+
+              // Gift message
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.green.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      context.tr('thank_you'),
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "Tunashukuru kwa kutumia Soko Langu!\nMaoni yako yanatusaidia kuboresha.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.7),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 30),
+
+              // Copyright
+              Text(
+                context.tr('copyright'),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.5),
+                ),
+                textAlign: TextAlign.center,
+              ),
+
+              const SizedBox(height: 20),
+            ],
+          ),
         ),
       ),
     );
@@ -203,7 +233,9 @@ class AboutAppScreen extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -211,7 +243,9 @@ class AboutAppScreen extends StatelessWidget {
                   value,
                   style: TextStyle(
                     fontSize: 14,
-                    color: isLink ? Colors.green : Theme.of(context).colorScheme.onSurface,
+                    color: isLink
+                        ? Colors.green
+                        : Theme.of(context).colorScheme.onSurface,
                     decoration: isLink ? TextDecoration.underline : null,
                   ),
                 ),

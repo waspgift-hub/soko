@@ -51,16 +51,17 @@ class AutoLockService with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
       _lockTimer?.cancel();
       if (_timeoutMinutes > 0) {
         _lockTimer = Timer(Duration(minutes: _timeoutMinutes), () {
           _isLocked = true;
-          onLock?.call();
         });
       }
     } else if (state == AppLifecycleState.resumed) {
       if (_isLocked) {
+        _isLocked = false;
         onLock?.call();
       } else {
         resetTimer();

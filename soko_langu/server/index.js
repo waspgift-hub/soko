@@ -1,17 +1,78 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const crypto = require('crypto');
 const admin = require('firebase-admin');
+const nodemailer = require('nodemailer');
 const { RtcTokenBuilder, RtcRole } = require('agora-access-token');
 
 const app = express();
+
+const REQUEST_TIMEOUT = 20000; // 20 seconds
+
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
+
+app.use((req, res, next) => {
+  res.setTimeout(REQUEST_TIMEOUT, () => {
+    res.status(504).json({ error: 'Request timed out' });
+  });
+  next();
+});
+
+app.use('/api/', rateLimit);
+
+function asyncHandler(fn) {
+  return (req, res, next) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
+  };
+}
 
 const MONGIKE_API_KEY = process.env.MONGIKE_API_KEY;
 const AGORA_APP_ID = process.env.AGORA_APP_ID;
 const AGORA_CERT = process.env.AGORA_APP_CERTIFICATE;
 const PORT = process.env.PORT || 3000;
+
+// ─── Rate limiter (in-memory) ───
+const rateHits = new Map();
+const RATE_WINDOW = 60 * 1000;
+const RATE_MAX = 30;
+
+function rateLimit(req, res, next) {
+  const ip = req.ip || req.connection.remoteAddress || 'unknown';
+  const now = Date.now();
+  if (!rateHits.has(ip)) rateHits.set(ip, []);
+  const hits = rateHits.get(ip).filter(t => now - t < RATE_WINDOW);
+  hits.push(now);
+  rateHits.set(ip, hits);
+  if (hits.length > RATE_MAX) {
+    return res.status(429).json({ error: 'Too many requests. Please slow down.' });
+  }
+  next();
+}
+
+function sanitize(str) {
+  if (typeof str !== 'string') return '';
+  return str.replace(/<[^>]*>/g, '').trim().slice(0, 1000);
+}
+
+// ─── Email transporter (nodemailer) ───
+const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
+const SMTP_PORT = process.env.SMTP_PORT || '587';
+const SMTP_USER = process.env.SMTP_USER || 'waspgift@gmail.com';
+const SMTP_PASS = process.env.SMTP_PASS || 'fgnd ylot wwmc grou';
+const SMTP_FROM = process.env.SMTP_FROM || 'Soko Langu <waspgift@gmail.com>';
+const SMTP_SECURE = process.env.SMTP_SECURE || 'false';
+
+let transporter;
+if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
+  transporter = nodemailer.createTransport({
+    host: SMTP_HOST,
+    port: parseInt(SMTP_PORT),
+    secure: SMTP_SECURE === 'true',
+    auth: { user: SMTP_USER, pass: SMTP_PASS },
+  });
+}
 
 let db;
 if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
@@ -25,18 +86,33 @@ const TIER_PRICES_TZS = {
   silver: { monthly: 35000, yearly: 350000 },
 };
 
+const MONGIKE_TX_FEE = 180;          // Mongike charges TZS 180 per transaction
+const MONGIKE_PAYOUT_FEE = 2000;     // Mongike charges TZS 2,000 per payout
 const MONGIKE_BASE = 'https://mongike.com/api/v1';
 
-async function callMongikePay(body) {
-  const resp = await fetch(`${MONGIKE_BASE}/payments/mobile-money/tanzania`, {
-    method: 'POST',
-    headers: {
-      'x-api-key': MONGIKE_API_KEY,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
-  return resp.json();
+async function callMongikePay(body, retries = 2) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+
+      const resp = await fetch(`${MONGIKE_BASE}/payments/mobile-money/tanzania`, {
+        method: 'POST',
+        headers: {
+          'x-api-key': MONGIKE_API_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      return await resp.json();
+    } catch (err) {
+      if (attempt === retries) throw err;
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
 }
 
 // --- Mongike payment link for subscriptions ---
@@ -140,7 +216,9 @@ app.post('/api/buy-coins', async (req, res) => {
   }
 });
 
-// --- Monthly payout for all streamers ---
+// --- Monthly payout for all streamers (trigger via cron job) ---
+// Cron schedule: "0 0 1 * *" (first day of every month)
+// POST with x-admin-secret header
 app.post('/api/process-monthly-payouts', async (req, res) => {
   try {
     if (!db) return res.status(503).json({ error: 'Database not configured' });
@@ -150,9 +228,9 @@ app.post('/api/process-monthly-payouts', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const FEE_TOTAL = 4000;
     const FEE_PLATFORM = 2000;
     const FEE_MONGIKE = 2000;
+    const FEE_TOTAL = FEE_PLATFORM + FEE_MONGIKE;
     const now = new Date();
     const month = now.toLocaleString('default', { month: 'long' });
     const year = now.getFullYear();
@@ -204,7 +282,6 @@ app.post('/api/process-monthly-payouts', async (req, res) => {
         await db.collection('withdrawals').add({
           userId: doc.id,
           earnings,
-          feeTotal: FEE_TOTAL,
           feePlatform: FEE_PLATFORM,
           feeMongike: FEE_MONGIKE,
           netAmount,
@@ -233,22 +310,214 @@ app.post('/api/process-monthly-payouts', async (req, res) => {
   }
 });
 
+// --- Process viewer payouts ---
+app.post('/api/process-viewer-payouts', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const FEE_PLATFORM = 2000;
+    const FEE_MONGIKE = 2000;
+    const FEE_TOTAL = FEE_PLATFORM + FEE_MONGIKE;
+    const TZS_PER_COIN = 5;
+    const now = new Date();
+    const month = now.toLocaleString('default', { month: 'long' });
+    const year = now.getFullYear();
+    const monthLabel = `${month} ${year}`;
+    let processed = 0;
+    let skipped = 0;
+    const errors = [];
+
+    const usersSnap = await db.collection('users')
+      .where('viewerCoins', '>', 0)
+      .get();
+
+    for (const doc of usersSnap.docs) {
+      const data = doc.data();
+      const coins = data.viewerCoins || 0;
+      const tzsValue = coins * TZS_PER_COIN;
+      const phone = data.phone || '';
+
+      if (!phone || tzsValue <= FEE_TOTAL) {
+        skipped++;
+        continue;
+      }
+
+      const netAmount = tzsValue - FEE_TOTAL;
+
+      try {
+        const resp = await fetch(`${MONGIKE_BASE}/payouts/withdraw`, {
+          method: 'POST',
+          headers: {
+            'x-api-key': MONGIKE_API_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            amount: netAmount,
+            recipient_phone: phone,
+          }),
+        });
+
+        const result = await resp.json();
+
+        if (result.status !== 'success') {
+          errors.push({ userId: doc.id, error: result.message || 'Payout failed' });
+          continue;
+        }
+
+        await db.collection('users').doc(doc.id).update({
+          viewerCoins: 0,
+        });
+
+        await db.collection('viewer_payouts').add({
+          userId: doc.id,
+          coins,
+          tzsValue,
+          feePlatform: FEE_PLATFORM,
+          feeMongike: FEE_MONGIKE,
+          netAmount,
+          phone,
+          month: monthLabel,
+          status: 'completed',
+          reference: result.reference || '',
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        processed++;
+      } catch (e) {
+        errors.push({ userId: doc.id, error: e.message });
+      }
+    }
+
+    res.json({
+      processed,
+      skipped,
+      errors,
+      month: monthLabel,
+      feePerPayout: FEE_TOTAL,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- Process ad revenue for sellers (40% seller / 60% platform) ---
+app.post('/api/process-ad-revenue', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const MAX_VIEWS = 500;
+    const REVENUE_PER_VIEW = 10;       // TZS per ad view
+    const SELLER_SHARE = 0.40;          // 40% to seller
+    const PLATFORM_SHARE = 0.60;        // 60% to platform
+    const SELLER_PER_VIEW = Math.round(REVENUE_PER_VIEW * SELLER_SHARE); // TZS 4
+
+    const viewsSnap = await db.collection('ad_views')
+      .where('processed', '==', false)
+      .limit(MAX_VIEWS)
+      .get();
+
+    if (viewsSnap.empty) {
+      return res.json({ processed: 0, totalEarnings: 0, message: 'No unprocessed views' });
+    }
+
+    const sellerGroups = {};
+    const batch = db.batch();
+
+    for (const doc of viewsSnap.docs) {
+      const data = doc.data();
+      const sellerId = data.sellerId;
+      if (!sellerId) continue;
+      if (!sellerGroups[sellerId]) sellerGroups[sellerId] = 0;
+      sellerGroups[sellerId]++;
+      batch.update(doc.ref, { processed: true });
+    }
+
+    let totalEarnings = 0;
+    let sellerCount = 0;
+
+    for (const [sellerId, count] of Object.entries(sellerGroups)) {
+      const earning = count * SELLER_PER_VIEW;
+      totalEarnings += earning;
+      sellerCount++;
+
+      const walletRef = db.collection('wallets').doc(sellerId);
+      const walletDoc = await walletRef.get();
+
+      if (!walletDoc.exists) {
+        batch.set(walletRef, {
+          balance: earning,
+          totalEarnings: earning,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } else {
+        batch.update(walletRef, {
+          balance: admin.firestore.FieldValue.increment(earning),
+          totalEarnings: admin.firestore.FieldValue.increment(earning),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+
+      const txRef = db.collection('revenue_transactions').doc();
+      batch.set(txRef, {
+        userId: sellerId,
+        type: 'ad_share',
+        amount: earning,
+        views: count,
+        ratePerView: SELLER_PER_VIEW,
+        description: `Ad revenue: ${count} views × TZS ${SELLER_PER_VIEW}`,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+
+    await batch.commit();
+
+    res.json({
+      processed: viewsSnap.docs.length,
+      sellers: sellerCount,
+      totalEarnings,
+      perView: SELLER_PER_VIEW,
+      platformShare: `${PLATFORM_SHARE * 100}%`,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // --- Mongike payment link for marketplace ---
 app.post('/api/create-marketplace-payment-link', async (req, res) => {
   try {
-    const { productPrice, productName, productId, sellerId, sellerName, email, phone } = req.body;
+    const { productPrice, productName, productId, sellerId, sellerName, email, phone, userId } = req.body;
+
     if (!productPrice || productPrice <= 0) {
       return res.status(400).json({ error: 'Invalid price' });
     }
-
-    if (!phone) {
-      return res.status(400).json({ error: 'Phone number required' });
+    if (!phone || phone.length < 10) {
+      return res.status(400).json({ error: 'Valid phone number required (min 10 digits)' });
+    }
+    if (!productId) {
+      return res.status(400).json({ error: 'Product ID is required' });
+    }
+    if (!sellerId) {
+      return res.status(400).json({ error: 'Seller ID is required' });
     }
 
     const order_id = `mkt_${Date.now()}`;
-    const amount = Math.round(productPrice * 1.05);
+    const amount = Math.round(productPrice);
 
     const webhookUrl = process.env.WEBHOOK_URL || `https://sokolangu-production.up.railway.app/api/webhook`;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
 
     const result = await callMongikePay({
       order_id,
@@ -258,16 +527,17 @@ app.post('/api/create-marketplace-payment-link', async (req, res) => {
       fee_payer: 'MERCHANT',
       webhook_url: webhookUrl,
     });
+    clearTimeout(timeout);
 
     if (result.status !== 'success') {
-      return res.status(500).json({ error: result.message || 'Mongike error' });
+      return res.status(500).json({ error: result.message || 'Mongike payment initiation failed' });
     }
 
     if (db) {
       const mongikeId = result.data?.id || '';
       await db.collection('transactions').doc(order_id).set({
         type: 'marketplace',
-        buyerId: req.body.userId || '',
+        buyerId: userId || '',
         buyerPhone: phone,
         buyerEmail: email || '',
         productId,
@@ -287,7 +557,10 @@ app.post('/api/create-marketplace-payment-link', async (req, res) => {
       message: 'Payment prompt sent to your phone. Check M-Pesa/Airtel Money and enter your PIN.',
     });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    if (e.name === 'AbortError') {
+      return res.status(504).json({ error: 'Mongike request timed out. Please try again.' });
+    }
+    res.status(500).json({ error: e.message || 'Internal server error' });
   }
 });
 
@@ -354,23 +627,33 @@ app.post('/api/webhook', async (req, res) => {
           completedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
 
+        const item = {
+          productId: data.productId || '',
+          name: data.productName || 'Product',
+          price: (data.amount || 0),
+          quantity: 1,
+          image: data.productImage || null,
+          isReviewed: false,
+        };
+
         await db.collection('orders').add({
           buyerId: data.buyerId || '',
           sellerId: data.sellerId || '',
-          productId: data.productId || '',
-          productName: data.productName || '',
-          productPrice: data.amount || 0,
+          items: [item],
           totalAmount: data.amount || 0,
           status: 'confirmed',
           paymentMethod: 'Mongike',
-          transactionRef: orderId,
+          paymentMethodName: 'Mongike',
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          trackingNumber: null,
         });
 
         if (data.productId) {
-          await db.collection('products').doc(data.productId).update({
-            soldCount: admin.firestore.FieldValue.increment(1),
-          });
+          try {
+            await db.collection('products').doc(data.productId).update({
+              soldCount: admin.firestore.FieldValue.increment(1),
+            });
+          } catch (_) {}
         }
       } else if (data?.type === 'coins') {
         const coinsAmount = data.coins || 0;
@@ -465,64 +748,7 @@ app.get('/api/webhook-redirect', (req, res) => {
   res.redirect(`sokolangu://payment-callback?tx_ref=${txRef}`);
 });
 
-// --- Process unprocessed ad views into revenue ---
-app.post('/api/process-ad-revenue', async (req, res) => {
-  try {
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-    const RATE_PER_VIEW = 10;
-    const SELLER_SHARE = 0.4;
-
-    const snap = await db.collection('ad_views')
-      .where('processed', '==', false)
-      .limit(500)
-      .get();
-
-    let processed = 0;
-
-    for (const doc of snap.docs) {
-      const data = doc.data();
-      const amount = Math.round(RATE_PER_VIEW * SELLER_SHARE);
-
-      await db.runTransaction(async (tx) => {
-        const walletRef = db.collection('wallets').doc(data.sellerId);
-        const walletSnap = await tx.get(walletRef);
-
-        let newBalance = amount;
-        let newTotal = amount;
-        if (walletSnap.exists) {
-          newBalance += (walletSnap.data().balance || 0);
-          newTotal += (walletSnap.data().totalEarnings || 0);
-        }
-
-        tx.set(walletRef, {
-          balance: newBalance,
-          totalEarnings: newTotal,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        }, { merge: true });
-
-        tx.update(doc.ref, { processed: true });
-
-        tx.set(db.collection('revenue_transactions').doc(), {
-          userId: data.sellerId,
-          type: 'ad_share',
-          amount,
-          sellerTier: data.sellerTier || 'silver',
-          source: doc.id,
-          description: `Ad revenue share - view by ${data.buyerId || 'unknown'}`,
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
-          status: 'completed',
-        });
-      });
-
-      processed++;
-    }
-
-    res.json({ processed, rate: RATE_PER_VIEW, sellerShare: `${SELLER_SHARE * 100}%` });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
 
 // ============================================================
 // 📲 FCM — SEND PUSH NOTIFICATION
@@ -542,10 +768,41 @@ app.post('/api/send-notification', async (req, res) => {
     const fcmToken = userDoc.data().fcmToken;
     if (!fcmToken) return res.json({ sent: false, reason: 'No FCM token' });
 
+    const isCall = data && data.type === 'call';
+
     const message = {
       token: fcmToken,
       notification: { title, body: body || '' },
       data: data || {},
+      android: {
+        priority: isCall ? 'high' : 'normal',
+        notification: isCall ? {
+          channelId: 'incoming_calls',
+          priority: 'high',
+          visibility: 'public',
+          sound: 'default',
+          notificationPriority: 'max',
+          vibrationPattern: [0, 500, 200, 500, 200, 1000],
+          fullScreenIntent: true,
+          tag: 'incoming_call',
+        } : undefined,
+      },
+      apns: isCall ? {
+        payload: {
+          aps: {
+            sound: 'default',
+            category: 'incoming_call',
+            'content-available': 1,
+          },
+        },
+      } : undefined,
+      webpush: isCall ? {
+        headers: { urgency: 'high' },
+        notification: {
+          requireInteraction: true,
+          vibrate: [0, 500, 200, 500],
+        },
+      } : undefined,
     };
 
     const response = await admin.messaging().send(message);
@@ -751,9 +1008,144 @@ app.get('/api/admin/orders', async (req, res) => {
   }
 });
 
+// ============================================================
+// 🔐 FORGOT PASSWORD — SEND OTP
+// ============================================================
+app.post('/api/send-otp', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    // Check if user exists in Firebase Auth
+    let userRecord;
+    try {
+      userRecord = await admin.auth().getUserByEmail(email);
+    } catch {
+      return res.status(404).json({ error: 'No account found with this email' });
+    }
+
+    if (!transporter) {
+      return res.status(503).json({ error: 'Email service not configured. Contact admin.' });
+    }
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashed = crypto.createHash('sha256').update(otp).digest('hex');
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+    // Save to Firestore
+    await db.collection('password_resets').doc(email.toLowerCase()).set({
+      otpHash: hashed,
+      expiresAt,
+      used: false,
+      uid: userRecord.uid,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // Send email
+    try {
+      await transporter.sendMail({
+        from: SMTP_FROM,
+        to: email,
+        subject: 'Soko Langu — Password Reset OTP',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
+            <h2 style="color: #2D6A4F;">Soko Langu</h2>
+            <p>Use the OTP below to reset your password:</p>
+            <div style="font-size: 32px; font-weight: bold; color: #2D6A4F; text-align: center; 
+                        padding: 20px; background: #F0F9F1; border-radius: 12px; letter-spacing: 8px;">
+              ${otp}
+            </div>
+            <p style="color: #666;">This OTP expires in 10 minutes.</p>
+            <p style="color: #999; font-size: 12px;">If you didn't request this, ignore this email.</p>
+          </div>
+        `,
+      });
+    } catch (mailErr) {
+      return res.status(500).json({ error: 'Failed to send email. Try again.' });
+    }
+
+    res.json({ sent: true, message: 'OTP sent to your email' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 🔐 VERIFY OTP
+// ============================================================
+app.post('/api/verify-otp', async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) return res.status(400).json({ error: 'Email and OTP are required' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const doc = await db.collection('password_resets').doc(email.toLowerCase()).get();
+    if (!doc.exists) return res.status(400).json({ error: 'No OTP found. Request a new one.' });
+
+    const data = doc.data();
+    if (data.used) return res.status(400).json({ error: 'OTP already used' });
+    if (Date.now() > data.expiresAt) return res.status(400).json({ error: 'OTP expired. Request a new one.' });
+
+    const hashed = crypto.createHash('sha256').update(otp).digest('hex');
+    if (hashed !== data.otpHash) return res.status(400).json({ error: 'Invalid OTP' });
+
+    // Mark as used
+    await doc.ref.update({ used: true });
+
+    res.json({ valid: true, uid: data.uid });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 🔐 RESET PASSWORD AFTER OTP
+// ============================================================
+app.post('/api/reset-password-after-otp', async (req, res) => {
+  try {
+    const { email, newPassword } = req.body;
+    if (!email || !newPassword) {
+      return res.status(400).json({ error: 'Email and new password are required' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const doc = await db.collection('password_resets').doc(email.toLowerCase()).get();
+    if (!doc.exists) return res.status(400).json({ error: 'No verified OTP found' });
+
+    const data = doc.data();
+    if (!data.used) return res.status(400).json({ error: 'OTP not yet verified' });
+
+    // Update password via Firebase Admin SDK
+    await admin.auth().updateUser(data.uid, { password: newPassword });
+
+    // Generate a custom token so user can sign in automatically
+    const customToken = await admin.auth().createCustomToken(data.uid);
+
+    // Clean up the OTP doc
+    await doc.ref.delete();
+
+    res.json({ success: true, customToken });
+  } catch (e) {
+    if (e.code === 'auth/claims-too-large') {
+      return res.status(400).json({ error: 'Token claims too large' });
+    }
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ---- Handle boost payment completion in webhook ----
 // (Insert right after the 'coins' handler in the webhook)
 // ============================================================
+
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: err.message || 'Internal server error' });
+});
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 

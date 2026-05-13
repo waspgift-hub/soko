@@ -328,5 +328,26 @@ List<Category> getDefaultCategories() {
       ],
       order: 10,
     ),
+    // Others
+    Category(
+      id: 'others',
+      name: 'Others',
+      nameSw: 'Nyingine',
+      icon: '📦',
+      subcategories: [
+        SubCategory(id: 'other', name: 'Other', nameSw: 'Nyingine'),
+        SubCategory(
+          id: 'miscellaneous',
+          name: 'Miscellaneous',
+          nameSw: 'Mchanganyiko',
+        ),
+        SubCategory(
+          id: 'uncategorized',
+          name: 'Uncategorized',
+          nameSw: 'Haina Kategoria',
+        ),
+      ],
+      order: 11,
+    ),
   ];
 }

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/product_model.dart';
 import '../../main.dart';
 import '../widgets/tilt_card.dart';
+import '../extensions/context_tr.dart';
 
 class ProductCard extends StatelessWidget {
   final Product product;
@@ -39,28 +41,47 @@ class ProductCard extends StatelessWidget {
           Expanded(
             child: ClipRRect(
               borderRadius: BorderRadius.vertical(top: Radius.circular(radius)),
-              child: Container(
-                decoration: BoxDecoration(
-                  image: product.images.isNotEmpty
-                      ? DecorationImage(
-                          image: NetworkImage(product.images.first),
+              child: product.images.isNotEmpty
+                  ? Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        CachedNetworkImage(
+                          imageUrl: product.images.first,
                           fit: BoxFit.cover,
-                        )
-                      : null,
-                  color: product.images.isEmpty ? Colors.grey[200] : null,
-                ),
-                child: product.images.isEmpty
-                    ? Center(
-                        child: Icon(
-                          Icons.image,
-                          size: 40,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withValues(alpha: 0.6),
+                          placeholder: (context, url) => Container(
+                            color: Colors.grey[100],
+                            child: Center(
+                              child: SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.green[400],
+                                ),
+                              ),
+                            ),
+                          ),
+                          errorWidget: (context, url, error) => Container(
+                            color: Colors.grey[200],
+                            child: Icon(
+                              Icons.image,
+                              size: 40,
+                              color: Colors.grey[400],
+                            ),
+                          ),
                         ),
-                      )
-                    : _buildSellerBadge(),
-              ),
+                        _buildSellerBadge(context),
+                      ],
+                    )
+                  : Center(
+                      child: Icon(
+                        Icons.image,
+                        size: 40,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
+                    ),
             ),
           ),
           Padding(
@@ -169,7 +190,7 @@ class ProductCard extends StatelessWidget {
     return GestureDetector(onTap: onTap, child: card);
   }
 
-  Widget _buildSellerBadge() {
+  Widget _buildSellerBadge(BuildContext context) {
     return Stack(
       children: [
         if (product.isFeaturedValid)
@@ -184,14 +205,14 @@ class ProductCard extends StatelessWidget {
                 ),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.verified, size: 10, color: Colors.white),
-                  SizedBox(width: 3),
+                  const Icon(Icons.verified, size: 10, color: Colors.white),
+                  const SizedBox(width: 3),
                   Text(
-                    'Featured',
-                    style: TextStyle(
+                    context.tr('featured'),
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 9,
                       fontWeight: FontWeight.bold,
@@ -211,9 +232,9 @@ class ProductCard extends StatelessWidget {
                 color: Colors.blueGrey.withAlpha(200),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Text(
-                'Silver',
-                style: TextStyle(
+              child: Text(
+                context.tr('silver'),
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
@@ -231,9 +252,9 @@ class ProductCard extends StatelessWidget {
                 color: Colors.amber.withAlpha(200),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Text(
-                'Premium',
-                style: TextStyle(
+              child: Text(
+                context.tr('premium'),
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 10,
                   fontWeight: FontWeight.bold,

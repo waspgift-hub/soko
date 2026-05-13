@@ -127,7 +127,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (!serviceEnabled) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Location services are disabled')),
+          SnackBar(content: Text(context.tr('location_disabled'))),
         );
       }
       return;
@@ -140,11 +140,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
     if (perm == LocationPermission.deniedForever) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Location permissions are permanently denied'),
-          ),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.tr('location_denied'))));
       }
       return;
     }
@@ -226,8 +224,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (taken) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Username already taken'),
+            SnackBar(
+              content: Text(context.tr('username_taken')),
               backgroundColor: Colors.red,
             ),
           );
@@ -260,14 +258,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text("Profile saved!")));
+        ).showSnackBar(SnackBar(content: Text(context.tr('profile_saved'))));
         Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text("Error: $e")));
+        ).showSnackBar(SnackBar(content: Text("${context.tr('error')}: $e")));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -278,7 +276,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Widget build(BuildContext context) {
     if (_loading) {
       return Scaffold(
-        backgroundColor: Colors.white,
         appBar: AppBar(title: Text(context.tr('edit_profile'))),
         body: const Center(child: CircularProgressIndicator()),
       );
@@ -287,7 +284,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text(context.tr('edit_profile')),
         actions: [
@@ -309,262 +305,270 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           ),
         ],
       ),
-      body: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            children: [
-              Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 60,
-                    backgroundColor: Colors.green,
-                    backgroundImage: _imagePath != null
-                        ? (_imagePath!.startsWith('http')
-                              ? NetworkImage(_imagePath!)
-                              : FileImage(File(_imagePath!)) as ImageProvider)
-                        : null,
-                    child: _imagePath == null
-                        ? Text(
-                            user?.displayName != null
-                                ? user!.displayName![0].toUpperCase()
-                                : user?.email != null
-                                ? user!.email![0].toUpperCase()
-                                : "U",
-                            style: const TextStyle(
-                              fontSize: 40,
-                              color: Colors.white,
-                            ),
-                          )
-                        : null,
-                  ),
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: GestureDetector(
-                      onTap: _pickImage,
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: const BoxDecoration(
-                          color: Colors.green,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.camera_alt,
-                          color: Colors.white,
-                          size: 20,
+      body: SafeArea(
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(
+              20,
+              20,
+              20,
+              20 + MediaQuery.of(context).padding.bottom,
+            ),
+            child: Column(
+              children: [
+                Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 60,
+                      backgroundColor: Colors.green,
+                      backgroundImage: _imagePath != null
+                          ? (_imagePath!.startsWith('http')
+                                ? NetworkImage(_imagePath!)
+                                : FileImage(File(_imagePath!)) as ImageProvider)
+                          : null,
+                      child: _imagePath == null
+                          ? Text(
+                              user?.displayName != null
+                                  ? user!.displayName![0].toUpperCase()
+                                  : user?.email != null
+                                  ? user!.email![0].toUpperCase()
+                                  : "U",
+                              style: const TextStyle(
+                                fontSize: 40,
+                                color: Colors.white,
+                              ),
+                            )
+                          : null,
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: GestureDetector(
+                        onTap: _pickImage,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: const BoxDecoration(
+                            color: Colors.green,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.camera_alt,
+                            color: Colors.white,
+                            size: 20,
+                          ),
                         ),
                       ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                TextFormField(
+                  controller: _nameController,
+                  decoration: InputDecoration(
+                    labelText: context.tr('display_name'),
+                    border: const OutlineInputBorder(),
                   ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              TextFormField(
-                controller: _nameController,
-                decoration: InputDecoration(
-                  labelText: context.tr('display_name'),
-                  border: const OutlineInputBorder(),
+                  validator: (v) => v == null || v.trim().isEmpty
+                      ? context.tr('required')
+                      : null,
                 ),
-                validator: (v) => v == null || v.trim().isEmpty
-                    ? context.tr('required')
-                    : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _usernameController,
-                decoration: InputDecoration(
-                  labelText: 'Username',
-                  hintText: 'choose a unique username',
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(
-                    Icons.alternate_email,
-                    color: Colors.green,
-                  ),
-                ),
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) {
-                    return 'Username is required';
-                  }
-                  if (v.trim().contains(' ')) return 'No spaces allowed';
-                  if (v.trim().length < 3) return 'At least 3 characters';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _bioController,
-                decoration: InputDecoration(
-                  labelText: context.tr('bio'),
-                  hintText: 'Tell us about yourself...',
-                  border: const OutlineInputBorder(),
-                ),
-                maxLines: 3,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _emailController,
-                decoration: InputDecoration(
-                  labelText: context.tr('email'),
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.email, color: Colors.green),
-                ),
-                keyboardType: TextInputType.emailAddress,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _phoneController,
-                decoration: InputDecoration(
-                  labelText: context.tr('phone'),
-                  hintText: '+255 712 345 678',
-                  border: const OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.phone,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _locationController,
-                decoration: InputDecoration(
-                  labelText: context.tr('location'),
-                  hintText: 'Dar es Salaam, Tanzania',
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(
-                    Icons.location_on,
-                    color: Colors.green,
-                  ),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.my_location, color: Colors.green),
-                    onPressed: _getCurrentLocation,
-                    tooltip: 'Get current location',
-                  ),
-                ),
-              ),
-              if (_latitude != null && _longitude != null) ...[
-                const SizedBox(height: 4),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    '${_latitude!.toStringAsFixed(4)}, ${_longitude!.toStringAsFixed(4)}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _moodController,
-                decoration: InputDecoration(
-                  labelText: 'Mood',
-                  hintText: 'How are you feeling?',
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(
-                    Icons.emoji_emotions,
-                    color: Colors.green,
-                  ),
-                  suffixIcon: PopupMenuButton<String>(
-                    icon: const Icon(
-                      Icons.arrow_drop_down,
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _usernameController,
+                  decoration: InputDecoration(
+                    labelText: 'Username',
+                    hintText: context.tr('choose_username'),
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(
+                      Icons.alternate_email,
                       color: Colors.green,
                     ),
-                    onSelected: (v) => _moodController.text = v,
-                    itemBuilder: (_) => _moodOptions
-                        .map((m) => PopupMenuItem(value: m, child: Text(m)))
-                        .toList(),
                   ),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) {
+                      return context.tr('username_required');
+                    }
+                    if (v.trim().contains(' ')) return context.tr('no_spaces');
+                    if (v.trim().length < 3) return context.tr('min_chars');
+                    return null;
+                  },
                 ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    context.tr('payment_methods'),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _bioController,
+                  decoration: InputDecoration(
+                    labelText: context.tr('bio'),
+                    hintText: context.tr('tell_about'),
+                    border: const OutlineInputBorder(),
+                  ),
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _emailController,
+                  decoration: InputDecoration(
+                    labelText: context.tr('email'),
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.email, color: Colors.green),
+                  ),
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _phoneController,
+                  decoration: InputDecoration(
+                    labelText: context.tr('phone'),
+                    hintText: '+255 712 345 678',
+                    border: const OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.phone,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _locationController,
+                  decoration: InputDecoration(
+                    labelText: context.tr('location'),
+                    hintText: 'Dar es Salaam, Tanzania',
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(
+                      Icons.location_on,
+                      color: Colors.green,
+                    ),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.my_location, color: Colors.green),
+                      onPressed: _getCurrentLocation,
+                      tooltip: context.tr('get_location'),
                     ),
                   ),
-                  TextButton.icon(
-                    onPressed: _addPaymentMethod,
-                    icon: const Icon(Icons.add, size: 18),
-                    label: Text(context.tr('add_payment')),
+                ),
+                if (_latitude != null && _longitude != null) ...[
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '${_latitude!.toStringAsFixed(4)}, ${_longitude!.toStringAsFixed(4)}',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                    ),
                   ),
                 ],
-              ),
-              if (_paymentEntries.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(
-                    "No payment methods added yet",
-                    style: TextStyle(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.5),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _moodController,
+                  decoration: InputDecoration(
+                    labelText: context.tr('mood'),
+                    hintText: context.tr('how_feeling'),
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(
+                      Icons.emoji_emotions,
+                      color: Colors.green,
+                    ),
+                    suffixIcon: PopupMenuButton<String>(
+                      icon: const Icon(
+                        Icons.arrow_drop_down,
+                        color: Colors.green,
+                      ),
+                      onSelected: (v) => _moodController.text = v,
+                      itemBuilder: (_) => _moodOptions
+                          .map((m) => PopupMenuItem(value: m, child: Text(m)))
+                          .toList(),
                     ),
                   ),
                 ),
-              ...List.generate(_paymentEntries.length, (index) {
-                final entry = _paymentEntries[index];
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 2,
-                        child: Autocomplete<String>(
-                          optionsBuilder: (textEditingValue) {
-                            if (textEditingValue.text.isEmpty) return [];
-                            return _paymentMethodHints.where(
-                              (h) => h.toLowerCase().contains(
-                                textEditingValue.text.toLowerCase(),
-                              ),
-                            );
-                          },
-                          fieldViewBuilder:
-                              (context, controller, focusNode, onSubmitted) {
-                                entry.key.text = controller.text;
-                                return TextField(
-                                  controller: controller,
-                                  focusNode: focusNode,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Method',
-                                    hintText: 'Payment number',
-                                    border: OutlineInputBorder(),
-                                    isDense: true,
-                                  ),
-                                  onChanged: (v) => entry.key.text = v,
-                                );
-                              },
-                        ),
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      context.tr('payment_methods'),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        flex: 3,
-                        child: TextField(
-                          controller: entry.value,
-                          decoration: const InputDecoration(
-                            labelText: 'Number',
-                            hintText: '0712 345 678',
-                            border: OutlineInputBorder(),
-                            isDense: true,
-                          ),
-                          keyboardType: TextInputType.phone,
-                        ),
+                    ),
+                    TextButton.icon(
+                      onPressed: _addPaymentMethod,
+                      icon: const Icon(Icons.add, size: 18),
+                      label: Text(context.tr('add_payment')),
+                    ),
+                  ],
+                ),
+                if (_paymentEntries.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      context.tr('no_payment_methods'),
+                      style: TextStyle(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.5),
                       ),
-                      const SizedBox(width: 4),
-                      IconButton(
-                        icon: const Icon(
-                          Icons.remove_circle,
-                          color: Colors.red,
-                        ),
-                        onPressed: () => _removePaymentMethod(index),
-                      ),
-                    ],
+                    ),
                   ),
-                );
-              }),
-              const SizedBox(height: 30),
-            ],
+                ...List.generate(_paymentEntries.length, (index) {
+                  final entry = _paymentEntries[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: Autocomplete<String>(
+                            optionsBuilder: (textEditingValue) {
+                              if (textEditingValue.text.isEmpty) return [];
+                              return _paymentMethodHints.where(
+                                (h) => h.toLowerCase().contains(
+                                  textEditingValue.text.toLowerCase(),
+                                ),
+                              );
+                            },
+                            fieldViewBuilder:
+                                (context, controller, focusNode, onSubmitted) {
+                                  entry.key.text = controller.text;
+                                  return TextField(
+                                    controller: controller,
+                                    focusNode: focusNode,
+                                    decoration: InputDecoration(
+                                      labelText: context.tr('method'),
+                                      hintText: context.tr('payment_number'),
+                                      border: OutlineInputBorder(),
+                                      isDense: true,
+                                    ),
+                                    onChanged: (v) => entry.key.text = v,
+                                  );
+                                },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 3,
+                          child: TextField(
+                            controller: entry.value,
+                            decoration: InputDecoration(
+                              labelText: context.tr('number'),
+                              hintText: '0712 345 678',
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                            ),
+                            keyboardType: TextInputType.phone,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.remove_circle,
+                            color: Colors.red,
+                          ),
+                          onPressed: () => _removePaymentMethod(index),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+                const SizedBox(height: 30),
+              ],
+            ),
           ),
         ),
       ),

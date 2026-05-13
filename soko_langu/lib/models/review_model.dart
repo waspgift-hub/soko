@@ -6,6 +6,7 @@ class Review {
   final String userId;
   final String userName;
   final String? userImage;
+  final String userTier;
   final double rating;
   final String comment;
   final DateTime createdAt;
@@ -19,6 +20,7 @@ class Review {
     required this.userId,
     required this.userName,
     this.userImage,
+    this.userTier = 'free',
     required this.rating,
     required this.comment,
     required this.createdAt,
@@ -35,6 +37,7 @@ class Review {
       userId: data['userId'] ?? '',
       userName: data['userName'] ?? 'Anonymous',
       userImage: data['userImage'],
+      userTier: data['userTier'] as String? ?? 'free',
       rating: (data['rating'] ?? 0).toDouble(),
       comment: data['comment'] ?? '',
       createdAt: data['createdAt'] is Timestamp
@@ -51,6 +54,7 @@ class Review {
     'userId': userId,
     'userName': userName,
     'userImage': userImage,
+    'userTier': userTier,
     'rating': rating,
     'comment': comment,
     'createdAt': FieldValue.serverTimestamp(),

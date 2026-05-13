@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../extensions/context_tr.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/bottom_nav_bar.dart';
 
@@ -24,9 +25,9 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       await _authService.sendEmailVerification();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             backgroundColor: Colors.green,
-            content: Text("Verification email sent! Check your inbox"),
+            content: Text(context.tr('email_verification_sent')),
           ),
         );
       }
@@ -34,7 +35,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text("Failed: $e")));
+        ).showSnackBar(SnackBar(content: Text("${context.tr('error')}: $e")));
       }
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -50,9 +51,9 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       );
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           backgroundColor: Colors.orange,
-          content: Text("Email not verified yet. Please check your inbox."),
+          content: Text(context.tr('email_not_verified')),
         ),
       );
     }
@@ -61,83 +62,103 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(30),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.mark_email_unread,
-                size: 80,
-                color: Colors.green,
-              ),
-              const SizedBox(height: 24),
-              Text(
-                "Verify Your Email",
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                "We sent a verification email to your address.\n"
-                "Please check your inbox and click the link to verify.",
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6), fontSize: 15),
-              ),
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: _checkVerification,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    "I've Verified - Continue",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextButton(
-                onPressed: _sending ? null : _resend,
-                child: _sending
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text(
-                        "Resend Verification Email",
-                        style: TextStyle(color: Colors.green),
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Padding(
+                  padding: const EdgeInsets.all(30),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.mark_email_unread,
+                        size: 80,
+                        color: Colors.green,
                       ),
-              ),
-              const SizedBox(height: 24),
-              TextButton(
-                onPressed: () async {
-                  await _authService.logout();
-                  if (context.mounted) Navigator.pop(context);
-                },
-                child: Text(
-                  "Use a different account",
-                  style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
+                      const SizedBox(height: 24),
+                      Text(
+                        context.tr('verify_email_title'),
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        context.tr('verify_email_sent'),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.6),
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: _checkVerification,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(
+                            context.tr('verified_continue'),
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextButton(
+                        onPressed: _sending ? null : _resend,
+                        child: _sending
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Text(
+                                context.tr('resend_verification'),
+                                style: TextStyle(color: Colors.green),
+                              ),
+                      ),
+                      const SizedBox(height: 24),
+                      TextButton(
+                        onPressed: () async {
+                          await _authService.logout();
+                          if (context.mounted) Navigator.pop(context);
+                        },
+                        child: Text(
+                          context.tr('use_different_account'),
+                          style: TextStyle(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.6),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );

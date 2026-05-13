@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../main.dart';
 
 class InterstitialAdService {
   InterstitialAd? _interstitialAd;
   bool _isLoading = false;
+  bool _showQueued = false;
 
   bool get _isFree => themeManager.currentTier == 'free';
 
@@ -14,14 +16,20 @@ class InterstitialAdService {
     _isLoading = true;
 
     await InterstitialAd.load(
-      adUnitId: 'ca-app-pub-3796499857968162/2220136124',
+      adUnitId: 'ca-app-pub-3940256099942544/1033173712',
       request: const AdRequest(),
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) {
+          debugPrint('InterstitialAd: loaded');
           _interstitialAd = ad;
           _isLoading = false;
+          if (_showQueued) {
+            _showQueued = false;
+            show();
+          }
         },
         onAdFailedToLoad: (error) {
+          debugPrint('InterstitialAd: failed — ${error.message}');
           _interstitialAd = null;
           _isLoading = false;
         },
@@ -36,7 +44,11 @@ class InterstitialAdService {
       return;
     }
 
-    if (_interstitialAd == null) return;
+    if (_interstitialAd == null) {
+      _showQueued = true;
+      if (!_isLoading) load();
+      return;
+    }
 
     _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
       onAdDismissedFullScreenContent: (ad) {

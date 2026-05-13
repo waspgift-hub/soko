@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../extensions/context_tr.dart';
 
 class PaymentSuccessScreen extends StatefulWidget {
   final String transactionId;
@@ -49,11 +50,12 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(32),
-          child: Column(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.only(left: 32, top: 32, right: 32, bottom: MediaQuery.of(context).padding.bottom + 20),
+            child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               AnimatedBuilder(
@@ -78,7 +80,7 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
               FadeTransition(
                 opacity: _fadeAnim,
                 child: Text(
-                  'Payment Successful!',
+                  context.tr('payment_successful'),
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -88,7 +90,7 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
               FadeTransition(
                 opacity: _fadeAnim,
                 child: Text(
-                  'Your payment has been processed.',
+                  context.tr('payment_processed'),
                   style: TextStyle(color: Colors.grey[600], fontSize: 16),
                 ),
               ),
@@ -104,18 +106,21 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
                     padding: const EdgeInsets.all(20),
                     child: Column(
                       children: [
-                        _detailRow('Product', widget.productName),
+                        _detailRow(context.tr('product'), widget.productName),
                         const Divider(),
                         _detailRow(
-                          'Amount Paid',
+                          context.tr('amount_paid'),
                           '\$${widget.amount.toStringAsFixed(2)}',
                         ),
                         const Divider(),
-                        _detailRow('Transaction ID', widget.transactionId),
+                        _detailRow(
+                          context.tr('transaction_id'),
+                          widget.transactionId,
+                        ),
                         const Divider(),
                         _detailRow(
-                          'Status',
-                          'Completed',
+                          context.tr('status'),
+                          context.tr('completed'),
                           valueColor: Colors.green,
                         ),
                       ],
@@ -127,8 +132,7 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
               FadeTransition(
                 opacity: _fadeAnim,
                 child: Text(
-                  'A confirmation message has been sent to the seller.\n'
-                  'Check your chats for updates.',
+                  context.tr('confirmation_message'),
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.grey[500], fontSize: 13),
                 ),
@@ -149,18 +153,18 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
                         borderRadius: BorderRadius.circular(14),
                       ),
                     ),
-                    child: const Text(
-                      'Back to Home',
-                      style: TextStyle(fontSize: 16),
+                    child: Text(
+                      context.tr('back_to_home'),
+                      style: const TextStyle(fontSize: 16),
                     ),
                   ),
-                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
-    );
+      ),
+      );
   }
 
   Widget _detailRow(String label, String value, {Color? valueColor}) {

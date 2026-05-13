@@ -14,15 +14,16 @@ class AuthService {
 
   Future<UserCredential?> signInWithGoogle() async {
     try {
-      final GoogleSignInAccount googleUser = await GoogleSignIn.instance.authenticate();
+      final GoogleSignInAccount googleUser = await GoogleSignIn.instance
+          .authenticate();
       final GoogleSignInAuthentication googleAuth = googleUser.authentication;
-      if (googleAuth.idToken == null) return null;
+      if (googleAuth.idToken == null) throw Exception('Google idToken is null');
       final credential = GoogleAuthProvider.credential(
         idToken: googleAuth.idToken,
       );
       return await _auth.signInWithCredential(credential);
     } catch (e) {
-      return null;
+      throw Exception('Google Sign-In failed: $e');
     }
   }
 

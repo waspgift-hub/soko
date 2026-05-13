@@ -8,14 +8,15 @@ class LiveGiftService {
 
   static const double streamerShare = 0.7;
 
-  Future<int> getCoinBalance() async {
+  // ── Premium coins (bought, 1 coin = TZS 5) ──
+  Future<int> getPremiumCoins() async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return 0;
     final doc = await _db.collection('users').doc(uid).get();
     return (doc.data()?['coins'] ?? 0) as int;
   }
 
-  Stream<int> streamCoinBalance() {
+  Stream<int> streamPremiumCoins() {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return Stream.value(0);
     return _db
@@ -23,6 +24,30 @@ class LiveGiftService {
         .doc(uid)
         .snapshots()
         .map((doc) => (doc.data()?['coins'] ?? 0) as int);
+  }
+
+  // ── Soft coins (earned from ads, 1 coin = TZS 1) ──
+  Future<int> getSoftCoins() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return 0;
+    final doc = await _db.collection('users').doc(uid).get();
+    return (doc.data()?['softCoins'] ?? 0) as int;
+  }
+
+  Stream<int> streamSoftCoins() {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return Stream.value(0);
+    return _db
+        .collection('users')
+        .doc(uid)
+        .snapshots()
+        .map((doc) => (doc.data()?['softCoins'] ?? 0) as int);
+  }
+
+  Future<int> getTotalCoins() async {
+    final premium = await getPremiumCoins();
+    final soft = await getSoftCoins();
+    return premium + soft;
   }
 
   Future<bool> sendGift({
@@ -36,13 +61,41 @@ class LiveGiftService {
     return _db.runTransaction((tx) async {
       final userRef = _db.collection('users').doc(user.uid);
       final userDoc = await tx.get(userRef);
-      final coins = (userDoc.data()?['coins'] ?? 0) as int;
+      final data = userDoc.data() ?? {};
+      final premiumCoins = (data['coins'] ?? 0) as int;
+      final softCoins = (data['softCoins'] ?? 0) as int;
 
-      if (coins < gift.coinCost) return false;
+      if (gift.isPremium) {
+        if (premiumCoins < gift.coinCost) return false;
+        tx.update(userRef, {'coins': premiumCoins - gift.coinCost});
+      } else {
+        final total = premiumCoins + softCoins;
+        if (total < gift.coinCost) return false;
 
-      tx.update(userRef, {'coins': coins - gift.coinCost});
+        int remaining = gift.coinCost;
+        int softUsed = 0;
+        int premiumUsed = 0;
 
-      final streamerEarning = (gift.coinCost * 5 * streamerShare).round();
+        if (softCoins >= remaining) {
+          softUsed = remaining;
+        } else {
+          softUsed = softCoins;
+          premiumUsed = remaining - softCoins;
+        }
+
+        tx.update(userRef, {
+          'softCoins': softCoins - softUsed,
+          'coins': premiumCoins - premiumUsed,
+        });
+      }
+
+      int coinCost = gift.coinCost;
+      bool usingPremium = gift.isPremium;
+      final tzsValue = gift.isPremium
+          ? coinCost * LiveGift.tzsPerPremiumCoin
+          : coinCost * LiveGift.tzsPerSoftCoin;
+      final streamerEarning = (tzsValue * streamerShare).round();
+
       final streamerRef = _db.collection('users').doc(streamerId);
       final streamerDoc = await tx.get(streamerRef);
       final currentEarnings =
@@ -59,10 +112,11 @@ class LiveGiftService {
         'giftId': gift.id,
         'giftName': gift.name,
         'giftEmoji': gift.emoji,
-        'coinCost': gift.coinCost,
-        'valueTzs': gift.tzsValue,
+        'coinCost': coinCost,
+        'isPremium': usingPremium,
+        'valueTzs': tzsValue,
         'streamerEarning': streamerEarning,
-        'platformEarning': (gift.tzsValue - streamerEarning),
+        'platformEarning': (tzsValue - streamerEarning),
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -89,9 +143,15 @@ class LiveGiftService {
         .map((snap) => snap.docs.map((d) => d.data()).toList());
   }
 
-  Future<void> addCoins(String uid, int amount) async {
+  Future<void> addPremiumCoins(String uid, int amount) async {
     await _db.collection('users').doc(uid).update({
       'coins': FieldValue.increment(amount),
+    });
+  }
+
+  Future<void> addSoftCoins(String uid, int amount) async {
+    await _db.collection('users').doc(uid).update({
+      'softCoins': FieldValue.increment(amount),
     });
   }
 }

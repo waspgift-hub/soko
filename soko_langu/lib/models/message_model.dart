@@ -7,6 +7,7 @@ class Message {
   final String content;
   final DateTime timestamp;
   final bool isRead;
+  final bool isEdited;
   final String? productId;
   final String? productName;
 
@@ -17,6 +18,7 @@ class Message {
     required this.content,
     required this.timestamp,
     this.isRead = false,
+    this.isEdited = false,
     this.productId,
     this.productName,
   });
@@ -32,6 +34,7 @@ class Message {
           ? (data['timestamp'] as Timestamp).toDate()
           : DateTime.now(),
       isRead: data['isRead'] ?? false,
+      isEdited: data['isEdited'] ?? false,
       productId: data['productId'],
       productName: data['productName'],
     );
@@ -43,6 +46,7 @@ class Message {
     'content': content,
     'timestamp': FieldValue.serverTimestamp(),
     'isRead': isRead,
+    'isEdited': isEdited,
     'productId': productId,
     'productName': productName,
   };
@@ -53,8 +57,6 @@ class Conversation {
   final List<String> participants;
   final String lastMessage;
   final DateTime lastMessageTime;
-  final String otherUserName;
-  final String? otherUserImage;
   final int unreadCount;
 
   Conversation({
@@ -62,8 +64,6 @@ class Conversation {
     required this.participants,
     required this.lastMessage,
     required this.lastMessageTime,
-    required this.otherUserName,
-    this.otherUserImage,
     this.unreadCount = 0,
   });
 
@@ -76,8 +76,6 @@ class Conversation {
       lastMessageTime: data['lastMessageTime'] is Timestamp
           ? (data['lastMessageTime'] as Timestamp).toDate()
           : DateTime.now(),
-      otherUserName: data['otherUserName'] ?? '',
-      otherUserImage: data['otherUserImage'],
       unreadCount: data['unreadCount'] ?? 0,
     );
   }
@@ -86,8 +84,6 @@ class Conversation {
     'participants': participants,
     'lastMessage': lastMessage,
     'lastMessageTime': FieldValue.serverTimestamp(),
-    'otherUserName': otherUserName,
-    'otherUserImage': otherUserImage,
     'unreadCount': unreadCount,
   };
 }

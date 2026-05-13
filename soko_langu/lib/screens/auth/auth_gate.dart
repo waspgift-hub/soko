@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/user_service.dart';
 import '../../main.dart';
 import '../../widgets/bottom_nav_bar.dart';
+import '../../shared/loading_widget.dart';
+import '../../extensions/context_tr.dart';
 import 'login_screen.dart';
 import '../onboarding/account_selection_screen.dart';
 
@@ -16,15 +18,15 @@ class AuthGate extends StatelessWidget {
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Scaffold(body: Center(child: CircularProgressIndicator()));
+          return Scaffold(body: LoadingWidget(message: context.tr('loading')));
         }
         if (snapshot.hasData) {
           return FutureBuilder<bool>(
             future: _checkUser(snapshot.data!.uid),
             builder: (context, snap) {
               if (!snap.hasData) {
-                return const Scaffold(
-                  body: Center(child: CircularProgressIndicator()),
+                return Scaffold(
+                  body: LoadingWidget(message: context.tr('loading')),
                 );
               }
               if (snap.data == true) {
@@ -41,12 +43,11 @@ class AuthGate extends StatelessWidget {
 
   Future<bool> _checkUser(String uid) async {
     try {
-      await UserService().autoDowngradeExpired(uid);
-      interstitialAdService.load();
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .get();
+      final results = await Future.wait([
+        UserService().autoDowngradeExpired(uid),
+        FirebaseFirestore.instance.collection('users').doc(uid).get(),
+      ]);
+      final doc = results[1] as DocumentSnapshot<Map<String, dynamic>>;
       if (!doc.exists) return false;
       final tier = doc.data()?['accountTier'] as String?;
       return tier != null && tier.isNotEmpty;

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/review_service.dart';
 import '../models/review_model.dart';
+import 'verified_badge.dart';
+import '../extensions/context_tr.dart';
 
 class ReviewSection extends StatefulWidget {
   final String productId;
@@ -25,7 +27,7 @@ class _ReviewSectionState extends State<ReviewSection> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text("Write Review"),
+          title: Text(context.tr('write_review')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -46,9 +48,9 @@ class _ReviewSectionState extends State<ReviewSection> {
               TextField(
                 controller: commentController,
                 maxLines: 3,
-                decoration: const InputDecoration(
-                  hintText: "Share your experience...",
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  hintText: context.tr('share_experience'),
+                  border: const OutlineInputBorder(),
                 ),
               ),
             ],
@@ -76,14 +78,14 @@ class _ReviewSectionState extends State<ReviewSection> {
         );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Review submitted!")),
+            SnackBar(content: Text(context.tr('review_submitted'))),
           );
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Failed: $e")),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text("${context.tr('error')}: $e")));
         }
       }
     }
@@ -97,12 +99,14 @@ class _ReviewSectionState extends State<ReviewSection> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text("Reviews",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(
+              context.tr('reviews'),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
             TextButton.icon(
               onPressed: _writeReview,
               icon: const Icon(Icons.edit, size: 16),
-              label: const Text("Write"),
+              label: Text(context.tr('write')),
             ),
           ],
         ),
@@ -116,8 +120,14 @@ class _ReviewSectionState extends State<ReviewSection> {
             if (reviews.isEmpty) {
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Text("No reviews yet. Be the first!",
-                    style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))),
+                child: Text(
+                  context.tr('no_reviews_yet'),
+                  style: TextStyle(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
               );
             }
             return ListView.separated(
@@ -142,34 +152,50 @@ class _ReviewSectionState extends State<ReviewSection> {
                                   ? review.userName[0].toUpperCase()
                                   : "?",
                               style: const TextStyle(
-                                  color: Colors.white, fontSize: 14),
+                                color: Colors.white,
+                                fontSize: 14,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(review.userName,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold)),
+                          Text(
+                            review.userName,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
+                          VerifiedBadge(tier: review.userTier, size: 14),
+                          const Spacer(),
                           Row(
-                            children: List.generate(5, (i) => Icon(
-                                  i < review.rating.round()
-                                      ? Icons.star
-                                      : Icons.star_border,
-                                  size: 16,
-                                  color: Colors.amber,
-                                )),
+                            children: List.generate(
+                              5,
+                              (i) => Icon(
+                                i < review.rating.round()
+                                    ? Icons.star
+                                    : Icons.star_border,
+                                size: 16,
+                                color: Colors.amber,
+                              ),
+                            ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Text(review.comment,
-                          style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))),
+                      Text(
+                        review.comment,
+                        style: TextStyle(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.6),
+                        ),
+                      ),
                       const SizedBox(height: 4),
                       Text(
                         _formatDate(review.createdAt),
                         style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6), fontSize: 11),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.6),
+                          fontSize: 11,
+                        ),
                       ),
                     ],
                   ),

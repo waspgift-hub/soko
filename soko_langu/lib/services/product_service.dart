@@ -101,8 +101,10 @@ class ProductService {
     }
   }
 
-  Stream<List<Product>> getProducts() {
-    return _db.collection("products").snapshots().map((snapshot) {
+  Stream<List<Product>> getProducts({int limitAmt = 30}) {
+    return _db.collection("products").limit(limitAmt).snapshots().map((
+      snapshot,
+    ) {
       final products = snapshot.docs
           .map((doc) => Product.fromFirestore(doc))
           .where((p) => p.isActive)
@@ -116,6 +118,25 @@ class ProductService {
     return _db
         .collection("products")
         .where("category", isEqualTo: category)
+        .snapshots()
+        .map((snapshot) {
+          final products = snapshot.docs
+              .map((doc) => Product.fromFirestore(doc))
+              .where((p) => p.isActive)
+              .toList();
+          _sortByTier(products);
+          return products;
+        });
+  }
+
+  Stream<List<Product>> getProductsByCategoryAndSubcategory(
+    String category,
+    String subcategory,
+  ) {
+    return _db
+        .collection("products")
+        .where("category", isEqualTo: category)
+        .where("subcategory", isEqualTo: subcategory)
         .snapshots()
         .map((snapshot) {
           final products = snapshot.docs

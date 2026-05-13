@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
@@ -9,9 +10,13 @@ import '../../services/agora_config.dart';
 import '../../services/live_stream_service.dart';
 import '../../models/product_model.dart';
 import '../../utils/helpers.dart';
+import '../../services/live_gift_service.dart';
+import '../../models/live_gift.dart';
 import '../home/product_detail.dart';
 import '../../widgets/ad_banner.dart';
-import 'gift_shop_dialog.dart';
+import '../../widgets/verified_badge.dart';
+import '../wallet/buy_coins_screen.dart';
+import '../../extensions/context_tr.dart';
 
 class LiveScreen extends StatefulWidget {
   final LiveStream stream;
@@ -166,16 +171,16 @@ class _LiveScreenState extends State<LiveScreen> {
                 child: CircularProgressIndicator(color: Colors.white),
               ),
 
-            // Top bar
+            // Top bar (glassmorphism)
             Positioned(top: 8, left: 8, child: _buildTopBar()),
 
-            // Gift notifications
+            // Gift notifications (glassmorphism)
             _buildGiftNotifications(),
 
             // Floating hearts
             ..._hearts.map((h) => _buildFloatingHeart(h)),
 
-            // TikTok-style floating comments
+            // TikTok-style floating comments (glassmorphism)
             Positioned(
               bottom: 100,
               left: 8,
@@ -191,10 +196,10 @@ class _LiveScreenState extends State<LiveScreen> {
               child: const AdBanner(showAlways: true),
             ),
 
-            // Bottom overlay bar
+            // Bottom overlay bar (glassmorphism)
             Positioned(bottom: 0, left: 0, right: 0, child: _buildBottomBar()),
 
-            // Streamer info
+            // Streamer info (glassmorphism)
             Positioned(top: 60, right: 12, child: _buildStreamInfo()),
 
             // Input overlay when typing
@@ -205,31 +210,55 @@ class _LiveScreenState extends State<LiveScreen> {
     );
   }
 
+  Widget _glassContainer({
+    required Widget child,
+    EdgeInsets? padding,
+    BorderRadius? borderRadius,
+  }) {
+    return ClipRRect(
+      borderRadius: borderRadius ?? BorderRadius.circular(16),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          padding:
+              padding ??
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.15),
+            borderRadius: borderRadius ?? BorderRadius.circular(16),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+
   Widget _buildTopBar() {
-    return Row(
-      children: [
-        IconButton(
-          icon: const Icon(Icons.close, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        const SizedBox(width: 4),
-        const _LiveIndicator(),
-        const SizedBox(width: 8),
-        IconButton(
-          icon: const Icon(Icons.share, color: Colors.white, size: 22),
-          onPressed: _shareStream,
-        ),
-      ],
+    return _glassContainer(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      borderRadius: BorderRadius.circular(24),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.close, color: Colors.white),
+            onPressed: () => Navigator.pop(context),
+          ),
+          const _LiveIndicator(),
+          IconButton(
+            icon: const Icon(Icons.share, color: Colors.white, size: 22),
+            onPressed: _shareStream,
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildStreamInfo() {
-    return Container(
+    return _glassContainer(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.black54,
-        borderRadius: BorderRadius.circular(20),
-      ),
+      borderRadius: BorderRadius.circular(20),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -256,6 +285,7 @@ class _LiveScreenState extends State<LiveScreen> {
               fontSize: 12,
             ),
           ),
+          VerifiedBadge(tier: widget.stream.userTier, size: 12),
           const SizedBox(width: 8),
           GestureDetector(
             onTap: () {
@@ -286,7 +316,9 @@ class _LiveScreenState extends State<LiveScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: Colors.green,
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF2D6A4F), Color(0xFF40916C)],
+                ),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Text(
@@ -326,18 +358,12 @@ class _LiveScreenState extends State<LiveScreen> {
             final text = data['text'] ?? '';
             return Padding(
               padding: const EdgeInsets.only(bottom: 6),
-              child: Container(
-                constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width * 0.65,
-                ),
+              child: _glassContainer(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 10,
                   vertical: 6,
                 ),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(18),
-                ),
+                borderRadius: BorderRadius.circular(18),
                 child: RichText(
                   text: TextSpan(
                     children: [
@@ -368,50 +394,61 @@ class _LiveScreenState extends State<LiveScreen> {
   }
 
   Widget _buildBottomBar() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.bottomCenter,
-          end: Alignment.topCenter,
-          colors: [Colors.black87, Colors.transparent],
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: () => setState(() => _showInput = true),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: const Text(
-                  'Send a message...',
-                  style: TextStyle(color: Colors.white54, fontSize: 13),
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.bottomCenter,
+              end: Alignment.topCenter,
+              colors: [Colors.black.withValues(alpha: 0.7), Colors.transparent],
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() => _showInput = true),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Text(
+                      context.tr('send_message'),
+                      style: const TextStyle(
+                        color: Colors.white54,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.favorite, color: Colors.red, size: 26),
+                onPressed: _sendHeart,
+              ),
+              IconButton(
+                icon: const Icon(
+                  Icons.card_giftcard,
+                  color: Colors.amber,
+                  size: 26,
+                ),
+                onPressed: _openGiftShop,
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          IconButton(
-            icon: const Icon(Icons.favorite, color: Colors.red, size: 26),
-            onPressed: _sendHeart,
-          ),
-          IconButton(
-            icon: const Icon(
-              Icons.card_giftcard,
-              color: Colors.amber,
-              size: 26,
-            ),
-            onPressed: _openGiftShop,
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -421,57 +458,75 @@ class _LiveScreenState extends State<LiveScreen> {
       bottom: 0,
       left: 0,
       right: 0,
-      child: Container(
-        color: Colors.black,
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-        child: Row(
-          children: [
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                decoration: BoxDecoration(
-                  color: Colors.grey[900],
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.grey[700]!),
-                ),
-                child: TextField(
-                  controller: _chatController,
-                  focusNode: _chatFocus,
-                  autofocus: true,
-                  style: const TextStyle(color: Colors.white, fontSize: 14),
-                  decoration: const InputDecoration(
-                    hintText: 'Type message...',
-                    hintStyle: TextStyle(color: Colors.white38),
-                    border: InputBorder.none,
+      child: ClipRRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: Container(
+            color: Colors.black.withValues(alpha: 0.8),
+            padding: EdgeInsets.fromLTRB(
+              12,
+              8,
+              12,
+              12 + MediaQuery.of(context).viewInsets.bottom,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.2),
+                      ),
+                    ),
+                    child: TextField(
+                      controller: _chatController,
+                      focusNode: _chatFocus,
+                      autofocus: true,
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                      decoration: InputDecoration(
+                        hintText: context.tr('send_message'),
+                        hintStyle: const TextStyle(color: Colors.white38),
+                        border: InputBorder.none,
+                      ),
+                      onSubmitted: (_) => _sendMessage(),
+                    ),
                   ),
-                  onSubmitted: (_) => _sendMessage(),
                 ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            GestureDetector(
-              onTap: _sendMessage,
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: const BoxDecoration(
-                  color: Colors.green,
-                  shape: BoxShape.circle,
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _sendMessage,
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF2D6A4F), Color(0xFF40916C)],
+                      ),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.send,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                  ),
                 ),
-                child: const Icon(Icons.send, color: Colors.white, size: 18),
-              ),
+                const SizedBox(width: 4),
+                GestureDetector(
+                  onTap: () {
+                    setState(() => _showInput = false);
+                    _chatFocus.unfocus();
+                  },
+                  child: const Padding(
+                    padding: EdgeInsets.all(8),
+                    child: Icon(Icons.close, color: Colors.white54, size: 20),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 4),
-            GestureDetector(
-              onTap: () {
-                setState(() => _showInput = false);
-                _chatFocus.unfocus();
-              },
-              child: const Padding(
-                padding: EdgeInsets.all(8),
-                child: Icon(Icons.close, color: Colors.white54, size: 20),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -492,12 +547,9 @@ class _LiveScreenState extends State<LiveScreen> {
         return Positioned(
           top: 60,
           left: 12,
-          child: Container(
+          child: _glassContainer(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.black54,
-              borderRadius: BorderRadius.circular(20),
-            ),
+            borderRadius: BorderRadius.circular(20),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -507,7 +559,7 @@ class _LiveScreenState extends State<LiveScreen> {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  '${latest['fromName'] ?? 'Someone'} sent ${latest['giftName'] ?? 'a gift'}',
+                  "${latest['fromName'] ?? 'Someone'} ${context.tr('sent_gift')} ${latest['giftName'] ?? 'a gift'}",
                   style: const TextStyle(color: Colors.white, fontSize: 12),
                 ),
               ],
@@ -521,11 +573,9 @@ class _LiveScreenState extends State<LiveScreen> {
   void _openGiftShop() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => GiftShopDialog(
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _GiftPanelSheet(
         streamerId: widget.stream.userId,
         streamId: widget.stream.channelName,
       ),
@@ -535,43 +585,55 @@ class _LiveScreenState extends State<LiveScreen> {
   Widget _buildEndedScreen() {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.wifi_tethering_off, size: 80, color: Colors.grey[600]),
-              const SizedBox(height: 20),
-              const Text(
-                'Stream Ended',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '${widget.stream.userName}\'s live stream has ended.',
-                style: TextStyle(color: Colors.grey[400], fontSize: 14),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 32),
-              ElevatedButton.icon(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.arrow_back),
-                label: const Text('Go Back'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 32,
-                    vertical: 14,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).padding.bottom + 20,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.wifi_tethering_off,
+                    size: 80,
+                    color: Colors.grey[600],
                   ),
-                ),
+                  const SizedBox(height: 20),
+                  Text(
+                    context.tr('stream_ended'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    context.tr('stream_ended_subtitle'),
+                    style: TextStyle(color: Colors.grey[400], fontSize: 14),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 32),
+                  ElevatedButton.icon(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.arrow_back),
+                    label: Text(context.tr('go_back')),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2D6A4F),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 32,
+                        vertical: 14,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -583,6 +645,225 @@ class _LiveScreenState extends State<LiveScreen> {
       left: MediaQuery.of(context).size.width * heart.left,
       bottom: 80 + (heart.id % 3) * 40.0,
       child: const Icon(Icons.favorite, color: Colors.red, size: 36),
+    );
+  }
+}
+
+class _GiftPanelSheet extends StatefulWidget {
+  final String streamerId;
+  final String streamId;
+
+  const _GiftPanelSheet({required this.streamerId, required this.streamId});
+
+  @override
+  State<_GiftPanelSheet> createState() => _GiftPanelSheetState();
+}
+
+class _GiftPanelSheetState extends State<_GiftPanelSheet> {
+  final _service = LiveGiftService();
+  int _coins = 0;
+  bool _sending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCoins();
+  }
+
+  Future<void> _loadCoins() async {
+    final bal = await _service.getTotalCoins();
+    if (mounted) setState(() => _coins = bal);
+  }
+
+  Future<void> _sendGift(LiveGift gift) async {
+    if (_coins < gift.coinCost) {
+      Navigator.pop(context);
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const BuyCoinsScreen()),
+      );
+      return;
+    }
+
+    setState(() => _sending = true);
+    final ok = await _service.sendGift(
+      streamerId: widget.streamerId,
+      streamId: widget.streamId,
+      gift: gift,
+    );
+
+    if (mounted) {
+      if (ok) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("${context.tr('sent')} ${gift.emoji} ${gift.name}!"),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      } else {
+        setState(() => _sending = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.white, Color(0xFFF0F9F1)],
+        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).padding.bottom + 20,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      context.tr('gift_shop'),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                        color: Color(0xFF2D6A4F),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const BuyCoinsScreen(),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.amber[100],
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.monetization_on,
+                              color: Colors.amber,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '$_coins',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF2D6A4F),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              context.tr('buy'),
+                              style: TextStyle(
+                                color: Colors.amber[800],
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    childAspectRatio: 1.1,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                  ),
+                  itemCount: LiveGift.gifts.length,
+                  itemBuilder: (ctx, i) {
+                    final gift = LiveGift.gifts[i];
+                    final canAfford = _coins >= gift.coinCost;
+                    return GestureDetector(
+                      onTap: _sending ? null : () => _sendGift(gift),
+                      child: Opacity(
+                        opacity: canAfford ? 1 : 0.4,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: canAfford ? Colors.white : Colors.grey[200],
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: canAfford
+                                  ? const Color(0xFF40916C)
+                                  : Colors.grey[300]!,
+                            ),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                gift.emoji,
+                                style: const TextStyle(fontSize: 32),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                gift.name,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey[700],
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              Text(
+                                '${gift.coinCost} coins',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: Color(0xFF2D6A4F),
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -605,9 +886,9 @@ class _LiveIndicator extends StatelessWidget {
         color: Colors.red,
         borderRadius: BorderRadius.circular(4),
       ),
-      child: const Text(
-        'LIVE',
-        style: TextStyle(
+      child: Text(
+        context.tr('live_tab'),
+        style: const TextStyle(
           color: Colors.white,
           fontSize: 11,
           fontWeight: FontWeight.bold,

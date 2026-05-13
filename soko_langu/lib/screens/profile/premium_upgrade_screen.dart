@@ -8,19 +8,31 @@ import '../../extensions/context_tr.dart';
 import '../../main.dart';
 
 class PremiumUpgradeScreen extends StatefulWidget {
-  const PremiumUpgradeScreen({super.key});
+  final String? initialTier;
+
+  const PremiumUpgradeScreen({super.key, this.initialTier});
 
   @override
   State<PremiumUpgradeScreen> createState() => _PremiumUpgradeScreenState();
 }
 
 class _PremiumUpgradeScreenState extends State<PremiumUpgradeScreen> {
-  String _selectedTier = 'silver';
+  late String _selectedTier;
   bool _isYearly = true;
   bool _isLoading = false;
   bool _isSuccess = false;
   String? _error;
   final _phoneController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialTier == 'premium' || widget.initialTier == 'silver') {
+      _selectedTier = widget.initialTier!;
+    } else {
+      _selectedTier = 'premium';
+    }
+  }
 
   @override
   void dispose() {
@@ -66,7 +78,7 @@ class _PremiumUpgradeScreenState extends State<PremiumUpgradeScreen> {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _error = 'Failed to initiate payment. Try again.';
+        _error = context.tr('failed_payment_init');
       });
       return;
     }
@@ -92,20 +104,24 @@ class _PremiumUpgradeScreenState extends State<PremiumUpgradeScreen> {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 _onPaymentSuccess(uid);
               });
-              return const AlertDialog(
+              return AlertDialog(
                 content: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.check_circle, color: Colors.green, size: 64),
-                    SizedBox(height: 16),
-                    Text('Payment confirmed! Activating...'),
+                    const Icon(
+                      Icons.check_circle,
+                      color: Colors.green,
+                      size: 64,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(context.tr('payment_confirmed_activating')),
                   ],
                 ),
               );
             }
 
             return AlertDialog(
-              title: const Text('Complete Payment'),
+              title: Text(context.tr('complete_payment')),
               content: const Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -147,82 +163,82 @@ class _PremiumUpgradeScreenState extends State<PremiumUpgradeScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('account_tier', _selectedTier);
     if (mounted) {
-      Navigator.pop(context);
       AppConfig.of(context).onSetTier(_selectedTier);
-      setState(() {
-        _isLoading = false;
-        _isSuccess = true;
-      });
+      Navigator.of(context).pop(true);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(title: Text(context.tr('upgrade_account'))),
-      body: _isSuccess ? _buildSuccess() : _buildUpgrade(),
+      body: SafeArea(child: _isSuccess ? _buildSuccess() : _buildUpgrade()),
     );
   }
 
   Widget _buildSuccess() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              _selectedTier == 'silver'
-                  ? Icons.workspace_premium
-                  : Icons.verified,
-              color: _selectedTier == 'silver' ? Colors.blueGrey : Colors.amber,
-              size: 96,
-            ),
-            const SizedBox(height: 24),
-            Text(
-              '${context.tr('welcome_premium')} $_tierLabel!',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              _selectedTier == 'silver'
-                  ? context.tr('silver_welcome_msg')
-                  : context.tr('premium_no_ads'),
-              style: TextStyle(
-                fontSize: 16,
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.6),
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _selectedTier == 'silver'
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                _selectedTier == 'silver'
+                    ? Icons.workspace_premium
+                    : Icons.verified,
+                color: _selectedTier == 'silver'
                     ? Colors.blueGrey
                     : Colors.amber,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 48,
-                  vertical: 14,
+                size: 96,
+              ),
+              const SizedBox(height: 24),
+              Text(
+                '${context.tr('welcome_premium')} $_tierLabel!',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                _selectedTier == 'silver'
+                    ? context.tr('silver_welcome_msg')
+                    : context.tr('premium_no_ads'),
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.6),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _selectedTier == 'silver'
+                      ? Colors.blueGrey
+                      : Colors.amber,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 48,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(
+                  '$_tierLabel ${context.tr('premium_active')}',
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
                 ),
               ),
-              onPressed: () => Navigator.pop(context, true),
-              child: Text(
-                '$_tierLabel ${context.tr('premium_active')}',
-                style: const TextStyle(color: Colors.white, fontSize: 16),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -230,6 +246,9 @@ class _PremiumUpgradeScreenState extends State<PremiumUpgradeScreen> {
 
   Widget _buildUpgrade() {
     return SingleChildScrollView(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).padding.bottom + 20,
+      ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Column(
@@ -547,8 +566,8 @@ class _PremiumUpgradeScreenState extends State<PremiumUpgradeScreen> {
             : const Icon(Icons.payment, color: Colors.white, size: 20),
         label: Text(
           _isLoading
-              ? 'Processing...'
-              : 'Pay with Mongike  TZS ${_amount.toStringAsFixed(0)}',
+              ? context.tr('processing')
+              : '${context.tr('pay_mongike')} TZS ${_amount.toStringAsFixed(0)}',
           style: const TextStyle(
             color: Colors.white,
             fontSize: 17,

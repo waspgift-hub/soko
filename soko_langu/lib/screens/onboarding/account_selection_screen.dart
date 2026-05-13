@@ -5,6 +5,7 @@ import '../../services/user_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../main.dart';
 import '../../widgets/bottom_nav_bar.dart';
+import '../profile/premium_upgrade_screen.dart';
 
 class AccountSelectionScreen extends StatefulWidget {
   const AccountSelectionScreen({super.key});
@@ -18,12 +19,35 @@ class _AccountSelectionScreenState extends State<AccountSelectionScreen> {
   bool _isSaving = false;
 
   Future<void> _continue() async {
+    if (_selectedTier == 'free') {
+      await _goToMain();
+      return;
+    }
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    if (!mounted) return;
+    final paid = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PremiumUpgradeScreen(initialTier: _selectedTier),
+      ),
+    );
+
+    if (paid == true && mounted) {
+      await _goToMain();
+    }
+  }
+
+  Future<void> _goToMain() async {
     setState(() => _isSaving = true);
 
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       try {
-        await UserService().setAccountTier(user.uid, _selectedTier)
+        await UserService()
+            .setAccountTier(user.uid, _selectedTier)
             .timeout(const Duration(seconds: 5));
       } catch (_) {}
     }
@@ -44,26 +68,43 @@ class _AccountSelectionScreenState extends State<AccountSelectionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.fromLTRB(
+            24,
+            24,
+            24,
+            MediaQuery.of(context).padding.bottom + 24,
+          ),
           child: Column(
             children: [
               const SizedBox(height: 40),
               Icon(Icons.store, color: Colors.green, size: 64),
               const SizedBox(height: 16),
-              Text(context.tr('welcome_soko'),
-                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
+              Text(
+                context.tr('welcome_soko'),
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
               const SizedBox(height: 8),
-              Text(context.tr('choose_account'),
-                  style: TextStyle(fontSize: 15, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
-                  textAlign: TextAlign.center),
+              Text(
+                context.tr('choose_account'),
+                style: TextStyle(
+                  fontSize: 15,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.6),
+                ),
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 32),
               _accountCard(
                 tier: 'free',
                 title: context.tr('free'),
-                price: r'$0',
+                price: 'TSh 0',
                 period: context.tr('forever'),
                 features: [
                   context.tr('free_feature_list'),
@@ -75,7 +116,7 @@ class _AccountSelectionScreenState extends State<AccountSelectionScreen> {
               _accountCard(
                 tier: 'premium',
                 title: context.tr('premium'),
-                price: r'$6',
+                price: 'TSh 15,000',
                 period: context.tr('per_month'),
                 features: [
                   context.tr('premium_no_ads'),
@@ -88,7 +129,7 @@ class _AccountSelectionScreenState extends State<AccountSelectionScreen> {
               _accountCard(
                 tier: 'silver',
                 title: context.tr('silver'),
-                price: r'$14',
+                price: 'TSh 35,000',
                 period: context.tr('per_month'),
                 features: [
                   context.tr('silver_feature_visibility'),
@@ -107,24 +148,46 @@ class _AccountSelectionScreenState extends State<AccountSelectionScreen> {
                     backgroundColor: _selectedTier == 'silver'
                         ? Colors.blueGrey
                         : _selectedTier == 'premium'
-                            ? Colors.amber
-                            : Colors.green,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ? Colors.amber
+                        : Colors.green,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                     elevation: 0,
                   ),
                   onPressed: _isSaving ? null : _continue,
                   child: _isSaving
-                      ? const SizedBox(width: 24, height: 24,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                      : Text(context.tr('continue_free'),
-                          style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2.5,
+                          ),
+                        )
+                      : Text(
+                          _selectedTier == 'free'
+                              ? context.tr('continue_free')
+                              : context.tr('pay_now'),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                 ),
               ),
               const SizedBox(height: 16),
               TextButton(
                 onPressed: _isSaving ? null : _continue,
-                child: Text(context.tr('skip_choose'),
-                    style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))),
+                child: Text(
+                  context.tr('skip_choose'),
+                  style: TextStyle(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
               ),
               const SizedBox(height: 32),
             ],
@@ -163,31 +226,57 @@ class _AccountSelectionScreenState extends State<AccountSelectionScreen> {
                 children: [
                   Row(
                     children: [
-                      Text(title,
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold,
-                              color: isSelected ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7))),
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: isSelected
+                              ? Theme.of(context).colorScheme.onSurface
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: 0.7),
+                        ),
+                      ),
                       const SizedBox(width: 8),
-                      Text('$price/$period',
-                          style: TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w600,
-                              color: isSelected ? color : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))),
+                      Text(
+                        '$price/$period',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: isSelected
+                              ? color
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: 0.6),
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  ...features.map((f) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: Row(
-                      children: [
-                        Icon(Icons.check, color: color, size: 16),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(f,
-                              style: TextStyle(fontSize: 13, color: isSelected ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))),
-                        ),
-                      ],
+                  ...features.map(
+                    (f) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(
+                        children: [
+                          Icon(Icons.check, color: color, size: 16),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              f,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: isSelected
+                                    ? Theme.of(context).colorScheme.onSurface
+                                    : Theme.of(context).colorScheme.onSurface
+                                          .withValues(alpha: 0.6),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  )),
+                  ),
                 ],
               ),
             ),
@@ -195,7 +284,8 @@ class _AccountSelectionScreenState extends State<AccountSelectionScreen> {
               Icon(Icons.check_circle, color: color, size: 28)
             else
               Container(
-                width: 28, height: 28,
+                width: 28,
+                height: 28,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.grey[400]!),

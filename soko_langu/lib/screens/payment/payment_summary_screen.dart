@@ -13,7 +13,6 @@ class PaymentSummaryScreen extends StatefulWidget {
   final String productId;
   final String productName;
   final double productPrice;
-  final String paymentMethod;
 
   const PaymentSummaryScreen({
     super.key,
@@ -22,7 +21,6 @@ class PaymentSummaryScreen extends StatefulWidget {
     required this.productId,
     required this.productName,
     required this.productPrice,
-    required this.paymentMethod,
   });
 
   @override
@@ -44,14 +42,11 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
 
   Future<void> _loadSellerProfile() async {
     final profile = await _userService.getProfile(widget.sellerId);
-    if (mounted) {
-      setState(() => _sellerProfile = profile);
-    }
+    if (mounted) setState(() => _sellerProfile = profile);
   }
 
-  Future<void> _iHavePaid() async {
+  Future<void> _payDirect() async {
     setState(() => _processing = true);
-
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
@@ -74,15 +69,14 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
       );
 
       if (!mounted) return;
-
       await _db.collection('products').doc(widget.productId).update({
         'soldCount': FieldValue.increment(1),
       });
+      if (!mounted) return;
 
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(context.tr('order_placed'))));
-
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const MyOrdersScreen()),
@@ -100,34 +94,22 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(title: Text('Payment Summary')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
+      appBar: AppBar(
+        title: Text(context.tr('payment_summary')),
+        backgroundColor: Colors.transparent,
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.only(left: 20, top: 20, right: 20, bottom: MediaQuery.of(context).padding.bottom + 20),
+          child: Column(
           children: [
-            Icon(Icons.info_outline, size: 64, color: Colors.blue),
-            const SizedBox(height: 8),
-            Text(
-              'Send Payment Directly to Seller',
-              style: Theme.of(
-                context,
-              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'After sending payment, tap "I\'ve Paid" below',
-              style: TextStyle(color: Colors.grey[600], fontSize: 14),
-            ),
-            const SizedBox(height: 24),
-
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   children: [
-                    _row(context, 'Product', widget.productName),
+                    _row(context, context.tr('product'), widget.productName),
                     const Divider(),
                     _row(
                       context,
@@ -140,9 +122,9 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 20),
 
+            // ── Direct Transfer to Seller ──
             Card(
               color: Colors.green[50],
               child: Padding(
@@ -155,7 +137,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                         Icon(Icons.person, color: Colors.green[700], size: 20),
                         const SizedBox(width: 8),
                         Text(
-                          'Send payment to ${widget.sellerName}',
+                          '${context.tr('send_payment_to')} ${widget.sellerName}',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
@@ -165,19 +147,17 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                       ],
                     ),
                     const SizedBox(height: 12),
-
                     if (_sellerProfile != null) ...[
-                      if (_sellerProfile!.phone.isNotEmpty) ...[
+                      if (_sellerProfile!.phone.isNotEmpty)
                         _paymentInfoRow(
                           Icons.phone,
                           'Phone',
                           _sellerProfile!.phone,
                         ),
-                      ],
                       if (_sellerProfile!.paymentNumbers.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         Text(
-                          'Payment Methods:',
+                          context.tr('payment_methods_label'),
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
@@ -189,16 +169,13 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                           (e) => _paymentInfoRow(Icons.payment, e.key, e.value),
                         ),
                       ],
-                    ] else ...[
+                    ] else
                       const Center(child: CircularProgressIndicator()),
-                    ],
                   ],
                 ),
               ),
             ),
-
             const SizedBox(height: 12),
-
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -212,23 +189,21 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'After sending money via M-Pesa/Airtel/Mixx, tap "I\'ve Paid" below so the seller knows to confirm.',
+                      context.tr('send_money_mpesa'),
                       style: TextStyle(fontSize: 12, color: Colors.amber[900]),
                     ),
                   ),
                 ],
               ),
             ),
-
             const SizedBox(height: 24),
-
             SizedBox(
               width: double.infinity,
               height: 52,
               child: ElevatedButton.icon(
-                onPressed: _processing ? null : _iHavePaid,
+                onPressed: _processing ? null : _payDirect,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
+                  backgroundColor: const Color(0xFF2D6A4F),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
@@ -247,7 +222,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                 label: Text(
                   _processing
                       ? 'Processing...'
-                      : "I've Paid - TZS ${widget.productPrice.toStringAsFixed(0)}",
+                      : '${context.tr('paid_button')} TZS ${widget.productPrice.toStringAsFixed(0)}',
                   style: const TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w600,
@@ -255,9 +230,7 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 16),
-
             SizedBox(
               width: double.infinity,
               height: 44,
@@ -292,10 +265,6 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
           ),
           Expanded(child: Text(value, style: const TextStyle(fontSize: 14))),
-          GestureDetector(
-            onTap: () {},
-            child: Icon(Icons.copy, size: 16, color: Colors.grey[400]),
-          ),
         ],
       ),
     );
@@ -305,7 +274,6 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
     BuildContext context,
     String label,
     String value, {
-    Color? valueColor,
     bool bold = false,
     double size = 14,
   }) {
@@ -322,12 +290,12 @@ class _PaymentSummaryScreenState extends State<PaymentSummaryScreen> {
             value,
             style: TextStyle(
               fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-              color: valueColor ?? Theme.of(context).colorScheme.onSurface,
               fontSize: size,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    );
+      );
   }
 }

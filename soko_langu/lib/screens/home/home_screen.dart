@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../services/product_service.dart';
 import '../../services/category_service.dart';
@@ -5,7 +6,11 @@ import '../../models/product_model.dart';
 import '../../models/category_model.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/ad_banner.dart';
+import '../../widgets/verified_badge.dart';
+import '../../shared/loading_widget.dart';
+import '../../extensions/context_tr.dart';
 import 'category_screen.dart';
+import 'category_products_screen.dart';
 import 'product_detail.dart';
 import 'add_product_screen.dart';
 import 'search_screen.dart';
@@ -26,6 +31,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _selectedBrand;
   bool _pageLoaded = false;
   int _retryKey = 0;
+  final _searchCtrl = TextEditingController();
   List<String> _brands = [
     'Nike',
     'Adidas',
@@ -39,6 +45,12 @@ class _HomeScreenState extends State<HomeScreen> {
     'Other',
   ];
 
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
   Widget _brandChip(String label, String? brand) {
     final isSelected = _selectedBrand == brand;
     return GestureDetector(
@@ -47,17 +59,18 @@ class _HomeScreenState extends State<HomeScreen> {
         margin: const EdgeInsets.only(right: 8),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.green : Colors.white,
+          color: isSelected ? const Color(0xFF2D6A4F) : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? Colors.green : Colors.grey[300]!,
+            color: isSelected ? const Color(0xFF2D6A4F) : Colors.grey[300]!,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? Colors.white : Colors.black,
+            color: isSelected ? Colors.white : Colors.grey[700],
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            fontSize: 13,
           ),
         ),
       ),
@@ -67,27 +80,33 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: Text(
+        centerTitle: false,
+        title: const Text(
           "Soko Kuu",
           style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface,
-            fontWeight: FontWeight.bold,
+            color: Color(0xFF2D6A4F),
+            fontWeight: FontWeight.w900,
+            fontSize: 28,
+            fontStyle: FontStyle.italic,
+            letterSpacing: -0.5,
           ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_none, color: Colors.green),
+            icon: const Icon(
+              Icons.notifications_none,
+              color: Color(0xFF2D6A4F),
+            ),
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const NotificationScreen()),
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.search, color: Colors.green),
+            icon: const Icon(Icons.search, color: Color(0xFF2D6A4F)),
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const SearchScreen()),
@@ -95,231 +114,373 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: StreamBuilder<List<Product>>(
-        key: ValueKey('products_${_selectedBrand ?? 'all'}_$_retryKey'),
-        stream: _selectedBrand == null
-            ? _productService.getProducts()
-            : _productService.getProductsByBrand(_selectedBrand!),
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting && !_pageLoaded) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (!_pageLoaded && snap.hasData && snap.data!.isNotEmpty) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) setState(() => _pageLoaded = true);
-            });
-          }
-          return SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  height: 50,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: [
-                      _brandChip('All', null),
-                      ..._brands.map((b) => _brandChip(b, b)),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        "Categories",
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const CategoryScreen(),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).padding.bottom + 80,
+          ),
+          child: Column(
+            children: [
+              // Search bar
+              RepaintBoundary(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.7),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.5),
                           ),
                         ),
-                        child: const Text("See All"),
+                        child: TextField(
+                          controller: _searchCtrl,
+                          readOnly: true,
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const SearchScreen(),
+                            ),
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Search products...',
+                            hintStyle: TextStyle(
+                              color: Colors.grey[400],
+                              fontSize: 14,
+                            ),
+                            prefixIcon: Icon(
+                              Icons.search,
+                              color: Colors.grey[400],
+                              size: 22,
+                            ),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 14,
+                            ),
+                          ),
+                        ),
                       ),
-                    ],
+                    ),
                   ),
                 ),
-                SizedBox(
-                  height: 100,
-                  child: StreamBuilder<List<Category>>(
-                    stream: CategoryService().getCategories(),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-                      return ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        itemCount: snapshot.data!.length,
-                        itemBuilder: (context, index) {
-                          final cat = snapshot.data![index];
-                          return GestureDetector(
-                            onTap: () => Navigator.push(
+              ),
+              // Brand chips
+              SizedBox(
+                height: 44,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  children: [
+                    _brandChip('All', null),
+                    ..._brands.map((b) => _brandChip(b, b)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              // Live section
+              _buildLiveNowSection(),
+              const SizedBox(height: 8),
+              // Categories
+              RepaintBoundary(
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            context.tr('categories'),
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1B4332),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) =>
-                                    CategoryProductsScreen(category: cat),
+                                builder: (_) => const CategoryScreen(),
                               ),
                             ),
-                            child: Container(
-                              width: 80,
-                              margin: const EdgeInsets.only(right: 12),
-                              child: Column(
-                                children: [
-                                  Container(
-                                    width: 60,
-                                    height: 60,
-                                    decoration: BoxDecoration(
-                                      color: Colors.blue[50],
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        cat.icon,
-                                        style: const TextStyle(fontSize: 30),
+                            child: Text(
+                              context.tr('see_all'),
+                              style: TextStyle(
+                                color: Color(0xFF40916C),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(
+                      height: 100,
+                      child: StreamBuilder<List<Category>>(
+                        stream: CategoryService().getCategories(),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) {
+                            return const Center(
+                              child: SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            );
+                          }
+                          return ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: snapshot.data!.length,
+                            itemBuilder: (context, index) {
+                              final cat = snapshot.data![index];
+                              return GestureDetector(
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        CategoryProductsScreen(category: cat),
+                                  ),
+                                ),
+                                child: Container(
+                                  width: 80,
+                                  margin: const EdgeInsets.only(right: 12),
+                                  child: Column(
+                                    children: [
+                                      Container(
+                                        width: 60,
+                                        height: 60,
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withValues(
+                                                alpha: 0.04,
+                                              ),
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 3),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            cat.icon,
+                                            style: const TextStyle(
+                                              fontSize: 30,
+                                            ),
+                                          ),
+                                        ),
                                       ),
-                                    ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        cat.nameSw,
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: Color(0xFF2D6A4F),
+                                        ),
+                                        textAlign: TextAlign.center,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      Text(
+                                        cat.name,
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          color: Colors.grey[500],
+                                        ),
+                                        textAlign: TextAlign.center,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    cat.nameSw,
-                                    style: const TextStyle(fontSize: 11),
-                                    textAlign: TextAlign.center,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                              ),
-                            ),
+                                ),
+                              );
+                            },
                           );
                         },
-                      );
-                    },
-                  ),
-                ),
-                _buildLiveNowSection(),
-                const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        _selectedBrand == null
-                            ? "Latest Products"
-                            : "Products - $_selectedBrand",
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
                       ),
-                      TextButton(
-                        onPressed: () {},
-                        child: const Text("See All"),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                Builder(
-                  builder: (context) {
-                    if (snap.hasError) {
-                      final err = snap.error.toString();
-                      return Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            children: [
-                              Icon(
-                                Icons.cloud_off,
-                                size: 48,
-                                color: Colors.grey[400],
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                'Kuna tatizo limetokea!',
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                err.contains('permission-denied')
-                                    ? 'Firestore permissions hazijafunguliwa. Fungua Firebase Console → Firestore → Rules.'
-                                    : err.contains('UNAVAILABLE')
-                                    ? 'Hakuna mtandao. Angalia internet connection yako.'
-                                    : 'Tafadhali jaribu tena.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 13,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              ElevatedButton.icon(
-                                onPressed: () => setState(() => _retryKey++),
-                                icon: const Icon(Icons.refresh, size: 18),
-                                label: const Text('Jaribu tena'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green,
-                                  foregroundColor: Colors.white,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }
-                    final products = snap.data ?? [];
-                    return GridView.builder(
-                      padding: const EdgeInsets.all(12),
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 12,
-                            childAspectRatio: 0.7,
-                          ),
-                      itemCount: products.length,
-                      itemBuilder: (context, index) => ProductCard(
-                        product: products[index],
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                ProductDetailPage(product: products[index]),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                const AdBanner(),
-              ],
+              ),
+              const SizedBox(height: 8),
+              // Products area
+              _buildProductsArea(),
+              const SizedBox(height: 16),
+              const AdBanner(),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+      floatingActionButton: Container(
+        decoration: const BoxDecoration(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+          gradient: LinearGradient(
+            colors: [Color(0xFF2D6A4F), Color(0xFF40916C)],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Color(0x332D6A4F),
+              blurRadius: 12,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: FloatingActionButton.extended(
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const AddProductScreen()),
+          ),
+          backgroundColor: Colors.transparent,
+          label: Text(
+            context.tr('sell_product'),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          icon: const Icon(Icons.add, color: Colors.white),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProductsArea() {
+    return StreamBuilder<List<Product>>(
+      key: ValueKey('products_${_selectedBrand ?? 'all'}_$_retryKey'),
+      stream: _selectedBrand == null
+          ? _productService.getProducts()
+          : _productService.getProductsByBrand(_selectedBrand!),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting && !_pageLoaded) {
+          return Padding(
+            padding: const EdgeInsets.all(24),
+            child: Center(
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
             ),
           );
-        },
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const AddProductScreen()),
-        ),
-        label: const Text("Uza Bidhaa"),
-        icon: const Icon(Icons.add),
-      ),
+        }
+        if (!_pageLoaded && snap.hasData && snap.data!.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() => _pageLoaded = true);
+          });
+        }
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    context.tr('latest_products'),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1B4332),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Builder(
+              builder: (context) {
+                if (snap.hasError) {
+                  final err = snap.error.toString();
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.cloud_off,
+                            size: 48,
+                            color: Colors.grey[400],
+                          ),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Kuna tatizo limetokea!',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            err.contains('permission-denied')
+                                ? 'Firestore permissions hazijafunguliwa.'
+                                : err.contains('UNAVAILABLE')
+                                ? 'Hakuna mtandao.'
+                                : 'Tafadhali jaribu tena.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: () => setState(() => _retryKey++),
+                            icon: const Icon(Icons.refresh, size: 18),
+                            label: const Text('Jaribu tena'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF2D6A4F),
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+                final products = snap.data ?? [];
+                return GridView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: 0.72,
+                  ),
+                  itemCount: products.length,
+                  itemBuilder: (context, index) => RepaintBoundary(
+                    child: ProductCard(
+                      product: products[index],
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              ProductDetailPage(product: products[index]),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -334,14 +495,18 @@ class _HomeScreenState extends State<HomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
               child: Row(
                 children: [
                   const LiveBadge(size: 14),
                   const SizedBox(width: 8),
-                  const Text(
-                    'Live Now',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  Text(
+                    context.tr('live_now'),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1B4332),
+                    ),
                   ),
                   const Spacer(),
                   Text(
@@ -355,7 +520,7 @@ class _HomeScreenState extends State<HomeScreen> {
               height: 120,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 itemCount: streams.length,
                 itemBuilder: (context, i) {
                   final stream = streams[i];
@@ -370,7 +535,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       width: 200,
                       margin: const EdgeInsets.only(right: 12),
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(16),
                         gradient: const LinearGradient(
                           colors: [Color(0xFFE53935), Color(0xFFFF6F00)],
                           begin: Alignment.topLeft,
@@ -383,7 +548,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             top: 8,
                             left: 8,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.black54,
                                 borderRadius: BorderRadius.circular(8),
@@ -391,11 +559,22 @@ class _HomeScreenState extends State<HomeScreen> {
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(Icons.person, color: Colors.white, size: 12),
+                                  const Icon(
+                                    Icons.person,
+                                    color: Colors.white,
+                                    size: 12,
+                                  ),
                                   const SizedBox(width: 4),
                                   Text(
                                     stream.userName,
-                                    style: const TextStyle(color: Colors.white, fontSize: 11),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                  VerifiedBadge(
+                                    tier: stream.userTier,
+                                    size: 10,
                                   ),
                                 ],
                               ),
@@ -405,14 +584,21 @@ class _HomeScreenState extends State<HomeScreen> {
                             top: 8,
                             right: 8,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 3,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.red,
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              child: const Text(
-                                'LIVE',
-                                style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                              child: Text(
+                                context.tr('live_tab'),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ),
@@ -422,7 +608,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             right: 8,
                             child: Text(
                               stream.productName,
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -437,19 +627,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         );
       },
-    );
-  }
-}
-
-class CategoryProductsScreen extends StatelessWidget {
-  final Category category;
-  const CategoryProductsScreen({super.key, required this.category});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(category.nameSw)),
-      body: const Center(child: Text("Category products coming soon")),
     );
   }
 }

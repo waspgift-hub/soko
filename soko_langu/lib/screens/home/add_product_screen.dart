@@ -41,7 +41,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   String _selectedCategory = 'Electronics';
   String _selectedSubcategory = '';
   String _selectedCondition = 'new';
-  List<String> _subcategories = [];
+  List<SubCategory> _subcategories = [];
   List<XFile> _newImages = [];
   List<String> _existingImages = [];
   bool _isWholesale = false;
@@ -132,14 +132,14 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   void _updateSubcategories() {
     final category = _categories.firstWhere(
-      (cat) => cat.name == _selectedCategory,
+      (c) => c.name == _selectedCategory,
       orElse: () => _categories.first,
     );
     setState(() {
-      _subcategories = category.subcategories.map((s) => s.name).toList();
+      _subcategories = category.subcategories;
       if (_subcategories.isNotEmpty &&
-          !_subcategories.contains(_selectedSubcategory)) {
-        _selectedSubcategory = _subcategories.first;
+          !_subcategories.any((s) => s.name == _selectedSubcategory)) {
+        _selectedSubcategory = _subcategories.first.name;
       }
     });
   }
@@ -221,7 +221,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
       navigator.pop();
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text("Error: $e")));
+      messenger.showSnackBar(
+        SnackBar(content: Text("${context.tr('error')}: $e")),
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -230,7 +232,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text(
           _isEditing
@@ -259,360 +260,374 @@ class _AddProductScreenState extends State<AddProductScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                context.tr('product_images'),
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: Colors.green,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            16,
+            16,
+            MediaQuery.of(context).viewInsets.bottom + 20,
+          ),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context.tr('product_images'),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: Colors.green,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 100,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 100,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      GestureDetector(
+                        onTap: _pickImages,
+                        child: Container(
+                          width: 100,
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            Icons.add_a_photo,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.6),
+                          ),
+                        ),
+                      ),
+                      ..._existingImages.map(
+                        (url) => Stack(
+                          children: [
+                            Container(
+                              margin: const EdgeInsets.only(left: 8),
+                              width: 100,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                image: DecorationImage(
+                                  image: NetworkImage(url),
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              top: 0,
+                              right: 0,
+                              child: GestureDetector(
+                                onTap: () => _removeExistingImage(
+                                  _existingImages.indexOf(url),
+                                ),
+                                child: Container(
+                                  decoration: const BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.close,
+                                    size: 18,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      ..._newImages.map(
+                        (file) => Stack(
+                          children: [
+                            Container(
+                              margin: const EdgeInsets.only(left: 8),
+                              width: 100,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                image: DecorationImage(
+                                  image: FileImage(File(file.path)),
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              top: 0,
+                              right: 0,
+                              child: GestureDetector(
+                                onTap: () =>
+                                    _removeNewImage(_newImages.indexOf(file)),
+                                child: Container(
+                                  decoration: const BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.close,
+                                    size: 18,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                TextFormField(
+                  controller: _nameController,
+                  decoration: InputDecoration(
+                    labelText: context.tr('product_name'),
+                    border: const OutlineInputBorder(),
+                    labelStyle: const TextStyle(color: Colors.green),
+                  ),
+                  validator: (v) => v!.isEmpty ? context.tr('required') : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _descriptionController,
+                  decoration: InputDecoration(
+                    labelText: context.tr('description'),
+                    border: const OutlineInputBorder(),
+                    labelStyle: const TextStyle(color: Colors.green),
+                  ),
+                  maxLines: 3,
+                  validator: (v) => v!.isEmpty ? context.tr('required') : null,
+                ),
+                const SizedBox(height: 12),
+                Row(
                   children: [
-                    GestureDetector(
-                      onTap: _pickImages,
-                      child: Container(
-                        width: 100,
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey),
-                          borderRadius: BorderRadius.circular(8),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _priceController,
+                        decoration: InputDecoration(
+                          labelText: context.tr('price'),
+                          border: const OutlineInputBorder(),
+                          labelStyle: const TextStyle(color: Colors.green),
                         ),
-                        child: Icon(
-                          Icons.add_a_photo,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withValues(alpha: 0.6),
-                        ),
+                        keyboardType: TextInputType.number,
+                        validator: (v) =>
+                            v!.isEmpty ? context.tr('required') : null,
                       ),
                     ),
-                    ..._existingImages.map(
-                      (url) => Stack(
-                        children: [
-                          Container(
-                            margin: const EdgeInsets.only(left: 8),
-                            width: 100,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8),
-                              image: DecorationImage(
-                                image: NetworkImage(url),
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            top: 0,
-                            right: 0,
-                            child: GestureDetector(
-                              onTap: () => _removeExistingImage(
-                                _existingImages.indexOf(url),
-                              ),
-                              child: Container(
-                                decoration: const BoxDecoration(
-                                  color: Colors.red,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.close,
-                                  size: 18,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    ..._newImages.map(
-                      (file) => Stack(
-                        children: [
-                          Container(
-                            margin: const EdgeInsets.only(left: 8),
-                            width: 100,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8),
-                              image: DecorationImage(
-                                image: FileImage(File(file.path)),
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            top: 0,
-                            right: 0,
-                            child: GestureDetector(
-                              onTap: () =>
-                                  _removeNewImage(_newImages.indexOf(file)),
-                              child: Container(
-                                decoration: const BoxDecoration(
-                                  color: Colors.red,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.close,
-                                  size: 18,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _stockController,
+                        decoration: InputDecoration(
+                          labelText: context.tr('stock'),
+                          border: const OutlineInputBorder(),
+                          labelStyle: const TextStyle(color: Colors.green),
+                        ),
+                        keyboardType: TextInputType.number,
+                        validator: (v) =>
+                            v!.isEmpty ? context.tr('required') : null,
                       ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 20),
-              TextFormField(
-                controller: _nameController,
-                decoration: InputDecoration(
-                  labelText: context.tr('product_name'),
-                  border: const OutlineInputBorder(),
-                  labelStyle: const TextStyle(color: Colors.green),
-                ),
-                validator: (v) => v!.isEmpty ? context.tr('required') : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _descriptionController,
-                decoration: InputDecoration(
-                  labelText: context.tr('description'),
-                  border: const OutlineInputBorder(),
-                  labelStyle: const TextStyle(color: Colors.green),
-                ),
-                maxLines: 3,
-                validator: (v) => v!.isEmpty ? context.tr('required') : null,
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _priceController,
-                      decoration: InputDecoration(
-                        labelText: context.tr('price'),
-                        border: const OutlineInputBorder(),
-                        labelStyle: const TextStyle(color: Colors.green),
-                      ),
-                      keyboardType: TextInputType.number,
-                      validator: (v) =>
-                          v!.isEmpty ? context.tr('required') : null,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _stockController,
-                      decoration: InputDecoration(
-                        labelText: context.tr('stock'),
-                        border: const OutlineInputBorder(),
-                        labelStyle: const TextStyle(color: Colors.green),
-                      ),
-                      keyboardType: TextInputType.number,
-                      validator: (v) =>
-                          v!.isEmpty ? context.tr('required') : null,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _brandController,
-                decoration: InputDecoration(
-                  labelText: context.tr('brand'),
-                  border: const OutlineInputBorder(),
-                  labelStyle: const TextStyle(color: Colors.green),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _locationController,
-                decoration: InputDecoration(
-                  labelText: context.tr('location'),
-                  border: const OutlineInputBorder(),
-                  labelStyle: const TextStyle(color: Colors.green),
-                ),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: _selectedCategory,
-                decoration: InputDecoration(
-                  labelText: context.tr('category'),
-                  border: const OutlineInputBorder(),
-                  labelStyle: const TextStyle(color: Colors.green),
-                ),
-                items: _categories
-                    .map(
-                      (cat) => DropdownMenuItem(
-                        value: cat.name,
-                        child: Text(cat.nameSw),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedCategory = value!;
-                    _updateSubcategories();
-                  });
-                },
-              ),
-              const SizedBox(height: 12),
-              if (_subcategories.isNotEmpty)
-                DropdownButtonFormField<String>(
-                  initialValue: _selectedSubcategory.isNotEmpty
-                      ? _selectedSubcategory
-                      : null,
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _brandController,
                   decoration: InputDecoration(
-                    labelText: context.tr('subcategory'),
+                    labelText: context.tr('brand'),
                     border: const OutlineInputBorder(),
                     labelStyle: const TextStyle(color: Colors.green),
                   ),
-                  items: _subcategories
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _locationController,
+                  decoration: InputDecoration(
+                    labelText: context.tr('location'),
+                    border: const OutlineInputBorder(),
+                    labelStyle: const TextStyle(color: Colors.green),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedCategory,
+                  decoration: InputDecoration(
+                    labelText: context.tr('category'),
+                    border: const OutlineInputBorder(),
+                    labelStyle: const TextStyle(color: Colors.green),
+                  ),
+                  items: _categories
                       .map(
-                        (sub) => DropdownMenuItem(value: sub, child: Text(sub)),
+                        (cat) => DropdownMenuItem(
+                          value: cat.name,
+                          child: Text('${cat.nameSw} | ${cat.name}'),
+                        ),
                       )
                       .toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedCategory = value!;
+                      _updateSubcategories();
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
+                if (_subcategories.isNotEmpty)
+                  DropdownButtonFormField<String>(
+                    initialValue: _selectedSubcategory.isNotEmpty
+                        ? _selectedSubcategory
+                        : null,
+                    decoration: InputDecoration(
+                      labelText: context.tr('subcategory'),
+                      border: const OutlineInputBorder(),
+                      labelStyle: const TextStyle(color: Colors.green),
+                    ),
+                    items: _subcategories
+                        .map(
+                          (sub) => DropdownMenuItem(
+                            value: sub.name,
+                            child: Text('${sub.nameSw} | ${sub.name}'),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) =>
+                        setState(() => _selectedSubcategory = value!),
+                  ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedCondition,
+                  decoration: InputDecoration(
+                    labelText: context.tr('condition'),
+                    border: const OutlineInputBorder(),
+                    labelStyle: const TextStyle(color: Colors.green),
+                  ),
+                  items: [
+                    DropdownMenuItem(
+                      value: 'new',
+                      child: Text(context.tr('new')),
+                    ),
+                    DropdownMenuItem(
+                      value: 'used',
+                      child: Text(context.tr('used')),
+                    ),
+                    DropdownMenuItem(
+                      value: 'refurbished',
+                      child: Text(context.tr('refurbished')),
+                    ),
+                  ],
                   onChanged: (value) =>
-                      setState(() => _selectedSubcategory = value!),
+                      setState(() => _selectedCondition = value!),
                 ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: _selectedCondition,
-                decoration: InputDecoration(
-                  labelText: context.tr('condition'),
-                  border: const OutlineInputBorder(),
-                  labelStyle: const TextStyle(color: Colors.green),
+                const SizedBox(height: 12),
+                SwitchListTile(
+                  title: Text(
+                    context.tr('wholesale'),
+                    style: const TextStyle(color: Colors.green),
+                  ),
+                  value: _isWholesale,
+                  onChanged: (value) => setState(() => _isWholesale = value),
                 ),
-                items: [
-                  DropdownMenuItem(
-                    value: 'new',
-                    child: Text(context.tr('new')),
-                  ),
-                  DropdownMenuItem(
-                    value: 'used',
-                    child: Text(context.tr('used')),
-                  ),
-                  DropdownMenuItem(
-                    value: 'refurbished',
-                    child: Text(context.tr('refurbished')),
-                  ),
-                ],
-                onChanged: (value) =>
-                    setState(() => _selectedCondition = value!),
-              ),
-              const SizedBox(height: 12),
-              SwitchListTile(
-                title: Text(
-                  context.tr('wholesale'),
-                  style: const TextStyle(color: Colors.green),
-                ),
-                value: _isWholesale,
-                onChanged: (value) => setState(() => _isWholesale = value),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    "Variants",
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: Colors.green,
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      context.tr('variants'),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: Colors.green,
+                      ),
                     ),
-                  ),
-                  TextButton.icon(
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text("Add"),
-                    onPressed: _addVariant,
-                  ),
-                ],
-              ),
-              ..._variants.asMap().entries.map((entry) {
-                final i = entry.key;
-                final v = entry.value;
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: v.nameCtrl,
-                                decoration: const InputDecoration(
-                                  labelText: "Name (e.g. Size, Color)",
-                                  border: OutlineInputBorder(),
-                                  isDense: true,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            IconButton(
-                              icon: const Icon(Icons.close, color: Colors.red),
-                              onPressed: () => _removeVariant(i),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: v.valueCtrl,
-                                decoration: const InputDecoration(
-                                  labelText: "Value (e.g. Large, Red)",
-                                  border: OutlineInputBorder(),
-                                  isDense: true,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            SizedBox(
-                              width: 80,
-                              child: TextField(
-                                controller: v.priceCtrl,
-                                decoration: const InputDecoration(
-                                  labelText: "Price \u00B1",
-                                  border: OutlineInputBorder(),
-                                  isDense: true,
-                                ),
-                                keyboardType: TextInputType.number,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            SizedBox(
-                              width: 60,
-                              child: TextField(
-                                controller: v.stockCtrl,
-                                decoration: const InputDecoration(
-                                  labelText: "Stock",
-                                  border: OutlineInputBorder(),
-                                  isDense: true,
-                                ),
-                                keyboardType: TextInputType.number,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                    TextButton.icon(
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text("Add"),
+                      onPressed: _addVariant,
                     ),
-                  ),
-                );
-              }),
-            ],
+                  ],
+                ),
+                ..._variants.asMap().entries.map((entry) {
+                  final i = entry.key;
+                  final v = entry.value;
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: v.nameCtrl,
+                                  decoration: InputDecoration(
+                                    labelText: context.tr('name_eg'),
+                                    border: OutlineInputBorder(),
+                                    isDense: true,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.close,
+                                  color: Colors.red,
+                                ),
+                                onPressed: () => _removeVariant(i),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: v.valueCtrl,
+                                  decoration: InputDecoration(
+                                    labelText: context.tr('value_eg'),
+                                    border: OutlineInputBorder(),
+                                    isDense: true,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              SizedBox(
+                                width: 80,
+                                child: TextField(
+                                  controller: v.priceCtrl,
+                                  decoration: InputDecoration(
+                                    labelText: context.tr('price_adj_label'),
+                                    border: OutlineInputBorder(),
+                                    isDense: true,
+                                  ),
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              SizedBox(
+                                width: 60,
+                                child: TextField(
+                                  controller: v.stockCtrl,
+                                  decoration: const InputDecoration(
+                                    labelText: "Stock",
+                                    border: OutlineInputBorder(),
+                                    isDense: true,
+                                  ),
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+              ],
+            ),
           ),
         ),
       ),

@@ -46,11 +46,15 @@ class ReviewService {
 
       final isVerified = orderId != null;
 
+      final userDoc = await _db.collection('users').doc(user.uid).get();
+      final tier = userDoc.data()?['accountTier'] as String? ?? 'free';
+
       await _db.collection("reviews").add({
         'productId': productId,
         'userId': user.uid,
         'userName': user.displayName ?? user.email ?? 'Anonymous',
         'userImage': user.photoURL,
+        'userTier': tier,
         'rating': rating,
         'comment': comment,
         'createdAt': FieldValue.serverTimestamp(),
@@ -80,7 +84,7 @@ class ReviewService {
               userId: sellerId,
               title: 'New Review!',
               body:
-                  '${user.displayName ?? "Someone"} rated your product ${rating} stars',
+                  '${user.displayName ?? "Someone"} rated your product $rating stars',
             );
           }
         }

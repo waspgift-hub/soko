@@ -231,7 +231,6 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -252,7 +251,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
               )
             : null,
       ),
-      body: _buildBody(),
+      body: SafeArea(child: _buildBody()),
       bottomNavigationBar: _currentIndex != null ? _buildMiniPlayer() : null,
     );
   }
@@ -261,135 +260,147 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
     if (_isLoading) return const Center(child: CircularProgressIndicator());
 
     if (!_hasPermission) {
-      return Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 100,
-              height: 100,
-              decoration: BoxDecoration(
-                color: Colors.green.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
+      return SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).padding.bottom + 20,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(40),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.music_note_rounded,
+                  size: 50,
+                  color: Colors.green,
+                ),
               ),
-              child: const Icon(
-                Icons.music_note_rounded,
-                size: 50,
-                color: Colors.green,
+              const SizedBox(height: 32),
+              const Text(
+                "Music Player",
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
-            ),
-            const SizedBox(height: 32),
-            const Text(
-              "Music Player",
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              "To play your music, Soko Langu needs permission to access audio files on your device.",
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
-                height: 1.5,
+              const SizedBox(height: 12),
+              Text(
+                "To play your music, Soko Langu needs permission to access audio files on your device.",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                  height: 1.5,
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              "Tap 'Allow Access' to grant permission.",
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: Colors.grey[500]),
-            ),
-            const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(25),
+              const SizedBox(height: 8),
+              Text(
+                "Tap 'Allow Access' to grant permission.",
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+              ),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(25),
+                    ),
                   ),
-                ),
-                icon: const Icon(Icons.check_circle),
-                label: const Text(
-                  "Allow Access",
-                  style: TextStyle(fontSize: 16),
-                ),
-                onPressed: () async {
-                  setState(() => _isLoading = true);
-                  final sdk = Platform.isAndroid
-                      ? int.tryParse(
-                              Platform.operatingSystemVersion.split(' ').last,
-                            ) ??
-                            0
-                      : 0;
-                  final perms = sdk >= 33
-                      ? [Permission.audio, Permission.manageExternalStorage]
-                      : sdk >= 30
-                      ? [Permission.storage, Permission.manageExternalStorage]
-                      : [Permission.storage];
-                  for (final p in perms) {
-                    final status = await p.request();
-                    if (status.isGranted) {
-                      setState(() => _hasPermission = true);
-                      _loadSongs();
-                      return;
-                    }
-                  }
-                  if (mounted) {
-                    setState(() => _isLoading = false);
-                    bool anyPermanentlyDenied = false;
+                  icon: const Icon(Icons.check_circle),
+                  label: const Text(
+                    "Allow Access",
+                    style: TextStyle(fontSize: 16),
+                  ),
+                  onPressed: () async {
+                    setState(() => _isLoading = true);
+                    final sdk = Platform.isAndroid
+                        ? int.tryParse(
+                                Platform.operatingSystemVersion.split(' ').last,
+                              ) ??
+                              0
+                        : 0;
+                    final perms = sdk >= 33
+                        ? [Permission.audio, Permission.manageExternalStorage]
+                        : sdk >= 30
+                        ? [Permission.storage, Permission.manageExternalStorage]
+                        : [Permission.storage];
                     for (final p in perms) {
-                      if (await p.status.isPermanentlyDenied) {
-                        anyPermanentlyDenied = true;
-                        break;
+                      final status = await p.request();
+                      if (status.isGranted) {
+                        setState(() => _hasPermission = true);
+                        _loadSongs();
+                        return;
                       }
                     }
-                    if (anyPermanentlyDenied && mounted) {
-                      final go = await showDialog<bool>(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          title: const Text("Permission Required"),
-                          content: const Text(
-                            "Permission was denied. Open app settings to enable it manually.",
+                    if (mounted) {
+                      setState(() => _isLoading = false);
+                      bool anyPermanentlyDenied = false;
+                      for (final p in perms) {
+                        if (await p.status.isPermanentlyDenied) {
+                          anyPermanentlyDenied = true;
+                          break;
+                        }
+                      }
+                      if (anyPermanentlyDenied && mounted) {
+                        final go = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text("Permission Required"),
+                            content: const Text(
+                              "Permission was denied. Open app settings to enable it manually.",
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                child: const Text("Cancel"),
+                              ),
+                              ElevatedButton(
+                                onPressed: () => Navigator.pop(ctx, true),
+                                child: const Text("Open Settings"),
+                              ),
+                            ],
                           ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(ctx, false),
-                              child: const Text("Cancel"),
-                            ),
-                            ElevatedButton(
-                              onPressed: () => Navigator.pop(ctx, true),
-                              child: const Text("Open Settings"),
-                            ),
-                          ],
-                        ),
-                      );
-                      if (go == true) {
-                        await openAppSettings();
-                        await _checkPermission();
+                        );
+                        if (go == true) {
+                          await openAppSettings();
+                          await _checkPermission();
+                        }
                       }
                     }
-                  }
-                },
+                  },
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       );
     }
 
     if (_songs.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.music_note, size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text("No songs found", style: TextStyle(color: Colors.grey[600])),
-          ],
+      return SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).padding.bottom + 20,
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.music_note, size: 64, color: Colors.grey[400]),
+              const SizedBox(height: 16),
+              Text("No songs found", style: TextStyle(color: Colors.grey[600])),
+            ],
+          ),
         ),
       );
     }
@@ -677,7 +688,6 @@ class _PlaylistViewScreen extends StatelessWidget {
         .toList();
 
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         title: Text(
