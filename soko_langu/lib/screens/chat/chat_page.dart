@@ -4,8 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:audioplayers/audioplayers.dart';
-import 'package:record/record.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
@@ -46,13 +44,8 @@ class _ChatPageState extends State<ChatPage> {
   final PresenceService _presenceService = PresenceService();
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _picker = ImagePicker();
-  final AudioRecorder _recorder = AudioRecorder();
-  final AudioPlayer _audioPlayer = AudioPlayer();
-  StreamSubscription? _playerCompleteSub;
   UserProfile? _sellerProfile;
   bool _showSellerInfo = false;
-  bool _isRecording = false;
-  String? _playingVoiceMessageId;
   String? _editingMessageId;
   bool _isTyping = false;
   String? _wallpaperPath;
@@ -81,9 +74,6 @@ class _ChatPageState extends State<ChatPage> {
     _messageController.removeListener(_onTyping);
     _messageController.dispose();
     _scrollController.dispose();
-    _recorder.dispose();
-    _playerCompleteSub?.cancel();
-    _audioPlayer.dispose();
     _typingDebounce?.cancel();
     chatTyping.sendTypingStatus(widget.receiverId, false);
     super.dispose();
@@ -174,64 +164,6 @@ class _ChatPageState extends State<ChatPage> {
         );
       }
     }
-  }
-
-  Future<void> _startRecording() async {
-    final granted = await requestPermissionWithDialog(context, Permission.microphone, 'permission_microphone');
-    if (!granted) return;
-    try {
-      await _recorder.start(const RecordConfig(), path: _voiceMessagePath());
-      setState(() => _isRecording = true);
-    } catch (e) {
-      debugPrint('Record start error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${context.tr('voice')}: $e')),
-        );
-      }
-    }
-  }
-
-  Future<void> _stopAndSendRecording() async {
-    if (!_isRecording) return;
-    try {
-      final path = await _recorder.stop();
-      setState(() => _isRecording = false);
-      if (path == null) return;
-
-      final url = await CloudinaryService.uploadFromPath(path, folder: 'chat_voice');
-      await chatService.sendMessage(
-        receiverId: widget.receiverId,
-        content: 'voice://$url',
-        messageType: 'voice',
-      );
-      _scrollToBottom();
-    } catch (e) {
-      debugPrint('Record stop error: $e');
-      if (mounted) setState(() => _isRecording = false);
-    }
-  }
-
-  String _voiceMessagePath() {
-    final dir = Directory.systemTemp;
-    return '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
-  }
-
-  Future<void> _playVoiceMessage(String messageId, String url) async {
-    if (_playingVoiceMessageId == messageId) {
-      await _audioPlayer.stop();
-      setState(() => _playingVoiceMessageId = null);
-      return;
-    }
-    if (_playingVoiceMessageId != null) await _audioPlayer.stop();
-
-    _playerCompleteSub?.cancel();
-    _playerCompleteSub = _audioPlayer.onPlayerComplete.listen((_) {
-      setState(() => _playingVoiceMessageId = null);
-    });
-
-    await _audioPlayer.play(UrlSource(url));
-    setState(() => _playingVoiceMessageId = messageId);
   }
 
   void _scrollToBottom() {
@@ -538,15 +470,6 @@ class _ChatPageState extends State<ChatPage> {
           Row(
             children: [
               IconButton(icon: Icon(Icons.image, color: cs.primary), onPressed: _editingMessageId != null ? null : _pickAndSendImage),
-              GestureDetector(
-                onLongPressStart: _editingMessageId != null ? null : (_) => _startRecording(),
-                onLongPressEnd: _editingMessageId != null ? null : (_) => _stopAndSendRecording(),
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: _isRecording ? Colors.red : cs.primary, shape: BoxShape.circle),
-                  child: Icon(_isRecording ? Icons.mic : Icons.mic_none, color: Colors.white, size: 20),
-                ),
-              ),
               const SizedBox(width: 4),
               Expanded(
                 child: Container(
@@ -612,13 +535,17 @@ class _ChatPageState extends State<ChatPage> {
               if (hasReply) _buildReplyPreview(message, isMe, cs),
               if (isDeleted)
                 Text(context.tr('deleted_for_everyone'), style: TextStyle(fontSize: 15, fontStyle: FontStyle.italic, color: isMe ? Colors.white70 : cs.onSurface.withValues(alpha: 0.6)))
+              else if (isVoice)
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: isMe ? Colors.white.withValues(alpha: 0.2) : cs.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.mic, color: isMe ? Colors.white : cs.primary), const SizedBox(width: 8), Text(context.tr('voice'), style: TextStyle(fontSize: 13, color: isMe ? Colors.white70 : cs.onSurfaceVariant))]),
+                )
               else if (isImage)
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: CachedNetworkImage(imageUrl: message.content, fit: BoxFit.cover, width: double.infinity, placeholder: (context, url) => Container(height: 200, color: cs.surfaceContainerHighest, child: const Center(child: CircularProgressIndicator(strokeWidth: 2)))),
                 )
-              else if (isVoice)
-                _buildVoiceBubble(message, isMe, cs)
               else
                 Text(message.content, style: TextStyle(fontSize: 16, color: isMe ? Colors.white : cs.onSurface)),
               if (message.reactions.isNotEmpty) _buildReactions(message, isMe),
@@ -684,24 +611,6 @@ class _ChatPageState extends State<ChatPage> {
             ),
           );
         }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildVoiceBubble(Message message, bool isMe, ColorScheme cs) {
-    final url = message.content.replaceFirst('voice://', '');
-    final isPlaying = _playingVoiceMessageId == message.id;
-    return InkWell(
-      onTap: () => _playVoiceMessage(message.id, url),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(isPlaying ? Icons.stop : Icons.play_arrow, color: isMe ? Colors.white : cs.primary),
-          const SizedBox(width: 8),
-          Container(width: 80, height: 4, decoration: BoxDecoration(color: isMe ? Colors.white30 : cs.outlineVariant, borderRadius: BorderRadius.circular(2)), child: FractionallySizedBox(alignment: Alignment.centerLeft, widthFactor: isPlaying ? 0.6 : 0.3, child: Container(decoration: BoxDecoration(color: isMe ? Colors.white : cs.primary, borderRadius: BorderRadius.circular(2))))),
-          const SizedBox(width: 8),
-          Text(context.tr('voice'), style: TextStyle(fontSize: 13, color: isMe ? Colors.white70 : cs.onSurfaceVariant)),
-        ],
       ),
     );
   }
