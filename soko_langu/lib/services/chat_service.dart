@@ -112,13 +112,13 @@ class ChatService {
           'reactions': {},
         });
 
+    final senderName = _auth.currentUser!.displayName ?? _auth.currentUser!.email ?? 'User';
     final displayContent = messageType == 'image' ? '📷 Picha' : messageType == 'voice' ? '🎤 Sauti' : content;
     await _db.collection("conversations").doc(conversationId).set({
       'participants': [_uid, receiverId],
       'lastMessage': displayContent,
       'lastMessageTime': FieldValue.serverTimestamp(),
-      'otherUserName': _auth.currentUser!.displayName ?? _auth.currentUser!.email ?? '',
-      'otherUserImage': _auth.currentUser!.photoURL,
+      'participantNames': { _uid: senderName },
       'unreadCount': FieldValue.increment(1),
     }, SetOptions(merge: true));
 
