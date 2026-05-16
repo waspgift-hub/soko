@@ -344,6 +344,69 @@ class _ConversationTile extends StatelessWidget {
     return '${time.day}/${time.month}';
   }
 
+  void _showOptions(BuildContext context) {
+    final chatService = ChatService();
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(conversation.isPinned ? Icons.push_pin : Icons.push_pin_outlined),
+              title: Text(conversation.isPinned ? context.tr('unpin_chat') : context.tr('pin_chat')),
+              onTap: () {
+                Navigator.pop(ctx);
+                if (conversation.isPinned) {
+                  chatService.unpinConversation(otherUserId);
+                } else {
+                  chatService.pinConversation(otherUserId);
+                }
+              },
+            ),
+            ListTile(
+              leading: Icon(conversation.isMuted ? Icons.notifications_off : Icons.notifications),
+              title: Text(conversation.isMuted ? context.tr('unmute_chat') : context.tr('mute_chat')),
+              onTap: () {
+                Navigator.pop(ctx);
+                if (conversation.isMuted) {
+                  chatService.unmuteConversation(otherUserId);
+                } else {
+                  chatService.muteConversation(otherUserId);
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.block, color: Colors.red),
+              title: Text(
+                context.tr('block_user'),
+                style: const TextStyle(color: Colors.red),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                chatService.blockUser(otherUserId);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(context.tr('user_blocked'))),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete, color: Colors.red),
+              title: Text(
+                context.tr('delete_chat'),
+                style: const TextStyle(color: Colors.red),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                onDelete();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final name = profile?.displayName.isNotEmpty == true
@@ -354,6 +417,9 @@ class _ConversationTile extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
+      color: conversation.isPinned
+          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.05)
+          : null,
       child: ListTile(
         leading: Stack(
           children: [
@@ -395,6 +461,11 @@ class _ConversationTile extends StatelessWidget {
         ),
         title: Row(
           children: [
+            if (conversation.isPinned)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Icon(Icons.push_pin, size: 14, color: Theme.of(context).colorScheme.primary),
+              ),
             Expanded(
               child: Text(
                 name,
@@ -405,10 +476,21 @@ class _ConversationTile extends StatelessWidget {
             VerifiedBadge(tier: profile?.accountTier ?? 'basic', size: 14),
           ],
         ),
-        subtitle: Text(
-          conversation.lastMessage,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+        subtitle: Row(
+          children: [
+            if (conversation.isMuted)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Icon(Icons.notifications_off, size: 12, color: Colors.grey),
+              ),
+            Expanded(
+              child: Text(
+                conversation.lastMessage,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
         ),
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -440,7 +522,7 @@ class _ConversationTile extends StatelessWidget {
           '${AppRoutes.chat}/$otherUserId',
           extra: {'name': name},
         ),
-        onLongPress: onDelete,
+        onLongPress: () => _showOptions(context),
       ),
     );
   }

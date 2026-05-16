@@ -63,6 +63,9 @@ class _ChatPageState extends State<ChatPage> {
   bool _isTyping = false;
   String? _wallpaperPath;
   Timer? _typingDebounce;
+  bool _searchMode = false;
+  final TextEditingController _searchController = TextEditingController();
+  List<Message> _searchResults = [];
 
   @override
   void initState() {
@@ -82,6 +85,7 @@ class _ChatPageState extends State<ChatPage> {
   void dispose() {
     _messageController.removeListener(_onTyping);
     _messageController.dispose();
+    _searchController.dispose();
     _scrollController.dispose();
     _recorder.dispose();
     _playerCompleteSub?.cancel();
@@ -90,6 +94,32 @@ class _ChatPageState extends State<ChatPage> {
     _callAnswerSub?.cancel();
     chatTyping.sendTypingStatus(widget.receiverId, false);
     super.dispose();
+  }
+
+  void _startSearch() {
+    setState(() {
+      _searchMode = true;
+      _searchResults = [];
+    });
+  }
+
+  void _stopSearch() {
+    setState(() {
+      _searchMode = false;
+      _searchController.clear();
+      _searchResults = [];
+    });
+  }
+
+  Future<void> _performSearch(String query) async {
+    if (query.trim().isEmpty) {
+      setState(() => _searchResults = []);
+      return;
+    }
+    final results = await chatService.searchMessages(widget.receiverId, query.trim());
+    if (mounted) {
+      setState(() => _searchResults = results);
+    }
   }
 
   void _onTyping() {
@@ -474,6 +504,10 @@ class _ChatPageState extends State<ChatPage> {
         ),
         actions: [
           IconButton(
+            icon: Icon(_searchMode ? Icons.close : Icons.search, color: cs.primary),
+            onPressed: _searchMode ? _stopSearch : _startSearch,
+          ),
+          IconButton(
             icon: Icon(Icons.phone, color: cs.primary),
             onPressed: _startVoiceCall,
           ),
@@ -499,6 +533,8 @@ class _ChatPageState extends State<ChatPage> {
             ),
           if (_isCalling)
             _buildCallingBanner(cs)
+          else if (_searchMode)
+            _buildSearchOverlay(cs)
           else
             Column(
               children: [
@@ -538,6 +574,140 @@ class _ChatPageState extends State<ChatPage> {
           },
         );
       },
+    );
+  }
+
+  Widget _buildSearchOverlay(ColorScheme cs) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          color: cs.surface,
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    hintText: context.tr('search_messages'),
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _searchResults = []);
+                            },
+                          )
+                        : null,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(25),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  ),
+                  onChanged: _performSearch,
+                  onSubmitted: _performSearch,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _searchResults.isEmpty && _searchController.text.isNotEmpty
+              ? Center(
+                  child: Text(
+                    context.tr('no_messages_found'),
+                    style: TextStyle(color: cs.onSurface.withValues(alpha: 0.6)),
+                  ),
+                )
+              : _searchResults.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.search, size: 64, color: cs.onSurface.withValues(alpha: 0.3)),
+                          const SizedBox(height: 16),
+                          Text(
+                            context.tr('search_messages_hint'),
+                            style: TextStyle(color: cs.onSurface.withValues(alpha: 0.5)),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(10),
+                      itemCount: _searchResults.length,
+                      itemBuilder: (context, index) {
+                        final message = _searchResults[index];
+                        final isMe = message.senderId == FirebaseAuth.instance.currentUser?.uid;
+                        return _buildSearchResultBubble(message, isMe, cs);
+                      },
+                    ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSearchResultBubble(Message message, bool isMe, ColorScheme cs) {
+    return GestureDetector(
+      onTap: () {
+        _stopSearch();
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (_scrollController.hasClients) {
+            _scrollController.animateTo(
+              0,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
+          }
+        });
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isMe ? const Color(0xFF2D6A4F) : cs.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: cs.primary.withValues(alpha: 0.3),
+            width: 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              message.content,
+              style: TextStyle(
+                fontSize: 14,
+                color: isMe ? Colors.white : cs.onSurface,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${message.timestamp.hour}:${message.timestamp.minute.toString().padLeft(2, '0')}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isMe ? Colors.white70 : cs.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '${message.timestamp.day}/${message.timestamp.month}/${message.timestamp.year}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isMe ? Colors.white54 : cs.onSurface.withValues(alpha: 0.4),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 
