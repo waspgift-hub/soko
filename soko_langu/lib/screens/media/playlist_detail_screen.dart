@@ -39,13 +39,24 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
 
   void _playAll() {
     if (_songs.isEmpty) return;
-    _audio.playSong(widget.allSongs.indexOf(_songs[0]));
+    final idx = _audio.songs.indexWhere((s) => s.data == _songs[0].data);
+    if (idx >= 0) {
+      _audio.playSong(idx);
+    } else {
+      _audio.songs = widget.allSongs;
+      _audio.playSong(widget.allSongs.indexOf(_songs[0]));
+    }
   }
 
   void _playSong(int index) {
-    final songIndex = widget.allSongs.indexOf(_songs[index]);
-    if (songIndex >= 0) {
-      _audio.playSong(songIndex);
+    final song = _songs[index];
+    final idx = _audio.songs.indexWhere((s) => s.data == song.data);
+    if (idx >= 0) {
+      _audio.playSong(idx);
+    } else {
+      _audio.songs = widget.allSongs;
+      final globalIdx = widget.allSongs.indexOf(song);
+      if (globalIdx >= 0) _audio.playSong(globalIdx);
     }
   }
 
@@ -106,11 +117,11 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.music_note, size: 64, color: Colors.grey[400]),
+                    Icon(Icons.music_note, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     const SizedBox(height: 16),
                     Text(
                       context.tr('no_songs_in_playlist'),
-                      style: TextStyle(color: Colors.grey[600]),
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                   ],
                 ),
@@ -122,8 +133,8 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                     padding: const EdgeInsets.all(16),
                     margin: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF2D6A4F), Color(0xFF40916C)],
+                      gradient: LinearGradient(
+                        colors: [Theme.of(context).colorScheme.secondary, Theme.of(context).colorScheme.secondary],
                       ),
                       borderRadius: BorderRadius.circular(16),
                     ),
@@ -150,8 +161,8 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                             icon: const Icon(Icons.play_arrow),
                             label: Text(context.tr('play_all')),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: const Color(0xFF2D6A4F),
+                              backgroundColor: Theme.of(context).colorScheme.surface,
+                              foregroundColor: Theme.of(context).colorScheme.secondary,
                             ),
                           ),
                         ),
@@ -166,7 +177,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                         final song = _songs[i];
                         return Card(
                           margin: const EdgeInsets.only(bottom: 8),
-                          color: Colors.white,
+                          color: Theme.of(context).colorScheme.surface,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -175,12 +186,12 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                               width: 44,
                               height: 44,
                               decoration: BoxDecoration(
-                                color: const Color(0xFFD8F3DC),
+                                color: Theme.of(context).colorScheme.primaryContainer,
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                              child: const Icon(
+                              child: Icon(
                                 Icons.music_note,
-                                color: Color(0xFF2D6A4F),
+                                color: Theme.of(context).colorScheme.secondary,
                               ),
                             ),
                             title: Text(

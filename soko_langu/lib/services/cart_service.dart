@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/cart_model.dart';
+import '../utils/network_error.dart';
 
 class CartService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -29,7 +30,10 @@ class CartService {
   // ➕ ADD TO CART
   // =========================
   Future<void> addToCart(CartItem item) async {
-    if (_userId == null) throw Exception("User not logged in");
+    if (_userId == null) throw NetworkError(
+        message: 'User not logged in',
+        userMessage: 'Please log in to continue.',
+      );
 
     try {
       final docRef = _db
@@ -46,7 +50,11 @@ class CartService {
         await docRef.set(item.toMap());
       }
     } catch (e) {
-      throw Exception("Failed to add to cart: $e");
+      throw NetworkError(
+          message: "Failed to add to cart: $e",
+          userMessage: translateError(e),
+          originalError: e,
+        );
     }
   }
 
@@ -54,7 +62,10 @@ class CartService {
   // 🔄 UPDATE QUANTITY
   // =========================
   Future<void> updateQuantity(String productId, int quantity) async {
-    if (_userId == null) throw Exception("User not logged in");
+    if (_userId == null) throw NetworkError(
+        message: 'User not logged in',
+        userMessage: 'Please log in to continue.',
+      );
 
     try {
       if (quantity <= 0) {
@@ -69,7 +80,11 @@ class CartService {
           .doc(productId)
           .update({'quantity': quantity});
     } catch (e) {
-      throw Exception("Failed to update quantity: $e");
+      throw NetworkError(
+          message: "Failed to update quantity: $e",
+          userMessage: translateError(e),
+          originalError: e,
+        );
     }
   }
 
@@ -77,7 +92,10 @@ class CartService {
   // 🗑️ REMOVE FROM CART
   // =========================
   Future<void> removeFromCart(String productId) async {
-    if (_userId == null) throw Exception("User not logged in");
+    if (_userId == null) throw NetworkError(
+        message: 'User not logged in',
+        userMessage: 'Please log in to continue.',
+      );
 
     try {
       await _db
@@ -87,7 +105,11 @@ class CartService {
           .doc(productId)
           .delete();
     } catch (e) {
-      throw Exception("Failed to remove from cart: $e");
+      throw NetworkError(
+          message: "Failed to remove from cart: $e",
+          userMessage: translateError(e),
+          originalError: e,
+        );
     }
   }
 
@@ -95,7 +117,10 @@ class CartService {
   // 🧹 CLEAR CART
   // =========================
   Future<void> clearCart() async {
-    if (_userId == null) throw Exception("User not logged in");
+    if (_userId == null) throw NetworkError(
+        message: 'User not logged in',
+        userMessage: 'Please log in to continue.',
+      );
 
     try {
       final items = await _db
@@ -110,7 +135,11 @@ class CartService {
       }
       await batch.commit();
     } catch (e) {
-      throw Exception("Failed to clear cart: $e");
+      throw NetworkError(
+          message: "Failed to clear cart: $e",
+          userMessage: translateError(e),
+          originalError: e,
+        );
     }
   }
 

@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Soko Langu Admin</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+* { box-sizing:border-box; }
+body { background:#f0f2f5; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:13px; margin:0; }
+.sidebar { position:fixed; top:0; left:0; width:200px; height:100vh; background:#1b2a3b; color:#cdd9e5; z-index:100; overflow-y:auto; }
+.sidebar .brand { padding:18px 16px; font-size:16px; font-weight:700; border-bottom:1px solid #2a3d52; color:#fff; letter-spacing:.5px; }
+.sidebar a { display:flex; align-items:center; gap:8px; padding:11px 16px; color:#99aec6; text-decoration:none; border-left:3px solid transparent; cursor:pointer; transition:.15s; font-size:13px; }
+.sidebar a:hover, .sidebar a.active { background:rgba(255,255,255,.04); color:#fff; border-left-color:#4c9aff; }
+.main { margin-left:200px; padding:20px 24px; min-height:100vh; }
+.page-title { font-size:18px; font-weight:600; margin-bottom:16px; display:flex; align-items:center; gap:12px; }
+.card { background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.06); border:none; margin-bottom:16px; }
+.card-body { padding:16px; }
+.table { margin-bottom:0; font-size:13px; }
+.table th { background:#f7f9fc; font-size:11px; text-transform:uppercase; color:#5e6f8d; font-weight:600; padding:8px 10px; border-bottom:1px solid #e8ecf1; white-space:nowrap; }
+.table td { padding:8px 10px; border-bottom:1px solid #f0f2f5; vertical-align:middle; }
+.table-hover tbody tr:hover { background:#f8faff; }
+.badge { font-size:11px; font-weight:500; padding:3px 8px; }
+code { font-size:10px; background:#f0f2f5; padding:1px 5px; border-radius:3px; }
+.stat-card { text-align:center; padding:18px 12px; }
+.stat-card .num { font-size:26px; font-weight:700; line-height:1.2; }
+.stat-card .label { font-size:11px; color:#8896a8; margin-top:4px; }
+.search-box { margin-bottom:12px; }
+.empty-state { text-align:center; padding:40px 20px; color:#99aec6; }
+.error-state { text-align:center; padding:20px; color:#e74c3c; }
+.loading-state { text-align:center; padding:30px; color:#8896a8; }
+.loading-state .spinner { width:32px; height:32px; border:3px solid #e8ecf1; border-top-color:#4c9aff; border-radius:50%; animation:spin .8s linear infinite; margin:0 auto 10px; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.btn-sm { font-size:11px; padding:3px 10px; }
+.modal-dialog { max-width:750px; }
+pre { max-height:350px; overflow:auto; font-size:11px; background:#f7f9fc; padding:12px; border-radius:6px; }
+.alert-toast { position:fixed; top:16px; right:16px; z-index:9999; min-width:280px; }
+.refresh-btn { background:none; border:1px solid #dde1e7; border-radius:6px; padding:4px 12px; font-size:12px; cursor:pointer; color:#5e6f8d; }
+.refresh-btn:hover { background:#f0f2f5; }
+</style>
+</head>
+<body>
+
+<div id="loginScreen" style="display:flex;align-items:center;justify-content:center;height:100vh;background:#f0f2f5">
+  <div class="card" style="width:380px">
+    <div class="card-body p-4">
+      <h4 style="text-align:center;margin-bottom:20px;color:#1b2a3b">Soko Langu Admin</h4>
+      <div class="mb-3">
+        <label class="form-label fw500">Admin Secret</label>
+        <input type="password" id="adminSecret" class="form-control" placeholder="Enter admin secret" onkeydown="if(event.key==='Enter')login()">
+      </div>
+      <button class="btn btn-primary w-100" onclick="login()">Login</button>
+      <div id="loginError" class="text-danger mt-2 small d-none"></div>
+    </div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <div class="sidebar">
+    <div class="brand">Soko Langu</div>
+    <a class="active" onclick="show('dashboard')">📊 Dashboard</a>
+    <a onclick="show('users')">👥 Users</a>
+    <a onclick="show('orders')">📦 Orders</a>
+    <a onclick="show('transactions')">💳 Transactions</a>
+    <a onclick="show('withdrawals')">💰 Withdrawals</a>
+    <a onclick="show('revenue')">📈 Revenue</a>
+    <a onclick="show('audit')">📝 Audit Log</a>
+    <a onclick="show('products')">🏷️ Products</a>
+    <a onclick="show('notify')">🔔 Notify</a>
+    <a onclick="show('raw')">🔍 Raw Firestore</a>
+  </div>
+
+  <div class="main">
+    <!-- DASHBOARD -->
+    <div id="section-dashboard"><div class="page-title">Dashboard <button class="refresh-btn" onclick="loadDashboard()">🔄 Refresh</button></div>
+      <div class="row g-3" id="statsCards"></div>
+    </div>
+
+    <!-- USERS -->
+    <div id="section-users" style="display:none"><div class="page-title">Users <span class="badge bg-secondary" id="userCount">0</span> <button class="refresh-btn" onclick="loadUsers()">🔄</button></div>
+      <div class="search-box"><input type="text" class="form-control" placeholder="Search name, email, phone, uid..." oninput="filterUsers(this.value)"></div>
+      <div class="card"><div class="card-body p-0"><div class="table-responsive"><table class="table table-hover"><thead><tr>
+        <th>UID</th><th>Name</th><th>Email / Phone</th><th>Seller Bal</th><th>Viewer Coins</th><th>Coins</th><th>Role</th><th>Status</th><th>Actions</th>
+      </tr></thead><tbody id="usersTable"></tbody></table></div></div></div>
+    </div>
+
+    <!-- ORDERS -->
+    <div id="section-orders" style="display:none"><div class="page-title">Orders <button class="refresh-btn" onclick="loadOrders()">🔄</button></div>
+      <div class="card"><div class="card-body p-0"><div class="table-responsive"><table class="table table-hover"><thead><tr>
+        <th>ID</th><th>Buyer ID</th><th>Seller ID</th><th>Amount</th><th>Status</th><th>Escrow</th><th>Date</th><th></th>
+      </tr></thead><tbody id="ordersTable"></tbody></table></div></div></div>
+    </div>
+
+    <!-- TRANSACTIONS -->
+    <div id="section-transactions" style="display:none"><div class="page-title">Mongike Transactions <button class="refresh-btn" onclick="loadTransactions()">🔄</button></div>
+      <div class="card"><div class="card-body p-0"><div class="table-responsive"><table class="table table-hover"><thead><tr>
+        <th>ID</th><th>Type</th><th>Amount</th><th>Status</th><th>Buyer</th><th>Phone</th><th>Date</th><th></th>
+      </tr></thead><tbody id="transactionsTable"></tbody></table></div></div></div>
+    </div>
+
+    <!-- WITHDRAWALS -->
+    <div id="section-withdrawals" style="display:none"><div class="page-title">Withdrawals <button class="refresh-btn" onclick="loadWithdrawals()">🔄</button></div>
+      <div class="card"><div class="card-body p-0"><div class="table-responsive"><table class="table table-hover"><thead><tr>
+        <th>ID</th><th>User ID</th><th>Type</th><th>Amount</th><th>Net</th><th>Fee</th><th>Phone</th><th>Date</th><th></th>
+      </tr></thead><tbody id="withdrawalsTable"></tbody></table></div></div></div>
+    </div>
+
+    <!-- REVENUE -->
+    <div id="section-revenue" style="display:none"><div class="page-title">Revenue Transactions <button class="refresh-btn" onclick="loadRevenue()">🔄</button></div>
+      <div class="card"><div class="card-body p-0"><div class="table-responsive"><table class="table table-hover"><thead><tr>
+        <th>ID</th><th>User ID</th><th>Type</th><th>Amount</th><th>Description</th><th>Date</th><th></th>
+      </tr></thead><tbody id="revenueTable"></tbody></table></div></div></div>
+    </div>
+
+    <!-- AUDIT -->
+    <div id="section-audit" style="display:none"><div class="page-title">Audit Log <button class="refresh-btn" onclick="loadAudit()">🔄</button></div>
+      <div class="card"><div class="card-body p-0"><div class="table-responsive"><table class="table table-hover"><thead><tr>
+        <th>Time</th><th>User ID</th><th>Type</th><th>Amount</th><th>Before</th><th>After</th><th>Reason</th>
+      </tr></thead><tbody id="auditTable"></tbody></table></div></div></div>
+    </div>
+
+    <!-- PRODUCTS -->
+    <div id="section-products" style="display:none"><div class="page-title">Products <button class="refresh-btn" onclick="loadProducts()">🔄</button></div>
+      <div class="card"><div class="card-body p-0"><div class="table-responsive"><table class="table table-hover"><thead><tr>
+        <th>ID</th><th>Name</th><th>Price</th><th>Seller</th><th>Status</th><th>Date</th><th></th>
+      </tr></thead><tbody id="productsTable"></tbody></table></div></div></div>
+    </div>
+
+    <!-- NOTIFY -->
+    <div id="section-notify" style="display:none"><div class="page-title">Send Notification</div>
+      <div class="card"><div class="card-body">
+        <div class="mb-3"><label class="form-label fw500">Title</label><input type="text" id="notifTitle" class="form-control"></div>
+        <div class="mb-3"><label class="form-label fw500">Body</label><textarea id="notifBody" class="form-control" rows="3"></textarea></div>
+        <div class="mb-3"><label class="form-label fw500">Target User (optional UID, leave blank for all)</label><input type="text" id="notifUid" class="form-control" placeholder="Leave empty to send to ALL users"></div>
+        <button class="btn btn-primary" onclick="sendNotif()">📨 Send</button>
+        <div id="notifResult" class="mt-2 small"></div>
+      </div></div>
+    </div>
+
+    <!-- RAW FIRESTORE -->
+    <div id="section-raw" style="display:none"><div class="page-title">Raw Firestore Query <button class="refresh-btn" onclick="showRaw()">🔄</button></div>
+      <div class="card"><div class="card-body">
+        <div class="row g-2 mb-3">
+          <div class="col"><select id="rawCollection" class="form-select"><option>users</option><option>orders</option><option>products</option><option>transactions</option><option>withdrawals</option><option>revenue_transactions</option><option>audit_log</option><option>ad_views</option><option>notifications</option><option>conversations</option><option>groups</option></select></div>
+          <div class="col"><input type="number" id="rawLimit" class="form-control" value="20" min="1" max="500"></div>
+          <div class="col"><button class="btn btn-outline-primary" onclick="showRaw()">Query</button></div>
+        </div>
+        <pre id="rawOutput" style="max-height:500px">Select a collection and click Query</pre>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- USER DETAIL MODAL -->
+<div class="modal fade" id="userModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title" id="userModalTitle">User Detail</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body" id="userModalBody">Loading...</div>
+</div></div></div>
+
+<!-- CONFIRM MODAL -->
+<div class="modal fade" id="confirmModal" tabindex="-1"><div class="modal-dialog modal-sm"><div class="modal-content">
+  <div class="modal-body text-center py-4">
+    <div class="mb-3" style="font-size:24px">⚠️</div>
+    <div id="confirmMsg" class="mb-3">Are you sure?</div>
+    <button class="btn btn-danger me-2" id="confirmBtn" onclick="confirmAction()">Yes, Delete</button>
+    <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+  </div>
+</div></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const API = 'https://sokolangu-production.up.railway.app';
+let secret = '';
+let allUsers = [];
+let pendingAction = null;
+
+// ─── LOGIN ───
+function login() {
+  secret = document.getElementById('adminSecret').value.trim();
+  if (!secret) return;
+  fetch(`${API}/api/admin/stats`, { headers: { 'x-admin-secret': secret } })
+    .then(r => { if (!r.ok) throw new Error('Invalid admin secret'); return r.json(); })
+    .then(() => {
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      loadAll();
+      // Auto-refresh every 10 seconds
+      setInterval(loadAll, 10000);
+    })
+    .catch(e => {
+      document.getElementById('loginError').textContent = '❌ ' + e.message;
+      document.getElementById('loginError').classList.remove('d-none');
+    });
+}
+
+// ─── NAV ───
+function show(id) {
+  document.querySelectorAll('[id^="section-"]').forEach(s => s.style.display = 'none');
+  document.getElementById('section-' + id).style.display = 'block';
+  document.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
+  document.querySelector(`.sidebar a[onclick*="'${id}'"]`)?.classList.add('active');
+  // Load section data
+  const fns = { dashboard: 'loadDashboard', users: 'loadUsers', orders: 'loadOrders',
+    transactions: 'loadTransactions', withdrawals: 'loadWithdrawals', revenue: 'loadRevenue',
+    audit: 'loadAudit', products: 'loadProducts' };
+  if (fns[id]) window[fns[id]]();
+}
+
+// ─── API HELPERS ───
+async function api(path) {
+  const r = await fetch(`${API}${path}`, { headers: { 'x-admin-secret': secret } });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+  return data;
+}
+
+async function apiDel(path) {
+  const r = await fetch(`${API}${path}`, { method: 'DELETE', headers: { 'x-admin-secret': secret } });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+  return data;
+}
+
+async function apiPost(path, body) {
+  const r = await fetch(`${API}${path}`, { method: 'POST',
+    headers: { 'x-admin-secret': secret, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body) });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+  return data;
+}
+
+function toast(msg, type = 'success') {
+  const div = document.createElement('div');
+  div.className = `alert alert-${type} alert-toast shadow`;
+  div.innerHTML = msg;
+  document.body.appendChild(div);
+  setTimeout(() => div.remove(), 4000);
+}
+
+function loading(containerId) {
+  document.getElementById(containerId).innerHTML =
+    '<tr><td colspan="10"><div class="loading-state"><div class="spinner"></div>Loading...</div></td></tr>';
+}
+
+function errorRow(containerId, msg) {
+  document.getElementById(containerId).innerHTML =
+    `<tr><td colspan="10"><div class="error-state">❌ ${msg}</div></td></tr>`;
+}
+
+// ─── CONFIRM DIALOG ───
+function confirmDelete(msg, actionFn) {
+  document.getElementById('confirmMsg').textContent = msg;
+  pendingAction = actionFn;
+  const modal = new bootstrap.Modal(document.getElementById('confirmModal'));
+  modal.show();
+}
+function confirmAction() {
+  if (pendingAction) { pendingAction(); pendingAction = null; }
+  bootstrap.Modal.getInstance(document.getElementById('confirmModal')).hide();
+}
+
+// ─── LOAD ALL ───
+function loadAll() {
+  loadDashboard(); loadUsers(); loadOrders(); loadTransactions();
+  loadWithdrawals(); loadRevenue(); loadAudit(); loadProducts();
+}
+
+// ─── DASHBOARD ───
+async function loadDashboard() {
+  try {
+    const d = await api('/api/admin/stats');
+    const cards = [
+      { label:'Total Users', num:d.totalUsers, color:'#4c9aff' },
+      { label:'Total Orders', num:d.totalOrders, color:'#ff6b6b' },
+      { label:'Withdrawals', num:d.totalWithdrawals, color:'#ffa94d' },
+      { label:'Ad Views', num:d.totalAdViews, color:'#51cf66' },
+      { label:'Seller Balance', num:'TZS '+(d.totalSellerBalance||0).toLocaleString(), color:'#2ecc71' },
+      { label:'Viewer Coins', num:(d.totalViewerCoins||0).toLocaleString(), color:'#f39c12' },
+      { label:'Regular Coins', num:(d.totalCoins||0).toLocaleString(), color:'#ab7ae7' },
+    ];
+    document.getElementById('statsCards').innerHTML = cards.map(c => `
+      <div class="col-md-3 col-6"><div class="card stat-card">
+        <div class="num" style="color:${c.color}">${c.num}</div>
+        <div class="label">${c.label}</div>
+      </div></div>
+    `).join('');
+  } catch(e) { toast('Dashboard error: '+e.message, 'danger'); }
+}
+
+// ─── USERS ───
+async function loadUsers() {
+  loading('usersTable');
+  try {
+    const d = await api('/api/admin/users');
+    allUsers = d.users || [];
+    document.getElementById('userCount').textContent = allUsers.length;
+    renderUsers(allUsers);
+  } catch(e) { errorRow('usersTable', e.message); }
+}
+
+function renderUsers(users) {
+  document.getElementById('usersTable').innerHTML = users.length === 0
+    ? '<tr><td colspan="9"><div class="empty-state">No users found</div></td></tr>'
+    : users.map(u => {
+      const uid = u.uid || '';
+      return `<tr>
+        <td><code>${uid.substring(0,10)}…</code></td>
+        <td><strong>${u.displayName || '-'}</strong></td>
+        <td>${u.email||'-'}<br><small class="text-muted">${u.phone||''}</small></td>
+        <td><strong>${(u.sellerBalance||0).toLocaleString()}</strong> TZS</td>
+        <td>${(u.viewerCoins||0).toLocaleString()}</td>
+        <td>${(u.coins||0).toLocaleString()}</td>
+        <td>${u.role || 'user'}</td>
+        <td>${u.isSuspended ? '<span class="badge bg-danger">Suspended</span>' : '<span class="badge bg-success">Active</span>'}</td>
+        <td style="white-space:nowrap">
+          <button class="btn btn-sm btn-outline-info" onclick="viewUser('${uid}')">👁️</button>
+          ${u.isSuspended
+            ? `<button class="btn btn-sm btn-outline-warning" onclick="unsuspendUser('${uid}')">Unblock</button>`
+            : `<button class="btn btn-sm btn-outline-danger" onclick="suspendUser('${uid}')">Block</button>`
+          }
+          <button class="btn btn-sm btn-outline-danger" onclick="fullDeleteUser('${uid}','${u.displayName||uid}')">🗑️</button>
+        </td>
+      </tr>`;
+    }).join('');
+}
+
+function filterUsers(q) {
+  if (!q) return renderUsers(allUsers);
+  const s = q.toLowerCase();
+  renderUsers(allUsers.filter(u =>
+    (u.displayName||'').toLowerCase().includes(s) ||
+    (u.email||'').toLowerCase().includes(s) ||
+    (u.phone||'').toLowerCase().includes(s) ||
+    (u.uid||'').toLowerCase().includes(s)
+  ));
+}
+
+async function viewUser(uid) {
+  document.getElementById('userModalTitle').textContent = 'User: '+uid.substring(0,16)+'…';
+  document.getElementById('userModalBody').innerHTML = '<div class="loading-state"><div class="spinner"></div>Loading...</div>';
+  const modal = new bootstrap.Modal(document.getElementById('userModal'));
+  modal.show();
+  try {
+    const d = await api('/api/admin/user-detail/'+uid);
+    document.getElementById('userModalBody').innerHTML = `
+      <h6 class="mb-2">User Data</h6>
+      <pre>${JSON.stringify(d.user, null, 2)}</pre>
+      <h6 class="mt-3 mb-2">Orders (${(d.orders||[]).length})</h6>
+      <pre>${JSON.stringify(d.orders||[], null, 2)}</pre>
+      <h6 class="mt-3 mb-2">Withdrawals (${(d.withdrawals||[]).length})</h6>
+      <pre>${JSON.stringify(d.withdrawals||[], null, 2)}</pre>
+      <h6 class="mt-3 mb-2">Revenue Transactions (${(d.revenueTransactions||[]).length})</h6>
+      <pre>${JSON.stringify(d.revenueTransactions||[], null, 2)}</pre>
+    `;
+  } catch(e) {
+    document.getElementById('userModalBody').innerHTML = `<div class="error-state">❌ ${e.message}</div>`;
+  }
+}
+
+async function suspendUser(uid) {
+  confirmDelete('Block user '+uid.substring(0,12)+'…? They will not be able to login.', async () => {
+    try { await apiDel('/api/admin/users/'+uid); toast('User blocked'); loadUsers(); }
+    catch(e) { toast('Error: '+e.message, 'danger'); }
+  });
+}
+
+async function unsuspendUser(uid) {
+  try { await apiPost('/api/admin/users/'+uid+'/unsuspend'); toast('User unblocked'); loadUsers(); }
+  catch(e) { toast('Error: '+e.message, 'danger'); }
+}
+
+async function fullDeleteUser(uid, name) {
+  confirmDelete(`Permanently DELETE ${name} and ALL their data (orders, products, withdrawals, notifications)? This CANNOT be undone.`, async () => {
+    try { await apiDel('/api/admin/users/'+uid+'/full-delete'); toast('User and all data deleted'); loadUsers(); }
+    catch(e) { toast('Error: '+e.message, 'danger'); }
+  });
+}
+
+// ─── ORDERS ───
+async function loadOrders() {
+  loading('ordersTable');
+  try {
+    const d = await api('/api/admin/orders');
+    document.getElementById('ordersTable').innerHTML = (d.orders||[]).length === 0
+      ? '<tr><td colspan="8"><div class="empty-state">No orders</div></td></tr>'
+      : (d.orders||[]).map(o => `
+      <tr>
+        <td><code>${(o.id||'').substring(0,10)}…</code></td>
+        <td><code>${(o.buyerId||'').substring(0,10)}…</code></td>
+        <td><code>${(o.sellerId||'').substring(0,10)}…</code></td>
+        <td><strong>${(o.totalAmount||0).toLocaleString()}</strong> TZS</td>
+        <td><span class="badge ${o.status==='delivered'?'bg-success':o.status==='cancelled'?'bg-danger':'bg-warning text-dark'}">${o.status||'pending'}</span></td>
+        <td>${o.escrowReleased ? '✅' : '🔒'}</td>
+        <td style="font-size:11px">${o.createdAt ? new Date(o.createdAt.seconds*1000).toLocaleString() : '-'}</td>
+        <td><button class="btn btn-sm btn-outline-danger" onclick="deleteOrder('${o.id}')">🗑️</button></td>
+      </tr>
+    `).join('');
+  } catch(e) { errorRow('ordersTable', e.message); }
+}
+
+async function deleteOrder(id) {
+  confirmDelete('Delete order '+id.substring(0,12)+'…?', async () => {
+    try { await apiDel('/api/admin/orders/'+id); toast('Order deleted'); loadOrders(); }
+    catch(e) { toast('Error: '+e.message, 'danger'); }
+  });
+}
+
+// ─── TRANSACTIONS ───
+async function loadTransactions() {
+  loading('transactionsTable');
+  try {
+    const d = await api('/api/admin/transactions');
+    document.getElementById('transactionsTable').innerHTML = (d.transactions||[]).length === 0
+      ? '<tr><td colspan="8"><div class="empty-state">No transactions</div></td></tr>'
+      : (d.transactions||[]).map(t => `
+      <tr>
+        <td><code>${(t.id||'').substring(0,10)}…</code></td>
+        <td>${t.type||'-'}</td>
+        <td><strong>${(t.amount||0).toLocaleString()}</strong> TZS</td>
+        <td><span class="badge ${t.status==='completed'?'bg-success':'bg-warning text-dark'}">${t.status||'pending'}</span></td>
+        <td><code>${(t.buyerId||t.buyerEmail||'-').substring(0,16)}</code></td>
+        <td>${t.buyerPhone||'-'}</td>
+        <td style="font-size:11px">${t.createdAt ? new Date(t.createdAt.seconds*1000).toLocaleString() : '-'}</td>
+        <td><button class="btn btn-sm btn-outline-danger" onclick="deleteTx('${t.id}')">🗑️</button></td>
+      </tr>
+    `).join('');
+  } catch(e) { errorRow('transactionsTable', e.message); }
+}
+
+async function deleteTx(id) {
+  confirmDelete('Delete transaction '+id.substring(0,12)+'…?', async () => {
+    try { await fetch(`${API}/api/admin/delete-doc`, { method:'POST',
+      headers:{'x-admin-secret':secret,'Content-Type':'application/json'},
+      body:JSON.stringify({collection:'transactions',docId:id}) });
+      toast('Transaction deleted'); loadTransactions(); }
+    catch(e) { toast('Error: '+e.message, 'danger'); }
+  });
+}
+
+// ─── WITHDRAWALS ───
+async function loadWithdrawals() {
+  loading('withdrawalsTable');
+  try {
+    const d = await api('/api/admin/withdrawals');
+    document.getElementById('withdrawalsTable').innerHTML = (d.withdrawals||[]).length === 0
+      ? '<tr><td colspan="9"><div class="empty-state">No withdrawals</div></td></tr>'
+      : (d.withdrawals||[]).map(w => `
+      <tr>
+        <td><code>${(w.id||'').substring(0,10)}…</code></td>
+        <td><code>${(w.userId||'').substring(0,10)}…</code></td>
+        <td><span class="badge ${w.type==='seller'?'bg-primary':'bg-secondary'}">${w.type||'viewer'}</span></td>
+        <td><strong>${(w.amount||0).toLocaleString()}</strong> TZS</td>
+        <td>${(w.netAmount||0).toLocaleString()} TZS</td>
+        <td>${(w.feeMongike||0).toLocaleString()} TZS</td>
+        <td>${w.phone||'-'}</td>
+        <td style="font-size:11px">${w.createdAt ? new Date(w.createdAt.seconds*1000).toLocaleString() : '-'}</td>
+        <td><button class="btn btn-sm btn-outline-danger" onclick="deleteWd('${w.id}')">🗑️</button></td>
+      </tr>
+    `).join('');
+  } catch(e) { errorRow('withdrawalsTable', e.message); }
+}
+
+async function deleteWd(id) {
+  confirmDelete('Delete withdrawal '+id.substring(0,12)+'…?', async () => {
+    try { await apiPost('/api/admin/delete-doc', {collection:'withdrawals',docId:id}); toast('Withdrawal deleted'); loadWithdrawals(); }
+    catch(e) { toast('Error: '+e.message, 'danger'); }
+  });
+}
+
+// ─── REVENUE ───
+async function loadRevenue() {
+  loading('revenueTable');
+  try {
+    const d = await api('/api/admin/revenue-transactions');
+    document.getElementById('revenueTable').innerHTML = (d.items||[]).length === 0
+      ? '<tr><td colspan="6"><div class="empty-state">No revenue transactions</div></td></tr>'
+      : (d.items||[]).map(r => `
+      <tr>
+        <td><code>${(r.id||'').substring(0,10)}…</code></td>
+        <td><code>${(r.userId||'').substring(0,10)}…</code></td>
+        <td><span class="badge ${r.type==='sale'?'bg-success':'bg-warning text-dark'}">${r.type||'-'}</span></td>
+        <td><strong>${(r.amount||0).toLocaleString()}</strong> TZS</td>
+        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${r.description||'-'}</td>
+        <td style="font-size:11px">${r.timestamp ? new Date(r.timestamp.seconds*1000).toLocaleString() : '-'}</td>
+      </tr>
+    `).join('');
+  } catch(e) { errorRow('revenueTable', e.message); }
+}
+
+// ─── AUDIT ───
+async function loadAudit() {
+  loading('auditTable');
+  try {
+    const d = await api('/api/admin/audit-log');
+    document.getElementById('auditTable').innerHTML = (d.logs||[]).length === 0
+      ? '<tr><td colspan="7"><div class="empty-state">No audit logs</div></td></tr>'
+      : (d.logs||[]).map(l => `
+      <tr>
+        <td style="font-size:11px">${l.timestamp ? new Date(l.timestamp.seconds*1000).toLocaleString() : '-'}</td>
+        <td><code>${(l.userId||'').substring(0,10)}…</code></td>
+        <td><span class="badge ${(l.type||'').includes('withdraw')?'bg-danger':'bg-info'}">${l.type||'-'}</span></td>
+        <td><strong>${(l.amount||0).toLocaleString()}</strong></td>
+        <td>${(l.balanceBefore||0).toLocaleString()}</td>
+        <td>${(l.balanceAfter||0).toLocaleString()}</td>
+        <td style="font-size:11px;max-width:250px">${l.reason||'-'}</td>
+      </tr>
+    `).join('');
+  } catch(e) { errorRow('auditTable', e.message); }
+}
+
+// ─── PRODUCTS ───
+async function loadProducts() {
+  loading('productsTable');
+  try {
+    const d = await api('/api/admin/products');
+    document.getElementById('productsTable').innerHTML = (d.products||[]).length === 0
+      ? '<tr><td colspan="6"><div class="empty-state">No products</div></td></tr>'
+      : (d.products||[]).map(p => `
+      <tr>
+        <td><code>${(p.id||'').substring(0,10)}…</code></td>
+        <td>${p.name||'-'}</td>
+        <td><strong>${(p.price||0).toLocaleString()}</strong> TZS</td>
+        <td><code>${(p.sellerId||'').substring(0,10)}…</code></td>
+        <td>${p.isActive === false ? '<span class="badge bg-danger">Inactive</span>' : '<span class="badge bg-success">Active</span>'}</td>
+        <td style="font-size:11px">${p.createdAt ? new Date(p.createdAt.seconds*1000).toLocaleString() : '-'}</td>
+        <td><button class="btn btn-sm btn-outline-danger" onclick="deleteProduct('${p.id}')">🗑️</button></td>
+      </tr>
+    `).join('');
+  } catch(e) { errorRow('productsTable', e.message); }
+}
+
+async function deleteProduct(id) {
+  confirmDelete('Delete product '+id.substring(0,12)+'…?', async () => {
+    try { await apiDel('/api/admin/products/'+id); toast('Product deleted'); loadProducts(); }
+    catch(e) { toast('Error: '+e.message, 'danger'); }
+  });
+}
+
+// ─── NOTIFICATION ───
+async function sendNotif() {
+  const title = document.getElementById('notifTitle').value.trim();
+  const body = document.getElementById('notifBody').value.trim();
+  const targetUid = document.getElementById('notifUid').value.trim();
+  if (!title) { toast('Title is required', 'warning'); return; }
+
+  const btn = document.querySelector('#section-notify .btn-primary');
+  btn.disabled = true; btn.innerHTML = '⏳ Sending...';
+  document.getElementById('notifResult').innerHTML = '';
+
+  try {
+    if (targetUid) {
+      const r = await apiPost('/api/send-notification', { userId: targetUid, title, body });
+      document.getElementById('notifResult').innerHTML = r.sent
+        ? '<span class="text-success">✅ Sent to user</span>'
+        : '<span class="text-warning">⚠️ User has no FCM token</span>';
+    } else {
+      const users = await api('/api/admin/users');
+      const tokens = (users.users||[]).map(u => u.fcmToken).filter(Boolean);
+      if (tokens.length === 0) {
+        document.getElementById('notifResult').innerHTML = '<span class="text-warning">No FCM tokens found</span>';
+      } else {
+        const r = await apiPost('/api/send-bulk-notification', { title, body, tokens });
+        document.getElementById('notifResult').innerHTML =
+          `<span class="text-success">✅ Sent to ${r.delivered||0}/${tokens.length} devices</span>`;
+      }
+    }
+  } catch(e) {
+    document.getElementById('notifResult').innerHTML = `<span class="text-danger">❌ ${e.message}</span>`;
+  }
+  btn.disabled = false; btn.textContent = '📨 Send';
+}
+
+// ─── RAW QUERY ───
+async function showRaw() {
+  const col = document.getElementById('rawCollection').value;
+  const limit = document.getElementById('rawLimit').value || 20;
+  document.getElementById('rawOutput').textContent = 'Loading...';
+  try {
+    const d = await api(`/api/admin/${col === 'users' ? 'users' : col === 'orders' ? 'orders' : col === 'products' ? 'admin/products' : col === 'transactions' ? 'admin/transactions' : col === 'withdrawals' ? 'admin/withdrawals' : col === 'revenue_transactions' ? 'admin/revenue-transactions' : col === 'audit_log' ? 'admin/audit-log' : col === 'ad_views' ? 'admin/ad-views' : ''}`);
+    const items = d.users || d.orders || d.products || d.transactions || d.withdrawals || d.items || d.logs || d;
+    document.getElementById('rawOutput').textContent = JSON.stringify(Array.isArray(items) ? items.slice(0,limit) : items, null, 2);
+  } catch(e) {
+    document.getElementById('rawOutput').textContent = 'Error: '+e.message;
+  }
+}
+</script>
+</body>
+</html>

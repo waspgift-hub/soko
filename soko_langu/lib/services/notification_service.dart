@@ -4,6 +4,11 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
+import 'package:flutter_callkit_incoming/entities/call_kit_params.dart';
+import 'package:flutter_callkit_incoming/entities/android_params.dart';
+import 'package:flutter_callkit_incoming/entities/ios_params.dart';
+import 'package:flutter_callkit_incoming/entities/notification_params.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'api_config.dart';
@@ -19,6 +24,9 @@ class NotificationService {
   static final GlobalKey<ScaffoldMessengerState> messengerKey =
       GlobalKey<ScaffoldMessengerState>();
   static void Function(Map<String, dynamic> data)? onCallNotificationTap;
+  static void Function(Map<String, dynamic> data)? onForegroundCall;
+  static void Function(String callId)? onCallAcceptFromNotification;
+  static void Function(String callId)? onCallDeclineFromNotification;
 
   static Future<void> initLocalNotifications() async {
     const androidSettings = AndroidInitializationSettings(
@@ -33,10 +41,26 @@ class NotificationService {
       android: androidSettings,
       iOS: iosSettings,
     );
-    await localNotifications.initialize(settings);
+    await localNotifications.initialize(
+      settings: settings,
+      onDidReceiveNotificationResponse: (response) {
+        final payload = response.payload;
+        if (payload == null) return;
+        try {
+          final data = jsonDecode(payload) as Map<String, dynamic>;
+          if (response.actionId == 'accept_call') {
+            onCallAcceptFromNotification?.call(data['callId'] as String);
+          } else if (response.actionId == 'decline_call') {
+            onCallDeclineFromNotification?.call(data['callId'] as String);
+          } else {
+            onCallNotificationTap?.call(data);
+          }
+        } catch (_) {}
+      },
+    );
 
-    final androidChannel = AndroidNotificationChannel(
-      'incoming_calls',
+    final callChannel = AndroidNotificationChannel(
+      'incoming_calls_v2',
       'Incoming Calls',
       description: 'Notifications for incoming voice and video calls',
       importance: Importance.max,
@@ -45,11 +69,23 @@ class NotificationService {
       showBadge: true,
       enableLights: true,
     );
-    await localNotifications
+    final chatChannel = AndroidNotificationChannel(
+      'chat_messages_v2',
+      'Chat Messages',
+      description: 'New message notifications from chats',
+      importance: Importance.max,
+      playSound: true,
+      enableVibration: true,
+      showBadge: true,
+      enableLights: true,
+    );
+    final plugin = localNotifications
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.createNotificationChannel(androidChannel);
+        >();
+    await plugin?.createNotificationChannel(callChannel);
+    await plugin?.createNotificationChannel(chatChannel);
+    await plugin?.requestNotificationsPermission();
   }
 
   Future<bool> isEnabled() async {
@@ -88,7 +124,9 @@ class NotificationService {
           _handleNotificationTap(initialMsg);
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Notification init: $e');
+    }
   }
 
   Future<void> _saveToken(String token) async {
@@ -100,11 +138,108 @@ class NotificationService {
     }, SetOptions(merge: true));
   }
 
-  void _handleForegroundMessage(RemoteMessage message) {
+  Future<void> _handleForegroundMessage(RemoteMessage message) async {
     final data = message.data;
-    if (data['type'] == 'call') {
+
+    if (data['type'] == 'chat' || data['type'] == 'group_chat') {
+      final senderName = data['senderName'] ?? 'New message';
+      final body = message.notification?.body ?? data['body'] ?? '';
+      localNotifications.show(
+        id: DateTime.now().millisecondsSinceEpoch % 100000,
+        title: senderName,
+        body: body,
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'chat_messages_v2',
+            'Chat Messages',
+            channelDescription: 'New message notifications from chats',
+            importance: Importance.max,
+            priority: Priority.high,
+            playSound: true,
+            enableVibration: true,
+            enableLights: true,
+            fullScreenIntent: true,
+            category: AndroidNotificationCategory.message,
+            visibility: NotificationVisibility.public,
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+            categoryIdentifier: 'chat_message',
+          ),
+        ),
+        payload: jsonEncode(data),
+      );
       return;
     }
+
+    if (data['type'] == 'call') {
+      if (onForegroundCall != null) {
+        onForegroundCall!(data);
+      } else {
+        final callId = data['callId'] as String? ?? '';
+        final callerName = data['callerName'] as String? ?? 'Incoming Call';
+        final callerImage = data['callerImage'] as String? ?? '';
+        final channelName = data['channelName'] as String? ?? '';
+        final callType = data['callType'] as String? ?? 'voice';
+
+        await FlutterCallkitIncoming.showCallkitIncoming(CallKitParams(
+          id: callId,
+          nameCaller: callerName,
+          appName: 'Soko Langu',
+          avatar: callerImage.isNotEmpty ? callerImage : null,
+          handle: callType == 'video' ? 'Video Call' : 'Voice Call',
+          type: callType == 'video' ? 1 : 0,
+          textAccept: 'Accept',
+          textDecline: 'Decline',
+          duration: 30000,
+          missedCallNotification: const NotificationParams(
+            showNotification: true,
+            isShowCallback: true,
+            callbackText: 'Call back',
+          ),
+          extra: <String, dynamic>{
+            'callId': callId,
+            'channelName': channelName,
+            'callType': callType,
+            'callerName': callerName,
+            'callerImage': callerImage,
+          },
+          android: AndroidParams(
+            isCustomNotification: true,
+            isShowLogo: false,
+            ringtonePath: 'system_ringtone_default',
+            backgroundColor: '#0D1B12',
+            backgroundUrl: null,
+            actionColor: '#2D6A4F',
+            textColor: '#FFFFFF',
+            incomingCallNotificationChannelName: 'Incoming Calls',
+            missedCallNotificationChannelName: 'Missed Calls',
+            isShowCallID: false,
+            isShowFullLockedScreen: true,
+          ),
+          ios: IOSParams(
+            iconName: 'CallKitLogo',
+            handleType: 'generic',
+            supportsVideo: true,
+            maximumCallGroups: 1,
+            maximumCallsPerCallGroup: 1,
+            audioSessionMode: 'default',
+            audioSessionActive: true,
+            audioSessionPreferredSampleRate: 44100.0,
+            audioSessionPreferredIOBufferDuration: 0.005,
+            supportsDTMF: false,
+            supportsHolding: false,
+            supportsGrouping: false,
+            supportsUngrouping: false,
+            ringtonePath: 'system_ringtone_default',
+          ),
+        ));
+      }
+      return;
+    }
+
     final title = message.notification?.title ?? '';
     final body = message.notification?.body ?? '';
     if (title.isNotEmpty && messengerKey.currentContext != null) {
@@ -127,40 +262,98 @@ class NotificationService {
 
   static Future<void> _backgroundHandler(RemoteMessage message) async {
     final data = message.data;
-    if (data['type'] == 'call') {
-      final title = data['callerName'] ?? 'Incoming Call';
-      final body = data['callType'] == 'video'
-          ? 'Incoming Video Call...'
-          : 'Incoming Voice Call...';
+    if (data['type'] == 'chat' || data['type'] == 'group_chat') {
+      final senderName = data['senderName'] ?? 'New message';
+      final body = message.notification?.body ?? '';
       await localNotifications.show(
-        DateTime.now().millisecondsSinceEpoch % 100000,
-        '$title $body',
-        'Tap to answer',
-        const NotificationDetails(
+        id: DateTime.now().millisecondsSinceEpoch % 100000,
+        title: senderName,
+        body: body,
+        notificationDetails: NotificationDetails(
           android: AndroidNotificationDetails(
-            'incoming_calls',
-            'Incoming Calls',
-            channelDescription:
-                'Notifications for incoming voice and video calls',
+            'chat_messages_v2',
+            'Chat Messages',
+            channelDescription: 'New message notifications from chats',
             importance: Importance.max,
             priority: Priority.high,
             playSound: true,
             enableVibration: true,
-            channelShowBadge: true,
             enableLights: true,
             fullScreenIntent: true,
-            category: AndroidNotificationCategory.call,
+            category: AndroidNotificationCategory.message,
             visibility: NotificationVisibility.public,
           ),
           iOS: DarwinNotificationDetails(
             presentAlert: true,
             presentBadge: true,
             presentSound: true,
-            categoryIdentifier: 'incoming_call',
+            categoryIdentifier: 'chat_message',
           ),
         ),
         payload: jsonEncode(data),
       );
+      return;
+    }
+    if (data['type'] == 'call') {
+      final callId = data['callId'] as String? ?? '';
+      final callerName = data['callerName'] as String? ?? 'Incoming Call';
+      final callerImage = data['callerImage'] as String? ?? '';
+      final channelName = data['channelName'] as String? ?? '';
+      final callType = data['callType'] as String? ?? 'voice';
+
+      await FlutterCallkitIncoming.showCallkitIncoming(CallKitParams(
+        id: callId,
+        nameCaller: callerName,
+        appName: 'Soko Langu',
+        avatar: callerImage.isNotEmpty ? callerImage : null,
+        handle: callType == 'video' ? 'Video Call' : 'Voice Call',
+        type: callType == 'video' ? 1 : 0,
+        textAccept: 'Accept',
+        textDecline: 'Decline',
+        duration: 30000,
+        missedCallNotification: const NotificationParams(
+          showNotification: true,
+          isShowCallback: true,
+          callbackText: 'Call back',
+        ),
+        extra: <String, dynamic>{
+          'callId': callId,
+          'channelName': channelName,
+          'callType': callType,
+          'callerName': callerName,
+          'callerImage': callerImage,
+        },
+        android: AndroidParams(
+          isCustomNotification: true,
+          isShowLogo: false,
+          ringtonePath: 'system_ringtone_default',
+          backgroundColor: '#0D1B12',
+          backgroundUrl: null,
+          actionColor: '#2D6A4F',
+          textColor: '#FFFFFF',
+          incomingCallNotificationChannelName: 'Incoming Calls',
+          missedCallNotificationChannelName: 'Missed Calls',
+          isShowCallID: false,
+          isShowFullLockedScreen: true,
+        ),
+        ios: IOSParams(
+          iconName: 'CallKitLogo',
+          handleType: 'generic',
+          supportsVideo: true,
+          maximumCallGroups: 1,
+          maximumCallsPerCallGroup: 1,
+          audioSessionMode: 'default',
+          audioSessionActive: true,
+          audioSessionPreferredSampleRate: 44100.0,
+          audioSessionPreferredIOBufferDuration: 0.005,
+          supportsDTMF: false,
+          supportsHolding: false,
+          supportsGrouping: false,
+          supportsUngrouping: false,
+          ringtonePath: 'system_ringtone_default',
+        ),
+      ));
+      return;
     }
   }
 
@@ -184,7 +377,9 @@ class NotificationService {
           'data': data,
         }),
       );
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('sendNotification: $e');
+    }
   }
 
   // =========================
@@ -209,7 +404,9 @@ class NotificationService {
       await _db.collection('notifications').doc(notifId).update({
         'isRead': true,
       });
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('markAsRead: $e');
+    }
   }
 
   Future<void> markAllAsRead() async {

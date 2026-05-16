@@ -5,6 +5,8 @@ import '../models/review_model.dart';
 import 'verified_badge.dart';
 import '../extensions/context_tr.dart';
 
+import 'google_loading.dart';
+
 class ReviewSection extends StatefulWidget {
   final String productId;
   const ReviewSection({super.key, required this.productId});
@@ -114,7 +116,7 @@ class _ReviewSectionState extends State<ReviewSection> {
           stream: _reviewService.getProductReviews(widget.productId),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return const GoogleLoadingPage();
             }
             final reviews = snapshot.data ?? [];
             if (reviews.isEmpty) {

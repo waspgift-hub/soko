@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/review_model.dart';
 import 'notification_service.dart';
+import '../utils/network_error.dart';
 
 class ReviewService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -42,7 +44,10 @@ class ReviewService {
   }) async {
     try {
       final user = _auth.currentUser;
-      if (user == null) throw Exception("User not logged in");
+      if (user == null) throw NetworkError(
+          message: "User not logged in",
+          userMessage: 'Please log in to continue.',
+        );
 
       final isVerified = orderId != null;
 
@@ -88,9 +93,15 @@ class ReviewService {
             );
           }
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('ReviewService sendNotification: $e');
+      }
     } catch (e) {
-      throw Exception("Failed to add review: $e");
+      throw NetworkError(
+          message: "Failed to add review: $e",
+          userMessage: translateError(e),
+          originalError: e,
+        );
     }
   }
 
@@ -133,7 +144,11 @@ class ReviewService {
         'helpfulCount': FieldValue.increment(1),
       });
     } catch (e) {
-      throw Exception("Failed to mark helpful: $e");
+      throw NetworkError(
+          message: "Failed to mark helpful: $e",
+          userMessage: translateError(e),
+          originalError: e,
+        );
     }
   }
 
@@ -159,7 +174,11 @@ class ReviewService {
         'reviewCount': reviewList.length,
       });
     } catch (e) {
-      throw Exception("Failed to update product rating: $e");
+      throw NetworkError(
+          message: "Failed to update product rating: $e",
+          userMessage: translateError(e),
+          originalError: e,
+        );
     }
   }
 }

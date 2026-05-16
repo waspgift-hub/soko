@@ -8,17 +8,20 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:record/record.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../call/video_call_screen.dart';
-import '../profile/public_profile_screen.dart';
+import 'package:go_router/go_router.dart';
 import '../../services/cloudinary_service.dart';
 import '../../services/call_service.dart';
 import '../../models/message_model.dart';
-import '../../services/chat_service.dart';
+import 'package:soko_langu/services/chat_service.dart';
+import 'package:soko_langu/services/chat_typing.dart';
 import '../../services/user_service.dart';
+import '../../services/presence_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../utils/helpers.dart';
+import '../../app/routes.dart';
+import '../../widgets/google_loading.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../widgets/verified_badge.dart';
-import '../../main.dart';
 
 class ChatPage extends StatefulWidget {
   final String receiverId;
@@ -39,12 +42,15 @@ class ChatPage extends StatefulWidget {
 class _ChatPageState extends State<ChatPage> {
   final _messageController = TextEditingController();
   final ChatService chatService = ChatService();
+  final ChatTyping chatTyping = ChatTyping();
   final UserService userService = UserService();
   final CallService _callService = CallService();
+  final PresenceService _presenceService = PresenceService();
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _picker = ImagePicker();
   final AudioRecorder _recorder = AudioRecorder();
   final AudioPlayer _audioPlayer = AudioPlayer();
+  StreamSubscription? _playerCompleteSub;
   UserProfile? _sellerProfile;
   bool _showSellerInfo = false;
   bool _isRecording = false;
@@ -52,6 +58,7 @@ class _ChatPageState extends State<ChatPage> {
   String? _editingMessageId;
   String? _activeCallId;
   bool _isCalling = false;
+  StreamSubscription? _callAnswerSub;
   bool _isTyping = false;
   String? _wallpaperPath;
   Timer? _typingDebounce;
@@ -76,9 +83,11 @@ class _ChatPageState extends State<ChatPage> {
     _messageController.dispose();
     _scrollController.dispose();
     _recorder.dispose();
+    _playerCompleteSub?.cancel();
     _audioPlayer.dispose();
     _typingDebounce?.cancel();
-    chatService.stopTyping(widget.receiverId);
+    _callAnswerSub?.cancel();
+    chatTyping.sendTypingStatus(widget.receiverId, false);
     super.dispose();
   }
 
@@ -87,19 +96,19 @@ class _ChatPageState extends State<ChatPage> {
       _typingDebounce?.cancel();
       if (_isTyping) {
         _isTyping = false;
-        chatService.stopTyping(widget.receiverId);
+        chatTyping.sendTypingStatus(widget.receiverId, false);
       }
       return;
     }
     if (!_isTyping) {
       _isTyping = true;
-      chatService.startTyping(widget.receiverId);
+      chatTyping.sendTypingStatus(widget.receiverId, true);
     }
     _typingDebounce?.cancel();
     _typingDebounce = Timer(const Duration(seconds: 2), () {
       if (_isTyping) {
         _isTyping = false;
-        chatService.stopTyping(widget.receiverId);
+        chatTyping.sendTypingStatus(widget.receiverId, false);
       }
     });
   }
@@ -179,9 +188,16 @@ class _ChatPageState extends State<ChatPage> {
       'permission_microphone',
     );
     if (!granted) return;
-    if (await _recorder.hasPermission()) {
+    try {
       await _recorder.start(const RecordConfig(), path: _voiceMessagePath());
       setState(() => _isRecording = true);
+    } catch (e) {
+      debugPrint('Record start error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${context.tr('voice')}: $e')),
+        );
+      }
     }
   }
 
@@ -226,8 +242,9 @@ class _ChatPageState extends State<ChatPage> {
     }
     setState(() => _playingVoiceMessageId = messageId);
     await _audioPlayer.stop();
+    _playerCompleteSub?.cancel();
     await _audioPlayer.play(UrlSource(url));
-    _audioPlayer.onPlayerComplete.listen((_) {
+    _playerCompleteSub = _audioPlayer.onPlayerComplete.listen((_) {
       if (mounted) setState(() => _playingVoiceMessageId = null);
     });
   }
@@ -293,11 +310,12 @@ class _ChatPageState extends State<ChatPage> {
         type: 'video',
         callerName: FirebaseAuth.instance.currentUser?.displayName,
       );
-      if (mounted)
+      if (mounted) {
         setState(() {
           _activeCallId = callId;
           _isCalling = true;
         });
+      }
       _listenForCallAnswer(callId, isVideo: true);
     } catch (e) {
       if (mounted) {
@@ -315,11 +333,12 @@ class _ChatPageState extends State<ChatPage> {
         type: 'voice',
         callerName: FirebaseAuth.instance.currentUser?.displayName,
       );
-      if (mounted)
+      if (mounted) {
         setState(() {
           _activeCallId = callId;
           _isCalling = true;
         });
+      }
       _listenForCallAnswer(callId, isVideo: false);
     } catch (e) {
       if (mounted) {
@@ -331,34 +350,38 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void _listenForCallAnswer(String callId, {required bool isVideo}) {
-    _callService.myActiveCallStream().listen((call) {
-      if (!mounted) return;
-      if (call == null || call['id'] != callId) return;
+    _callAnswerSub?.cancel();
+    _callAnswerSub = _callService.getCallStream(callId).listen((call) {
+      if (!mounted || call == null) return;
       if (call['status'] == 'connected') {
         setState(() => _isCalling = false);
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => VideoCallScreen(
-              channelName: call['channelName'] as String,
-              isAudioOnly: !isVideo,
-              callId: callId,
-              remoteName: widget.receiverName,
-              remoteImage: _sellerProfile?.profileImage,
-            ),
-          ),
+        final channelName = call['channelName'] as String;
+        context.push(
+          '${AppRoutes.videoCall}/$channelName',
+          extra: {
+            'isAudioOnly': !isVideo,
+            'callId': callId,
+            'remoteName': widget.receiverName,
+            'remoteImage': _sellerProfile?.profileImage,
+          },
         );
       } else if (call['status'] == 'declined' ||
           call['status'] == 'ended' ||
-          call['status'] == 'cancelled') {
+          call['status'] == 'cancelled' ||
+          call['status'] == 'missed') {
         setState(() {
           _activeCallId = null;
           _isCalling = false;
         });
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(context.tr('call_ended'))));
+          final status = call['status'] as String;
+          String msg = context.tr('call_ended');
+          if (status == 'declined') msg = 'Call declined';
+          else if (status == 'missed') msg = 'No answer';
+          else if (status == 'cancelled') msg = 'Call cancelled';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg)),
+          );
         }
       }
     });
@@ -390,6 +413,7 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
@@ -409,17 +433,10 @@ class _ChatPageState extends State<ChatPage> {
         ),
         titleSpacing: 0,
         title: GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => PublicProfileScreen(
-                  userId: widget.receiverId,
-                  userName: widget.receiverName,
-                ),
-              ),
-            );
-          },
+          onTap: () => context.push(
+            '${AppRoutes.publicProfile}/${widget.receiverId}',
+            extra: widget.receiverName,
+          ),
           child: Row(
             children: [
               CircleAvatar(
@@ -432,7 +449,7 @@ class _ChatPageState extends State<ChatPage> {
                         widget.receiverName.isNotEmpty
                             ? widget.receiverName[0].toUpperCase()
                             : widget.receiverId[0].toUpperCase(),
-                        style: const TextStyle(color: Color(0xFF2D6A4F)),
+                        style: TextStyle(color: cs.primary),
                       )
                     : null,
               ),
@@ -447,15 +464,15 @@ class _ChatPageState extends State<ChatPage> {
                           widget.receiverName.isNotEmpty
                               ? widget.receiverName
                               : widget.receiverId,
-                          style: const TextStyle(
-                            color: Color(0xFF2D6A4F),
+                          style: TextStyle(
+                            color: cs.primary,
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
                         const SizedBox(width: 6),
                         StreamBuilder<bool>(
-                          stream: presenceService.isOnline(widget.receiverId),
+                          stream: _presenceService.isOnline(widget.receiverId),
                           builder: (context, snap) {
                             final online = snap.data ?? false;
                             return Container(
@@ -475,8 +492,8 @@ class _ChatPageState extends State<ChatPage> {
                     if (_sellerProfile?.location.isNotEmpty == true)
                       Text(
                         _sellerProfile!.location,
-                        style: const TextStyle(
-                          color: Color(0xFF40916C),
+                        style: TextStyle(
+                          color: cs.primary,
                           fontSize: 12,
                         ),
                       ),
@@ -488,19 +505,19 @@ class _ChatPageState extends State<ChatPage> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.phone, color: Color(0xFF2D6A4F)),
+            icon: Icon(Icons.phone, color: cs.primary),
             onPressed: _startVoiceCall,
           ),
           IconButton(
-            icon: const Icon(Icons.videocam, color: Color(0xFF2D6A4F)),
+            icon: Icon(Icons.videocam, color: cs.primary),
             onPressed: _startVideoCall,
           ),
           IconButton(
-            icon: const Icon(Icons.wallpaper, color: Color(0xFF2D6A4F)),
+            icon: Icon(Icons.wallpaper, color: cs.primary),
             onPressed: _pickWallpaper,
           ),
           IconButton(
-            icon: const Icon(Icons.info_outline, color: Color(0xFF2D6A4F)),
+            icon: Icon(Icons.info_outline, color: cs.primary),
             onPressed: () => setState(() => _showSellerInfo = !_showSellerInfo),
           ),
         ],
@@ -512,16 +529,16 @@ class _ChatPageState extends State<ChatPage> {
               child: Image.file(File(_wallpaperPath!), fit: BoxFit.cover),
             ),
           if (_isCalling)
-            _buildCallingBanner()
+            _buildCallingBanner(cs)
           else
             Column(
               children: [
                 if (_showSellerInfo && _sellerProfile != null)
-                  _buildSellerInfoBanner(),
-                if (widget.productName.isNotEmpty) _buildProductReference(),
-                Expanded(child: _buildMessagesList(user)),
-                _buildTypingIndicator(),
-                _buildInputArea(),
+                  _buildSellerInfoBanner(cs),
+                if (widget.productName.isNotEmpty) _buildProductReference(cs),
+                Expanded(child: _buildMessagesList(user, cs)),
+                _buildTypingIndicator(cs),
+                _buildInputArea(cs),
               ],
             ),
         ],
@@ -529,16 +546,16 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  Widget _buildMessagesList(User? user) {
+  Widget _buildMessagesList(User? user, ColorScheme cs) {
     return StreamBuilder<List<Message>>(
       stream: chatService.getMessages(widget.receiverId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const GoogleLoadingPage();
         }
         final messages = snapshot.data ?? [];
         if (messages.isEmpty) {
-          return _buildEmptyState();
+          return _buildEmptyState(cs);
         }
         return ListView.builder(
           controller: _scrollController,
@@ -548,14 +565,14 @@ class _ChatPageState extends State<ChatPage> {
           itemBuilder: (context, index) {
             final message = messages[index];
             final isMe = message.senderId == user?.uid;
-            return _buildMessageBubble(message, isMe);
+            return _buildMessageBubble(message, isMe, cs);
           },
         );
       },
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(ColorScheme cs) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(40),
@@ -566,20 +583,20 @@ class _ChatPageState extends State<ChatPage> {
               width: 100,
               height: 100,
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: cs.surface,
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF2D6A4F).withValues(alpha: 0.08),
+                    color: cs.primary.withValues(alpha: 0.08),
                     blurRadius: 20,
                     offset: const Offset(0, 4),
                   ),
                 ],
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.chat_bubble_outline,
                 size: 48,
-                color: Color(0xFF40916C),
+                color: cs.primary,
               ),
             ),
             const SizedBox(height: 20),
@@ -588,14 +605,17 @@ class _ChatPageState extends State<ChatPage> {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF2D6A4F),
+                color: cs.primary,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               context.tr('start_conversation'),
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+              style: TextStyle(
+                fontSize: 14,
+                color: cs.onSurface.withValues(alpha: 0.6),
+              ),
             ),
           ],
         ),
@@ -603,31 +623,24 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  Widget _buildSellerInfoBanner() {
+  Widget _buildSellerInfoBanner(ColorScheme cs) {
     final s = _sellerProfile!;
     return ClipRRect(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
         child: Container(
           padding: const EdgeInsets.all(12),
-          color: Colors.white.withValues(alpha: 0.85),
+          color: cs.surface.withValues(alpha: 0.85),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
                   GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => PublicProfileScreen(
-                            userId: widget.receiverId,
-                            userName: widget.receiverName,
-                          ),
-                        ),
-                      );
-                    },
+                    onTap: () => context.push(
+                      '${AppRoutes.publicProfile}/${widget.receiverId}',
+                      extra: widget.receiverName,
+                    ),
                     child: CircleAvatar(
                       radius: 30,
                       backgroundImage: s.profileImage.isNotEmpty
@@ -638,7 +651,7 @@ class _ChatPageState extends State<ChatPage> {
                               s.displayName.isNotEmpty
                                   ? s.displayName[0].toUpperCase()
                                   : widget.receiverId[0].toUpperCase(),
-                              style: const TextStyle(color: Color(0xFF2D6A4F)),
+                              style: TextStyle(color: cs.primary),
                             )
                           : null,
                     ),
@@ -655,10 +668,10 @@ class _ChatPageState extends State<ChatPage> {
                                 s.displayName.isNotEmpty
                                     ? s.displayName
                                     : widget.receiverName,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
-                                  color: Color(0xFF2D6A4F),
+                                  color: cs.primary,
                                 ),
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -672,13 +685,13 @@ class _ChatPageState extends State<ChatPage> {
                               Icon(
                                 Icons.location_on,
                                 size: 14,
-                                color: Colors.grey[600],
+                                color: cs.onSurfaceVariant,
                               ),
                               const SizedBox(width: 4),
                               Text(
                                 s.location,
                                 style: TextStyle(
-                                  color: Colors.grey[600],
+                                  color: cs.onSurfaceVariant,
                                   fontSize: 13,
                                 ),
                               ),
@@ -693,19 +706,22 @@ class _ChatPageState extends State<ChatPage> {
                 const SizedBox(height: 8),
                 Text(
                   s.bio,
-                  style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                  style: TextStyle(
+                    color: cs.onSurfaceVariant,
+                    fontSize: 13,
+                  ),
                 ),
               ],
               if (s.phone.isNotEmpty) ...[
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    const Icon(Icons.phone, size: 14, color: Color(0xFF2D6A4F)),
+                    Icon(Icons.phone, size: 14, color: cs.primary),
                     const SizedBox(width: 4),
                     Text(
                       s.phone,
-                      style: const TextStyle(
-                        color: Color(0xFF2D6A4F),
+                      style: TextStyle(
+                        color: cs.primary,
                         fontSize: 13,
                       ),
                     ),
@@ -716,10 +732,10 @@ class _ChatPageState extends State<ChatPage> {
                 const SizedBox(height: 6),
                 Text(
                   "${context.tr('payment_methods')}:",
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 12,
-                    color: Color(0xFF2D6A4F),
+                    color: cs.primary,
                   ),
                 ),
                 ...s.paymentNumbers.entries.map(
@@ -727,9 +743,9 @@ class _ChatPageState extends State<ChatPage> {
                     padding: const EdgeInsets.only(top: 2),
                     child: Text(
                       "${e.key}: ${e.value}",
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
-                        color: Color(0xFF2D6A4F),
+                        color: cs.primary,
                       ),
                     ),
                   ),
@@ -742,18 +758,18 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  Widget _buildProductReference() {
+  Widget _buildProductReference(ColorScheme cs) {
     return Container(
       padding: const EdgeInsets.all(8),
-      color: Colors.white.withValues(alpha: 0.9),
+      color: cs.surface.withValues(alpha: 0.9),
       child: Row(
         children: [
-          const Icon(Icons.shopping_bag, size: 16, color: Color(0xFF2D6A4F)),
+          Icon(Icons.shopping_bag, size: 16, color: cs.primary),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               '${context.tr('replied_to')} ${widget.productName}',
-              style: const TextStyle(fontSize: 12, color: Color(0xFF2D6A4F)),
+              style: TextStyle(fontSize: 12, color: cs.primary),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -762,9 +778,10 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  Widget _buildTypingIndicator() {
+  Widget _buildTypingIndicator(ColorScheme cs) {
+    final typing = chatTyping.observeTyping(widget.receiverId);
     return StreamBuilder<bool>(
-      stream: chatService.typingStream(widget.receiverId),
+      stream: typing,
       builder: (context, snap) {
         if (snap.data != true) return const SizedBox(height: 4);
         return Container(
@@ -778,15 +795,15 @@ class _ChatPageState extends State<ChatPage> {
                 height: 12,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: const Color(0xFF2D6A4F),
+                  color: cs.primary,
                 ),
               ),
               const SizedBox(width: 8),
               Text(
                 '${widget.receiverName.isNotEmpty ? widget.receiverName : ''}${context.tr('typing')}',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
-                  color: Color(0xFF2D6A4F),
+                  color: cs.primary,
                   fontStyle: FontStyle.italic,
                 ),
               ),
@@ -797,13 +814,13 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  Widget _buildInputArea() {
+  Widget _buildInputArea(ColorScheme cs) {
     return ClipRRect(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          color: Colors.white.withValues(alpha: 0.85),
+          color: cs.surface.withValues(alpha: 0.85),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -815,26 +832,26 @@ class _ChatPageState extends State<ChatPage> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.edit,
                         size: 16,
-                        color: Color(0xFF2D6A4F),
+                        color: cs.primary,
                       ),
                       const SizedBox(width: 8),
                       Text(
                         context.tr('editing_message'),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
-                          color: Color(0xFF2D6A4F),
+                          color: cs.primary,
                         ),
                       ),
                       const Spacer(),
                       GestureDetector(
                         onTap: _cancelEdit,
-                        child: const Icon(
+                        child: Icon(
                           Icons.close,
                           size: 18,
-                          color: Colors.grey,
+                          color: cs.onSurface.withValues(alpha: 0.6),
                         ),
                       ),
                     ],
@@ -843,7 +860,7 @@ class _ChatPageState extends State<ChatPage> {
               Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.image, color: Color(0xFF2D6A4F)),
+                    icon: Icon(Icons.image, color: cs.primary),
                     onPressed: _editingMessageId != null
                         ? null
                         : _pickAndSendImage,
@@ -860,7 +877,7 @@ class _ChatPageState extends State<ChatPage> {
                       decoration: BoxDecoration(
                         color: _isRecording
                             ? Colors.red
-                            : const Color(0xFF2D6A4F),
+                            : cs.primary,
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
@@ -875,15 +892,17 @@ class _ChatPageState extends State<ChatPage> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       decoration: BoxDecoration(
-                        color: Colors.grey[100],
+                        color: cs.surfaceContainerLow,
                         borderRadius: BorderRadius.circular(25),
-                        border: Border.all(color: Colors.grey[300]!),
+                        border: Border.all(color: cs.outlineVariant),
                       ),
                       child: TextField(
                         controller: _messageController,
                         decoration: InputDecoration(
                           hintText: context.tr('type_message'),
-                          hintStyle: TextStyle(color: Colors.grey[400]),
+                          hintStyle: TextStyle(
+                            color: cs.onSurface.withValues(alpha: 0.4),
+                          ),
                           border: InputBorder.none,
                         ),
                         onSubmitted: (_) => _sendMessage(),
@@ -918,7 +937,7 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  Widget _buildMessageBubble(Message message, bool isMe) {
+  Widget _buildMessageBubble(Message message, bool isMe, ColorScheme cs) {
     final isVoice = message.content.startsWith('voice://');
     final isImage =
         !isVoice &&
@@ -945,7 +964,7 @@ class _ChatPageState extends State<ChatPage> {
                   end: Alignment.bottomRight,
                 )
               : null,
-          color: isMe ? null : Colors.white,
+          color: isMe ? null : cs.surface,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(16),
             topRight: const Radius.circular(16),
@@ -978,36 +997,33 @@ class _ChatPageState extends State<ChatPage> {
                 style: TextStyle(
                   fontSize: 15,
                   fontStyle: FontStyle.italic,
-                  color: Colors.grey[500],
+                  color: cs.onSurface.withValues(alpha: 0.6),
                 ),
               )
             else if (isImage)
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: Image.network(
-                  message.content,
+                child: CachedNetworkImage(
+                  imageUrl: message.content,
                   fit: BoxFit.cover,
                   width: double.infinity,
-                  loadingBuilder: (context, child, progress) {
-                    if (progress == null) return child;
-                    return Container(
-                      height: 200,
-                      color: Colors.grey[200],
-                      child: const Center(
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    );
-                  },
+                  placeholder: (context, url) => Container(
+                    height: 200,
+                    color: cs.surfaceContainerHighest,
+                    child: const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
                 ),
               )
             else if (isVoice)
-              _buildVoiceBubble(message, isMe)
+              _buildVoiceBubble(message, isMe, cs)
             else
               Text(
                 message.content,
                 style: TextStyle(
                   fontSize: 16,
-                  color: isMe ? Colors.white : Colors.black87,
+                  color: isMe ? Colors.white : cs.onSurface,
                 ),
               ),
             const SizedBox(height: 4),
@@ -1018,7 +1034,9 @@ class _ChatPageState extends State<ChatPage> {
                   '${message.timestamp.hour}:${message.timestamp.minute.toString().padLeft(2, '0')}',
                   style: TextStyle(
                     fontSize: 11,
-                    color: isMe ? Colors.white70 : Colors.grey[500],
+                    color: isMe
+                        ? Colors.white70
+                        : cs.onSurface.withValues(alpha: 0.6),
                   ),
                 ),
                 if (message.isEdited && !isDeleted)
@@ -1027,7 +1045,9 @@ class _ChatPageState extends State<ChatPage> {
                     style: TextStyle(
                       fontSize: 11,
                       fontStyle: FontStyle.italic,
-                      color: isMe ? Colors.white60 : Colors.grey[400],
+                      color: isMe
+                          ? Colors.white60
+                          : cs.onSurface.withValues(alpha: 0.4),
                     ),
                   ),
                 if (isMe) ...[
@@ -1089,7 +1109,7 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  Widget _buildVoiceBubble(Message message, bool isMe) {
+  Widget _buildVoiceBubble(Message message, bool isMe, ColorScheme cs) {
     final url = message.content.replaceFirst('voice://', '');
     final isPlaying = _playingVoiceMessageId == message.id;
     return InkWell(
@@ -1099,14 +1119,16 @@ class _ChatPageState extends State<ChatPage> {
         children: [
           Icon(
             isPlaying ? Icons.stop : Icons.play_arrow,
-            color: isMe ? Colors.white : const Color(0xFF2D6A4F),
+            color: isMe ? Colors.white : cs.primary,
           ),
           const SizedBox(width: 8),
           Container(
             width: 80,
             height: 4,
             decoration: BoxDecoration(
-              color: isMe ? Colors.white30 : Colors.grey[300],
+              color: isMe
+                  ? Colors.white30
+                  : cs.outlineVariant,
               borderRadius: BorderRadius.circular(2),
             ),
             child: FractionallySizedBox(
@@ -1114,7 +1136,7 @@ class _ChatPageState extends State<ChatPage> {
               widthFactor: isPlaying ? 0.6 : 0.3,
               child: Container(
                 decoration: BoxDecoration(
-                  color: isMe ? Colors.white : const Color(0xFF2D6A4F),
+                  color: isMe ? Colors.white : cs.primary,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -1125,7 +1147,9 @@ class _ChatPageState extends State<ChatPage> {
             context.tr('voice'),
             style: TextStyle(
               fontSize: 13,
-              color: isMe ? Colors.white70 : Colors.grey[600],
+              color: isMe
+                  ? Colors.white70
+                  : cs.onSurfaceVariant,
             ),
           ),
         ],
@@ -1133,17 +1157,17 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  Widget _buildCallingBanner() {
+  Widget _buildCallingBanner(ColorScheme cs) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const SizedBox(
+          SizedBox(
             width: 80,
             height: 80,
             child: CircularProgressIndicator(
               strokeWidth: 4,
-              color: Color(0xFF2D6A4F),
+              color: cs.primary,
             ),
           ),
           const SizedBox(height: 24),
@@ -1152,7 +1176,7 @@ class _ChatPageState extends State<ChatPage> {
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF2D6A4F),
+              color: cs.primary,
             ),
           ),
           const SizedBox(height: 32),

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:go_router/go_router.dart';
 import '../../services/product_service.dart';
 import '../../models/product_model.dart';
 import '../../extensions/context_tr.dart';
-import '../home/product_detail.dart';
-import '../home/add_product_screen.dart';
+import '../../app/routes.dart';
+import '../../widgets/google_loading.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class MyAdsScreen extends StatefulWidget {
   const MyAdsScreen({super.key});
@@ -54,17 +56,15 @@ class _MyAdsScreenState extends State<MyAdsScreen> {
   }
 
   Future<void> _editProduct(Product product) async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => AddProductScreen(product: product)),
-    );
+    await context.push(AppRoutes.addProduct, extra: product);
   }
 
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null)
+    if (user == null) {
       return Scaffold(body: Center(child: Text(context.tr('login_required'))));
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -72,10 +72,7 @@ class _MyAdsScreenState extends State<MyAdsScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AddProductScreen()),
-            ),
+            onPressed: () => context.push(AppRoutes.addProduct),
           ),
         ],
       ),
@@ -84,7 +81,7 @@ class _MyAdsScreenState extends State<MyAdsScreen> {
           stream: _productService.getMyProducts(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return const GoogleLoadingPage();
             }
             final products = snapshot.data ?? [];
             if (products.isEmpty) {
@@ -111,12 +108,7 @@ class _MyAdsScreenState extends State<MyAdsScreen> {
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton.icon(
-                      onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const AddProductScreen(),
-                        ),
-                      ),
+                      onPressed: () => context.push(AppRoutes.addProduct),
                       icon: const Icon(Icons.add),
                       label: Text(context.tr('sell_product')),
                     ),
@@ -136,13 +128,19 @@ class _MyAdsScreenState extends State<MyAdsScreen> {
               itemBuilder: (context, index) {
                 final product = products[index];
                 return GestureDetector(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ProductDetailPage(product: product),
-                    ),
+                  onTap: () => context.push(
+                    '${AppRoutes.productDetail}/${product.id}',
+                    extra: product,
                   ),
-                  child: Card(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+                        width: 1.5,
+                      ),
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -150,13 +148,13 @@ class _MyAdsScreenState extends State<MyAdsScreen> {
                           child: Stack(
                             children: [
                               product.images.isNotEmpty
-                                  ? Image.network(
-                                      product.images.first,
+                                  ? CachedNetworkImage(
+                                      imageUrl: product.images.first,
                                       fit: BoxFit.cover,
                                       width: double.infinity,
                                     )
                                   : Container(
-                                      color: Colors.grey[200],
+                                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
                                       child: const Center(
                                         child: Icon(Icons.image),
                                       ),
@@ -167,8 +165,9 @@ class _MyAdsScreenState extends State<MyAdsScreen> {
                                 child: PopupMenuButton<String>(
                                   onSelected: (value) {
                                     if (value == 'edit') _editProduct(product);
-                                    if (value == 'delete')
+                                    if (value == 'delete') {
                                       _deleteProduct(product);
+                                    }
                                   },
                                   itemBuilder: (ctx) => [
                                     PopupMenuItem(

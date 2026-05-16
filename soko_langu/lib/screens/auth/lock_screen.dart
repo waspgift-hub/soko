@@ -34,7 +34,9 @@ class _LockScreenState extends State<LockScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
+      backgroundColor: cs.surface,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -49,27 +51,28 @@ class _LockScreenState extends State<LockScreen> {
                     Container(
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
-                        color: Colors.green[50],
+                        color: cs.primaryContainer,
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
                         Icons.lock,
                         size: 56,
-                        color: Colors.green[400],
+                        color: cs.onPrimaryContainer,
                       ),
                     ),
                     const SizedBox(height: 32),
                     Text(
                       context.tr('app_locked'),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
+                        color: cs.onSurface,
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       context.tr('enter_pin_unlock'),
-                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                      style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant),
                     ),
                     const SizedBox(height: 32),
                     Padding(
@@ -86,18 +89,18 @@ class _LockScreenState extends State<LockScreen> {
                         decoration: InputDecoration(
                           hintText: "• • • • • •",
                           hintStyle: TextStyle(
-                            color: Colors.grey[300],
+                            color: cs.outlineVariant,
                             letterSpacing: 12,
                             fontSize: 32,
                           ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
-                            borderSide: BorderSide(color: Colors.grey[300]!),
+                            borderSide: BorderSide(color: cs.outlineVariant),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
                             borderSide: BorderSide(
-                              color: Colors.green,
+                              color: cs.primary,
                               width: 2,
                             ),
                           ),
@@ -107,10 +110,11 @@ class _LockScreenState extends State<LockScreen> {
                             vertical: 16,
                           ),
                         ),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 28,
                           letterSpacing: 12,
                           fontWeight: FontWeight.w600,
+                          color: cs.onSurface,
                         ),
                         onSubmitted: (_) => _unlock(),
                       ),
@@ -120,8 +124,8 @@ class _LockScreenState extends State<LockScreen> {
                       width: 200,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
+                          backgroundColor: cs.primary,
+                          foregroundColor: cs.onPrimary,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),

@@ -4,7 +4,7 @@ ThemeData buildDarkTheme() {
   return ThemeData(
     useMaterial3: true,
     brightness: Brightness.dark,
-    scaffoldBackgroundColor: Colors.transparent,
+    scaffoldBackgroundColor: const Color(0xFF001A0A),
     colorScheme: const ColorScheme.dark(
       primary: Color(0xFF39FF14),
       secondary: Color(0xFF2D6A4F),
@@ -120,8 +120,9 @@ ThemeData buildDarkTheme() {
     ),
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.selected))
+        if (states.contains(WidgetState.selected)) {
           return const Color(0xFF39FF14);
+        }
         return Colors.grey[600];
       }),
       trackColor: WidgetStateProperty.resolveWith((states) {

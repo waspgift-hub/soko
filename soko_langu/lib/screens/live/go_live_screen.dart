@@ -1,13 +1,17 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:share_plus/share_plus.dart';
+import '../../services/agora_service.dart';
 import '../../services/agora_config.dart';
 import '../../services/live_stream_service.dart';
 import '../../utils/helpers.dart';
 import '../../extensions/context_tr.dart';
+
+import 'package:cached_network_image/cached_network_image.dart';
 
 class GoLiveScreen extends StatefulWidget {
   final String productId;
@@ -26,7 +30,8 @@ class GoLiveScreen extends StatefulWidget {
 }
 
 class _GoLiveScreenState extends State<GoLiveScreen> {
-  RtcEngine? _engine;
+  final AgoraService _agoraService = AgoraService();
+  final LiveStreamService _liveService = LiveStreamService();
   bool _isLive = false;
   bool _isMuted = false;
   bool _isCameraOn = true;
@@ -37,113 +42,137 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
   String? _prefetchedToken;
   final _chatScroll = ScrollController();
   int _reactionCount = 0;
+  StreamSubscription? _reactionsSub;
+  StreamSubscription? _coHostReqSub;
+  List<Map<String, dynamic>> _coHostRequests = [];
 
   @override
   void initState() {
     super.initState();
+    _channelName =
+        'live_${FirebaseAuth.instance.currentUser?.uid}_${DateTime.now().millisecondsSinceEpoch}';
     _initAgora();
-    _prefetchToken();
+    _prefetchTokenAndDoc();
   }
 
-  Future<void> _prefetchToken() async {
+  Future<void> _prefetchTokenAndDoc() async {
     try {
-      final channelName =
-          'live_${FirebaseAuth.instance.currentUser?.uid}_${DateTime.now().millisecondsSinceEpoch}';
-      _channelName = channelName;
       _prefetchedToken = await getAgoraToken(
-        channelName: channelName,
+        channelName: _channelName!,
         role: 'broadcaster',
+      );
+    } catch (_) {}
+    try {
+      await LiveStreamService().startLive(
+        productId: widget.productId,
+        productName: widget.productName,
+        productImage: widget.productImage,
+        channelName: _channelName!,
+        isActive: false,
       );
     } catch (_) {}
   }
 
   @override
   void dispose() {
-    _engine?.release();
+    _reactionsSub?.cancel();
+    _coHostReqSub?.cancel();
+    _agoraService.dispose();
     _chatScroll.dispose();
     super.dispose();
   }
 
   Future<void> _initAgora() async {
-    final camGranted = await requestPermissionWithDialog(
-      context,
-      Permission.camera,
-      'permission_camera',
-    );
-    if (!camGranted || !mounted) return;
+    try {
+      final camGranted = await requestPermissionWithDialog(
+        context,
+        Permission.camera,
+        'permission_camera',
+      );
+      if (!camGranted || !mounted) return;
 
-    final micGranted = await requestPermissionWithDialog(
-      context,
-      Permission.microphone,
-      'permission_microphone',
-    );
-    if (!micGranted) return;
+      final micGranted = await requestPermissionWithDialog(
+        context,
+        Permission.microphone,
+        'permission_microphone',
+      );
+      if (!micGranted || !mounted) return;
 
-    _engine = createAgoraRtcEngine();
-    await _engine?.initialize(RtcEngineContext(appId: agoraAppId));
-    await _engine?.enableVideo();
-    await _engine?.startPreview();
+      await _agoraService.initialize(
+        channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
+      );
+      await _agoraService.engine.enableVideo();
+      await _agoraService.engine.startPreview();
 
-    _engine?.registerEventHandler(
-      RtcEngineEventHandler(
-        onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
-          setState(() => _isLive = true);
-        },
-      ),
-    );
-    if (mounted) setState(() => _engineReady = true);
+      _agoraService.engine.registerEventHandler(
+        RtcEngineEventHandler(
+          onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
+            setState(() => _isLive = true);
+          },
+          onTokenPrivilegeWillExpire: (RtcConnection connection, String token) async {
+            final newToken = await getAgoraToken(
+              channelName: _channelName!,
+              role: 'broadcaster',
+            );
+            if (newToken.isNotEmpty) {
+              _agoraService.engine.renewToken(newToken);
+            }
+          },
+        ),
+      );
+      if (mounted) setState(() => _engineReady = true);
+    } catch (e) {
+      debugPrint('initAgora error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("${context.tr('call_error')} $e")),
+        );
+      }
+    }
   }
 
   Future<void> _startLive() async {
-    if (_engine == null) return;
+    if (!_engineReady) {
+      await _initAgora();
+      if (!_engineReady || !mounted) return;
+    }
     setState(() => _isStarting = true);
 
     try {
-      final futures = <Future>[];
-      if (_channelName == null) {
-        futures.add(
-          LiveStreamService().startLive(
-            productId: widget.productId,
-            productName: widget.productName,
-            productImage: widget.productImage,
-          ),
-        );
-      } else {
-        futures.add(
-          LiveStreamService().startLive(
-            productId: widget.productId,
-            productName: widget.productName,
-            productImage: widget.productImage,
-            channelName: _channelName,
-          ),
-        );
-      }
-
-      if (_prefetchedToken == null) {
-        futures.add(
-          getAgoraToken(channelName: _channelName ?? '', role: 'broadcaster'),
-        );
-      }
-
-      await Future.wait(futures);
       final channelName = _channelName!;
-      final token =
-          _prefetchedToken ??
-          await getAgoraToken(channelName: channelName, role: 'broadcaster');
-
-      await _engine?.joinChannel(
-        token: token,
-        channelId: channelName,
-        uid: 0,
-        options: const ChannelMediaOptions(
-          channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
-          clientRoleType: ClientRoleType.clientRoleBroadcaster,
-          publishCameraTrack: true,
-          publishMicrophoneTrack: true,
+      String token = _prefetchedToken ?? '';
+      if (token.isEmpty) {
+        token = await getAgoraToken(
+          channelName: channelName,
+          role: 'broadcaster',
+        );
+      }
+      if (token.isEmpty) {
+        if (mounted) {
+          setState(() => _isStarting = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(context.tr('token_error'))),
+          );
+        }
+        return;
+      }
+      await _agoraService.engine.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
+      await Future.wait([
+        LiveStreamService().activateLive(channelName),
+        _agoraService.engine.joinChannel(
+          token: token,
+          channelId: channelName,
+          uid: 0,
+          options: const ChannelMediaOptions(
+            channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
+            clientRoleType: ClientRoleType.clientRoleBroadcaster,
+            publishCameraTrack: true,
+            publishMicrophoneTrack: true,
+          ),
         ),
-      );
-
+      ]);
       _listenReactions(channelName);
+      _listenCoHostRequests(channelName);
     } catch (e) {
       if (!mounted) return;
       setState(() => _isStarting = false);
@@ -154,7 +183,8 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
   }
 
   void _listenReactions(String channelName) {
-    FirebaseFirestore.instance
+    _reactionsSub?.cancel();
+    _reactionsSub = FirebaseFirestore.instance
         .collection('live_streams')
         .doc(channelName)
         .collection('reactions')
@@ -164,17 +194,94 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
         });
   }
 
+  void _listenCoHostRequests(String channelName) {
+    _coHostReqSub?.cancel();
+    _coHostReqSub = _liveService.streamCoHostRequests(channelName).listen((requests) {
+      if (mounted) {
+        setState(() => _coHostRequests = requests);
+        if (requests.isNotEmpty) {
+          _showCoHostRequestDialog(requests.first);
+        }
+      }
+    });
+  }
+
+  void _showCoHostRequestDialog(Map<String, dynamic> request) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('cohost_request')),
+        content: Text("${request['viewerName'] ?? 'Someone'} ${context.tr('wants_to_cohost')}"),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _declineCoHost(request['id'] as String);
+            },
+            child: Text(context.tr('decline')),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _acceptCoHost(request['id'] as String, request['viewerId'] as String);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2D6A4F)),
+            child: Text(context.tr('accept'), style: const TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _acceptCoHost(String requestId, String viewerId) async {
+    if (_channelName == null) return;
+    try {
+      await _liveService.acceptCoHost(_channelName!, requestId, viewerId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(context.tr('cohost_accepted')),
+            backgroundColor: const Color(0xFF2D6A4F),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _declineCoHost(String requestId) async {
+    if (_channelName == null) return;
+    try {
+      await _liveService.declineCoHost(_channelName!, requestId);
+      if (mounted) {
+        setState(() => _coHostRequests.removeWhere((r) => r['id'] == requestId));
+      }
+    } catch (e) {
+      debugPrint('declineCoHost error: $e');
+    }
+  }
+
   Future<void> _endLive() async {
     setState(() => _streamEnded = true);
+    _reactionsSub?.cancel();
     if (_channelName != null) {
       await LiveStreamService().endLive(_channelName!);
     }
-    await _engine?.leaveChannel();
+    _agoraService.dispose();
   }
 
   void _shareStream() {
     if (_channelName == null) return;
-    Share.share("${context.tr('share_live')} ${widget.productName}");
+    SharePlus.instance.share(
+      ShareParams(text: "${context.tr('share_live')} ${widget.productName}"),
+    );
   }
 
   @override
@@ -226,7 +333,7 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
                     if (_engineReady)
                       AgoraVideoView(
                         controller: VideoViewController(
-                          rtcEngine: _engine!,
+                          rtcEngine: _agoraService.engine,
                           canvas: const VideoCanvas(uid: 0),
                         ),
                       )
@@ -396,8 +503,8 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
           if (widget.productImage != null)
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.network(
-                widget.productImage!,
+              child: CachedNetworkImage(
+                imageUrl: widget.productImage!,
                 width: 40,
                 height: 40,
                 fit: BoxFit.cover,
@@ -435,83 +542,84 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 24),
         child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _ctrlBtn(Icons.mic, _isMuted ? 'Unmute' : 'Mute', () async {
-                await _engine?.muteLocalAudioStream(!_isMuted);
-                setState(() => _isMuted = !_isMuted);
-              }),
-              _ctrlBtn(
-                _isCameraOn ? Icons.videocam : Icons.videocam_off,
-                _isCameraOn ? context.tr('camera') : context.tr('off'),
-                () async {
-                  await _engine?.muteLocalVideoStream(_isCameraOn);
-                  setState(() => _isCameraOn = !_isCameraOn);
-                },
-              ),
-              _ctrlBtn(
-                Icons.switch_camera,
-                context.tr('switch_camera'),
-                () => _engine?.switchCamera(),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: ElevatedButton(
-              onPressed: _isStarting ? null : _startLive,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-                disabledBackgroundColor: Colors.red.withValues(alpha: 0.5),
-                disabledForegroundColor: Colors.white70,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _ctrlBtn(Icons.mic, _isMuted ? 'Unmute' : 'Mute', () async {
+                  await _agoraService.engine.muteLocalAudioStream(!_isMuted);
+                  setState(() => _isMuted = !_isMuted);
+                }),
+                _ctrlBtn(
+                  _isCameraOn ? Icons.videocam : Icons.videocam_off,
+                  _isCameraOn ? context.tr('camera') : context.tr('off'),
+                  () async {
+                    await _agoraService.engine.muteLocalVideoStream(_isCameraOn);
+                    setState(() => _isCameraOn = !_isCameraOn);
+                  },
                 ),
-              ),
-              child: _isStarting
-                  ? Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          context.tr('starting'),
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    )
-                  : Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.wifi_tethering),
-                        const SizedBox(width: 8),
-                        Text(
-                          context.tr('go_live_now'),
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
+                _ctrlBtn(
+                  Icons.switch_camera,
+                  context.tr('switch_camera'),
+                  () => _agoraService.engine.switchCamera(),
+                ),
+              ],
             ),
-          ),
-        ],
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                onPressed: _isStarting ? null : _startLive,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: Colors.red.withValues(alpha: 0.5),
+                  disabledForegroundColor: Colors.white70,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: _isStarting
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            context.tr('starting'),
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      )
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.wifi_tethering),
+                          const SizedBox(width: 8),
+                          Text(
+                            context.tr('go_live_now'),
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -7,41 +7,41 @@ class ViewerEarningsService {
 
   static const String adUnitId = 'ca-app-pub-3940256099942544/5224354917';
 
-  Future<void> creditAdView({required int coins}) async {
+  Future<void> creditAdView({
+    required int viewerCoins,
+    required int adminCoins,
+  }) async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return;
+
     await _db.collection('users').doc(uid).update({
-      'softCoins': FieldValue.increment(coins),
+      'softCoins': FieldValue.increment(viewerCoins),
     });
+
+    await _db.collection('admin_ad_revenue').add({
+      'coinsEarned': adminCoins,
+      'viewerId': uid,
+      'timestamp': FieldValue.serverTimestamp(),
+      'payoutMonth': '${DateTime.now().month}_${DateTime.now().year}',
+    });
+
     await _db.collection('viewer_ad_views').add({
       'userId': uid,
-      'coinsEarned': coins,
+      'viewerCoins': viewerCoins,
+      'adminCoins': adminCoins,
       'timestamp': FieldValue.serverTimestamp(),
       'payoutMonth': '${DateTime.now().month}_${DateTime.now().year}',
     });
   }
 
-  Future<int> getDailyAdCount() async {
+  Future<int> getTotalAdCount() async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return 0;
-    final now = DateTime.now();
-    final start = DateTime(now.year, now.month, now.day);
     final snap = await _db
         .collection('viewer_ad_views')
         .where('userId', isEqualTo: uid)
-        .where('timestamp', isGreaterThanOrEqualTo: start)
         .count()
         .get();
     return snap.count ?? 0;
-  }
-
-  Stream<QuerySnapshot> streamSoftPayoutHistory() {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null) return const Stream.empty();
-    return _db
-        .collection('viewer_soft_payouts')
-        .where('userId', isEqualTo: uid)
-        .orderBy('createdAt', descending: true)
-        .snapshots();
   }
 }

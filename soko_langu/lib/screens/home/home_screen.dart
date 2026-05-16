@@ -1,5 +1,6 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import '../../main.dart';
 import '../../services/product_service.dart';
 import '../../services/category_service.dart';
 import '../../models/product_model.dart';
@@ -7,15 +8,8 @@ import '../../models/category_model.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/ad_banner.dart';
 import '../../widgets/verified_badge.dart';
-import '../../shared/loading_widget.dart';
 import '../../extensions/context_tr.dart';
-import 'category_screen.dart';
-import 'category_products_screen.dart';
-import 'product_detail.dart';
-import 'add_product_screen.dart';
-import 'search_screen.dart';
-import '../notification/notification_screen.dart';
-import '../live/live_screen.dart';
+import '../../app/routes.dart';
 import '../../services/live_stream_service.dart';
 import '../../widgets/live_badge.dart';
 
@@ -100,17 +94,11 @@ class _HomeScreenState extends State<HomeScreen> {
               Icons.notifications_none,
               color: Color(0xFF2D6A4F),
             ),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const NotificationScreen()),
-            ),
+            onPressed: () => context.push(AppRoutes.notifications),
           ),
           IconButton(
             icon: const Icon(Icons.search, color: Color(0xFF2D6A4F)),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SearchScreen()),
-            ),
+            onPressed: () => context.push(AppRoutes.search),
           ),
         ],
       ),
@@ -126,43 +114,35 @@ class _HomeScreenState extends State<HomeScreen> {
               RepaintBoundary(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.7),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.5),
-                          ),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: const Color(0xFF2D6A4F),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: TextField(
+                      controller: _searchCtrl,
+                      readOnly: true,
+                      onTap: () => context.push(AppRoutes.search),
+                      decoration: InputDecoration(
+                        hintText: 'Search products...',
+                        hintStyle: TextStyle(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white
+                              : Colors.black,
+                          fontSize: 14,
                         ),
-                        child: TextField(
-                          controller: _searchCtrl,
-                          readOnly: true,
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const SearchScreen(),
-                            ),
-                          ),
-                          decoration: InputDecoration(
-                            hintText: 'Search products...',
-                            hintStyle: TextStyle(
-                              color: Colors.grey[400],
-                              fontSize: 14,
-                            ),
-                            prefixIcon: Icon(
-                              Icons.search,
-                              color: Colors.grey[400],
-                              size: 22,
-                            ),
-                            border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(
-                              vertical: 14,
-                            ),
-                          ),
+                        prefixIcon: Icon(
+                          Icons.search,
+                          color: const Color(0xFF2D6A4F),
+                          size: 22,
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 14,
                         ),
                       ),
                     ),
@@ -203,16 +183,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                           TextButton(
-                            onPressed: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const CategoryScreen(),
-                              ),
-                            ),
+                            onPressed: () => context.push(AppRoutes.category),
                             child: Text(
                               context.tr('see_all'),
                               style: TextStyle(
-                                color: Color(0xFF40916C),
+                                color: Theme.of(context).colorScheme.primary,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -236,68 +211,62 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             );
                           }
+                          final cats = snapshot.data!;
+                          if (cats.isEmpty) {
+                            return Center(
+                              child: Text(
+                                'No categories yet',
+                                style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                              ),
+                            );
+                          }
                           return ListView.builder(
                             scrollDirection: Axis.horizontal,
                             padding: const EdgeInsets.symmetric(horizontal: 16),
-                            itemCount: snapshot.data!.length,
+                            itemCount: cats.length,
                             itemBuilder: (context, index) {
-                              final cat = snapshot.data![index];
+                              final cat = cats[index];
+                              final config = AppConfig.of(context);
                               return GestureDetector(
-                                onTap: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        CategoryProductsScreen(category: cat),
-                                  ),
+                                onTap: () => context.push(
+                                  '${AppRoutes.categoryProducts}/${cat.name}',
+                                  extra: cat,
                                 ),
                                 child: Container(
                                   width: 80,
                                   margin: const EdgeInsets.only(right: 12),
                                   child: Column(
                                     children: [
-                                      Container(
-                                        width: 60,
-                                        height: 60,
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          borderRadius: BorderRadius.circular(
-                                            16,
-                                          ),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.black.withValues(
-                                                alpha: 0.04,
-                                              ),
-                                              blurRadius: 8,
-                                              offset: const Offset(0, 3),
-                                            ),
-                                          ],
-                                        ),
+                                              Container(
+                                                width: 60,
+                                                height: 60,
+                                                decoration: BoxDecoration(
+                                                  borderRadius: BorderRadius.circular(16),
+                                                  border: Border.all(
+                                                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+                                                    width: 1.5,
+                                                  ),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: Colors.black.withValues(alpha: 0.04),
+                                                      blurRadius: 8,
+                                                      offset: const Offset(0, 3),
+                                                    ),
+                                                  ],
+                                                ),
                                         child: Center(
                                           child: Text(
                                             cat.icon,
-                                            style: const TextStyle(
-                                              fontSize: 30,
-                                            ),
+                                            style: const TextStyle(fontSize: 30),
                                           ),
                                         ),
                                       ),
                                       const SizedBox(height: 6),
                                       Text(
-                                        cat.nameSw,
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          color: Color(0xFF2D6A4F),
-                                        ),
-                                        textAlign: TextAlign.center,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      Text(
-                                        cat.name,
+                                        config.langCode == 'en' ? cat.name : cat.nameSw,
                                         style: TextStyle(
-                                          fontSize: 9,
-                                          color: Colors.grey[500],
+                                          fontSize: 11,
+                                          color: Theme.of(context).colorScheme.primary,
                                         ),
                                         textAlign: TextAlign.center,
                                         maxLines: 1,
@@ -340,10 +309,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         child: FloatingActionButton.extended(
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const AddProductScreen()),
-          ),
+          onPressed: () => context.push(AppRoutes.addProduct),
           backgroundColor: Colors.transparent,
           label: Text(
             context.tr('sell_product'),
@@ -452,6 +418,28 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 }
                 final products = snap.data ?? [];
+                if (products.isEmpty && _pageLoaded) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        children: [
+                          Icon(Icons.inventory_2, size: 48, color: Colors.grey[400]),
+                          const SizedBox(height: 12),
+                          Text(
+                            _selectedBrand == null
+                                ? 'No products yet'
+                                : 'No products for $_selectedBrand',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
                 return GridView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   shrinkWrap: true,
@@ -466,12 +454,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   itemBuilder: (context, index) => RepaintBoundary(
                     child: ProductCard(
                       product: products[index],
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              ProductDetailPage(product: products[index]),
-                        ),
+                      onTap: () => context.push(
+                        '${AppRoutes.productDetail}/${products[index].id}',
+                        extra: products[index],
                       ),
                     ),
                   ),
@@ -525,12 +510,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 itemBuilder: (context, i) {
                   final stream = streams[i];
                   return GestureDetector(
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => LiveScreen(stream: stream),
-                      ),
-                    ),
+                    onTap: () => context.push(AppRoutes.live, extra: stream),
                     child: Container(
                       width: 200,
                       margin: const EdgeInsets.only(right: 12),

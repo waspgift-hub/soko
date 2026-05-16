@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:go_router/go_router.dart';
 import '../../models/notification_item.dart';
 import '../../services/product_service.dart';
 import '../../extensions/context_tr.dart';
-import '../chat/chat_page.dart';
-import '../home/product_detail.dart';
+import '../../app/routes.dart';
+import '../../widgets/google_loading.dart';
 
 class NotificationScreen extends StatefulWidget {
   const NotificationScreen({super.key});
@@ -113,7 +114,14 @@ class _NotificationScreenState extends State<NotificationScreen> {
             ),
           );
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('NotificationScreen load: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${context.tr('error')}: $e')),
+          );
+        }
+      }
     }
 
     notifications.sort((a, b) => b.timestamp.compareTo(a.timestamp));
@@ -131,7 +139,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
       appBar: AppBar(title: Text(context.tr('notifications'))),
       body: SafeArea(
         child: _loading
-            ? const Center(child: CircularProgressIndicator())
+            ? const GoogleLoadingPage()
             : _notifications.isEmpty
             ? Center(
                 child: Column(
@@ -216,23 +224,16 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
   void _openNotification(NotificationItem notif) {
     if (notif.type == 'chat' && notif.otherUserId != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ChatPage(
-            receiverId: notif.otherUserId!,
-            receiverName: notif.otherUserName ?? '',
-          ),
-        ),
+      context.push(
+        '${AppRoutes.chat}/${notif.otherUserId}',
+        extra: {'name': notif.otherUserName ?? ''},
       );
     } else if (notif.type == 'product' && notif.productId != null) {
       ProductService().getProductById(notif.productId!).then((product) {
         if (product != null && mounted) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ProductDetailPage(product: product),
-            ),
+          context.push(
+            '${AppRoutes.productDetail}/${product.id}',
+            extra: product,
           );
         }
       });

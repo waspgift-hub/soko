@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' hide Order;
 import 'package:http/http.dart' as http;
+import 'package:go_router/go_router.dart';
 import '../../services/order_service.dart';
 import '../../services/product_service.dart';
 import '../../services/payment_service.dart';
@@ -11,10 +12,9 @@ import '../../extensions/context_tr.dart';
 import '../../models/order_model.dart';
 import '../../models/product_model.dart';
 import '../../models/transaction_model.dart';
-import '../live/go_live_screen.dart';
-import '../seller/earnings_dashboard.dart';
-import 'streamer_earnings_screen.dart';
-import 'shop_customization_screen.dart';
+import '../../app/routes.dart';
+import '../../widgets/google_loading.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class SellerDashboardScreen extends StatefulWidget {
   const SellerDashboardScreen({super.key});
@@ -38,16 +38,30 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
         child: StreamBuilder<List<MarketplaceTransaction>>(
           stream: _paymentService.getSellerTransactions(),
           builder: (context, txSnap) {
+            if (txSnap.hasError) {
+              debugPrint('SellerDashboard tx error: ${txSnap.error}');
+            }
             final transactions = txSnap.data ?? [];
 
             return StreamBuilder<List<Order>>(
               stream: _orderService.getReceivedOrders(),
               builder: (context, orderSnap) {
+                if (orderSnap.hasError) {
+                  debugPrint('SellerDashboard orders error: ${orderSnap.error}');
+                }
                 final orders = orderSnap.data ?? [];
 
                 return StreamBuilder<List<Product>>(
                   stream: _productService.getMyProducts(),
                   builder: (context, productSnap) {
+                    if (productSnap.hasError) {
+                      debugPrint('SellerDashboard products error: ${productSnap.error}');
+                    }
+                    if (txSnap.connectionState == ConnectionState.waiting ||
+                        orderSnap.connectionState == ConnectionState.waiting ||
+                        productSnap.connectionState == ConnectionState.waiting) {
+                      return const GoogleLoadingPage();
+                    }
                     final productCount = productSnap.data?.length ?? 0;
                     final pendingOrders = orders
                         .where((o) => o.status == OrderStatus.pending)
@@ -84,7 +98,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                                 context,
                                 Icons.receipt_long,
                                 '$txCount Sold',
-                                'Total Sales',
+                                context.tr('total_sales'),
                                 Colors.orange,
                               ),
                             ],
@@ -96,7 +110,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                                 context,
                                 Icons.monetization_on,
                                 '\$${txRevenue.toStringAsFixed(2)}',
-                                'Amount Received',
+                                context.tr('amount_received'),
                                 Colors.green,
                               ),
                               const SizedBox(width: 12),
@@ -173,6 +187,10 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
         decoration: BoxDecoration(
           color: color.withAlpha(15),
           borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+            width: 1.5,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -189,7 +207,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
             ),
             Text(
               label,
-              style: TextStyle(color: Colors.grey[600], fontSize: 13),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13),
             ),
           ],
         ),
@@ -198,8 +216,16 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   }
 
   Widget _buildTransactionTile(MarketplaceTransaction tx) {
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+          width: 1.5,
+        ),
+      ),
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: tx.status == TransactionStatus.completed
@@ -229,12 +255,12 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
               '\$${tx.totalAmount.toStringAsFixed(2)}',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                color: Colors.green[700],
+                color: Theme.of(context).colorScheme.primary,
               ),
             ),
             Text(
               '${tx.createdAt.day}/${tx.createdAt.month}/${tx.createdAt.year}',
-              style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+              style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           ],
         ),
@@ -243,8 +269,16 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   }
 
   Widget _buildOrderTile(Order order) {
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+          width: 1.5,
+        ),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -263,7 +297,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
             const SizedBox(height: 4),
             Text(
               '\$${order.totalAmount.toStringAsFixed(0)} - ${order.items.length} items',
-              style: TextStyle(color: Colors.grey[600], fontSize: 13),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13),
             ),
           ],
         ),
@@ -275,6 +309,9 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     return FutureBuilder<Map<String, double>>(
       future: _paymentService.getRevenueStats(),
       builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
         final stats = snap.data ?? {};
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -313,10 +350,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
 
   Widget _buildEarningsCard() {
     return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const EarningsDashboard()),
-      ),
+      onTap: () => context.push(AppRoutes.earningsDashboard),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -366,14 +400,14 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           .doc(uid)
           .snapshots(),
       builder: (ctx, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const SizedBox(height: 80, child: Center(child: CircularProgressIndicator()));
+        }
         final earnings =
             (snap.data?.data() as Map<String, dynamic>?)?['streamerEarnings'] ??
             0;
         return GestureDetector(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const StreamerEarningsScreen()),
-          ),
+          onTap: () => context.push(AppRoutes.streamerEarnings),
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -423,10 +457,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
 
   Widget _buildCustomizeShopButton() {
     return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const ShopCustomizationScreen()),
-      ),
+      onTap: () => context.push(AppRoutes.shopCustomization),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -569,7 +600,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                           height: 48,
                           color: Colors.grey[200],
                           child: p.images.isNotEmpty
-                              ? Image.network(p.images.first, fit: BoxFit.cover)
+                              ? CachedNetworkImage(imageUrl: p.images.first, fit: BoxFit.cover)
                               : const Icon(Icons.image, color: Colors.grey),
                         ),
                       ),
@@ -578,7 +609,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                       subtitle: Text(
-                        alreadyFeatured ? 'Already featured' : 'Tap to boost',
+                        alreadyFeatured ? context.tr('already_featured') : context.tr('tap_to_boost'),
                       ),
                       trailing: alreadyFeatured
                           ? const Icon(Icons.check_circle, color: Colors.green)
@@ -772,7 +803,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                           height: 48,
                           color: Colors.grey[200],
                           child: p.images.isNotEmpty
-                              ? Image.network(p.images.first, fit: BoxFit.cover)
+                              ? CachedNetworkImage(imageUrl: p.images.first, fit: BoxFit.cover)
                               : const Icon(Icons.image, color: Colors.grey),
                         ),
                       ),
@@ -783,17 +814,9 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                       subtitle: Text('TZS ${p.price.toStringAsFixed(0)}'),
                       onTap: () {
                         Navigator.pop(ctx);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => GoLiveScreen(
-                              productId: p.id,
-                              productName: p.name,
-                              productImage: p.images.isNotEmpty
-                                  ? p.images.first
-                                  : null,
-                            ),
-                          ),
+                        context.push(
+                          '${AppRoutes.goLive}/${p.id}/${p.name}',
+                          extra: p.images.isNotEmpty ? p.images.first : null,
                         );
                       },
                     );

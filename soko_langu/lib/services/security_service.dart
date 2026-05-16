@@ -33,7 +33,8 @@ class SecurityService {
       }
       if (kDebugMode) return false;
       return true;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Security checkDevice: $e');
       return true;
     }
   }
@@ -54,7 +55,9 @@ class SecurityService {
       for (final path in paths) {
         if (File(path).existsSync()) return true;
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Security rootPackages: $e');
+    }
     return false;
   }
 
@@ -68,7 +71,9 @@ class SecurityService {
           if (hardware.contains(p) || bootloader.contains(p)) return true;
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Security isEmulator: $e');
+    }
     return false;
   }
 
@@ -85,7 +90,9 @@ class SecurityService {
       for (final path in paths) {
         if (File(path).existsSync()) return true;
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Security isJailbroken: $e');
+    }
     return false;
   }
 
@@ -93,7 +100,8 @@ class SecurityService {
     try {
       final result = Process.runSync('getprop', [name]);
       return result.stdout.toString().trim();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Security readProp: $e');
       return '';
     }
   }

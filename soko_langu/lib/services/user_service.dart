@@ -238,19 +238,46 @@ class UserService {
   Future<List<UserProfile>> searchUsers(String query) async {
     final q = query.trim().toLowerCase();
     if (q.isEmpty) return [];
-    final snap = await _db.collection('users').get();
-    final results = snap.docs.where((doc) {
-      final name = (doc.data()['displayName'] as String? ?? '').toLowerCase();
-      final username = (doc.data()['username'] as String? ?? '').toLowerCase();
-      return name.contains(q) || username.contains(q);
-    });
-    return results
-        .map((doc) => UserProfile.fromMap(doc.id, doc.data()))
-        .toList();
+    final results = <String, UserProfile>{};
+    try {
+      final nameSnap = await _db
+          .collection('users')
+          .where('displayName', isGreaterThanOrEqualTo: q)
+          .where('displayName', isLessThan: '$q\uf8ff')
+          .limit(20)
+          .get();
+      for (final doc in nameSnap.docs) {
+        results[doc.id] = UserProfile.fromMap(doc.id, doc.data());
+      }
+      final usernameSnap = await _db
+          .collection('users')
+          .where('username', isGreaterThanOrEqualTo: q)
+          .where('username', isLessThan: '$q\uf8ff')
+          .limit(20)
+          .get();
+      for (final doc in usernameSnap.docs) {
+        results[doc.id] = UserProfile.fromMap(doc.id, doc.data());
+      }
+    } catch (_) {
+      // Fallback: fetch recent users
+      final snap = await _db.collection('users').limit(50).get();
+      for (final doc in snap.docs) {
+        results[doc.id] = UserProfile.fromMap(doc.id, doc.data());
+      }
+    }
+    return results.values.toList();
   }
 
   Future<void> updateStorefront(String uid, Map<String, dynamic> data) async {
     await _db.collection('users').doc(uid).update(data);
+  }
+
+  Future<void> deleteMyAccount() async {
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('Not logged in');
+    await _db.collection('users').doc(user.uid).delete();
+    await user.delete();
+    await _auth.signOut();
   }
 
   Future<void> autoDowngradeExpired(String uid) async {

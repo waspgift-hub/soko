@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/product_service.dart';
 import '../../services/user_service.dart';
@@ -6,8 +7,7 @@ import '../../models/product_model.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/ad_banner.dart';
 import '../../widgets/verified_badge.dart';
-import 'product_detail.dart';
-import '../profile/public_profile_screen.dart';
+import '../../app/routes.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -299,11 +299,9 @@ class _SearchScreenState extends State<SearchScreen> {
               final product = products[index];
               return ProductCard(
                 product: product,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ProductDetailPage(product: product),
-                  ),
+                onTap: () => context.push(
+                  '${AppRoutes.productDetail}/${product.id}',
+                  extra: product,
                 ),
               );
             },
@@ -373,17 +371,10 @@ class _SearchScreenState extends State<SearchScreen> {
           size: 14,
           color: Colors.grey,
         ),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PublicProfileScreen(
-                userId: user.uid,
-                userName: user.displayName,
-              ),
-            ),
-          );
-        },
+        onTap: () => context.push(
+          '${AppRoutes.publicProfile}/${user.uid}',
+          extra: user.displayName,
+        ),
       ),
     );
   }

@@ -325,16 +325,16 @@ class _PremiumUpgradeScreenState extends State<PremiumUpgradeScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
         decoration: BoxDecoration(
-          color: isSelected ? color.withValues(alpha: 0.08) : Colors.grey[50],
+          color: isSelected ? color.withValues(alpha: 0.08) : Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? color : Colors.grey[300]!,
-            width: isSelected ? 2 : 1,
+            color: isSelected ? color : Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+            width: isSelected ? 2 : 1.5,
           ),
         ),
         child: Column(
           children: [
-            Icon(icon, color: isSelected ? color : Colors.grey, size: 36),
+            Icon(icon, color: isSelected ? color : Theme.of(context).colorScheme.onSurfaceVariant, size: 36),
             const SizedBox(height: 8),
             Text(
               tier == 'silver' ? context.tr('silver') : context.tr('premium'),

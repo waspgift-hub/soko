@@ -53,7 +53,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyCAJ76izS22J-tQ0W90rUG7zd-pGEIzIvk',
-    appId: '1:344682929526:android:d8f3eba12c33c826c26e57',
+    appId: '1:344682929526:android:828e2523b15358a7c26e57',
     messagingSenderId: '344682929526',
     projectId: 'sokonimoko-8c171-a8d14',
     databaseURL: 'https://sokonimoko-8c171-a8d14-default-rtdb.firebaseio.com',
@@ -62,26 +62,26 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyCKCh1yepeS53GvF5EOVER1QKj6rQ5quqQ',
-    appId: '1:344682929526:ios:78d05b9accec1cd9c26e57',
+    appId: '1:344682929526:ios:500eba80b1b44e3bc26e57',
     messagingSenderId: '344682929526',
     projectId: 'sokonimoko-8c171-a8d14',
     databaseURL: 'https://sokonimoko-8c171-a8d14-default-rtdb.firebaseio.com',
     storageBucket: 'sokonimoko-8c171-a8d14.firebasestorage.app',
     androidClientId: '344682929526-5ame7l830dt2d2eu3igihfvunaab0v18.apps.googleusercontent.com',
-    iosClientId: '344682929526-3mu6jrlpdp199f76j2bbdd8pb0e12tru.apps.googleusercontent.com',
-    iosBundleId: 'com.example.sokoLangu',
+    iosClientId: '344682929526-ecva26lp30ci9qg48onsvnt2ftbanvit.apps.googleusercontent.com',
+    iosBundleId: 'com.sokolangu.app',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
     apiKey: 'AIzaSyCKCh1yepeS53GvF5EOVER1QKj6rQ5quqQ',
-    appId: '1:344682929526:ios:78d05b9accec1cd9c26e57',
+    appId: '1:344682929526:ios:500eba80b1b44e3bc26e57',
     messagingSenderId: '344682929526',
     projectId: 'sokonimoko-8c171-a8d14',
     databaseURL: 'https://sokonimoko-8c171-a8d14-default-rtdb.firebaseio.com',
     storageBucket: 'sokonimoko-8c171-a8d14.firebasestorage.app',
     androidClientId: '344682929526-5ame7l830dt2d2eu3igihfvunaab0v18.apps.googleusercontent.com',
-    iosClientId: '344682929526-3mu6jrlpdp199f76j2bbdd8pb0e12tru.apps.googleusercontent.com',
-    iosBundleId: 'com.example.sokoLangu',
+    iosClientId: '344682929526-ecva26lp30ci9qg48onsvnt2ftbanvit.apps.googleusercontent.com',
+    iosBundleId: 'com.sokolangu.app',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(

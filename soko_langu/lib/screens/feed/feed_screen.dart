@@ -1,15 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../services/live_stream_service.dart';
 import '../../widgets/live_badge.dart';
 import '../../widgets/verified_badge.dart';
-import '../live/live_screen.dart';
 import '../../extensions/context_tr.dart';
+import '../../app/routes.dart';
+import '../../widgets/google_loading.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
-class FeedScreen extends StatelessWidget {
+class FeedScreen extends StatefulWidget {
   const FeedScreen({super.key});
 
   @override
+  State<FeedScreen> createState() => _FeedScreenState();
+}
+
+class _FeedScreenState extends State<FeedScreen> {
+  int _refreshKey = 0;
+
+  @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final service = LiveStreamService();
 
     return Scaffold(
@@ -18,22 +29,32 @@ class FeedScreen extends StatelessWidget {
         elevation: 0,
         title: Text(
           context.tr('live_feed'),
-          style: const TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(fontWeight: FontWeight.bold, color: cs.onSurface),
         ),
       ),
       body: SafeArea(
         child: StreamBuilder<List<LiveStream>>(
+          key: ValueKey('feed_$_refreshKey'),
           stream: service.getActiveStreams(),
           builder: (context, snap) {
             if (snap.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return const GoogleLoadingPage();
             }
             final streams = snap.data ?? [];
             if (streams.isEmpty) {
-              return _buildEmpty(context);
+              return RefreshIndicator(
+                onRefresh: _handleRefresh,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.6,
+                    child: _buildEmpty(context, cs),
+                  ),
+                ),
+              );
             }
             return RefreshIndicator(
-              onRefresh: () async {},
+              onRefresh: _handleRefresh,
               child: ListView.builder(
                 padding: EdgeInsets.fromLTRB(
                   12,
@@ -43,7 +64,7 @@ class FeedScreen extends StatelessWidget {
                 ),
                 itemCount: streams.length,
                 itemBuilder: (context, index) =>
-                    _buildStreamCard(context, streams[index]),
+                    _buildStreamCard(context, streams[index], cs),
               ),
             );
           },
@@ -52,7 +73,11 @@ class FeedScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildEmpty(BuildContext context) {
+  Future<void> _handleRefresh() async {
+    setState(() => _refreshKey++);
+  }
+
+  Widget _buildEmpty(BuildContext context, ColorScheme cs) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -60,32 +85,36 @@ class FeedScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: Colors.red[50],
+              color: cs.errorContainer,
               shape: BoxShape.circle,
             ),
             child: Icon(
               Icons.videocam_off_rounded,
               size: 64,
-              color: Colors.red[300],
+              color: cs.onErrorContainer,
             ),
           ),
           const SizedBox(height: 24),
           Text(
             context.tr('no_live_now'),
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: cs.onSurface,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             context.tr('no_live_subtitle'),
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey[600]),
+            style: TextStyle(color: cs.onSurfaceVariant),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStreamCard(BuildContext context, LiveStream stream) {
+  Widget _buildStreamCard(BuildContext context, LiveStream stream, ColorScheme cs) {
     final dur = DateTime.now().difference(stream.startedAt);
     final durStr = dur.inMinutes < 60
         ? '${dur.inMinutes}m'
@@ -96,15 +125,12 @@ class FeedScreen extends StatelessWidget {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Colors.grey[200]!),
+        side: BorderSide(color: cs.outlineVariant),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => LiveScreen(stream: stream)),
-          );
+          context.push(AppRoutes.live, extra: stream);
         },
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -116,7 +142,7 @@ class FeedScreen extends StatelessWidget {
                   width: double.infinity,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [Colors.grey[300]!, Colors.grey[100]!],
+                      colors: [cs.surfaceContainerHighest, cs.surfaceContainerLow],
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                     ),
@@ -124,14 +150,14 @@ class FeedScreen extends StatelessWidget {
                   child:
                       stream.productImage != null &&
                           stream.productImage!.isNotEmpty
-                      ? Image.network(
-                          stream.productImage!,
+                      ? CachedNetworkImage(
+                          imageUrl: stream.productImage!,
                           fit: BoxFit.cover,
                           width: double.infinity,
                           height: 200,
-                          errorBuilder: (_, _, _) => _buildPlaceholder(),
+                          errorWidget: (_, _, _) => _buildPlaceholder(cs),
                         )
-                      : _buildPlaceholder(),
+                      : _buildPlaceholder(cs),
                 ),
                 Positioned(top: 12, left: 12, child: LiveBadge(size: 28)),
                 Positioned(
@@ -157,7 +183,7 @@ class FeedScreen extends StatelessWidget {
                         const SizedBox(width: 4),
                         Text(
                           durStr,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white,
                             fontSize: 12,
                           ),
@@ -199,13 +225,13 @@ class FeedScreen extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 18,
-                    backgroundColor: Colors.green,
+                    backgroundColor: cs.primaryContainer,
                     child: Text(
                       stream.userName.isNotEmpty
                           ? stream.userName[0].toUpperCase()
                           : '?',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: cs.onPrimaryContainer,
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
                       ),
@@ -220,9 +246,10 @@ class FeedScreen extends StatelessWidget {
                           children: [
                             Text(
                               stream.userName,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.w600,
                                 fontSize: 15,
+                                color: cs.onSurface,
                               ),
                             ),
                             VerifiedBadge(tier: stream.userTier, size: 14),
@@ -231,7 +258,7 @@ class FeedScreen extends StatelessWidget {
                         Text(
                           "${context.tr('selling')} ${stream.productName}",
                           style: TextStyle(
-                            color: Colors.grey[600],
+                            color: cs.onSurfaceVariant,
                             fontSize: 12,
                           ),
                           maxLines: 1,
@@ -246,7 +273,7 @@ class FeedScreen extends StatelessWidget {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.green,
+                      color: cs.primary,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Row(
@@ -278,7 +305,13 @@ class FeedScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildPlaceholder() {
-    return Center(child: Icon(Icons.image, size: 48, color: Colors.grey[400]));
+  Widget _buildPlaceholder(ColorScheme cs) {
+    return Center(
+      child: Icon(
+        Icons.image,
+        size: 48,
+        color: cs.onSurface.withValues(alpha: 0.4),
+      ),
+    );
   }
 }

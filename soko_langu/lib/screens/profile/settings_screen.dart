@@ -1,17 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/localization_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/notification_service.dart';
+import '../../services/auto_lock_service.dart';
 import '../../services/secure_storage_service.dart';
 import '../../services/user_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../../services/notification_service.dart';
-import '../../services/localization_service.dart';
-import '../../main.dart';
 import '../../extensions/context_tr.dart';
-import 'edit_profile_screen.dart';
-import 'about_app_screen.dart';
-import 'premium_upgrade_screen.dart';
-import 'wallpaper_screen.dart';
-import 'help_center_screen.dart';
+import '../../app/routes.dart';
+import '../../main.dart' show themeManager, AppConfig;
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -196,7 +194,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ],
                   onChanged: (value) async {
                     if (value == null) return;
-                    await autoLockService.setTimeout(value);
+                    await AutoLockService.instance.setTimeout(value);
                     setState(() => _autoLockMinutes = value);
                   },
                 ),
@@ -211,14 +209,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _buildTile(
                 icon: Icons.person,
                 title: context.tr('edit_profile'),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const EditProfileScreen(),
-                    ),
-                  );
-                },
+                onTap: () => context.push(AppRoutes.editProfile),
               ),
               const Divider(),
               _buildSectionTitle(context.tr('account_tier')),
@@ -267,7 +258,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 subtitle: const Text('Switch between light and dark theme'),
                 value: themeManager.isDark,
-                activeColor: const Color(0xFF39FF14),
+                activeThumbColor: const Color(0xFF39FF14),
                 onChanged: (val) => themeManager.setDark(val),
               ),
               if (_accountTier == 'silver')
@@ -275,37 +266,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.wallpaper,
                   title: context.tr('wallpaper'),
                   subtitle: context.tr('wallpaper_sub'),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const WallpaperScreen(),
-                      ),
-                    );
-                  },
+                  onTap: () => context.push(AppRoutes.wallpaper),
                 ),
               const Divider(),
               _buildSectionTitle(context.tr('support')),
               _buildTile(
                 icon: Icons.help,
                 title: context.tr('help'),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const HelpCenterScreen()),
-                  );
-                },
+                onTap: () => context.push(AppRoutes.help),
               ),
               _buildTile(
                 icon: Icons.info,
                 title: context.tr('about'),
                 subtitle: context.tr('version'),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const AboutAppScreen()),
-                  );
-                },
+                onTap: () => context.push(AppRoutes.about),
               ),
               const SizedBox(height: 30),
               Padding(
@@ -323,6 +297,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: Text(context.tr('delete_account')),
+                        content: Text(context.tr('delete_account_confirm')),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: Text(context.tr('cancel')),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: Text(
+                              context.tr('delete'),
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm != true) return;
+                    try {
+                      await UserService().deleteMyAccount();
+                      if (mounted)
+                        Navigator.of(
+                          context,
+                        ).popUntil((route) => route.isFirst);
+                    } catch (e) {
+                      if (mounted)
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(SnackBar(content: Text('$e')));
+                    }
+                  },
+                  icon: const Icon(Icons.delete_forever, color: Colors.white),
+                  label: Text(
+                    context.tr('delete_account'),
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade900,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
@@ -348,10 +372,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showPremiumUpgrade(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const PremiumUpgradeScreen()),
-    ).then((_) async {
+    context.push(AppRoutes.premiumUpgrade).then((_) async {
       final tier = await UserService().getCurrentTier();
       if (mounted) {
         setState(() => _accountTier = tier);

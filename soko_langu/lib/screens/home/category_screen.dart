@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import '../../main.dart';
 import '../../models/category_model.dart';
 import '../../services/category_service.dart';
 import '../../extensions/context_tr.dart';
-import 'category_products_screen.dart';
+import '../../app/routes.dart';
+import '../../widgets/google_loading.dart';
 
 class CategoryScreen extends StatelessWidget {
   const CategoryScreen({super.key});
@@ -16,7 +19,7 @@ class CategoryScreen extends StatelessWidget {
           stream: CategoryService().getCategories(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return const GoogleLoadingPage();
             }
             if (!snapshot.hasData || snapshot.data!.isEmpty) {
               return Center(
@@ -62,19 +65,20 @@ class CategoryScreen extends StatelessWidget {
               itemCount: categories.length,
               itemBuilder: (context, index) {
                 final cat = categories[index];
+                final config = AppConfig.of(context);
                 return GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => CategoryProductsScreen(category: cat),
-                      ),
-                    );
-                  },
+                  onTap: () => context.push(
+                    '${AppRoutes.categoryProducts}/${cat.name}',
+                    extra: cat,
+                  ),
                   child: Container(
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.surface,
                       borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+                        width: 1.5,
+                      ),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.05),
@@ -89,20 +93,10 @@ class CategoryScreen extends StatelessWidget {
                         Text(cat.icon, style: const TextStyle(fontSize: 40)),
                         const SizedBox(height: 8),
                         Text(
-                          cat.nameSw,
+                          config.langCode == 'en' ? cat.name : cat.nameSw,
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          cat.name,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.6),
                           ),
                         ),
                       ],

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/auth_service.dart';
-import '../../widgets/bottom_nav_bar.dart';
+import '../../app/routes.dart';
 
 class VerifyEmailScreen extends StatefulWidget {
   const VerifyEmailScreen({super.key});
@@ -45,10 +46,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   Future<void> _checkVerification() async {
     final verified = await _authService.isEmailVerified();
     if (verified && mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const MainScreen()),
-      );
+      context.replace(AppRoutes.home);
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -61,7 +59,9 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
+      backgroundColor: cs.surface,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -75,10 +75,10 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                     mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.mark_email_unread,
                         size: 80,
-                        color: Colors.green,
+                        color: cs.primary,
                       ),
                       const SizedBox(height: 24),
                       Text(
@@ -86,7 +86,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.onSurface,
+                          color: cs.onSurface,
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -94,9 +94,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                         context.tr('verify_email_sent'),
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withValues(alpha: 0.6),
+                          color: cs.onSurface.withValues(alpha: 0.6),
                           fontSize: 15,
                         ),
                       ),
@@ -107,7 +105,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                         child: ElevatedButton(
                           onPressed: _checkVerification,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
+                            backgroundColor: cs.primary,
+                            foregroundColor: cs.onPrimary,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -115,7 +114,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                           child: Text(
                             context.tr('verified_continue'),
                             style: TextStyle(
-                              color: Colors.white,
+                              color: cs.onPrimary,
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                             ),
@@ -126,16 +125,17 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                       TextButton(
                         onPressed: _sending ? null : _resend,
                         child: _sending
-                            ? const SizedBox(
+                            ? SizedBox(
                                 width: 16,
                                 height: 16,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
+                                  color: cs.primary,
                                 ),
                               )
                             : Text(
                                 context.tr('resend_verification'),
-                                style: TextStyle(color: Colors.green),
+                                style: TextStyle(color: cs.primary),
                               ),
                       ),
                       const SizedBox(height: 24),
@@ -147,9 +147,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                         child: Text(
                           context.tr('use_different_account'),
                           style: TextStyle(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.6),
+                            color: cs.onSurface.withValues(alpha: 0.6),
                           ),
                         ),
                       ),

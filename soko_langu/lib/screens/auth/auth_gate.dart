@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/user_service.dart';
-import '../../main.dart';
 import '../../widgets/bottom_nav_bar.dart';
 import '../../shared/loading_widget.dart';
 import '../../extensions/context_tr.dart';
@@ -18,11 +17,13 @@ class AuthGate extends StatelessWidget {
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Scaffold(body: LoadingWidget(message: context.tr('loading')));
+          return Scaffold(
+            body: LoadingWidget(message: context.tr('loading')),
+          );
         }
-        if (snapshot.hasData) {
+        if (snapshot.hasData && snapshot.data != null) {
           return FutureBuilder<bool>(
-            future: _checkUser(snapshot.data!.uid),
+            future: _hasProfile(snapshot.data!.uid),
             builder: (context, snap) {
               if (!snap.hasData) {
                 return Scaffold(
@@ -41,17 +42,18 @@ class AuthGate extends StatelessWidget {
     );
   }
 
-  Future<bool> _checkUser(String uid) async {
+  Future<bool> _hasProfile(String uid) async {
     try {
-      final results = await Future.wait([
-        UserService().autoDowngradeExpired(uid),
-        FirebaseFirestore.instance.collection('users').doc(uid).get(),
-      ]);
-      final doc = results[1] as DocumentSnapshot<Map<String, dynamic>>;
+      await UserService().autoDowngradeExpired(uid);
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
       if (!doc.exists) return false;
       final tier = doc.data()?['accountTier'] as String?;
       return tier != null && tier.isNotEmpty;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('AuthGate _hasProfile: $e');
       return false;
     }
   }

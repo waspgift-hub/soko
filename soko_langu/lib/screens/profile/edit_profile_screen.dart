@@ -9,6 +9,8 @@ import '../../services/user_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../utils/helpers.dart';
 
+import '../../widgets/google_loading.dart';
+
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
 
@@ -171,7 +173,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           _longitude = pos.longitude;
         });
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint('EditProfile reverse geocode: $e');
       setState(() {
         _locationController.text = '${pos.latitude}, ${pos.longitude}';
         _latitude = pos.latitude;
@@ -277,7 +280,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (_loading) {
       return Scaffold(
         appBar: AppBar(title: Text(context.tr('edit_profile'))),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const GoogleLoadingPage(),
       );
     }
 

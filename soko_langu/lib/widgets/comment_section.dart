@@ -179,7 +179,7 @@ class _CommentSectionState extends State<CommentSection> {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: comments.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
+              separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (context, i) {
                 final c = comments[i];
                 return _CommentTile(
@@ -383,7 +383,7 @@ class _CommentTile extends StatelessWidget {
                         return ListView.separated(
                           controller: scrollController,
                           itemCount: replies.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          separatorBuilder: (_, _) => const Divider(height: 1),
                           itemBuilder: (_, i) {
                             final r = replies[i];
                             final isMyReply =

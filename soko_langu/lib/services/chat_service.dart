@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/message_model.dart';
+import 'notification_service.dart';
 
 class ChatService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -57,8 +58,22 @@ class ChatService {
         'participants': [sender.uid, receiverId],
         'lastMessage': content,
         'lastMessageTime': FieldValue.serverTimestamp(),
+        'otherUserName': sender.displayName ?? sender.email ?? '',
+        'otherUserImage': sender.photoURL,
         'unreadCount': FieldValue.increment(1),
       }, SetOptions(merge: true));
+
+      NotificationService().sendNotification(
+        userId: receiverId,
+        title: sender.displayName ?? sender.email ?? 'New message',
+        body: content,
+        data: {
+          'type': 'chat',
+          'senderId': sender.uid,
+          'conversationId': conversationId,
+          'senderName': sender.displayName ?? sender.email ?? '',
+        },
+      );
     } catch (e) {
       throw Exception("Failed to send message: $e");
     }
@@ -118,9 +133,12 @@ class ChatService {
   }
 
   // =========================
-  // 📨 GET MESSAGES
+  // 📨 GET MESSAGES (paged)
   // =========================
-  Stream<List<Message>> getMessages(String otherUserId) {
+  Stream<List<Message>> getMessages(
+    String otherUserId, {
+    int limit = 50,
+  }) {
     final currentUser = _auth.currentUser;
     if (currentUser == null) return Stream.value([]);
 
@@ -131,11 +149,39 @@ class ChatService {
         .doc(conversationId)
         .collection("messages")
         .orderBy("timestamp", descending: true)
+        .limit(limit)
         .snapshots()
         .map(
           (snapshot) =>
               snapshot.docs.map((doc) => Message.fromFirestore(doc)).toList(),
         );
+  }
+
+  // =========================
+  // 📨 LOAD OLDER MESSAGES (pagination)
+  // =========================
+  Future<List<Message>> loadOlderMessages(
+    String otherUserId, {
+    required DocumentSnapshot? lastDoc,
+    int limit = 30,
+  }) async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) return [];
+
+    final conversationId = _getConversationId(currentUser.uid, otherUserId);
+    var query = _db
+        .collection("conversations")
+        .doc(conversationId)
+        .collection("messages")
+        .orderBy("timestamp", descending: true)
+        .limit(limit);
+
+    if (lastDoc != null) {
+      query = query.startAfterDocument(lastDoc);
+    }
+
+    final snap = await query.get();
+    return snap.docs.map((doc) => Message.fromFirestore(doc)).toList();
   }
 
   // =========================
@@ -148,14 +194,13 @@ class ChatService {
     return _db
         .collection("conversations")
         .where("participants", arrayContains: currentUser.uid)
+        .orderBy("lastMessageTime", descending: true)
         .snapshots()
-        .map((snapshot) {
-          final list = snapshot.docs
+        .map(
+          (snapshot) => snapshot.docs
               .map((doc) => Conversation.fromFirestore(doc))
-              .toList();
-          list.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
-          return list;
-        });
+              .toList(),
+        );
   }
 
   // =========================
@@ -178,42 +223,6 @@ class ChatService {
     }
     batch.delete(_db.collection("conversations").doc(conversationId));
     await batch.commit();
-  }
-
-  // =========================
-  // ✅ MARK MESSAGES AS READ
-  // =========================
-  // =========================
-  // ⌨️ TYPING INDICATOR
-  // =========================
-  Future<void> startTyping(String otherUserId) async {
-    final user = _auth.currentUser;
-    if (user == null) return;
-    final convId = _getConversationId(user.uid, otherUserId);
-    await _db.collection("conversations").doc(convId).set({
-      'typing_${user.uid}': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-  }
-
-  Future<void> stopTyping(String otherUserId) async {
-    final user = _auth.currentUser;
-    if (user == null) return;
-    final convId = _getConversationId(user.uid, otherUserId);
-    await _db.collection("conversations").doc(convId).update({
-      'typing_${user.uid}': null,
-    });
-  }
-
-  Stream<bool> typingStream(String otherUserId) {
-    final user = _auth.currentUser;
-    if (user == null) return Stream.value(false);
-    final convId = _getConversationId(user.uid, otherUserId);
-    return _db.collection("conversations").doc(convId).snapshots().map((snap) {
-      if (!snap.exists) return false;
-      final data = snap.data();
-      if (data == null) return false;
-      return data['typing_$otherUserId'] != null;
-    });
   }
 
   // =========================

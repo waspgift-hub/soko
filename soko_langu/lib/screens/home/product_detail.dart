@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:go_router/go_router.dart';
 import '../../models/product_model.dart';
 import '../../models/category_model.dart';
 import '../../models/cart_model.dart';
@@ -10,10 +11,8 @@ import '../../services/wishlist_service.dart';
 import '../../services/ad_revenue_service.dart';
 import '../../services/category_service.dart';
 import '../../extensions/context_tr.dart';
-import '../chat/chat_page.dart';
-import '../profile/public_profile_screen.dart';
-import '../payment/payment_summary_screen.dart';
-import '../auth/login_screen.dart';
+import '../../app/routes.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../widgets/ad_banner.dart';
 import '../../widgets/review_section.dart';
 import '../../widgets/comment_section.dart';
@@ -35,11 +34,19 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   int _quantity = 1;
   bool _isFav = false;
   String? _selectedVariantId;
+  final PageController _imageController = PageController();
+  int _currentImageIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _checkFav();
+  }
+
+  @override
+  void dispose() {
+    _imageController.dispose();
+    super.dispose();
   }
 
   Future<void> _checkFav() async {
@@ -66,10 +73,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   void _requireAuth(VoidCallback action) {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-      );
+      context.push(AppRoutes.login);
       return;
     }
     action();
@@ -121,17 +125,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null || user.uid == widget.product.sellerId) return;
     final total = _getEffectivePrice() * _quantity;
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PaymentSummaryScreen(
-          sellerId: widget.product.sellerId,
-          sellerName: widget.product.sellerName,
-          productId: widget.product.id,
-          productName: widget.product.name,
-          productPrice: total,
-        ),
-      ),
+    context.push(
+      '${AppRoutes.payment}/${widget.product.id}',
+      extra: {
+        'sellerId': widget.product.sellerId,
+        'sellerName': widget.product.sellerName,
+        'productName': widget.product.name,
+        'productPrice': total,
+      },
     );
   }
 
@@ -140,11 +141,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         "${product.name}\n"
         "Price: ${product.currency ?? 'TSh'} ${product.price.toStringAsFixed(0)}\n"
         "${context.tr('check_out_on')}";
-    Share.share(text);
+    SharePlus.instance.share(ShareParams(text: text));
   }
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final currentUser = FirebaseAuth.instance.currentUser;
     final product = widget.product;
     final sellerId = product.sellerId;
@@ -154,7 +156,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         title: Text(context.tr('product_detail')),
         actions: [
           IconButton(
-            icon: const Icon(Icons.share, color: Colors.green),
+            icon: Icon(Icons.share, color: cs.primary),
             onPressed: () => _shareProduct(product),
           ),
           IconButton(
@@ -175,44 +177,123 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(
-                height: MediaQuery.of(context).size.height * 0.3,
-                child: product.images.isNotEmpty
-                    ? PageView.builder(
-                        itemCount: product.images.length,
-                        itemBuilder: (context, index) {
-                          return Image.network(
-                            product.images[index],
-                            fit: BoxFit.cover,
-                            loadingBuilder: (context, child, progress) =>
-                                progress == null
-                                ? child
-                                : Container(
-                                    color: Colors.grey[100],
+              Stack(
+                children: [
+                  SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.3,
+                    child: product.images.isNotEmpty
+                        ? PageView.builder(
+                            controller: _imageController,
+                            itemCount: product.images.length,
+                            onPageChanged: (index) {
+                              setState(() => _currentImageIndex = index);
+                            },
+                            itemBuilder: (context, index) {
+                              return GestureDetector(
+                                onTap: () => _showFullScreenImage(
+                                  context,
+                                  product.images,
+                                  index,
+                                ),
+                                child: CachedNetworkImage(
+                                  imageUrl: product.images[index],
+                                  fit: BoxFit.cover,
+                                  placeholder: (context, url) => Container(
+                                    color: cs.surfaceContainerLow,
                                     child: Center(
                                       child: SizedBox(
                                         width: 24,
                                         height: 24,
                                         child: CircularProgressIndicator(
                                           strokeWidth: 2,
-                                          color: Colors.green[400],
+                                          color: cs.primary,
                                         ),
                                       ),
                                     ),
                                   ),
-                            errorBuilder: (context, error, stackTrace) =>
-                                Container(
-                                  color: Colors.grey[200],
-                                  child: const Icon(Icons.image, size: 50),
+                                  errorWidget: (context, error, stackTrace) =>
+                                      Container(
+                                        color: cs.surfaceContainerHighest,
+                                        child: const Icon(Icons.image, size: 50),
+                                      ),
                                 ),
-                          );
-                        },
-                      )
-                    : Container(
-                        color: Colors.grey[200],
-                        child: const Icon(Icons.image, size: 50),
+                              );
+                            },
+                          )
+                        : Container(
+                            color: cs.surfaceContainerHighest,
+                            child: const Icon(Icons.image, size: 50),
+                          ),
+                  ),
+                  if (product.images.length > 1)
+                    Positioned(
+                      bottom: 12,
+                      left: 0,
+                      right: 0,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(
+                          product.images.length,
+                          (index) => Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 3),
+                            width: _currentImageIndex == index ? 10 : 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: _currentImageIndex == index
+                                  ? Colors.white
+                                  : Colors.white.withValues(alpha: 0.5),
+                              border: Border.all(
+                                color: Colors.black.withValues(alpha: 0.2),
+                                width: 1,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
+                    ),
+                  if (product.images.isNotEmpty)
+                    Positioned(
+                      top: 12,
+                      right: 12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${_currentImageIndex + 1}/${product.images.length}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
+              if (product.images.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.photo_library, size: 16, color: Colors.grey),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Picha ${product.images.length}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: cs.onSurface.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -220,9 +301,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   children: [
                     Text(
                       product.name,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
+                        color: cs.onSurface,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -237,8 +319,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     if (_selectedVariantId != null)
                       Text(
                         "${context.tr('with_variant')} ${product.currency ?? 'TSh'} ${_getEffectivePrice().toStringAsFixed(0)}",
-                        style: const TextStyle(
-                          color: Colors.green,
+                        style: TextStyle(
+                          color: cs.primary,
                           fontSize: 14,
                         ),
                       ),
@@ -251,18 +333,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           Text(
                             "${product.rating.toStringAsFixed(1)} (${product.reviewCount} ${context.tr('reviews_count')})",
                             style: TextStyle(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurface.withValues(alpha: 0.6),
+                              color: cs.onSurface.withValues(alpha: 0.6),
                             ),
                           ),
                           const SizedBox(width: 8),
                           Text(
                             "${product.soldCount} ${context.tr('sold')}",
                             style: TextStyle(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurface.withValues(alpha: 0.6),
+                              color: cs.onSurface.withValues(alpha: 0.6),
                             ),
                           ),
                         ],
@@ -271,27 +349,27 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     const SizedBox(height: 16),
                     Text(
                       context.tr('description'),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
+                        color: cs.onSurface,
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       product.description,
                       style: TextStyle(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.6),
+                        color: cs.onSurface.withValues(alpha: 0.6),
                         height: 1.5,
                       ),
                     ),
                     const SizedBox(height: 16),
                     Text(
                       context.tr('details'),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
+                        color: cs.onSurface,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -316,9 +394,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       const SizedBox(height: 16),
                       Text(
                         context.tr('variants'),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
+                          color: cs.onSurface,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -334,8 +413,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                 groupName,
                                 style: TextStyle(
                                   fontWeight: FontWeight.w500,
-                                  color: Theme.of(context).colorScheme.onSurface
-                                      .withValues(alpha: 0.6),
+                                  color: cs.onSurface.withValues(alpha: 0.6),
                                 ),
                               ),
                               const SizedBox(height: 4),
@@ -347,7 +425,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                   return ChoiceChip(
                                     label: Text(v.value),
                                     selected: selected,
-                                    selectedColor: Colors.green[100],
+                                    selectedColor: cs.primaryContainer,
                                     onSelected: (sel) {
                                       setState(() {
                                         _selectedVariantId = sel ? v.id : null;
@@ -372,34 +450,83 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           context.tr('price_adjustment'),
                           "${product.currency ?? 'TSh'} ${_getSelectedVariant()?.priceAdjustment?.toStringAsFixed(0) ?? '0'}",
                         ),
-                      ],
-                    ],
+                       ],
+                     ],
+                    const SizedBox(height: 20),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: cs.primaryContainer.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: cs.primary.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.storefront_outlined,
+                            size: 20,
+                            color: cs.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: RichText(
+                              text: TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: 'Imepostiwa kwenye ',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: cs.onSurface.withValues(alpha: 0.7),
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: 'Soko Langu',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: cs.primary,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: ' na ',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: cs.onSurface.withValues(alpha: 0.7),
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: product.sellerName,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: cs.onSurface,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 20),
                     GestureDetector(
                       onTap: () {
                         if (currentUser == null) {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const LoginScreen(),
-                            ),
-                          );
+                          context.push(AppRoutes.login);
                         } else {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => PublicProfileScreen(
-                                userId: sellerId,
-                                userName: product.sellerName,
-                              ),
-                            ),
+                          context.push(
+                            '${AppRoutes.publicProfile}/$sellerId',
+                            extra: product.sellerName,
                           );
                         }
                       },
                       child: Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.grey[100],
+                          color: cs.surfaceContainerLow,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
@@ -410,9 +537,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                 final online = snap.data ?? false;
                                 return Stack(
                                   children: [
-                                    const CircleAvatar(
-                                      backgroundColor: Colors.blueAccent,
-                                      child: Icon(
+                                    CircleAvatar(
+                                      backgroundColor: cs.primaryContainer,
+                                      child: const Icon(
                                         Icons.person,
                                         color: Colors.white,
                                       ),
@@ -447,16 +574,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                   Text(
                                     context.tr('seller'),
                                     style: TextStyle(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurface
-                                          .withValues(alpha: 0.6),
+                                      color: cs.onSurface.withValues(alpha: 0.6),
                                     ),
                                   ),
                                   Text(
                                     product.sellerName,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontWeight: FontWeight.bold,
+                                      color: cs.onSurface,
                                     ),
                                   ),
                                   VerifiedBadge(tier: product.sellerTier),
@@ -466,68 +591,42 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                             if (currentUser == null) ...[
                               ElevatedButton(
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green,
+                                  backgroundColor: cs.primary,
                                 ),
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const LoginScreen(),
-                                    ),
-                                  );
-                                },
+                                onPressed: () => context.push(AppRoutes.login),
                                 child: Text(
                                   context.tr('chat'),
-                                  style: const TextStyle(color: Colors.white),
+                                  style: TextStyle(color: cs.onPrimary),
                                 ),
                               ),
                               const SizedBox(width: 8),
                               TextButton(
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const LoginScreen(),
-                                    ),
-                                  );
-                                },
+                                onPressed: () => context.push(AppRoutes.login),
                                 child: Text(context.tr('view_store')),
                               ),
                             ] else if (currentUser.uid != sellerId) ...[
                               ElevatedButton(
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green,
+                                  backgroundColor: cs.primary,
                                 ),
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => ChatPage(
-                                        receiverId: sellerId,
-                                        receiverName: product.sellerName,
-                                        productName: product.name,
-                                      ),
-                                    ),
-                                  );
-                                },
+                                onPressed: () => context.push(
+                                  '${AppRoutes.chat}/$sellerId',
+                                  extra: {
+                                    'name': product.sellerName,
+                                    'product': product.name,
+                                  },
+                                ),
                                 child: Text(
                                   context.tr('chat'),
-                                  style: const TextStyle(color: Colors.white),
+                                  style: TextStyle(color: cs.onPrimary),
                                 ),
                               ),
                               const SizedBox(width: 8),
                               TextButton(
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => PublicProfileScreen(
-                                        userId: sellerId,
-                                        userName: product.sellerName,
-                                      ),
-                                    ),
-                                  );
-                                },
+                                onPressed: () => context.push(
+                                  '${AppRoutes.publicProfile}/$sellerId',
+                                  extra: product.sellerName,
+                                ),
                                 child: Text(context.tr('view_store')),
                               ),
                             ],
@@ -540,7 +639,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       children: [
                         Text(
                           "${context.tr('quantity')}: ",
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: cs.onSurface,
+                          ),
                         ),
                         IconButton(
                           onPressed: _quantity > 1
@@ -550,7 +652,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         ),
                         Text(
                           "$_quantity",
-                          style: const TextStyle(fontSize: 18),
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: cs.onSurface,
+                          ),
                         ),
                         IconButton(
                           onPressed: _quantity < product.stock
@@ -596,7 +701,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           MediaQuery.of(context).padding.bottom + 16,
         ),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: cs.surface,
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.05),
@@ -660,13 +765,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   ProductVariant? _getSelectedVariant() {
     if (_selectedVariantId == null) return null;
-    try {
-      return widget.product.variants.firstWhere(
-        (v) => v.id == _selectedVariantId,
-      );
-    } catch (_) {
-      return null;
-    }
+    final variants =
+        widget.product.variants.where((v) => v.id == _selectedVariantId);
+    return variants.isNotEmpty ? variants.first : null;
   }
 
   Widget _buildDetailRow(String label, String value) {
@@ -683,6 +784,131 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             ),
           ),
           Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+
+  void _showFullScreenImage(
+    BuildContext context,
+    List<String> images,
+    int initialIndex,
+  ) {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.black,
+        pageBuilder: (context, animation, secondaryAnimation) {
+          return _FullScreenImageViewer(
+            images: images,
+            initialIndex: initialIndex,
+          );
+        },
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+      ),
+    );
+  }
+}
+
+class _FullScreenImageViewer extends StatefulWidget {
+  final List<String> images;
+  final int initialIndex;
+
+  const _FullScreenImageViewer({
+    required this.images,
+    required this.initialIndex,
+  });
+
+  @override
+  State<_FullScreenImageViewer> createState() => _FullScreenImageViewerState();
+}
+
+class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
+  late PageController _pageController;
+  late int _currentIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: Text(
+          '${_currentIndex + 1}/${widget.images.length}',
+          style: const TextStyle(color: Colors.white),
+        ),
+        centerTitle: true,
+        elevation: 0,
+      ),
+      body: Stack(
+        children: [
+          PageView.builder(
+            controller: _pageController,
+            itemCount: widget.images.length,
+            onPageChanged: (index) {
+              setState(() => _currentIndex = index);
+            },
+            itemBuilder: (context, index) {
+              return GestureDetector(
+                onTap: () => Navigator.of(context).pop(),
+                child: InteractiveViewer(
+                  minScale: 1.0,
+                  maxScale: 5.0,
+                  child: Center(
+                    child: CachedNetworkImage(
+                      imageUrl: widget.images[index],
+                      fit: BoxFit.contain,
+                      placeholder: (context, url) => const Center(
+                        child: CircularProgressIndicator(color: Colors.white),
+                      ),
+                      errorWidget: (context, error, stackTrace) => const Center(
+                        child: Icon(Icons.broken_image, color: Colors.white, size: 80),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+          if (widget.images.length > 1)
+            Positioned(
+              bottom: 40,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  widget.images.length,
+                  (index) => Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: _currentIndex == index ? 12 : 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _currentIndex == index
+                          ? Colors.white
+                          : Colors.white.withValues(alpha: 0.4),
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

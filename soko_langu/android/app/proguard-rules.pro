@@ -1,2 +1,25 @@
--dontwarn com.stripe.android.pushProvisioning.**
--keep class com.stripe.android.pushProvisioning.** { *; }
+-keep class com.example.soko_langu.** { *; }
+-keep class com.google.firebase.** { *; }
+-keep class com.google.android.gms.** { *; }
+-keep class com.agora.** { *; }
+-keep class io.flutter.** { *; }
+-keep class io.flutter.app.** { *; }
+-keep class io.flutter.plugin.** { *; }
+-keep class io.flutter.plugins.** { *; }
+-keep class io.flutter.util.** { *; }
+-keep class io.flutter.view.** { *; }
+-keep class io.flutter.embedding.** { *; }
+-keep class com.dexterous.** { *; }
+-keep class com.google.android.play.** { *; }
+-keep class com.android.vending.** { *; }
+
+-keepattributes *Annotation*
+-keepattributes SourceFile,LineNumberTable
+-keepattributes EnclosingMethod
+-keepattributes InnerClasses
+-keepattributes Signature
+-keepattributes Exceptions
+
+-dontwarn io.flutter.**
+-dontwarn com.google.firebase.**
+-dontwarn com.google.android.gms.**

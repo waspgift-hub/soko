@@ -641,11 +641,13 @@ app.post('/api/webhook', async (req, res) => {
           sellerId: data.sellerId || '',
           items: [item],
           totalAmount: data.amount || 0,
-          status: 'confirmed',
+          status: 'pending',
           paymentMethod: 'Mongike',
           paymentMethodName: 'Mongike',
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           trackingNumber: null,
+          escrowHold: true,
+          escrowReleased: false,
         });
 
         if (data.productId) {
@@ -742,6 +744,24 @@ app.post('/api/agora-token', (req, res) => {
   }
 });
 
+app.get('/api/agora-token', (req, res) => {
+  try {
+    const channelName = req.query.channel;
+    const uid = parseInt(req.query.uid) || 0;
+    const role = req.query.role === 'broadcaster' ? RtcRole.PUBLISHER : RtcRole.SUBSCRIBER;
+    if (!channelName) return res.status(400).json({ error: 'Missing channel query param' });
+
+    const expireTime = 3600;
+    const token = RtcTokenBuilder.buildTokenWithUid(
+      AGORA_APP_ID, AGORA_CERT, channelName, uid, role, expireTime, expireTime,
+    );
+
+    res.json({ token, appId: AGORA_APP_ID });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // --- Webhook redirect handler (legacy — kept for Flutterwave backwards compatibility) ---
 app.get('/api/webhook-redirect', (req, res) => {
   const txRef = req.query.tx_ref || req.query.txref || '';
@@ -768,16 +788,18 @@ app.post('/api/send-notification', async (req, res) => {
     const fcmToken = userDoc.data().fcmToken;
     if (!fcmToken) return res.json({ sent: false, reason: 'No FCM token' });
 
-    const isCall = data && data.type === 'call';
+    const notifType = data && data.type;
+    const isCall = notifType === 'call';
+    const isChat = notifType === 'chat' || notifType === 'group_chat';
 
     const message = {
       token: fcmToken,
       notification: { title, body: body || '' },
       data: data || {},
       android: {
-        priority: isCall ? 'high' : 'normal',
+        priority: isCall || isChat ? 'high' : 'normal',
         notification: isCall ? {
-          channelId: 'incoming_calls',
+          channelId: 'incoming_calls_v2',
           priority: 'high',
           visibility: 'public',
           sound: 'default',
@@ -785,22 +807,24 @@ app.post('/api/send-notification', async (req, res) => {
           vibrationPattern: [0, 500, 200, 500, 200, 1000],
           fullScreenIntent: true,
           tag: 'incoming_call',
+        } : isChat ? {
+          channelId: 'chat_messages_v2',
+          priority: 'high',
+          visibility: 'public',
+          sound: 'default',
+          notificationPriority: 'high',
+          vibrationPattern: [0, 200, 100, 200],
+          tag: notifType === 'group_chat' ? 'group_chat' : 'chat_message',
+          color: '#40916C',
         } : undefined,
       },
-      apns: isCall ? {
+      apns: isCall || isChat ? {
         payload: {
           aps: {
             sound: 'default',
-            category: 'incoming_call',
+            category: isCall ? 'incoming_call' : 'chat_message',
             'content-available': 1,
           },
-        },
-      } : undefined,
-      webpush: isCall ? {
-        headers: { urgency: 'high' },
-        notification: {
-          requireInteraction: true,
-          vibrate: [0, 500, 200, 500],
         },
       } : undefined,
     };
@@ -1134,6 +1158,889 @@ app.post('/api/reset-password-after-otp', async (req, res) => {
     if (e.code === 'auth/claims-too-large') {
       return res.status(400).json({ error: 'Token claims too large' });
     }
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 📲 FCM — SEND BULK PUSH NOTIFICATION (to multiple tokens)
+// ============================================================
+app.post('/api/send-bulk-notification', async (req, res) => {
+  try {
+    const { title, body, tokens, target } = req.body;
+    if (!title || !tokens || !Array.isArray(tokens) || tokens.length === 0) {
+      return res.status(400).json({ error: 'Missing title or tokens array' });
+    }
+
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const BATCH_SIZE = 500;
+    let sent = 0;
+    const errors = [];
+
+    for (let i = 0; i < tokens.length; i += BATCH_SIZE) {
+      const batch = tokens.slice(i, i + BATCH_SIZE);
+      try {
+        const message = {
+          tokens: batch,
+          notification: { title, body: body || '' },
+          android: { priority: 'high' },
+          apns: {
+            payload: {
+              aps: { sound: 'default', 'content-available': 1 },
+            },
+          },
+        };
+
+        const response = await admin.messaging().sendEachForMulticast(message);
+        sent += response.successCount;
+
+        if (response.failureCount > 0) {
+          response.responses.forEach((resp, idx) => {
+            if (!resp.success) {
+              errors.push({ token: batch[idx].substring(0, 20) + '...', error: resp.error.message });
+            }
+          });
+        }
+      } catch (e) {
+        errors.push({ batch: i / BATCH_SIZE, error: e.message });
+      }
+    }
+
+    // Log the notification in Firestore
+    await db.collection('admin_notifications').add({
+      title,
+      body,
+      target: target || 'all',
+      sentCount: sent,
+      errorCount: errors.length,
+      sentAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.json({
+      sent: true,
+      totalTokens: tokens.length,
+      delivered: sent,
+      errors: errors.length > 0 ? errors.slice(0, 10) : [],
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 💸 WITHDRAW — Send money to user's M-Pesa via Mongike
+// ============================================================
+app.post('/api/withdraw', async (req, res) => {
+  try {
+    const { userId, amount, phone } = req.body;
+    if (!userId || !amount || !phone) {
+      return res.status(400).json({ error: 'Missing userId, amount, or phone' });
+    }
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
+
+    const user = userDoc.data();
+    if (user.isSuspended) return res.status(403).json({ error: 'Account suspended' });
+
+    const totalCoinsBefore = (user.viewerCoins || 0) + (user.coins || 0);
+    if (amount > totalCoinsBefore) {
+      return res.status(400).json({ error: 'Insufficient balance' });
+    }
+
+    const FEE_MONGIKE = 2000;
+    const netAmount = amount - FEE_MONGIKE;
+    if (netAmount <= 0) {
+      return res.status(400).json({ error: 'Amount too small after fee (min TZS 2001)' });
+    }
+
+    const resp = await fetch(`${MONGIKE_BASE}/payouts/withdraw`, {
+      method: 'POST',
+      headers: {
+        'x-api-key': MONGIKE_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        amount: netAmount,
+        recipient_phone: phone,
+      }),
+    });
+
+    const result = await resp.json();
+
+    if (result.status !== 'success') {
+      await auditLog({
+        userId, type: 'withdraw_failed', amount, balanceBefore: totalCoinsBefore, balanceAfter: totalCoinsBefore,
+        reason: `Mongike payout failed: ${result.message || 'Unknown error'}`,
+        metadata: { phone, netAmount, withdrawalType: 'viewer' },
+      });
+      return res.status(500).json({ error: result.message || 'Mongike payout failed' });
+    }
+
+    const viewerCoins = user.viewerCoins || 0;
+    const regCoins = user.coins || 0;
+    let remaining = amount;
+    const deductions = {};
+    if (viewerCoins > 0) {
+      const take = Math.min(remaining, viewerCoins);
+      deductions.viewerCoins = admin.firestore.FieldValue.increment(-take);
+      remaining -= take;
+    }
+    if (remaining > 0 && regCoins > 0) {
+      const take = Math.min(remaining, regCoins);
+      deductions.coins = admin.firestore.FieldValue.increment(-take);
+      remaining -= take;
+    }
+    await db.collection('users').doc(userId).update(deductions);
+
+    await db.collection('withdrawals').add({
+      userId,
+      type: 'viewer',
+      amount,
+      feeMongike: FEE_MONGIKE,
+      netAmount,
+      phone,
+      reference: result.data?.id || '',
+      status: 'completed',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await auditLog({
+      userId, type: 'viewer_withdraw', amount: -amount,
+      balanceBefore: totalCoinsBefore, balanceAfter: totalCoinsBefore - amount,
+      reason: `Viewer withdrawal: TZS ${netAmount} to ${phone}`,
+      relatedId: result.data?.id || '',
+      metadata: { phone, netAmount, fee: FEE_MONGIKE },
+    });
+
+    res.json({
+      success: true,
+      netAmount,
+      reference: result.data?.id || '',
+      message: `TZS ${netAmount} sent to ${phone}`,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 🔒 ESCROW — Release payment to seller (buyer confirms delivery)
+// ============================================================
+app.post('/api/escrow/release', async (req, res) => {
+  try {
+    const { orderId, userId } = req.body;
+    if (!orderId || !userId) {
+      return res.status(400).json({ error: 'Missing orderId or userId' });
+    }
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const orderDoc = await db.collection('orders').doc(orderId).get();
+    if (!orderDoc.exists) return res.status(404).json({ error: 'Order not found' });
+
+    const order = orderDoc.data();
+    if (order.buyerId !== userId) {
+      return res.status(403).json({ error: 'Only the buyer can confirm delivery' });
+    }
+    if (order.status !== 'shipped' && order.status !== 'confirmed') {
+      return res.status(400).json({ error: `Order cannot be released from status: ${order.status}` });
+    }
+    if (order.escrowReleased === true) {
+      return res.status(400).json({ error: 'Escrow already released' });
+    }
+
+    await orderDoc.ref.update({
+      status: 'delivered',
+      escrowReleased: true,
+      escrowReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // Credit seller's balance (full amount minus platform fee if any)
+    const orderAmount = order.totalAmount || 0;
+    const sellerPayout = orderAmount;
+
+    const sellerDoc = await db.collection('users').doc(order.sellerId).get();
+    const balanceBefore = sellerDoc.exists ? (sellerDoc.data().sellerBalance || 0) : 0;
+
+    await db.collection('users').doc(order.sellerId).update({
+      sellerBalance: admin.firestore.FieldValue.increment(sellerPayout),
+    });
+
+    // Record in revenue_transactions for seller
+    await db.collection('revenue_transactions').add({
+      userId: order.sellerId,
+      type: 'sale',
+      amount: sellerPayout,
+      orderId,
+      description: `Sale: ${order.items?.map(i => i.name).join(', ') || 'Product'} - TZS ${sellerPayout}`,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // Audit log
+    await auditLog({
+      userId: order.sellerId,
+      type: 'escrow_release',
+      amount: sellerPayout,
+      balanceBefore,
+      balanceAfter: balanceBefore + sellerPayout,
+      reason: `Escrow released for order ${orderId}`,
+      relatedId: orderId,
+      metadata: { buyerId: order.buyerId, items: order.items },
+    });
+
+    // Notify seller
+    const notifRef = db.collection('notifications');
+    await notifRef.add({
+      userId: order.sellerId,
+      title: 'Payment Released!',
+      body: `Buyer confirmed delivery for order #${orderId.substring(0, 8)}. TZS ${sellerPayout} added to your balance.`,
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.json({ success: true, message: 'Escrow released. Seller balance credited.' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 🔒 ESCROW — Admin force release
+// ============================================================
+app.post('/api/escrow/admin-release', async (req, res) => {
+  try {
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const { orderId } = req.body;
+    if (!orderId) return res.status(400).json({ error: 'Missing orderId' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const orderDoc = await db.collection('orders').doc(orderId).get();
+    if (!orderDoc.exists) return res.status(404).json({ error: 'Order not found' });
+
+    const order = orderDoc.data();
+    const orderAmount = order.totalAmount || 0;
+    const sellerPayout = orderAmount;
+
+    await orderDoc.ref.update({
+      status: 'delivered',
+      escrowReleased: true,
+      escrowReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    if (order.sellerId) {
+      await db.collection('users').doc(order.sellerId).update({
+        sellerBalance: admin.firestore.FieldValue.increment(sellerPayout),
+      });
+      await db.collection('revenue_transactions').add({
+        userId: order.sellerId,
+        type: 'sale',
+        amount: sellerPayout,
+        orderId,
+        description: `Sale (admin release): ${order.items?.map(i => i.name).join(', ') || 'Product'} - TZS ${sellerPayout}`,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+
+    res.json({ success: true, message: 'Escrow force-released by admin' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 💰 SELLER WITHDRAW — Send seller balance to mobile money
+// ============================================================
+app.post('/api/seller/withdraw', async (req, res) => {
+  try {
+    const { userId, amount, phone } = req.body;
+    if (!userId || !amount || !phone) {
+      return res.status(400).json({ error: 'Missing userId, amount, or phone' });
+    }
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
+
+    const user = userDoc.data();
+    if (user.isSuspended) return res.status(403).json({ error: 'Account suspended' });
+
+    const sellerBalance = user.sellerBalance || 0;
+    if (amount > sellerBalance) {
+      return res.status(400).json({ error: 'Insufficient balance' });
+    }
+
+    const netAmount = amount - MONGIKE_PAYOUT_FEE;
+    if (netAmount <= 0) {
+      return res.status(400).json({ error: `Amount too small after fee (min TZS ${MONGIKE_PAYOUT_FEE + 1})` });
+    }
+
+    const resp = await fetch(`${MONGIKE_BASE}/payouts/withdraw`, {
+      method: 'POST',
+      headers: {
+        'x-api-key': MONGIKE_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        amount: netAmount,
+        recipient_phone: phone,
+      }),
+    });
+
+    const result = await resp.json();
+
+    if (result.status !== 'success') {
+      await auditLog({
+        userId, type: 'withdraw_failed', amount, balanceBefore: sellerBalance, balanceAfter: sellerBalance,
+        reason: `Mongike payout failed: ${result.message || 'Unknown error'}`,
+        relatedId: '', metadata: { phone, netAmount },
+      });
+      return res.status(500).json({ error: result.message || 'Mongike payout failed' });
+    }
+
+    await db.collection('users').doc(userId).update({
+      sellerBalance: admin.firestore.FieldValue.increment(-amount),
+    });
+
+    await db.collection('withdrawals').add({
+      userId,
+      type: 'seller',
+      amount,
+      feeMongike: MONGIKE_PAYOUT_FEE,
+      netAmount,
+      phone,
+      reference: result.data?.id || '',
+      status: 'completed',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await auditLog({
+      userId, type: 'seller_withdraw', amount: -amount,
+      balanceBefore: sellerBalance, balanceAfter: sellerBalance - amount,
+      reason: `Seller withdrawal: TZS ${netAmount} to ${phone}`,
+      relatedId: result.data?.id || '',
+      metadata: { phone, netAmount, fee: MONGIKE_PAYOUT_FEE },
+    });
+
+    res.json({
+      success: true,
+      netAmount,
+      reference: result.data?.id || '',
+      message: `TZS ${netAmount} sent to ${phone}`,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 🎬 STREAMER WITHDRAW — Send gift earnings to mobile money
+// ============================================================
+app.post('/api/streamer/withdraw', async (req, res) => {
+  try {
+    const { userId, amount, phone } = req.body;
+    if (!userId || !amount || !phone) {
+      return res.status(400).json({ error: 'Missing userId, amount, or phone' });
+    }
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
+
+    const user = userDoc.data();
+    if (user.isSuspended) return res.status(403).json({ error: 'Account suspended' });
+
+    const streamerEarnings = user.streamerEarnings || 0;
+    if (amount > streamerEarnings) {
+      return res.status(400).json({ error: 'Insufficient gift earnings' });
+    }
+
+    const netAmount = amount - MONGIKE_PAYOUT_FEE;
+    if (netAmount <= 0) {
+      return res.status(400).json({ error: `Amount too small after fee (min TZS ${MONGIKE_PAYOUT_FEE + 1})` });
+    }
+
+    const resp = await fetch(`${MONGIKE_BASE}/payouts/withdraw`, {
+      method: 'POST',
+      headers: {
+        'x-api-key': MONGIKE_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        amount: netAmount,
+        recipient_phone: phone,
+      }),
+    });
+
+    const result = await resp.json();
+
+    if (result.status !== 'success') {
+      await auditLog({
+        userId, type: 'streamer_withdraw_failed', amount, balanceBefore: streamerEarnings, balanceAfter: streamerEarnings,
+        reason: `Mongike payout failed: ${result.message || 'Unknown error'}`,
+        metadata: { phone, netAmount },
+      });
+      return res.status(500).json({ error: result.message || 'Mongike payout failed' });
+    }
+
+    await db.collection('users').doc(userId).update({
+      streamerEarnings: admin.firestore.FieldValue.increment(-amount),
+    });
+
+    await db.collection('streamer_withdrawals').add({
+      userId,
+      amount,
+      fee: MONGIKE_PAYOUT_FEE,
+      netAmount,
+      phone,
+      reference: result.data?.id || '',
+      status: 'completed',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await auditLog({
+      userId, type: 'streamer_withdraw', amount: -amount,
+      balanceBefore: streamerEarnings, balanceAfter: streamerEarnings - amount,
+      reason: `Streamer withdrawal: TZS ${netAmount} to ${phone}`,
+      relatedId: result.data?.id || '',
+      metadata: { phone, netAmount, fee: MONGIKE_PAYOUT_FEE },
+    });
+
+    res.json({
+      success: true,
+      netAmount,
+      reference: result.data?.id || '',
+      message: `TZS ${netAmount} sent to ${phone}`,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 📊 ADMIN WITHDRAW — Send ad revenue to mobile money
+// ============================================================
+app.post('/api/admin/withdraw', async (req, res) => {
+  try {
+    const { userId, amount, phone } = req.body;
+    if (!userId || !amount || !phone) {
+      return res.status(400).json({ error: 'Missing userId, amount, or phone' });
+    }
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
+
+    const user = userDoc.data();
+    if (!user.isAdmin) return res.status(403).json({ error: 'Admin access required' });
+    if (user.isSuspended) return res.status(403).json({ error: 'Account suspended' });
+
+    const netAmount = amount - MONGIKE_PAYOUT_FEE;
+    if (netAmount <= 0) {
+      return res.status(400).json({ error: `Amount too small after fee (min TZS ${MONGIKE_PAYOUT_FEE + 1})` });
+    }
+
+    const resp = await fetch(`${MONGIKE_BASE}/payouts/withdraw`, {
+      method: 'POST',
+      headers: {
+        'x-api-key': MONGIKE_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        amount: netAmount,
+        recipient_phone: phone,
+      }),
+    });
+
+    const result = await resp.json();
+
+    if (result.status !== 'success') {
+      await auditLog({
+        userId, type: 'admin_withdraw_failed', amount,
+        reason: `Mongike payout failed: ${result.message || 'Unknown error'}`,
+        metadata: { phone, netAmount },
+      });
+      return res.status(500).json({ error: result.message || 'Mongike payout failed' });
+    }
+
+    await db.collection('admin_withdrawals').add({
+      userId,
+      amount,
+      fee: MONGIKE_PAYOUT_FEE,
+      netAmount,
+      phone,
+      reference: result.data?.id || '',
+      status: 'completed',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await auditLog({
+      userId, type: 'admin_withdraw', amount: -amount,
+      reason: `Admin ad revenue withdrawal: TZS ${netAmount} to ${phone}`,
+      relatedId: result.data?.id || '',
+      metadata: { phone, netAmount, fee: MONGIKE_PAYOUT_FEE },
+    });
+
+    res.json({
+      success: true,
+      netAmount,
+      reference: result.data?.id || '',
+      message: `TZS ${netAmount} sent to ${phone}`,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 📝 AUDIT LOG — Log every balance change for fraud prevention
+// ============================================================
+async function auditLog({ userId, type, amount, balanceBefore, balanceAfter, reason, relatedId, metadata }) {
+  if (!db) return;
+  try {
+    await db.collection('audit_log').add({
+      userId,
+      type,
+      amount,
+      balanceBefore: balanceBefore ?? 0,
+      balanceAfter: balanceAfter ?? 0,
+      reason: reason || '',
+      relatedId: relatedId || '',
+      metadata: metadata || {},
+      ip: '',
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (e) {
+    console.error('Audit log error:', e);
+  }
+}
+
+// ============================================================
+// 📊 ADMIN — Dashboard statistics
+// ============================================================
+app.get('/api/admin/stats', async (req, res) => {
+  try {
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const [usersSnap, ordersSnap, withdrawalsSnap, adViewsSnap] = await Promise.all([
+      db.collection('users').count().get(),
+      db.collection('orders').count().get(),
+      db.collection('withdrawals').count().get(),
+      db.collection('ad_views').count().get(),
+    ]);
+
+    const totalUsers = usersSnap.data().count;
+    const totalOrders = ordersSnap.data().count;
+    const totalWithdrawals = withdrawalsSnap.data().count;
+    const totalAdViews = adViewsSnap.data().count;
+
+    const balanceSnap = await db.collection('users').get();
+    let totalSellerBalance = 0;
+    let totalViewerCoins = 0;
+    let totalCoins = 0;
+    balanceSnap.docs.forEach(doc => {
+      const d = doc.data();
+      totalSellerBalance += d.sellerBalance || 0;
+      totalViewerCoins += d.viewerCoins || 0;
+      totalCoins += d.coins || 0;
+    });
+
+    res.json({
+      totalUsers,
+      totalOrders,
+      totalWithdrawals,
+      totalAdViews,
+      totalSellerBalance,
+      totalViewerCoins,
+      totalCoins,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 📊 ADMIN — All transactions (Mongike payments)
+// ============================================================
+app.get('/api/admin/transactions', async (req, res) => {
+  try {
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+    const snap = await db.collection('transactions').orderBy('createdAt', 'desc').limit(limit).get();
+    const transactions = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json({ transactions });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 📊 ADMIN — All withdrawals (viewer + seller)
+// ============================================================
+app.get('/api/admin/withdrawals', async (req, res) => {
+  try {
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+    const snap = await db.collection('withdrawals').orderBy('createdAt', 'desc').limit(limit).get();
+    const withdrawals = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json({ withdrawals });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 📊 ADMIN — Revenue transactions
+// ============================================================
+app.get('/api/admin/revenue-transactions', async (req, res) => {
+  try {
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+    const snap = await db.collection('revenue_transactions').orderBy('timestamp', 'desc').limit(limit).get();
+    const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json({ items });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 📊 ADMIN — Audit log (all balance changes)
+// ============================================================
+app.get('/api/admin/audit-log', async (req, res) => {
+  try {
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+    const snap = await db.collection('audit_log').orderBy('timestamp', 'desc').limit(limit).get();
+    const logs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json({ logs });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 📊 ADMIN — Ad views
+// ============================================================
+app.get('/api/admin/ad-views', async (req, res) => {
+  try {
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+    const snap = await db.collection('ad_views').orderBy('createdAt', 'desc').limit(limit).get();
+    const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json({ items });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 👑 ADMIN — Full user detail (with all balances + orders)
+// ============================================================
+app.get('/api/admin/user-detail/:uid', async (req, res) => {
+  try {
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const { uid } = req.params;
+    const [userDoc, ordersSnap, withdrawalsSnap, txSnap] = await Promise.all([
+      db.collection('users').doc(uid).get(),
+      db.collection('orders').where('sellerId', '==', uid).orderBy('createdAt', 'desc').limit(50).get(),
+      db.collection('withdrawals').where('userId', '==', uid).orderBy('createdAt', 'desc').limit(50).get(),
+      db.collection('revenue_transactions').where('userId', '==', uid).orderBy('timestamp', 'desc').limit(50).get(),
+    ]);
+
+    if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
+
+    res.json({
+      user: { uid, ...userDoc.data() },
+      orders: ordersSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+      withdrawals: withdrawalsSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+      revenueTransactions: txSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 👑 ADMIN — Delete user (suspend + remove data)
+// ============================================================
+app.delete('/api/admin/users/:uid', async (req, res) => {
+  try {
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const { uid } = req.params;
+    await db.collection('users').doc(uid).update({
+      isSuspended: true,
+      suspendedAt: admin.firestore.FieldValue.serverTimestamp(),
+      suspendedBy: 'admin',
+    });
+
+    await auditLog({
+      userId: uid,
+      type: 'admin_suspend',
+      amount: 0,
+      reason: 'User suspended by admin',
+    });
+
+    res.json({ success: true, message: 'User suspended' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 👑 ADMIN — Unsuspend user
+// ============================================================
+app.post('/api/admin/users/:uid/unsuspend', async (req, res) => {
+  try {
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const { uid } = req.params;
+    await db.collection('users').doc(uid).update({
+      isSuspended: false,
+      suspendedAt: admin.firestore.FieldValue.delete(),
+      suspendedBy: admin.firestore.FieldValue.delete(),
+    });
+
+    res.json({ success: true, message: 'User unsuspended' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 👑 ADMIN — Delete order
+// ============================================================
+app.delete('/api/admin/orders/:id', async (req, res) => {
+  try {
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const { id } = req.params;
+    await db.collection('orders').doc(id).delete();
+
+    res.json({ success: true, message: 'Order deleted' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 👑 ADMIN — Delete product
+// ============================================================
+app.delete('/api/admin/products/:id', async (req, res) => {
+  try {
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const { id } = req.params;
+    await db.collection('products').doc(id).delete();
+
+    res.json({ success: true, message: 'Product deleted' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 👑 ADMIN — Delete user completely (all data)
+// ============================================================
+app.delete('/api/admin/users/:uid/full-delete', async (req, res) => {
+  try {
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const { uid } = req.params;
+
+    // Delete user doc
+    await db.collection('users').doc(uid).delete();
+
+    // Delete related data in batches
+    const batch = db.batch();
+    const [orders, withdrawals, notifications, products, reviews] = await Promise.all([
+      db.collection('orders').where('sellerId', '==', uid).get(),
+      db.collection('orders').where('buyerId', '==', uid).get(),
+      db.collection('withdrawals').where('userId', '==', uid).get(),
+      db.collection('notifications').where('userId', '==', uid).get(),
+      db.collection('products').where('sellerId', '==', uid).get(),
+      db.collection('reviews').where('userId', '==', uid).get(),
+    ]);
+
+    orders.docs.forEach(d => batch.delete(d.ref));
+    withdrawals.docs.forEach(d => batch.delete(d.ref));
+    notifications.docs.forEach(d => batch.delete(d.ref));
+    products.docs.forEach(d => batch.delete(d.ref));
+    reviews.docs.forEach(d => batch.delete(d.ref));
+
+    await batch.commit();
+
+    await auditLog({
+      userId: uid, type: 'admin_full_delete', amount: 0,
+      reason: 'User fully deleted by admin',
+    });
+
+    res.json({ success: true, message: 'User and all related data deleted' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 👑 ADMIN — Delete any document (use with extreme caution)
+// ============================================================
+app.post('/api/admin/delete-doc', async (req, res) => {
+  try {
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const { collection, docId } = req.body;
+    if (!collection || !docId) return res.status(400).json({ error: 'Missing collection or docId' });
+
+    const allowed = ['transactions', 'withdrawals', 'revenue_transactions', 'ad_views', 'notifications', 'products', 'orders', 'reviews', 'audit_log', 'viewer_ad_views', 'viewer_payouts', 'viewer_soft_payouts'];
+    if (!allowed.includes(collection)) return res.status(403).json({ error: 'Collection not allowed for deletion' });
+
+    await db.collection(collection).doc(docId).delete();
+
+    await auditLog({
+      userId: 'admin', type: 'admin_delete', amount: 0,
+      reason: `Admin deleted ${collection}/${docId}`,
+      metadata: { collection, docId },
+    });
+
+    res.json({ success: true, message: `Document ${collection}/${docId} deleted` });
+  } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });

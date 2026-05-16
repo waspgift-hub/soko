@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:go_router/go_router.dart';
 import '../../services/user_service.dart';
 import '../../services/cloudinary_service.dart';
 import '../../extensions/context_tr.dart';
-import 'premium_upgrade_screen.dart';
+import '../../app/routes.dart';
 
 class ShopCustomizationScreen extends StatefulWidget {
   const ShopCustomizationScreen({super.key});
@@ -65,11 +66,12 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
         _banner = url;
         _changed = true;
       });
-    } catch (_) {
+    } catch (e) {
+      debugPrint('ShopCustomization banner upload: $e');
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(context.tr('checkout_failed'))));
+        ).showSnackBar(SnackBar(content: Text('${context.tr('error')}: $e')));
       }
     } finally {
       setState(() => _loading = false);
@@ -179,10 +181,7 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
             ),
             const SizedBox(height: 32),
             ElevatedButton(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const PremiumUpgradeScreen()),
-              ),
+              onPressed: () => context.push(AppRoutes.premiumUpgrade),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.amber[800],
                 foregroundColor: Colors.white,
@@ -363,8 +362,12 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
 
     return Container(
       decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[200]!),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+          width: 1.5,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

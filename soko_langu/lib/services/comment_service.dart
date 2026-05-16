@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/comment_model.dart';
+import '../utils/network_error.dart';
 
 class CommentService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -16,7 +17,10 @@ class CommentService {
     required String text,
   }) async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) throw Exception('Not logged in');
+    if (user == null) throw NetworkError(
+        message: 'Not logged in',
+        userMessage: 'Please log in to continue.',
+      );
     final userDoc = await _db.collection('users').doc(user.uid).get();
     final tier = userDoc.data()?['accountTier'] as String? ?? 'free';
     await _commentsRef(productId).add({
@@ -36,7 +40,10 @@ class CommentService {
     required String text,
   }) async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) throw Exception('Not logged in');
+    if (user == null) throw NetworkError(
+        message: 'Not logged in',
+        userMessage: 'Please log in to continue.',
+      );
     final userDoc = await _db.collection('users').doc(user.uid).get();
     final tier = userDoc.data()?['accountTier'] as String? ?? 'free';
     await _repliesRef(productId, commentId).add({
@@ -57,11 +64,17 @@ class CommentService {
     required String commentId,
   }) async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) throw Exception('Not logged in');
+    if (user == null) throw NetworkError(
+        message: 'Not logged in',
+        userMessage: 'Please log in to continue.',
+      );
     final commentSnap = await _commentsRef(productId).doc(commentId).get();
     final commentData = commentSnap.data() as Map<String, dynamic>?;
     if (commentData == null || commentData['userId'] != user.uid) {
-      throw Exception('Cannot delete another user\'s comment');
+      throw NetworkError(
+        message: 'Cannot delete another user\'s comment',
+        userMessage: 'You can only delete your own comments.',
+      );
     }
     final replies = await _repliesRef(productId, commentId).get();
     final batch = _db.batch();
@@ -78,14 +91,20 @@ class CommentService {
     required String replyId,
   }) async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) throw Exception('Not logged in');
+    if (user == null) throw NetworkError(
+        message: 'Not logged in',
+        userMessage: 'Please log in to continue.',
+      );
     final replySnap = await _repliesRef(
       productId,
       commentId,
     ).doc(replyId).get();
     final replyData = replySnap.data() as Map<String, dynamic>?;
     if (replyData == null || replyData['userId'] != user.uid) {
-      throw Exception('Cannot delete another user\'s reply');
+      throw NetworkError(
+        message: 'Cannot delete another user\'s reply',
+        userMessage: 'You can only delete your own replies.',
+      );
     }
     await _repliesRef(productId, commentId).doc(replyId).delete();
     await _commentsRef(

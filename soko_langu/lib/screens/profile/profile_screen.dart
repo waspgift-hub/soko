@@ -3,28 +3,16 @@ import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
-import '../order/my_orders_screen.dart';
-import '../chat/chats_list_screen.dart';
-import '../call/call_history_screen.dart';
-import '../media/media_player_screen.dart';
-import 'settings_screen.dart';
-import 'wishlist_screen.dart';
-import 'my_ads_screen.dart';
-import 'edit_profile_screen.dart';
-import 'seller_dashboard_screen.dart';
-import '../admin/admin_dashboard_screen.dart';
-import '../wallet/buy_coins_screen.dart';
-import '../wallet/viewer_earnings_screen.dart';
-import '../media/playlists_screen.dart';
+import 'package:go_router/go_router.dart';
 import '../../services/user_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/wishlist_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/verified_badge.dart';
 import '../../main.dart';
 import '../../widgets/tier_badge.dart';
 import '../../widgets/ad_banner.dart';
-import 'premium_upgrade_screen.dart';
-import 'shop_customization_screen.dart';
+import '../../app/routes.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -36,13 +24,43 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage> {
   final ImagePicker _picker = ImagePicker();
   final UserService _userService = UserService();
+  final WishlistService _wishlistService = WishlistService();
   UserProfile? _profile;
   String? _localImagePath;
+  int _wishlistCount = 0;
+  int _orderCount = 0;
+  double _avgRating = 0;
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
+  }
+
+  Future<void> _loadStats(String uid) async {
+    try {
+      final wishlist = await _wishlistService.getWishlist();
+      final orderSnap = await FirebaseFirestore.instance
+          .collection('orders')
+          .where('buyerId', isEqualTo: uid)
+          .count()
+          .get();
+      final reviewSnap = await FirebaseFirestore.instance
+          .collection('reviews')
+          .where('sellerId', isEqualTo: uid)
+          .get();
+      double total = 0;
+      for (final doc in reviewSnap.docs) {
+        total += (doc.data()['rating'] ?? 0).toDouble();
+      }
+      if (mounted) {
+        setState(() {
+          _wishlistCount = wishlist.length;
+          _orderCount = orderSnap.count ?? 0;
+          _avgRating = reviewSnap.docs.isEmpty ? 0 : total / reviewSnap.docs.length;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadProfile() async {
@@ -62,6 +80,7 @@ class _ProfilePageState extends State<ProfilePage> {
     if (mounted) {
       setState(() => _profile = profile);
     }
+    _loadStats(user.uid);
   }
 
   Future<void> _pickImage() async {
@@ -265,9 +284,9 @@ class _ProfilePageState extends State<ProfilePage> {
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Row(
         children: [
-          _statCard(Icons.favorite, context.tr('wishlist'), '0'),
-          _statCard(Icons.shopping_bag, context.tr('my_orders'), '0'),
-          _statCard(Icons.star, 'Rating', '0'),
+          _statCard(Icons.favorite, context.tr('wishlist'), '$_wishlistCount'),
+          _statCard(Icons.shopping_bag, context.tr('my_orders'), '$_orderCount'),
+          _statCard(Icons.star, 'Rating', _avgRating.toStringAsFixed(1)),
         ],
       ),
     );
@@ -279,31 +298,31 @@ class _ProfilePageState extends State<ProfilePage> {
         margin: const EdgeInsets.symmetric(horizontal: 4),
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF2D6A4F).withValues(alpha: 0.06),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
-            ),
-          ],
+          border: Border.all(
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+            width: 1.5,
+          ),
         ),
         child: Column(
           children: [
-            Icon(icon, color: const Color(0xFF40916C), size: 22),
+            Icon(icon, color: Theme.of(context).colorScheme.primary, size: 22),
             const SizedBox(height: 4),
             Text(
               value,
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
-                color: Color(0xFF2D6A4F),
+                color: Theme.of(context).colorScheme.primary,
               ),
             ),
             Text(
               label,
-              style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+              style: TextStyle(
+                fontSize: 11,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -332,16 +351,12 @@ class _ProfilePageState extends State<ProfilePage> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            tierColor.withValues(alpha: 0.1),
-            tierColor.withValues(alpha: 0.02),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: tierColor.withValues(alpha: 0.3)),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+          width: 1.5,
+        ),
       ),
       child: Row(
         children: [
@@ -370,14 +385,7 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
           if (tier == 'free')
             GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const PremiumUpgradeScreen(),
-                  ),
-                );
-              },
+              onTap: () => context.push(AppRoutes.premiumUpgrade),
               child: Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
@@ -409,77 +417,41 @@ class _ProfilePageState extends State<ProfilePage> {
 
     final actions = [
       _ActionItem(Icons.edit, context.tr('edit_profile'), () async {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const EditProfileScreen()),
-        );
+        await context.push(AppRoutes.editProfile);
         _refreshProfile();
       }),
       _ActionItem(Icons.favorite, context.tr('wishlist'), () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const WishlistScreen()),
-        );
+        context.push(AppRoutes.wishlist);
       }),
       _ActionItem(Icons.receipt_long, context.tr('my_orders'), () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const MyOrdersScreen()),
-        );
+        context.push(AppRoutes.orders);
       }),
       _ActionItem(Icons.shopping_bag, context.tr('my_ads'), () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const MyAdsScreen()),
-        );
+        context.push(AppRoutes.myAds);
       }),
       _ActionItem(Icons.store, context.tr('customize_shop'), () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const ShopCustomizationScreen()),
-        );
+        context.push(AppRoutes.shopCustomization);
       }),
       _ActionItem(Icons.dashboard, context.tr('dashboard'), () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const SellerDashboardScreen()),
-        );
+        context.push(AppRoutes.sellerDashboard);
       }),
       _ActionItem(Icons.chat_bubble, context.tr('chats'), () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const ChatsListScreen()),
-        );
+        context.push(AppRoutes.chats);
       }),
       _ActionItem(Icons.phone, context.tr('call_history'), () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const CallHistoryScreen()),
-        );
+        context.push(AppRoutes.callHistory);
       }),
       _ActionItem(Icons.play_circle_outline, context.tr('my_media'), () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const MediaPlayerScreen()),
-        );
+        context.push(AppRoutes.mediaPlayer);
       }),
       _ActionItem(Icons.monetization_on, context.tr('buy_coins'), () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const BuyCoinsScreen()),
-        );
+        context.push(AppRoutes.buyCoins);
       }),
       _ActionItem(Icons.visibility, context.tr('earn_coins'), () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const ViewerEarningsScreen()),
-        );
+        context.push(AppRoutes.viewerEarnings);
       }),
       _ActionItem(Icons.queue_music, context.tr('playlists'), () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const PlaylistsScreen()),
-        );
+        context.push(AppRoutes.playlists);
       }),
     ];
 
@@ -488,12 +460,7 @@ class _ProfilePageState extends State<ProfilePage> {
         _ActionItem(
           Icons.admin_panel_settings,
           context.tr('admin_dashboard'),
-          () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
-            );
-          },
+          () => context.push(AppRoutes.admin),
         ),
       );
     }
@@ -514,15 +481,12 @@ class _ProfilePageState extends State<ProfilePage> {
           onTap: item.onTap,
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF2D6A4F).withValues(alpha: 0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+              border: Border.all(
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+                width: 1.5,
+              ),
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -530,21 +494,21 @@ class _ProfilePageState extends State<ProfilePage> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF0F9F1),
+                    color: Theme.of(context).colorScheme.primaryContainer,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
                     item.icon,
-                    color: const Color(0xFF2D6A4F),
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
                     size: 24,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   item.label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
-                    color: Color(0xFF2D6A4F),
+                    color: Theme.of(context).colorScheme.onSurface,
                     fontWeight: FontWeight.w500,
                   ),
                   textAlign: TextAlign.center,
@@ -561,39 +525,35 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Widget _buildSettingsSection() {
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const SettingsScreen()),
-        );
-      },
+      onTap: () => context.push(AppRoutes.settings),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF2D6A4F).withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          border: Border.all(
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+            width: 1.5,
+          ),
         ),
         child: Row(
           children: [
-            const Icon(Icons.settings, color: Color(0xFF2D6A4F)),
+            Icon(Icons.settings, color: Theme.of(context).colorScheme.primary),
             const SizedBox(width: 12),
             Text(
               context.tr('settings'),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
-                color: Color(0xFF2D6A4F),
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
             const Spacer(),
-            Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[400]),
+            Icon(
+              Icons.arrow_forward_ios,
+              size: 16,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ],
         ),
       ),
