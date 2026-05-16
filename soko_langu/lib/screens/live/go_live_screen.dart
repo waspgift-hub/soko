@@ -147,15 +147,6 @@ class _GoLiveScreenState extends State<GoLiveScreen> {
           role: 'broadcaster',
         );
       }
-      if (token.isEmpty) {
-        if (mounted) {
-          setState(() => _isStarting = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(context.tr('token_error'))),
-          );
-        }
-        return;
-      }
       await _agoraService.engine.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
       await Future.wait([
         LiveStreamService().activateLive(channelName),
