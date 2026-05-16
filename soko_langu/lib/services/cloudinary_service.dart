@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import '../utils/network_error.dart';
 
 class CloudinaryService {
   static const String _cloudName = 'dgbsohnl4';
@@ -31,8 +32,9 @@ class CloudinaryService {
     if (response.statusCode == 200 && body['secure_url'] != null) {
       return body['secure_url'] as String;
     }
-    throw Exception(
-      'Cloudinary upload failed: ${body['error']['message'] ?? 'Unknown error'}',
+    throw NetworkError(
+      message: 'Cloudinary upload failed: ${body['error']['message'] ?? 'Unknown error'}',
+      userMessage: 'Poor internet connection. Image upload failed.',
     );
   }
 

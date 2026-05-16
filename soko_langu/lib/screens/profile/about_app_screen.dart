@@ -80,13 +80,16 @@ class AboutAppScreen extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.grey[50],
+                  color: Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey[200]!),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+                    width: 1.5,
+                  ),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.group, color: Colors.green, size: 24),
+                    Icon(Icons.group, color: Theme.of(context).colorScheme.primary, size: 24),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -103,11 +106,11 @@ class AboutAppScreen extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 4),
-                          const Text(
+                          Text(
                             "Gift Wapalila & Praygod Hassani",
                             style: TextStyle(
                               fontSize: 14,
-                              color: Colors.black87,
+                              color: Theme.of(context).colorScheme.onSurface,
                             ),
                           ),
                         ],
@@ -152,10 +155,11 @@ class AboutAppScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.1),
+                  color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: Colors.green.withValues(alpha: 0.3),
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+                    width: 1.5,
                   ),
                 ),
                 child: Column(
@@ -165,7 +169,7 @@ class AboutAppScreen extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: Colors.green,
+                        color: Theme.of(context).colorScheme.primary,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -216,13 +220,16 @@ class AboutAppScreen extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+          width: 1.5,
+        ),
       ),
       child: Row(
         children: [
-          Icon(icon, color: Colors.green, size: 24),
+          Icon(icon, color: Theme.of(context).colorScheme.primary, size: 24),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -244,7 +251,7 @@ class AboutAppScreen extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     color: isLink
-                        ? Colors.green
+                        ? Theme.of(context).colorScheme.primary
                         : Theme.of(context).colorScheme.onSurface,
                     decoration: isLink ? TextDecoration.underline : null,
                   ),

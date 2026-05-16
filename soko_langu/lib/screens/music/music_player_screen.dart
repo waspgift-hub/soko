@@ -2,9 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:on_audio_query/on_audio_query.dart';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:audio_service/audio_service.dart';
+import '../../services/audio_player_service.dart';
+import '../../widgets/google_loading.dart';
 
 class MusicPlaylist {
   final String name;
@@ -30,13 +32,11 @@ class MusicPlayerScreen extends StatefulWidget {
 class _MusicPlayerScreenState extends State<MusicPlayerScreen>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final OnAudioQuery _audioQuery = OnAudioQuery();
-  final AudioPlayer _player = AudioPlayer();
+  final AudioPlayerService _service = AudioPlayerService.instance;
   List<SongModel> _songs = [];
   List<MusicPlaylist> _playlists = [];
   bool _hasPermission = false;
   bool _isLoading = true;
-  int? _currentIndex;
-  bool _isPlaying = false;
   int _tabIndex = 0;
   late TabController _tabCtrl;
 
@@ -48,10 +48,6 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
     _tabCtrl.addListener(() => setState(() => _tabIndex = _tabCtrl.index));
     _checkPermission();
     _loadPlaylists();
-    _player.onPlayerComplete.listen((_) {
-      setState(() => _isPlaying = false);
-      _next();
-    });
   }
 
   @override
@@ -65,7 +61,6 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _tabCtrl.dispose();
-    _player.dispose();
     super.dispose();
   }
 
@@ -98,9 +93,12 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
     if (mounted) {
       setState(() {
         _songs = songs;
+        _service.songs = songs;
         _isLoading = false;
       });
-      if (songs.isNotEmpty) _playSong(0);
+      if (songs.isNotEmpty && _service.currentIndex == null) {
+        _service.playSong(0);
+      }
     }
   }
 
@@ -185,44 +183,11 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
     }
   }
 
-  Future<void> _playSong(int index) async {
-    if (index < 0 || index >= _songs.length) return;
-    final song = _songs[index];
-    if (song.data.isEmpty) return;
-    setState(() {
-      _currentIndex = index;
-      _isPlaying = true;
-    });
-    await _player.stop();
-    await _player.play(DeviceFileSource(song.data));
-  }
-
   void _playPlaylistSongs(List<String> paths, int startIndex) {
     if (paths.isEmpty) return;
     final path = paths[startIndex];
     final idx = _songs.indexWhere((s) => s.data == path);
-    if (idx >= 0) _playSong(idx);
-  }
-
-  void _togglePlayPause() {
-    if (_currentIndex == null) return;
-    if (_isPlaying) {
-      _player.pause();
-      setState(() => _isPlaying = false);
-    } else {
-      _player.resume();
-      setState(() => _isPlaying = true);
-    }
-  }
-
-  void _next() {
-    if (_currentIndex == null || _songs.isEmpty) return;
-    _playSong((_currentIndex! + 1) % _songs.length);
-  }
-
-  void _previous() {
-    if (_currentIndex == null || _songs.isEmpty) return;
-    _playSong((_currentIndex! - 1 + _songs.length) % _songs.length);
+    if (idx >= 0) _service.playSong(idx);
   }
 
   String _fmt(Duration d) =>
@@ -241,9 +206,11 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
         bottom: _hasPermission && _songs.isNotEmpty
             ? TabBar(
                 controller: _tabCtrl,
-                labelColor: Colors.green,
-                unselectedLabelColor: Colors.grey,
-                indicatorColor: Colors.green,
+                labelColor: Theme.of(context).colorScheme.primary,
+                unselectedLabelColor: Theme.of(
+                  context,
+                ).colorScheme.onSurfaceVariant,
+                indicatorColor: Theme.of(context).colorScheme.primary,
                 tabs: const [
                   Tab(text: 'Songs'),
                   Tab(text: 'Playlists'),
@@ -252,12 +219,14 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
             : null,
       ),
       body: SafeArea(child: _buildBody()),
-      bottomNavigationBar: _currentIndex != null ? _buildMiniPlayer() : null,
+      bottomNavigationBar: _service.currentIndex != null
+          ? _buildMiniPlayer()
+          : null,
     );
   }
 
   Widget _buildBody() {
-    if (_isLoading) return const Center(child: CircularProgressIndicator());
+    if (_isLoading) return const GoogleLoadingPage();
 
     if (!_hasPermission) {
       return SingleChildScrollView(
@@ -274,13 +243,15 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
                 width: 100,
                 height: 100,
                 decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.1),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.music_note_rounded,
                   size: 50,
-                  color: Colors.green,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
               ),
               const SizedBox(height: 32),
@@ -294,7 +265,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
-                  color: Colors.grey[600],
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                   height: 1.5,
                 ),
               ),
@@ -302,7 +273,10 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
               Text(
                 "Tap 'Allow Access' to grant permission.",
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
               const SizedBox(height: 32),
               SizedBox(
@@ -310,8 +284,8 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
                 height: 50,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(25),
                     ),
@@ -327,7 +301,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
                         ? int.tryParse(
                                 Platform.operatingSystemVersion.split(' ').last,
                               ) ??
-                              0
+                            0
                         : 0;
                     final perms = sdk >= 33
                         ? [Permission.audio, Permission.manageExternalStorage]
@@ -387,20 +361,23 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
     }
 
     if (_songs.isEmpty) {
-      return SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).padding.bottom + 20,
-        ),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.music_note, size: 64, color: Colors.grey[400]),
-              const SizedBox(height: 16),
-              Text("No songs found", style: TextStyle(color: Colors.grey[600])),
-            ],
-          ),
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.music_note,
+              size: 64,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "No songs found",
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -416,8 +393,8 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
               padding: const EdgeInsets.symmetric(vertical: 12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -425,7 +402,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
             ),
             icon: const Icon(Icons.playlist_play),
             label: Text("Play All (${_songs.length} songs)"),
-            onPressed: () => _playSong(0),
+            onPressed: () => _service.playSong(0),
           ),
         ),
         Expanded(
@@ -434,7 +411,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
             itemCount: _songs.length,
             itemBuilder: (context, index) {
               final song = _songs[index];
-              final isCurrent = _currentIndex == index;
+              final isCurrent = _service.currentIndex == index;
               return ListTile(
                 leading: QueryArtworkWidget(
                   id: song.id,
@@ -444,13 +421,19 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
                     height: 48,
                     decoration: BoxDecoration(
                       color: isCurrent
-                          ? Colors.green.withValues(alpha: 0.15)
-                          : Colors.grey[200],
+                          ? Theme.of(
+                              context,
+                            ).colorScheme.primary.withValues(alpha: 0.15)
+                          : Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
                       Icons.music_note,
-                      color: isCurrent ? Colors.green : Colors.grey[500],
+                      color: isCurrent
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                   artworkFit: BoxFit.cover,
@@ -462,20 +445,28 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
-                    color: isCurrent ? Colors.green : Colors.black,
+                    color: isCurrent
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
                 subtitle: Text(
                   song.artist ?? 'Unknown Artist',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
                 trailing: Text(
                   _fmt(Duration(milliseconds: song.duration ?? 0)),
-                  style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
-                onTap: () => _playSong(index),
+                onTap: () => _service.togglePlayPauseFromIndex(index),
                 onLongPress: () => _addToPlaylist(index),
               );
             },
@@ -491,14 +482,23 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.playlist_play, size: 64, color: Colors.grey[400]),
+            Icon(
+              Icons.playlist_play,
+              size: 64,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
             const SizedBox(height: 16),
-            Text("No playlists yet", style: TextStyle(color: Colors.grey[600])),
+            Text(
+              "No playlists yet",
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
             const SizedBox(height: 16),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
               ),
               icon: const Icon(Icons.add),
               label: const Text('Create Playlist'),
@@ -517,8 +517,8 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
             padding: const EdgeInsets.all(16),
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
               ),
               icon: const Icon(Icons.add),
               label: const Text('Create Playlist'),
@@ -532,10 +532,15 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: Colors.green.withValues(alpha: 0.1),
+              color: Theme.of(
+                context,
+              ).colorScheme.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.playlist_play, color: Colors.green),
+            child: Icon(
+              Icons.playlist_play,
+              color: Theme.of(context).colorScheme.primary,
+            ),
           ),
           title: Text(
             p.name,
@@ -582,84 +587,182 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
   }
 
   Widget _buildMiniPlayer() {
-    final song = _currentIndex != null && _currentIndex! < _songs.length
-        ? _songs[_currentIndex!]
-        : null;
-    return Container(
-      height: 72,
-      decoration: BoxDecoration(
-        color: Colors.green[50],
-        border: Border(
-          top: BorderSide(color: Colors.green.withValues(alpha: 0.2)),
-        ),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Row(
-        children: [
-          if (song != null)
-            QueryArtworkWidget(
-              id: song.id,
-              type: ArtworkType.AUDIO,
-              nullArtworkWidget: Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(Icons.music_note, color: Colors.grey[600]),
-              ),
-              artworkFit: BoxFit.cover,
-              artworkBorder: BorderRadius.circular(8),
-              size: 48,
-            ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  song?.title ?? '',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (song?.artist != null)
-                  Text(
-                    song!.artist!,
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+    return StreamBuilder<MediaItem?>(
+      stream: _service.mediaItem,
+      builder: (context, mediaSnap) {
+        final media = mediaSnap.data;
+        final title = media?.title ?? '';
+        final artist = media?.artist ?? '';
+        final mediaDuration = media?.duration ?? Duration.zero;
+        return StreamBuilder<PlaybackState>(
+          stream: _service.playbackState,
+          builder: (context, stateSnap) {
+            final state = stateSnap.data;
+            final isPlaying = state?.playing ?? false;
+            return StreamBuilder<Duration>(
+              stream: _service.positionStream,
+              builder: (context, posSnap) {
+                final position = posSnap.data ?? Duration.zero;
+                final duration = mediaDuration > Duration.zero
+                    ? mediaDuration
+                    : _service.duration;
+
+                return Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerLow,
+                    border: Border(
+                      top: BorderSide(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .primary
+                            .withValues(alpha: 0.2),
+                      ),
+                    ),
                   ),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.skip_previous_rounded),
-            onPressed: _previous,
-          ),
-          Container(
-            decoration: const BoxDecoration(
-              color: Colors.green,
-              shape: BoxShape.circle,
-            ),
-            child: IconButton(
-              icon: Icon(
-                _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                color: Colors.white,
-                size: 24,
-              ),
-              onPressed: _togglePlayPause,
-              padding: const EdgeInsets.all(8),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.skip_next_rounded),
-            onPressed: _next,
-          ),
-        ],
-      ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (duration > Duration.zero)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Row(
+                            children: [
+                              Text(
+                                _fmt(position),
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                              Expanded(
+                                child: Slider(
+                                  value: position.inSeconds.toDouble().clamp(
+                                    0,
+                                    duration.inSeconds.toDouble(),
+                                  ),
+                                  max: duration.inSeconds.toDouble().clamp(
+                                    1,
+                                    double.infinity,
+                                  ),
+                                  onChanged: (v) => _service.seek(
+                                    Duration(seconds: v.toInt()),
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                _fmt(duration),
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                      SizedBox(
+                        height: 64,
+                        child: Row(
+                          children: [
+                            const SizedBox(width: 12),
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.music_note,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    title,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  if (artist.isNotEmpty)
+                                    Text(
+                                      artist,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.replay_10, size: 20),
+                              onPressed: () {
+                                final newPos = position - const Duration(seconds: 10);
+                                _service.seek(
+                                  newPos > Duration.zero ? newPos : Duration.zero,
+                                );
+                              },
+                              constraints: const BoxConstraints(
+                                minWidth: 32,
+                                minHeight: 32,
+                              ),
+                              padding: EdgeInsets.zero,
+                            ),
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.primary,
+                                shape: BoxShape.circle,
+                              ),
+                              child: IconButton(
+                                icon: Icon(
+                                  isPlaying
+                                      ? Icons.pause_rounded
+                                      : Icons.play_arrow_rounded,
+                                  color: Theme.of(context).colorScheme.onPrimary,
+                                  size: 22,
+                                ),
+                                onPressed: _service.togglePlayPause,
+                                padding: const EdgeInsets.all(6),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.forward_10, size: 20),
+                              onPressed: () {
+                                final newPos = position + const Duration(seconds: 10);
+                                if (newPos > duration) {
+                                  _service.next();
+                                } else {
+                                  _service.seek(newPos);
+                                }
+                              },
+                              constraints: const BoxConstraints(
+                                minWidth: 32,
+                                minHeight: 32,
+                              ),
+                              padding: EdgeInsets.zero,
+                            ),
+                            const SizedBox(width: 4),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -699,7 +802,9 @@ class _PlaylistViewScreen extends StatelessWidget {
           ? Center(
               child: Text(
                 'No songs in this playlist',
-                style: TextStyle(color: Colors.grey[600]),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
             )
           : ListView.builder(
@@ -715,10 +820,15 @@ class _PlaylistViewScreen extends StatelessWidget {
                       width: 48,
                       height: 48,
                       decoration: BoxDecoration(
-                        color: Colors.grey[200],
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Icon(Icons.music_note, color: Colors.grey[500]),
+                      child: Icon(
+                        Icons.music_note,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
                     artworkFit: BoxFit.cover,
                     artworkBorder: BorderRadius.circular(8),
@@ -730,7 +840,10 @@ class _PlaylistViewScreen extends StatelessWidget {
                   ),
                   subtitle: Text(
                     song.artist ?? 'Unknown',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                   trailing: IconButton(
                     icon: const Icon(

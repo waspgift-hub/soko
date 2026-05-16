@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import '../../main.dart';
 import '../../extensions/context_tr.dart';
 import '../../models/category_model.dart';
 import '../../models/product_model.dart';
 import '../../services/product_service.dart';
-import '../home/product_detail.dart';
 import '../../widgets/product_card.dart';
+import '../../app/routes.dart';
+import '../../widgets/google_loading.dart';
 
 class CategoryProductsScreen extends StatefulWidget {
   final Category category;
@@ -70,21 +73,16 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
           }
           final sub = widget.category.subcategories[index - 1];
           final isSelected = _selectedSubcategory == sub.name;
+          final config = AppConfig.of(context);
           return Container(
             margin: const EdgeInsets.only(right: 8, top: 10, bottom: 10),
             child: ChoiceChip(
               label: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(sub.nameSw, style: const TextStyle(fontSize: 12)),
-                      Text(
-                        sub.name,
-                        style: TextStyle(fontSize: 9, color: Colors.grey[500]),
-                      ),
-                    ],
+                  Text(
+                    config.langCode == 'en' ? sub.name : sub.nameSw,
+                    style: const TextStyle(fontSize: 12),
                   ),
                   if (isSelected) const SizedBox(width: 4),
                   if (isSelected)
@@ -116,7 +114,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
       stream: stream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const GoogleLoadingPage();
         }
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return Center(
@@ -163,14 +161,10 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
           itemBuilder: (context, index) {
             return ProductCard(
               product: products[index],
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ProductDetailPage(product: products[index]),
-                  ),
-                );
-              },
+              onTap: () => context.push(
+                '${AppRoutes.productDetail}/${products[index].id}',
+                extra: products[index],
+              ),
             );
           },
         );

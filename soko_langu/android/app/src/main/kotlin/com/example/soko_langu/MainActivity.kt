@@ -1,6 +1,8 @@
 package com.example.soko_langu
 
+import android.content.ContentUris
 import android.provider.MediaStore
+import android.util.Log
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -24,33 +26,47 @@ class MainActivity : AudioServiceActivity() {
 
     private fun queryVideos(): List<Map<String, Any?>> {
         val videos = mutableListOf<Map<String, Any?>>()
-        val uri = MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-        val projection = arrayOf(
-            MediaStore.Video.Media._ID,
-            MediaStore.Video.Media.DATA,
-            MediaStore.Video.Media.DISPLAY_NAME,
-            MediaStore.Video.Media.DURATION,
-            MediaStore.Video.Media.SIZE,
-        )
-        val cursor = contentResolver.query(uri, projection, null, null, null)
-        cursor?.use {
-            val idCol = it.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
-            val dataCol = it.getColumnIndexOrThrow(MediaStore.Video.Media.DATA)
-            val nameCol = it.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
-            val durCol = it.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
-            val sizeCol = it.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
+        try {
+            val uri = MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+            val projection = arrayOf(
+                MediaStore.Video.Media._ID,
+                MediaStore.Video.Media.DATA,
+                MediaStore.Video.Media.DISPLAY_NAME,
+                MediaStore.Video.Media.DURATION,
+                MediaStore.Video.Media.SIZE,
+            )
+            val cursor = contentResolver.query(uri, projection, null, null, null)
+            cursor?.use {
+                val idCol = it.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
+                val nameCol = it.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
+                val durCol = it.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
+                val sizeCol = it.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
 
-            while (it.moveToNext()) {
-                videos.add(
-                    mapOf(
-                        "id" to it.getLong(idCol),
-                        "data" to it.getString(dataCol),
-                        "displayName" to it.getString(nameCol),
-                        "duration" to it.getLong(durCol),
-                        "size" to it.getLong(sizeCol),
-                    ),
-                )
+                while (it.moveToNext()) {
+                    val videoId = it.getLong(idCol)
+                    var dataPath: String? = null
+                    try {
+                        val dataCol = it.getColumnIndexOrThrow(MediaStore.Video.Media.DATA)
+                        dataPath = it.getString(dataCol)
+                    } catch (_: Exception) {}
+                    videos.add(
+                        mapOf<String, Any?>(
+                            "displayName" to (it.getString(nameCol) ?: "Unknown"),
+                            "id" to videoId,
+                            "duration" to it.getLong(durCol),
+                            "size" to it.getLong(sizeCol),
+                            "data" to (dataPath ?: ""),
+                            "contentUri" to ContentUris.withAppendedId(
+                                MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                                videoId,
+                            ).toString(),
+                        ),
+                    )
+                }
             }
+            Log.d("VideoQuery", "Found ${videos.size} videos")
+        } catch (e: Exception) {
+            Log.e("VideoQuery", "Error querying videos: ${e.message}", e)
         }
         return videos
     }

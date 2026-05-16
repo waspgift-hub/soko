@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/wishlist_service.dart';
 import '../../services/product_service.dart';
 import '../../models/product_model.dart';
-import '../home/product_detail.dart';
+import '../../app/routes.dart';
+import '../../widgets/google_loading.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class WishlistScreen extends StatefulWidget {
   const WishlistScreen({super.key});
@@ -49,17 +52,36 @@ class _WishlistScreenState extends State<WishlistScreen> {
       appBar: AppBar(title: Text(context.tr('wishlist'))),
       body: SafeArea(
         child: _loading
-            ? const Center(child: CircularProgressIndicator())
+            ? const GoogleLoadingPage()
             : _wishlistIds.isEmpty
             ? Center(
-                child: Text(
-                  context.tr('wishlist_empty'),
-                  style: TextStyle(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.6),
-                    fontSize: 16,
-                  ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.favorite_border,
+                      size: 64,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.4),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      context.tr('wishlist_empty'),
+                      style: TextStyle(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.6),
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: () => context.push('/'),
+                      icon: const Icon(Icons.shopping_bag),
+                      label: Text(context.tr('start_shopping')),
+                    ),
+                  ],
                 ),
               )
             : ListView.builder(
@@ -69,14 +91,24 @@ class _WishlistScreenState extends State<WishlistScreen> {
                   final id = _wishlistIds[index];
                   final product = _products[id];
                   if (product == null) return const SizedBox.shrink();
-                  return Card(
+                  return Container(
                     margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.primary.withValues(alpha: 0.5),
+                        width: 1.5,
+                      ),
+                    ),
                     child: ListTile(
                       leading: product.images.isNotEmpty
                           ? ClipRRect(
                               borderRadius: BorderRadius.circular(8),
-                              child: Image.network(
-                                product.images.first,
+                              child: CachedNetworkImage(
+                                imageUrl: product.images.first,
                                 width: 60,
                                 height: 60,
                                 fit: BoxFit.cover,
@@ -85,7 +117,9 @@ class _WishlistScreenState extends State<WishlistScreen> {
                           : Container(
                               width: 60,
                               height: 60,
-                              color: Colors.grey[200],
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.surfaceContainerHighest,
                               child: const Icon(Icons.image),
                             ),
                       title: Text(
@@ -100,11 +134,9 @@ class _WishlistScreenState extends State<WishlistScreen> {
                         icon: const Icon(Icons.delete, color: Colors.red),
                         onPressed: () => _remove(id),
                       ),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ProductDetailPage(product: product),
-                        ),
+                      onTap: () => context.push(
+                        '${AppRoutes.productDetail}/${product.id}',
+                        extra: product,
                       ),
                     ),
                   );

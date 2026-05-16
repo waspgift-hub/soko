@@ -29,10 +29,29 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>soko_langu</title>
+  <title>Soko Langu</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    .loading { display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; flex-direction: column; font-family: Arial, sans-serif; }
+    .loading h1 { color: #2D6A4F; font-size: 2em; }
+    .spinner { width: 40px; height: 40px; border: 4px solid #e0e0e0; border-top: 4px solid #2D6A4F; border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
 </head>
 <body>
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <h1>Soko Langu</h1>
+    <p>Inapakia...</p>
+  </div>
+  <script>
+    window.addEventListener('load', function() {
+      setTimeout(function() {
+        var el = document.getElementById('loading');
+        if (el) el.style.display = 'none';
+      }, 3000);
+    });
+  </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AutoLockService with WidgetsBindingObserver {
+  static AutoLockService? _instance;
+  static AutoLockService get instance => _instance ??= AutoLockService();
   Timer? _lockTimer;
   int _timeoutMinutes = 0;
   bool _isLocked = false;

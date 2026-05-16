@@ -3,14 +3,18 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/transaction_model.dart';
 
 class PaymentService {
-  static const double processingFeePercent = 0;
-  static const double platformFeePercent = 0;
+  static const double processingFeePercent = 0.03;
+  static const double platformFeePercent = 0.02;
 
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   TransactionFeeBreakdown calculateFees(double productPrice) {
-    return TransactionFeeBreakdown(productPrice: productPrice);
+    return TransactionFeeBreakdown(
+      productPrice: productPrice,
+      processingFeePercent: processingFeePercent,
+      platformFeePercent: platformFeePercent,
+    );
   }
 
   Stream<List<MarketplaceTransaction>> getSellerTransactions() {

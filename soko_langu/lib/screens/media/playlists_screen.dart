@@ -6,6 +6,7 @@ import '../../services/playlist_service.dart';
 import '../../models/music_playlist.dart';
 import 'playlist_detail_screen.dart';
 import '../../extensions/context_tr.dart';
+import '../../widgets/google_loading.dart';
 
 class PlaylistsScreen extends StatefulWidget {
   const PlaylistsScreen({super.key});
@@ -55,6 +56,11 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
       }
     } catch (e) {
       debugPrint('PlaylistsScreen: error loading songs — $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("${context.tr('error')}: $e")),
+        );
+      }
       final playlists = await _service.load();
       if (mounted) {
         setState(() {
@@ -171,17 +177,17 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
       ),
       body: SafeArea(
         child: _loading
-            ? const Center(child: CircularProgressIndicator())
+            ? const GoogleLoadingPage()
             : _playlists.isEmpty
             ? Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.queue_music, size: 64, color: Colors.grey[400]),
+                    Icon(Icons.queue_music, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     const SizedBox(height: 16),
                     Text(
                       context.tr('no_playlists'),
-                      style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+                      style: TextStyle(fontSize: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                     const SizedBox(height: 8),
                     TextButton.icon(
@@ -225,7 +231,7 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
                       },
                       child: Container(
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: Theme.of(context).colorScheme.surface,
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
@@ -243,12 +249,12 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
                             Container(
                               padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFD8F3DC),
+                                color: Theme.of(context).colorScheme.primaryContainer,
                                 borderRadius: BorderRadius.circular(16),
                               ),
-                              child: const Icon(
+                              child: Icon(
                                 Icons.queue_music,
-                                color: Color(0xFF2D6A4F),
+                                color: Theme.of(context).colorScheme.secondary,
                                 size: 32,
                               ),
                             ),
@@ -259,10 +265,10 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
                               ),
                               child: Text(
                                 p.name,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 14,
-                                  color: Color(0xFF2D6A4F),
+                                  color: Theme.of(context).colorScheme.secondary,
                                 ),
                                 textAlign: TextAlign.center,
                                 maxLines: 1,
@@ -273,7 +279,7 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
                               '${p.songs.length} songs',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: Colors.grey[500],
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ],

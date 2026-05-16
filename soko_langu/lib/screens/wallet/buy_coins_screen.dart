@@ -182,32 +182,34 @@ class _BuyCoinsScreenState extends State<BuyCoinsScreen> {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              Card(
-                color: Colors.amber[50],
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    16,
-                    16,
-                    16,
-                    MediaQuery.of(context).padding.bottom + 16,
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+                    width: 1.5,
                   ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.monetization_on,
-                        color: Colors.amber,
-                        size: 32,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.monetization_on,
+                      color: Colors.amber,
+                      size: 32,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      '${context.tr("your_balance")} $_coins ${context.tr("coins")}',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
-                      const SizedBox(width: 12),
-                      Text(
-                        '${context.tr("your_balance")} $_coins ${context.tr("coins")}',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 24),
@@ -228,37 +230,30 @@ class _BuyCoinsScreenState extends State<BuyCoinsScreen> {
                       onTap: _buying ? null : () => _buy(coins, price),
                       child: Container(
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: Theme.of(context).colorScheme.surface,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: Colors.amber[200]!,
+                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
                             width: 1.5,
                           ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.amber.withAlpha(25),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
                         ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
                               '$coins',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.amber,
+                                color: Theme.of(context).colorScheme.primary,
                               ),
                             ),
                             if (p.containsKey('bonus'))
                               Text(
                                 '+${p['bonus']} ${context.tr("bonus")}',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 11,
-                                  color: Colors.green,
+                                  color: Theme.of(context).colorScheme.primary,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -267,7 +262,7 @@ class _BuyCoinsScreenState extends State<BuyCoinsScreen> {
                               'TZS $price',
                               style: TextStyle(
                                 fontSize: 16,
-                                color: Colors.grey[700],
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ],

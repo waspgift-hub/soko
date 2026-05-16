@@ -8,20 +8,12 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:344682929526:android:d8f3eba12c33c826c26e57",
+        "mobilesdk_app_id": "1:344682929526:android:828e2523b15358a7c26e57",
         "android_client_info": {
           "package_name": "com.example.soko_langu"
         }
       },
       "oauth_client": [
-        {
-          "client_id": "344682929526-5ame7l830dt2d2eu3igihfvunaab0v18.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.example.soko_langu",
-            "certificate_hash": "d075f7045ba2edb08950c98e1f6f552c8b6be95e"
-          }
-        },
         {
           "client_id": "344682929526-ik4onilm1bj7lug9ev13u3e63f0ka28h.apps.googleusercontent.com",
           "client_type": 3

@@ -1,5 +1,6 @@
+import 'dart:async';
 import 'dart:math';
-import 'package:audioplayers/audioplayers.dart';
+import 'package:just_audio/just_audio.dart' as ja;
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:audio_service/audio_service.dart';
 
@@ -8,65 +9,124 @@ enum PlayerRepeatMode { off, all, one }
 class AudioPlayerService extends BaseAudioHandler
     with QueueHandler, SeekHandler {
   AudioPlayerService._() {
-    player.onPlayerComplete.listen((_) => next());
-    player.onPositionChanged.listen((p) => position = p);
-    player.onDurationChanged.listen((d) => duration = d);
+    _init();
   }
   static final AudioPlayerService _instance = AudioPlayerService._();
   static AudioPlayerService get instance => _instance;
   factory AudioPlayerService() => _instance;
 
-  final AudioPlayer player = AudioPlayer();
-
+  final ja.AudioPlayer _player = ja.AudioPlayer();
   List<SongModel> songs = [];
   int? currentIndex;
-  bool isPlaying = false;
   bool shuffle = false;
   PlayerRepeatMode repeatMode = PlayerRepeatMode.off;
   Duration position = Duration.zero;
   Duration duration = Duration.zero;
+  bool isPlaying = false;
+
+  Stream<Duration> get positionStream => _player.positionStream;
+  Stream<Duration?> get durationStream => _player.durationStream;
+
+  StreamSubscription? _playerStateSub;
+  StreamSubscription? _positionSub;
+  StreamSubscription? _durationSub;
+  StreamSubscription? _processingSub;
+
+  void _init() {
+    _playerStateSub = _player.playerStateStream.listen(_onPlayerStateChanged);
+    _positionSub = _player.positionStream.listen((p) {
+      position = p;
+    });
+    _durationSub = _player.durationStream.listen((d) {
+      duration = d ?? Duration.zero;
+    });
+    _processingSub = _player.processingStateStream
+        .listen(_onProcessingStateChanged);
+  }
+
+  void _onPlayerStateChanged(ja.PlayerState state) {
+    isPlaying = state.playing;
+    playbackState.add(
+      playbackState.value.copyWith(
+        playing: state.playing,
+        processingState: state.processingState == ja.ProcessingState.ready
+            ? AudioProcessingState.ready
+            : state.processingState == ja.ProcessingState.loading
+                ? AudioProcessingState.loading
+                : state.processingState == ja.ProcessingState.buffering
+                    ? AudioProcessingState.buffering
+                    : AudioProcessingState.idle,
+        controls: [
+          MediaControl.skipToPrevious,
+          if (state.playing) MediaControl.pause else MediaControl.play,
+          MediaControl.skipToNext,
+        ],
+        systemActions: {
+          MediaAction.seek,
+          MediaAction.seekForward,
+          MediaAction.seekBackward,
+        },
+        updatePosition: _player.position,
+      ),
+    );
+  }
+
+  void _onProcessingStateChanged(ja.ProcessingState state) {
+    if (state == ja.ProcessingState.completed) {
+      _advanceToNext();
+    }
+  }
 
   void playSong(int index) {
     if (index < 0 || index >= songs.length) return;
     final song = songs[index];
     if (song.data.isEmpty) return;
     currentIndex = index;
-    isPlaying = true;
-    player.stop();
-    player.play(DeviceFileSource(song.data));
     mediaItem.add(
       MediaItem(
         id: song.data,
         title: song.title,
         artist: song.artist ?? 'Unknown Artist',
+        artUri: Uri.tryParse(
+          'content://media/external/audio/albumart/${song.albumId}',
+        ),
         duration: Duration(milliseconds: song.duration ?? 0),
       ),
     );
-    playbackState.add(
-      PlaybackState(
-        processingState: AudioProcessingState.ready,
-        playing: true,
-        controls: [
-          MediaControl.skipToPrevious,
-          MediaControl.pause,
-          MediaControl.skipToNext,
-        ],
-        systemActions: {MediaAction.seek},
-        updatePosition: Duration.zero,
-      ),
-    );
+    _player.setAudioSource(ja.AudioSource.file(song.data));
+    _player.play();
   }
 
   void togglePlayPause() {
     if (currentIndex == null) return;
     if (isPlaying) {
-      player.pause();
-      isPlaying = false;
+      _player.pause();
     } else {
-      player.resume();
-      isPlaying = true;
+      _player.play();
     }
-    playbackState.add(playbackState.value.copyWith(playing: isPlaying));
+  }
+
+  void togglePlayPauseFromIndex(int index) {
+    if (currentIndex == index) {
+      togglePlayPause();
+    } else {
+      playSong(index);
+    }
+  }
+
+  void _advanceToNext() {
+    if (songs.isEmpty) return;
+    if (repeatMode == PlayerRepeatMode.one) {
+      playSong(currentIndex!);
+      return;
+    }
+    int next;
+    if (shuffle) {
+      next = _randomIndex();
+    } else {
+      next = (currentIndex! + 1) % songs.length;
+    }
+    playSong(next);
   }
 
   void next() {
@@ -88,6 +148,10 @@ class AudioPlayerService extends BaseAudioHandler
     if (currentIndex == null || songs.isEmpty) return;
     if (repeatMode == PlayerRepeatMode.one) {
       playSong(currentIndex!);
+      return;
+    }
+    if (_player.position.inSeconds > 3) {
+      _player.seek(Duration.zero);
       return;
     }
     int prev;
@@ -120,39 +184,24 @@ class AudioPlayerService extends BaseAudioHandler
 
   @override
   Future<void> seek(Duration position) async {
-    await player.seek(position);
-  }
-
-  void dispose() {
-    player.dispose();
+    await _player.seek(position);
   }
 
   @override
   Future<void> play() async {
     if (currentIndex != null) {
-      await player.resume();
-      isPlaying = true;
-      playbackState.add(playbackState.value.copyWith(playing: true));
+      await _player.play();
     }
   }
 
   @override
   Future<void> pause() async {
-    await player.pause();
-    isPlaying = false;
-    playbackState.add(playbackState.value.copyWith(playing: false));
+    await _player.pause();
   }
 
   @override
   Future<void> stop() async {
-    await player.stop();
-    isPlaying = false;
-    playbackState.add(
-      playbackState.value.copyWith(
-        playing: false,
-        processingState: AudioProcessingState.idle,
-      ),
-    );
+    await _player.stop();
   }
 
   @override
@@ -164,5 +213,18 @@ class AudioPlayerService extends BaseAudioHandler
   @override
   Future<void> setShuffleMode(AudioServiceShuffleMode shuffleMode) async {
     shuffle = shuffleMode == AudioServiceShuffleMode.all;
+  }
+
+  @override
+  Future<void> onTaskRemoved() async {
+    _player.pause();
+  }
+
+  void dispose() {
+    _playerStateSub?.cancel();
+    _positionSub?.cancel();
+    _durationSub?.cancel();
+    _processingSub?.cancel();
+    _player.dispose();
   }
 }

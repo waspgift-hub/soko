@@ -131,10 +131,13 @@ class _AddProductScreenState extends State<AddProductScreen> {
   }
 
   void _updateSubcategories() {
-    final category = _categories.firstWhere(
-      (c) => c.name == _selectedCategory,
-      orElse: () => _categories.first,
-    );
+    final category = _categories.isEmpty
+        ? null
+        : _categories.firstWhere(
+            (c) => c.name == _selectedCategory,
+            orElse: () => _categories.first,
+          );
+    if (category == null) return;
     setState(() {
       _subcategories = category.subcategories;
       if (_subcategories.isNotEmpty &&

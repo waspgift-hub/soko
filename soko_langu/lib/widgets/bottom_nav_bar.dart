@@ -9,6 +9,7 @@ import '../screens/feed/feed_screen.dart';
 import '../screens/chat/chats_list_screen.dart';
 import '../extensions/context_tr.dart';
 import '../main.dart';
+import 'offline_banner.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -64,7 +65,9 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(index: _currentIndex, children: _screens),
+      body: OfflineBanner(
+        child: IndexedStack(index: _currentIndex, children: _screens),
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) {

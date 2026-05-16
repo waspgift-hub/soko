@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/product_model.dart';
 import 'cloudinary_service.dart';
+import '../utils/network_error.dart';
 
 int _tierOrder(String tier) {
   switch (tier) {
@@ -97,7 +98,11 @@ class ProductService {
         "createdAt": FieldValue.serverTimestamp(),
       });
     } catch (e) {
-      throw Exception("Failed to add product: $e");
+      throw NetworkError(
+          message: "Failed to add product: $e",
+          userMessage: translateError(e),
+          originalError: e,
+        );
     }
   }
 
@@ -205,7 +210,11 @@ class ProductService {
       }
       return null;
     } catch (e) {
-      throw Exception("Failed to get product: $e");
+      throw NetworkError(
+          message: "Failed to get product: $e",
+          userMessage: translateError(e),
+          originalError: e,
+        );
     }
   }
 
@@ -253,7 +262,11 @@ class ProductService {
 
       await _db.collection("products").doc(productId).update(data);
     } catch (e) {
-      throw Exception("Update failed: $e");
+      throw NetworkError(
+          message: "Update failed: $e",
+          userMessage: translateError(e),
+          originalError: e,
+        );
     }
   }
 
@@ -261,7 +274,11 @@ class ProductService {
     try {
       await _db.collection("products").doc(productId).delete();
     } catch (e) {
-      throw Exception("Delete failed: $e");
+      throw NetworkError(
+          message: "Delete failed: $e",
+          userMessage: translateError(e),
+          originalError: e,
+        );
     }
   }
 
@@ -279,7 +296,11 @@ class ProductService {
         "reviewCount": newReviewCount,
       });
     } catch (e) {
-      throw Exception("Failed to update rating: $e");
+      throw NetworkError(
+          message: "Failed to update rating: $e",
+          userMessage: translateError(e),
+          originalError: e,
+        );
     }
   }
 
@@ -289,7 +310,11 @@ class ProductService {
         "soldCount": FieldValue.increment(quantity),
       });
     } catch (e) {
-      throw Exception("Failed to update sold count: $e");
+      throw NetworkError(
+          message: "Failed to update sold count: $e",
+          userMessage: translateError(e),
+          originalError: e,
+        );
     }
   }
 
@@ -306,7 +331,11 @@ class ProductService {
       }
       await batch.commit();
     } catch (e) {
-      throw Exception("Failed to update products tier: $e");
+      throw NetworkError(
+          message: "Failed to update products tier: $e",
+          userMessage: translateError(e),
+          originalError: e,
+        );
     }
   }
 }

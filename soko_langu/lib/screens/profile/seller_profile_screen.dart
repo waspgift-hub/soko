@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../models/product_model.dart';
 import '../../services/product_service.dart';
 import '../../services/user_service.dart';
 import '../../extensions/context_tr.dart';
-import '../home/product_detail.dart';
-import '../chat/chat_page.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/verified_badge.dart';
+import '../../app/routes.dart';
 
 class SellerProfileScreen extends StatelessWidget {
   final String sellerId;
@@ -29,15 +29,10 @@ class SellerProfileScreen extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.message, color: Colors.green),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      ChatPage(receiverId: sellerId, receiverName: sellerName),
-                ),
-              );
-            },
+            onPressed: () => context.push(
+              '${AppRoutes.chat}/$sellerId',
+              extra: {'name': sellerName},
+            ),
           ),
         ],
       ),
@@ -45,6 +40,9 @@ class SellerProfileScreen extends StatelessWidget {
         child: StreamBuilder<UserProfile?>(
           stream: userService.streamProfile(sellerId),
           builder: (context, userSnap) {
+            if (userSnap.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
             final profile = userSnap.data;
             return CustomScrollView(
               slivers: [
@@ -103,12 +101,9 @@ class SellerProfileScreen extends StatelessWidget {
                       delegate: SliverChildBuilderDelegate(
                         (context, index) => ProductCard(
                           product: products[index],
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  ProductDetailPage(product: products[index]),
-                            ),
+                          onTap: () => context.push(
+                            '${AppRoutes.productDetail}/${products[index].id}',
+                            extra: products[index],
                           ),
                         ),
                         childCount: products.length,
@@ -299,8 +294,12 @@ class SellerProfileScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+          width: 1.5,
+        ),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -308,26 +307,26 @@ class SellerProfileScreen extends StatelessWidget {
           FutureBuilder<int>(
             future: userService.getUserProductCount(sellerId),
             builder: (c, s) =>
-                _statItem(context.tr('products'), '${s.data ?? 0}'),
+                _statItem(context, context.tr('products'), '${s.data ?? 0}'),
           ),
-          Container(width: 1, height: 30, color: Colors.grey[200]),
+          Container(width: 1, height: 30, color: Theme.of(context).colorScheme.outlineVariant),
           FutureBuilder<int>(
             future: userService.getUserTotalSales(sellerId),
-            builder: (c, s) => _statItem(context.tr('sales'), '${s.data ?? 0}'),
+            builder: (c, s) => _statItem(context, context.tr('sales'), '${s.data ?? 0}'),
           ),
         ],
       ),
     );
   }
 
-  Widget _statItem(String label, String value) {
+  Widget _statItem(BuildContext context, String label, String value) {
     return Column(
       children: [
         Text(
           value,
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
-        Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+        Text(label, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13)),
       ],
     );
   }
@@ -339,17 +338,10 @@ class SellerProfileScreen extends StatelessWidget {
         children: [
           Expanded(
             child: ElevatedButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ChatPage(
-                      receiverId: sellerId,
-                      receiverName: sellerName,
-                    ),
-                  ),
-                );
-              },
+              onPressed: () => context.push(
+                '${AppRoutes.chat}/$sellerId',
+                extra: {'name': sellerName},
+              ),
               icon: const Icon(Icons.message, color: Colors.white),
               label: Text(context.tr('message')),
               style: ElevatedButton.styleFrom(

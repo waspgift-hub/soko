@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:go_router/go_router.dart';
 import '../../services/user_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../main.dart';
-import '../../widgets/bottom_nav_bar.dart';
 import '../profile/premium_upgrade_screen.dart';
+import '../../app/routes.dart';
 
 class AccountSelectionScreen extends StatefulWidget {
   const AccountSelectionScreen({super.key});
@@ -49,7 +50,14 @@ class _AccountSelectionScreenState extends State<AccountSelectionScreen> {
         await UserService()
             .setAccountTier(user.uid, _selectedTier)
             .timeout(const Duration(seconds: 5));
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('AccountSelection setTier: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Tier save failed, continuing anyway: $e')),
+          );
+        }
+      }
     }
 
     final prefs = await SharedPreferences.getInstance();
@@ -58,10 +66,7 @@ class _AccountSelectionScreenState extends State<AccountSelectionScreen> {
 
     if (mounted) {
       AppConfig.of(context).onSetTier(_selectedTier);
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const MainScreen()),
-      );
+      context.replace(AppRoutes.home);
     }
   }
 

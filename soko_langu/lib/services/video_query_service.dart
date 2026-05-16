@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class VideoQueryService {
@@ -8,6 +9,7 @@ class VideoQueryService {
       final result = await _channel.invokeMethod('queryVideos');
       return List<Map<String, dynamic>>.from(result as List);
     } catch (e) {
+      debugPrint('VideoQueryService.queryVideos: $e');
       return [];
     }
   }

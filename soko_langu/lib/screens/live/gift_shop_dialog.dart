@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../models/live_gift.dart';
 import '../../services/live_gift_service.dart';
-import '../wallet/buy_coins_screen.dart';
 import '../../extensions/context_tr.dart';
+import '../../app/routes.dart';
 
 class GiftShopDialog extends StatefulWidget {
   final String streamerId;
@@ -33,11 +34,12 @@ class _GiftShopDialogState extends State<GiftShopDialog> {
   Future<void> _loadCoins() async {
     final premium = await _service.getPremiumCoins();
     final soft = await _service.getSoftCoins();
-    if (mounted)
+    if (mounted) {
       setState(() {
         _premiumCoins = premium;
         _softCoins = soft;
       });
+    }
   }
 
   bool _canAfford(LiveGift gift) {
@@ -48,10 +50,7 @@ class _GiftShopDialogState extends State<GiftShopDialog> {
   Future<void> _sendGift(LiveGift gift) async {
     if (!_canAfford(gift)) {
       Navigator.pop(context);
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const BuyCoinsScreen()),
-      );
+      context.push(AppRoutes.buyCoins);
       return;
     }
 
@@ -106,10 +105,7 @@ class _GiftShopDialogState extends State<GiftShopDialog> {
                 GestureDetector(
                   onTap: () {
                     Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const BuyCoinsScreen()),
-                    );
+                    context.push(AppRoutes.buyCoins);
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(

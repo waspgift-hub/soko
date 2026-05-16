@@ -1,14 +1,19 @@
 import 'dart:async';
-import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:io' show File;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_performance/firebase_performance.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:go_router/go_router.dart';
+import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
+import 'package:flutter_callkit_incoming/entities/call_event.dart';
 import 'firebase_options.dart';
 import 'services/notification_service.dart';
 import 'services/localization_service.dart';
@@ -17,22 +22,23 @@ import 'services/presence_service.dart';
 import 'services/interstitial_ad_service.dart';
 import 'package:audio_service/audio_service.dart';
 import 'services/audio_player_service.dart';
-import 'screens/auth/auth_gate.dart';
 import 'screens/auth/lock_screen.dart';
-import 'screens/call/incoming_call_screen.dart';
 import 'services/call_service.dart';
 import 'services/security_service.dart';
 import 'theme/theme_manager.dart';
 import 'utils/responsive.dart';
+import 'app/router.dart' as router_lib;
+import 'app/app_state.dart' as app_state;
+import 'app/routes.dart';
 
 final NotificationService notificationService = NotificationService();
 final LocalizationService localizationService = LocalizationService();
-final AutoLockService autoLockService = AutoLockService();
+final AutoLockService autoLockService = AutoLockService.instance;
 final PresenceService presenceService = PresenceService();
 final InterstitialAdService interstitialAdService = InterstitialAdService();
 final ThemeManager themeManager = ThemeManager();
 final CallService callService = CallService();
-final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+final GoRouter appRouter = router_lib.buildRouter();
 
 typedef LangCallback = void Function(String);
 typedef CurrencyCallback = void Function(String);
@@ -40,70 +46,97 @@ typedef TierCallback = void Function(String);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  try {
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    FirebaseFirestore.instance.settings = const Settings(
+      persistenceEnabled: true,
+    );
+  } catch (e) {
+    debugPrint('Firebase: initialization failed — $e');
+  }
 
   // Crashlytics
-  FlutterError.onError = (details) {
-    FirebaseCrashlytics.instance.recordFlutterFatalError(details);
-  };
-  PlatformDispatcher.instance.onError = (error, stack) {
-    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
-    return true;
-  };
-  await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);
+  try {
+    FlutterError.onError = (details) {
+      FirebaseCrashlytics.instance.recordFlutterFatalError(details);
+    };
+    ui.PlatformDispatcher.instance.onError = (error, stack) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      return true;
+    };
+    await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);
+  } catch (e) {
+    debugPrint('Crashlytics: failed — $e');
+  }
 
   // Performance
-  await FirebasePerformance.instance.setPerformanceCollectionEnabled(true);
+  try {
+    await FirebasePerformance.instance.setPerformanceCollectionEnabled(true);
+  } catch (e) {
+    debugPrint('Performance: failed — $e');
+  }
 
   try {
     await FirebaseAppCheck.instance.activate(
-      providerAndroid: AndroidAppCheckProvider.playIntegrity,
+      providerAndroid: const AndroidPlayIntegrityProvider(),
     );
   } catch (e) {
     debugPrint('AppCheck: failed — $e');
   }
   try {
     await MobileAds.instance.initialize();
-    await MobileAds.instance.updateRequestConfiguration(
-      RequestConfiguration(testDeviceIds: ['YOUR_TEST_DEVICE_ID_HERE']),
-    );
     debugPrint('AdMob: initialized successfully');
   } catch (e) {
     debugPrint('AdMob: initialization failed — $e');
   }
-  await GoogleSignIn.instance.initialize();
+  try {
+    await GoogleSignIn.instance.initialize();
+  } catch (e) {
+    debugPrint('GoogleSignIn: failed — $e');
+  }
   await SecurityService().initialize();
   await themeManager.load();
-  await NotificationService.initLocalNotifications();
+  final prefs = await SharedPreferences.getInstance();
+  app_state.onboardingSeen = prefs.getBool('onboarding_seen') ?? false;
+  try {
+    await NotificationService.initLocalNotifications();
+  } catch (e) {
+    debugPrint('LocalNotifications: failed — $e');
+  }
   NotificationService.onCallNotificationTap = (data) {
-    final ctx = navigatorKey.currentContext;
+    final ctx = router_lib.rootNavigatorKey.currentContext;
     if (ctx == null) return;
-    Navigator.of(ctx).push(
-      MaterialPageRoute(
-        builder: (_) => IncomingCallScreen(
-          callId: data['callId'] as String,
-          callerId: data['callerId'] as String,
-          callerName: data['callerName'] as String? ?? 'Unknown',
-          callerImage: data['callerImage'] as String?,
-          channelName: data['channelName'] as String,
-          callType: data['callType'] as String? ?? 'video',
-        ),
+    GoRouter.of(ctx).push(AppRoutes.incomingCall, extra: data);
+  };
+  NotificationService.onForegroundCall = (data) {
+    final ctx = router_lib.rootNavigatorKey.currentContext;
+    if (ctx == null) return;
+    GoRouter.of(ctx).push(AppRoutes.incomingCall, extra: data);
+  };
+  NotificationService.onCallAcceptFromNotification = (callId) {
+    CallService().acceptCall(callId);
+  };
+  NotificationService.onCallDeclineFromNotification = (callId) {
+    CallService().declineCall(callId);
+  };
+  try { notificationService.initialize(); } catch (e) { debugPrint('notificationService: $e'); }
+  try { presenceService.initialize(); } catch (e) { debugPrint('presenceService: $e'); }
+  try { autoLockService.initialize(); } catch (e) { debugPrint('autoLockService: $e'); }
+  try { callService.clearAllActiveCalls(); } catch (e) { debugPrint('callService: $e'); }
+  try {
+    await AudioService.init(
+      builder: () => AudioPlayerService.instance,
+      config: AudioServiceConfig(
+        androidNotificationChannelId: 'com.soko_langu.audio',
+        androidNotificationChannelName: 'Soko Langu Music',
+        androidNotificationOngoing: true,
+        androidStopForegroundOnPause: false,
+        androidNotificationClickStartsActivity: true,
       ),
     );
-  };
-  notificationService.initialize();
-  presenceService.initialize();
-  autoLockService.initialize();
-  callService.cleanupOldCalls();
-  await AudioService.init(
-    builder: () => AudioPlayerService.instance,
-    config: AudioServiceConfig(
-      androidNotificationChannelId: 'com.soko_langu.audio',
-      androidNotificationChannelName: 'Soko Langu Music',
-      androidNotificationOngoing: true,
-      androidStopForegroundOnPause: true,
-    ),
-  );
+  } catch (e) {
+    debugPrint('AudioService: failed — $e');
+  }
   runApp(SokoLanguApp());
 }
 
@@ -150,6 +183,7 @@ class _SokoLanguAppState extends State<SokoLanguApp> {
   String? _wallpaperPath;
   bool _showLockScreen = false;
   StreamSubscription? _callSubscription;
+  StreamSubscription? _callKitSubscription;
 
   @override
   void initState() {
@@ -160,24 +194,82 @@ class _SokoLanguAppState extends State<SokoLanguApp> {
       if (mounted) setState(() => _showLockScreen = true);
     };
     _listenForIncomingCalls();
+    _listenCallKitEvents();
+  }
+
+  void _listenCallKitEvents() {
+    _callKitSubscription = FlutterCallkitIncoming.onEvent.listen((event) async {
+      if (event == null || !mounted) return;
+      final ctx = router_lib.rootNavigatorKey.currentContext;
+      if (ctx == null) return;
+      final body = event.body as Map<String, dynamic>?;
+      if (body == null) return;
+      final extra = body['extra'] as Map<String, dynamic>?;
+      if (extra == null) return;
+
+      switch (event.event) {
+        case Event.actionCallAccept:
+          final callId = extra['callId'] as String;
+          final channelName = extra['channelName'] as String;
+          final callType = extra['callType'] as String;
+          final callerName = extra['callerName'] as String;
+          final callerImage = extra['callerImage'] as String?;
+          await callService.acceptCall(callId);
+          if (mounted) {
+            GoRouter.of(ctx).push(
+              '${AppRoutes.videoCall}/$channelName',
+              extra: {
+                'isAudioOnly': callType != 'video',
+                'callId': callId,
+                'remoteName': callerName,
+                'remoteImage': callerImage,
+              },
+            );
+          }
+          break;
+        case Event.actionCallDecline:
+          final callId = extra['callId'] as String;
+          await callService.declineCall(callId);
+          break;
+        case Event.actionCallEnded:
+          final callId = extra['callId'] as String;
+          await callService.endCall(callId);
+          break;
+        case Event.actionCallTimeout:
+          final callId = extra['callId'] as String;
+          await callService.missCall(callId);
+          break;
+        case Event.actionCallIncoming:
+        case Event.actionCallStart:
+        case Event.actionCallToggleAudioSession:
+        case Event.actionDidUpdateDevicePushTokenVoip:
+        case Event.actionCallCallback:
+        case Event.actionCallToggleHold:
+        case Event.actionCallToggleMute:
+        case Event.actionCallToggleDmtf:
+        case Event.actionCallToggleGroup:
+        case Event.actionCallConnected:
+        case Event.actionCallCustom:
+          break;
+      }
+    });
   }
 
   void _listenForIncomingCalls() {
     _callSubscription = callService.incomingCallStream().listen((call) {
       if (call == null || !mounted) return;
-      final ctx = navigatorKey.currentContext;
-      if (ctx == null) return;
-      Navigator.of(ctx).push(
-        MaterialPageRoute(
-          builder: (_) => IncomingCallScreen(
-            callId: call['id'] as String,
-            callerId: call['callerId'] as String,
-            callerName: call['callerName'] as String? ?? 'Unknown',
-            callerImage: call['callerImage'] as String?,
-            channelName: call['channelName'] as String,
-            callType: call['type'] as String? ?? 'video',
-          ),
-        ),
+      final callId = call['id'] as String? ?? '';
+      final callerName = call['callerName'] as String? ?? 'Incoming Call';
+      final callerImage = call['callerImage'] as String? ?? '';
+      final channelName = call['channelName'] as String? ?? '';
+      final callType = call['type'] as String? ?? 'voice';
+      callService.showCallKitUI(
+        callId: callId,
+        callerName: callerName,
+        callerImage: callerImage,
+        channelName: channelName,
+        callType: callType,
+        isOutgoing: false,
       );
     });
   }
@@ -185,6 +277,7 @@ class _SokoLanguAppState extends State<SokoLanguApp> {
   @override
   void dispose() {
     _callSubscription?.cancel();
+    _callKitSubscription?.cancel();
     themeManager.removeListener(_onThemeChange);
     presenceService.dispose();
     autoLockService.dispose();
@@ -221,14 +314,13 @@ class _SokoLanguAppState extends State<SokoLanguApp> {
     final isDark = themeManager.isDark;
     final isSilver = themeManager.currentTier == 'silver';
 
-    return MaterialApp(
-      navigatorKey: navigatorKey,
+    return MaterialApp.router(
+      routerConfig: appRouter,
       debugShowCheckedModeBanner: false,
       title: 'Soko Langu',
       theme: themeManager.lightTheme,
       darkTheme: themeManager.darkTheme,
       themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
-      home: const AuthGate(),
       builder: (context, child) {
         Responsive.init(context);
         Widget content = SafeArea(child: child!);
@@ -245,6 +337,7 @@ class _SokoLanguAppState extends State<SokoLanguApp> {
           );
         } else if (isSilver &&
             _wallpaperPath != null &&
+            !kIsWeb &&
             File(_wallpaperPath!).existsSync()) {
           content = Stack(
             children: [
@@ -261,6 +354,11 @@ class _SokoLanguAppState extends State<SokoLanguApp> {
               ),
               content,
             ],
+          );
+        } else {
+          content = Container(
+            color: Theme.of(context).colorScheme.surface,
+            child: content,
           );
         }
         return AppConfig(

@@ -12,28 +12,20 @@ import '../../services/video_query_service.dart';
 import '../../services/audio_player_service.dart';
 import '../../shared/loading_widget.dart';
 import '../../extensions/context_tr.dart';
-
-class MusicPlaylist {
-  final String name;
-  final List<String> songPaths;
-  MusicPlaylist({required this.name, required this.songPaths});
-  Map<String, dynamic> toJson() => {'name': name, 'songPaths': songPaths};
-  factory MusicPlaylist.fromJson(Map<String, dynamic> json) => MusicPlaylist(
-    name: json['name'] as String,
-    songPaths: List<String>.from(json['songPaths']),
-  );
-}
+import '../../models/music_playlist.dart';
 
 class LocalVideoFile {
   final String path;
   final String name;
   final int durationMs;
   final int sizeBytes;
+  final String contentUri;
   LocalVideoFile({
     required this.path,
     required this.name,
     this.durationMs = 0,
     this.sizeBytes = 0,
+    this.contentUri = '',
   });
 }
 
@@ -66,15 +58,7 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
     _tabCtrl.addListener(() => setState(() {}));
     _checkPermissions();
     _loadPlaylists();
-    _audio.player.onPlayerComplete.listen((_) {
-      if (mounted) setState(() {});
-    });
-    _audio.player.onPositionChanged.listen((p) {
-      _audio.position = p;
-      if (mounted) setState(() {});
-    });
-    _audio.player.onDurationChanged.listen((d) {
-      _audio.duration = d;
+    _audio.playbackState.listen((_) {
       if (mounted) setState(() {});
     });
   }
@@ -117,9 +101,11 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
         }
       }
     }
-    if (_hasAudioPermission) _loadSongs();
-    if (_hasVideoPermission) _loadVideos();
-    setState(() => _isLoading = false);
+    final futures = <Future>[];
+    if (_hasAudioPermission) futures.add(_loadSongs());
+    if (_hasVideoPermission) futures.add(_loadVideos());
+    if (futures.isNotEmpty) await Future.wait(futures);
+    if (mounted) setState(() => _isLoading = false);
   }
 
   Future<void> _requestAudioPermission() async {
@@ -127,12 +113,13 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
     for (final p in [Permission.audio, Permission.photos, Permission.storage]) {
       if (await p.request().isGranted) {
         setState(() => _hasAudioPermission = true);
-        _loadSongs();
+        await _loadSongs();
+        if (mounted) setState(() => _isLoading = false);
         return;
       }
     }
     if (mounted) await _handleDenied();
-    setState(() => _isLoading = false);
+    if (mounted) setState(() => _isLoading = false);
   }
 
   Future<void> _requestVideoPermission() async {
@@ -144,12 +131,13 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
     ]) {
       if (await p.request().isGranted) {
         setState(() => _hasVideoPermission = true);
-        _loadVideos();
+        await _loadVideos();
+        if (mounted) setState(() => _isLoading = false);
         return;
       }
     }
     if (mounted) await _handleDenied();
-    setState(() => _isLoading = false);
+    if (mounted) setState(() => _isLoading = false);
   }
 
   Future<void> _handleDenied() async {
@@ -202,6 +190,7 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
                 name: v['displayName'] as String? ?? 'Unknown',
                 durationMs: (v['duration'] as num?)?.toInt() ?? 0,
                 sizeBytes: (v['size'] as num?)?.toInt() ?? 0,
+                contentUri: v['contentUri'] as String? ?? '',
               ),
             )
             .toList();
@@ -238,12 +227,18 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
 
   Future<void> _playVideo(LocalVideoFile video) async {
     if (_audio.currentIndex != null) {
-      await _audio.player.stop();
+      await _audio.stop();
       _audio.currentIndex = null;
-      _audio.isPlaying = false;
     }
     _disposeVideo();
-    final ctrl = VideoPlayerController.file(File(video.path));
+    final VideoPlayerController ctrl;
+    if (video.path.isNotEmpty) {
+      ctrl = VideoPlayerController.file(File(video.path));
+    } else if (video.contentUri.isNotEmpty) {
+      ctrl = VideoPlayerController.networkUrl(Uri.parse(video.contentUri));
+    } else {
+      return;
+    }
     await ctrl.initialize();
     if (mounted) {
       setState(() {
@@ -379,7 +374,7 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
                       width: 40,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: Colors.grey[300],
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -428,7 +423,7 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
                           Text(
                             '${songs.length} songs',
                             style: TextStyle(
-                              color: Colors.grey[600],
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                               fontSize: 13,
                             ),
                           ),
@@ -450,7 +445,7 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
                                       songs.isNotEmpty
                                   ? context.tr('deselect_all')
                                   : context.tr('select_all'),
-                              style: const TextStyle(color: Colors.green),
+                              style: TextStyle(color: Theme.of(context).colorScheme.primary),
                             ),
                           ),
                         ],
@@ -464,7 +459,7 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
                                 query.isEmpty
                                     ? context.tr('no_songs')
                                     : 'No songs match "$query"',
-                                style: TextStyle(color: Colors.grey[500]),
+                                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                               ),
                             )
                           : ListView.builder(
@@ -480,12 +475,12 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
                                       width: 44,
                                       height: 44,
                                       decoration: BoxDecoration(
-                                        color: Colors.grey[200],
+                                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: Icon(
                                         Icons.music_note,
-                                        color: Colors.grey[500],
+                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                                         size: 20,
                                       ),
                                     ),
@@ -505,12 +500,12 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                       fontSize: 12,
-                                      color: Colors.grey[600],
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                                     ),
                                   ),
                                   trailing: Checkbox(
                                     value: checked,
-                                    activeColor: Colors.green,
+                                    activeColor: Theme.of(context).colorScheme.primary,
                                     onChanged: (v) {
                                       setSheetState(() {
                                         v == true
@@ -539,8 +534,8 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
                             height: 48,
                             child: ElevatedButton(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green,
-                                foregroundColor: Colors.white,
+                                backgroundColor: Theme.of(context).colorScheme.primary,
+                                foregroundColor: Theme.of(context).colorScheme.onPrimary,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
@@ -552,8 +547,8 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
                                       if (name.isEmpty) return;
                                       final playlist = MusicPlaylist(
                                         name: name,
-                                        songPaths: selected
-                                            .map((i) => songs[i].data)
+                                        songs: selected
+                                            .map((i) => PlaylistSong.fromPath(songs[i].data))
                                             .toList(),
                                       );
                                       setState(() {
@@ -569,7 +564,7 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
                                             'Playlist "$name" created '
                                             'with ${selected.length} songs',
                                           ),
-                                          backgroundColor: Colors.green,
+                                          backgroundColor: Theme.of(context).colorScheme.primary,
                                         ),
                                       );
                                     },
@@ -610,14 +605,14 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.6),
+                  color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: TabBar(
                   controller: _tabCtrl,
-                  labelColor: Colors.green,
-                  unselectedLabelColor: Colors.grey,
-                  indicatorColor: Colors.green,
+                  labelColor: Theme.of(context).colorScheme.primary,
+                  unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
+                  indicatorColor: Theme.of(context).colorScheme.primary,
                   tabs: [
                     Tab(
                       icon: const Icon(Icons.music_note, size: 20),
@@ -662,8 +657,8 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
               Expanded(
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -680,8 +675,8 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
               const SizedBox(width: 8),
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.green,
-                  side: const BorderSide(color: Colors.green),
+                  foregroundColor: Theme.of(context).colorScheme.primary,
+                  side: BorderSide(color: Theme.of(context).colorScheme.primary),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
                     vertical: 12,
@@ -713,13 +708,13 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
                     height: 48,
                     decoration: BoxDecoration(
                       color: isCurrent
-                          ? Colors.green.withAlpha(25)
-                          : Colors.grey[200],
+                          ? Theme.of(context).colorScheme.primary.withAlpha(25)
+                          : Theme.of(context).colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
                       Icons.music_note,
-                      color: isCurrent ? Colors.green : Colors.grey[500],
+                      color: isCurrent ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                   artworkFit: BoxFit.cover,
@@ -731,18 +726,18 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
-                    color: isCurrent ? Colors.green : Colors.black,
+                    color: isCurrent ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
                 subtitle: Text(
                   song.artist ?? context.tr('unknown_artist'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
                 trailing: Text(
                   _fmt(Duration(milliseconds: song.duration ?? 0)),
-                  style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
                 onTap: () => _audio.playSong(index),
                 onLongPress: () => _addToPlaylist(index),
@@ -769,7 +764,7 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
             children: [
               Text(
                 '${_videos.length} ${context.tr('videos')}',
-                style: TextStyle(color: Colors.grey[600]),
+                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
             ],
           ),
@@ -798,7 +793,7 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
     return GestureDetector(
       onTap: () => _playVideo(video),
       child: Container(
-        color: Colors.grey[200],
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -863,13 +858,13 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
                 width: 100,
                 height: 100,
                 decoration: BoxDecoration(
-                  color: Colors.green.withAlpha(15),
+                  color: Theme.of(context).colorScheme.primary.withAlpha(15),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   isAudio ? Icons.music_note_rounded : Icons.videocam_rounded,
                   size: 50,
-                  color: Colors.green,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
               ),
               const SizedBox(height: 32),
@@ -888,7 +883,7 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
-                  color: Colors.grey[600],
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                   height: 1.5,
                 ),
               ),
@@ -896,7 +891,7 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
               Text(
                 "Tap 'Allow Access' to grant permission.",
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+                style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: 32),
               SizedBox(
@@ -904,8 +899,8 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
                 height: 50,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(25),
                     ),
@@ -932,9 +927,9 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 64, color: Colors.grey[400]),
+          Icon(icon, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
           const SizedBox(height: 16),
-          Text(msg, style: TextStyle(color: Colors.grey[600])),
+          Text(msg, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
         ],
       ),
     );
@@ -952,7 +947,7 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
         height: 64,
         decoration: BoxDecoration(
           color: Colors.black,
-          border: Border(top: BorderSide(color: Colors.green.withAlpha(80))),
+          border: Border(top: BorderSide(color: Theme.of(context).colorScheme.primary.withAlpha(80))),
         ),
         child: Row(
           children: [
@@ -1000,13 +995,13 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
               }),
             ),
             Container(
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.green,
-              ),
-              child: IconButton(
-                icon: Icon(
-                  _isVideoPlaying
+              decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            child: IconButton(
+              icon: Icon(
+                _isVideoPlaying
                       ? Icons.pause_rounded
                       : Icons.play_arrow_rounded,
                   color: Colors.white,
@@ -1073,8 +1068,8 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
       child: Container(
         height: 72,
         decoration: BoxDecoration(
-          color: Colors.green[50],
-          border: Border(top: BorderSide(color: Colors.green.withAlpha(40))),
+          color: Theme.of(context).colorScheme.surfaceContainerLow,
+          border: Border(top: BorderSide(color: Theme.of(context).colorScheme.primary.withAlpha(40))),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 12),
         child: Row(
@@ -1087,10 +1082,10 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: Colors.grey[300],
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(Icons.music_note, color: Colors.grey[600]),
+                  child: Icon(Icons.music_note, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
                 artworkFit: BoxFit.cover,
                 artworkBorder: BorderRadius.circular(8),
@@ -1111,7 +1106,7 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
                   if (song?.artist != null)
                     Text(
                       song!.artist!,
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1123,8 +1118,8 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
               onPressed: _audio.previous,
             ),
             Container(
-              decoration: const BoxDecoration(
-                color: Colors.green,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary,
                 shape: BoxShape.circle,
               ),
               child: IconButton(
@@ -1132,7 +1127,7 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
                   _audio.isPlaying
                       ? Icons.pause_rounded
                       : Icons.play_arrow_rounded,
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.onPrimary,
                   size: 24,
                 ),
                 onPressed: _audio.togglePlayPause,
@@ -1238,10 +1233,10 @@ class _FullVideoPageState extends State<_FullVideoPage> {
                       ),
                       Expanded(
                         child: SliderTheme(
-                          data: const SliderThemeData(
-                            activeTrackColor: Colors.green,
+                          data: SliderThemeData(
+                            activeTrackColor: Theme.of(context).colorScheme.primary,
                             inactiveTrackColor: Colors.white24,
-                            thumbColor: Colors.green,
+                            thumbColor: Theme.of(context).colorScheme.primary,
                             trackHeight: 3,
                           ),
                           child: Slider(
@@ -1291,8 +1286,8 @@ class _FullVideoPageState extends State<_FullVideoPage> {
                         },
                       ),
                       Container(
-                        decoration: const BoxDecoration(
-                          color: Colors.green,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary,
                           shape: BoxShape.circle,
                         ),
                         child: IconButton(
@@ -1400,11 +1395,11 @@ class _FullPlayerPageState extends State<_FullPlayerPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.music_note_rounded, size: 80, color: Colors.grey[300]),
+              Icon(Icons.music_note_rounded, size: 80, color: Theme.of(context).colorScheme.surfaceContainerHighest),
               const SizedBox(height: 16),
               Text(
                 context.tr('no_song_playing'),
-                style: TextStyle(color: Colors.grey[500]),
+                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
             ],
           ),
@@ -1434,33 +1429,33 @@ class _FullPlayerPageState extends State<_FullPlayerPage> {
                 right: 4,
                 bottom: 4,
               ),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(bottom: BorderSide(color: Color(0xFFE0E0E0))),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                border: Border(bottom: BorderSide(color: Theme.of(context).colorScheme.outlineVariant)),
               ),
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.keyboard_arrow_down,
-                      color: Color(0xFF2D6A4F),
+                      color: Theme.of(context).colorScheme.secondary,
                     ),
                     onPressed: () => Navigator.pop(context),
                   ),
                   const Spacer(),
                   Text(
                     context.tr('now_playing'),
-                    style: const TextStyle(
-                      color: Color(0xFF1B4332),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   const Spacer(),
                   IconButton(
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.playlist_play,
-                      color: Color(0xFF2D6A4F),
+                      color: Theme.of(context).colorScheme.secondary,
                     ),
                     onPressed: _openPlaylistPage,
                   ),
@@ -1525,13 +1520,13 @@ class _FullPlayerPageState extends State<_FullPlayerPage> {
                                   Icon(
                                     Icons.music_note_rounded,
                                     size: 80,
-                                    color: Colors.white.withValues(alpha: 0.3),
+                                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
                                   ),
                                   const SizedBox(height: 8),
                                   Icon(
                                     Icons.headphones_rounded,
                                     size: 32,
-                                    color: Colors.white.withValues(alpha: 0.15),
+                                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.15),
                                   ),
                                 ],
                               ),
@@ -1554,10 +1549,10 @@ class _FullPlayerPageState extends State<_FullPlayerPage> {
                             children: [
                               Text(
                                 song.title,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 22,
                                   fontWeight: FontWeight.bold,
-                                  color: Color(0xFF1B4332),
+                                  color: Theme.of(context).colorScheme.onSurface,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -1567,7 +1562,7 @@ class _FullPlayerPageState extends State<_FullPlayerPage> {
                                 song.artist ?? context.tr('unknown_artist'),
                                 style: TextStyle(
                                   fontSize: 15,
-                                  color: Colors.grey[600],
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -1578,7 +1573,7 @@ class _FullPlayerPageState extends State<_FullPlayerPage> {
                         IconButton(
                           icon: Icon(
                             Icons.playlist_add,
-                            color: const Color(0xFF2D6A4F),
+                            color: Theme.of(context).colorScheme.secondary,
                             size: 28,
                           ),
                           onPressed: widget.onAddToPlaylist,
@@ -1628,7 +1623,7 @@ class _FullPlayerPageState extends State<_FullPlayerPage> {
                 Container(
                   height: 3,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.15),
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -1637,11 +1632,11 @@ class _FullPlayerPageState extends State<_FullPlayerPage> {
                   child: Container(
                     height: 3,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFD8F3DC),
+                      color: Theme.of(context).colorScheme.primaryContainer,
                       borderRadius: BorderRadius.circular(2),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFFD8F3DC).withValues(alpha: 0.4),
+                          color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
                           blurRadius: 6,
                         ),
                       ],
@@ -1657,11 +1652,11 @@ class _FullPlayerPageState extends State<_FullPlayerPage> {
                     width: 12,
                     height: 12,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFD8F3DC),
+                      color: Theme.of(context).colorScheme.primaryContainer,
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFFD8F3DC).withValues(alpha: 0.6),
+                          color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.6),
                           blurRadius: 6,
                         ),
                       ],
@@ -1678,11 +1673,11 @@ class _FullPlayerPageState extends State<_FullPlayerPage> {
           children: [
             Text(
               _fmt(pos),
-              style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
             ),
             Text(
               _fmt(dur),
-              style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
             ),
           ],
         ),
@@ -1694,9 +1689,9 @@ class _FullPlayerPageState extends State<_FullPlayerPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFE0E0E0)),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -1713,8 +1708,8 @@ class _FullPlayerPageState extends State<_FullPlayerPage> {
             icon: Icon(
               Icons.shuffle,
               color: _audio.shuffle
-                  ? const Color(0xFF2D6A4F)
-                  : Colors.grey[400],
+                  ? Theme.of(context).colorScheme.secondary
+                  : Theme.of(context).colorScheme.onSurfaceVariant,
               size: 24,
             ),
             onPressed: () => setState(() => _audio.toggleShuffle()),
@@ -1723,7 +1718,7 @@ class _FullPlayerPageState extends State<_FullPlayerPage> {
           IconButton(
             icon: Icon(
               Icons.skip_previous_rounded,
-              color: const Color(0xFF2D6A4F),
+              color: Theme.of(context).colorScheme.secondary,
               size: 32,
             ),
             onPressed: () => setState(() => _audio.previous()),
@@ -1734,15 +1729,15 @@ class _FullPlayerPageState extends State<_FullPlayerPage> {
             width: 60,
             height: 60,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF2D6A4F), Color(0xFF40916C)],
+              gradient: LinearGradient(
+                colors: [Theme.of(context).colorScheme.secondary, Theme.of(context).colorScheme.secondary],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF2D6A4F).withValues(alpha: 0.4),
+                  color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.4),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -1764,7 +1759,7 @@ class _FullPlayerPageState extends State<_FullPlayerPage> {
           IconButton(
             icon: Icon(
               Icons.skip_next_rounded,
-              color: const Color(0xFF2D6A4F),
+              color: Theme.of(context).colorScheme.secondary,
               size: 32,
             ),
             onPressed: () => setState(() => _audio.next()),
@@ -1783,27 +1778,27 @@ class _FullPlayerPageState extends State<_FullPlayerPage> {
   Widget _buildRepeatIcon() {
     switch (_audio.repeatMode) {
       case PlayerRepeatMode.off:
-        return Icon(Icons.repeat, color: Colors.grey[400], size: 24);
+        return Icon(Icons.repeat, color: Theme.of(context).colorScheme.onSurfaceVariant, size: 24);
       case PlayerRepeatMode.all:
-        return const Icon(Icons.repeat, color: Color(0xFF2D6A4F), size: 24);
+        return Icon(Icons.repeat, color: Theme.of(context).colorScheme.secondary, size: 24);
       case PlayerRepeatMode.one:
         return Stack(
           alignment: Alignment.center,
           children: [
-            const Icon(Icons.repeat, color: Color(0xFF2D6A4F), size: 24),
+            Icon(Icons.repeat, color: Theme.of(context).colorScheme.secondary, size: 24),
             Positioned(
               top: 4,
               right: 4,
               child: Container(
                 padding: const EdgeInsets.all(2),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFD8F3DC),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
                   shape: BoxShape.circle,
                 ),
-                child: const Text(
+                child: Text(
                   '1',
                   style: TextStyle(
-                    color: Color(0xFF2D6A4F),
+                    color: Theme.of(context).colorScheme.secondary,
                     fontSize: 7,
                     fontWeight: FontWeight.bold,
                   ),
@@ -1855,13 +1850,13 @@ class _NowPlayingList extends StatelessWidget {
                 height: 48,
                 decoration: BoxDecoration(
                   color: isCurrent
-                      ? Colors.green.withValues(alpha: 0.15)
-                      : Colors.grey[200],
+                      ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)
+                      : Theme.of(context).colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
                   Icons.music_note,
-                  color: isCurrent ? Colors.green : Colors.grey[500],
+                  color: isCurrent ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
               artworkFit: BoxFit.cover,
@@ -1873,17 +1868,17 @@ class _NowPlayingList extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
-                color: isCurrent ? Colors.green : Colors.black,
+                color: isCurrent ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface,
               ),
             ),
             subtitle: Text(
               song.artist ?? context.tr('unknown_artist'),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
             trailing: isCurrent
-                ? Icon(Icons.music_note, color: Colors.green, size: 20)
+                ? Icon(Icons.music_note, color: Theme.of(context).colorScheme.primary, size: 20)
                 : null,
             onTap: isCurrent
                 ? null
