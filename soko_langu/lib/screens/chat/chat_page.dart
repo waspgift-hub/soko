@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:record/record.dart';
@@ -136,7 +137,13 @@ class _ChatPageState extends State<ChatPage> {
           productName: widget.productName.isNotEmpty
               ? widget.productName
               : null,
+          replyTo: _replyToMessageId,
+          replyToContent: _replyToContent,
+          replyToSender: _replyToSender,
         );
+        _replyToMessageId = null;
+        _replyToContent = null;
+        _replyToSender = null;
       }
       _messageController.clear();
       _scrollToBottom();
@@ -263,44 +270,6 @@ class _ChatPageState extends State<ChatPage> {
     _editingMessageId = null;
     _messageController.clear();
     setState(() {});
-  }
-
-  Future<void> _deleteMessage(Message message) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(context.tr('delete_message')),
-        content: Text(context.tr('delete_message_confirm')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(context.tr('cancel')),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(
-              context.tr('delete'),
-              style: const TextStyle(color: Colors.red),
-            ),
-          ),
-        ],
-      ),
-    );
-    if (confirm == true) {
-      try {
-        await chatService.deleteMessage(
-          otherUserId: widget.receiverId,
-          messageId: message.id,
-        );
-        if (mounted) setState(() {});
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('${context.tr('delete_failed')}: $e')),
-          );
-        }
-      }
-    }
   }
 
   Future<void> _startVideoCall() async {
@@ -857,6 +826,56 @@ class _ChatPageState extends State<ChatPage> {
                     ],
                   ),
                 ),
+              if (_replyToMessageId != null)
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: cs.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border(
+                      left: BorderSide(color: cs.primary, width: 3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.reply, size: 16, color: cs.primary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _replyToSender ?? '',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: cs.primary,
+                              ),
+                            ),
+                            Text(
+                              _replyToContent ?? '',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: cs.onSurface.withValues(alpha: 0.6),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => setState(() {
+                          _replyToMessageId = null;
+                          _replyToContent = null;
+                          _replyToSender = null;
+                        }),
+                        child: Icon(Icons.close, size: 18, color: cs.onSurface.withValues(alpha: 0.6)),
+                      ),
+                    ],
+                  ),
+                ),
               Row(
                 children: [
                   IconButton(
@@ -946,136 +965,221 @@ class _ChatPageState extends State<ChatPage> {
                 message.content.contains('.jpeg') ||
                 message.content.contains('.png') ||
                 message.content.contains('.gif')));
-    final isDeleted = message.content == 'deleted';
+    final isDeleted = message.isDeletedForEveryone;
+    final hasReply = message.replyToContent != null && message.replyToContent!.isNotEmpty;
 
     final bubble = Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        padding: EdgeInsets.all(isImage ? 4 : 12),
-        constraints: BoxConstraints(
-          maxWidth: isImage ? 250 : MediaQuery.of(context).size.width * 0.75,
-        ),
-        decoration: BoxDecoration(
-          gradient: isMe
-              ? const LinearGradient(
-                  colors: [Color(0xFF2D6A4F), Color(0xFF40916C)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : null,
-          color: isMe ? null : cs.surface,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft: isMe ? const Radius.circular(16) : Radius.zero,
-            bottomRight: isMe ? Radius.zero : const Radius.circular(16),
+      child: GestureDetector(
+        onLongPress: () => _showMessageActions(message),
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          padding: EdgeInsets.all(isImage ? 4 : 12),
+          constraints: BoxConstraints(
+            maxWidth: isImage ? 250 : MediaQuery.of(context).size.width * 0.75,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
+          decoration: BoxDecoration(
+            gradient: isMe
+                ? const LinearGradient(
+                    colors: [Color(0xFF2D6A4F), Color(0xFF40916C)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
+            color: isMe ? null : cs.surface,
+            borderRadius: BorderRadius.only(
+              topLeft: const Radius.circular(16),
+              topRight: const Radius.circular(16),
+              bottomLeft: isMe ? const Radius.circular(16) : Radius.zero,
+              bottomRight: isMe ? Radius.zero : const Radius.circular(16),
             ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (isDeleted && isMe)
-              Text(
-                context.tr('message_deleted'),
-                style: TextStyle(
-                  fontSize: 15,
-                  fontStyle: FontStyle.italic,
-                  color: Colors.white70,
-                ),
-              )
-            else if (isDeleted)
-              Text(
-                context.tr('message_deleted'),
-                style: TextStyle(
-                  fontSize: 15,
-                  fontStyle: FontStyle.italic,
-                  color: cs.onSurface.withValues(alpha: 0.6),
-                ),
-              )
-            else if (isImage)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: CachedNetworkImage(
-                  imageUrl: message.content,
-                  fit: BoxFit.cover,
-                  width: double.infinity,
-                  placeholder: (context, url) => Container(
-                    height: 200,
-                    color: cs.surfaceContainerHighest,
-                    child: const Center(
-                      child: CircularProgressIndicator(strokeWidth: 2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (hasReply) _buildReplyPreview(message, isMe, cs),
+              if (isDeleted)
+                Text(
+                  context.tr('deleted_for_everyone'),
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontStyle: FontStyle.italic,
+                    color: isMe ? Colors.white70 : cs.onSurface.withValues(alpha: 0.6),
+                  ),
+                )
+              else if (isImage)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: CachedNetworkImage(
+                    imageUrl: message.content,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    placeholder: (context, url) => Container(
+                      height: 200,
+                      color: cs.surfaceContainerHighest,
+                      child: const Center(
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
                     ),
                   ),
-                ),
-              )
-            else if (isVoice)
-              _buildVoiceBubble(message, isMe, cs)
-            else
-              Text(
-                message.content,
-                style: TextStyle(
-                  fontSize: 16,
-                  color: isMe ? Colors.white : cs.onSurface,
-                ),
-              ),
-            const SizedBox(height: 4),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+                )
+              else if (isVoice)
+                _buildVoiceBubble(message, isMe, cs)
+              else
                 Text(
-                  '${message.timestamp.hour}:${message.timestamp.minute.toString().padLeft(2, '0')}',
+                  message.content,
                   style: TextStyle(
-                    fontSize: 11,
-                    color: isMe
-                        ? Colors.white70
-                        : cs.onSurface.withValues(alpha: 0.6),
+                    fontSize: 16,
+                    color: isMe ? Colors.white : cs.onSurface,
                   ),
                 ),
-                if (message.isEdited && !isDeleted)
+              if (message.reactions.isNotEmpty) _buildReactions(message, isMe),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                   Text(
-                    context.tr('edited'),
+                    '${message.timestamp.hour}:${message.timestamp.minute.toString().padLeft(2, '0')}',
                     style: TextStyle(
                       fontSize: 11,
-                      fontStyle: FontStyle.italic,
                       color: isMe
-                          ? Colors.white60
-                          : cs.onSurface.withValues(alpha: 0.4),
+                          ? Colors.white70
+                          : cs.onSurface.withValues(alpha: 0.6),
                     ),
                   ),
-                if (isMe) ...[
-                  const SizedBox(width: 4),
-                  Icon(
-                    message.isRead ? Icons.done_all : Icons.done,
-                    size: 14,
-                    color: message.isRead
-                        ? const Color(0xFF8ECAE6)
-                        : Colors.white60,
-                  ),
+                  if (message.isEdited && !isDeleted)
+                    Text(
+                      context.tr('edited'),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontStyle: FontStyle.italic,
+                        color: isMe
+                            ? Colors.white60
+                            : cs.onSurface.withValues(alpha: 0.4),
+                      ),
+                    ),
+                  if (isMe) ...[
+                    const SizedBox(width: 4),
+                    Icon(
+                      message.isRead
+                          ? Icons.done_all
+                          : message.isDelivered
+                              ? Icons.done_all
+                              : Icons.done,
+                      size: 14,
+                      color: message.isRead
+                          ? const Color(0xFF8ECAE6)
+                          : message.isDelivered
+                              ? (isMe ? Colors.white38 : cs.onSurface.withValues(alpha: 0.4))
+                              : Colors.white60,
+                    ),
+                  ],
                 ],
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );
 
-    if (!isMe) return bubble;
+    return bubble;
+  }
 
-    return GestureDetector(
-      onLongPress: () => _showMessageActions(message),
-      child: bubble,
+  Widget _buildReplyPreview(Message message, bool isMe, ColorScheme cs) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: isMe ? Colors.white.withValues(alpha: 0.15) : cs.primary.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border(
+          left: BorderSide(
+            color: isMe ? Colors.white.withValues(alpha: 0.4) : cs.primary,
+            width: 3,
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            message.replyToSender ?? '',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: isMe ? Colors.white.withValues(alpha: 0.8) : cs.primary,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            message.replyToContent!,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 12,
+              color: isMe ? Colors.white70 : cs.onSurface.withValues(alpha: 0.6),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
+  Widget _buildReactions(Message message, bool isMe) {
+    final reactions = message.reactions;
+    if (reactions.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Wrap(
+        spacing: 4,
+        children: reactions.entries.map((entry) {
+          return GestureDetector(
+            onTap: () => chatService.addReaction(
+              otherUserId: widget.receiverId,
+              messageId: message.id,
+              emoji: entry.key,
+            ),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: isMe ? Colors.white.withValues(alpha: 0.2) : Colors.grey.shade200,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(entry.key, style: const TextStyle(fontSize: 14)),
+                  if (entry.value.length > 1)
+                    Text(
+                      '${entry.value.length}',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: isMe ? Colors.white70 : Colors.black54,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  String? _replyToMessageId;
+  String? _replyToContent;
+  String? _replyToSender;
+
   void _showMessageActions(Message message) {
+    final isMe = message.senderId == FirebaseAuth.instance.currentUser?.uid;
+    final canDeleteForEveryone = isMe && DateTime.now().difference(message.timestamp).inMinutes <= 15;
     showModalBottomSheet(
       context: context,
       builder: (ctx) => SafeArea(
@@ -1083,19 +1187,60 @@ class _ChatPageState extends State<ChatPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.edit),
-              title: Text(context.tr('edit')),
+              leading: const Icon(Icons.reply),
+              title: Text(context.tr('reply')),
               onTap: () {
                 Navigator.pop(ctx);
-                _editingMessageId = message.id;
-                _messageController.text = message.content;
-                setState(() {});
+                setState(() {
+                  _replyToMessageId = message.id;
+                  _replyToContent = message.content.length > 50 ? '${message.content.substring(0, 50)}...' : message.content;
+                  _replyToSender = isMe ? context.tr('you') : widget.receiverName;
+                });
               },
             ),
             ListTile(
-              leading: const Icon(Icons.delete, color: Colors.red),
+              leading: const Icon(Icons.forward),
+              title: Text(context.tr('forward')),
+              onTap: () {
+                Navigator.pop(ctx);
+                _forwardMessage(message);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.emoji_emotions_outlined),
+              title: Text(context.tr('react')),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showReactionPicker(message);
+              },
+            ),
+            if (isMe)
+              ListTile(
+                leading: const Icon(Icons.edit),
+                title: Text(context.tr('edit')),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _editingMessageId = message.id;
+                  _messageController.text = message.content;
+                  setState(() {});
+                },
+              ),
+            if (canDeleteForEveryone)
+              ListTile(
+                leading: const Icon(Icons.delete_forever, color: Colors.red),
+                title: Text(
+                  context.tr('delete_for_everyone'),
+                  style: const TextStyle(color: Colors.red),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _deleteMessageForEveryone(message);
+                },
+              ),
+            ListTile(
+              leading: Icon(isMe ? Icons.delete : Icons.delete_outline, color: Colors.red),
               title: Text(
-                context.tr('delete'),
+                isMe ? context.tr('delete_for_me') : context.tr('delete'),
                 style: const TextStyle(color: Colors.red),
               ),
               onTap: () {
@@ -1107,6 +1252,118 @@ class _ChatPageState extends State<ChatPage> {
         ),
       ),
     );
+  }
+
+  void _showReactionPicker(Message message) {
+    final emojis = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: emojis.map((emoji) {
+              return GestureDetector(
+                onTap: () {
+                  Navigator.pop(ctx);
+                  chatService.addReaction(
+                    otherUserId: widget.receiverId,
+                    messageId: message.id,
+                    emoji: emoji,
+                  );
+                },
+                child: Text(emoji, style: const TextStyle(fontSize: 32)),
+              );
+            }).toList(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _forwardMessage(Message message) async {
+    try {
+      final ctx = context;
+      final users = await FirebaseFirestore.instance
+          .collection('users')
+          .orderBy('displayName')
+          .limit(50)
+          .get();
+      if (!mounted) return;
+      await showModalBottomSheet(
+        context: ctx,
+        builder: (sheetCtx) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: users.docs
+                .where((u) => u.id != FirebaseAuth.instance.currentUser?.uid)
+                .map((u) {
+                  return ListTile(
+                    leading: CircleAvatar(
+                      child: Text((u.data()['displayName'] ?? '?')[0]),
+                    ),
+                    title: Text(u.data()['displayName'] ?? 'Unknown'),
+                    onTap: () async {
+                      Navigator.pop(sheetCtx);
+                      await chatService.forwardMessage(
+                        messageId: message.id,
+                        fromUserId: widget.receiverId,
+                        toUserId: u.id,
+                      );
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(context.tr('message_forwarded'))),
+                        );
+                      }
+                    },
+                  );
+                }).toList(),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${context.tr('error')}: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteMessageForEveryone(Message message) async {
+    try {
+      await chatService.deleteMessageForEveryone(
+        otherUserId: widget.receiverId,
+        messageId: message.id,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('deleted_for_everyone'))),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteMessage(Message message) async {
+    try {
+      await chatService.deleteMessageForMe(
+        otherUserId: widget.receiverId,
+        messageId: message.id,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
+      }
+    }
   }
 
   Widget _buildVoiceBubble(Message message, bool isMe, ColorScheme cs) {
