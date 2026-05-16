@@ -147,7 +147,10 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                       orElse: () => conv.participants.isNotEmpty ? conv.participants.first : '',
                     );
                     final profile = _userProfiles[otherUserId];
-                    final name = profile?.displayName.isNotEmpty == true ? profile!.displayName : otherUserId;
+                    final storedName = conv.participantNames[otherUserId];
+                    final name = profile?.displayName.isNotEmpty == true 
+                        ? profile!.displayName 
+                        : (storedName?.isNotEmpty == true ? storedName! : otherUserId);
                     final image = profile?.profileImage;
                     final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
 

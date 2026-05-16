@@ -125,6 +125,7 @@ class Conversation {
   final int unreadCount;
   final bool isPinned;
   final bool isMuted;
+  final Map<String, String> participantNames;
 
   Conversation({
     required this.id,
@@ -134,6 +135,7 @@ class Conversation {
     this.unreadCount = 0,
     this.isPinned = false,
     this.isMuted = false,
+    this.participantNames = const {},
   });
 
   factory Conversation.fromFirestore(DocumentSnapshot doc) {
@@ -148,6 +150,7 @@ class Conversation {
       unreadCount: data['unreadCount'] ?? 0,
       isPinned: data['isPinned'] ?? false,
       isMuted: data['isMuted'] ?? false,
+      participantNames: Map<String, String>.from(data['participantNames'] ?? {}),
     );
   }
 
@@ -158,5 +161,6 @@ class Conversation {
     'unreadCount': unreadCount,
     'isPinned': isPinned,
     'isMuted': isMuted,
+    'participantNames': participantNames,
   };
 }
