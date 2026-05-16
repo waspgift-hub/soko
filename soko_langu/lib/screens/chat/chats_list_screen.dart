@@ -112,46 +112,10 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     ChatService().deleteConversation(otherUserId);
   }
 
-  List<_ChatItem> _buildUnifiedList() {
-    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
-    final items = <_ChatItem>[];
-
-    for (final conv in _conversations) {
-      final otherUserId = conv.participants.firstWhere(
-        (id) => id != currentUid,
-        orElse: () => conv.participants.isNotEmpty ? conv.participants.first : '',
-      );
-      items.add(_ChatItem(
-        type: _ChatType.conversation,
-        id: conv.id,
-        otherUserId: otherUserId,
-        lastMessage: conv.lastMessage,
-        lastMessageTime: conv.lastMessageTime,
-        unreadCount: conv.unreadCount,
-        profile: _userProfiles[otherUserId],
-      ));
-    }
-
-    for (final group in _groups) {
-      items.add(_ChatItem(
-        type: _ChatType.group,
-        id: group.id,
-        group: group,
-        lastMessage: group.lastMessage,
-        lastMessageTime: group.lastMessageTime,
-        unreadCount: group.unreadCount,
-      ));
-    }
-
-    items.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
-    return items;
-  }
-
   @override
   Widget build(BuildContext context) {
     final currentUser = FirebaseAuth.instance.currentUser;
-    final unifiedList = _buildUnifiedList();
-    final hasItems = unifiedList.isNotEmpty;
+    final hasItems = _conversations.isNotEmpty || _groups.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(title: Text(context.tr('chats'))),
@@ -163,168 +127,88 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
       body: _loading
           ? const GoogleLoadingPage()
           : !hasItems
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.chat_bubble_outline,
-                    size: 64,
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.4),
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.chat_bubble_outline, size: 64, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4)),
+                      const SizedBox(height: 16),
+                      Text(context.tr('no_conversations'), style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6), fontSize: 16)),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    context.tr('no_conversations'),
-                    style: TextStyle(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.6),
-                      fontSize: 16,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    context.tr('chat_empty'),
-                    style: TextStyle(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.5),
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
-              ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(12),
-              itemCount: unifiedList.length,
-              itemBuilder: (context, index) {
-                final item = unifiedList[index];
-                if (item.type == _ChatType.group) {
-                  return _GroupTile(
-                    group: item.group!,
-                    profiles: _userProfiles,
-                    currentUid: currentUser?.uid ?? '',
-                  );
-                }
-                return _ConversationTile(
-                  conversation: _conversations.firstWhere(
-                    (c) => c.id == item.id,
-                    orElse: () => _conversations.first,
-                  ),
-                  otherUserId: item.otherUserId,
-                  profile: item.profile,
-                  onDelete: () => _deleteConversation(item.otherUserId),
-                );
-              },
-            ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: _conversations.length,
+                  itemBuilder: (context, index) {
+                    final conv = _conversations[index];
+                    final otherUserId = conv.participants.firstWhere(
+                      (id) => id != currentUser?.uid,
+                      orElse: () => conv.participants.isNotEmpty ? conv.participants.first : '',
+                    );
+                    final profile = _userProfiles[otherUserId];
+                    final name = profile?.displayName.isNotEmpty == true ? profile!.displayName : otherUserId;
+                    final image = profile?.profileImage;
+                    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: Stack(
+                          children: [
+                            CircleAvatar(
+                              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                              backgroundImage: image != null && image.isNotEmpty ? NetworkImage(image) : null,
+                              child: image == null || image.isEmpty ? Text(initial, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)) : null,
+                            ),
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: StreamBuilder<bool>(
+                                stream: PresenceService().isOnline(otherUserId),
+                                builder: (context, snap) {
+                                  final online = snap.data ?? false;
+                                  return Container(
+                                    width: 12,
+                                    height: 12,
+                                    decoration: BoxDecoration(
+                                      color: online ? Colors.greenAccent : Colors.grey,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.white, width: 2),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        title: Row(
+                          children: [
+                            Expanded(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                            VerifiedBadge(tier: profile?.accountTier ?? 'basic', size: 14),
+                          ],
+                        ),
+                        subtitle: Text(conv.lastMessage, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        trailing: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(_formatTime(conv.lastMessageTime), style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))),
+                            if (conv.unreadCount > 0)
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle),
+                                child: Text("${conv.unreadCount}", style: const TextStyle(color: Colors.white, fontSize: 12)),
+                              ),
+                          ],
+                        ),
+                        onTap: () => context.push('${AppRoutes.chat}/$otherUserId', extra: {'name': name}),
+                        onLongPress: () => _showOptions(context, conv, otherUserId),
+                      ),
+                    );
+                  },
+                ),
     );
   }
-}
-
-enum _ChatType { conversation, group }
-
-class _ChatItem {
-  final _ChatType type;
-  final String id;
-  final String otherUserId;
-  final GroupChat? group;
-  final String lastMessage;
-  final DateTime lastMessageTime;
-  final int unreadCount;
-  final UserProfile? profile;
-
-  _ChatItem({
-    required this.type,
-    required this.id,
-    this.otherUserId = '',
-    this.group,
-    required this.lastMessage,
-    required this.lastMessageTime,
-    this.unreadCount = 0,
-    this.profile,
-  });
-}
-
-class _GroupTile extends StatelessWidget {
-  final GroupChat group;
-  final Map<String, UserProfile> profiles;
-  final String currentUid;
-
-  const _GroupTile({
-    required this.group,
-    required this.profiles,
-    required this.currentUid,
-  });
-
-  String _getMemberNames() {
-    final names = <String>[];
-    for (final pid in group.participantIds.take(3)) {
-      if (pid == currentUid) continue;
-      final p = profiles[pid];
-      if (p != null && p.displayName.isNotEmpty) {
-        names.add(p.displayName);
-      }
-    }
-    return names.join(', ');
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final memberNames = _getMemberNames();
-    final subtitle = group.lastMessage.isNotEmpty
-        ? group.lastMessage
-        : memberNames.isNotEmpty
-            ? '${group.participantIds.length} members: $memberNames'
-            : '${group.participantIds.length} members';
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
-          backgroundImage: group.imageUrl.isNotEmpty
-              ? NetworkImage(group.imageUrl)
-              : null,
-          child: group.imageUrl.isEmpty
-              ? const Icon(Icons.group, color: Colors.white)
-              : null,
-        ),
-        title: Text(group.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
-        trailing: group.unreadCount > 0
-            ? Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary,
-                  shape: BoxShape.circle,
-                ),
-                child: Text(
-                  '${group.unreadCount}',
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                ),
-              )
-            : null,
-        onTap: () => context.push('${AppRoutes.groupChat}/${group.id}'),
-      ),
-    );
-  }
-}
-
-class _ConversationTile extends StatelessWidget {
-  final Conversation conversation;
-  final String otherUserId;
-  final UserProfile? profile;
-  final VoidCallback onDelete;
-
-  const _ConversationTile({
-    required this.conversation,
-    required this.otherUserId,
-    this.profile,
-    required this.onDelete,
-  });
 
   String _formatTime(DateTime time) {
     final now = DateTime.now();
@@ -344,7 +228,7 @@ class _ConversationTile extends StatelessWidget {
     return '${time.day}/${time.month}';
   }
 
-  void _showOptions(BuildContext context) {
+  void _showOptions(BuildContext context, Conversation conv, String otherUserId) {
     final chatService = ChatService();
     showModalBottomSheet(
       context: context,
@@ -353,176 +237,40 @@ class _ConversationTile extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: Icon(conversation.isPinned ? Icons.push_pin : Icons.push_pin_outlined),
-              title: Text(conversation.isPinned ? context.tr('unpin_chat') : context.tr('pin_chat')),
+              leading: Icon(conv.isPinned ? Icons.push_pin : Icons.push_pin_outlined),
+              title: Text(conv.isPinned ? context.tr('unpin_chat') : context.tr('pin_chat')),
               onTap: () {
                 Navigator.pop(ctx);
-                if (conversation.isPinned) {
-                  chatService.unpinConversation(otherUserId);
-                } else {
-                  chatService.pinConversation(otherUserId);
-                }
+                conv.isPinned ? chatService.unpinConversation(otherUserId) : chatService.pinConversation(otherUserId);
               },
             ),
             ListTile(
-              leading: Icon(conversation.isMuted ? Icons.notifications_off : Icons.notifications),
-              title: Text(conversation.isMuted ? context.tr('unmute_chat') : context.tr('mute_chat')),
+              leading: Icon(conv.isMuted ? Icons.notifications_off : Icons.notifications),
+              title: Text(conv.isMuted ? context.tr('unmute_chat') : context.tr('mute_chat')),
               onTap: () {
                 Navigator.pop(ctx);
-                if (conversation.isMuted) {
-                  chatService.unmuteConversation(otherUserId);
-                } else {
-                  chatService.muteConversation(otherUserId);
-                }
+                conv.isMuted ? chatService.unmuteConversation(otherUserId) : chatService.muteConversation(otherUserId);
               },
             ),
             ListTile(
               leading: const Icon(Icons.block, color: Colors.red),
-              title: Text(
-                context.tr('block_user'),
-                style: const TextStyle(color: Colors.red),
-              ),
+              title: Text(context.tr('block_user'), style: const TextStyle(color: Colors.red)),
               onTap: () {
                 Navigator.pop(ctx);
                 chatService.blockUser(otherUserId);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(context.tr('user_blocked'))),
-                );
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('user_blocked'))));
               },
             ),
             ListTile(
               leading: const Icon(Icons.delete, color: Colors.red),
-              title: Text(
-                context.tr('delete_chat'),
-                style: const TextStyle(color: Colors.red),
-              ),
+              title: Text(context.tr('delete_chat'), style: const TextStyle(color: Colors.red)),
               onTap: () {
                 Navigator.pop(ctx);
-                onDelete();
+                _deleteConversation(otherUserId);
               },
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final name = profile?.displayName.isNotEmpty == true
-        ? profile!.displayName
-        : otherUserId;
-    final image = profile?.profileImage;
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      color: conversation.isPinned
-          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.05)
-          : null,
-      child: ListTile(
-        leading: Stack(
-          children: [
-            CircleAvatar(
-              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-              backgroundImage: image != null && image.isNotEmpty
-                  ? NetworkImage(image)
-                  : null,
-              child: image == null || image.isEmpty
-                  ? Text(
-                      initial,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    )
-                  : null,
-            ),
-            Positioned(
-              right: 0,
-              bottom: 0,
-              child: StreamBuilder<bool>(
-                stream: PresenceService().isOnline(otherUserId),
-                builder: (context, snap) {
-                  final online = snap.data ?? false;
-                  return Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: online ? Colors.greenAccent : Colors.grey,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-        title: Row(
-          children: [
-            if (conversation.isPinned)
-              Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: Icon(Icons.push_pin, size: 14, color: Theme.of(context).colorScheme.primary),
-              ),
-            Expanded(
-              child: Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            VerifiedBadge(tier: profile?.accountTier ?? 'basic', size: 14),
-          ],
-        ),
-        subtitle: Row(
-          children: [
-            if (conversation.isMuted)
-              Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: Icon(Icons.notifications_off, size: 12, color: Colors.grey),
-              ),
-            Expanded(
-              child: Text(
-                conversation.lastMessage,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              _formatTime(conversation.lastMessageTime),
-              style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.6),
-              ),
-            ),
-            if (conversation.unreadCount > 0)
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary,
-                  shape: BoxShape.circle,
-                ),
-                child: Text(
-                  "${conversation.unreadCount}",
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                ),
-              ),
-          ],
-        ),
-        onTap: () => context.push(
-          '${AppRoutes.chat}/$otherUserId',
-          extra: {'name': name},
-        ),
-        onLongPress: () => _showOptions(context),
       ),
     );
   }
