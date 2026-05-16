@@ -175,15 +175,6 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       final token = await getAgoraToken(
         channelName: widget.channelName, role: 'broadcaster',
       );
-      if (token.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(context.tr('token_error'))),
-          );
-          setState(() => _initFailed = true);
-        }
-        return;
-      }
       await engine.joinChannel(
         token: token,
         channelId: widget.channelName,
