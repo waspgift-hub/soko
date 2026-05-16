@@ -90,7 +90,6 @@ class _AudioCallScreenState extends State<AudioCallScreen> {
       final token = await getAgoraToken(
         channelName: widget.channelName, role: 'broadcaster',
       );
-      if (token.isEmpty || !mounted) return;
 
       await _agoraService.engine.joinChannel(
         token: token,

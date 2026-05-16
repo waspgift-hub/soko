@@ -12,29 +12,6 @@ Future<String> getAgoraToken({
   String role = 'audience',
   int retries = 2,
 }) async {
-  for (int attempt = 0; attempt <= retries; attempt++) {
-    try {
-      final resp = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/agora-token'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'channelName': channelName,
-          'uid': uid,
-          'role': role,
-        }),
-      ).timeout(const Duration(seconds: 10));
-      if (resp.statusCode == 200) {
-        final data = jsonDecode(resp.body);
-        final token = data['token'] as String?;
-        if (token != null && token.isNotEmpty) return token;
-      }
-      debugPrint('AgoraToken attempt $attempt: status ${resp.statusCode}');
-    } catch (e) {
-      debugPrint('AgoraToken attempt $attempt: $e');
-    }
-    if (attempt < retries) {
-      await Future.delayed(Duration(seconds: 1 << attempt));
-    }
-  }
+  // Serverless mode: Return empty string to use App ID directly
   return '';
 }
