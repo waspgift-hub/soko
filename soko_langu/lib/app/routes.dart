@@ -53,4 +53,7 @@ class AppRoutes {
   static const String groupChat = '/group-chat';
   static const String onboarding = '/onboarding';
   static const String privacyPolicy = '/privacy-policy';
+  static const String status = '/status';
+  static const String statusViewer = '/status-viewer';
+  static const String addStatus = '/add-status';
 }

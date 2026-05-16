@@ -7,6 +7,7 @@ import '../screens/home/home_screen.dart';
 import '../screens/cart/cart_screen.dart';
 import '../screens/feed/feed_screen.dart';
 import '../screens/chat/chats_list_screen.dart';
+import '../screens/status/status_list_screen.dart';
 import '../extensions/context_tr.dart';
 import '../main.dart';
 import 'offline_banner.dart';
@@ -26,6 +27,7 @@ class _MainScreenState extends State<MainScreen> {
   final List<Widget> _screens = [
     const HomeScreen(),
     const FeedScreen(),
+    const StatusListScreen(),
     const CartScreen(),
     const ChatsListScreen(),
     const ProfilePage(),
@@ -88,6 +90,10 @@ class _MainScreenState extends State<MainScreen> {
           BottomNavigationBarItem(
             icon: const Icon(Icons.live_tv),
             label: context.tr('live_tab'),
+          ),
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.auto_awesome),
+            label: context.tr('status'),
           ),
           BottomNavigationBarItem(
             icon: const Icon(Icons.shopping_cart),

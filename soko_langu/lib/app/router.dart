@@ -50,6 +50,10 @@ import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_ad_revenue_screen.dart';
 import '../screens/seller/earnings_dashboard.dart';
 import '../screens/music/music_player_screen.dart';
+import '../models/status_model.dart';
+import '../screens/status/status_list_screen.dart';
+import '../screens/status/status_viewer_screen.dart';
+import '../screens/status/add_status_screen.dart';
 import 'routes.dart';
 import 'app_state.dart' as app_state;
 
@@ -322,6 +326,24 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.onboarding,
         builder: (context, state) => const OnboardingScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.status,
+        builder: (context, state) => const StatusListScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.statusViewer,
+        builder: (context, state) {
+          final data = state.extra as Map<String, dynamic>;
+          return StatusViewerScreen(
+            updates: (data['updates'] as List).cast<StatusUpdate>(),
+            initialIndex: data['initialIndex'] as int? ?? 0,
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.addStatus,
+        builder: (context, state) => const AddStatusScreen(),
       ),
     ],
   );
