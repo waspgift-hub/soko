@@ -161,12 +161,6 @@ class _LiveScreenState extends State<LiveScreen> {
         channelName: widget.stream.channelName,
         role: 'audience',
       );
-      if (token.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('token_error'))));
-        }
-        return;
-      }
       await _agoraService.engine.setClientRole(role: ClientRoleType.clientRoleAudience);
       await _agoraService.engine.joinChannel(
         token: token,
