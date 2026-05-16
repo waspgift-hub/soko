@@ -7,143 +7,265 @@ class ChatService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  String get _uid => _auth.currentUser?.uid ?? '';
+  bool get _loggedIn => _auth.currentUser != null;
+
   String _getConversationId(String userId1, String userId2) {
     return userId1.compareTo(userId2) < 0
         ? '${userId1}_$userId2'
         : '${userId2}_$userId1';
   }
 
-  // =========================
-  // 🔍 CHECK IF CONVERSATION EXISTS
-  // =========================
+  Future<bool> isBlocked(String otherUserId) async {
+    if (!_loggedIn) return false;
+    final doc = await _db.collection('blocked').doc(_getConversationId(_uid, otherUserId)).get();
+    return doc.exists;
+  }
+
+  Future<void> blockUser(String otherUserId) async {
+    if (!_loggedIn) return;
+    await _db.collection('blocked').doc(_getConversationId(_uid, otherUserId)).set({
+      'userId': _uid,
+      'blockedUserId': otherUserId,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> unblockUser(String otherUserId) async {
+    if (!_loggedIn) return;
+    await _db.collection('blocked').doc(_getConversationId(_uid, otherUserId)).delete();
+  }
+
+  Stream<List<String>> getBlockedUsers() {
+    if (!_loggedIn) return Stream.value([]);
+    return _db
+        .collection('blocked')
+        .where('userId', isEqualTo: _uid)
+        .snapshots()
+        .map((snap) => snap.docs.map((doc) => doc.data()['blockedUserId'] as String).toList());
+  }
+
+  Future<void> pinConversation(String otherUserId) async {
+    if (!_loggedIn) return;
+    final convId = _getConversationId(_uid, otherUserId);
+    await _db.collection('conversations').doc(convId).set({'isPinned': true}, SetOptions(merge: true));
+  }
+
+  Future<void> unpinConversation(String otherUserId) async {
+    if (!_loggedIn) return;
+    final convId = _getConversationId(_uid, otherUserId);
+    await _db.collection('conversations').doc(convId).set({'isPinned': false}, SetOptions(merge: true));
+  }
+
+  Future<void> muteConversation(String otherUserId) async {
+    if (!_loggedIn) return;
+    final convId = _getConversationId(_uid, otherUserId);
+    await _db.collection('conversations').doc(convId).set({'isMuted': true}, SetOptions(merge: true));
+  }
+
+  Future<void> unmuteConversation(String otherUserId) async {
+    if (!_loggedIn) return;
+    final convId = _getConversationId(_uid, otherUserId);
+    await _db.collection('conversations').doc(convId).set({'isMuted': false}, SetOptions(merge: true));
+  }
+
   Future<bool> hasConversation(String otherUserId) async {
-    final currentUser = _auth.currentUser;
-    if (currentUser == null) return false;
-    final conversationId = _getConversationId(currentUser.uid, otherUserId);
+    if (!_loggedIn) return false;
+    final conversationId = _getConversationId(_uid, otherUserId);
     final doc = await _db.collection("conversations").doc(conversationId).get();
     return doc.exists;
   }
 
-  // =========================
-  // 💬 SEND MESSAGE
-  // =========================
   Future<void> sendMessage({
     required String receiverId,
     required String content,
     String? productId,
     String? productName,
+    String? replyTo,
+    String? replyToContent,
+    String? replyToSender,
+    String messageType = 'text',
   }) async {
-    try {
-      final sender = _auth.currentUser;
-      if (sender == null) throw Exception("User not logged in");
+    if (!_loggedIn) throw Exception("User not logged in");
 
-      final conversationId = _getConversationId(sender.uid, receiverId);
+    final conversationId = _getConversationId(_uid, receiverId);
 
-      await _db
-          .collection("conversations")
-          .doc(conversationId)
-          .collection("messages")
-          .add({
-            'senderId': sender.uid,
-            'receiverId': receiverId,
-            'content': content,
-            'timestamp': FieldValue.serverTimestamp(),
-            'isRead': false,
-            'isEdited': false,
-            'productId': productId,
-            'productName': productName,
-          });
+    await _db
+        .collection("conversations")
+        .doc(conversationId)
+        .collection("messages")
+        .add({
+          'senderId': _uid,
+          'receiverId': receiverId,
+          'content': content,
+          'timestamp': FieldValue.serverTimestamp(),
+          'isRead': false,
+          'isDelivered': true,
+          'isEdited': false,
+          'productId': productId,
+          'productName': productName,
+          'replyTo': replyTo,
+          'replyToContent': replyToContent,
+          'replyToSender': replyToSender,
+          'messageType': messageType,
+          'isDeletedForEveryone': false,
+          'reactions': {},
+        });
 
-      await _db.collection("conversations").doc(conversationId).set({
-        'participants': [sender.uid, receiverId],
-        'lastMessage': content,
-        'lastMessageTime': FieldValue.serverTimestamp(),
-        'otherUserName': sender.displayName ?? sender.email ?? '',
-        'otherUserImage': sender.photoURL,
-        'unreadCount': FieldValue.increment(1),
-      }, SetOptions(merge: true));
+    final displayContent = messageType == 'image' ? '📷 Picha' : messageType == 'voice' ? '🎤 Sauti' : content;
+    await _db.collection("conversations").doc(conversationId).set({
+      'participants': [_uid, receiverId],
+      'lastMessage': displayContent,
+      'lastMessageTime': FieldValue.serverTimestamp(),
+      'otherUserName': _auth.currentUser!.displayName ?? _auth.currentUser!.email ?? '',
+      'otherUserImage': _auth.currentUser!.photoURL,
+      'unreadCount': FieldValue.increment(1),
+    }, SetOptions(merge: true));
 
-      NotificationService().sendNotification(
-        userId: receiverId,
-        title: sender.displayName ?? sender.email ?? 'New message',
-        body: content,
-        data: {
-          'type': 'chat',
-          'senderId': sender.uid,
-          'conversationId': conversationId,
-          'senderName': sender.displayName ?? sender.email ?? '',
-        },
-      );
-    } catch (e) {
-      throw Exception("Failed to send message: $e");
-    }
+    NotificationService().sendNotification(
+      userId: receiverId,
+      title: _auth.currentUser!.displayName ?? _auth.currentUser!.email ?? 'New message',
+      body: displayContent,
+      data: {
+        'type': 'chat',
+        'senderId': _uid,
+        'conversationId': conversationId,
+        'senderName': _auth.currentUser!.displayName ?? _auth.currentUser!.email ?? '',
+      },
+    );
   }
 
-  // =========================
-  // ✏️ EDIT MESSAGE
-  // =========================
   Future<void> editMessage({
     required String otherUserId,
     required String messageId,
     required String newContent,
   }) async {
-    try {
-      final currentUser = _auth.currentUser;
-      if (currentUser == null) throw Exception("User not logged in");
-
-      final conversationId = _getConversationId(currentUser.uid, otherUserId);
-
-      await _db
-          .collection("conversations")
-          .doc(conversationId)
-          .collection("messages")
-          .doc(messageId)
-          .update({'content': newContent, 'isEdited': true});
-
-      await _db.collection("conversations").doc(conversationId).update({
-        'lastMessage': newContent,
-      });
-    } catch (e) {
-      throw Exception("Failed to edit message: $e");
-    }
+    if (!_loggedIn) throw Exception("User not logged in");
+    final conversationId = _getConversationId(_uid, otherUserId);
+    await _db
+        .collection("conversations")
+        .doc(conversationId)
+        .collection("messages")
+        .doc(messageId)
+        .update({'content': newContent, 'isEdited': true});
   }
 
-  // =========================
-  // 🗑️ DELETE MESSAGE (soft delete)
-  // =========================
-  Future<void> deleteMessage({
+  Future<void> deleteMessageForMe({
     required String otherUserId,
     required String messageId,
   }) async {
-    try {
-      final currentUser = _auth.currentUser;
-      if (currentUser == null) throw Exception("User not logged in");
-
-      final conversationId = _getConversationId(currentUser.uid, otherUserId);
-
-      await _db
-          .collection("conversations")
-          .doc(conversationId)
-          .collection("messages")
-          .doc(messageId)
-          .update({'content': 'deleted', 'isEdited': false});
-    } catch (e) {
-      throw Exception("Failed to delete message: $e");
-    }
+    if (!_loggedIn) throw Exception("User not logged in");
+    final conversationId = _getConversationId(_uid, otherUserId);
+    await _db
+        .collection("conversations")
+        .doc(conversationId)
+        .collection("messages")
+        .doc(messageId)
+        .update({'content': 'deleted', 'isEdited': false});
   }
 
-  // =========================
-  // 📨 GET MESSAGES (paged)
-  // =========================
-  Stream<List<Message>> getMessages(
-    String otherUserId, {
-    int limit = 50,
-  }) {
-    final currentUser = _auth.currentUser;
-    if (currentUser == null) return Stream.value([]);
+  Future<void> deleteMessageForEveryone({
+    required String otherUserId,
+    required String messageId,
+  }) async {
+    if (!_loggedIn) throw Exception("User not logged in");
+    final conversationId = _getConversationId(_uid, otherUserId);
+    final msgDoc = _db
+        .collection("conversations")
+        .doc(conversationId)
+        .collection("messages")
+        .doc(messageId);
+    final snap = await msgDoc.get();
+    if (!snap.exists) return;
+    final msgTime = (snap.data()?['timestamp'] as Timestamp?)?.toDate();
+    if (msgTime == null) return;
+    final diff = DateTime.now().difference(msgTime);
+    if (diff.inMinutes > 15) throw Exception('Muda umeisha. Unaweza futa ndani ya dakika 15 tu.');
+    await msgDoc.update({
+      'content': 'Umejumbe imefutwa',
+      'isDeletedForEveryone': true,
+      'isEdited': false,
+    });
+  }
 
-    final conversationId = _getConversationId(currentUser.uid, otherUserId);
+  Future<void> forwardMessage({
+    required String messageId,
+    required String fromUserId,
+    required String toUserId,
+  }) async {
+    if (!_loggedIn) throw Exception("User not logged in");
+    final fromConvId = _getConversationId(_uid, fromUserId);
+    final msgDoc = await _db
+        .collection("conversations")
+        .doc(fromConvId)
+        .collection("messages")
+        .doc(messageId)
+        .get();
+    if (!msgDoc.exists) return;
+    final data = msgDoc.data()!;
+    final toConvId = _getConversationId(_uid, toUserId);
+    await _db
+        .collection("conversations")
+        .doc(toConvId)
+        .collection("messages")
+        .add({
+          'senderId': _uid,
+          'receiverId': toUserId,
+          'content': data['content'] ?? '',
+          'timestamp': FieldValue.serverTimestamp(),
+          'isRead': false,
+          'isDelivered': true,
+          'isEdited': false,
+          'messageType': data['messageType'] ?? 'text',
+          'isDeletedForEveryone': false,
+          'reactions': {},
+          'replyToContent': '↪️ Imetumwa tena',
+          'replyToSender': data['senderId'],
+        });
+    final displayContent = (data['messageType'] ?? 'text') == 'image' ? '📷 Picha' : (data['content'] ?? '');
+    await _db.collection("conversations").doc(toConvId).set({
+      'participants': [_uid, toUserId],
+      'lastMessage': displayContent,
+      'lastMessageTime': FieldValue.serverTimestamp(),
+      'otherUserName': _auth.currentUser!.displayName ?? _auth.currentUser!.email ?? '',
+      'otherUserImage': _auth.currentUser!.photoURL,
+      'unreadCount': FieldValue.increment(1),
+    }, SetOptions(merge: true));
+  }
 
+  Future<void> addReaction({
+    required String otherUserId,
+    required String messageId,
+    required String emoji,
+  }) async {
+    if (!_loggedIn) return;
+    final conversationId = _getConversationId(_uid, otherUserId);
+    final msgRef = _db
+        .collection("conversations")
+        .doc(conversationId)
+        .collection("messages")
+        .doc(messageId);
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(msgRef);
+      if (!snap.exists) return;
+      final data = snap.data() ?? {};
+      final reactions = Map<String, dynamic>.from(data['reactions'] ?? {});
+      final users = List<String>.from(reactions[emoji] ?? []);
+      if (users.contains(_uid)) {
+        users.remove(_uid);
+        if (users.isEmpty) reactions.remove(emoji);
+        else reactions[emoji] = users;
+      } else {
+        users.add(_uid);
+        reactions[emoji] = users;
+      }
+      tx.update(msgRef, {'reactions': reactions});
+    });
+  }
+
+  Stream<List<Message>> getMessages(String otherUserId, {int limit = 50}) {
+    if (!_loggedIn) return Stream.value([]);
+    final conversationId = _getConversationId(_uid, otherUserId);
     return _db
         .collection("conversations")
         .doc(conversationId)
@@ -151,109 +273,93 @@ class ChatService {
         .orderBy("timestamp", descending: true)
         .limit(limit)
         .snapshots()
-        .map(
-          (snapshot) =>
-              snapshot.docs.map((doc) => Message.fromFirestore(doc)).toList(),
-        );
+        .map((snapshot) => snapshot.docs.map((doc) => Message.fromFirestore(doc)).toList());
   }
 
-  // =========================
-  // 📨 LOAD OLDER MESSAGES (pagination)
-  // =========================
   Future<List<Message>> loadOlderMessages(
     String otherUserId, {
     required DocumentSnapshot? lastDoc,
     int limit = 30,
   }) async {
-    final currentUser = _auth.currentUser;
-    if (currentUser == null) return [];
-
-    final conversationId = _getConversationId(currentUser.uid, otherUserId);
+    if (!_loggedIn) return [];
+    final conversationId = _getConversationId(_uid, otherUserId);
     var query = _db
         .collection("conversations")
         .doc(conversationId)
         .collection("messages")
         .orderBy("timestamp", descending: true)
         .limit(limit);
-
-    if (lastDoc != null) {
-      query = query.startAfterDocument(lastDoc);
-    }
-
+    if (lastDoc != null) query = query.startAfterDocument(lastDoc);
     final snap = await query.get();
     return snap.docs.map((doc) => Message.fromFirestore(doc)).toList();
   }
 
-  // =========================
-  // 📋 GET CONVERSATIONS
-  // =========================
-  Stream<List<Conversation>> getConversations() {
-    final currentUser = _auth.currentUser;
-    if (currentUser == null) return Stream.value([]);
-
-    return _db
+  Future<List<Message>> searchMessages(String otherUserId, String query) async {
+    if (!_loggedIn) return [];
+    final conversationId = _getConversationId(_uid, otherUserId);
+    final snap = await _db
         .collection("conversations")
-        .where("participants", arrayContains: currentUser.uid)
-        .orderBy("lastMessageTime", descending: true)
-        .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => Conversation.fromFirestore(doc))
-              .toList(),
-        );
+        .doc(conversationId)
+        .collection("messages")
+        .orderBy("timestamp", descending: true)
+        .limit(200)
+        .get();
+    return snap.docs
+        .map((doc) => Message.fromFirestore(doc))
+        .where((msg) => msg.content.toLowerCase().contains(query.toLowerCase()))
+        .toList();
   }
 
-  // =========================
-  // 🗑️ DELETE CONVERSATION
-  // =========================
-  Future<void> deleteConversation(String otherUserId) async {
-    final currentUser = _auth.currentUser;
-    if (currentUser == null) throw Exception("Not logged in");
-    final conversationId = _getConversationId(currentUser.uid, otherUserId);
+  Stream<List<Conversation>> getConversations() {
+    if (!_loggedIn) return Stream.value([]);
+    return _db
+        .collection("conversations")
+        .where("participants", arrayContains: _uid)
+        .orderBy("lastMessageTime", descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => Conversation.fromFirestore(doc)).toList());
+  }
 
+  Future<void> deleteConversation(String otherUserId) async {
+    if (!_loggedIn) throw Exception("Not logged in");
+    final conversationId = _getConversationId(_uid, otherUserId);
     final messages = await _db
         .collection("conversations")
         .doc(conversationId)
         .collection("messages")
         .get();
-
     final batch = _db.batch();
-    for (var msg in messages.docs) {
-      batch.delete(msg.reference);
-    }
+    for (var msg in messages.docs) batch.delete(msg.reference);
     batch.delete(_db.collection("conversations").doc(conversationId));
     await batch.commit();
   }
 
-  // =========================
-  // ✅ MARK MESSAGES AS READ
-  // =========================
   Future<void> markAsRead(String otherUserId) async {
-    try {
-      final currentUser = _auth.currentUser;
-      if (currentUser == null) return;
-
-      final conversationId = _getConversationId(currentUser.uid, otherUserId);
-
-      final messages = await _db
-          .collection("conversations")
-          .doc(conversationId)
-          .collection("messages")
-          .where("receiverId", isEqualTo: currentUser.uid)
-          .where("isRead", isEqualTo: false)
-          .get();
-
-      final batch = _db.batch();
-      for (var doc in messages.docs) {
-        batch.update(doc.reference, {'isRead': true});
-      }
-      await batch.commit();
-
-      await _db.collection("conversations").doc(conversationId).update({
-        'unreadCount': 0,
-      });
-    } catch (e) {
-      throw Exception("Failed to mark as read: $e");
+    if (!_loggedIn) return;
+    final conversationId = _getConversationId(_uid, otherUserId);
+    final messages = await _db
+        .collection("conversations")
+        .doc(conversationId)
+        .collection("messages")
+        .where("receiverId", isEqualTo: _uid)
+        .where("isRead", isEqualTo: false)
+        .get();
+    final batch = _db.batch();
+    for (var doc in messages.docs) {
+      batch.update(doc.reference, {'isRead': true});
     }
+    await batch.commit();
+    await _db.collection("conversations").doc(conversationId).update({'unreadCount': 0});
+  }
+
+  Future<void> markAsDelivered(String messageId, String otherUserId) async {
+    if (!_loggedIn) return;
+    final conversationId = _getConversationId(_uid, otherUserId);
+    await _db
+        .collection("conversations")
+        .doc(conversationId)
+        .collection("messages")
+        .doc(messageId)
+        .update({'isDelivered': true});
   }
 }
