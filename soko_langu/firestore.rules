@@ -6,37 +6,68 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'admin@soko-langu.com' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true
+      );
+    }
+
+    function kycApproved() {
+      return isSignedIn() && (
+        request.auth.token.email == 'admin@soko-langu.com' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.kyc.approved == true
+      );
+    }
+
+    function notSuspended() {
+      return isSignedIn() && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isSuspended != true
+      );
+    }
+
     // ─── USERS ──────────────────────────────────────────────
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.auth.uid == userId;
-      allow update: if isSignedIn() && request.auth.uid == userId;
-      allow delete: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if isOwner(userId);
 
       match /following/{followingId} {
-        allow read, write: if isSignedIn() && request.auth.uid == userId;
+        allow read, write: if isOwner(userId);
       }
 
       match /followers/{followerId} {
-        allow read, write: if isSignedIn() && request.auth.uid == userId;
+        allow read, write: if isOwner(userId);
       }
 
       match /admin_withdrawals/{wdId} {
-        allow read, write: if isSignedIn() && request.auth.uid == userId;
+        allow read, write: if isOwner(userId);
       }
     }
 
     // ─── PRODUCTS ───────────────────────────────────────────
     match /products/{productId} {
       allow read: if true;
-      allow create, update, delete: if isSignedIn();
+      allow create: if isSignedIn() && notSuspended() && request.resource.data.sellerId == request.auth.uid;
+      allow update: if isSignedIn() && notSuspended() && resource.data.sellerId == request.auth.uid;
+      allow delete: if isSignedIn() && notSuspended() && resource.data.sellerId == request.auth.uid;
 
       match /comments/{commentId} {
         allow read: if true;
-        allow create, update, delete: if isSignedIn();
+        allow create: if isSignedIn() && notSuspended();
+        allow update: if isSignedIn() && notSuspended();
+        allow delete: if isSignedIn() && notSuspended();
 
         match /replies/{replyId} {
-          allow read, write: if isSignedIn();
+          allow read: if true;
+          allow create: if isSignedIn() && notSuspended();
+          allow update: if isSignedIn() && notSuspended();
+          allow delete: if isSignedIn() && notSuspended();
         }
       }
     }
@@ -49,15 +80,29 @@ service cloud.firestore {
 
     // ─── ORDERS ─────────────────────────────────────────────
     match /orders/{orderId} {
-      allow read, write: if isSignedIn();
+      allow read: if isSignedIn() && (
+        resource.data.buyerId == request.auth.uid ||
+        resource.data.sellerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && request.resource.data.buyerId == request.auth.uid;
+      allow update: if isSignedIn() && (
+        resource.data.buyerId == request.auth.uid ||
+        resource.data.sellerId == request.auth.uid
+      );
+      allow delete: if isAdmin();
     }
 
     // ─── CARTS ──────────────────────────────────────────────
     match /carts/{cartId} {
-      allow read, write: if isSignedIn();
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
 
       match /items/{itemId} {
-        allow read, write: if isSignedIn();
+        allow read: if isSignedIn() && get(/databases/$(database)/documents/carts/$(cartId)).data.userId == request.auth.uid;
+        allow write: if isSignedIn() && get(/databases/$(database)/documents/carts/$(cartId)).data.userId == request.auth.uid;
       }
     }
 
@@ -79,72 +124,48 @@ service cloud.firestore {
       }
     }
 
-    // ─── CALLS ──────────────────────────────────────────────
-    match /calls/{callId} {
-      allow read, write: if isSignedIn();
+    // ─── FLASH SALES ────────────────────────────────────────
+    match /flash_sales/{saleId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     // ─── NOTIFICATIONS ──────────────────────────────────────
     match /notifications/{notifId} {
-      allow read, write: if isSignedIn();
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow write: if isSignedIn() && request.resource.data.userId == request.auth.uid;
     }
 
     // ─── REVIEWS ────────────────────────────────────────────
     match /reviews/{reviewId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow create: if isSignedIn() && notSuspended() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && notSuspended() && resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && notSuspended() && resource.data.userId == request.auth.uid;
     }
 
     // ─── AD VIEWS ───────────────────────────────────────────
     match /ad_views/{adViewId} {
-      allow read, write: if isSignedIn();
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isSignedIn();
     }
 
-    // ─── LIVE STREAMS ───────────────────────────────────────
-    match /live_streams/{streamId} {
-      allow read: if true;
-      allow write: if isSignedIn();
-
-      match /{subcollection}/{docId} {
-        allow read, write: if isSignedIn();
-      }
-    }
-
-    // ─── LIVE GIFTS ─────────────────────────────────────────
-    match /live_gifts/{giftId} {
-      allow read, write: if isSignedIn();
-    }
-
-    // ─── VIEWER AD VIEWS & PAYOUTS ─────────────────────────
-    match /viewer_ad_views/{viewId} {
-      allow read, write: if isSignedIn();
-    }
-    match /admin_ad_revenue/{revenueId} {
-      allow read, write: if isSignedIn();
-    }
-    match /viewer_payouts/{payoutId} {
-      allow read, write: if isSignedIn();
-    }
-    match /viewer_soft_payouts/{payoutId} {
-      allow read, write: if isSignedIn();
-    }
-
-    // ─── STREAMER WITHDRAWALS ───────────────────────────────
-    match /streamer_withdrawals/{wdId} {
-      allow read, write: if isSignedIn();
-    }
-
-    // ─── ADMIN WITHDRAWALS (top-level) ─────────────────────
+    // ─── ADMIN WITHDRAWALS ──────────────────────────────────
     match /admin_withdrawals/{wdId} {
-      allow read, write: if isSignedIn();
+      allow read: if isAdmin();
+      allow write: if isAdmin();
     }
 
     // ─── GROUPS ─────────────────────────────────────────────
     match /groups/{groupId} {
-      allow read, write: if isSignedIn();
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
 
       match /messages/{msgId} {
-        allow read, write: if isSignedIn();
+        allow read: if isSignedIn();
+        allow write: if isSignedIn();
       }
     }
 
@@ -156,32 +177,57 @@ service cloud.firestore {
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
-    // ─── WALLETS & TRANSACTIONS ─────────────────────────────
-    match /wallets/{walletId} {
-      allow read, write: if isSignedIn();
-    }
-
-    match /revenue_transactions/{txId} {
-      allow read, write: if isSignedIn();
-    }
-
+    // ─── TRANSACTIONS (server-managed, client read-only) ────
     match /transactions/{txId} {
-      allow read, write: if isSignedIn();
+      allow read: if isSignedIn() && (
+        resource.data.buyerId == request.auth.uid ||
+        resource.data.sellerId == request.auth.uid ||
+        isAdmin()
+      );
+      // For now, allow writes for backward compat (webhook already writes server-side)
+      allow write: if isSignedIn();
+    }
+
+    // ─── REVENUE TRANSACTIONS ───────────────────────────────
+    match /revenue_transactions/{txId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
     }
 
     // ─── WITHDRAWALS ────────────────────────────────────────
     match /withdrawals/{wdId} {
-      allow read, write: if isSignedIn();
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow write: if isAdmin();
     }
 
     // ─── ADMIN EXPORTS ──────────────────────────────────────
     match /admin_exports/{exportId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if isAdmin();
+    }
+
+    // ─── REPORTS ─────────────────────────────────────────────
+    match /reports/{reportId} {
+      allow read: if isSignedIn() && (
+        resource.data.reporterId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && notSuspended();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ─── FRAUD ALERTS (server-managed + admin read) ─────────
+    match /fraud_alerts/{alertId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     // ─── AUDIT LOG ──────────────────────────────────────────
     match /audit_log/{logId} {
-      allow read, write: if isSignedIn();
+      allow read: if isAdmin();
+      allow write: if isAdmin();
     }
   }
 }

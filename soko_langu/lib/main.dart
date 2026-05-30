@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'dart:io' show File;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -11,38 +9,30 @@ import 'package:firebase_performance/firebase_performance.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
-import 'package:flutter_callkit_incoming/entities/call_event.dart';
 import 'firebase_options.dart';
 import 'services/notification_service.dart';
 import 'services/localization_service.dart';
-import 'services/auto_lock_service.dart';
-import 'services/presence_service.dart';
 import 'services/interstitial_ad_service.dart';
-import 'package:audio_service/audio_service.dart';
-import 'services/audio_player_service.dart';
-import 'screens/auth/lock_screen.dart';
-import 'services/call_service.dart';
 import 'services/security_service.dart';
+import 'services/whatsapp_service.dart';
+import 'services/ai/ai_service.dart';
+import 'services/groq_service.dart';
+import 'services/exchange_rate_service.dart';
 import 'theme/theme_manager.dart';
 import 'utils/responsive.dart';
 import 'app/router.dart' as router_lib;
 import 'app/app_state.dart' as app_state;
-import 'app/routes.dart';
 
 final NotificationService notificationService = NotificationService();
 final LocalizationService localizationService = LocalizationService();
-final AutoLockService autoLockService = AutoLockService.instance;
-final PresenceService presenceService = PresenceService();
 final InterstitialAdService interstitialAdService = InterstitialAdService();
 final ThemeManager themeManager = ThemeManager();
-final CallService callService = CallService();
 final GoRouter appRouter = router_lib.buildRouter();
 
 typedef LangCallback = void Function(String);
 typedef CurrencyCallback = void Function(String);
-typedef TierCallback = void Function(String);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -103,59 +93,66 @@ void main() async {
   } catch (e) {
     debugPrint('LocalNotifications: failed — $e');
   }
-  NotificationService.onCallNotificationTap = (data) {
-    final ctx = router_lib.rootNavigatorKey.currentContext;
-    if (ctx == null) return;
-    GoRouter.of(ctx).push(AppRoutes.incomingCall, extra: data);
+  NotificationService.onNotificationTap = (data) {
+    final type = data['type'] as String?;
+    if (type == 'order' || type == 'boost') {
+      appRouter.push('/notifications');
+    } else if (type == 'flash_sale') {
+      appRouter.push('/flash-sale');
+    } else if (type == 'product') {
+      final productId = data['productId'] as String?;
+      if (productId != null) {
+        appRouter.push('/product/$productId');
+      }
+    }
   };
-  NotificationService.onForegroundCall = (data) {
-    final ctx = router_lib.rootNavigatorKey.currentContext;
-    if (ctx == null) return;
-    GoRouter.of(ctx).push(AppRoutes.incomingCall, extra: data);
-  };
-  NotificationService.onCallAcceptFromNotification = (callId) {
-    CallService().acceptCall(callId);
-  };
-  NotificationService.onCallDeclineFromNotification = (callId) {
-    CallService().declineCall(callId);
+
+  NotificationService.onPriceDropTap = (data) {
+    final phone = data['sellerPhone'] as String? ?? '';
+    final productName = data['productName'] as String? ?? '';
+    final newPrice = data['newPrice'] as num? ?? 0;
+    if (phone.isEmpty) return;
+    final curSym = LocalizationService.supportedCurrencies['TZS']?['symbol'] ?? 'TSh';
+    final message = 'Habari, nimeona bidhaa "$productName" ikiwa $curSym ${newPrice.toStringAsFixed(0)}. Naomba kununua.';
+    WhatsAppService().openWhatsApp(
+      phoneNumber: phone,
+      message: message,
+    );
   };
   try { notificationService.initialize(); } catch (e) { debugPrint('notificationService: $e'); }
-  try { presenceService.initialize(); } catch (e) { debugPrint('presenceService: $e'); }
-  try { autoLockService.initialize(); } catch (e) { debugPrint('autoLockService: $e'); }
-  try { callService.clearAllActiveCalls(); } catch (e) { debugPrint('callService: $e'); }
+
+  await ExchangeRateService().initialize();
+  AiService.initialize(GroqService());
+
   try {
-    await AudioService.init(
-      builder: () => AudioPlayerService.instance,
-      config: AudioServiceConfig(
-        androidNotificationChannelId: 'com.soko_langu.audio',
-        androidNotificationChannelName: 'Soko Langu Music',
-        androidNotificationOngoing: true,
-        androidStopForegroundOnPause: false,
-        androidNotificationClickStartsActivity: true,
-      ),
+    await JustAudioBackground.init(
+      androidNotificationChannelId: 'com.sokolangu.audio.playback',
+      androidNotificationChannelName: 'Soko Langu Music',
+      androidNotificationOngoing: true,
+      androidStopForegroundOnPause: false,
+      notificationColor: const Color(0xFF2D6A4F),
+      androidNotificationIcon: 'mipmap/ic_launcher',
+      androidNotificationClickStartsActivity: true,
     );
   } catch (e) {
-    debugPrint('AudioService: failed — $e');
+    debugPrint('JustAudioBackground init: failed — $e');
   }
-  runApp(SokoLanguApp());
+
+  runApp(const SokoLanguApp());
 }
 
 class AppConfig extends InheritedWidget {
   final String langCode;
   final String currencyCode;
-  final String accountTier;
   final LangCallback onSetLanguage;
   final CurrencyCallback onSetCurrency;
-  final TierCallback onSetTier;
 
   const AppConfig({
     super.key,
     required this.langCode,
     required this.currencyCode,
-    required this.accountTier,
     required this.onSetLanguage,
     required this.onSetCurrency,
-    required this.onSetTier,
     required super.child,
   });
 
@@ -165,9 +162,7 @@ class AppConfig extends InheritedWidget {
 
   @override
   bool updateShouldNotify(AppConfig old) =>
-      langCode != old.langCode ||
-      currencyCode != old.currencyCode ||
-      accountTier != old.accountTier;
+      langCode != old.langCode || currencyCode != old.currencyCode;
 }
 
 class SokoLanguApp extends StatefulWidget {
@@ -180,107 +175,17 @@ class SokoLanguApp extends StatefulWidget {
 class _SokoLanguAppState extends State<SokoLanguApp> {
   String _langCode = 'en';
   String _currencyCode = 'TZS';
-  String? _wallpaperPath;
-  bool _showLockScreen = false;
-  StreamSubscription? _callSubscription;
-  StreamSubscription? _callKitSubscription;
 
   @override
   void initState() {
     super.initState();
     _loadPrefs();
     themeManager.addListener(_onThemeChange);
-    autoLockService.onLock = () {
-      if (mounted) setState(() => _showLockScreen = true);
-    };
-    _listenForIncomingCalls();
-    _listenCallKitEvents();
-  }
-
-  void _listenCallKitEvents() {
-    _callKitSubscription = FlutterCallkitIncoming.onEvent.listen((event) async {
-      if (event == null || !mounted) return;
-      final ctx = router_lib.rootNavigatorKey.currentContext;
-      if (ctx == null) return;
-      final body = event.body as Map<String, dynamic>?;
-      if (body == null) return;
-      final extra = body['extra'] as Map<String, dynamic>?;
-      if (extra == null) return;
-
-      switch (event.event) {
-        case Event.actionCallAccept:
-          final callId = extra['callId'] as String;
-          final channelName = extra['channelName'] as String;
-          final callType = extra['callType'] as String;
-          final callerName = extra['callerName'] as String;
-          final callerImage = extra['callerImage'] as String?;
-          await callService.acceptCall(callId);
-          if (mounted) {
-            GoRouter.of(ctx).push(
-              '${AppRoutes.videoCall}/$channelName',
-              extra: {
-                'isAudioOnly': callType != 'video',
-                'callId': callId,
-                'remoteName': callerName,
-                'remoteImage': callerImage,
-              },
-            );
-          }
-          break;
-        case Event.actionCallDecline:
-          final callId = extra['callId'] as String;
-          await callService.declineCall(callId);
-          break;
-        case Event.actionCallEnded:
-          final callId = extra['callId'] as String;
-          await callService.endCall(callId);
-          break;
-        case Event.actionCallTimeout:
-          final callId = extra['callId'] as String;
-          await callService.missCall(callId);
-          break;
-        case Event.actionCallIncoming:
-        case Event.actionCallStart:
-        case Event.actionCallToggleAudioSession:
-        case Event.actionDidUpdateDevicePushTokenVoip:
-        case Event.actionCallCallback:
-        case Event.actionCallToggleHold:
-        case Event.actionCallToggleMute:
-        case Event.actionCallToggleDmtf:
-        case Event.actionCallToggleGroup:
-        case Event.actionCallConnected:
-        case Event.actionCallCustom:
-          break;
-      }
-    });
-  }
-
-  void _listenForIncomingCalls() {
-    _callSubscription = callService.incomingCallStream().listen((call) {
-      if (call == null || !mounted) return;
-      final callId = call['id'] as String? ?? '';
-      final callerName = call['callerName'] as String? ?? 'Incoming Call';
-      final callerImage = call['callerImage'] as String? ?? '';
-      final channelName = call['channelName'] as String? ?? '';
-      final callType = call['type'] as String? ?? 'voice';
-      callService.showCallKitUI(
-        callId: callId,
-        callerName: callerName,
-        callerImage: callerImage,
-        channelName: channelName,
-        callType: callType,
-        isOutgoing: false,
-      );
-    });
   }
 
   @override
   void dispose() {
-    _callSubscription?.cancel();
-    _callKitSubscription?.cancel();
     themeManager.removeListener(_onThemeChange);
-    presenceService.dispose();
-    autoLockService.dispose();
     super.dispose();
   }
 
@@ -293,7 +198,6 @@ class _SokoLanguAppState extends State<SokoLanguApp> {
     setState(() {
       _langCode = prefs.getString('language_code') ?? 'en';
       _currencyCode = prefs.getString('currency') ?? 'TZS';
-      _wallpaperPath = prefs.getString('wallpaper_path');
     });
   }
 
@@ -305,14 +209,9 @@ class _SokoLanguAppState extends State<SokoLanguApp> {
     setState(() => _currencyCode = code);
   }
 
-  void _setTier(String tier) async {
-    await themeManager.setTier(tier);
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark = themeManager.isDark;
-    final isSilver = themeManager.currentTier == 'silver';
 
     return MaterialApp.router(
       routerConfig: appRouter,
@@ -335,26 +234,6 @@ class _SokoLanguAppState extends State<SokoLanguApp> {
             ),
             child: content,
           );
-        } else if (isSilver &&
-            _wallpaperPath != null &&
-            !kIsWeb &&
-            File(_wallpaperPath!).existsSync()) {
-          content = Stack(
-            children: [
-              Positioned.fill(
-                child: Image.file(File(_wallpaperPath!), fit: BoxFit.cover),
-              ),
-              Positioned.fill(
-                child: ClipRect(
-                  child: BackdropFilter(
-                    filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                    child: Container(color: Colors.white.withAlpha(60)),
-                  ),
-                ),
-              ),
-              content,
-            ],
-          );
         } else {
           content = Container(
             color: Theme.of(context).colorScheme.surface,
@@ -364,22 +243,9 @@ class _SokoLanguAppState extends State<SokoLanguApp> {
         return AppConfig(
           langCode: _langCode,
           currencyCode: _currencyCode,
-          accountTier: themeManager.currentTier,
           onSetLanguage: _setLanguage,
           onSetCurrency: _setCurrency,
-          onSetTier: _setTier,
-          child: Stack(
-            children: [
-              content,
-              if (_showLockScreen)
-                LockScreen(
-                  onUnlock: () {
-                    setState(() => _showLockScreen = false);
-                    autoLockService.unlock();
-                  },
-                ),
-            ],
-          ),
+          child: content,
         );
       },
     );

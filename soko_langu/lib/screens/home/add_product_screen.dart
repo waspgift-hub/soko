@@ -6,6 +6,8 @@ import '../../models/category_model.dart';
 import '../../models/product_model.dart';
 import '../../services/category_service.dart';
 import '../../extensions/context_tr.dart';
+import '../../widgets/google_loading.dart';
+import '../../widgets/rewarded_ad_gate.dart';
 
 class _VariantEntry {
   final TextEditingController nameCtrl = TextEditingController();
@@ -164,6 +166,15 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+
+    final passed = await RewardedAdGate.require(
+      context,
+      'post_product',
+      title: context.tr('watch_ad'),
+      message: context.tr('watch_ad_to_post'),
+    );
+    if (!passed) return;
+
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     final tr = context.tr;
@@ -246,14 +257,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
           TextButton(
             onPressed: _saving ? null : _submit,
             child: _saving
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.green,
-                    ),
-                  )
+                ? const GoogleLoading(size: 20, strokeWidth: 2)
                 : Text(
                     _isEditing
                         ? context.tr('update_product').toUpperCase()
@@ -547,7 +551,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     ),
                     TextButton.icon(
                       icon: const Icon(Icons.add, size: 18),
-                      label: const Text("Add"),
+                      label: Text(context.tr('add')),
                       onPressed: _addVariant,
                     ),
                   ],
@@ -614,8 +618,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                 width: 60,
                                 child: TextField(
                                   controller: v.stockCtrl,
-                                  decoration: const InputDecoration(
-                                    labelText: "Stock",
+                                  decoration: InputDecoration(
+                                    labelText: context.tr('stock'),
                                     border: OutlineInputBorder(),
                                     isDense: true,
                                   ),

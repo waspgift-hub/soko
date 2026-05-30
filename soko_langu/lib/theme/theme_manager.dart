@@ -4,34 +4,27 @@ import 'app_themes.dart';
 import 'dark_theme.dart';
 
 class ThemeManager extends ChangeNotifier {
-  static const String _tierKey = 'app_theme_tier';
   static const String _darkKey = 'app_dark_mode';
+  static const String _seedKey = 'theme_seed_color';
+  static const int _defaultSeed = 0xFF2D6A4F;
 
-  String _currentTier = 'free';
   bool _isDark = false;
+  Color _seedColor = const Color(_defaultSeed);
 
-  String get currentTier => _currentTier;
   bool get isDark => _isDark;
+  Color get seedColor => _seedColor;
 
-  ThemeData get currentTheme => _isDark
-      ? buildDarkTheme()
-      : (tierThemes[_currentTier] ?? tierThemes['free']!);
+  ThemeData get currentTheme =>
+      _isDark ? buildDarkTheme(_seedColor) : buildLightTheme(_seedColor);
 
-  ThemeData get lightTheme => tierThemes[_currentTier] ?? tierThemes['free']!;
-  ThemeData get darkTheme => buildDarkTheme();
+  ThemeData get lightTheme => buildLightTheme(_seedColor);
+  ThemeData get darkTheme => buildDarkTheme(_seedColor);
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
-    _currentTier = prefs.getString(_tierKey) ?? 'free';
     _isDark = prefs.getBool(_darkKey) ?? false;
-    notifyListeners();
-  }
-
-  Future<void> setTier(String tier) async {
-    if (!tierThemes.containsKey(tier)) return;
-    _currentTier = tier;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_tierKey, tier);
+    final seed = prefs.getInt(_seedKey);
+    if (seed != null) _seedColor = Color(seed);
     notifyListeners();
   }
 
@@ -44,25 +37,10 @@ class ThemeManager extends ChangeNotifier {
 
   Future<void> toggleDark() async => setDark(!_isDark);
 
-  Color get seedColor {
-    switch (_currentTier) {
-      case 'silver':
-        return Colors.blueGrey;
-      case 'premium':
-        return Colors.amber;
-      default:
-        return Colors.green;
-    }
-  }
-
-  String get label {
-    switch (_currentTier) {
-      case 'silver':
-        return 'Silver';
-      case 'premium':
-        return 'Premium';
-      default:
-        return 'Free';
-    }
+  Future<void> setSeedColor(Color color) async {
+    _seedColor = color;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_seedKey, color.value);
+    notifyListeners();
   }
 }

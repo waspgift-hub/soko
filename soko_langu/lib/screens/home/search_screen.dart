@@ -6,8 +6,8 @@ import '../../services/user_service.dart';
 import '../../models/product_model.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/ad_banner.dart';
-import '../../widgets/verified_badge.dart';
 import '../../app/routes.dart';
+import '../../widgets/google_loading.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -86,30 +86,39 @@ class _SearchScreenState extends State<SearchScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        title: TextField(
-          controller: _searchController,
-          autofocus: true,
-          decoration: InputDecoration(
-            hintText: context.tr('search_products'),
-            border: InputBorder.none,
-            suffixIcon: _searchController.text.isNotEmpty
-                ? IconButton(
-                    icon: const Icon(Icons.clear),
-                    onPressed: () {
-                      _searchController.clear();
-                      setState(() {
-                        _hasSearched = false;
-                        _loading = false;
-                        _error = false;
-                        _lastResults = null;
-                        _userResults = null;
-                      });
-                    },
-                  )
-                : null,
+        title: Container(
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            borderRadius: BorderRadius.circular(12),
           ),
-          textInputAction: TextInputAction.search,
-          onSubmitted: (_) => _performSearch(),
+          child: TextField(
+            controller: _searchController,
+            autofocus: true,
+            style: const TextStyle(color: Colors.black),
+            decoration: InputDecoration(
+              hintText: context.tr('search_products'),
+              hintStyle: const TextStyle(color: Colors.black54),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() {
+                          _hasSearched = false;
+                          _loading = false;
+                          _error = false;
+                          _lastResults = null;
+                          _userResults = null;
+                        });
+                      },
+                    )
+                  : null,
+            ),
+            textInputAction: TextInputAction.search,
+            onSubmitted: (_) => _performSearch(),
+          ),
         ),
         actions: [
           IconButton(
@@ -143,14 +152,7 @@ class _SearchScreenState extends State<SearchScreen> {
           children: [
             const Icon(Icons.search, size: 48, color: Colors.green),
             const SizedBox(height: 16),
-            SizedBox(
-              width: 32,
-              height: 32,
-              child: CircularProgressIndicator(
-                strokeWidth: 3,
-                color: Colors.green[400],
-              ),
-            ),
+            const GoogleLoading(size: 32, strokeWidth: 3),
             const SizedBox(height: 16),
             Text(
               context.tr('searching_soko'),
@@ -186,7 +188,7 @@ class _SearchScreenState extends State<SearchScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Find products and people across Tanzania',
+              context.tr('find_products_people'),
               style: TextStyle(fontSize: 14, color: Colors.grey[400]),
             ),
           ],
@@ -353,7 +355,6 @@ class _SearchScreenState extends State<SearchScreen> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            VerifiedBadge(tier: user.accountTier, size: 14),
           ],
         ),
         subtitle: Text(

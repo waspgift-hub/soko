@@ -64,21 +64,6 @@ void main() {
     });
   });
 
-  group('tierPriority', () {
-    test('silver returns 0', () {
-      expect(tierPriority('silver'), 0);
-    });
-    test('premium returns 1', () {
-      expect(tierPriority('premium'), 1);
-    });
-    test('free returns 2', () {
-      expect(tierPriority('free'), 2);
-    });
-    test('unknown returns 2', () {
-      expect(tierPriority('gold'), 2);
-    });
-  });
-
   group('Product', () {
     final base = Product(
       id: 'prod1',

@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:file_picker/file_picker.dart';
 import '../services/cloudinary_service.dart';
+import '../widgets/google_loading.dart';
 
 Future<bool> requestPermissionWithDialog(
   BuildContext context,
@@ -109,7 +110,7 @@ Future<String?> pickAndUploadImage(BuildContext context) async {
   showDialog(
     context: context,
     barrierDismissible: false,
-    builder: (_) => const Center(child: CircularProgressIndicator()),
+    builder: (_) => const GoogleLoadingPage(),
   );
 
   try {

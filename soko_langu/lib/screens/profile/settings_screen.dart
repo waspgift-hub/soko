@@ -4,7 +4,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/localization_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/notification_service.dart';
-import '../../services/auto_lock_service.dart';
 import '../../services/secure_storage_service.dart';
 import '../../services/user_service.dart';
 import '../../extensions/context_tr.dart';
@@ -20,8 +19,6 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true;
-  int _autoLockMinutes = 0;
-  String _accountTier = 'free';
 
   @override
   void initState() {
@@ -31,13 +28,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
-    final tier = await UserService().getCurrentTier();
     if (mounted) {
       setState(() {
         _notificationsEnabled =
             prefs.getBool('push_notifications_enabled') ?? true;
-        _autoLockMinutes = prefs.getInt('auto_lock_minutes') ?? 0;
-        _accountTier = tier;
       });
     }
   }
@@ -159,46 +153,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onTap: () => _showCurrencyPicker(context, config),
               ),
               const Divider(),
-              _buildSectionTitle(context.tr('auto_lock')),
-              _buildTile(
-                icon: Icons.lock,
-                title: context.tr('auto_lock_desc'),
-                trailing: DropdownButton<int>(
-                  value: _autoLockMinutes,
-                  underline: const SizedBox(),
-                  items: [
-                    DropdownMenuItem(
-                      value: 0,
-                      child: Text(context.tr('never')),
-                    ),
-                    DropdownMenuItem(
-                      value: 1,
-                      child: Text('1 ${context.tr('minutes')}'),
-                    ),
-                    DropdownMenuItem(
-                      value: 2,
-                      child: Text('2 ${context.tr('minutes')}'),
-                    ),
-                    DropdownMenuItem(
-                      value: 5,
-                      child: Text('5 ${context.tr('minutes')}'),
-                    ),
-                    DropdownMenuItem(
-                      value: 10,
-                      child: Text('10 ${context.tr('minutes')}'),
-                    ),
-                    DropdownMenuItem(
-                      value: 30,
-                      child: Text('30 ${context.tr('minutes')}'),
-                    ),
-                  ],
-                  onChanged: (value) async {
-                    if (value == null) return;
-                    await AutoLockService.instance.setTimeout(value);
-                    setState(() => _autoLockMinutes = value);
-                  },
-                ),
-              ),
               _buildTile(
                 icon: Icons.pin,
                 title: context.tr('set_pin'),
@@ -210,36 +164,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: Icons.person,
                 title: context.tr('edit_profile'),
                 onTap: () => context.push(AppRoutes.editProfile),
-              ),
-              const Divider(),
-              _buildSectionTitle(context.tr('account_tier')),
-              _buildTile(
-                icon: _accountTier == 'silver'
-                    ? Icons.workspace_premium
-                    : _accountTier == 'premium'
-                    ? Icons.verified
-                    : Icons.star,
-                title: _accountTier == 'silver'
-                    ? 'Silver ${context.tr('premium_active')}'
-                    : _accountTier == 'premium'
-                    ? context.tr('premium_active')
-                    : context.tr('go_premium'),
-                subtitle: _accountTier == 'silver'
-                    ? context.tr('silver_feature_visibility')
-                    : _accountTier == 'premium'
-                    ? context.tr('premium_no_ads')
-                    : context.tr('premium_subtitle'),
-                trailing: _accountTier != 'free'
-                    ? Icon(
-                        Icons.check_circle,
-                        color: _accountTier == 'silver'
-                            ? Colors.blueGrey
-                            : Colors.green,
-                      )
-                    : null,
-                onTap: _accountTier != 'free'
-                    ? null
-                    : () => _showPremiumUpgrade(context),
               ),
               const Divider(),
               _buildSectionTitle(context.tr('appearance')),
@@ -256,18 +180,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     color: themeManager.isDark ? const Color(0xFF39FF14) : null,
                   ),
                 ),
-                subtitle: const Text('Switch between light and dark theme'),
+                subtitle: Text(context.tr('switch_theme')),
                 value: themeManager.isDark,
                 activeThumbColor: const Color(0xFF39FF14),
                 onChanged: (val) => themeManager.setDark(val),
               ),
-              if (_accountTier == 'silver')
-                _buildTile(
-                  icon: Icons.wallpaper,
-                  title: context.tr('wallpaper'),
-                  subtitle: context.tr('wallpaper_sub'),
-                  onTap: () => context.push(AppRoutes.wallpaper),
-                ),
               const Divider(),
               _buildSectionTitle(context.tr('support')),
               _buildTile(
@@ -369,17 +286,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
-  }
-
-  void _showPremiumUpgrade(BuildContext context) {
-    context.push(AppRoutes.premiumUpgrade).then((_) async {
-      final tier = await UserService().getCurrentTier();
-      if (mounted) {
-        setState(() => _accountTier = tier);
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('account_tier', tier);
-      }
-    });
   }
 
   void _showLanguagePicker(BuildContext context, AppConfig config) {

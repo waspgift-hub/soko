@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Create Soko Langu Logo</title>
+</head>
+<body style="background: #f0f0f0; display: flex; justify-content: center; align-items: center; min-height: 100vh;">
+    <canvas id="canvas" width="512" height="512"></canvas>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Green gradient background (rounded square)
+        const gradient = ctx.createLinearGradient(0, 0, 512, 512);
+        gradient.addColorStop(0, '#4CAF50');
+        gradient.addColorStop(1, '#2E7D32');
+        
+        // Draw rounded rectangle
+        const radius = 80;
+        ctx.beginPath();
+        ctx.moveTo(radius, 0);
+        ctx.lineTo(512 - radius, 0);
+        ctx.quadraticCurveTo(512, 0, 512, radius);
+        ctx.lineTo(512, 512 - radius);
+        ctx.quadraticCurveTo(512, 512, 512 - radius, 512);
+        ctx.lineTo(radius, 512);
+        ctx.quadraticCurveTo(0, 512, 0, 512 - radius);
+        ctx.lineTo(0, radius);
+        ctx.quadraticCurveTo(0, 0, radius, 0);
+        ctx.closePath();
+        ctx.fillStyle = gradient;
+        ctx.fill();
+        
+        // White text "Soko Langu"
+        ctx.fillStyle = 'white';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        // "Soko" - bigger
+        ctx.font = 'bold 70px Arial';
+        ctx.fillText('Soko', 256, 200);
+        
+        // "Langu" - bigger
+        ctx.font = 'bold 70px Arial';
+        ctx.fillText('Langu', 256, 320);
+        
+        // Download automatically
+        const link = document.createElement('a');
+        link.download = 'soko_langu_logo.png';
+        link.href = canvas.toDataURL();
+        link.click();
+        setTimeout(() => alert('Logo downloaded! Check your downloads folder.'), 100);
+    </script>
+</body>
+</html>

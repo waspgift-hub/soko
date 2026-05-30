@@ -4,7 +4,6 @@ const cors = require('cors');
 const crypto = require('crypto');
 const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
-const { RtcTokenBuilder, RtcRole } = require('agora-access-token');
 
 const app = express();
 
@@ -29,14 +28,17 @@ function asyncHandler(fn) {
 }
 
 const MONGIKE_API_KEY = process.env.MONGIKE_API_KEY;
-const AGORA_APP_ID = process.env.AGORA_APP_ID;
-const AGORA_CERT = process.env.AGORA_APP_CERTIFICATE;
 const PORT = process.env.PORT || 3000;
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || '';
+const ESCROW_AUTO_RELEASE_DAYS = parseInt(process.env.ESCROW_AUTO_RELEASE_DAYS) || 14;
+const MAX_DAILY_SALE_AMOUNT = parseInt(process.env.MAX_DAILY_SALE_AMOUNT) || 5000000;
 
 // ─── Rate limiter (in-memory) ───
 const rateHits = new Map();
+const walletHits = new Map(); // per-wallet rate limit for payments
 const RATE_WINDOW = 60 * 1000;
 const RATE_MAX = 30;
+const PAYMENT_RATE_MAX = 5; // max 5 payment attempts per 60s per IP
 
 function rateLimit(req, res, next) {
   const ip = req.ip || req.connection.remoteAddress || 'unknown';
@@ -49,6 +51,79 @@ function rateLimit(req, res, next) {
     return res.status(429).json({ error: 'Too many requests. Please slow down.' });
   }
   next();
+}
+
+// Stricter rate limit for payment endpoints
+function paymentRateLimit(req, res, next) {
+  const ip = req.ip || req.connection.remoteAddress || 'unknown';
+  const now = Date.now();
+  if (!walletHits.has(ip)) walletHits.set(ip, []);
+  const hits = walletHits.get(ip).filter(t => now - t < RATE_WINDOW);
+  hits.push(now);
+  walletHits.set(ip, hits);
+  if (hits.length > PAYMENT_RATE_MAX) {
+    return res.status(429).json({ error: 'Too many payment attempts. Please wait before trying again.' });
+  }
+  next();
+}
+
+// Verify webhook secret to prevent forged callbacks
+function verifyWebhook(req, res, next) {
+  if (!WEBHOOK_SECRET) return next(); // skip if not configured
+  const secret = req.headers['x-webhook-secret'];
+  if (secret !== WEBHOOK_SECRET) {
+    console.warn(`Webhook secret mismatch from IP: ${req.ip}`);
+    return res.status(200).json({ received: false });
+  }
+  next();
+}
+
+// Check if user is suspended
+async function checkSuspended(userId) {
+  if (!db) return false;
+  try {
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) return false;
+    return userDoc.data().isSuspended === true;
+  } catch { return false; }
+}
+
+// Check daily transaction limit for a buyer
+async function checkDailyLimit(buyerId, amount) {
+  if (!db) return true;
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const snap = await db.collection('transactions')
+      .where('buyerId', '==', buyerId)
+      .where('createdAt', '>=', admin.firestore.Timestamp.fromDate(today))
+      .get();
+    let dailyTotal = 0;
+    snap.docs.forEach(doc => {
+      const d = doc.data();
+      if (d.status === 'completed' || d.status === 'pending' || d.status === 'escrow_hold') {
+        dailyTotal += (d.productPrice || 0);
+      }
+    });
+    if (dailyTotal + amount > MAX_DAILY_SALE_AMOUNT) {
+      return false;
+    }
+    return true;
+  } catch { return true; }
+}
+
+// Check for duplicate pending payment on same product by same buyer
+async function checkDuplicatePayment(productId, buyerId) {
+  if (!db) return false;
+  try {
+    const snap = await db.collection('transactions')
+      .where('productId', '==', productId)
+      .where('buyerId', '==', buyerId)
+      .where('status', 'in', ['pending', 'escrow_hold'])
+      .limit(1)
+      .get();
+    return snap.docs.length > 0;
+  } catch { return false; }
 }
 
 function sanitize(str) {
@@ -81,14 +156,20 @@ if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
   db = admin.firestore();
 }
 
-const TIER_PRICES_TZS = {
-  premium: { monthly: 15000, yearly: 150000 },
-  silver: { monthly: 35000, yearly: 350000 },
+// ============================================================
+// ⭐ BOOST PRODUCT — TIER-BASED FEATURED LISTING
+// ============================================================
+const BOOST_TIERS = {
+  bronze: { price: 1500, days: 3 },
+  silver: { price: 3000, days: 7 },
+  gold: { price: 10000, days: 30 },
 };
 
 const MONGIKE_TX_FEE = 180;          // Mongike charges TZS 180 per transaction
 const MONGIKE_PAYOUT_FEE = 2000;     // Mongike charges TZS 2,000 per payout
 const MONGIKE_BASE = 'https://mongike.com/api/v1';
+const PLATFORM_COMMISSION_PERCENT = 0.04; // 4% platform commission
+const MIN_WITHDRAWAL = 5000;          // Minimum withdrawal TZS 5,000
 
 async function callMongikePay(body, retries = 2) {
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -115,75 +196,24 @@ async function callMongikePay(body, retries = 2) {
   }
 }
 
-// --- Mongike payment link for subscriptions ---
-app.post('/api/create-payment-link', async (req, res) => {
+app.post('/api/boost-product', async (req, res) => {
   try {
-    const { tier, isYearly, email, phone, userId } = req.body;
-    if (!tier || !['premium', 'silver'].includes(tier)) {
-      return res.status(400).json({ error: 'Invalid tier' });
-    }
-    const prices = TIER_PRICES_TZS[tier];
-    const amount = isYearly ? prices.yearly : prices.monthly;
-    const order_id = `${tier}_${Date.now()}`;
-
-    if (!phone) {
-      return res.status(400).json({ error: 'Phone number required' });
+    const { productId, tier, amount, durationDays, phone, userId } = req.body;
+    if (!productId || !tier || !phone) {
+      return res.status(400).json({ error: 'Missing required fields (productId, tier, phone)' });
     }
 
+    const tierConfig = BOOST_TIERS[tier];
+    if (!tierConfig) {
+      return res.status(400).json({ error: 'Invalid boost tier' });
+    }
+
+    const order_id = `boost_${Date.now()}`;
     const webhookUrl = process.env.WEBHOOK_URL || `https://sokolangu-production.up.railway.app/api/webhook`;
 
     const result = await callMongikePay({
       order_id,
-      amount,
-      buyer_phone: phone,
-      buyer_email: email || '',
-      fee_payer: 'MERCHANT',
-      webhook_url: webhookUrl,
-    });
-
-    if (result.status !== 'success') {
-      return res.status(500).json({ error: result.message || 'Mongike error' });
-    }
-
-    if (db) {
-      const mongikeId = result.data?.id || '';
-      await db.collection('transactions').doc(order_id).set({
-        type: 'subscription',
-        tier,
-        amount,
-        isYearly: isYearly ?? true,
-        status: 'pending',
-        mongikeId,
-        buyerId: userId || email || '',
-        buyerPhone: phone,
-        buyerEmail: email || '',
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-    }
-
-    res.json({
-      order_id,
-      mongikeId: result.data?.id || '',
-      message: 'Payment prompt sent to your phone. Check M-Pesa/Airtel Money and enter your PIN.',
-    });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// --- Buy coins via Mongike ---
-app.post('/api/buy-coins', async (req, res) => {
-  try {
-    const { coins, price, phone, userId } = req.body;
-    if (!coins || !price || !phone) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
-    const order_id = `coins_${Date.now()}`;
-    const webhookUrl = process.env.WEBHOOK_URL || `https://sokolangu-production.up.railway.app/api/webhook`;
-
-    const result = await callMongikePay({
-      order_id,
-      amount: price,
+      amount: tierConfig.price,
       buyer_phone: phone,
       fee_payer: 'MERCHANT',
       webhook_url: webhookUrl,
@@ -195,357 +225,13 @@ app.post('/api/buy-coins', async (req, res) => {
 
     if (db) {
       await db.collection('transactions').doc(order_id).set({
-        type: 'coins',
-        coins,
-        amount: price,
-        buyerId: userId || '',
-        buyerPhone: phone,
-        status: 'pending',
-        mongikeId: result.data?.id || '',
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-    }
-
-    res.json({
-      order_id,
-      mongikeId: result.data?.id || '',
-      message: 'Payment prompt sent to your phone.',
-    });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// --- Monthly payout for all streamers (trigger via cron job) ---
-// Cron schedule: "0 0 1 * *" (first day of every month)
-// POST with x-admin-secret header
-app.post('/api/process-monthly-payouts', async (req, res) => {
-  try {
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
-
-    const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    const FEE_PLATFORM = 2000;
-    const FEE_MONGIKE = 2000;
-    const FEE_TOTAL = FEE_PLATFORM + FEE_MONGIKE;
-    const now = new Date();
-    const month = now.toLocaleString('default', { month: 'long' });
-    const year = now.getFullYear();
-    const monthLabel = `${month} ${year}`;
-    let processed = 0;
-    let skipped = 0;
-    const errors = [];
-
-    const usersSnap = await db.collection('users')
-      .where('streamerEarnings', '>', 0)
-      .get();
-
-    for (const doc of usersSnap.docs) {
-      const data = doc.data();
-      const earnings = data.streamerEarnings || 0;
-      const phone = data.phone || '';
-
-      if (!phone || earnings <= FEE_TOTAL) {
-        skipped++;
-        continue;
-      }
-
-      const netAmount = earnings - FEE_TOTAL;
-
-      try {
-        const resp = await fetch(`${MONGIKE_BASE}/payouts/withdraw`, {
-          method: 'POST',
-          headers: {
-            'x-api-key': MONGIKE_API_KEY,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            amount: netAmount,
-            recipient_phone: phone,
-          }),
-        });
-
-        const result = await resp.json();
-
-        if (result.status !== 'success') {
-          errors.push({ userId: doc.id, error: result.message || 'Payout failed' });
-          continue;
-        }
-
-        await db.collection('users').doc(doc.id).update({
-          streamerEarnings: 0,
-        });
-
-        await db.collection('withdrawals').add({
-          userId: doc.id,
-          earnings,
-          feePlatform: FEE_PLATFORM,
-          feeMongike: FEE_MONGIKE,
-          netAmount,
-          phone,
-          month: monthLabel,
-          status: 'completed',
-          reference: result.reference || '',
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-
-        processed++;
-      } catch (e) {
-        errors.push({ userId: doc.id, error: e.message });
-      }
-    }
-
-    res.json({
-      processed,
-      skipped,
-      errors,
-      month: monthLabel,
-      feePerPayout: FEE_TOTAL,
-    });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// --- Process viewer payouts ---
-app.post('/api/process-viewer-payouts', async (req, res) => {
-  try {
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
-
-    const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    const FEE_PLATFORM = 2000;
-    const FEE_MONGIKE = 2000;
-    const FEE_TOTAL = FEE_PLATFORM + FEE_MONGIKE;
-    const TZS_PER_COIN = 5;
-    const now = new Date();
-    const month = now.toLocaleString('default', { month: 'long' });
-    const year = now.getFullYear();
-    const monthLabel = `${month} ${year}`;
-    let processed = 0;
-    let skipped = 0;
-    const errors = [];
-
-    const usersSnap = await db.collection('users')
-      .where('viewerCoins', '>', 0)
-      .get();
-
-    for (const doc of usersSnap.docs) {
-      const data = doc.data();
-      const coins = data.viewerCoins || 0;
-      const tzsValue = coins * TZS_PER_COIN;
-      const phone = data.phone || '';
-
-      if (!phone || tzsValue <= FEE_TOTAL) {
-        skipped++;
-        continue;
-      }
-
-      const netAmount = tzsValue - FEE_TOTAL;
-
-      try {
-        const resp = await fetch(`${MONGIKE_BASE}/payouts/withdraw`, {
-          method: 'POST',
-          headers: {
-            'x-api-key': MONGIKE_API_KEY,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            amount: netAmount,
-            recipient_phone: phone,
-          }),
-        });
-
-        const result = await resp.json();
-
-        if (result.status !== 'success') {
-          errors.push({ userId: doc.id, error: result.message || 'Payout failed' });
-          continue;
-        }
-
-        await db.collection('users').doc(doc.id).update({
-          viewerCoins: 0,
-        });
-
-        await db.collection('viewer_payouts').add({
-          userId: doc.id,
-          coins,
-          tzsValue,
-          feePlatform: FEE_PLATFORM,
-          feeMongike: FEE_MONGIKE,
-          netAmount,
-          phone,
-          month: monthLabel,
-          status: 'completed',
-          reference: result.reference || '',
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-
-        processed++;
-      } catch (e) {
-        errors.push({ userId: doc.id, error: e.message });
-      }
-    }
-
-    res.json({
-      processed,
-      skipped,
-      errors,
-      month: monthLabel,
-      feePerPayout: FEE_TOTAL,
-    });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// --- Process ad revenue for sellers (40% seller / 60% platform) ---
-app.post('/api/process-ad-revenue', async (req, res) => {
-  try {
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
-
-    const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    const MAX_VIEWS = 500;
-    const REVENUE_PER_VIEW = 10;       // TZS per ad view
-    const SELLER_SHARE = 0.40;          // 40% to seller
-    const PLATFORM_SHARE = 0.60;        // 60% to platform
-    const SELLER_PER_VIEW = Math.round(REVENUE_PER_VIEW * SELLER_SHARE); // TZS 4
-
-    const viewsSnap = await db.collection('ad_views')
-      .where('processed', '==', false)
-      .limit(MAX_VIEWS)
-      .get();
-
-    if (viewsSnap.empty) {
-      return res.json({ processed: 0, totalEarnings: 0, message: 'No unprocessed views' });
-    }
-
-    const sellerGroups = {};
-    const batch = db.batch();
-
-    for (const doc of viewsSnap.docs) {
-      const data = doc.data();
-      const sellerId = data.sellerId;
-      if (!sellerId) continue;
-      if (!sellerGroups[sellerId]) sellerGroups[sellerId] = 0;
-      sellerGroups[sellerId]++;
-      batch.update(doc.ref, { processed: true });
-    }
-
-    let totalEarnings = 0;
-    let sellerCount = 0;
-
-    for (const [sellerId, count] of Object.entries(sellerGroups)) {
-      const earning = count * SELLER_PER_VIEW;
-      totalEarnings += earning;
-      sellerCount++;
-
-      const walletRef = db.collection('wallets').doc(sellerId);
-      const walletDoc = await walletRef.get();
-
-      if (!walletDoc.exists) {
-        batch.set(walletRef, {
-          balance: earning,
-          totalEarnings: earning,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      } else {
-        batch.update(walletRef, {
-          balance: admin.firestore.FieldValue.increment(earning),
-          totalEarnings: admin.firestore.FieldValue.increment(earning),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      }
-
-      const txRef = db.collection('revenue_transactions').doc();
-      batch.set(txRef, {
-        userId: sellerId,
-        type: 'ad_share',
-        amount: earning,
-        views: count,
-        ratePerView: SELLER_PER_VIEW,
-        description: `Ad revenue: ${count} views × TZS ${SELLER_PER_VIEW}`,
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      });
-    }
-
-    await batch.commit();
-
-    res.json({
-      processed: viewsSnap.docs.length,
-      sellers: sellerCount,
-      totalEarnings,
-      perView: SELLER_PER_VIEW,
-      platformShare: `${PLATFORM_SHARE * 100}%`,
-    });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// --- Mongike payment link for marketplace ---
-app.post('/api/create-marketplace-payment-link', async (req, res) => {
-  try {
-    const { productPrice, productName, productId, sellerId, sellerName, email, phone, userId } = req.body;
-
-    if (!productPrice || productPrice <= 0) {
-      return res.status(400).json({ error: 'Invalid price' });
-    }
-    if (!phone || phone.length < 10) {
-      return res.status(400).json({ error: 'Valid phone number required (min 10 digits)' });
-    }
-    if (!productId) {
-      return res.status(400).json({ error: 'Product ID is required' });
-    }
-    if (!sellerId) {
-      return res.status(400).json({ error: 'Seller ID is required' });
-    }
-
-    const order_id = `mkt_${Date.now()}`;
-    const amount = Math.round(productPrice);
-
-    const webhookUrl = process.env.WEBHOOK_URL || `https://sokolangu-production.up.railway.app/api/webhook`;
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-
-    const result = await callMongikePay({
-      order_id,
-      amount,
-      buyer_phone: phone,
-      buyer_email: email || '',
-      fee_payer: 'MERCHANT',
-      webhook_url: webhookUrl,
-    });
-    clearTimeout(timeout);
-
-    if (result.status !== 'success') {
-      return res.status(500).json({ error: result.message || 'Mongike payment initiation failed' });
-    }
-
-    if (db) {
-      const mongikeId = result.data?.id || '';
-      await db.collection('transactions').doc(order_id).set({
-        type: 'marketplace',
-        buyerId: userId || '',
-        buyerPhone: phone,
-        buyerEmail: email || '',
+        type: 'boost',
         productId,
-        sellerId,
-        sellerName: sellerName || '',
-        productName: productName || '',
-        amount,
-        mongikeId,
+        tier: tier.toLowerCase(),
+        amount: tierConfig.price,
+        durationDays: tierConfig.days,
+        userId: userId || '',
+        buyerPhone: phone,
         status: 'pending',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
@@ -554,7 +240,7 @@ app.post('/api/create-marketplace-payment-link', async (req, res) => {
     res.json({
       order_id,
       mongikeId: result.data?.id || '',
-      message: 'Payment prompt sent to your phone. Check M-Pesa/Airtel Money and enter your PIN.',
+      message: 'Payment prompt sent to your phone. Check Mongike, Airtel Money, Mixx, or Halopesa and enter your PIN.',
     });
   } catch (e) {
     if (e.name === 'AbortError') {
@@ -563,212 +249,6 @@ app.post('/api/create-marketplace-payment-link', async (req, res) => {
     res.status(500).json({ error: e.message || 'Internal server error' });
   }
 });
-
-// --- Verify transaction status ---
-app.get('/api/verify-transaction', async (req, res) => {
-  try {
-    const { tx_ref } = req.query;
-    if (!tx_ref) return res.status(400).json({ error: 'Missing tx_ref' });
-
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
-
-    const doc = await db.collection('transactions').doc(tx_ref).get();
-    if (!doc.exists) return res.json({ status: 'not_found' });
-
-    res.json({ status: doc.data().status || 'pending' });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// --- Mongike webhook ---
-app.post('/api/webhook', async (req, res) => {
-  const payload = req.body;
-  const webhookKey = req.headers['x-api-key'];
-  console.log('Mongike webhook received:', JSON.stringify(payload, null, 2));
-
-  // Verify webhook authenticity
-  if (webhookKey !== MONGIKE_API_KEY) {
-    console.log('Webhook x-api-key mismatch — acknowledging anyway');
-  }
-
-  // Mongike webhook payload format:
-  // { order_id, payment_status: "COMPLETED", reference, amount, metadata }
-  const orderId = payload.order_id || '';
-  const paymentStatus = payload.payment_status || '';
-  const gatewayRef = payload.reference || '';
-
-  if (!orderId) {
-    console.log('No order_id in webhook payload — acknowledging');
-    return res.status(200).send('OK');
-  }
-
-  try {
-    if (!db) return res.status(200).send('OK');
-
-    const txDoc = await db.collection('transactions').doc(orderId).get();
-
-    if (!txDoc.exists) {
-      console.log(`Transaction not found for order_id=${orderId}`);
-      return res.status(200).send('OK');
-    }
-
-    const data = txDoc.data();
-    if (data?.status === 'completed') {
-      console.log(`Transaction ${orderId} already processed`);
-      return res.status(200).send('Already processed');
-    }
-
-    if (paymentStatus === 'COMPLETED') {
-      if (data?.type === 'marketplace') {
-        await db.collection('transactions').doc(orderId).update({
-          status: 'completed',
-          gatewayRef,
-          completedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-
-        const item = {
-          productId: data.productId || '',
-          name: data.productName || 'Product',
-          price: (data.amount || 0),
-          quantity: 1,
-          image: data.productImage || null,
-          isReviewed: false,
-        };
-
-        await db.collection('orders').add({
-          buyerId: data.buyerId || '',
-          sellerId: data.sellerId || '',
-          items: [item],
-          totalAmount: data.amount || 0,
-          status: 'pending',
-          paymentMethod: 'Mongike',
-          paymentMethodName: 'Mongike',
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          trackingNumber: null,
-          escrowHold: true,
-          escrowReleased: false,
-        });
-
-        if (data.productId) {
-          try {
-            await db.collection('products').doc(data.productId).update({
-              soldCount: admin.firestore.FieldValue.increment(1),
-            });
-          } catch (_) {}
-        }
-      } else if (data?.type === 'coins') {
-        const coinsAmount = data.coins || 0;
-        const userId = data.buyerId || '';
-
-        if (userId) {
-          await db.collection('users').doc(userId).update({
-            coins: admin.firestore.FieldValue.increment(coinsAmount),
-          });
-        }
-
-        await db.collection('transactions').doc(orderId).update({
-          status: 'completed',
-          gatewayRef,
-          completedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      } else if (data?.type === 'boost') {
-        const productId = data.productId || '';
-        if (productId) {
-          const featuredUntil = new Date(Date.now() + 30 * 86400000);
-          await db.collection('products').doc(productId).update({
-            isFeatured: true,
-            featuredUntil: admin.firestore.Timestamp.fromDate(featuredUntil),
-          });
-        }
-        await db.collection('transactions').doc(orderId).update({
-          status: 'completed',
-          gatewayRef,
-          completedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      } else {
-        // subscription
-        const userId = data.buyerId || data.buyerEmail || '';
-        const tier = data.tier || 'premium';
-        const isYearly = data.isYearly === true;
-
-        if (userId) {
-          const durationDays = isYearly ? 365 : 30;
-          const premiumUntil = new Date(Date.now() + durationDays * 86400000);
-          await db.collection('users').doc(userId).update({
-            accountTier: tier,
-            isPremium: true,
-            premiumUntil: admin.firestore.Timestamp.fromDate(premiumUntil),
-          });
-        }
-
-        await db.collection('transactions').doc(orderId).update({
-          status: 'completed',
-          gatewayRef,
-          completedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      }
-
-      console.log(`Payment ${orderId} completed successfully`);
-    } else {
-      console.log(`Payment ${orderId} status: ${paymentStatus}`);
-      await db.collection('transactions').doc(orderId).update({
-        status: paymentStatus === 'FAILED' ? 'failed' : paymentStatus.toLowerCase(),
-        gatewayRef,
-      });
-    }
-  } catch (err) {
-    console.error('Webhook error:', err);
-  }
-
-  res.status(200).send('OK');
-});
-
-// --- Agora token generation ---
-app.post('/api/agora-token', (req, res) => {
-  try {
-    const { channelName, uid, role } = req.body;
-    if (!channelName) return res.status(400).json({ error: 'Missing channelName' });
-
-    const userUid = uid || 0;
-    const userRole = role === 'broadcaster' ? RtcRole.PUBLISHER : RtcRole.SUBSCRIBER;
-    const expireTime = 3600;
-
-    const token = RtcTokenBuilder.buildTokenWithUid(
-      AGORA_APP_ID, AGORA_CERT, channelName, userUid, userRole, expireTime, expireTime,
-    );
-
-    res.json({ token, appId: AGORA_APP_ID });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.get('/api/agora-token', (req, res) => {
-  try {
-    const channelName = req.query.channel;
-    const uid = parseInt(req.query.uid) || 0;
-    const role = req.query.role === 'broadcaster' ? RtcRole.PUBLISHER : RtcRole.SUBSCRIBER;
-    if (!channelName) return res.status(400).json({ error: 'Missing channel query param' });
-
-    const expireTime = 3600;
-    const token = RtcTokenBuilder.buildTokenWithUid(
-      AGORA_APP_ID, AGORA_CERT, channelName, uid, role, expireTime, expireTime,
-    );
-
-    res.json({ token, appId: AGORA_APP_ID });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// --- Webhook redirect handler (legacy — kept for Flutterwave backwards compatibility) ---
-app.get('/api/webhook-redirect', (req, res) => {
-  const txRef = req.query.tx_ref || req.query.txref || '';
-  res.redirect(`sokolangu://payment-callback?tx_ref=${txRef}`);
-});
-
-
 
 // ============================================================
 // 📲 FCM — SEND PUSH NOTIFICATION
@@ -789,7 +269,6 @@ app.post('/api/send-notification', async (req, res) => {
     if (!fcmToken) return res.json({ sent: false, reason: 'No FCM token' });
 
     const notifType = data && data.type;
-    const isCall = notifType === 'call';
     const isChat = notifType === 'chat' || notifType === 'group_chat';
 
     const message = {
@@ -797,17 +276,8 @@ app.post('/api/send-notification', async (req, res) => {
       notification: { title, body: body || '' },
       data: data || {},
       android: {
-        priority: isCall || isChat ? 'high' : 'normal',
-        notification: isCall ? {
-          channelId: 'incoming_calls_v2',
-          priority: 'high',
-          visibility: 'public',
-          sound: 'default',
-          notificationPriority: 'max',
-          vibrationPattern: [0, 500, 200, 500, 200, 1000],
-          fullScreenIntent: true,
-          tag: 'incoming_call',
-        } : isChat ? {
+        priority: isChat ? 'high' : 'normal',
+        notification: isChat ? {
           channelId: 'chat_messages_v2',
           priority: 'high',
           visibility: 'public',
@@ -818,11 +288,11 @@ app.post('/api/send-notification', async (req, res) => {
           color: '#40916C',
         } : undefined,
       },
-      apns: isCall || isChat ? {
+      apns: isChat ? {
         payload: {
           aps: {
             sound: 'default',
-            category: isCall ? 'incoming_call' : 'chat_message',
+            category: 'chat_message',
             'content-available': 1,
           },
         },
@@ -842,56 +312,6 @@ app.post('/api/send-notification', async (req, res) => {
     });
 
     res.json({ sent: true, response });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// ============================================================
-// ⭐ BOOST PRODUCT — FEATURED LISTING (TZS 5,000 / 30 days)
-// ============================================================
-const BOOST_PRICE_TZS = 5000;
-
-app.post('/api/boost-product', async (req, res) => {
-  try {
-    const { productId, phone, userId } = req.body;
-    if (!productId || !phone) {
-      return res.status(400).json({ error: 'Missing productId or phone' });
-    }
-
-    const order_id = `boost_${Date.now()}`;
-    const webhookUrl = process.env.WEBHOOK_URL || `https://sokolangu-production.up.railway.app/api/webhook`;
-
-    const result = await callMongikePay({
-      order_id,
-      amount: BOOST_PRICE_TZS,
-      buyer_phone: phone,
-      fee_payer: 'MERCHANT',
-      webhook_url: webhookUrl,
-    });
-
-    if (result.status !== 'success') {
-      return res.status(500).json({ error: result.message || 'Mongike error' });
-    }
-
-    if (db) {
-      await db.collection('transactions').doc(order_id).set({
-        type: 'boost',
-        productId,
-        amount: BOOST_PRICE_TZS,
-        buyerId: userId || '',
-        buyerPhone: phone,
-        status: 'pending',
-        mongikeId: result.data?.id || '',
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-    }
-
-    res.json({
-      order_id,
-      mongikeId: result.data?.id || '',
-      message: 'Payment prompt sent to your phone.',
-    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -948,7 +368,7 @@ app.put('/api/admin/users/:uid', async (req, res) => {
 
     const { uid } = req.params;
     const updates = {};
-    const allowed = ['accountTier', 'isAdmin', 'isSuspended', 'displayName', 'phone'];
+    const allowed = ['isAdmin', 'isSuspended', 'displayName', 'phone'];
     for (const field of allowed) {
       if (req.body[field] !== undefined) updates[field] = req.body[field];
     }
@@ -1072,18 +492,64 @@ app.post('/api/send-otp', async (req, res) => {
       await transporter.sendMail({
         from: SMTP_FROM,
         to: email,
-        subject: 'Soko Langu — Password Reset OTP',
+        subject: '🔐 Soko Langu — Reset Your Password',
         html: `
-          <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
-            <h2 style="color: #2D6A4F;">Soko Langu</h2>
-            <p>Use the OTP below to reset your password:</p>
-            <div style="font-size: 32px; font-weight: bold; color: #2D6A4F; text-align: center; 
-                        padding: 20px; background: #F0F9F1; border-radius: 12px; letter-spacing: 8px;">
-              ${otp}
-            </div>
-            <p style="color: #666;">This OTP expires in 10 minutes.</p>
-            <p style="color: #999; font-size: 12px;">If you didn't request this, ignore this email.</p>
-          </div>
+          <!DOCTYPE html>
+          <html>
+          <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+          <body style="margin:0; padding:0; background-color:#f4f7f6; font-family: 'Segoe UI', Arial, sans-serif;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f7f6; padding:20px 0;">
+              <tr><td align="center">
+                <table width="480" cellpadding="0" cellspacing="0" style="background-color:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+                  <!-- Header -->
+                  <tr>
+                    <td style="background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 50%, #40916C 100%); padding:32px 24px; text-align:center;">
+                      <div style="font-size:36px; margin-bottom:8px;">🏪</div>
+                      <h1 style="color:#ffffff; margin:0; font-size:24px; font-weight:700; letter-spacing:1px;">SOKO LANGU</h1>
+                      <p style="color:#95D5B2; margin:4px 0 0; font-size:13px;">Tanzania's Trusted Marketplace</p>
+                    </td>
+                  </tr>
+                  <!-- Body -->
+                  <tr>
+                    <td style="padding:32px 24px;">
+                      <h2 style="color:#1B4332; font-size:20px; margin:0 0 8px;">Password Reset Request</h2>
+                      <p style="color:#555; font-size:14px; line-height:1.6; margin:0 0 20px;">
+                        Someone requested to reset the password for your Soko Langu account. 
+                        Use the One-Time Password (OTP) below to proceed.
+                      </p>
+                      <!-- OTP Box -->
+                      <div style="background:#F0F9F1; border:2px dashed #2D6A4F; border-radius:12px; padding:20px; text-align:center; margin-bottom:20px;">
+                        <p style="color:#2D6A4F; font-size:13px; font-weight:600; margin:0 0 10px; text-transform:uppercase; letter-spacing:1px;">Your OTP</p>
+                        <div style="font-size:36px; font-weight:800; color:#1B4332; letter-spacing:12px; font-family:'Courier New', monospace;">
+                          ${otp}
+                        </div>
+                        <p style="color:#888; font-size:12px; margin:12px 0 0;">Valid for 10 minutes</p>
+                      </div>
+                      <!-- Instructions -->
+                      <div style="background:#FFF8E1; border-left:4px solid #FFA000; padding:12px 16px; border-radius:8px; margin-bottom:20px;">
+                        <p style="color:#795548; font-size:13px; margin:0; line-height:1.5;">
+                          <strong>⚡ Didn't request this?</strong> Ignore this email. Your password will not be changed.
+                        </p>
+                      </div>
+                      <p style="color:#999; font-size:12px; line-height:1.5; margin:0; text-align:center;">
+                        Soko Langu &bull; Tanzania<br>
+                        Need help? Contact us through the app.
+                      </p>
+                    </td>
+                  </tr>
+                  <!-- Footer -->
+                  <tr>
+                    <td style="background:#1B4332; padding:16px 24px; text-align:center;">
+                      <p style="color:#95D5B2; font-size:11px; margin:0;">
+                        &copy; ${new Date().getFullYear()} Soko Langu. All rights reserved.
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+              </td></tr>
+            </table>
+          </body>
+          </html>
         `,
       });
     } catch (mailErr) {
@@ -1229,104 +695,6 @@ app.post('/api/send-bulk-notification', async (req, res) => {
 });
 
 // ============================================================
-// 💸 WITHDRAW — Send money to user's M-Pesa via Mongike
-// ============================================================
-app.post('/api/withdraw', async (req, res) => {
-  try {
-    const { userId, amount, phone } = req.body;
-    if (!userId || !amount || !phone) {
-      return res.status(400).json({ error: 'Missing userId, amount, or phone' });
-    }
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
-
-    const userDoc = await db.collection('users').doc(userId).get();
-    if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
-
-    const user = userDoc.data();
-    if (user.isSuspended) return res.status(403).json({ error: 'Account suspended' });
-
-    const totalCoinsBefore = (user.viewerCoins || 0) + (user.coins || 0);
-    if (amount > totalCoinsBefore) {
-      return res.status(400).json({ error: 'Insufficient balance' });
-    }
-
-    const FEE_MONGIKE = 2000;
-    const netAmount = amount - FEE_MONGIKE;
-    if (netAmount <= 0) {
-      return res.status(400).json({ error: 'Amount too small after fee (min TZS 2001)' });
-    }
-
-    const resp = await fetch(`${MONGIKE_BASE}/payouts/withdraw`, {
-      method: 'POST',
-      headers: {
-        'x-api-key': MONGIKE_API_KEY,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        amount: netAmount,
-        recipient_phone: phone,
-      }),
-    });
-
-    const result = await resp.json();
-
-    if (result.status !== 'success') {
-      await auditLog({
-        userId, type: 'withdraw_failed', amount, balanceBefore: totalCoinsBefore, balanceAfter: totalCoinsBefore,
-        reason: `Mongike payout failed: ${result.message || 'Unknown error'}`,
-        metadata: { phone, netAmount, withdrawalType: 'viewer' },
-      });
-      return res.status(500).json({ error: result.message || 'Mongike payout failed' });
-    }
-
-    const viewerCoins = user.viewerCoins || 0;
-    const regCoins = user.coins || 0;
-    let remaining = amount;
-    const deductions = {};
-    if (viewerCoins > 0) {
-      const take = Math.min(remaining, viewerCoins);
-      deductions.viewerCoins = admin.firestore.FieldValue.increment(-take);
-      remaining -= take;
-    }
-    if (remaining > 0 && regCoins > 0) {
-      const take = Math.min(remaining, regCoins);
-      deductions.coins = admin.firestore.FieldValue.increment(-take);
-      remaining -= take;
-    }
-    await db.collection('users').doc(userId).update(deductions);
-
-    await db.collection('withdrawals').add({
-      userId,
-      type: 'viewer',
-      amount,
-      feeMongike: FEE_MONGIKE,
-      netAmount,
-      phone,
-      reference: result.data?.id || '',
-      status: 'completed',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    await auditLog({
-      userId, type: 'viewer_withdraw', amount: -amount,
-      balanceBefore: totalCoinsBefore, balanceAfter: totalCoinsBefore - amount,
-      reason: `Viewer withdrawal: TZS ${netAmount} to ${phone}`,
-      relatedId: result.data?.id || '',
-      metadata: { phone, netAmount, fee: FEE_MONGIKE },
-    });
-
-    res.json({
-      success: true,
-      netAmount,
-      reference: result.data?.id || '',
-      message: `TZS ${netAmount} sent to ${phone}`,
-    });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// ============================================================
 // 🔒 ESCROW — Release payment to seller (buyer confirms delivery)
 // ============================================================
 app.post('/api/escrow/release', async (req, res) => {
@@ -1337,65 +705,154 @@ app.post('/api/escrow/release', async (req, res) => {
     }
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-    const orderDoc = await db.collection('orders').doc(orderId).get();
-    if (!orderDoc.exists) return res.status(404).json({ error: 'Order not found' });
+    // Try transaction-based escrow first, then fall back to orders
+    let txDoc = await db.collection('transactions').doc(orderId).get();
+    let orderDoc = null;
 
-    const order = orderDoc.data();
-    if (order.buyerId !== userId) {
-      return res.status(403).json({ error: 'Only the buyer can confirm delivery' });
-    }
-    if (order.status !== 'shipped' && order.status !== 'confirmed') {
-      return res.status(400).json({ error: `Order cannot be released from status: ${order.status}` });
-    }
-    if (order.escrowReleased === true) {
-      return res.status(400).json({ error: 'Escrow already released' });
+    if (!txDoc.exists) {
+      orderDoc = await db.collection('orders').doc(orderId).get();
     }
 
-    await orderDoc.ref.update({
+    if (!txDoc.exists && (!orderDoc || !orderDoc.exists)) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+
+    let sellerId, sellerReceives, productName, productPrice, escrowReleased, mongikeFee, platformFee;
+
+    if (txDoc.exists) {
+      const tx = txDoc.data();
+      if (tx.buyerId !== userId) {
+        return res.status(403).json({ error: 'Only the buyer can confirm delivery' });
+      }
+      if (tx.status !== 'escrow_hold') {
+        return res.status(400).json({ error: `Cannot release escrow from status: ${tx.status}` });
+      }
+      if (tx.escrowReleased === true) {
+        return res.status(400).json({ error: 'Escrow already released' });
+      }
+      sellerId = tx.sellerId;
+      sellerReceives = tx.sellerReceives || 0;
+      productName = tx.productName || 'Product';
+      productPrice = tx.productPrice || 0;
+      escrowReleased = tx.escrowReleased;
+      mongikeFee = tx.mongikeFee || 0;
+      platformFee = tx.platformFee || 0;
+    } else {
+      const order = orderDoc.data();
+      if (order.buyerId !== userId) {
+        return res.status(403).json({ error: 'Only the buyer can confirm delivery' });
+      }
+      if (order.status !== 'shipped' && order.status !== 'confirmed') {
+        return res.status(400).json({ error: `Order cannot be released from status: ${order.status}` });
+      }
+      if (order.escrowReleased === true) {
+        return res.status(400).json({ error: 'Escrow already released' });
+      }
+      sellerId = order.sellerId;
+      sellerReceives = order.totalAmount || 0;
+      productName = order.items?.map(i => i.name).join(', ') || 'Product';
+      productPrice = order.totalAmount || 0;
+      escrowReleased = order.escrowReleased;
+      mongikeFee = 0;
+      platformFee = 0;
+    }
+
+    // Mark as released
+    const ref = txDoc.exists ? txDoc.ref : orderDoc.ref;
+    await ref.update({
       status: 'delivered',
       escrowReleased: true,
       escrowReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    // Credit seller's balance (full amount minus platform fee if any)
-    const orderAmount = order.totalAmount || 0;
-    const sellerPayout = orderAmount;
-
-    const sellerDoc = await db.collection('users').doc(order.sellerId).get();
+    const sellerDoc = await db.collection('users').doc(sellerId).get();
     const balanceBefore = sellerDoc.exists ? (sellerDoc.data().sellerBalance || 0) : 0;
+    const pendingBefore = sellerDoc.exists ? (sellerDoc.data().pendingEscrow || 0) : 0;
 
-    await db.collection('users').doc(order.sellerId).update({
-      sellerBalance: admin.firestore.FieldValue.increment(sellerPayout),
+    // Move from pendingEscrow to sellerBalance
+    await db.collection('users').doc(sellerId).update({
+      sellerBalance: admin.firestore.FieldValue.increment(sellerReceives),
+      pendingEscrow: admin.firestore.FieldValue.increment(-sellerReceives),
     });
 
     // Record in revenue_transactions for seller
     await db.collection('revenue_transactions').add({
-      userId: order.sellerId,
+      userId: sellerId,
       type: 'sale',
-      amount: sellerPayout,
+      amount: sellerReceives,
       orderId,
-      description: `Sale: ${order.items?.map(i => i.name).join(', ') || 'Product'} - TZS ${sellerPayout}`,
+      description: `Escrow released: ${productName} - TZS ${sellerReceives}`,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
     });
 
     // Audit log
     await auditLog({
-      userId: order.sellerId,
+      userId: sellerId,
       type: 'escrow_release',
-      amount: sellerPayout,
+      amount: sellerReceives,
       balanceBefore,
-      balanceAfter: balanceBefore + sellerPayout,
-      reason: `Escrow released for order ${orderId}`,
+      balanceAfter: balanceBefore + sellerReceives,
+      reason: `Escrow released for ${orderId}`,
       relatedId: orderId,
-      metadata: { buyerId: order.buyerId, items: order.items },
+      metadata: { buyerId: userId, productName, pendingBefore, pendingAfter: pendingBefore - sellerReceives },
     });
 
+    // Try auto-payout to seller's phone now that escrow is released
+    if (sellerReceives > 0) {
+      try {
+        const sellerUserDoc = await db.collection('users').doc(sellerId).get();
+        const sellerPhone = sellerUserDoc.exists ? sellerUserDoc.data().phone : null;
+
+        if (sellerPhone) {
+          const payoutFee = MONGIKE_PAYOUT_FEE;
+          const netPayout = sellerReceives - payoutFee;
+
+          if (netPayout > 0) {
+            const payoutResp = await fetch(`${MONGIKE_BASE}/payouts/withdraw`, {
+              method: 'POST',
+              headers: {
+                'x-api-key': MONGIKE_API_KEY,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                amount: netPayout,
+                recipient_phone: sellerPhone,
+              }),
+            });
+
+            const payoutData = await payoutResp.json();
+
+            if (payoutData.status === 'success') {
+              await db.collection('withdrawals').add({
+                userId: sellerId,
+                type: 'seller',
+                amount: sellerReceives,
+                feeMongike: payoutFee,
+                netAmount: netPayout,
+                phone: sellerPhone,
+                reference: payoutData.data?.id || orderId,
+                status: 'completed',
+                autoPayout: true,
+                transactionId: orderId,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
+
+              // Deduct from seller balance (already credited above)
+              // Actually keep in balance - this is a separate payout record
+            }
+          }
+        }
+      } catch (payoutErr) {
+        console.error('Escrow auto-payout error:', payoutErr);
+        // Funds already in sellerBalance — they can withdraw manually
+      }
+    }
+
     // Notify seller
-    const notifRef = db.collection('notifications');
-    await notifRef.add({
-      userId: order.sellerId,
-      title: 'Payment Released!',
-      body: `Buyer confirmed delivery for order #${orderId.substring(0, 8)}. TZS ${sellerPayout} added to your balance.`,
+    await db.collection('notifications').add({
+      userId: sellerId,
+      title: 'Escrow Imefunguliwa!',
+      body: `Mnunuzi amethibitisha upokeaji wa ${productName}. TZS ${sellerReceives.toLocaleString()} zimewekwa kwenye salio lako.`,
       isRead: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
@@ -1405,7 +862,6 @@ app.post('/api/escrow/release', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
-
 // ============================================================
 // 🔒 ESCROW — Admin force release
 // ============================================================
@@ -1419,34 +875,499 @@ app.post('/api/escrow/admin-release', async (req, res) => {
     if (!orderId) return res.status(400).json({ error: 'Missing orderId' });
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-    const orderDoc = await db.collection('orders').doc(orderId).get();
-    if (!orderDoc.exists) return res.status(404).json({ error: 'Order not found' });
+    // Try transaction first, then order
+    let txDoc = await db.collection('transactions').doc(orderId).get();
+    let orderDoc = null;
 
-    const order = orderDoc.data();
-    const orderAmount = order.totalAmount || 0;
-    const sellerPayout = orderAmount;
+    if (!txDoc.exists) {
+      orderDoc = await db.collection('orders').doc(orderId).get();
+    }
 
-    await orderDoc.ref.update({
-      status: 'delivered',
-      escrowReleased: true,
-      escrowReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    if (!txDoc.exists && (!orderDoc || !orderDoc.exists)) {
+      return res.status(404).json({ error: 'Transaction/Order not found' });
+    }
 
-    if (order.sellerId) {
-      await db.collection('users').doc(order.sellerId).update({
-        sellerBalance: admin.firestore.FieldValue.increment(sellerPayout),
+    let sellerId, sellerReceives, productName;
+
+    if (txDoc.exists) {
+      const tx = txDoc.data();
+      sellerId = tx.sellerId;
+      sellerReceives = tx.sellerReceives || tx.productPrice || 0;
+      productName = tx.productName || 'Product';
+      if (tx.escrowReleased) {
+        return res.status(400).json({ error: 'Escrow already released' });
+      }
+      await txDoc.ref.update({
+        status: 'delivered',
+        escrowReleased: true,
+        escrowReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } else {
+      const order = orderDoc.data();
+      sellerId = order.sellerId;
+      sellerReceives = order.totalAmount || 0;
+      productName = order.items?.map(i => i.name).join(', ') || 'Product';
+      if (order.escrowReleased) {
+        return res.status(400).json({ error: 'Escrow already released' });
+      }
+      await orderDoc.ref.update({
+        status: 'delivered',
+        escrowReleased: true,
+        escrowReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+
+    if (sellerId) {
+      await db.collection('users').doc(sellerId).update({
+        sellerBalance: admin.firestore.FieldValue.increment(sellerReceives),
+        pendingEscrow: admin.firestore.FieldValue.increment(-sellerReceives),
       });
       await db.collection('revenue_transactions').add({
-        userId: order.sellerId,
+        userId: sellerId,
         type: 'sale',
-        amount: sellerPayout,
+        amount: sellerReceives,
         orderId,
-        description: `Sale (admin release): ${order.items?.map(i => i.name).join(', ') || 'Product'} - TZS ${sellerPayout}`,
+        description: `Sale (admin release): ${productName} - TZS ${sellerReceives}`,
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
       });
     }
 
     res.json({ success: true, message: 'Escrow force-released by admin' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 🪪 KYC — Seller identity verification
+// ============================================================
+app.post('/api/kyc/submit', async (req, res) => {
+  try {
+    const { userId, fullName, idType, idNumber, idImageUrl, selfieUrl } = req.body;
+    if (!userId || !fullName || !idType || !idNumber) {
+      return res.status(400).json({ error: 'Missing required KYC fields' });
+    }
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
+
+    const existing = userDoc.data().kyc;
+    if (existing && existing.status === 'approved') {
+      return res.status(400).json({ error: 'KYC already approved' });
+    }
+
+    // Auto-validate KYC fields
+    const errors = [];
+    const nameParts = fullName.trim().split(/\s+/);
+    if (nameParts.length < 2) errors.push('Jina kamili linahitaji angalau majina mawili');
+    if (!idImageUrl) errors.push('Picha ya kitambulisho haijapakiwa');
+    if (!selfieUrl) errors.push('Selfie haijapakiwa');
+
+    // Validate ID number format based on type
+    const cleanId = idNumber.replace(/\s/g, '');
+    switch (idType) {
+      case 'National ID':
+        if (!/^\d{20}$/.test(cleanId)) errors.push('Namba ya National ID inatakiwa kuwa na tarakimu 20');
+        break;
+      case 'Passport':
+        if (cleanId.length < 6) errors.push('Namba ya Passport inatakiwa kuwa na angalau herufi 6');
+        break;
+      case 'Drivers License':
+        if (cleanId.length < 6) errors.push('Namba ya Drivers License inatakiwa kuwa na angalau herufi 6');
+        break;
+      case 'Voters ID':
+        if (cleanId.length < 6) errors.push('Namba ya Voters ID inatakiwa kuwa na angalau herufi 6');
+        break;
+    }
+
+    const autoApproved = errors.length === 0;
+    const status = autoApproved ? 'approved' : 'pending';
+    const reason = autoApproved ? '' : errors.join('; ');
+
+    await db.collection('users').doc(userId).update({
+      kyc: {
+        fullName,
+        idType,
+        idNumber: cleanId,
+        idImageUrl: idImageUrl || '',
+        selfieUrl: selfieUrl || '',
+        status,
+        approved: autoApproved,
+        reviewNotes: reason,
+        submittedAt: admin.firestore.FieldValue.serverTimestamp(),
+        reviewedAt: autoApproved ? admin.firestore.FieldValue.serverTimestamp() : null,
+      },
+    });
+
+    await auditLog({
+      userId,
+      type: `kyc_${status}`,
+      amount: 0,
+      reason: `KYC ${status}: ${idType} ${cleanId}${reason ? ' — ' + reason : ''}`,
+    });
+
+    // Notify user
+    await db.collection('notifications').add({
+      userId,
+      title: autoApproved ? 'KYC Imekubaliwa!' : 'KYC Inahitaji Ukaguzi',
+      body: autoApproved
+        ? 'Umekubaliwa kuuza bidhaa. Sasa unaweza kuongeza bidhaa zako.'
+        : `KYC yako inahitaji marekebisho: ${reason}. Tuma tena baada ya kusahihisha.`,
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.json({
+      success: true,
+      approved: autoApproved,
+      reason,
+      message: autoApproved ? 'KYC imekubaliwa moja kwa moja' : `KYC imetumwa lakini: ${reason}`,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/kyc/status/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
+
+    const kyc = userDoc.data().kyc || { status: 'none' };
+    res.json({ kyc });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Admin KYC review
+app.post('/api/admin/kyc/review', async (req, res) => {
+  try {
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const { userId, approve, notes } = req.body;
+    if (!userId) return res.status(400).json({ error: 'Missing userId' });
+
+    const status = approve ? 'approved' : 'rejected';
+
+    await db.collection('users').doc(userId).update({
+      'kyc.status': status,
+      'kyc.reviewedAt': admin.firestore.FieldValue.serverTimestamp(),
+      'kyc.reviewNotes': notes || '',
+      'kyc.approved': approve === true,
+    });
+
+    await db.collection('notifications').add({
+      userId,
+      title: approve ? 'KYC Imekubaliwa!' : 'KYC Imekataliwa',
+      body: approve
+        ? 'Umekubaliwa kuuza bidhaa. Sasa unaweza kuongeza bidhaa mpya.'
+        : `KYC yako imekataliwa. Sababu: ${notes || 'Tafadhali wasiliana na msaada'}. Wasilisha tena baada ya kurekebisha.`,
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await auditLog({
+      userId,
+      type: `kyc_${status}`,
+      amount: 0,
+      reason: `KYC ${status} by admin. Notes: ${notes || ''}`,
+    });
+
+    res.json({ success: true, message: `KYC ${status}` });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/admin/kyc/pending', async (req, res) => {
+  try {
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const snap = await db.collection('users')
+      .where('kyc.status', '==', 'pending')
+      .limit(50)
+      .get();
+
+    const pending = snap.docs.map(doc => ({
+      uid: doc.id,
+      displayName: doc.data().displayName || '',
+      email: doc.data().email || '',
+      phone: doc.data().phone || '',
+      kyc: doc.data().kyc || {},
+    }));
+
+    res.json({ pending });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 🛒 MARKETPLACE — Initiate product purchase payment via Mongike
+// ============================================================
+app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, res) => {
+  try {
+    const { productPrice, productName, productId, sellerId, sellerName, email, phone, buyerId } = req.body;
+    if (!productPrice || !productId || !sellerId || !phone) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Fraud checks
+    if (buyerId) {
+      const suspended = await checkSuspended(buyerId);
+      if (suspended) return res.status(403).json({ error: 'Account suspended' });
+
+      const isDuplicate = await checkDuplicatePayment(productId, buyerId);
+      if (isDuplicate) return res.status(400).json({ error: 'A pending payment already exists for this product' });
+
+      const withinLimit = await checkDailyLimit(buyerId, productPrice);
+      if (!withinLimit) return res.status(400).json({ error: `Daily purchase limit of TZS ${MAX_DAILY_SALE_AMOUNT.toLocaleString()} exceeded` });
+    }
+
+    const order_id = `order_${Date.now()}_${buyerId ? buyerId.substring(0, 8) : 'anon'}`;
+    const webhookUrl = process.env.WEBHOOK_URL || `https://sokolangu-production.up.railway.app/api/webhook`;
+
+    const result = await callMongikePay({
+      order_id,
+      amount: Math.round(productPrice),
+      buyer_phone: phone,
+      fee_payer: 'MERCHANT',
+      webhook_url: webhookUrl,
+    });
+
+    if (result.status !== 'success') {
+      return res.status(500).json({ error: result.message || 'Mongike error' });
+    }
+
+    if (db) {
+      await db.collection('transactions').doc(order_id).set({
+        type: 'purchase',
+        productId,
+        productName: sanitize(productName),
+        sellerId,
+        sellerName: sanitize(sellerName),
+        buyerPhone: phone,
+        buyerId: buyerId || '',
+        productPrice: Math.round(productPrice),
+        status: 'pending',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+
+    res.json({
+      order_id,
+      mongikeId: result.data?.id || '',
+      message: 'Payment prompt sent to your phone. Check Mongike, Airtel Money, Mixx, or Halopesa and enter your PIN.',
+    });
+  } catch (e) {
+    if (e.name === 'AbortError') {
+      return res.status(504).json({ error: 'Mongike request timed out. Please try again.' });
+    }
+    res.status(500).json({ error: e.message || 'Internal server error' });
+  }
+});
+
+// ============================================================
+// 🔔 MONGIKE WEBHOOK — Handle payment completion
+// ============================================================
+app.post('/api/webhook', verifyWebhook, async (req, res) => {
+  try {
+    const { order_id, status, amount, buyer_phone } = req.body;
+    if (!order_id || !status) {
+      return res.status(200).json({ received: false });
+    }
+
+    if (!db) return res.status(200).json({ received: false });
+
+    const txDoc = await db.collection('transactions').doc(order_id).get();
+    if (!txDoc.exists) return res.status(200).json({ received: false });
+
+    const tx = txDoc.data();
+
+    if (status === 'success' || status === 'completed') {
+      await txDoc.ref.update({ status: 'completed' });
+
+      if (tx.type === 'boost') {
+        // Handle boost payment success
+        const tier = tx.tier || 'bronze';
+        const tierConfig = BOOST_TIERS[tier] || BOOST_TIERS.bronze;
+        const now = new Date();
+        const boostedUntil = new Date(now.getTime() + tierConfig.days * 24 * 60 * 60 * 1000);
+
+        await db.collection('products').doc(tx.productId).update({
+          isBoosted: true,
+          boostedUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
+          boostTier: tier,
+          // Backward compat
+          isFeatured: true,
+          featuredUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
+        });
+
+        // Send notification + FCM push
+        if (tx.userId) {
+          await db.collection('notifications').add({
+            userId: tx.userId,
+            title: '✅ Boost imewashwa!',
+            body: `Bidhaa yako imepandishwa kwa daraja la ${tier} kwa siku ${tierConfig.days}.`,
+            data: { type: 'boost', productId: tx.productId },
+            isRead: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          // Send FCM push
+          try {
+            const userSnap = await db.collection('users').doc(tx.userId).get();
+            const token = userSnap.data()?.fcmToken;
+            if (token) {
+              await admin.messaging().send({
+                token,
+                notification: { title: '✅ Boost imewashwa!', body: `Bidhaa yako imepandishwa kwa daraja la ${tier} kwa siku ${tierConfig.days}.` },
+                data: { type: 'boost', productId: tx.productId || '' },
+              });
+            }
+          } catch (_) {}
+        }
+      }
+
+      if (tx.type === 'purchase') {
+        const productPrice = tx.productPrice || 0;
+        const platformFee = Math.round(productPrice * PLATFORM_COMMISSION_PERCENT);
+        const mongikeFee = MONGIKE_TX_FEE;
+        const payoutFee = MONGIKE_PAYOUT_FEE;
+        const sellerReceives = productPrice - platformFee - mongikeFee - payoutFee;
+        const escrowExpiry = new Date(Date.now() + ESCROW_AUTO_RELEASE_DAYS * 24 * 60 * 60 * 1000);
+
+        // Update transaction — put in escrow instead of auto-paying
+        await txDoc.ref.update({
+          processingFee: mongikeFee,
+          platformFee,
+          mongikeFee,
+          payoutFee,
+          sokoLanguCommission: platformFee,
+          totalAmount: productPrice,
+          sellerReceives,
+          status: 'escrow_hold',
+          paymentMethod: 'Mongike',
+          transactionReference: order_id,
+          buyerId: tx.buyerId || '',
+          buyerName: tx.buyerName || '',
+          escrowStatus: 'held',
+          escrowHeldAt: admin.firestore.FieldValue.serverTimestamp(),
+          escrowExpiresAt: admin.firestore.Timestamp.fromDate(escrowExpiry),
+        });
+
+        // Record platform commission immediately
+        await db.collection('revenue_transactions').add({
+          userId: 'platform',
+          amount: platformFee,
+          type: 'commission',
+          description: `Commission for ${tx.productName || 'Product'} (escrow)`,
+          transactionId: order_id,
+          productName: tx.productName || '',
+          productPrice,
+          mongikeFee,
+          payoutFee,
+          sokoLanguCommission: platformFee,
+          buyerName: tx.buyerName || '',
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        // Credit seller's pendingEscrow (not available for withdrawal until released)
+        if (sellerReceives > 0 && tx.sellerId) {
+          await db.collection('users').doc(tx.sellerId).set({
+            pendingEscrow: admin.firestore.FieldValue.increment(sellerReceives),
+            totalSales: admin.firestore.FieldValue.increment(1),
+            grossSalesVolume: admin.firestore.FieldValue.increment(productPrice),
+            lastSaleAt: admin.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true });
+
+          // Notify seller — payment received, held in escrow
+          await db.collection('notifications').add({
+            userId: tx.sellerId,
+            title: 'Umepata Mauzo!',
+            body: `${tx.productName || 'Bidhaa'} imeuzwa. TZS ${sellerReceives.toLocaleString()} imewekwa escrow. Mnunuzi atathibitisha upokeaji ili pesa zifunguliwe.`,
+            isRead: false,
+            type: 'sale',
+            transactionId: order_id,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          // Send FCM push to seller
+          try {
+            const sellerSnap = await db.collection('users').doc(tx.sellerId).get();
+            const sellerToken = sellerSnap.data()?.fcmToken;
+            if (sellerToken) {
+              await admin.messaging().send({
+                token: sellerToken,
+                notification: { title: 'Umepata Mauzo!', body: `${tx.productName || 'Bidhaa'} imeuzwa. TZS ${sellerReceives.toLocaleString()} imewekwa escrow.` },
+                data: { type: 'order', productId: tx.productId || '', transactionId: order_id },
+              });
+            }
+          } catch (_) {}
+        }
+
+        // Notify buyer to confirm delivery
+        if (tx.buyerId) {
+          await db.collection('notifications').add({
+            userId: tx.buyerId,
+            title: 'Malipo Yamekamilika!',
+            body: `Malipo ya ${tx.productName || 'Bidhaa'} yamepokelewa. Thibitisha upokeaji ili muuzaji apate hela zake.`,
+            isRead: false,
+            type: 'escrow_confirm',
+            transactionId: order_id,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          // Send FCM push to buyer
+          try {
+            const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
+            const buyerToken = buyerSnap.data()?.fcmToken;
+            if (buyerToken) {
+              await admin.messaging().send({
+                token: buyerToken,
+                notification: { title: 'Malipo Yamekamilika!', body: `Malipo ya ${tx.productName || 'Bidhaa'} yamepokelewa.` },
+                data: { type: 'order', productId: tx.productId || '', transactionId: order_id },
+              });
+            }
+          } catch (_) {}
+        }
+      }
+    } else if (status === 'failed' || status === 'cancelled') {
+      await txDoc.ref.update({ status: 'failed' });
+    }
+
+    res.status(200).json({ received: true });
+  } catch (e) {
+    console.error('Webhook error:', e);
+    res.status(200).json({ received: true });
+  }
+});
+
+// ============================================================
+// 💰 SELLER — Check balance
+// ============================================================
+app.get('/api/seller/balance', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ error: 'Missing userId' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
+
+    const user = userDoc.data();
+    res.json({
+      sellerBalance: user.sellerBalance || 0,
+      totalSales: user.totalSales || 0,
+      grossSalesVolume: user.grossSalesVolume || 0,
+      phone: user.phone || '',
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -1470,13 +1391,19 @@ app.post('/api/seller/withdraw', async (req, res) => {
     if (user.isSuspended) return res.status(403).json({ error: 'Account suspended' });
 
     const sellerBalance = user.sellerBalance || 0;
+
+    // Minimum withdrawal check
+    if (amount < MIN_WITHDRAWAL) {
+      return res.status(400).json({ error: `Minimum withdrawal is TZS ${MIN_WITHDRAWAL.toLocaleString()}` });
+    }
+
     if (amount > sellerBalance) {
       return res.status(400).json({ error: 'Insufficient balance' });
     }
 
     const netAmount = amount - MONGIKE_PAYOUT_FEE;
     if (netAmount <= 0) {
-      return res.status(400).json({ error: `Amount too small after fee (min TZS ${MONGIKE_PAYOUT_FEE + 1})` });
+      return res.status(400).json({ error: `Amount too small after TZS ${MONGIKE_PAYOUT_FEE.toLocaleString()} payout fee` });
     }
 
     const resp = await fetch(`${MONGIKE_BASE}/payouts/withdraw`, {
@@ -1521,7 +1448,7 @@ app.post('/api/seller/withdraw', async (req, res) => {
     await auditLog({
       userId, type: 'seller_withdraw', amount: -amount,
       balanceBefore: sellerBalance, balanceAfter: sellerBalance - amount,
-      reason: `Seller withdrawal: TZS ${netAmount} to ${phone}`,
+      reason: `Seller withdrawal: TZS ${netAmount.toLocaleString()} to ${phone}`,
       relatedId: result.data?.id || '',
       metadata: { phone, netAmount, fee: MONGIKE_PAYOUT_FEE },
     });
@@ -1529,92 +1456,9 @@ app.post('/api/seller/withdraw', async (req, res) => {
     res.json({
       success: true,
       netAmount,
-      reference: result.data?.id || '',
-      message: `TZS ${netAmount} sent to ${phone}`,
-    });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// ============================================================
-// 🎬 STREAMER WITHDRAW — Send gift earnings to mobile money
-// ============================================================
-app.post('/api/streamer/withdraw', async (req, res) => {
-  try {
-    const { userId, amount, phone } = req.body;
-    if (!userId || !amount || !phone) {
-      return res.status(400).json({ error: 'Missing userId, amount, or phone' });
-    }
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
-
-    const userDoc = await db.collection('users').doc(userId).get();
-    if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
-
-    const user = userDoc.data();
-    if (user.isSuspended) return res.status(403).json({ error: 'Account suspended' });
-
-    const streamerEarnings = user.streamerEarnings || 0;
-    if (amount > streamerEarnings) {
-      return res.status(400).json({ error: 'Insufficient gift earnings' });
-    }
-
-    const netAmount = amount - MONGIKE_PAYOUT_FEE;
-    if (netAmount <= 0) {
-      return res.status(400).json({ error: `Amount too small after fee (min TZS ${MONGIKE_PAYOUT_FEE + 1})` });
-    }
-
-    const resp = await fetch(`${MONGIKE_BASE}/payouts/withdraw`, {
-      method: 'POST',
-      headers: {
-        'x-api-key': MONGIKE_API_KEY,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        amount: netAmount,
-        recipient_phone: phone,
-      }),
-    });
-
-    const result = await resp.json();
-
-    if (result.status !== 'success') {
-      await auditLog({
-        userId, type: 'streamer_withdraw_failed', amount, balanceBefore: streamerEarnings, balanceAfter: streamerEarnings,
-        reason: `Mongike payout failed: ${result.message || 'Unknown error'}`,
-        metadata: { phone, netAmount },
-      });
-      return res.status(500).json({ error: result.message || 'Mongike payout failed' });
-    }
-
-    await db.collection('users').doc(userId).update({
-      streamerEarnings: admin.firestore.FieldValue.increment(-amount),
-    });
-
-    await db.collection('streamer_withdrawals').add({
-      userId,
-      amount,
       fee: MONGIKE_PAYOUT_FEE,
-      netAmount,
-      phone,
       reference: result.data?.id || '',
-      status: 'completed',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    await auditLog({
-      userId, type: 'streamer_withdraw', amount: -amount,
-      balanceBefore: streamerEarnings, balanceAfter: streamerEarnings - amount,
-      reason: `Streamer withdrawal: TZS ${netAmount} to ${phone}`,
-      relatedId: result.data?.id || '',
-      metadata: { phone, netAmount, fee: MONGIKE_PAYOUT_FEE },
-    });
-
-    res.json({
-      success: true,
-      netAmount,
-      reference: result.data?.id || '',
-      message: `TZS ${netAmount} sent to ${phone}`,
+      message: `TZS ${netAmount.toLocaleString()} sent to ${phone}`,
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1742,13 +1586,9 @@ app.get('/api/admin/stats', async (req, res) => {
 
     const balanceSnap = await db.collection('users').get();
     let totalSellerBalance = 0;
-    let totalViewerCoins = 0;
-    let totalCoins = 0;
     balanceSnap.docs.forEach(doc => {
       const d = doc.data();
       totalSellerBalance += d.sellerBalance || 0;
-      totalViewerCoins += d.viewerCoins || 0;
-      totalCoins += d.coins || 0;
     });
 
     res.json({
@@ -1757,8 +1597,7 @@ app.get('/api/admin/stats', async (req, res) => {
       totalWithdrawals,
       totalAdViews,
       totalSellerBalance,
-      totalViewerCoins,
-      totalCoins,
+
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -2028,7 +1867,7 @@ app.post('/api/admin/delete-doc', async (req, res) => {
     const { collection, docId } = req.body;
     if (!collection || !docId) return res.status(400).json({ error: 'Missing collection or docId' });
 
-    const allowed = ['transactions', 'withdrawals', 'revenue_transactions', 'ad_views', 'notifications', 'products', 'orders', 'reviews', 'audit_log', 'viewer_ad_views', 'viewer_payouts', 'viewer_soft_payouts'];
+    const allowed = ['transactions', 'withdrawals', 'revenue_transactions', 'ad_views', 'notifications', 'products', 'orders', 'reviews', 'audit_log', 'viewer_ad_views'];
     if (!allowed.includes(collection)) return res.status(403).json({ error: 'Collection not allowed for deletion' });
 
     await db.collection(collection).doc(docId).delete();
@@ -2053,6 +1892,386 @@ app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
   res.status(500).json({ error: err.message || 'Internal server error' });
 });
+
+// ============================================================
+// ⏰ CRON — Auto-release expired escrows
+// Call this endpoint every hour from cron-job.org or similar
+// ============================================================
+app.post('/api/cron/release-escrows', async (req, res) => {
+  try {
+    const secret = req.headers['x-cron-secret'];
+    if (secret !== process.env.ADMIN_SECRET) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const now = admin.firestore.Timestamp.now();
+    const expired = await db.collection('transactions')
+      .where('status', '==', 'escrow_hold')
+      .where('escrowExpiresAt', '<=', now)
+      .where('escrowReleased', '!=', true)
+      .limit(20)
+      .get();
+
+    let released = 0;
+    for (const doc of expired.docs) {
+      const tx = doc.data();
+      const sellerReceives = tx.sellerReceives || 0;
+      const sellerId = tx.sellerId;
+
+      await doc.ref.update({
+        status: 'delivered',
+        escrowReleased: true,
+        escrowReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
+        escrowAutoReleased: true,
+      });
+
+      if (sellerId && sellerReceives > 0) {
+        await db.collection('users').doc(sellerId).update({
+          sellerBalance: admin.firestore.FieldValue.increment(sellerReceives),
+          pendingEscrow: admin.firestore.FieldValue.increment(-sellerReceives),
+        });
+
+        await db.collection('notifications').add({
+          userId: sellerId,
+          title: 'Escrow Imefunguliwa Kiotomatiki',
+          body: `${tx.productName || 'Bidhaa'} escrow imefunguliwa baada ya muda wake. TZS ${sellerReceives.toLocaleString()} zimewekwa kwenye salio lako.`,
+          isRead: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+
+      released++;
+    }
+
+    res.json({ success: true, released, total: expired.docs.length });
+  } catch (e) {
+    console.error('Cron release-escrows error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 📊 Stats endpoint for monitoring
+// ============================================================
+app.get('/api/stats', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const [txSnap, pendingKycSnap, userSnap] = await Promise.all([
+      db.collection('transactions').where('status', '==', 'escrow_hold').count().get(),
+      db.collection('users').where('kyc.status', '==', 'pending').count().get(),
+      db.collection('users').count().get(),
+    ]);
+
+    res.json({
+      activeEscrows: txSnap.data().count,
+      pendingKyc: pendingKycSnap.data().count,
+      totalUsers: userSnap.data().count,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 📋 Report endpoints
+// ============================================================
+
+// Submit a report
+app.post('/api/reports', asyncHandler(async (req, res) => {
+  try {
+    const { reporterId, reporterName, reportedUserId, reportedUserName, productId, productName, reason, description } = req.body;
+
+    if (!reporterId || !reportedUserId || !reason || !description) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    await db.collection('reports').add({
+      reporterId,
+      reporterName: reporterName || 'Anonymous',
+      reportedUserId,
+      reportedUserName: reportedUserName || 'Anonymous',
+      productId: productId || null,
+      productName: productName || null,
+      reason,
+      description,
+      status: 'pending',
+      adminNote: null,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.json({ success: true, message: 'Report submitted' });
+  } catch (e) {
+    console.error('Submit report error:', e);
+    res.status(500).json({ error: e.message });
+  }
+}));
+
+// Get reports (admin only)
+app.get('/api/reports', asyncHandler(async (req, res) => {
+  try {
+    const { status } = req.query;
+    let query = db.collection('reports').orderBy('createdAt', 'desc');
+    if (status) query = query.where('status', '==', status);
+
+    const snap = await query.get();
+    const reports = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    res.json({ success: true, reports });
+  } catch (e) {
+    console.error('Get reports error:', e);
+    res.status(500).json({ error: e.message });
+  }
+}));
+
+// Update report status (admin only)
+app.patch('/api/reports/:id', asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, adminNote } = req.body;
+
+    if (!status) return res.status(400).json({ error: 'Status is required' });
+
+    const update = { status };
+    if (adminNote !== undefined) update.adminNote = adminNote;
+
+    await db.collection('reports').doc(id).update(update);
+    res.json({ success: true, message: 'Report updated' });
+  } catch (e) {
+    console.error('Update report error:', e);
+    res.status(500).json({ error: e.message });
+  }
+}));
+
+// ============================================================
+// 🚨 Fraud prevention endpoints
+// ============================================================
+
+// Get fraud alerts
+app.get('/api/fraud/alerts', asyncHandler(async (req, res) => {
+  try {
+    const { resolved } = req.query;
+    let query = db.collection('fraud_alerts').orderBy('detectedAt', 'desc');
+    if (resolved !== undefined) query = query.where('resolved', '==', resolved === 'true');
+    const snap = await query.get();
+    const alerts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    res.json({ success: true, alerts });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}));
+
+// Dismiss a fraud alert
+app.patch('/api/fraud/alerts/:id/dismiss', asyncHandler(async (req, res) => {
+  try {
+    await db.collection('fraud_alerts').doc(req.params.id).update({ resolved: true });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}));
+
+// Check seller risk score
+app.get('/api/fraud/risk/:sellerId', asyncHandler(async (req, res) => {
+  try {
+    const { sellerId } = req.params;
+    const sellerDoc = await db.collection('users').doc(sellerId).get();
+    if (!sellerDoc.exists) return res.status(404).json({ error: 'Seller not found' });
+
+    const seller = sellerDoc.data();
+    let riskScore = 0;
+    const reasons = [];
+
+    // No KYC
+    if (!seller?.kyc?.approved) { riskScore += 30; reasons.push('No KYC'); }
+
+    // New account
+    const createdAt = seller?.createdAt?.toDate();
+    if (createdAt) {
+      const ageDays = (Date.now() - createdAt.getTime()) / 86400000;
+      if (ageDays < 1) { riskScore += 20; reasons.push('Account less than 1 day old'); }
+      else if (ageDays < 7) { riskScore += 10; reasons.push('Account less than 1 week old'); }
+    }
+
+    // Check for active fraud alerts
+    const alertSnap = await db.collection('fraud_alerts')
+      .where('sellerId', '==', sellerId)
+      .where('resolved', '==', false)
+      .count()
+      .get();
+    if ((alertSnap.data().count || 0) > 0) { riskScore += 25; reasons.push('Active fraud alerts'); }
+
+    res.json({
+      success: true,
+      sellerId,
+      riskScore: Math.min(riskScore, 100),
+      riskLevel: riskScore >= 50 ? 'high' : riskScore >= 25 ? 'medium' : 'low',
+      reasons,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}));
+
+// ─── FLASH SALE: CREATE ────────────────────────────────
+app.post('/api/flash-sale/create', asyncHandler(async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const {
+      productId, productName, productImage, originalPrice, salePrice,
+      discountPercent, sellerId, sellerName, sellerPhone, location,
+      stock, startTime, endTime,
+    } = req.body;
+
+    if (!productId || !sellerId || !productName) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const ref = await db.collection('flash_sales').add({
+      productId,
+      productName: productName || '',
+      productImage: productImage || '',
+      originalPrice: originalPrice || 0,
+      salePrice: salePrice || 0,
+      discountPercent: discountPercent || 0,
+      sellerId,
+      sellerName: sellerName || '',
+      sellerPhone: sellerPhone || '',
+      location: location || '',
+      stock: stock || 0,
+      soldCount: 0,
+      isActive: true,
+      startTime: startTime ? new Date(startTime) : admin.firestore.FieldValue.serverTimestamp(),
+      endTime: endTime ? new Date(endTime) : new Date(Date.now() + 24 * 3600000),
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.json({ success: true, flashSaleId: ref.id });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}));
+
+// ─── FLASH SALE: SCAN PRODUCTS ─────────────────────────
+app.post('/api/flash-sale/scan', asyncHandler(async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000);
+    const productsSnap = await db.collection('products')
+      .where('isActive', '==', true)
+      .where('createdAt', '<=', sevenDaysAgo)
+      .orderBy('createdAt', 'desc')
+      .limit(20)
+      .get();
+
+    let created = 0;
+    const now = new Date();
+
+    for (const doc of productsSnap.docs) {
+      const data = doc.data();
+      const viewCount = data.viewCount || 0;
+      const soldCount = data.soldCount || 0;
+      if (soldCount > 5 || viewCount > 200) continue;
+
+      const existing = await db.collection('flash_sales')
+        .where('productId', '==', doc.id)
+        .where('isActive', '==', true)
+        .get();
+      if (!existing.empty) continue;
+
+      const originalPrice = (data.price || 0).toDouble ? data.price : Number(data.price || 0);
+      const discountPercent = soldCount === 0 ? 30 : 20;
+      const salePrice = originalPrice * (1 - discountPercent / 100);
+      const images = data.images || [];
+
+      await db.collection('flash_sales').add({
+        productId: doc.id,
+        productName: data.name || '',
+        productImage: images.length > 0 ? images[0] : '',
+        originalPrice: Math.round(originalPrice),
+        salePrice: Math.round(salePrice),
+        discountPercent,
+        sellerId: data.sellerId || '',
+        sellerName: data.sellerName || '',
+        sellerPhone: data.sellerPhone || '',
+        location: data.location || '',
+        stock: data.stock || 0,
+        soldCount,
+        isActive: true,
+        startTime: admin.firestore.FieldValue.serverTimestamp(),
+        endTime: new Date(now.getTime() + 24 * 3600000),
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      created++;
+    }
+
+    res.json({ success: true, flashSalesCreated: created });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}));
+
+// ─── FLASH SALE: NOTIFY USERS ──────────────────────────
+app.post('/api/flash-sale/notify', asyncHandler(async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const { productName, salePrice, discountPercent, sellerId } = req.body;
+
+    // Get all users with FCM tokens
+    const usersSnap = await db.collection('users')
+      .where('fcmToken', '!=', null)
+      .limit(500)
+      .get();
+
+    const tokens = [];
+    for (const doc of usersSnap.docs) {
+      const token = doc.data().fcmToken;
+      if (token) tokens.push(token);
+    }
+
+    let sentCount = 0;
+    if (tokens.length > 0) {
+      const message = {
+        tokens,
+        notification: {
+          title: `⚡ Flash Sale! -${discountPercent}%`,
+          body: `${productName} sasa TSh ${salePrice} pekee!`,
+        },
+        data: {
+          type: 'flash_sale',
+          productName: productName || '',
+        },
+        android: { priority: 'high' },
+      };
+      const resp = await admin.messaging().sendEachForMulticast(message);
+      sentCount = resp.successCount;
+    }
+
+    // Write in-app notification for all users
+    const usersForNotif = await db.collection('users').limit(500).get();
+    const batch = db.batch();
+    for (const doc of usersForNotif.docs) {
+      if (doc.id === sellerId) continue;
+      const notifRef = db.collection('notifications').doc();
+      batch.set(notifRef, {
+        userId: doc.id,
+        title: `⚡ Flash Sale! -${discountPercent}%`,
+        body: `${productName} sasa TSh ${salePrice} pekee!`,
+        data: { type: 'flash_sale' },
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+
+    res.json({ success: true, pushSent: sentCount, inAppNotified: usersForNotif.size });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}));
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 

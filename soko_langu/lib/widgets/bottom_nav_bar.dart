@@ -1,13 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../screens/profile/profile_screen.dart';
 import '../screens/home/home_screen.dart';
-import '../screens/cart/cart_screen.dart';
-import '../screens/feed/feed_screen.dart';
-import '../screens/chat/chats_list_screen.dart';
-import '../screens/status/status_list_screen.dart';
+import '../screens/home/discovery_screen.dart';
+import '../screens/ai/ai_assistant_screen.dart';
 import '../extensions/context_tr.dart';
 import '../main.dart';
 import 'offline_banner.dart';
@@ -19,49 +15,39 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
+class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
-  int _unreadCount = 0;
-  StreamSubscription? _unreadSub;
+  Timer? _adTimer;
 
   final List<Widget> _screens = [
     const HomeScreen(),
-    const FeedScreen(),
-    const StatusListScreen(),
-    const CartScreen(),
-    const ChatsListScreen(),
+    const DiscoveryScreen(),
+    const AiAssistantScreen(),
     const ProfilePage(),
   ];
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     interstitialAdService.load();
-    _listenUnread();
+    _adTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      interstitialAdService.tryShow();
+    });
   }
 
   @override
   void dispose() {
-    _unreadSub?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _adTimer?.cancel();
     super.dispose();
   }
 
-  void _listenUnread() {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    _unreadSub = FirebaseFirestore.instance
-        .collection('conversations')
-        .where('participants', arrayContains: user.uid)
-        .snapshots()
-        .listen((snap) {
-          int total = 0;
-          for (var doc in snap.docs) {
-            final data = doc.data();
-            final count = data['unreadCount'] as int? ?? 0;
-            total += count;
-          }
-          if (mounted) setState(() => _unreadCount = total);
-        });
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      interstitialAdService.tryShow();
+    }
   }
 
   @override
@@ -73,10 +59,6 @@ class _MainScreenState extends State<MainScreen> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) {
-          if (index != _currentIndex) {
-            interstitialAdService.show();
-            interstitialAdService.load();
-          }
           setState(() {
             _currentIndex = index;
           });
@@ -84,35 +66,23 @@ class _MainScreenState extends State<MainScreen> {
         type: BottomNavigationBarType.fixed,
         items: [
           BottomNavigationBarItem(
-            icon: const Icon(Icons.home),
+            icon: const Icon(Icons.storefront_outlined),
+            activeIcon: const Icon(Icons.storefront_rounded),
             label: context.tr('home'),
           ),
           BottomNavigationBarItem(
-            icon: const Icon(Icons.live_tv),
-            label: context.tr('live_tab'),
+            icon: const Icon(Icons.diamond_outlined),
+            activeIcon: const Icon(Icons.diamond_rounded),
+            label: context.tr('discovery'),
           ),
           BottomNavigationBarItem(
-            icon: const Icon(Icons.auto_awesome),
-            label: context.tr('status'),
+            icon: const Icon(Icons.rocket_launch_outlined),
+            activeIcon: const Icon(Icons.rocket_launch_rounded),
+            label: 'AI',
           ),
           BottomNavigationBarItem(
-            icon: const Icon(Icons.shopping_cart),
-            label: context.tr('shopping_cart'),
-          ),
-          BottomNavigationBarItem(
-            icon: _unreadCount > 0
-                ? Badge(
-                    label: Text(
-                      _unreadCount > 99 ? '99+' : '$_unreadCount',
-                      style: const TextStyle(fontSize: 10),
-                    ),
-                    child: const Icon(Icons.chat_bubble_outline),
-                  )
-                : const Icon(Icons.chat_bubble_outline),
-            label: context.tr('chats'),
-          ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.person),
+            icon: const Icon(Icons.workspace_premium_outlined),
+            activeIcon: const Icon(Icons.workspace_premium_rounded),
             label: context.tr('profile'),
           ),
         ],

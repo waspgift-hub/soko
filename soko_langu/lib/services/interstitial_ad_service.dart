@@ -1,22 +1,37 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import '../main.dart';
+import 'api_config.dart';
 
 class InterstitialAdService {
   InterstitialAd? _interstitialAd;
   bool _isLoading = false;
   bool _showQueued = false;
+  DateTime? _lastShownAt;
 
-  bool get _isFree => themeManager.currentTier == 'free';
+  static const String _prodAdUnitId = 'ca-app-pub-3796499857968162/1033173712';
+  static const String _testAdUnitId = 'ca-app-pub-3940256099942544/1033173712';
+
+  static const int _cooldownMinutes = 20;
+
+  bool get _isCooldownPassed {
+    if (_lastShownAt == null) return true;
+    return DateTime.now().difference(_lastShownAt!).inMinutes >= _cooldownMinutes;
+  }
+
+  Future<bool> tryShow() async {
+    if (!_isCooldownPassed) return false;
+    _lastShownAt = DateTime.now();
+    await show();
+    return true;
+  }
 
   Future<void> load() async {
-    if (!_isFree) return;
     if (_isLoading) return;
     _isLoading = true;
 
     await InterstitialAd.load(
-      adUnitId: 'ca-app-pub-3940256099942544/1033173712',
+      adUnitId: ApiConfig.kAdsTestMode ? _testAdUnitId : _prodAdUnitId,
       request: const AdRequest(),
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) {
@@ -38,12 +53,6 @@ class InterstitialAdService {
   }
 
   Future<void> show() async {
-    if (!_isFree) {
-      _interstitialAd?.dispose();
-      _interstitialAd = null;
-      return;
-    }
-
     if (_interstitialAd == null) {
       _showQueued = true;
       if (!_isLoading) load();
@@ -54,6 +63,7 @@ class InterstitialAdService {
       onAdDismissedFullScreenContent: (ad) {
         ad.dispose();
         _interstitialAd = null;
+        load();
       },
       onAdFailedToShowFullScreenContent: (ad, error) {
         ad.dispose();

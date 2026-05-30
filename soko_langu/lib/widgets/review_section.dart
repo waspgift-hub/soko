@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/review_service.dart';
 import '../models/review_model.dart';
-import 'verified_badge.dart';
 import '../extensions/context_tr.dart';
 
 import 'google_loading.dart';
@@ -164,7 +163,6 @@ class _ReviewSectionState extends State<ReviewSection> {
                             review.userName,
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
-                          VerifiedBadge(tier: review.userTier, size: 14),
                           const Spacer(),
                           Row(
                             children: List.generate(

@@ -8,9 +8,7 @@ import '../../services/user_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/wishlist_service.dart';
 import '../../extensions/context_tr.dart';
-import '../../widgets/verified_badge.dart';
-import '../../main.dart';
-import '../../widgets/tier_badge.dart';
+import '../../widgets/account_switcher_sheet.dart';
 import '../../widgets/ad_banner.dart';
 import '../../app/routes.dart';
 
@@ -28,7 +26,6 @@ class _ProfilePageState extends State<ProfilePage> {
   UserProfile? _profile;
   String? _localImagePath;
   int _wishlistCount = 0;
-  int _orderCount = 0;
   double _avgRating = 0;
 
   @override
@@ -40,11 +37,6 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _loadStats(String uid) async {
     try {
       final wishlist = await _wishlistService.getWishlist();
-      final orderSnap = await FirebaseFirestore.instance
-          .collection('orders')
-          .where('buyerId', isEqualTo: uid)
-          .count()
-          .get();
       final reviewSnap = await FirebaseFirestore.instance
           .collection('reviews')
           .where('sellerId', isEqualTo: uid)
@@ -56,8 +48,9 @@ class _ProfilePageState extends State<ProfilePage> {
       if (mounted) {
         setState(() {
           _wishlistCount = wishlist.length;
-          _orderCount = orderSnap.count ?? 0;
-          _avgRating = reviewSnap.docs.isEmpty ? 0 : total / reviewSnap.docs.length;
+          _avgRating = reviewSnap.docs.isEmpty
+              ? 0
+              : total / reviewSnap.docs.length;
         });
       }
     } catch (_) {}
@@ -67,16 +60,6 @@ class _ProfilePageState extends State<ProfilePage> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     var profile = await _userService.getProfile(user.uid);
-    if (profile != null && profile.email == 'admin@soko-langu.com') {
-      if (profile.accountTier != 'silver') {
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-          'accountTier': 'silver',
-          'isPremium': true,
-          'premiumUntil': null,
-        }, SetOptions(merge: true));
-        profile = await _userService.getProfile(user.uid);
-      }
-    }
     if (mounted) {
       setState(() => _profile = profile);
     }
@@ -211,11 +194,6 @@ class _ProfilePageState extends State<ProfilePage> {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        const SizedBox(width: 6),
-                        VerifiedBadge(
-                          tier: _profile?.accountTier,
-                          isAdmin: _profile?.email == 'admin@soko-langu.com',
-                        ),
                       ],
                     ),
                     const SizedBox(height: 4),
@@ -243,12 +221,6 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
               ),
               const SizedBox(height: 8),
-              // Tier section
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _buildTierSection(),
-              ),
-              const SizedBox(height: 16),
               // Action grid
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -285,7 +257,6 @@ class _ProfilePageState extends State<ProfilePage> {
       child: Row(
         children: [
           _statCard(Icons.favorite, context.tr('wishlist'), '$_wishlistCount'),
-          _statCard(Icons.shopping_bag, context.tr('my_orders'), '$_orderCount'),
           _statCard(Icons.star, 'Rating', _avgRating.toStringAsFixed(1)),
         ],
       ),
@@ -330,101 +301,19 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildTierSection() {
-    final tier = themeManager.currentTier;
-    final Color tierColor;
-    final String tierName;
-    switch (tier) {
-      case 'silver':
-        tierColor = Colors.blueGrey;
-        tierName = 'Silver';
-        break;
-      case 'premium':
-        tierColor = Colors.amber;
-        tierName = 'Premium';
-        break;
-      default:
-        tierColor = const Color(0xFF2D6A4F);
-        tierName = 'Free';
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
-          width: 1.5,
-        ),
-      ),
-      child: Row(
-        children: [
-          TierBadge(size: 40, showLabel: false),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  tierName,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: tierColor,
-                  ),
-                ),
-                Text(
-                  tier == 'free'
-                      ? context.tr('free_plan_current')
-                      : context.tr('plan_active'),
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                ),
-              ],
-            ),
-          ),
-          if (tier == 'free')
-            GestureDetector(
-              onTap: () => context.push(AppRoutes.premiumUpgrade),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF2D6A4F), Color(0xFF40916C)],
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  context.tr('upgrade_now'),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildActionGrid() {
     final isAdmin = _profile?.email == 'admin@soko-langu.com';
 
     final actions = [
+      _ActionItem(Icons.swap_horiz_rounded, 'Accounts', () {
+        AccountSwitcherSheet.show(context);
+      }),
       _ActionItem(Icons.edit, context.tr('edit_profile'), () async {
         await context.push(AppRoutes.editProfile);
         _refreshProfile();
       }),
       _ActionItem(Icons.favorite, context.tr('wishlist'), () {
         context.push(AppRoutes.wishlist);
-      }),
-      _ActionItem(Icons.receipt_long, context.tr('my_orders'), () {
-        context.push(AppRoutes.orders);
       }),
       _ActionItem(Icons.shopping_bag, context.tr('my_ads'), () {
         context.push(AppRoutes.myAds);
@@ -435,23 +324,20 @@ class _ProfilePageState extends State<ProfilePage> {
       _ActionItem(Icons.dashboard, context.tr('dashboard'), () {
         context.push(AppRoutes.sellerDashboard);
       }),
-      _ActionItem(Icons.chat_bubble, context.tr('chats'), () {
-        context.push(AppRoutes.chats);
-      }),
-      _ActionItem(Icons.phone, context.tr('call_history'), () {
-        context.push(AppRoutes.callHistory);
+      _ActionItem(Icons.explore, context.tr('discovery'), () {
+        context.push(AppRoutes.discovery);
       }),
       _ActionItem(Icons.play_circle_outline, context.tr('my_media'), () {
         context.push(AppRoutes.mediaPlayer);
       }),
-      _ActionItem(Icons.monetization_on, context.tr('buy_coins'), () {
-        context.push(AppRoutes.buyCoins);
-      }),
-      _ActionItem(Icons.visibility, context.tr('earn_coins'), () {
-        context.push(AppRoutes.viewerEarnings);
-      }),
       _ActionItem(Icons.queue_music, context.tr('playlists'), () {
         context.push(AppRoutes.playlists);
+      }),
+      _ActionItem(Icons.receipt_long_outlined, 'Manunuzi Yangu', () {
+        context.push(AppRoutes.myPurchases);
+      }),
+      _ActionItem(Icons.verified_outlined, 'KYC', () {
+        context.push(AppRoutes.kyc);
       }),
     ];
 
@@ -484,7 +370,9 @@ class _ProfilePageState extends State<ProfilePage> {
               color: Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.5),
                 width: 1.5,
               ),
             ),

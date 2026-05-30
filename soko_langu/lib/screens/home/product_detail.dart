@@ -1,23 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/product_model.dart';
 import '../../models/category_model.dart';
-import '../../models/cart_model.dart';
-import '../../services/cart_service.dart';
 import '../../services/wishlist_service.dart';
 import '../../services/ad_revenue_service.dart';
 import '../../services/category_service.dart';
+import '../../services/localization_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../widgets/ad_banner.dart';
+import '../../widgets/google_loading.dart';
 import '../../widgets/review_section.dart';
 import '../../widgets/comment_section.dart';
-import '../../widgets/verified_badge.dart';
-import '../../main.dart';
+import '../../services/product_service.dart';
+import '../../services/cart_service.dart';
+import '../../services/user_service.dart';
+import '../../models/cart_model.dart';
 
 class ProductDetailPage extends StatefulWidget {
   final Product product;
@@ -31,16 +32,23 @@ class ProductDetailPage extends StatefulWidget {
 class _ProductDetailPageState extends State<ProductDetailPage> {
   final WishlistService _wishlistService = WishlistService();
   final CartService _cartService = CartService();
-  int _quantity = 1;
+  final UserService _userService = UserService();
   bool _isFav = false;
   String? _selectedVariantId;
   final PageController _imageController = PageController();
   int _currentImageIndex = 0;
+  UserProfile? _sellerProfile;
 
   @override
   void initState() {
     super.initState();
     _checkFav();
+    _loadSellerProfile();
+  }
+
+  Future<void> _loadSellerProfile() async {
+    final profile = await _userService.getProfile(widget.product.sellerId);
+    if (mounted) setState(() => _sellerProfile = profile);
   }
 
   @override
@@ -52,6 +60,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   Future<void> _checkFav() async {
     final fav = await _wishlistService.isFavorite(widget.product.id);
     if (mounted) setState(() => _isFav = fav);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    ProductService().incrementViewCount(widget.product.id);
   }
 
   Future<void> _toggleFav() async {
@@ -70,76 +84,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     }
   }
 
-  void _requireAuth(VoidCallback action) {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      context.push(AppRoutes.login);
-      return;
-    }
-    action();
-  }
-
-  Future<void> _addToCart() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    final variant = _getSelectedVariant();
-    final adjustedPrice =
-        widget.product.price + (variant?.priceAdjustment ?? 0);
-    final item = CartItem(
-      productId: widget.product.id,
-      name:
-          widget.product.name + (variant != null ? " (${variant.value})" : ""),
-      price: adjustedPrice,
-      image: widget.product.images.isNotEmpty
-          ? widget.product.images.first
-          : null,
-      quantity: _quantity,
-      sellerId: widget.product.sellerId,
-      selectedVariant: variant != null
-          ? {
-              'id': variant.id,
-              'name': variant.name,
-              'value': variant.value,
-              'priceAdjustment': variant.priceAdjustment,
-              'stock': variant.stock,
-            }
-          : null,
-    );
-    try {
-      await _cartService.addToCart(item);
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(context.tr('added_to_cart'))));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("${context.tr('error')}: $e")));
-      }
-    }
-  }
-
-  Future<void> _buyNow() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null || user.uid == widget.product.sellerId) return;
-    final total = _getEffectivePrice() * _quantity;
-    context.push(
-      '${AppRoutes.payment}/${widget.product.id}',
-      extra: {
-        'sellerId': widget.product.sellerId,
-        'sellerName': widget.product.sellerName,
-        'productName': widget.product.name,
-        'productPrice': total,
-      },
-    );
-  }
-
   void _shareProduct(Product product) {
     final text =
         "${product.name}\n"
-        "Price: ${product.currency ?? 'TSh'} ${product.price.toStringAsFixed(0)}\n"
+        "Price: ${LocalizationService.supportedCurrencies[product.currency]?['symbol'] ?? 'TSh'} ${product.price.toStringAsFixed(0)}\n"
         "${context.tr('check_out_on')}";
     SharePlus.instance.share(ShareParams(text: text));
   }
@@ -166,6 +114,16 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             ),
             onPressed: _toggleFav,
           ),
+          if (currentUser != null && currentUser.uid != sellerId)
+            IconButton(
+              icon: Icon(Icons.flag_outlined, color: Colors.red[300]),
+              onPressed: () => context.push(AppRoutes.report, extra: {
+                'reportedUserId': sellerId,
+                'reportedUserName': product.sellerName,
+                'productId': product.id,
+                'productName': product.name,
+              }),
+            ),
         ],
       ),
       body: SafeArea(
@@ -200,15 +158,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                   fit: BoxFit.cover,
                                   placeholder: (context, url) => Container(
                                     color: cs.surfaceContainerLow,
-                                    child: Center(
-                                      child: SizedBox(
-                                        width: 24,
-                                        height: 24,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: cs.primary,
-                                        ),
-                                      ),
+                                    child: const Center(
+                                      child: GoogleLoading(size: 24, strokeWidth: 2),
                                     ),
                                   ),
                                   errorWidget: (context, error, stackTrace) =>
@@ -309,7 +260,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      "${product.currency ?? 'TSh'} ${product.price.toStringAsFixed(0)}",
+                      context.formatPrice(product.price),
                       style: const TextStyle(
                         color: Colors.blue,
                         fontSize: 22,
@@ -318,7 +269,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     ),
                     if (_selectedVariantId != null)
                       Text(
-                        "${context.tr('with_variant')} ${product.currency ?? 'TSh'} ${_getEffectivePrice().toStringAsFixed(0)}",
+                        "${context.tr('with_variant')} ${context.formatPrice(_getEffectivePrice())}",
                         style: TextStyle(
                           color: cs.primary,
                           fontSize: 14,
@@ -448,7 +399,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         ),
                         _buildDetailRow(
                           context.tr('price_adjustment'),
-                          "${product.currency ?? 'TSh'} ${_getSelectedVariant()?.priceAdjustment?.toStringAsFixed(0) ?? '0'}",
+                          context.formatPrice(_getSelectedVariant()?.priceAdjustment?.toDouble() ?? 0),
                         ),
                        ],
                      ],
@@ -512,224 +463,279 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    GestureDetector(
-                      onTap: () {
-                        if (currentUser == null) {
-                          context.push(AppRoutes.login);
-                        } else {
-                          context.push(
-                            '${AppRoutes.publicProfile}/$sellerId',
-                            extra: product.sellerName,
-                          );
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: cs.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
+                    Material(
+                      color: cs.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(12),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: () {
+                          if (currentUser == null) {
+                            context.push(AppRoutes.login);
+                          } else {
+                            context.push(
+                              '${AppRoutes.publicProfile}/$sellerId',
+                              extra: product.sellerName,
+                            );
+                          }
+                        },
+                        child: Column(
                           children: [
-                            StreamBuilder<bool>(
-                              stream: presenceService.isOnline(sellerId),
-                              builder: (context, snap) {
-                                final online = snap.data ?? false;
-                                return Stack(
-                                  children: [
-                                    CircleAvatar(
-                                      backgroundColor: cs.primaryContainer,
-                                      child: const Icon(
-                                        Icons.person,
-                                        color: Colors.white,
+                            if (_sellerProfile != null &&
+                                _sellerProfile!.shopBanner.isNotEmpty)
+                              Container(
+                                height: 100,
+                                width: double.infinity,
+                                decoration: BoxDecoration(
+                                  color: _sellerProfile!.shopBannerColor.isNotEmpty
+                                      ? Color(int.parse(
+                                              'FF${_sellerProfile!.shopBannerColor.replaceFirst('#', '')}',
+                                              radix: 16))
+                                      : cs.primaryContainer,
+                                  image: DecorationImage(
+                                    image: NetworkImage(
+                                        _sellerProfile!.shopBanner),
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ),
+                            Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Row(
+                                children: [
+                                  Stack(
+                                    children: [
+                                      CircleAvatar(
+                                        backgroundColor: _sellerProfile?.shopAccentColor.isNotEmpty == true
+                                            ? Color(int.parse(
+                                                    'FF${_sellerProfile!.shopAccentColor.replaceFirst('#', '')}',
+                                                    radix: 16))
+                                            : cs.primaryContainer,
+                                        backgroundImage: _sellerProfile?.profileImage.isNotEmpty == true
+                                            ? NetworkImage(
+                                                _sellerProfile!.profileImage)
+                                            : null,
+                                        child: _sellerProfile?.profileImage.isNotEmpty == true
+                                            ? null
+                                            : const Icon(
+                                                Icons.person,
+                                                color: Colors.white,
+                                              ),
                                       ),
-                                    ),
-                                    Positioned(
-                                      right: 0,
-                                      bottom: 0,
-                                      child: Container(
-                                        width: 12,
-                                        height: 12,
-                                        decoration: BoxDecoration(
-                                          color: online
-                                              ? Colors.green
-                                              : Colors.grey,
-                                          shape: BoxShape.circle,
-                                          border: Border.all(
-                                            color: Colors.white,
-                                            width: 2,
+                                    ],
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          context.tr('seller'),
+                                          style: TextStyle(
+                                            color: cs.onSurface
+                                                .withValues(alpha: 0.6),
                                           ),
                                         ),
+                                        Text(
+                                          product.sellerName,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: cs.onSurface,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (currentUser == null) ...[
+                                    ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor:
+                                            const Color(0xFF25D366),
+                                      ),
+                                      icon: const Icon(Icons.chat,
+                                          color: Colors.white, size: 18),
+                                      onPressed: () => context.push(
+                                          '${AppRoutes.chat}/$sellerId',
+                                          extra: {
+                                            'name': product.sellerName
+                                          }),
+                                      label: Text(
+                                        context.tr('whatsapp'),
+                                        style:
+                                            TextStyle(color: cs.onPrimary),
                                       ),
                                     ),
+                                    const SizedBox(width: 8),
+                                    TextButton(
+                                      onPressed: () =>
+                                          context.push(AppRoutes.login),
+                                      child:
+                                          Text(context.tr('view_store')),
+                                    ),
+                                  ] else if (currentUser.uid != sellerId) ...[
+                                    ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor:
+                                            const Color(0xFF25D366),
+                                      ),
+                                      icon: const Icon(Icons.chat,
+                                          color: Colors.white, size: 18),
+                                      onPressed: () => context.push(
+                                          '${AppRoutes.chat}/$sellerId',
+                                          extra: {
+                                            'name': product.sellerName
+                                          }),
+                                      label: Text(
+                                        context.tr('whatsapp'),
+                                        style:
+                                            TextStyle(color: cs.onPrimary),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    TextButton(
+                                      onPressed: () => context.push(
+                                        '${AppRoutes.publicProfile}/$sellerId',
+                                        extra: product.sellerName,
+                                      ),
+                                      child: Text(
+                                          context.tr('view_store')),
+                                    ),
                                   ],
-                                );
-                              },
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    context.tr('seller'),
-                                    style: TextStyle(
-                                      color: cs.onSurface.withValues(alpha: 0.6),
-                                    ),
-                                  ),
-                                  Text(
-                                    product.sellerName,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: cs.onSurface,
-                                    ),
-                                  ),
-                                  VerifiedBadge(tier: product.sellerTier),
                                 ],
                               ),
                             ),
-                            if (currentUser == null) ...[
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: cs.primary,
-                                ),
-                                onPressed: () => context.push(AppRoutes.login),
-                                child: Text(
-                                  context.tr('chat'),
-                                  style: TextStyle(color: cs.onPrimary),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              TextButton(
-                                onPressed: () => context.push(AppRoutes.login),
-                                child: Text(context.tr('view_store')),
-                              ),
-                            ] else if (currentUser.uid != sellerId) ...[
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: cs.primary,
-                                ),
-                                onPressed: () => context.push(
-                                  '${AppRoutes.chat}/$sellerId',
-                                  extra: {
-                                    'name': product.sellerName,
-                                    'product': product.name,
-                                  },
-                                ),
-                                child: Text(
-                                  context.tr('chat'),
-                                  style: TextStyle(color: cs.onPrimary),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              TextButton(
-                                onPressed: () => context.push(
-                                  '${AppRoutes.publicProfile}/$sellerId',
-                                  extra: product.sellerName,
-                                ),
-                                child: Text(context.tr('view_store')),
-                              ),
-                            ],
                           ],
                         ),
                       ),
                     ),
                     const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        Text(
-                          "${context.tr('quantity')}: ",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: cs.onSurface,
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: _quantity > 1
-                              ? () => setState(() => _quantity--)
-                              : null,
-                          icon: const Icon(Icons.remove_circle_outline),
-                        ),
-                        Text(
-                          "$_quantity",
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: cs.onSurface,
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: _quantity < product.stock
-                              ? () => setState(() => _quantity++)
-                              : null,
-                          icon: const Icon(Icons.add_circle_outline),
-                        ),
-                        const Spacer(),
-                        Text(
-                          "${context.tr('total')}: ${product.currency ?? 'TSh'} ${(_getEffectivePrice() * _quantity).toStringAsFixed(0)}",
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: Colors.blue,
-                          ),
-                        ),
-                      ],
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: ReviewSection(productId: product.id),
                     ),
+                    const Divider(height: 32),
+                    CommentSection(productId: product.id),
+                    const Divider(height: 8),
+                    _AdViewTracker(
+                      sellerId: widget.product.sellerId,
+                      productId: widget.product.id,
+                    ),
+                    const AdBanner(),
                   ],
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: ReviewSection(productId: product.id),
-              ),
-              const Divider(height: 32),
-              CommentSection(productId: product.id),
-              const Divider(height: 8),
-              _AdViewTracker(
-                sellerId: widget.product.sellerId,
-                productId: widget.product.id,
-              ),
-              const AdBanner(),
             ],
           ),
         ),
       ),
-      bottomNavigationBar: Container(
-        padding: EdgeInsets.fromLTRB(
-          16,
-          16,
-          16,
-          MediaQuery.of(context).padding.bottom + 16,
-        ),
-        decoration: BoxDecoration(
-          color: cs.surface,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, -5),
-            ),
-          ],
-        ),
-        child: Row(
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: () => _requireAuth(_addToCart),
-                child: Text(context.tr('add_to_cart')),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF2D6A4F),
+                      side: const BorderSide(color: Color(0xFF2D6A4F)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.add_shopping_cart, size: 18),
+                    onPressed: () async {
+                      if (currentUser == null) {
+                        context.push(AppRoutes.login);
+                      } else if (currentUser.uid == sellerId) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(context.tr('cannot_buy_own'))),
+                        );
+                      } else {
+                        try {
+                          await _cartService.addToCart(CartItem(
+                            productId: widget.product.id,
+                            name: widget.product.name,
+                            image: widget.product.images.isNotEmpty ? widget.product.images.first : '',
+                            price: _getEffectivePrice(),
+                            sellerId: sellerId,
+                            sellerName: widget.product.sellerName,
+                          ));
+                          if (mounted) context.push(AppRoutes.cart);
+                        } catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(context.tr('cart_error').replaceAll('{0}', '$e'))),
+                            );
+                          }
+                        }
+                      }
+                    },
+                    label: Text(context.tr('cart'), style: TextStyle(fontSize: 13)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF065535),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.shopping_cart_checkout, color: Colors.white, size: 18),
+                    onPressed: () async {
+                      if (currentUser == null) {
+                        context.push(AppRoutes.login);
+                      } else if (currentUser.uid == sellerId) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(context.tr('cannot_buy_own'))),
+                        );
+                      } else {
+                        try {
+                          await _cartService.addToCart(CartItem(
+                            productId: widget.product.id,
+                            name: widget.product.name,
+                            image: widget.product.images.isNotEmpty ? widget.product.images.first : '',
+                            price: _getEffectivePrice(),
+                            sellerId: sellerId,
+                            sellerName: widget.product.sellerName,
+                          ));
+                          if (mounted) context.push(AppRoutes.checkout, extra: [
+                            CartItem(
+                              productId: widget.product.id,
+                              name: widget.product.name,
+                              image: widget.product.images.isNotEmpty ? widget.product.images.first : '',
+                              price: _getEffectivePrice(),
+                              sellerId: sellerId,
+                              sellerName: widget.product.sellerName,
+                            )
+                          ]);
+                        } catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(context.tr('cart_error').replaceAll('{0}', '$e'))),
+                            );
+                          }
+                        }
+                      }
+                    },
+                    label: Text(context.tr('buy_now'), style: TextStyle(color: Colors.white, fontSize: 15)),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: ElevatedButton(
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  backgroundColor: const Color(0xFF25D366),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                onPressed: () => _requireAuth(_buyNow),
-                child: Text(
-                  context.tr('buy_now'),
-                  style: const TextStyle(color: Colors.white),
-                ),
+                icon: const Icon(Icons.chat, color: Colors.white, size: 18),
+                onPressed: () => context.push('${AppRoutes.chat}/$sellerId', extra: {'name': product.sellerName}),
+                label: Text(context.tr('whatsapp'), style: TextStyle(color: Colors.white, fontSize: 15)),
               ),
             ),
           ],
@@ -810,6 +816,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       ),
     );
   }
+
 }
 
 class _FullScreenImageViewer extends StatefulWidget {
@@ -875,7 +882,7 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                       imageUrl: widget.images[index],
                       fit: BoxFit.contain,
                       placeholder: (context, url) => const Center(
-                        child: CircularProgressIndicator(color: Colors.white),
+                        child: GoogleLoading(size: 32, strokeWidth: 2),
                       ),
                       errorWidget: (context, error, stackTrace) => const Center(
                         child: Icon(Icons.broken_image, color: Colors.white, size: 80),
@@ -935,23 +942,8 @@ class _AdViewTrackerState extends State<_AdViewTracker> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
-    final userDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .get();
-    final myTier = userDoc.data()?['accountTier'] as String? ?? 'free';
-    if (myTier != 'free') return;
-
-    final sellerDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(widget.sellerId)
-        .get();
-    final sellerTier = sellerDoc.data()?['accountTier'] as String? ?? 'free';
-    if (sellerTier == 'free') return;
-
     await AdRevenueService().recordAdView(
       sellerId: widget.sellerId,
-      sellerTier: sellerTier,
       productId: widget.productId,
     );
   }

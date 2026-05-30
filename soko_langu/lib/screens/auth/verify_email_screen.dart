@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/auth_service.dart';
 import '../../app/routes.dart';
+import '../../widgets/google_loading.dart';
 
 class VerifyEmailScreen extends StatefulWidget {
   const VerifyEmailScreen({super.key});
@@ -125,14 +126,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                       TextButton(
                         onPressed: _sending ? null : _resend,
                         child: _sending
-                            ? SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: cs.primary,
-                                ),
-                              )
+                            ? const GoogleLoading(size: 20, strokeWidth: 2)
                             : Text(
                                 context.tr('resend_verification'),
                                 style: TextStyle(color: cs.primary),

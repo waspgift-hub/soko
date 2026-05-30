@@ -25,9 +25,7 @@ class AnalyticsData {
   final int inactiveProducts;
   final Map<String, int> productsByCategory;
 
-  // Orders
   final int totalOrders;
-  final Map<String, int> ordersByStatus;
   final double totalRevenue;
   final double revenueToday;
   final double revenueThisMonth;
@@ -47,7 +45,6 @@ class AnalyticsData {
     this.inactiveProducts = 0,
     this.productsByCategory = const {},
     this.totalOrders = 0,
-    this.ordersByStatus = const {},
     this.totalRevenue = 0,
     this.revenueToday = 0,
     this.revenueThisMonth = 0,
@@ -111,12 +108,10 @@ class AnalyticsService {
     // Orders
     final ordersSnap = await _db.collection('orders').get();
     final allOrders = ordersSnap.docs;
-    final statusMap = <String, int>{};
     double totalRev = 0, todayRev = 0, monthRev = 0;
     for (final d in allOrders) {
       final data = d.data();
       final status = data['status'] as String? ?? 'pending';
-      statusMap[status] = (statusMap[status] ?? 0) + 1;
       if (status == 'delivered') {
         final amt = (data['totalAmount'] ?? 0).toDouble();
         totalRev += amt;
@@ -162,7 +157,6 @@ class AnalyticsService {
       inactiveProducts: inactiveProducts,
       productsByCategory: catMap,
       totalOrders: allOrders.length,
-      ordersByStatus: statusMap,
       totalRevenue: totalRev,
       revenueToday: todayRev,
       revenueThisMonth: monthRev,

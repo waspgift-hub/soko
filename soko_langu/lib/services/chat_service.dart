@@ -315,9 +315,9 @@ class ChatService {
     return _db
         .collection("conversations")
         .where("participants", arrayContains: _uid)
-        .orderBy("lastMessageTime", descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => Conversation.fromFirestore(doc)).toList());
+        .map((snapshot) => snapshot.docs.map((doc) => Conversation.fromFirestore(doc)).toList()
+          ..sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime)));
   }
 
   Future<void> deleteConversation(String otherUserId) async {

@@ -1,13 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import '../main.dart';
 import '../extensions/context_tr.dart';
+import '../services/api_config.dart';
 
 class AdBanner extends StatefulWidget {
-  final bool showAlways;
-
-  const AdBanner({super.key, this.showAlways = false});
+  const AdBanner({super.key});
 
   @override
   State<AdBanner> createState() => _AdBannerState();
@@ -18,8 +16,7 @@ class _AdBannerState extends State<AdBanner> {
   bool _isLoaded = false;
   Timer? _retryTimer;
 
-  bool get _shouldShow =>
-      widget.showAlways || themeManager.currentTier == 'free';
+  bool get _shouldShow => true;
 
   @override
   void initState() {
@@ -29,9 +26,12 @@ class _AdBannerState extends State<AdBanner> {
     }
   }
 
+  static const String _prodAdUnitId = 'ca-app-pub-3796499857968162/6300978111';
+  static const String _testAdUnitId = 'ca-app-pub-3940256099942544/6300978111';
+
   void _loadAd() {
     _bannerAd = BannerAd(
-      adUnitId: 'ca-app-pub-3940256099942544/6300978111',
+      adUnitId: ApiConfig.kAdsTestMode ? _testAdUnitId : _prodAdUnitId,
       size: AdSize.banner,
       request: const AdRequest(),
       listener: BannerAdListener(

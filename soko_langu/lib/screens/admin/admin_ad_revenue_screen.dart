@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../../services/mongike_service.dart';
 import '../../extensions/context_tr.dart';
+import '../../widgets/google_loading.dart';
 
 class AdminAdRevenueScreen extends StatefulWidget {
   const AdminAdRevenueScreen({super.key});
@@ -214,7 +215,7 @@ class _AdminAdRevenueScreenState extends State<AdminAdRevenueScreen> {
                             ? const SizedBox(
                                 width: 18,
                                 height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                child: GoogleLoading(size: 18, strokeWidth: 2, color: Colors.white),
                               )
                             : const Icon(Icons.send),
                         label: Text(
@@ -247,14 +248,18 @@ class _AdminAdRevenueScreenState extends State<AdminAdRevenueScreen> {
             const SizedBox(height: 8),
             StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(uid)
                   .collection('admin_withdrawals')
-                  .orderBy('createdAt', descending: true)
+                  .where('userId', isEqualTo: uid)
                   .snapshots(),
               builder: (context, snap) {
-                if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-                final docs = snap.data!.docs;
+                if (!snap.hasData) return const GoogleLoadingPage();
+                final docs = snap.data!.docs.toList()
+                  ..sort((a, b) {
+                    final ta = (a.data() as Map<String, dynamic>)['createdAt'];
+                    final tb = (b.data() as Map<String, dynamic>)['createdAt'];
+                    if (ta is Timestamp && tb is Timestamp) return tb.compareTo(ta);
+                    return 0;
+                  });
                 if (docs.isEmpty) {
                   return Card(
                     child: Padding(

@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:google_sign_in/google_sign_in.dart';
 import '../utils/network_error.dart';
+import 'fraud_prevention_service.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -109,6 +110,142 @@ class AuthService {
     return guardNetwork(() => _auth.sendPasswordResetEmail(email: email));
   }
 
+  /// Normalizes Tanzanian numbers to E.164 (+2557XXXXXXXX).
+  String normalizePhoneToE164(String input) {
+    var digits = input.replaceAll(RegExp(r'\D'), '');
+    if (digits.startsWith('255')) {
+      digits = digits.substring(3);
+    }
+    if (digits.startsWith('0')) {
+      digits = digits.substring(1);
+    }
+    if (digits.length == 9 && (digits.startsWith('6') || digits.startsWith('7'))) {
+      return '+255$digits';
+    }
+    if (input.trim().startsWith('+') && digits.length >= 12) {
+      return '+$digits';
+    }
+    throw NetworkError(
+      message: 'Invalid phone',
+      userMessage: 'Weka namba sahihi ya Tanzania (mfano 0712345678).',
+    );
+  }
+
+  List<String> phoneLookupVariants(String input) {
+    final variants = <String>{};
+    try {
+      final e164 = normalizePhoneToE164(input);
+      variants.add(e164);
+      variants.add(e164.replaceFirst('+255', '0'));
+      variants.add(e164.replaceFirst('+', ''));
+    } catch (_) {
+      variants.add(input.trim());
+    }
+    return variants.toList();
+  }
+
+  Future<Map<String, dynamic>?> findUserProfileByPhone(String phone) async {
+    for (final variant in phoneLookupVariants(phone)) {
+      if (variant.isEmpty) continue;
+      try {
+        final snap = await _db
+            .collection('users')
+            .where('phone', isEqualTo: variant)
+            .limit(1)
+            .get();
+        if (snap.docs.isNotEmpty) {
+          final doc = snap.docs.first;
+          return {'uid': doc.id, ...doc.data()};
+        }
+      } catch (e) {
+        debugPrint('findUserProfileByPhone: $e');
+      }
+    }
+    return null;
+  }
+
+  Future<void> sendPhoneVerificationCode({
+    required String phoneNumberE164,
+    required void Function(String verificationId, int? resendToken) onCodeSent,
+    required void Function(FirebaseAuthException e) onFailed,
+    required void Function(PhoneAuthCredential credential) onAutoVerified,
+    int? forceResendingToken,
+  }) async {
+    await _auth.verifyPhoneNumber(
+      phoneNumber: phoneNumberE164,
+      timeout: const Duration(seconds: 120),
+      forceResendingToken: forceResendingToken,
+      verificationCompleted: onAutoVerified,
+      verificationFailed: onFailed,
+      codeSent: onCodeSent,
+      codeAutoRetrievalTimeout: (verificationId) {
+        onCodeSent(verificationId, forceResendingToken);
+      },
+    );
+  }
+
+  Future<UserCredential> signInWithPhoneSmsCode({
+    required String verificationId,
+    required String smsCode,
+  }) async {
+    try {
+      final credential = PhoneAuthProvider.credential(
+        verificationId: verificationId,
+        smsCode: smsCode.trim(),
+      );
+      return await _auth.signInWithCredential(credential);
+    } on FirebaseAuthException catch (e) {
+      throw NetworkError(
+        message: e.message ?? 'Phone verification failed',
+        userMessage: _swahiliAuthError(e.code),
+        originalError: e,
+      );
+    }
+  }
+
+  Future<UserCredential> signInWithPhoneCredential(
+    PhoneAuthCredential credential,
+  ) async {
+    try {
+      return await _auth.signInWithCredential(credential);
+    } on FirebaseAuthException catch (e) {
+      throw NetworkError(
+        message: e.message ?? 'Phone sign-in failed',
+        userMessage: _swahiliAuthError(e.code),
+        originalError: e,
+      );
+    }
+  }
+
+  Future<void> updatePasswordForCurrentUser(String newPassword) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw NetworkError(
+        message: 'No user',
+        userMessage: 'Hujathibitishwa. Tafadhali jaribu tena OTP.',
+      );
+    }
+    try {
+      await user.updatePassword(newPassword);
+    } on FirebaseAuthException catch (e) {
+      throw NetworkError(
+        message: e.message ?? 'Password update failed',
+        userMessage: _swahiliAuthError(e.code),
+        originalError: e,
+      );
+    }
+  }
+
+  Future<void> syncPhoneOnProfile(String uid, String phoneE164) async {
+    try {
+      await _db.collection('users').doc(uid).set({
+        'phone': phoneE164.replaceFirst('+255', '0'),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('syncPhoneOnProfile: $e');
+    }
+  }
+
   Future<void> sendEmailVerification() async {
     final user = _auth.currentUser;
     if (user != null && !user.emailVerified) {
@@ -158,26 +295,21 @@ class AuthService {
         'location': '',
         'mood': '',
         'profileImage': '',
-        'accountTier': 'free',
-        'isPremium': false,
         'paymentNumbers': {},
         'shopBanner': '',
         'shopBannerColor': '',
         'shopAccentColor': '',
         'latitude': null,
         'longitude': null,
-        'premiumUntil': null,
         'coins': 0,
         'viewerCoins': 0,
         'sellerBalance': 0,
         'soldCount': 0,
         'isAdmin': false,
         'isSuspended': false,
-        'agoraUid': '',
-        'online': false,
-        'lastSeen': null,
         'createdAt': FieldValue.serverTimestamp(),
       });
+      await FraudPreventionService().checkNewSeller(uid, displayName);
     } catch (e) {
       debugPrint('createUserProfile error: $e');
     }
@@ -227,6 +359,20 @@ class AuthService {
         return 'Tafadhali ingia tena kwa usalama kisha jaribu tena.';
       case 'provider-already-linked':
         return 'Akaunti hii tayari imeunganishwa na mtandao huu.';
+      case 'invalid-phone-number':
+        return 'Namba ya simu si sahihi. Tumia mfano 0712345678.';
+      case 'invalid-verification-code':
+        return 'OTP si sahihi. Angalia SMS na jaribu tena.';
+      case 'invalid-verification-id':
+        return 'OTP imeisha muda. Tuma OTP mpya.';
+      case 'session-expired':
+        return 'Muda wa OTP umeisha. Tuma OTP mpya.';
+      case 'quota-exceeded':
+        return 'Ujumbe mwingi umetumwa. Subiri kidogo kisha jaribu tena.';
+      case 'missing-phone-number':
+        return 'Weka namba ya simu.';
+      case 'credential-already-in-use':
+        return 'Namba hii tayari inatumika na akaunti nyingine.';
       default:
         return 'Kuna tatizo lililotokea. Tafadhali jaribu tena.';
     }

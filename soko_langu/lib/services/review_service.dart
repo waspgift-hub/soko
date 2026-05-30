@@ -40,7 +40,6 @@ class ReviewService {
     required double rating,
     required String comment,
     List<String> images = const [],
-    String? orderId,
   }) async {
     try {
       final user = _auth.currentUser;
@@ -49,17 +48,13 @@ class ReviewService {
           userMessage: 'Please log in to continue.',
         );
 
-      final isVerified = orderId != null;
-
-      final userDoc = await _db.collection('users').doc(user.uid).get();
-      final tier = userDoc.data()?['accountTier'] as String? ?? 'free';
+      const isVerified = false;
 
       await _db.collection("reviews").add({
         'productId': productId,
         'userId': user.uid,
         'userName': user.displayName ?? user.email ?? 'Anonymous',
         'userImage': user.photoURL,
-        'userTier': tier,
         'rating': rating,
         'comment': comment,
         'createdAt': FieldValue.serverTimestamp(),
@@ -67,11 +62,6 @@ class ReviewService {
         'helpfulCount': 0,
         'isVerifiedPurchase': isVerified,
       });
-
-      // Mark order item as reviewed
-      if (isVerified) {
-        await _markOrderItemReviewed(orderId, productId);
-      }
 
       // Update product rating
       await _updateProductRating(productId, rating);
@@ -102,19 +92,6 @@ class ReviewService {
           userMessage: translateError(e),
           originalError: e,
         );
-    }
-  }
-
-  // =========================
-  // ✅ MARK ORDER ITEM AS REVIEWED
-  // =========================
-  Future<void> _markOrderItemReviewed(String orderId, String productId) async {
-    try {
-      await _db.collection("orders").doc(orderId).update({
-        'reviewedProductIds': FieldValue.arrayUnion([productId]),
-      });
-    } catch (e) {
-      // Silently fail — rating is more important than the flag
     }
   }
 

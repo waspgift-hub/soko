@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import '../../extensions/context_tr.dart';
+import '../../widgets/google_loading.dart';
 
 class ModernVideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
@@ -97,7 +98,7 @@ class _ModernVideoPlayerScreenState extends State<ModernVideoPlayerScreen> {
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
-              child: CircularProgressIndicator(color: Colors.white),
+              child: GoogleLoadingPage(),
             );
           }
           if (snapshot.hasError) {
@@ -226,7 +227,7 @@ class _ModernVideoPlayerScreenState extends State<ModernVideoPlayerScreen> {
                 // Tap hint (first play)
                 if (!_controller.value.isInitialized)
                   const Center(
-                    child: CircularProgressIndicator(color: Colors.white),
+                    child: GoogleLoading(size: 24, strokeWidth: 2),
                   ),
               ],
             ),

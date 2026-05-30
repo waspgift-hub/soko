@@ -6,17 +6,14 @@ class AdRevenueService {
 
   Future<void> recordAdView({
     required String sellerId,
-    required String sellerTier,
     required String productId,
   }) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
-    if (sellerTier == 'free') return;
 
     await _db.collection('ad_views').add({
       'buyerId': uid,
       'sellerId': sellerId,
-      'sellerTier': sellerTier,
       'productId': productId,
       'timestamp': FieldValue.serverTimestamp(),
       'processed': false,

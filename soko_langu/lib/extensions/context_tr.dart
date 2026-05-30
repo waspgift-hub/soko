@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../main.dart';
 import '../services/localization_service.dart';
+import '../services/exchange_rate_service.dart';
 
 extension ContextTr on BuildContext {
   String tr(String key) {
@@ -11,5 +12,23 @@ extension ContextTr on BuildContext {
   String currencySymbol() {
     final config = AppConfig.of(this);
     return LocalizationService.supportedCurrencies[config.currencyCode]?['symbol'] ?? 'TSh';
+  }
+
+  String formatPrice(double price, {String? currencyOverride}) {
+    final config = AppConfig.of(this);
+    final code = currencyOverride ?? config.currencyCode;
+    final symbol = LocalizationService.supportedCurrencies[code]?['symbol'] ?? 'TSh';
+    final converted = ExchangeRateService().convert(price, code);
+    final formatted = converted.toStringAsFixed(converted >= 1 ? 0 : 2);
+    return '$symbol $formatted';
+  }
+
+  String formatPriceInt(int price, {String? currencyOverride}) {
+    final config = AppConfig.of(this);
+    final code = currencyOverride ?? config.currencyCode;
+    final symbol = LocalizationService.supportedCurrencies[code]?['symbol'] ?? 'TSh';
+    final converted = ExchangeRateService().convert(price.toDouble(), code);
+    final formatted = converted.toStringAsFixed(converted >= 1 ? 0 : 2);
+    return '$symbol $formatted';
   }
 }

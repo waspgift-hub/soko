@@ -1,154 +1,65 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/cart_model.dart';
-import '../utils/network_error.dart';
 
 class CartService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  String? get _userId => _auth.currentUser?.uid;
-
-  // =========================
-  // 🛒 GET CART ITEMS
-  // =========================
-  Stream<List<CartItem>> getCartItems() {
-    if (_userId == null) return Stream.value([]);
-
-    return _db
-        .collection("carts")
-        .doc(_userId)
-        .collection("items")
-        .snapshots()
-        .map(
-          (snapshot) =>
-              snapshot.docs.map((doc) => CartItem.fromMap(doc.data())).toList(),
-        );
+  CollectionReference _cartRef() {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) throw Exception('Not logged in');
+    return _db.collection('users').doc(uid).collection('cart');
   }
 
-  // =========================
-  // ➕ ADD TO CART
-  // =========================
+  Stream<List<CartItem>> getCartStream() {
+    return _cartRef().snapshots().map((snap) =>
+        snap.docs.map((doc) {
+          final data = doc.data() as Map<String, dynamic>?;
+          if (data == null) return null;
+          return CartItem.fromMap({'id': doc.id, ...data});
+        }).whereType<CartItem>().toList());
+  }
+
+  Future<int> getCartCount() async {
+    try {
+      final snap = await _cartRef().get();
+      return snap.docs.length;
+    } catch (_) {
+      return 0;
+    }
+  }
+
   Future<void> addToCart(CartItem item) async {
-    if (_userId == null) throw NetworkError(
-        message: 'User not logged in',
-        userMessage: 'Please log in to continue.',
-      );
-
-    try {
-      final docRef = _db
-          .collection("carts")
-          .doc(_userId)
-          .collection("items")
-          .doc(item.productId);
-
-      final existing = await docRef.get();
-      if (existing.exists) {
-        // Update quantity if item already in cart
-        await docRef.update({'quantity': FieldValue.increment(item.quantity)});
-      } else {
-        await docRef.set(item.toMap());
-      }
-    } catch (e) {
-      throw NetworkError(
-          message: "Failed to add to cart: $e",
-          userMessage: translateError(e),
-          originalError: e,
-        );
+    final ref = _cartRef().doc(item.productId);
+    final existing = await ref.get();
+    if (existing.exists) {
+      final data = existing.data() as Map<String, dynamic>;
+      final currentQty = data['quantity'] as int? ?? 0;
+      await ref.update({'quantity': currentQty + 1});
+    } else {
+      await ref.set(item.toMap());
     }
   }
 
-  // =========================
-  // 🔄 UPDATE QUANTITY
-  // =========================
   Future<void> updateQuantity(String productId, int quantity) async {
-    if (_userId == null) throw NetworkError(
-        message: 'User not logged in',
-        userMessage: 'Please log in to continue.',
-      );
-
-    try {
-      if (quantity <= 0) {
-        await removeFromCart(productId);
-        return;
-      }
-
-      await _db
-          .collection("carts")
-          .doc(_userId)
-          .collection("items")
-          .doc(productId)
-          .update({'quantity': quantity});
-    } catch (e) {
-      throw NetworkError(
-          message: "Failed to update quantity: $e",
-          userMessage: translateError(e),
-          originalError: e,
-        );
+    if (quantity <= 0) {
+      await removeFromCart(productId);
+    } else {
+      await _cartRef().doc(productId).update({'quantity': quantity});
     }
   }
 
-  // =========================
-  // 🗑️ REMOVE FROM CART
-  // =========================
   Future<void> removeFromCart(String productId) async {
-    if (_userId == null) throw NetworkError(
-        message: 'User not logged in',
-        userMessage: 'Please log in to continue.',
-      );
-
-    try {
-      await _db
-          .collection("carts")
-          .doc(_userId)
-          .collection("items")
-          .doc(productId)
-          .delete();
-    } catch (e) {
-      throw NetworkError(
-          message: "Failed to remove from cart: $e",
-          userMessage: translateError(e),
-          originalError: e,
-        );
-    }
+    await _cartRef().doc(productId).delete();
   }
 
-  // =========================
-  // 🧹 CLEAR CART
-  // =========================
   Future<void> clearCart() async {
-    if (_userId == null) throw NetworkError(
-        message: 'User not logged in',
-        userMessage: 'Please log in to continue.',
-      );
-
-    try {
-      final items = await _db
-          .collection("carts")
-          .doc(_userId)
-          .collection("items")
-          .get();
-
-      final batch = _db.batch();
-      for (var doc in items.docs) {
-        batch.delete(doc.reference);
-      }
-      await batch.commit();
-    } catch (e) {
-      throw NetworkError(
-          message: "Failed to clear cart: $e",
-          userMessage: translateError(e),
-          originalError: e,
-        );
+    final snap = await _cartRef().get();
+    final batch = _db.batch();
+    for (final doc in snap.docs) {
+      batch.delete(doc.reference);
     }
-  }
-
-  // =========================
-  // 💰 GET CART TOTAL
-  // =========================
-  Stream<double> getCartTotal() {
-    return getCartItems().map(
-      (items) => items.fold(0, (total, item) => total + item.totalPrice),
-    );
+    await batch.commit();
   }
 }

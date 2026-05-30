@@ -5,9 +5,11 @@ import 'package:go_router/go_router.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../services/analytics_service.dart';
-import '../../shared/loading_widget.dart';
+import '../../services/fraud_prevention_service.dart';
 import '../../widgets/google_loading.dart';
+import '../report/admin_reports_screen.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:intl/intl.dart';
 
 class BarEntry {
   final DateTime date;
@@ -25,19 +27,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final _analyticsService = AnalyticsService();
+  final _fraudService = FraudPreventionService();
   AnalyticsData? _analytics;
   bool _loading = true;
   bool _isAdmin = false;
+  Map<String, int> _fraudStats = {};
 
   List<Map<String, dynamic>> _users = [];
   List<Map<String, dynamic>> _products = [];
-  List<Map<String, dynamic>> _orders = [];
-  bool _loadingUsers = false, _loadingProducts = false, _loadingOrders = false;
+  bool _loadingUsers = false, _loadingProducts = false;
+  String _userSearchQuery = '';
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
     _checkAdmin();
   }
 
@@ -73,7 +77,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       return;
     }
     setState(() => _isAdmin = true);
-    await Future.wait([_loadAnalytics(), _loadUsers(), _loadProducts(), _loadOrders()]);
+    await Future.wait([_loadAnalytics(), _loadUsers(), _loadProducts(), _loadFraudStats()]);
     if (mounted) setState(() => _loading = false);
   }
 
@@ -95,6 +99,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     if (mounted) setState(() => _loadingUsers = false);
   }
 
+  Future<void> _loadFraudStats() async {
+    try {
+      final stats = await _fraudService.getFraudStats();
+      if (mounted) setState(() => _fraudStats = stats);
+    } catch (_) {}
+  }
+
   Future<void> _loadProducts() async {
     setState(() => _loadingProducts = true);
     try {
@@ -108,19 +119,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     if (mounted) setState(() => _loadingProducts = false);
   }
 
-  Future<void> _loadOrders() async {
-    setState(() => _loadingOrders = true);
-    try {
-      final snap = await FirebaseFirestore.instance.collection('orders').get();
-      if (mounted) {
-        setState(() => _orders = snap.docs.map((d) => {'id': d.id, ...d.data()}).toList());
-      }
-    } catch (e) {
-      debugPrint('Admin loadOrders: $e');
-    }
-    if (mounted) setState(() => _loadingOrders = false);
-  }
-
   @override
   Widget build(BuildContext context) {
     if (!_isAdmin) {
@@ -129,7 +127,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     if (_loading) {
       return Scaffold(
         appBar: AppBar(title: Text(context.tr('admin_dashboard'))),
-        body: LoadingWidget(message: context.tr('loading')),
+        body: const GoogleLoadingPage(),
       );
     }
 
@@ -141,7 +139,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             icon: const Icon(Icons.refresh),
             onPressed: () {
               setState(() => _loading = true);
-              Future.wait([_loadAnalytics(), _loadUsers(), _loadProducts(), _loadOrders()])
+              Future.wait([_loadAnalytics(), _loadUsers(), _loadProducts(), _loadFraudStats()])
                   .then((_) => setState(() => _loading = false));
             },
           ),
@@ -150,11 +148,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           controller: _tabController,
           isScrollable: true,
           tabs: [
-            Tab(icon: const Icon(Icons.dashboard), text: context.tr('stats')),
-            Tab(icon: const Icon(Icons.analytics), text: context.tr('stats')),
+            Tab(icon: const Icon(Icons.dashboard), text: 'Dashboard'),
+            Tab(icon: const Icon(Icons.analytics), text: 'Analytics'),
             Tab(icon: const Icon(Icons.people), text: context.tr('users')),
             Tab(icon: const Icon(Icons.inventory_2), text: context.tr('products')),
-            Tab(icon: const Icon(Icons.receipt_long), text: context.tr('orders')),
+            Tab(icon: const Icon(Icons.flag), text: context.tr('reports')),
+            Tab(icon: const Icon(Icons.security), text: 'Fraud'),
           ],
         ),
       ),
@@ -166,7 +165,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             _buildAnalyticsTab(),
             _buildUsersTab(),
             _buildProductsTab(),
-            _buildOrdersTab(),
+            _buildReportsTab(),
+            _buildFraudTab(),
           ],
         ),
       ),
@@ -177,7 +177,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   Widget _buildDashboardTab() {
     final a = _analytics!;
     return RefreshIndicator(
-      onRefresh: _loadAnalytics,
+      onRefresh: () async {
+        await Future.wait([_loadAnalytics(), _loadFraudStats()]);
+      },
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -193,7 +195,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           const SizedBox(height: 12),
           _kpiRow([
             _kpiCard('New Today', '${a.newUsersToday}', Icons.person_add, Colors.teal, null),
-            _kpiCard('Reports', '${a.totalReports}', Icons.flag, Colors.red, null),
+            GestureDetector(
+              onTap: () => context.push(AppRoutes.adminReports),
+              child: _kpiCard('Reports', '${a.totalReports}', Icons.flag, Colors.red, null),
+            ),
+          ]),
+          const SizedBox(height: 12),
+          _kpiRow([
+            Expanded(child: _kpiCard('Fraud Alerts', '${_fraudStats['unresolved'] ?? 0}', Icons.security, Colors.orange, '${_fraudStats['high'] ?? 0} high')),
+            const SizedBox(width: 8),
+            Expanded(child: _kpiCard('Test Mode', _fraudService.isTestMode ? 'ON' : 'OFF', Icons.science, Colors.teal, null)),
           ]),
           const SizedBox(height: 20),
           Text('Revenue (7 days)', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
@@ -211,10 +222,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             Colors.blue,
             (v) => '$v users',
           ),
-          const SizedBox(height: 20),
-          Text('Order Status', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          _buildOrderStatusPie(a.ordersByStatus),
           const SizedBox(height: 20),
           _buildQuickActions(),
           const SizedBox(height: 20),
@@ -295,54 +302,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
-  // ─── ORDER STATUS PIE ────────────────────────────────────
-  Widget _buildOrderStatusPie(Map<String, int> statusMap) {
-    final colors = {
-      'pending': Colors.orange,
-      'confirmed': Colors.blue,
-      'processing': Colors.purple,
-      'shipped': Colors.teal,
-      'delivered': Colors.green,
-      'cancelled': Colors.red,
-    };
-    final total = statusMap.values.fold(0, (a, b) => a + b);
-    if (total == 0) return const Card(child: Padding(padding: EdgeInsets.all(16), child: Text('No orders yet')));
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: statusMap.entries.map((e) {
-            final pct = (e.value / total * 100).toStringAsFixed(1);
-            final c = colors[e.key] ?? Colors.grey;
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  Container(width: 12, height: 12, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
-                  const SizedBox(width: 8),
-                  SizedBox(width: 90, child: Text(e.key, style: const TextStyle(fontSize: 13))),
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: e.value / total,
-                        backgroundColor: c.withAlpha(30),
-                        valueColor: AlwaysStoppedAnimation(c),
-                        minHeight: 8,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  SizedBox(width: 50, child: Text('$pct%', textAlign: TextAlign.right, style: const TextStyle(fontSize: 12))),
-                ],
-              ),
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
-
   // ─── QUICK ACTIONS ─────────────────────────────────────
   Widget _buildQuickActions() {
     return Column(
@@ -381,24 +340,24 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Send Push Notification'),
+        title: Text(context.tr('send_push_notification')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: titleCtrl,
-              decoration: const InputDecoration(labelText: 'Title', border: OutlineInputBorder()),
+              decoration: InputDecoration(labelText: context.tr('title'), border: OutlineInputBorder()),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: bodyCtrl,
               maxLines: 3,
-              decoration: const InputDecoration(labelText: 'Body', border: OutlineInputBorder()),
+              decoration: InputDecoration(labelText: context.tr('body'), border: OutlineInputBorder()),
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.tr('cancel'))),
           ElevatedButton(
             onPressed: () async {
               if (titleCtrl.text.isEmpty || bodyCtrl.text.isEmpty) return;
@@ -406,11 +365,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               await _analyticsService.sendPushToAll(titleCtrl.text, bodyCtrl.text);
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Notification sent to all users')),
+                  SnackBar(content: Text(context.tr('notification_sent_all'))),
                 );
               }
             },
-            child: const Text('Send to All'),
+            child: Text(context.tr('send_to_all')),
           ),
         ],
       ),
@@ -420,11 +379,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   // ─── EXPORT USERS CSV ─────────────────────────────────
   Future<void> _exportUsersCsv() async {
     final buffer = StringBuffer();
-    buffer.writeln('UID,Name,Email,Phone,Tier,Admin,Suspended,Created');
+      buffer.writeln('UID,Name,Email,Phone,Admin,Suspended,Created');
     for (final u in _users) {
       buffer.writeln(
         '"${u['uid']}","${u['displayName'] ?? ''}","${u['email'] ?? ''}","${u['phone'] ?? ''}",'
-        '"${u['accountTier'] ?? 'free'}","${u['isAdmin'] == true}","${u['isSuspended'] == true}","${u['createdAt'] ?? ''}"',
+        '"${u['isAdmin'] == true}","${u['isSuspended'] == true}","${u['createdAt'] ?? ''}"',
       );
     }
     await FirebaseFirestore.instance.collection('admin_exports').add({
@@ -574,7 +533,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           padding: const EdgeInsets.all(8),
           child: TextField(
             decoration: const InputDecoration(hintText: 'Search users...', prefixIcon: Icon(Icons.search), border: OutlineInputBorder()),
-            onChanged: (_) => setState(() {}),
+            onChanged: (q) => setState(() => _userSearchQuery = q.toLowerCase()),
           ),
         ),
         Expanded(
@@ -582,11 +541,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             onRefresh: _loadUsers,
             child: ListView.builder(
               padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 8),
-              itemCount: _users.length,
+              itemCount: _users.where((u) {
+                final name = (u['displayName'] ?? u['email'] ?? '').toString().toLowerCase();
+                final phone = (u['phone'] ?? '').toString().toLowerCase();
+                return name.contains(_userSearchQuery) || phone.contains(_userSearchQuery);
+              }).length,
               itemBuilder: (_, i) {
-                final u = _users[i];
-                final name = u['displayName'] ?? u['email'] ?? 'Unknown';
-                final tier = u['accountTier'] ?? 'free';
+                final filtered = _users.where((u) {
+                  final name = (u['displayName'] ?? u['email'] ?? '').toString().toLowerCase();
+                  final phone = (u['phone'] ?? '').toString().toLowerCase();
+                  return name.contains(_userSearchQuery) || phone.contains(_userSearchQuery);
+                }).toList();
+                final u = filtered[i];
+                final name = u['displayName'] ?? u['email'] ?? context.tr('unknown');
                 final suspended = u['isSuspended'] == true;
                 final phone = u['phone'] ?? '';
                 return Card(
@@ -597,13 +564,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       child: Text(name.toString()[0].toUpperCase(), style: const TextStyle(color: Colors.white)),
                     ),
                     title: Text('$name${suspended ? ' (Suspended)' : ''}'),
-                    subtitle: Text('Tier: $tier | $phone'),
+                    subtitle: Text(phone),
                     trailing: PopupMenuButton<String>(
                       onSelected: (v) => _updateUser(u['uid'] as String, v),
                       itemBuilder: (_) => [
-                        const PopupMenuItem(value: 'silver', child: Text('Set Silver')),
-                        const PopupMenuItem(value: 'premium', child: Text('Set Premium')),
-                        const PopupMenuItem(value: 'free', child: Text('Set Free')),
                         const PopupMenuItem(value: 'toggle_admin', child: Text('Toggle Admin')),
                         PopupMenuItem(value: suspended ? 'unsuspend' : 'suspend', child: Text(suspended ? 'Unsuspend' : 'Suspend')),
                       ],
@@ -621,9 +585,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   Future<void> _updateUser(String uid, String action) async {
     try {
       Map<String, dynamic> body = {};
-      if (action == 'silver' || action == 'premium' || action == 'free') {
-        body = {'accountTier': action};
-      } else if (action == 'toggle_admin') {
+      if (action == 'toggle_admin') {
         final user = _users.firstWhere((u) => u['uid'] == uid);
         body = {'isAdmin': user['isAdmin'] != true};
       } else if (action == 'suspend') {
@@ -652,11 +614,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         itemCount: _products.length,
         itemBuilder: (_, i) {
           final p = _products[i];
-          final name = p['name'] ?? 'Unknown';
+          final name = p['name'] ?? context.tr('unknown');
           final price = p['price'] ?? 0;
           final active = p['isActive'] != false;
           final featured = p['isFeatured'] == true;
-          final seller = p['sellerName'] ?? 'Unknown';
+          final seller = p['sellerName'] ?? context.tr('unknown');
           return Card(
             margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             child: ListTile(
@@ -722,64 +684,68 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     }
   }
 
-  // ─── ORDERS TAB ───────────────────────────────────────────────
-  Widget _buildOrdersTab() {
-    if (_loadingOrders) return const GoogleLoadingPage();
-    return RefreshIndicator(
-      onRefresh: _loadOrders,
-      child: ListView.builder(
-        itemCount: _orders.length,
-        itemBuilder: (_, i) {
-          final o = _orders[i];
-          final id = o['id'] as String? ?? '';
-          final status = o['status'] as String? ?? 'pending';
-          final total = o['totalAmount'] ?? o['productPrice'] ?? 0;
-          final buyer = o['buyerName'] ?? 'Unknown';
-          final items = o['items'] as List?;
-          final itemNames = items != null ? items.map((it) => it['name'] ?? '').join(', ') : o['productName'] ?? '';
-          final statusColors = {
-            'pending': Colors.orange, 'confirmed': Colors.blue, 'processing': Colors.purple,
-            'shipped': Colors.teal, 'delivered': Colors.green, 'cancelled': Colors.red,
-          };
-          return Card(
-            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            child: ListTile(
-              title: Text('#${id.length > 8 ? id.substring(0, 8) : id} — $buyer',
-                  maxLines: 1, overflow: TextOverflow.ellipsis),
-              subtitle: Text('$itemNames — TZS $total'),
-              trailing: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: (statusColors[status] ?? Colors.grey).withAlpha(20),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: DropdownButton<String>(
-                  value: status,
-                  underline: const SizedBox(),
-                  items: ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled']
-                      .map((s) => DropdownMenuItem(value: s, child: Text(s, style: TextStyle(color: statusColors[s] ?? Colors.grey, fontSize: 12))))
-                      .toList(),
-                  onChanged: (v) { if (v != null) _updateOrder(id, v); },
-                ),
-              ),
+  // ─── REPORTS TAB ─────────────────────────────────────────────
+  Widget _buildReportsTab() {
+    return const AdminReportsScreen(embedded: true);
+  }
+
+  // ─── FRAUD TAB ────────────────────────────────────────────────
+  Widget _buildFraudTab() {
+    return StreamBuilder<List<FraudAlert>>(
+      stream: _fraudService.getFraudAlerts(resolved: false),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) return const GoogleLoadingPage();
+        final alerts = snap.data ?? [];
+        if (alerts.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.security, size: 64, color: Colors.green[300]),
+                const SizedBox(height: 16),
+                Text('No active fraud alerts', style: TextStyle(color: Colors.grey[600])),
+                const SizedBox(height: 8),
+                Text('Test mode: ${_fraudService.isTestMode ? "ON (alerts logged only)" : "OFF (production)"}',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+              ],
             ),
           );
-        },
+        }
+        return RefreshIndicator(
+          onRefresh: _loadFraudStats,
+          child: ListView.builder(
+            padding: const EdgeInsets.all(8),
+            itemCount: alerts.length,
+            itemBuilder: (_, i) => _buildFraudCard(alerts[i]),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFraudCard(FraudAlert alert) {
+    final severityColor = alert.severity == 'high'
+        ? Colors.red
+        : alert.severity == 'medium'
+            ? Colors.orange
+            : Colors.yellow[700]!;
+    final dateStr = DateFormat('MMM dd, HH:mm').format(alert.detectedAt);
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: severityColor.withAlpha(25),
+          child: Icon(Icons.warning_amber, color: severityColor, size: 22),
+        ),
+        title: Text(alert.sellerName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        subtitle: Text('${alert.description}\n$dateStr', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+        trailing: TextButton(
+          onPressed: () => _fraudService.markResolved(alert.id),
+          child: Text(context.tr('dismiss'), style: TextStyle(fontSize: 12)),
+        ),
       ),
     );
   }
 
-  Future<void> _updateOrder(String id, String status) async {
-    try {
-      await FirebaseFirestore.instance.collection('orders').doc(id).update({'status': status});
-      _loadOrders();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Order updated to $status')));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
-      }
-    }
-  }
 }

@@ -2,16 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../main.dart';
 import '../../services/product_service.dart';
+import '../../services/localization_service.dart';
 import '../../services/category_service.dart';
 import '../../models/product_model.dart';
 import '../../models/category_model.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/ad_banner.dart';
-import '../../widgets/verified_badge.dart';
+import '../../widgets/trending_carousel.dart';
+import '../../widgets/flash_sale_banner.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
-import '../../services/live_stream_service.dart';
-import '../../widgets/live_badge.dart';
+import '../../widgets/google_loading.dart';
+import '../../services/cart_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -22,6 +24,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final ProductService _productService = ProductService();
+  final CartService _cartService = CartService();
   String? _selectedBrand;
   bool _pageLoaded = false;
   int _retryKey = 0;
@@ -39,10 +42,52 @@ class _HomeScreenState extends State<HomeScreen> {
     'Other',
   ];
 
+  void _showCurrencyPicker(BuildContext context) {
+    final config = AppConfig.of(context);
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                context.tr('select_currency'),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+            ...LocalizationService.supportedCurrencies.entries.map(
+              (e) => ListTile(
+                title: Text("${e.value['name']} (${e.value['symbol']})"),
+                trailing: config.currencyCode == e.key
+                    ? const Icon(Icons.check, color: Colors.green)
+                    : null,
+                onTap: () {
+                  LocalizationService().setCurrency(e.key);
+                  config.onSetCurrency(e.key);
+                  Navigator.pop(ctx);
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  Stream<int> _cartCountStream() {
+    return _cartService.getCartStream().map((items) => items.length);
   }
 
   Widget _brandChip(String label, String? brand) {
@@ -78,9 +123,9 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: false,
-        title: const Text(
-          "Soko Kuu",
-          style: TextStyle(
+        title: Text(
+          context.tr('main_market'),
+          style: const TextStyle(
             color: Color(0xFF2D6A4F),
             fontWeight: FontWeight.w900,
             fontSize: 28,
@@ -91,14 +136,41 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           IconButton(
             icon: const Icon(
-              Icons.notifications_none,
+              Icons.monetization_on_outlined,
+              color: Color(0xFF2D6A4F),
+            ),
+            onPressed: () => _showCurrencyPicker(context),
+          ),
+          IconButton(
+            icon: const Icon(
+              Icons.notifications_outlined,
               color: Color(0xFF2D6A4F),
             ),
             onPressed: () => context.push(AppRoutes.notifications),
           ),
-          IconButton(
-            icon: const Icon(Icons.search, color: Color(0xFF2D6A4F)),
-            onPressed: () => context.push(AppRoutes.search),
+          StreamBuilder<int>(
+            stream: _cartCountStream(),
+            builder: (context, snap) {
+              final count = snap.data ?? 0;
+              return Stack(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.shopping_cart_outlined, color: Color(0xFF2D6A4F)),
+                    onPressed: () => context.push(AppRoutes.cart),
+                  ),
+                  if (count > 0)
+                    Positioned(
+                      right: 6, top: 6,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                        constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                        child: Text('$count', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -128,11 +200,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       readOnly: true,
                       onTap: () => context.push(AppRoutes.search),
                       decoration: InputDecoration(
-                        hintText: 'Search products...',
-                        hintStyle: TextStyle(
-                          color: Theme.of(context).brightness == Brightness.dark
-                              ? Colors.white
-                              : Colors.black,
+                        hintText: context.tr('search_products'),
+                        hintStyle: const TextStyle(
+                          color: Colors.black,
                           fontSize: 14,
                         ),
                         prefixIcon: Icon(
@@ -161,63 +231,52 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 8),
-              // Live section
-              _buildLiveNowSection(),
-              const SizedBox(height: 8),
-              // Categories
-              RepaintBoundary(
-                child: Column(
+              // Flash Sale banner
+              const FlashSaleBanner(),
+              // Categories header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                child: Row(
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            context.tr('categories'),
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1B4332),
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: () => context.push(AppRoutes.category),
-                            child: Text(
-                              context.tr('see_all'),
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.primary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
+                    Text(
+                      context.tr('categories'),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1B4332),
                       ),
                     ),
-                    SizedBox(
+                    const Spacer(),
+                    TextButton(
+                      onPressed: () => context.push(AppRoutes.category),
+                      child: Text(
+                        context.tr('see_all'),
+                        style: TextStyle(
+                          color: Color(0xFF2D6A4F),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(
                       height: 100,
                       child: StreamBuilder<List<Category>>(
                         stream: CategoryService().getCategories(),
                         builder: (context, snapshot) {
                           if (!snapshot.hasData) {
-                            return const Center(
-                              child: SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              ),
+                            return Center(
+                              child: GoogleLoading(size: 24, strokeWidth: 2),
                             );
                           }
                           final cats = snapshot.data!;
                           if (cats.isEmpty) {
                             return Center(
-                              child: Text(
-                                'No categories yet',
-                                style: TextStyle(color: Colors.grey[500], fontSize: 13),
-                              ),
+                  child: Text(
+                    context.tr('no_categories'),
+                    style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                  ),
                             );
                           }
                           return ListView.builder(
@@ -281,10 +340,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         },
                       ),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
+              // Trending
+              const TrendingCarousel(),
+              const SizedBox(height: 4),
               // Products area
               _buildProductsArea(),
               const SizedBox(height: 16),
@@ -334,13 +392,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (snap.connectionState == ConnectionState.waiting && !_pageLoaded) {
           return Padding(
             padding: const EdgeInsets.all(24),
-            child: Center(
-              child: SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
+            child: GoogleLoadingPage(),
           );
         }
         if (!_pageLoaded && snap.hasData && snap.data!.isNotEmpty) {
@@ -374,46 +426,46 @@ class _HomeScreenState extends State<HomeScreen> {
                   return Center(
                     child: Padding(
                       padding: const EdgeInsets.all(24),
-                      child: Column(
-                        children: [
-                          Icon(
-                            Icons.cloud_off,
-                            size: 48,
-                            color: Colors.grey[400],
-                          ),
-                          const SizedBox(height: 12),
-                          const Text(
-                            'Kuna tatizo limetokea!',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.cloud_off,
+                              size: 48,
+                              color: Colors.grey[400],
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            err.contains('permission-denied')
-                                ? 'Firestore permissions hazijafunguliwa.'
-                                : err.contains('UNAVAILABLE')
-                                ? 'Hakuna mtandao.'
-                                : 'Tafadhali jaribu tena.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 13,
+                            const SizedBox(height: 12),
+                            Text(
+                              context.tr('something_wrong'),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 16),
-                          ElevatedButton.icon(
-                            onPressed: () => setState(() => _retryKey++),
-                            icon: const Icon(Icons.refresh, size: 18),
-                            label: const Text('Jaribu tena'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF2D6A4F),
-                              foregroundColor: Colors.white,
+                            const SizedBox(height: 8),
+                            Text(
+                              err.contains('permission-denied')
+                                  ? context.tr('permission_denied')
+                                  : err.contains('UNAVAILABLE')
+                                  ? context.tr('no_network')
+                                  : context.tr('please_try_again'),
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 13,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
+                            const SizedBox(height: 16),
+                            ElevatedButton.icon(
+                              onPressed: () => setState(() => _retryKey++),
+                              icon: const Icon(Icons.refresh, size: 18),
+                              label: Text(context.tr('try_again')),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF2D6A4F),
+                                foregroundColor: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
                     ),
                   );
                 }
@@ -428,8 +480,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           const SizedBox(height: 12),
                           Text(
                             _selectedBrand == null
-                                ? 'No products yet'
-                                : 'No products for $_selectedBrand',
+                                ? context.tr('no_products')
+                                : '${context.tr('no_products_for')} $_selectedBrand',
                             style: TextStyle(
                               fontSize: 16,
                               color: Colors.grey[600],
@@ -469,144 +521,4 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildLiveNowSection() {
-    return StreamBuilder<List<LiveStream>>(
-      stream: LiveStreamService().getActiveStreams(),
-      builder: (context, snap) {
-        final streams = snap.data ?? [];
-        if (streams.isEmpty) return const SizedBox.shrink();
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-              child: Row(
-                children: [
-                  const LiveBadge(size: 14),
-                  const SizedBox(width: 8),
-                  Text(
-                    context.tr('live_now'),
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1B4332),
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    '${streams.length} active',
-                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(
-              height: 120,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: streams.length,
-                itemBuilder: (context, i) {
-                  final stream = streams[i];
-                  return GestureDetector(
-                    onTap: () => context.push(AppRoutes.live, extra: stream),
-                    child: Container(
-                      width: 200,
-                      margin: const EdgeInsets.only(right: 12),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFE53935), Color(0xFFFF6F00)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                      ),
-                      child: Stack(
-                        children: [
-                          Positioned(
-                            top: 8,
-                            left: 8,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.black54,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.person,
-                                    color: Colors.white,
-                                    size: 12,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    stream.userName,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                  VerifiedBadge(
-                                    tier: stream.userTier,
-                                    size: 10,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            top: 8,
-                            right: 8,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                context.tr('live_tab'),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            bottom: 8,
-                            left: 8,
-                            right: 8,
-                            child: Text(
-                              stream.productName,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
 }

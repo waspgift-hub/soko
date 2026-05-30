@@ -5,7 +5,7 @@ import '../../services/product_service.dart';
 import '../../services/user_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/product_card.dart';
-import '../../widgets/verified_badge.dart';
+import '../../widgets/google_loading.dart';
 import '../../app/routes.dart';
 
 class SellerProfileScreen extends StatelessWidget {
@@ -41,7 +41,7 @@ class SellerProfileScreen extends StatelessWidget {
           stream: userService.streamProfile(sellerId),
           builder: (context, userSnap) {
             if (userSnap.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return const GoogleLoadingPage();
             }
             final profile = userSnap.data;
             return CustomScrollView(
@@ -129,7 +129,6 @@ class SellerProfileScreen extends StatelessWidget {
   Widget _buildStorefront(BuildContext context, UserProfile? profile) {
     final hasStorefront =
         profile != null &&
-        profile.isPaid &&
         (profile.shopBanner.isNotEmpty || profile.shopBannerColor.isNotEmpty);
     if (!hasStorefront) return const SizedBox.shrink();
 
@@ -171,9 +170,7 @@ class SellerProfileScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
-                profile.isSilver
-                    ? context.tr('shop_silver_banner')
-                    : context.tr('shop_premium_banner'),
+                'Seller',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
@@ -242,10 +239,6 @@ class SellerProfileScreen extends StatelessWidget {
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
                 ),
-              ),
-              VerifiedBadge(
-                tier: profile?.accountTier,
-                isAdmin: profile?.email == 'admin@soko-langu.com',
               ),
             ],
           ),
