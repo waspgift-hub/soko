@@ -209,6 +209,11 @@ List<Category> getDefaultCategories() {
         ),
         SubCategory(id: 'makeup', name: 'Makeup', nameSw: 'Vipodozi'),
         SubCategory(
+          id: 'cosmetics',
+          name: 'Cosmetics',
+          nameSw: 'Cosmetics',
+        ),
+        SubCategory(
           id: 'supplements',
           name: 'Supplements',
           nameSw: 'Vidonge vya Afya',

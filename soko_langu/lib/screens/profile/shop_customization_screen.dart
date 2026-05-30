@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:go_router/go_router.dart';
 import '../../services/user_service.dart';
 import '../../services/cloudinary_service.dart';
 import '../../extensions/context_tr.dart';
-import '../../app/routes.dart';
+import '../../widgets/google_loading.dart';
+import '../../main.dart' show themeManager;
 
 class ShopCustomizationScreen extends StatefulWidget {
   const ShopCustomizationScreen({super.key});
@@ -20,7 +20,6 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
   final _picker = ImagePicker();
 
   bool _loading = false;
-  bool _isPaid = false;
   String _banner = '';
   String _bannerColor = '';
   String _accentColor = '';
@@ -35,6 +34,7 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
     Color(0xFF00838F),
     Color(0xFF4E342E),
     Color(0xFF37474F),
+
   ];
 
   @override
@@ -49,7 +49,6 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
     final profile = await _userService.getProfile(uid);
     if (profile == null) return;
     setState(() {
-      _isPaid = profile.isPaid;
       _banner = profile.shopBanner;
       _bannerColor = profile.shopBannerColor;
       _accentColor = profile.shopAccentColor;
@@ -117,87 +116,26 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(context.tr('shop_customization'))),
-      body: SafeArea(child: _isPaid ? _buildForm() : _buildLocked()),
-      bottomNavigationBar: _isPaid
-          ? SafeArea(
+      body: SafeArea(child: _buildForm()),
+      bottomNavigationBar: SafeArea(
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: ElevatedButton(
                   onPressed: _changed && !_loading ? _save : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: _loading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
+                      child: _loading
+                      ? const GoogleLoading(size: 20, strokeWidth: 2)
                       : Text(context.tr('save')),
                 ),
               ),
-            )
-          : null,
-    );
-  }
-
-  Widget _buildLocked() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.amber[50],
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.lock_outline,
-                size: 64,
-                color: Colors.amber[800],
-              ),
             ),
-            const SizedBox(height: 24),
-            Text(
-              context.tr('premium_feature_locked'),
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              context.tr('upgrade_to_customize'),
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey[600], fontSize: 15),
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: () => context.push(AppRoutes.premiumUpgrade),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.amber[800],
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 32,
-                  vertical: 14,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: Text(context.tr('upgrade_now')),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -346,6 +284,49 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
               );
             }).toList(),
           ),
+          const Divider(height: 40),
+          Text(
+            'App Theme Color',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Change the entire app\'s color theme',
+            style: TextStyle(color: Colors.grey[500], fontSize: 13),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: _presetColors.map((c) {
+              final selected = themeManager.seedColor.value == c.value;
+              return GestureDetector(
+                onTap: () => themeManager.setSeedColor(c),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: c,
+                    borderRadius: BorderRadius.circular(12),
+                    border: selected
+                        ? Border.all(color: Colors.black, width: 3)
+                        : null,
+                    boxShadow: selected
+                        ? [
+                            BoxShadow(
+                              color: c.withValues(alpha: 0.5),
+                              blurRadius: 8,
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: selected
+                      ? const Icon(Icons.check, color: Colors.white, size: 20)
+                      : null,
+                ),
+              );
+            }).toList(),
+          ),
           const SizedBox(height: 40),
         ],
       ),
@@ -408,7 +389,7 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        context.tr('shop_premium_banner'),
+                        'Shop',
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -419,24 +400,6 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
                         style: TextStyle(color: Colors.grey[600], fontSize: 13),
                       ),
                     ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    context.tr('premium'),
-                    style: TextStyle(
-                      color: accent,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
                   ),
                 ),
               ],

@@ -128,7 +128,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                         overflow: TextOverflow.ellipsis,
                       ),
                       subtitle: Text(
-                        "${product.currency ?? 'TSh'} ${product.price.toStringAsFixed(0)}",
+                        context.formatPrice(product.price),
                       ),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete, color: Colors.red),

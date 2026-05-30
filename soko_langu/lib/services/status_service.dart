@@ -82,12 +82,15 @@ class StatusService {
         .collection('statuses')
         .where('userId', isEqualTo: _uid)
         .where('expiresAt', isGreaterThan: Timestamp.now())
-        .orderBy('expiresAt', descending: true)
-        .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snap) => snap.docs
             .map((doc) => StatusUpdate.fromMap(doc.id, doc.data()))
-            .toList());
+            .toList()
+          ..sort((a, b) {
+            final cmp = b.expiresAt.compareTo(a.expiresAt);
+            if (cmp != 0) return cmp;
+            return b.createdAt.compareTo(a.createdAt);
+          }));
   }
 
   Stream<List<StatusViewerState>> getAllStatuses() {
@@ -95,8 +98,6 @@ class StatusService {
     return _db
         .collection('statuses')
         .where('expiresAt', isGreaterThan: Timestamp.now())
-        .orderBy('expiresAt', descending: true)
-        .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snap) {
       final Map<String, List<StatusUpdate>> grouped = {};

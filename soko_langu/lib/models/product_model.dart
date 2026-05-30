@@ -52,17 +52,6 @@ class WholesaleTier {
   };
 }
 
-int tierPriority(String tier) {
-  switch (tier) {
-    case 'silver':
-      return 0;
-    case 'premium':
-      return 1;
-    default:
-      return 2;
-  }
-}
-
 class Product {
   final String id;
   final String name;
@@ -72,7 +61,6 @@ class Product {
   final List<String> images;
   final String sellerId;
   final String sellerName;
-  final String sellerTier;
   final String category;
   final String subcategory;
   final String location;
@@ -84,11 +72,16 @@ class Product {
   final double rating;
   final int reviewCount;
   final int soldCount;
+  final int viewCount;
   final Map<String, dynamic> attributes;
   final bool isActive;
   final bool isFeatured;
   final DateTime? featuredUntil;
+  final bool isBoosted;
+  final DateTime? boostedUntil;
+  final String boostTier;
   final String? brand;
+  final String? sellerPhone;
   final String condition;
 
   Product({
@@ -100,7 +93,6 @@ class Product {
     required this.images,
     required this.sellerId,
     required this.sellerName,
-    this.sellerTier = 'free',
     required this.category,
     required this.subcategory,
     required this.location,
@@ -112,11 +104,16 @@ class Product {
     this.rating = 0.0,
     this.reviewCount = 0,
     this.soldCount = 0,
+    this.viewCount = 0,
     this.attributes = const {},
     this.isActive = true,
     this.isFeatured = false,
     this.featuredUntil,
+    this.isBoosted = false,
+    this.boostedUntil,
+    this.boostTier = '',
     this.brand,
+    this.sellerPhone,
     this.condition = 'new',
   });
 
@@ -124,6 +121,11 @@ class Product {
       isFeatured &&
       featuredUntil != null &&
       DateTime.now().isBefore(featuredUntil!);
+
+  bool get isBoostedValid =>
+      isBoosted &&
+      boostedUntil != null &&
+      DateTime.now().isBefore(boostedUntil!);
 
   factory Product.fromFirestore(DocumentSnapshot doc) {
     final dataRaw = doc.data();
@@ -157,7 +159,6 @@ class Product {
       images: List<String>.from(data['images'] ?? []),
       sellerId: data['sellerId'] ?? '',
       sellerName: data['sellerName'] ?? '',
-      sellerTier: data['sellerTier'] as String? ?? 'free',
       category: data['category'] ?? 'General',
       subcategory: data['subcategory'] ?? '',
       location: data['location'] ?? 'Tanzania',
@@ -171,13 +172,22 @@ class Product {
       rating: (data['rating'] ?? 0).toDouble(),
       reviewCount: data['reviewCount'] ?? 0,
       soldCount: data['soldCount'] ?? 0,
+      viewCount: data['viewCount'] ?? 0,
       attributes: Map<String, dynamic>.from(data['attributes'] ?? {}),
       isActive: data['isActive'] ?? true,
       isFeatured: data['isFeatured'] ?? false,
       featuredUntil: data['featuredUntil'] is Timestamp
           ? (data['featuredUntil'] as Timestamp).toDate()
           : null,
+      isBoosted: data['isBoosted'] ?? data['isFeatured'] ?? false,
+      boostedUntil: data['boostedUntil'] is Timestamp
+          ? (data['boostedUntil'] as Timestamp).toDate()
+          : (data['featuredUntil'] is Timestamp
+              ? (data['featuredUntil'] as Timestamp).toDate()
+              : null),
+      boostTier: data['boostTier'] as String? ?? '',
       brand: data['brand'],
+      sellerPhone: data['sellerPhone'] as String?,
       condition: data['condition'] ?? 'new',
     );
   }
@@ -190,7 +200,6 @@ class Product {
     'images': images,
     'sellerId': sellerId,
     'sellerName': sellerName,
-    'sellerTier': sellerTier,
     'category': category,
     'subcategory': subcategory,
     'location': location,
@@ -202,13 +211,20 @@ class Product {
     'rating': rating,
     'reviewCount': reviewCount,
     'soldCount': soldCount,
+    'viewCount': viewCount,
     'attributes': attributes,
     'isActive': isActive,
     'isFeatured': isFeatured,
     'featuredUntil': featuredUntil != null
         ? Timestamp.fromDate(featuredUntil!)
         : null,
+    'isBoosted': isBoosted,
+    'boostedUntil': boostedUntil != null
+        ? Timestamp.fromDate(boostedUntil!)
+        : null,
+    'boostTier': boostTier,
     'brand': brand,
+    'sellerPhone': sellerPhone,
     'condition': condition,
   };
 

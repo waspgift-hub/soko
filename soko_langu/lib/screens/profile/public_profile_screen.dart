@@ -4,11 +4,9 @@ import 'package:go_router/go_router.dart';
 import '../../models/product_model.dart';
 import '../../services/product_service.dart';
 import '../../services/user_service.dart';
-import '../../services/follow_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/product_card.dart';
-import '../../widgets/verified_badge.dart';
-import '../../main.dart';
+import '../../widgets/google_loading.dart';
 import '../../app/routes.dart';
 
 class PublicProfileScreen extends StatefulWidget {
@@ -22,7 +20,6 @@ class PublicProfileScreen extends StatefulWidget {
 }
 
 class _PublicProfileScreenState extends State<PublicProfileScreen> {
-  final FollowService _followService = FollowService();
   bool _isMyProfile = false;
 
   @override
@@ -40,28 +37,35 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
       appBar: AppBar(
         title: Text(widget.userName),
         actions: [
-          if (!_isMyProfile)
+          if (!_isMyProfile) ...[
             IconButton(
-              icon: const Icon(Icons.message, color: Colors.green),
+              icon: const Icon(Icons.chat, color: Color(0xFF25D366)),
               onPressed: () => context.push('${AppRoutes.chat}/${widget.userId}', extra: {'name': widget.userName}),
             ),
+            IconButton(
+              icon: Icon(Icons.flag_outlined, color: Colors.red[300]),
+              onPressed: () => context.push(AppRoutes.report, extra: {
+                'reportedUserId': widget.userId,
+                'reportedUserName': widget.userName,
+              }),
+            ),
+          ],
         ],
       ),
       body: SafeArea(
         child: StreamBuilder<UserProfile?>(
           stream: userService.streamProfile(widget.userId),
           builder: (context, snap) {
-            if (snap.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+            if (snap.connectionState == ConnectionState.waiting) return const GoogleLoadingPage();
             final profile = snap.data;
             return CustomScrollView(slivers: [
               SliverToBoxAdapter(child: _buildHeader(context, profile)),
-              if (!_isMyProfile) SliverToBoxAdapter(child: _buildFollowButton()),
               SliverToBoxAdapter(child: _buildActionButtons(context)),
               SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 8), child: Text(context.tr('products'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)))),
               StreamBuilder<List<Product>>(
                 stream: productService.getProducts(),
                 builder: (context, snap) {
-                  if (!snap.hasData) return const SliverFillRemaining(child: Center(child: CircularProgressIndicator()));
+                  if (!snap.hasData) return const SliverFillRemaining(child: GoogleLoadingPage());
                   final products = snap.data!.where((p) => p.sellerId == widget.userId).toList();
                   if (products.isEmpty) {
                     return SliverFillRemaining(child: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.shopping_bag_outlined, size: 64, color: Colors.grey[400]), const SizedBox(height: 16), Text(context.tr('no_products'), style: TextStyle(color: Colors.grey[600]))])));
@@ -72,44 +76,6 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
             ]);
           },
         ),
-      ),
-    );
-  }
-
-  Widget _buildFollowButton() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-      child: StreamBuilder<bool>(
-        stream: _followService.isFollowingStream(widget.userId),
-        builder: (context, snap) {
-          final following = snap.data ?? false;
-          return SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: () async {
-                try {
-                  if (following) {
-                    await _followService.unfollow(widget.userId);
-                  } else {
-                    await _followService.follow(widget.userId);
-                  }
-                } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-                  }
-                }
-              },
-              style: OutlinedButton.styleFrom(
-                backgroundColor: following ? Colors.green : null,
-                foregroundColor: following ? Colors.white : Colors.green,
-                side: BorderSide(color: following ? Colors.green : Colors.green),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-              icon: Icon(following ? Icons.check : Icons.person_add),
-              label: Text(following ? context.tr('following') : context.tr('follow')),
-            ),
-          );
-        },
       ),
     );
   }
@@ -132,7 +98,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
               Positioned(
                 right: 4, bottom: 4,
                 child: StreamBuilder<bool>(
-                  stream: presenceService.isOnline(widget.userId),
+                  stream: Stream.value(false),
                   builder: (context, snap) {
                     final online = snap.data ?? false;
                     return Container(width: 16, height: 16, decoration: BoxDecoration(color: online ? Colors.green : Colors.grey, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)));
@@ -144,7 +110,6 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
           const SizedBox(height: 12),
           Row(mainAxisSize: MainAxisSize.min, children: [
             Text(profile?.displayName.isNotEmpty == true ? profile!.displayName : widget.userName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            VerifiedBadge(tier: profile?.accountTier, isAdmin: profile?.email == 'admin@soko-langu.com'),
           ]),
           if (profile?.bio.isNotEmpty == true) ...[const SizedBox(height: 4), Text(profile!.bio, style: TextStyle(color: Colors.grey[600], fontSize: 14), textAlign: TextAlign.center)],
           if (profile?.location.isNotEmpty == true) ...[const SizedBox(height: 4), Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.location_on, size: 16, color: Colors.grey[500]), const SizedBox(width: 4), Text(profile!.location, style: TextStyle(color: Colors.grey[600]))])],
@@ -161,11 +126,15 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5), width: 1.5)),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _statItem(context, context.tr('products'), StreamBuilder<int>(stream: _followService.followingCount(widget.userId), builder: (context, snap) => Text('${snap.data ?? 0}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)))),
-          Container(width: 1, height: 30, color: Theme.of(context).colorScheme.outlineVariant),
-          _statItem(context, context.tr('followers'), StreamBuilder<int>(stream: _followService.followersCount(widget.userId), builder: (context, snap) => Text('${snap.data ?? 0}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)))),
+          _statItem(context, context.tr('products'), StreamBuilder<List<Product>>(
+            stream: ProductService().getProducts(),
+            builder: (context, snap) {
+              final count = snap.data?.where((p) => p.sellerId == widget.userId).length ?? 0;
+              return Text('$count', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18));
+            },
+          )),
         ],
       ),
     );
@@ -182,9 +151,9 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
         Expanded(
           child: ElevatedButton.icon(
             onPressed: () => context.push('${AppRoutes.chat}/${widget.userId}', extra: {'name': widget.userName}),
-            icon: const Icon(Icons.message, color: Colors.white),
-            label: Text(context.tr('message')),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            icon: const Icon(Icons.chat, color: Colors.white),
+            label: Text(context.tr('whatsapp')),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF25D366), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
           ),
         ),
       ]),

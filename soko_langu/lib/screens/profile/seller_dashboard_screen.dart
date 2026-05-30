@@ -1,18 +1,16 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart' hide Order;
-import 'package:http/http.dart' as http;
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
-import '../../services/order_service.dart';
+import 'package:intl/intl.dart';
 import '../../services/product_service.dart';
 import '../../services/payment_service.dart';
-import '../../services/api_config.dart';
 import '../../extensions/context_tr.dart';
-import '../../models/order_model.dart';
 import '../../models/product_model.dart';
 import '../../models/transaction_model.dart';
 import '../../app/routes.dart';
+import '../../models/flash_sale_model.dart';
+import '../../services/flash_sale_service.dart';
 import '../../widgets/google_loading.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -24,7 +22,6 @@ class SellerDashboardScreen extends StatefulWidget {
 }
 
 class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
-  final OrderService _orderService = OrderService();
   final ProductService _productService = ProductService();
   final PaymentService _paymentService = PaymentService();
 
@@ -43,128 +40,78 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
             }
             final transactions = txSnap.data ?? [];
 
-            return StreamBuilder<List<Order>>(
-              stream: _orderService.getReceivedOrders(),
-              builder: (context, orderSnap) {
-                if (orderSnap.hasError) {
-                  debugPrint('SellerDashboard orders error: ${orderSnap.error}');
+            return StreamBuilder<List<Product>>(
+              stream: _productService.getMyProducts(),
+              builder: (context, productSnap) {
+                if (productSnap.hasError) {
+                  debugPrint('SellerDashboard products error: ${productSnap.error}');
                 }
-                final orders = orderSnap.data ?? [];
-
-                return StreamBuilder<List<Product>>(
-                  stream: _productService.getMyProducts(),
-                  builder: (context, productSnap) {
-                    if (productSnap.hasError) {
-                      debugPrint('SellerDashboard products error: ${productSnap.error}');
-                    }
-                    if (txSnap.connectionState == ConnectionState.waiting ||
-                        orderSnap.connectionState == ConnectionState.waiting ||
-                        productSnap.connectionState == ConnectionState.waiting) {
-                      return const GoogleLoadingPage();
-                    }
-                    final productCount = productSnap.data?.length ?? 0;
-                    final pendingOrders = orders
-                        .where((o) => o.status == OrderStatus.pending)
-                        .length;
-                    final completedTx = transactions.where(
-                      (t) => t.status == TransactionStatus.completed,
-                    );
-                    final txRevenue = completedTx.fold<double>(
-                      0,
-                      (total, t) => total + t.sellerReceives,
-                    );
-                    final txCount = completedTx.length;
-                    return RefreshIndicator(
-                      onRefresh: () async => setState(() {}),
-                      child: ListView(
-                        padding: EdgeInsets.fromLTRB(
-                          16,
-                          16,
-                          16,
-                          16 + MediaQuery.of(context).padding.bottom,
-                        ),
+                if (txSnap.connectionState == ConnectionState.waiting ||
+                    productSnap.connectionState == ConnectionState.waiting) {
+                  return const GoogleLoadingPage();
+                }
+                final productCount = productSnap.data?.length ?? 0;
+                final completedTx = transactions.where(
+                  (t) => t.status == TransactionStatus.completed,
+                );
+                final txCount = completedTx.length;
+                return RefreshIndicator(
+                  onRefresh: () async => setState(() {}),
+                  child: ListView(
+                    padding: EdgeInsets.fromLTRB(
+                      16,
+                      16,
+                      16,
+                      16 + MediaQuery.of(context).padding.bottom,
+                    ),
+                    children: [
+                      Row(
                         children: [
-                          Row(
-                            children: [
-                              _statCard(
-                                context,
-                                Icons.inventory_2,
-                                productCount.toString(),
-                                context.tr('total_products'),
-                                Colors.blue,
-                              ),
-                              const SizedBox(width: 12),
-                              _statCard(
-                                context,
-                                Icons.receipt_long,
-                                '$txCount Sold',
-                                context.tr('total_sales'),
-                                Colors.orange,
-                              ),
-                            ],
+                          _statCard(
+                            context,
+                            Icons.inventory_2,
+                            productCount.toString(),
+                            context.tr('total_products'),
+                            Colors.blue,
                           ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              _statCard(
-                                context,
-                                Icons.monetization_on,
-                                '\$${txRevenue.toStringAsFixed(2)}',
-                                context.tr('amount_received'),
-                                Colors.green,
-                              ),
-                              const SizedBox(width: 12),
-                              _statCard(
-                                context,
-                                Icons.hourglass_empty,
-                                pendingOrders.toString(),
-                                context.tr('pending'),
-                                Colors.red,
-                              ),
-                            ],
+                          const SizedBox(width: 12),
+                          _statCard(
+                            context,
+                            Icons.receipt_long,
+                            '$txCount Sold',
+                            context.tr('total_sales'),
+                            Colors.orange,
                           ),
-                          const SizedBox(height: 16),
-                          _buildEarningsCard(),
-                          const SizedBox(height: 16),
-                          _buildCustomizeShopButton(),
-                          const SizedBox(height: 16),
-                          _buildBoostButton(productSnap.data ?? []),
-                          const SizedBox(height: 16),
-                          _buildGoLiveButton(productSnap.data ?? []),
-                          const SizedBox(height: 16),
-                          _buildStreamerEarningsCard(),
-                          if (user?.email == 'admin@soko-langu.com') ...[
-                            const SizedBox(height: 16),
-                            _buildAdminSection(),
-                          ],
-                          if (transactions.isNotEmpty) ...[
-                            const SizedBox(height: 16),
-                            Text(
-                              'Transaction History',
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 8),
-                            ...transactions
-                                .take(10)
-                                .map((tx) => _buildTransactionTile(tx)),
-                          ],
-                          if (orders.isNotEmpty) ...[
-                            const SizedBox(height: 16),
-                            Text(
-                              context.tr('recent_orders'),
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 8),
-                            ...orders
-                                .take(5)
-                                .map((order) => _buildOrderTile(order)),
-                          ],
                         ],
                       ),
-                    );
-                  },
+                      const SizedBox(height: 16),
+                      _buildEarningsCard(),
+                      const SizedBox(height: 16),
+                      _buildKycCard(),
+                      const SizedBox(height: 16),
+                      _buildCustomizeShopButton(),
+                      const SizedBox(height: 16),
+                      _buildFlashSaleCard(productSnap.data ?? []),
+                      const SizedBox(height: 16),
+                      _buildBoostButton(productSnap.data ?? []),
+                      if (user?.email == 'admin@soko-langu.com') ...[
+                        const SizedBox(height: 16),
+                        _buildAdminSection(),
+                      ],
+                      if (transactions.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          'Transaction History',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        ...transactions
+                            .take(10)
+                            .map((tx) => _buildTransactionTile(tx)),
+                      ],
+                    ],
+                  ),
                 );
               },
             );
@@ -268,49 +215,12 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     );
   }
 
-  Widget _buildOrderTile(Order order) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
-          width: 1.5,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  order.buyerName,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                _statusChip(order.status),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '\$${order.totalAmount.toStringAsFixed(0)} - ${order.items.length} items',
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildAdminSection() {
     return FutureBuilder<Map<String, double>>(
       future: _paymentService.getRevenueStats(),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const GoogleLoadingPage();
         }
         final stats = snap.data ?? {};
         return Column(
@@ -349,104 +259,161 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   }
 
   Widget _buildEarningsCard() {
-    return GestureDetector(
-      onTap: () => context.push(AppRoutes.earningsDashboard),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF1B5E20), Color(0xFF388E3C)],
-          ),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.monetization_on, color: Colors.white, size: 32),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Ad Revenue Earnings',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    'Tap to view your earnings dashboard',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.8),
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStreamerEarningsCard() {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
     return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .snapshots(),
-      builder: (ctx, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return const SizedBox(height: 80, child: Center(child: CircularProgressIndicator()));
-        }
-        final earnings =
-            (snap.data?.data() as Map<String, dynamic>?)?['streamerEarnings'] ??
-            0;
+      stream: FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
+      builder: (context, snap) {
+        final balance = (snap.data?.data() as Map<String, dynamic>?)?['sellerBalance'] as num? ?? 0;
+        final totalSales = (snap.data?.data() as Map<String, dynamic>?)?['totalSales'] as num? ?? 0;
+        final nf = NumberFormat('#,###', 'en');
         return GestureDetector(
-          onTap: () => context.push(AppRoutes.streamerEarnings),
+          onTap: () => context.push(AppRoutes.sellerEarnings),
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [Color(0xFF6A1B9A), Color(0xFFAB47BC)],
+                colors: [Color(0xFF065535), Color(0xFF0B8043)],
               ),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.card_giftcard, color: Colors.white, size: 28),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        context.tr('streamer_earnings'),
-                        style: const TextStyle(
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withAlpha(30),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.account_balance_wallet, color: Colors.white, size: 22),
+                    ),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text(
+                        'Seller Earnings',
+                        style: TextStyle(
                           color: Colors.white,
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
+                    ),
+                    const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'TZS ${nf.format(balance)}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$totalSales sales | Tap for details & withdrawal',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.8),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildKycCard() {
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
+      builder: (context, snap) {
+        final kyc = snap.data?.data() as Map<String, dynamic>?;
+        final kycData = kyc?['kyc'] as Map<String, dynamic>?;
+        final kycStatus = kycData?['status'] as String? ?? 'none';
+
+        String title;
+        String subtitle;
+        Color color;
+        IconData icon;
+
+        switch (kycStatus) {
+          case 'approved':
+            title = 'KYC Imekubaliwa';
+            subtitle = 'Unaweza kuuza bidhaa';
+            color = Colors.green;
+            icon = Icons.verified;
+            break;
+          case 'pending':
+            title = 'KYC Inakaguliwa';
+            subtitle = 'Taarifa zako zinakaguliwa...';
+            color = Colors.orange;
+            icon = Icons.hourglass_top;
+            break;
+          case 'rejected':
+            title = 'KYC Imekataliwa';
+            subtitle = 'Bonyeza kuwasilisha tena';
+            color = Colors.red;
+            icon = Icons.cancel;
+            break;
+          default:
+            title = 'KYC Haitumwa';
+            subtitle = 'Thibitisha utambulisho wako kuuza';
+            color = Colors.blueGrey;
+            icon = Icons.verified_outlined;
+        }
+
+        return GestureDetector(
+          onTap: () => context.push(AppRoutes.kyc),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [color.withAlpha(30), color.withAlpha(10)],
+              ),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: color.withAlpha(60)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: color.withAlpha(30),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: color, size: 28),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        'TZS $earnings from gifts — Tap to view',
+                        title,
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.8),
-                          fontSize: 12,
+                          color: color,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          color: color.withValues(alpha: 0.8),
+                          fontSize: 13,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const Icon(
-                  Icons.arrow_forward_ios,
-                  color: Colors.white,
-                  size: 16,
-                ),
+                Icon(Icons.arrow_forward_ios, color: color, size: 18),
               ],
             ),
           ),
@@ -491,7 +458,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Add banner & colors — Premium only',
+                    'Add banner & customize your shop',
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.8),
                       fontSize: 13,
@@ -504,6 +471,67 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildFlashSaleCard(List<Product> products) {
+    return StreamBuilder<List<FlashSale>>(
+      stream: FlashSaleService().getMyFlashSales(),
+      builder: (context, snap) {
+        final activeCount = snap.data?.length ?? 0;
+        return GestureDetector(
+          onTap: () {
+            if (products.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Weka bidhaa kwanza')),
+              );
+              return;
+            }
+            context.push(AppRoutes.createFlashSale);
+          },
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF2D6A4F), Color(0xFF1B4332)],
+              ),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.local_fire_department, color: Colors.white, size: 28),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Flash Sale',
+                        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        activeCount > 0
+                            ? '$activeCount Flash Sale inayoenda'
+                            : 'Unda flash sale kupunguza bei bidhaa zako',
+                        style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 18),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -545,10 +573,10 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                   Text(
                     products.isEmpty
                         ? 'Add a product first'
-                        : 'Feature your product for TZS 5,000 / 30 days',
+                        : 'Bronze TZS 1,500/3d · Silver TZS 3,000/7d · Gold TZS 10,000/30d',
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.8),
-                      fontSize: 13,
+                      fontSize: 12,
                     ),
                   ),
                 ],
@@ -580,7 +608,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
               ),
               const SizedBox(height: 4),
               const Text(
-                'TZS 5,000 — Featured for 30 days',
+                'Choose a product to boost',
                 style: TextStyle(color: Colors.grey, fontSize: 13),
               ),
               const SizedBox(height: 16),
@@ -591,7 +619,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                   separatorBuilder: (_, _) => const Divider(),
                   itemBuilder: (_, i) {
                     final p = products[i];
-                    final alreadyFeatured = p.isFeaturedValid;
+                    final alreadyBoosted = p.isBoostedValid;
                     return ListTile(
                       leading: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
@@ -609,16 +637,16 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                       subtitle: Text(
-                        alreadyFeatured ? context.tr('already_featured') : context.tr('tap_to_boost'),
+                        alreadyBoosted ? 'Already boosted' : 'Tap to boost',
                       ),
-                      trailing: alreadyFeatured
+                      trailing: alreadyBoosted
                           ? const Icon(Icons.check_circle, color: Colors.green)
                           : const Icon(Icons.arrow_forward_ios, size: 16),
-                      onTap: alreadyFeatured
+                      onTap: alreadyBoosted
                           ? null
                           : () {
                               Navigator.pop(ctx);
-                              _processBoostPayment(p);
+                              context.push(AppRoutes.productBoost, extra: p);
                             },
                     );
                   },
@@ -631,241 +659,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     );
   }
 
-  Future<void> _processBoostPayment(Product product) async {
-    final phoneController = TextEditingController();
-    final phone = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Boost Listing'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Boost "${product.name}" for TZS 5,000 for 30 days?'),
-            const SizedBox(height: 12),
-            TextField(
-              controller: phoneController,
-              decoration: InputDecoration(
-                labelText: context.tr('mpesa_phone'),
-                hintText: 'e.g. 0712345678',
-                border: const OutlineInputBorder(),
-              ),
-              keyboardType: TextInputType.phone,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, phoneController.text.trim()),
-            child: Text(context.tr('pay_boost')),
-          ),
-        ],
-      ),
-    );
 
-    if (phone == null || phone.isEmpty) return;
 
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
-
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => const Center(child: CircularProgressIndicator()),
-      );
-
-      final resp = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/boost-product'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'productId': product.id,
-          'phone': phone,
-          'userId': user.uid,
-        }),
-      );
-
-      if (mounted) Navigator.pop(context);
-
-      if (!mounted) return;
-
-      final data = jsonDecode(resp.body);
-      if (resp.statusCode == 200 && data['message'] != null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(data['message'])));
-      } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(data['error'] ?? 'Failed')));
-      }
-    } catch (e) {
-      if (mounted) Navigator.pop(context);
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("${context.tr('error')}: $e")));
-    }
-  }
-
-  Widget _buildGoLiveButton(List<Product> products) {
-    return GestureDetector(
-      onTap: products.isEmpty ? null : () => _showGoLiveDialog(products),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFE53935), Color(0xFFFF6F00)],
-          ),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.white.withAlpha(40),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(
-                Icons.wifi_tethering,
-                color: Colors.white,
-                size: 28,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Go Live',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    products.isEmpty
-                        ? 'Add a product first to go live'
-                        : 'Start a live stream for your products',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.8),
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 18),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showGoLiveDialog(List<Product> products) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Select Product to Go Live',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                height: 200,
-                child: ListView.separated(
-                  itemCount: products.length,
-                  separatorBuilder: (_, _) => const Divider(),
-                  itemBuilder: (_, i) {
-                    final p = products[i];
-                    return ListTile(
-                      leading: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          width: 48,
-                          height: 48,
-                          color: Colors.grey[200],
-                          child: p.images.isNotEmpty
-                              ? CachedNetworkImage(imageUrl: p.images.first, fit: BoxFit.cover)
-                              : const Icon(Icons.image, color: Colors.grey),
-                        ),
-                      ),
-                      title: Text(
-                        p.name,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      subtitle: Text('TZS ${p.price.toStringAsFixed(0)}'),
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        context.push(
-                          '${AppRoutes.goLive}/${p.id}/${p.name}',
-                          extra: p.images.isNotEmpty ? p.images.first : null,
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _statusChip(OrderStatus status) {
-    Color color;
-    switch (status) {
-      case OrderStatus.pending:
-        color = Colors.orange;
-        break;
-      case OrderStatus.confirmed:
-        color = Colors.blue;
-        break;
-      case OrderStatus.processing:
-        color = Colors.blueGrey;
-        break;
-      case OrderStatus.shipped:
-        color = Colors.indigo;
-        break;
-      case OrderStatus.delivered:
-        color = Colors.green;
-        break;
-      case OrderStatus.cancelled:
-        color = Colors.red;
-        break;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withAlpha(25),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        context.tr(status.toString().split('.').last),
-        style: TextStyle(
-          color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
 }

@@ -3,27 +3,15 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/product_model.dart';
 import 'cloudinary_service.dart';
+import 'fraud_prevention_service.dart';
 import '../utils/network_error.dart';
 
-int _tierOrder(String tier) {
-  switch (tier) {
-    case 'silver':
-      return 0;
-    case 'premium':
-      return 1;
-    default:
-      return 2;
-  }
-}
-
-void _sortByTier(List<Product> products) {
+void _sortByBoost(List<Product> products) {
   products.sort((a, b) {
-    final aFeatured = a.isFeaturedValid ? 0 : 1;
-    final bFeatured = b.isFeaturedValid ? 0 : 1;
-    final f = aFeatured.compareTo(bFeatured);
+    final aBoosted = a.isBoostedValid ? 0 : 1;
+    final bBoosted = b.isBoostedValid ? 0 : 1;
+    final f = aBoosted.compareTo(bBoosted);
     if (f != 0) return f;
-    final t = _tierOrder(a.sellerTier).compareTo(_tierOrder(b.sellerTier));
-    if (t != 0) return t;
     return b.createdAt.compareTo(a.createdAt);
   });
 }
@@ -63,14 +51,15 @@ class ProductService {
       }
 
       String sellerName = user.displayName ?? user.email ?? 'Anonymous';
+      String sellerPhone = '';
 
-      String sellerTier = 'free';
       final userDoc = await _db.collection('users').doc(user.uid).get();
       if (userDoc.exists) {
-        sellerTier = userDoc.data()?['accountTier'] as String? ?? 'free';
+        final data = userDoc.data()!;
+        sellerPhone = data['phone'] as String? ?? '';
       }
 
-      await _db.collection("products").add({
+      final docRef = await _db.collection("products").add({
         "name": name,
         "description": description,
         "price": price,
@@ -78,7 +67,7 @@ class ProductService {
         "images": imageUrls,
         "sellerId": user.uid,
         "sellerName": sellerName,
-        "sellerTier": sellerTier,
+        "sellerPhone": sellerPhone,
         "category": category,
         "subcategory": subcategory,
         "location": "Tanzania",
@@ -97,6 +86,20 @@ class ProductService {
         "featuredUntil": null,
         "createdAt": FieldValue.serverTimestamp(),
       });
+
+      final fraud = FraudPreventionService();
+      await fraud.checkNewSeller(user.uid, sellerName);
+      final productCount = await _db.collection('products')
+          .where('sellerId', isEqualTo: user.uid)
+          .count().get();
+      await fraud.checkSuspiciousListing(
+        sellerId: user.uid,
+        sellerName: sellerName,
+        productId: docRef.id,
+        productName: name,
+        price: price,
+        sellerProductCount: productCount.count ?? 0,
+      );
     } catch (e) {
       throw NetworkError(
           message: "Failed to add product: $e",
@@ -107,14 +110,19 @@ class ProductService {
   }
 
   Stream<List<Product>> getProducts({int limitAmt = 30}) {
-    return _db.collection("products").limit(limitAmt).snapshots().map((
+    return _db
+        .collection("products")
+        .orderBy("createdAt", descending: true)
+        .limit(limitAmt)
+        .snapshots()
+        .map((
       snapshot,
     ) {
       final products = snapshot.docs
           .map((doc) => Product.fromFirestore(doc))
           .where((p) => p.isActive)
           .toList();
-      _sortByTier(products);
+      _sortByBoost(products);
       return products;
     });
   }
@@ -129,7 +137,7 @@ class ProductService {
               .map((doc) => Product.fromFirestore(doc))
               .where((p) => p.isActive)
               .toList();
-          _sortByTier(products);
+          _sortByBoost(products);
           return products;
         });
   }
@@ -148,7 +156,7 @@ class ProductService {
               .map((doc) => Product.fromFirestore(doc))
               .where((p) => p.isActive)
               .toList();
-          _sortByTier(products);
+          _sortByBoost(products);
           return products;
         });
   }
@@ -164,7 +172,7 @@ class ProductService {
                     p.name.toLowerCase().contains(query.toLowerCase())),
           )
           .toList();
-      _sortByTier(products);
+      _sortByBoost(products);
       return products;
     });
   }
@@ -179,7 +187,7 @@ class ProductService {
               .map((doc) => Product.fromFirestore(doc))
               .where((p) => p.isActive)
               .toList();
-          _sortByTier(products);
+          _sortByBoost(products);
           return products;
         });
   }
@@ -304,6 +312,35 @@ class ProductService {
     }
   }
 
+  Stream<List<Product>> getFeaturedProducts() {
+    return _db
+        .collection("products")
+        .where("isBoosted", isEqualTo: true)
+        .snapshots()
+        .map((snapshot) {
+      final products = snapshot.docs
+          .map((doc) => Product.fromFirestore(doc))
+          .where((p) => p.isActive && p.isBoostedValid)
+          .toList();
+      products.sort((a, b) {
+        final tierOrder = (b.boostTier).compareTo(a.boostTier);
+        if (tierOrder != 0) return tierOrder;
+        return b.createdAt.compareTo(a.createdAt);
+      });
+      return products;
+    });
+  }
+
+  Future<void> incrementViewCount(String productId) async {
+    try {
+      await _db.collection("products").doc(productId).update({
+        "viewCount": FieldValue.increment(1),
+      });
+    } catch (e) {
+      // Silent
+    }
+  }
+
   Future<void> incrementSoldCount(String productId, int quantity) async {
     try {
       await _db.collection("products").doc(productId).update({
@@ -312,27 +349,6 @@ class ProductService {
     } catch (e) {
       throw NetworkError(
           message: "Failed to update sold count: $e",
-          userMessage: translateError(e),
-          originalError: e,
-        );
-    }
-  }
-
-  Future<void> updateAllSellerProductsTier(String sellerId, String tier) async {
-    try {
-      final products = await _db
-          .collection("products")
-          .where("sellerId", isEqualTo: sellerId)
-          .get();
-
-      final batch = _db.batch();
-      for (var doc in products.docs) {
-        batch.update(doc.reference, {'sellerTier': tier});
-      }
-      await batch.commit();
-    } catch (e) {
-      throw NetworkError(
-          message: "Failed to update products tier: $e",
           userMessage: translateError(e),
           originalError: e,
         );

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../main.dart';
 
 class TiltCard extends StatefulWidget {
   final Widget child;
@@ -21,7 +20,6 @@ class _TiltCardState extends State<TiltCard>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
-  bool _isPressed = false;
 
   @override
   void initState() {
@@ -43,33 +41,23 @@ class _TiltCardState extends State<TiltCard>
   }
 
   void _onTapDown(TapDownDetails details) {
-    _isPressed = true;
     _controller.forward();
   }
 
   void _onTapUp(TapUpDetails details) {
-    _isPressed = false;
     _controller.reverse();
     widget.onTap?.call();
   }
 
   void _onTapCancel() {
-    _isPressed = false;
     _controller.reverse();
   }
 
   @override
   Widget build(BuildContext context) {
-    final config = AppConfig.of(context);
-    final isSilver = config.accountTier == 'silver';
     final scale = _scaleAnimation.value;
 
     final transform = Matrix4.diagonal3Values(scale, scale, scale);
-    if (_isPressed && isSilver) {
-      transform.setEntry(3, 2, 0.001);
-      transform.rotateX(0.02);
-      transform.rotateY(-0.02);
-    }
 
     return Transform(
       transform: transform,

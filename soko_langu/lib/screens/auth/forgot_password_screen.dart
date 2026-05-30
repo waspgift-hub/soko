@@ -1,9 +1,8 @@
-import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
-import '../../extensions/context_tr.dart';
-import '../../services/auth_service.dart';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import '../../services/api_config.dart';
+import '../../widgets/google_loading.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -13,170 +12,140 @@ class ForgotPasswordScreen extends StatefulWidget {
 }
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
-  final _emailKey = GlobalKey<FormState>();
-  final _otpKey = GlobalKey<FormState>();
-  final _passwordKey = GlobalKey<FormState>();
-  final emailController = TextEditingController();
-  final otpController = TextEditingController();
-  final passwordController = TextEditingController();
-  final confirmPasswordController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _otpController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
 
-  int _step = 0;
+  int _step = 1; // 1=email, 2=otp, 3=new password
   bool _isLoading = false;
-  bool _obscurePassword = true;
-  bool _obscureConfirm = true;
-  static const _serverUrl = String.fromEnvironment(
-    'SERVER_URL',
-    defaultValue: 'https://sokolangu-production.up.railway.app',
-  );
-  bool _otpSent = false;
+  String? _serverError;
 
   @override
   void dispose() {
-    emailController.dispose();
-    otpController.dispose();
-    passwordController.dispose();
-    confirmPasswordController.dispose();
+    _emailController.dispose();
+    _otpController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
-  bool _isValidEmail(String v) =>
-      RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v.trim());
-
   String? _emailValidator(String? v) {
-    if (v == null || v.trim().isEmpty) return context.tr('enter_email');
-    if (!_isValidEmail(v)) return context.tr('invalid_email');
+    if (v == null || v.trim().isEmpty) return 'Tafadhali weka barua pepe';
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v.trim())) {
+      return 'Barua pepe si sahihi';
+    }
+    return null;
+  }
+
+  String? _otpValidator(String? v) {
+    if (v == null || v.trim().isEmpty) return 'Tafadhali weka OTP';
+    if (v.trim().length != 6) return 'OTP ina tarakimu 6';
+    if (!RegExp(r'^\d{6}$').hasMatch(v.trim())) return 'OTP ni namba pekee';
     return null;
   }
 
   String? _passwordValidator(String? v) {
-    if (v == null || v.isEmpty) return context.tr('enter_password');
-    if (v.length < 6) return context.tr('password_length');
+    if (v == null || v.isEmpty) return 'Tafadhali weka nenosiri';
+    if (v.length < 6) return 'Nenosiri lazima iwe angalau herufi 6';
+    return null;
+  }
+
+  String? _confirmValidator(String? v) {
+    if (v == null || v.isEmpty) return 'Tafadhali rudia nenosiri';
+    if (v != _passwordController.text) return 'Nenosiri hazilingani';
     return null;
   }
 
   Future<void> _sendOtp() async {
-    if (!_emailKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
-    try {
-      final resp = await http
-          .post(
-            Uri.parse('$_serverUrl/api/send-otp'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'email': emailController.text.trim()}),
-          )
-          .timeout(const Duration(seconds: 15));
+    if (!_formKey.currentState!.validate()) return;
+    setState(() { _isLoading = true; _serverError = null; });
 
-      final data = jsonDecode(resp.body);
-      if (resp.statusCode == 200 && data['sent'] == true) {
-        setState(() { _step = 1; _otpSent = true; });
+    try {
+      final res = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/send-otp'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': _emailController.text.trim()}),
+      );
+      final body = jsonDecode(res.body);
+      if (res.statusCode == 200 && body['sent'] == true) {
+        setState(() => _step = 2);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(backgroundColor: Colors.green, content: Text(context.tr('otp_sent'))),
+            SnackBar(
+              backgroundColor: const Color(0xFF2D6A4F),
+              content: Text('OTP imetumwa kwenye barua pepe yako. Angalia inbox.'),
+            ),
           );
         }
       } else {
-        _showError(data['error'] ?? 'Kushindwa kutuma OTP');
+        setState(() => _serverError = body['error'] ?? 'Failed to send OTP');
       }
     } catch (e) {
-      _showError('Hitilafu ya mtandao: ${e.toString()}');
+      setState(() => _serverError = 'Tatizo la mtandao. Tafadhali jaribu tena.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _verifyOtp() async {
-    if (!_otpKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
-    try {
-      final resp = await http
-          .post(
-            Uri.parse('$_serverUrl/api/verify-otp'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'email': emailController.text.trim(),
-              'otp': otpController.text.trim(),
-            }),
-          )
-          .timeout(const Duration(seconds: 15));
+    if (!_formKey.currentState!.validate()) return;
+    setState(() { _isLoading = true; _serverError = null; });
 
-      final data = jsonDecode(resp.body);
-      if (resp.statusCode == 200 && data['valid'] == true) {
-        setState(() => _step = 2);
+    try {
+      final res = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/verify-otp'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': _emailController.text.trim(),
+          'otp': _otpController.text.trim(),
+        }),
+      );
+      final body = jsonDecode(res.body);
+      if (res.statusCode == 200 && body['valid'] == true) {
+        setState(() => _step = 3);
       } else {
-        _showError(data['error'] ?? 'OTP si sahihi');
+        setState(() => _serverError = body['error'] ?? 'OTP si sahihi');
       }
     } catch (e) {
-      _showError('Hitilafu ya mtandao: ${e.toString()}');
+      setState(() => _serverError = 'Tatizo la mtandao. Tafadhali jaribu tena.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _resetPassword() async {
-    if (!_passwordKey.currentState!.validate()) return;
-    if (passwordController.text != confirmPasswordController.text) {
-      _showError(context.tr('password_mismatch'));
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
+    setState(() { _isLoading = true; _serverError = null; });
 
-    setState(() => _isLoading = true);
     try {
-      final resp = await http
-          .post(
-            Uri.parse('$_serverUrl/api/reset-password-after-otp'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'email': emailController.text.trim(),
-              'newPassword': passwordController.text,
-            }),
-          )
-          .timeout(const Duration(seconds: 15));
-
-      final data = jsonDecode(resp.body);
-      if (resp.statusCode == 200 && data['success'] == true) {
-        if (data['customToken'] != null) {
-          await FirebaseAuth.instance.signInWithCustomToken(data['customToken']);
-        }
+      final res = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/reset-password-after-otp'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': _emailController.text.trim(),
+          'newPassword': _passwordController.text,
+        }),
+      );
+      final body = jsonDecode(res.body);
+      if (res.statusCode == 200) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(backgroundColor: Colors.green, content: Text(context.tr('password_reset_success'))),
+            SnackBar(
+              backgroundColor: const Color(0xFF2D6A4F),
+              content: Text('Nenosiri limewekwa upya! Sasa unaweza kuingia.'),
+            ),
           );
-          Navigator.of(context).popUntil((route) => route.isFirst);
+          Navigator.pop(context);
         }
       } else {
-        _showError(data['error'] ?? 'Kushindwa kuweka upya nenosiri');
+        setState(() => _serverError = body['error'] ?? 'Failed to reset password');
       }
     } catch (e) {
-      _showError('Hitilafu ya mtandao: ${e.toString()}');
+      setState(() => _serverError = 'Tatizo la mtandao. Tafadhali jaribu tena.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _sendFirebaseResetEmail() async {
-    if (!_emailKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
-    try {
-      await AuthService().resetPassword(emailController.text.trim());
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(backgroundColor: Colors.green, content: Text(context.tr('password_reset_email_sent'))),
-        );
-        Navigator.pop(context);
-      }
-    } catch (e) {
-      _showError(e.toString());
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  void _showError(String msg) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(backgroundColor: Colors.red, content: Text(msg)),
-      );
     }
   }
 
@@ -186,43 +155,34 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     return Scaffold(
       resizeToAvoidBottomInset: true,
       backgroundColor: cs.surface,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: cs.primary),
+          onPressed: () {
+            if (_step > 1) {
+              setState(() { _step--; _serverError = null; });
+            } else {
+              Navigator.pop(context);
+            }
+          },
+        ),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.only(
-            left: 24, right: 24, top: 32,
+            left: 24, right: 24, top: 8,
             bottom: MediaQuery.of(context).padding.bottom + 20,
           ),
           child: Column(
             children: [
-              const SizedBox(height: 20),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: Image.asset('assets/soko_langu_logo.png',
-                  width: 80, height: 80, fit: BoxFit.cover),
-              ),
-              const SizedBox(height: 16),
-              Text(context.tr('reset_password'),
-                style: TextStyle(color: cs.primary, fontSize: 26,
-                  fontWeight: FontWeight.w900, fontStyle: FontStyle.italic)),
-              const SizedBox(height: 6),
-              Text(
-                _step == 0 ? context.tr('enter_email')
-                    : _step == 1 ? context.tr('enter_otp_step')
-                    : context.tr('enter_new_password'),
-                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
-              ),
-              const SizedBox(height: 32),
               _buildStepIndicator(cs),
               const SizedBox(height: 24),
-              if (_step == 0) _buildEmailStep(cs),
-              if (_step == 1) _buildOtpStep(cs),
-              if (_step == 2) _buildPasswordStep(cs),
-              const SizedBox(height: 24),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(context.tr('login_prompt'),
-                  style: TextStyle(color: cs.primary, fontSize: 14)),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child: _buildStepContent(cs, key: ValueKey(_step)),
               ),
             ],
           ),
@@ -234,219 +194,222 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Widget _buildStepIndicator(ColorScheme cs) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(3, (i) {
-        final isActive = i <= _step;
-        final isCurrent = i == _step;
+      children: [1, 2, 3].map((s) {
+        final active = s == _step;
+        final done = s < _step;
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: isCurrent ? 14 : 10,
-              height: isCurrent ? 14 : 10,
+              width: 36, height: 36,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: isActive ? cs.primary : cs.outlineVariant,
+                color: done || active ? const Color(0xFF2D6A4F) : cs.surfaceContainerHighest,
+              ),
+              child: Center(
+                child: done
+                    ? const Icon(Icons.check, color: Colors.white, size: 18)
+                    : Text('$s', style: TextStyle(
+                        color: done || active ? Colors.white : cs.onSurfaceVariant,
+                        fontWeight: FontWeight.bold,
+                      )),
               ),
             ),
-            if (i < 2) Container(
-              width: 32, height: 2,
-              color: i < _step ? cs.primary : cs.outlineVariant,
+            if (s < 3) Container(
+              width: 40, height: 3,
+              color: done ? const Color(0xFF2D6A4F) : cs.surfaceContainerHighest,
             ),
           ],
         );
-      }),
+      }).toList(),
     );
   }
 
-  Widget _buildCard({required ColorScheme cs, required Widget child}) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: cs.surface.withValues(alpha: 0.7),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: cs.primary.withValues(alpha: 0.5), width: 1.5),
-        ),
-        child: child,
+  Widget _buildStepContent(ColorScheme cs, {Key? key}) {
+    return Form(
+      key: _formKey,
+      child: Column(
+        key: key,
+        children: [
+          if (_step == 1) _buildStep1(cs),
+          if (_step == 2) _buildStep2(cs),
+          if (_step == 3) _buildStep3(cs),
+          if (_serverError != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.error_outline, color: Colors.red.shade700, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(_serverError!, style: TextStyle(color: Colors.red.shade800, fontSize: 13))),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
 
-  Widget _buildGradientButton(String label, VoidCallback onPressed) {
+  Widget _buildStep1(ColorScheme cs) {
+    return Column(
+      children: [
+        Container(
+          width: 80, height: 80,
+          decoration: BoxDecoration(
+            color: cs.primary.withAlpha(15), shape: BoxShape.circle,
+          ),
+          child: Icon(Icons.lock_reset_rounded, size: 40, color: cs.primary),
+        ),
+        const SizedBox(height: 20),
+        Text('Reset Password', style: TextStyle(color: cs.primary, fontSize: 24, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        Text('Enter your email to receive a reset OTP.', textAlign: TextAlign.center, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14)),
+        const SizedBox(height: 32),
+        _buildEmailField(cs),
+        const SizedBox(height: 24),
+        _buildActionButton('Send OTP', _sendOtp),
+      ],
+    );
+  }
+
+  Widget _buildStep2(ColorScheme cs) {
+    return Column(
+      children: [
+        Container(
+          width: 80, height: 80,
+          decoration: BoxDecoration(
+            color: Colors.orange.withAlpha(20), shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.pin_rounded, size: 40, color: Colors.orange),
+        ),
+        const SizedBox(height: 20),
+        Text('Enter OTP', style: TextStyle(color: cs.primary, fontSize: 24, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        Text('Check your email for the 6-digit OTP.', textAlign: TextAlign.center, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14)),
+        const SizedBox(height: 32),
+        TextFormField(
+          controller: _otpController,
+          keyboardType: TextInputType.number,
+          maxLength: 6,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 8),
+          decoration: InputDecoration(
+            hintText: '000000',
+            counterText: '',
+            filled: true,
+            fillColor: cs.surfaceContainerHighest.withAlpha(128),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.outlineVariant)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.primary, width: 2)),
+          ),
+          validator: _otpValidator,
+        ),
+        const SizedBox(height: 24),
+        _buildActionButton('Verify OTP', _verifyOtp),
+        const SizedBox(height: 12),
+        TextButton(
+          onPressed: _sendOtp,
+          child: Text('Resend OTP', style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStep3(ColorScheme cs) {
+    return Column(
+      children: [
+        Container(
+          width: 80, height: 80,
+          decoration: BoxDecoration(
+            color: cs.primary.withAlpha(15), shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.key_rounded, size: 40, color: Color(0xFF2D6A4F)),
+        ),
+        const SizedBox(height: 20),
+        Text('New Password', style: TextStyle(color: cs.primary, fontSize: 24, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        Text('Choose a new password for your account.', textAlign: TextAlign.center, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14)),
+        const SizedBox(height: 32),
+        TextFormField(
+          controller: _passwordController,
+          obscureText: true,
+          decoration: InputDecoration(
+            hintText: 'New password (min 6 characters)',
+            prefixIcon: const Icon(Icons.lock_outline),
+            filled: true,
+            fillColor: cs.surfaceContainerHighest.withAlpha(128),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.outlineVariant)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.primary, width: 2)),
+          ),
+          validator: _passwordValidator,
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _confirmPasswordController,
+          obscureText: true,
+          decoration: InputDecoration(
+            hintText: 'Repeat new password',
+            prefixIcon: const Icon(Icons.lock_outline),
+            filled: true,
+            fillColor: cs.surfaceContainerHighest.withAlpha(128),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.outlineVariant)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.primary, width: 2)),
+          ),
+          validator: _confirmValidator,
+        ),
+        const SizedBox(height: 24),
+        _buildActionButton('Reset Password', _resetPassword),
+      ],
+    );
+  }
+
+  Widget _buildEmailField(ColorScheme cs) {
+    return TextFormField(
+      controller: _emailController,
+      keyboardType: TextInputType.emailAddress,
+      textInputAction: TextInputAction.done,
+      onFieldSubmitted: (_) => _sendOtp(),
+      decoration: InputDecoration(
+        hintText: 'Enter your email',
+        prefixIcon: Icon(Icons.email_outlined, color: cs.onSurface.withAlpha(150)),
+        filled: true,
+        fillColor: cs.surfaceContainerHighest.withAlpha(128),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.outlineVariant)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.outlineVariant)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.primary, width: 2)),
+      ),
+      validator: _emailValidator,
+    );
+  }
+
+  Widget _buildActionButton(String label, VoidCallback onPressed) {
     return SizedBox(
-      width: double.infinity, height: 50,
+      width: double.infinity,
+      height: 50,
       child: _isLoading
-          ? Center(child: SizedBox(
-              width: 24, height: 24,
-              child: CircularProgressIndicator(strokeWidth: 2.5, color: Theme.of(context).colorScheme.primary),
-            ))
+          ? const Center(child: GoogleLoading(size: 24, strokeWidth: 2))
           : Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(14),
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF2D6A4F), Color(0xFF40916C)],
-                ),
+                gradient: const LinearGradient(colors: [Color(0xFF2D6A4F), Color(0xFF40916C)]),
               ),
               child: ElevatedButton(
                 onPressed: onPressed,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent, shadowColor: Colors.transparent,
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
                 child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ),
     );
-  }
-
-  InputDecoration _inputDecoration(String hint, IconData icon, ColorScheme cs) {
-    return InputDecoration(
-      hintText: hint,
-      prefixIcon: Icon(icon, color: cs.onSurface.withValues(alpha: 0.6)),
-      filled: true,
-      fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: cs.outlineVariant),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: cs.outlineVariant),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: cs.primary, width: 2),
-      ),
-    );
-  }
-
-  Widget _buildEmailStep(ColorScheme cs) {
-    return _buildCard(cs: cs, child: Column(
-      children: [
-        Icon(Icons.email_outlined, size: 48, color: cs.primary),
-        const SizedBox(height: 16),
-        Form(
-          key: _emailKey,
-          child: TextFormField(
-            controller: emailController,
-            keyboardType: TextInputType.emailAddress,
-            decoration: _inputDecoration(context.tr('email'), Icons.email_outlined, cs),
-            validator: _emailValidator,
-          ),
-        ),
-        const SizedBox(height: 20),
-        _buildGradientButton(context.tr('send_otp'), _sendOtp),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(child: Divider(color: cs.outlineVariant)),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(context.tr('or'),
-                style: TextStyle(color: cs.onSurface.withValues(alpha: 0.6), fontSize: 12)),
-            ),
-            Expanded(child: Divider(color: cs.outlineVariant)),
-          ],
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity, height: 50,
-          child: OutlinedButton.icon(
-            onPressed: _isLoading ? null : _sendFirebaseResetEmail,
-            icon: const Icon(Icons.email, size: 18),
-            label: Text(context.tr('send_reset_link')),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: cs.primary,
-              side: BorderSide(color: cs.primary),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            ),
-          ),
-        ),
-      ],
-    ));
-  }
-
-  Widget _buildOtpStep(ColorScheme cs) {
-    return _buildCard(cs: cs, child: Column(
-      children: [
-        Icon(Icons.pin_outlined, size: 48, color: cs.primary),
-        const SizedBox(height: 16),
-        Form(
-          key: _otpKey,
-          child: TextFormField(
-            controller: otpController,
-            keyboardType: TextInputType.number,
-            maxLength: 6,
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 28, letterSpacing: 12, fontWeight: FontWeight.bold, color: cs.primary),
-            decoration: _inputDecoration('000000', Icons.pin_outlined, cs).copyWith(counterText: ''),
-            validator: (v) {
-              if (v == null || v.trim().length < 6) return context.tr('enter_otp_step');
-              return null;
-            },
-          ),
-        ),
-        const SizedBox(height: 20),
-        _buildGradientButton(context.tr('verify_otp'), _verifyOtp),
-        const SizedBox(height: 12),
-        TextButton(
-          onPressed: _otpSent ? _sendOtp : null,
-          child: Text(context.tr('resend_otp'),
-            style: TextStyle(
-              color: _otpSent ? cs.primary : cs.onSurface.withValues(alpha: 0.4),
-              fontSize: 13,
-            )),
-        ),
-      ],
-    ));
-  }
-
-  Widget _buildPasswordStep(ColorScheme cs) {
-    return _buildCard(cs: cs, child: Column(
-      children: [
-        Icon(Icons.lock_reset, size: 48, color: cs.primary),
-        const SizedBox(height: 16),
-        Form(
-          key: _passwordKey,
-          child: Column(
-            children: [
-              TextFormField(
-                controller: passwordController,
-                obscureText: _obscurePassword,
-                decoration: _inputDecoration(context.tr('password'), Icons.lock_outlined, cs).copyWith(
-                  suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                      color: cs.onSurface.withValues(alpha: 0.6), size: 20),
-                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                  ),
-                ),
-                validator: _passwordValidator,
-              ),
-              const SizedBox(height: 14),
-              TextFormField(
-                controller: confirmPasswordController,
-                obscureText: _obscureConfirm,
-                decoration: _inputDecoration(context.tr('confirm_password'), Icons.lock_outlined, cs).copyWith(
-                  suffixIcon: IconButton(
-                    icon: Icon(_obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                      color: cs.onSurface.withValues(alpha: 0.6), size: 20),
-                    onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
-                  ),
-                ),
-                validator: (v) {
-                  if (v == null || v.isEmpty) return context.tr('enter_password');
-                  if (v != passwordController.text) return context.tr('password_mismatch');
-                  return null;
-                },
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-        _buildGradientButton(context.tr('reset_and_login'), _resetPassword),
-      ],
-    ));
   }
 }

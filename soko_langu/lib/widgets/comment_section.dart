@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/comment_model.dart';
 import '../services/comment_service.dart';
 import '../extensions/context_tr.dart';
-import 'verified_badge.dart';
+import 'google_loading.dart';
 
 class CommentSection extends StatefulWidget {
   final String productId;
@@ -75,7 +75,7 @@ class _CommentSectionState extends State<CommentSection> {
                     ),
                     const SizedBox(width: 8),
                     sending
-                        ? const CircularProgressIndicator()
+                        ? const GoogleLoading(size: 20, strokeWidth: 2)
                         : IconButton(
                             icon: const Icon(
                               Icons.send,
@@ -160,7 +160,7 @@ class _CommentSectionState extends State<CommentSection> {
             if (snap.connectionState == ConnectionState.waiting) {
               return const Padding(
                 padding: EdgeInsets.all(16),
-                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                child: Center(child: GoogleLoading(size: 24, strokeWidth: 2)),
               );
             }
             final comments = snap.data ?? [];
@@ -255,7 +255,6 @@ class _CommentTile extends StatelessWidget {
                             color: Color(0xFF2D6A4F),
                           ),
                         ),
-                        VerifiedBadge(tier: comment.userTier, size: 14),
                         const Spacer(),
                         Text(
                           _formatTime(comment.createdAt),
@@ -369,7 +368,7 @@ class _CommentTile extends StatelessWidget {
                         final replies = snap.data ?? [];
                         if (snap.connectionState == ConnectionState.waiting) {
                           return const Center(
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: GoogleLoading(size: 24, strokeWidth: 2),
                           );
                         }
                         if (replies.isEmpty) {
@@ -428,10 +427,6 @@ class _CommentTile extends StatelessWidget {
                                                 fontSize: 12,
                                                 color: Color(0xFF2D6A4F),
                                               ),
-                                            ),
-                                            VerifiedBadge(
-                                              tier: r.userTier,
-                                              size: 12,
                                             ),
                                             const Spacer(),
                                             Text(

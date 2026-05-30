@@ -39,27 +39,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              _buildSection(
-                icon: Icons.shopping_cart,
-                title: context.tr('buying'),
-                subtitle: context.tr('kununua'),
-                children: [
-                  _helpTile(
-                    title: context.tr('browse_products'),
-                    content: context.tr('help_browse'),
-                  ),
-                  _helpTile(
-                    title: context.tr('cart_checkout'),
-                    content: context.tr('help_cart_checkout'),
-                  ),
-                  _helpTile(
-                    title: context.tr('payment'),
-                    content: context.tr('help_payment_mongike'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
+
               _buildSection(
                 icon: Icons.store,
                 title: context.tr('selling'),
@@ -76,27 +56,6 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                   _helpTile(
                     title: context.tr('seller_dashboard'),
                     content: context.tr('help_seller_dashboard'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              _buildSection(
-                icon: Icons.workspace_premium,
-                title: context.tr('account_tiers'),
-                subtitle: context.tr('aina_za_akaunti'),
-                children: [
-                  _helpTile(
-                    title: context.tr('free_tier'),
-                    content: context.tr('help_free_tier'),
-                  ),
-                  _helpTile(
-                    title:
-                        '${context.tr('premium')} (\$6/${context.tr('month').toLowerCase()})',
-                    content: context.tr('help_premium_tier'),
-                  ),
-                  _helpTile(
-                    title: 'Silver (\$${context.tr('14_per_month')})',
-                    content: context.tr('help_silver_tier'),
                   ),
                 ],
               ),

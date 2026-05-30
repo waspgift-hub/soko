@@ -21,13 +21,10 @@ class CommentService {
         message: 'Not logged in',
         userMessage: 'Please log in to continue.',
       );
-    final userDoc = await _db.collection('users').doc(user.uid).get();
-    final tier = userDoc.data()?['accountTier'] as String? ?? 'free';
     await _commentsRef(productId).add({
       'userId': user.uid,
       'userName': user.displayName ?? user.email ?? 'Unknown',
       'userImage': user.photoURL,
-      'userTier': tier,
       'text': text,
       'createdAt': FieldValue.serverTimestamp(),
       'replyCount': 0,
@@ -44,13 +41,10 @@ class CommentService {
         message: 'Not logged in',
         userMessage: 'Please log in to continue.',
       );
-    final userDoc = await _db.collection('users').doc(user.uid).get();
-    final tier = userDoc.data()?['accountTier'] as String? ?? 'free';
     await _repliesRef(productId, commentId).add({
       'userId': user.uid,
       'userName': user.displayName ?? user.email ?? 'Unknown',
       'userImage': user.photoURL,
-      'userTier': tier,
       'text': text,
       'createdAt': FieldValue.serverTimestamp(),
     });

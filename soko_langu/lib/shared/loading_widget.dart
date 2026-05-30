@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/google_loading.dart';
 
 class LoadingWidget extends StatelessWidget {
   final String? message;
@@ -11,10 +12,10 @@ class LoadingWidget extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const CircularProgressIndicator(),
+          const GoogleLoading(size: 24, strokeWidth: 2),
           if (message != null) ...[
             const SizedBox(height: 16),
-            Text(message!, style: const TextStyle(color: Colors.grey)),
+            Text(message!, style: const TextStyle(color: Color.fromARGB(240, 125, 176, 108))),
           ],
         ],
       ),

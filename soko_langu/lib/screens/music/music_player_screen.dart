@@ -4,23 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:audio_service/audio_service.dart';
+import '../../models/music_playlist.dart';
 import '../../services/audio_player_service.dart';
 import '../../widgets/google_loading.dart';
-
-class MusicPlaylist {
-  final String name;
-  final List<String> songPaths;
-
-  MusicPlaylist({required this.name, required this.songPaths});
-
-  Map<String, dynamic> toJson() => {'name': name, 'songPaths': songPaths};
-
-  factory MusicPlaylist.fromJson(Map<String, dynamic> json) => MusicPlaylist(
-    name: json['name'] as String,
-    songPaths: List<String>.from(json['songPaths']),
-  );
-}
+import '../../widgets/audio_player_widgets.dart';
+import '../../widgets/rewarded_ad_gate.dart';
+import '../../extensions/context_tr.dart';
 
 class MusicPlayerScreen extends StatefulWidget {
   const MusicPlayerScreen({super.key});
@@ -38,6 +27,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
   bool _hasPermission = false;
   bool _isLoading = true;
   int _tabIndex = 0;
+  String _searchQuery = '';
   late TabController _tabCtrl;
 
   @override
@@ -46,6 +36,20 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
     WidgetsBinding.instance.addObserver(this);
     _tabCtrl = TabController(length: 2, vsync: this);
     _tabCtrl.addListener(() => setState(() => _tabIndex = _tabCtrl.index));
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initWithAdGate());
+  }
+
+  Future<void> _initWithAdGate() async {
+    final passed = await RewardedAdGate.require(
+      context,
+      'music_player',
+      title: context.tr('watch_ad'),
+      message: context.tr('watch_ad_to_music'),
+    );
+    if (!passed && mounted) {
+      Navigator.of(context).pop();
+      return;
+    }
     _checkPermission();
     _loadPlaylists();
   }
@@ -69,7 +73,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
         ? int.tryParse(Platform.operatingSystemVersion.split(' ').last) ?? 0
         : 0;
     final perms = sdk >= 33
-        ? [Permission.audio, Permission.manageExternalStorage]
+        ? [Permission.audio, Permission.manageExternalStorage, Permission.notification]
         : sdk >= 30
         ? [Permission.storage, Permission.manageExternalStorage]
         : [Permission.storage];
@@ -84,22 +88,49 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
   }
 
   Future<void> _loadSongs() async {
-    final songs = await _audioQuery.querySongs(
-      sortType: SongSortType.TITLE,
-      orderType: OrderType.ASC_OR_SMALLER,
-      uriType: UriType.EXTERNAL,
-      ignoreCase: true,
-    );
-    if (mounted) {
-      setState(() {
-        _songs = songs;
-        _service.songs = songs;
-        _isLoading = false;
-      });
-      if (songs.isNotEmpty && _service.currentIndex == null) {
-        _service.playSong(0);
+    try {
+      final songs = await _audioQuery.querySongs(
+        sortType: SongSortType.TITLE,
+        orderType: OrderType.ASC_OR_SMALLER,
+        uriType: UriType.EXTERNAL,
+        ignoreCase: true,
+      );
+      if (mounted) {
+        _service.loadSongs(songs);
+        setState(() {
+          _songs = songs;
+          _isLoading = false;
+        });
       }
+    } catch (e) {
+      debugPrint('MusicPlayerScreen._loadSongs: $e');
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _openFullPlayer() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AudioFullPlayerPage(
+          onAddToPlaylist: _service.currentIndex != null
+              ? () => _addToPlaylist(_service.currentIndex!)
+              : null,
+        ),
+      ),
+    );
+  }
+
+  List<SongModel> get _filteredSongs {
+    if (_searchQuery.isEmpty) return _songs;
+    final q = _searchQuery.toLowerCase();
+    return _songs
+        .where(
+          (s) =>
+              s.title.toLowerCase().contains(q) ||
+              (s.artist ?? '').toLowerCase().contains(q),
+        )
+        .toList();
   }
 
   Future<void> _loadPlaylists() async {
@@ -126,26 +157,26 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
     final name = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('New Playlist'),
+        title: Text(context.tr('new_playlist')),
         content: TextField(
           controller: ctrl,
           autofocus: true,
-          decoration: const InputDecoration(hintText: 'Playlist name'),
+          decoration: InputDecoration(hintText: context.tr('playlist_name')),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text(context.tr('cancel')),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            child: const Text('Create'),
+            child: Text(context.tr('create')),
           ),
         ],
       ),
     );
     if (name != null && name.isNotEmpty) {
-      setState(() => _playlists.add(MusicPlaylist(name: name, songPaths: [])));
+      setState(() => _playlists.add(MusicPlaylist(name: name, songs: [])));
       await _savePlaylists();
     }
   }
@@ -156,7 +187,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
     final playlist = await showDialog<String>(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: const Text('Add to Playlist'),
+        title: Text(context.tr('add_to_playlist')),
         children: [
           ..._playlists.map(
             (p) => SimpleDialogOption(
@@ -165,9 +196,9 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
             ),
           ),
           if (_playlists.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text('No playlists yet. Create one first.'),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(context.tr('no_playlists')),
             ),
         ],
       ),
@@ -175,8 +206,9 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
     if (playlist != null) {
       setState(() {
         final idx = _playlists.indexWhere((p) => p.name == playlist);
-        if (idx >= 0 && !_playlists[idx].songPaths.contains(song.data)) {
-          _playlists[idx].songPaths.add(song.data);
+        if (idx >= 0 &&
+            !_playlists[idx].songs.any((s) => s.path == song.data)) {
+          _playlists[idx].songs.add(PlaylistSong.fromPath(song.data));
         }
       });
       await _savePlaylists();
@@ -199,9 +231,9 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text(
-          'Music Player',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        title: Text(
+          context.tr('music_player'),
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         bottom: _hasPermission && _songs.isNotEmpty
             ? TabBar(
@@ -211,17 +243,15 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
                   context,
                 ).colorScheme.onSurfaceVariant,
                 indicatorColor: Theme.of(context).colorScheme.primary,
-                tabs: const [
-                  Tab(text: 'Songs'),
-                  Tab(text: 'Playlists'),
+                tabs: [
+                  Tab(text: context.tr('songs')),
+                  Tab(text: context.tr('playlists')),
                 ],
               )
             : null,
       ),
       body: SafeArea(child: _buildBody()),
-      bottomNavigationBar: _service.currentIndex != null
-          ? _buildMiniPlayer()
-          : null,
+      bottomNavigationBar: AudioMiniPlayer(onOpenFullPlayer: _openFullPlayer),
     );
   }
 
@@ -255,13 +285,13 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
                 ),
               ),
               const SizedBox(height: 32),
-              const Text(
-                "Music Player",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              Text(
+                context.tr('music_player'),
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               Text(
-                "To play your music, Soko Langu needs permission to access audio files on your device.",
+                context.tr('music_permission_desc'),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
@@ -271,7 +301,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
               ),
               const SizedBox(height: 8),
               Text(
-                "Tap 'Allow Access' to grant permission.",
+                context.tr('music_permission_hint'),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13,
@@ -291,9 +321,9 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
                     ),
                   ),
                   icon: const Icon(Icons.check_circle),
-                  label: const Text(
-                    "Allow Access",
-                    style: TextStyle(fontSize: 16),
+                  label: Text(
+                    context.tr('allow_access'),
+                    style: const TextStyle(fontSize: 16),
                   ),
                   onPressed: () async {
                     setState(() => _isLoading = true);
@@ -304,7 +334,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
                             0
                         : 0;
                     final perms = sdk >= 33
-                        ? [Permission.audio, Permission.manageExternalStorage]
+                        ? [Permission.audio, Permission.manageExternalStorage, Permission.notification]
                         : sdk >= 30
                         ? [Permission.storage, Permission.manageExternalStorage]
                         : [Permission.storage];
@@ -329,18 +359,16 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
                         final go = await showDialog<bool>(
                           context: context,
                           builder: (ctx) => AlertDialog(
-                            title: const Text("Permission Required"),
-                            content: const Text(
-                              "Permission was denied. Open app settings to enable it manually.",
-                            ),
+                            title: Text(context.tr('permission_required')),
+                            content: Text(context.tr('permission_denied_desc')),
                             actions: [
                               TextButton(
                                 onPressed: () => Navigator.pop(ctx, false),
-                                child: const Text("Cancel"),
+                                child: Text(context.tr('cancel')),
                               ),
                               ElevatedButton(
                                 onPressed: () => Navigator.pop(ctx, true),
-                                child: const Text("Open Settings"),
+                                child: Text(context.tr('open_settings')),
                               ),
                             ],
                           ),
@@ -372,7 +400,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
             ),
             const SizedBox(height: 16),
             Text(
-              "No songs found",
+              context.tr('no_songs'),
               style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -386,8 +414,14 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
   }
 
   Widget _buildSongsList() {
+    final visible = _filteredSongs;
+
     return Column(
       children: [
+        AudioSearchField(
+          query: _searchQuery,
+          onChanged: (v) => setState(() => _searchQuery = v),
+        ),
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -401,17 +435,46 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
               ),
             ),
             icon: const Icon(Icons.playlist_play),
-            label: Text("Play All (${_songs.length} songs)"),
-            onPressed: () => _service.playSong(0),
+            label: Text('${context.tr('play_all')} (${visible.length})'),
+            onPressed: visible.isEmpty
+                ? null
+                : () async {
+                    final idx = _songs.indexOf(visible.first);
+                    if (idx >= 0) {
+                      try {
+                        await _service.playSong(idx);
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('${context.tr('error')}: $e')),
+                          );
+                        }
+                      }
+                    }
+                  },
           ),
         ),
         Expanded(
-          child: ListView.builder(
+          child: ListenableBuilder(
+            listenable: _service,
+            builder: (context, _) {
+              if (visible.isEmpty) {
+                return Center(
+                  child: Text(
+                    context.tr('no_songs'),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                );
+              }
+              return ListView.builder(
             padding: const EdgeInsets.only(bottom: 80),
-            itemCount: _songs.length,
+            itemCount: visible.length,
             itemBuilder: (context, index) {
-              final song = _songs[index];
-              final isCurrent = _service.currentIndex == index;
+              final song = visible[index];
+              final songIndex = _songs.indexOf(song);
+              final isCurrent = _service.currentIndex == songIndex;
               return ListTile(
                 leading: QueryArtworkWidget(
                   id: song.id,
@@ -451,7 +514,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
                   ),
                 ),
                 subtitle: Text(
-                  song.artist ?? 'Unknown Artist',
+                  song.artist ?? context.tr('unknown_artist'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -466,9 +529,21 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
-                onTap: () => _service.togglePlayPauseFromIndex(index),
-                onLongPress: () => _addToPlaylist(index),
+                onTap: () async {
+                  try {
+                    await _service.togglePlayPauseFromIndex(songIndex);
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('${context.tr('error')}: $e')),
+                      );
+                    }
+                  }
+                },
+                onLongPress: () => _addToPlaylist(songIndex),
               );
+            },
+          );
             },
           ),
         ),
@@ -489,7 +564,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
             ),
             const SizedBox(height: 16),
             Text(
-              "No playlists yet",
+              context.tr('no_playlists'),
               style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -501,7 +576,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
                 foregroundColor: Theme.of(context).colorScheme.onPrimary,
               ),
               icon: const Icon(Icons.add),
-              label: const Text('Create Playlist'),
+              label: Text(context.tr('create_playlist')),
               onPressed: _createPlaylist,
             ),
           ],
@@ -521,7 +596,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
                 foregroundColor: Theme.of(context).colorScheme.onPrimary,
               ),
               icon: const Icon(Icons.add),
-              label: const Text('Create Playlist'),
+              label: Text(context.tr('create_playlist')),
               onPressed: _createPlaylist,
             ),
           );
@@ -546,11 +621,11 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
             p.name,
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
-          subtitle: Text('${p.songPaths.length} songs'),
+          subtitle: Text('${p.songPaths.length} ${context.tr('songs')}'),
           trailing: PopupMenuButton(
             itemBuilder: (_) => [
-              const PopupMenuItem(value: 'open', child: Text('Open')),
-              const PopupMenuItem(value: 'delete', child: Text('Delete')),
+              PopupMenuItem(value: 'open', child: Text(context.tr('open'))),
+              PopupMenuItem(value: 'delete', child: Text(context.tr('delete'))),
             ],
             onSelected: (v) async {
               if (v == 'delete') {
@@ -578,191 +653,13 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
           onPlay: (songPaths, startIdx) =>
               _playPlaylistSongs(songPaths, startIdx),
           onRemove: (songPath) async {
-            setState(() => _playlists[idx].songPaths.remove(songPath));
+            setState(
+              () => _playlists[idx].songs.removeWhere((s) => s.path == songPath),
+            );
             await _savePlaylists();
           },
         ),
       ),
-    );
-  }
-
-  Widget _buildMiniPlayer() {
-    return StreamBuilder<MediaItem?>(
-      stream: _service.mediaItem,
-      builder: (context, mediaSnap) {
-        final media = mediaSnap.data;
-        final title = media?.title ?? '';
-        final artist = media?.artist ?? '';
-        final mediaDuration = media?.duration ?? Duration.zero;
-        return StreamBuilder<PlaybackState>(
-          stream: _service.playbackState,
-          builder: (context, stateSnap) {
-            final state = stateSnap.data;
-            final isPlaying = state?.playing ?? false;
-            return StreamBuilder<Duration>(
-              stream: _service.positionStream,
-              builder: (context, posSnap) {
-                final position = posSnap.data ?? Duration.zero;
-                final duration = mediaDuration > Duration.zero
-                    ? mediaDuration
-                    : _service.duration;
-
-                return Container(
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerLow,
-                    border: Border(
-                      top: BorderSide(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .primary
-                            .withValues(alpha: 0.2),
-                      ),
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (duration > Duration.zero)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          child: Row(
-                            children: [
-                              Text(
-                                _fmt(position),
-                                style: const TextStyle(fontSize: 11),
-                              ),
-                              Expanded(
-                                child: Slider(
-                                  value: position.inSeconds.toDouble().clamp(
-                                    0,
-                                    duration.inSeconds.toDouble(),
-                                  ),
-                                  max: duration.inSeconds.toDouble().clamp(
-                                    1,
-                                    double.infinity,
-                                  ),
-                                  onChanged: (v) => _service.seek(
-                                    Duration(seconds: v.toInt()),
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                _fmt(duration),
-                                style: const TextStyle(fontSize: 11),
-                              ),
-                            ],
-                          ),
-                        ),
-                      SizedBox(
-                        height: 64,
-                        child: Row(
-                          children: [
-                            const SizedBox(width: 12),
-                            Container(
-                              width: 44,
-                              height: 44,
-                              decoration: BoxDecoration(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .surfaceContainerHighest,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Icon(
-                                Icons.music_note,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    title,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  if (artist.isNotEmpty)
-                                    Text(
-                                      artist,
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                ],
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.replay_10, size: 20),
-                              onPressed: () {
-                                final newPos = position - const Duration(seconds: 10);
-                                _service.seek(
-                                  newPos > Duration.zero ? newPos : Duration.zero,
-                                );
-                              },
-                              constraints: const BoxConstraints(
-                                minWidth: 32,
-                                minHeight: 32,
-                              ),
-                              padding: EdgeInsets.zero,
-                            ),
-                            Container(
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.primary,
-                                shape: BoxShape.circle,
-                              ),
-                              child: IconButton(
-                                icon: Icon(
-                                  isPlaying
-                                      ? Icons.pause_rounded
-                                      : Icons.play_arrow_rounded,
-                                  color: Theme.of(context).colorScheme.onPrimary,
-                                  size: 22,
-                                ),
-                                onPressed: _service.togglePlayPause,
-                                padding: const EdgeInsets.all(6),
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.forward_10, size: 20),
-                              onPressed: () {
-                                final newPos = position + const Duration(seconds: 10);
-                                if (newPos > duration) {
-                                  _service.next();
-                                } else {
-                                  _service.seek(newPos);
-                                }
-                              },
-                              constraints: const BoxConstraints(
-                                minWidth: 32,
-                                minHeight: 32,
-                              ),
-                              padding: EdgeInsets.zero,
-                            ),
-                            const SizedBox(width: 4),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            );
-          },
-        );
-      },
     );
   }
 }
@@ -801,7 +698,7 @@ class _PlaylistViewScreen extends StatelessWidget {
       body: playlistSongs.isEmpty
           ? Center(
               child: Text(
-                'No songs in this playlist',
+                context.tr('no_songs_in_playlist'),
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -839,7 +736,7 @@ class _PlaylistViewScreen extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   subtitle: Text(
-                    song.artist ?? 'Unknown',
+                    song.artist ?? context.tr('unknown_artist'),
                     style: TextStyle(
                       fontSize: 12,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,

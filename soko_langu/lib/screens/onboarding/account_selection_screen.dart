@@ -1,302 +1,175 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
-import '../../services/user_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../extensions/context_tr.dart';
-import '../../main.dart';
-import '../profile/premium_upgrade_screen.dart';
 import '../../app/routes.dart';
 
-class AccountSelectionScreen extends StatefulWidget {
+class AccountSelectionScreen extends StatelessWidget {
   const AccountSelectionScreen({super.key});
 
-  @override
-  State<AccountSelectionScreen> createState() => _AccountSelectionScreenState();
-}
-
-class _AccountSelectionScreenState extends State<AccountSelectionScreen> {
-  String _selectedTier = 'free';
-  bool _isSaving = false;
-
-  Future<void> _continue() async {
-    if (_selectedTier == 'free') {
-      await _goToMain();
-      return;
-    }
-
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    if (!mounted) return;
-    final paid = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PremiumUpgradeScreen(initialTier: _selectedTier),
-      ),
-    );
-
-    if (paid == true && mounted) {
-      await _goToMain();
-    }
-  }
-
-  Future<void> _goToMain() async {
-    setState(() => _isSaving = true);
-
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      try {
-        await UserService()
-            .setAccountTier(user.uid, _selectedTier)
-            .timeout(const Duration(seconds: 5));
-      } catch (e) {
-        debugPrint('AccountSelection setTier: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Tier save failed, continuing anyway: $e')),
-          );
-        }
-      }
-    }
-
+  Future<void> _select(String tier, BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('onboarding_complete', true);
-    await prefs.setString('account_tier', _selectedTier);
-
-    if (mounted) {
-      AppConfig.of(context).onSetTier(_selectedTier);
-      context.replace(AppRoutes.home);
+    await prefs.setString('account_tier', tier);
+    if (context.mounted) {
+      context.replace(AppRoutes.register);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     return Scaffold(
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(
-            24,
-            24,
-            24,
-            MediaQuery.of(context).padding.bottom + 24,
-          ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Column(
             children: [
-              const SizedBox(height: 40),
-              Icon(Icons.store, color: Colors.green, size: 64),
+              const Spacer(flex: 2),
+              Icon(Icons.storefront_rounded, size: 72, color: cs.primary),
               const SizedBox(height: 16),
               Text(
-                context.tr('welcome_soko'),
+                context.tr('onboarding_welcome_title'),
                 style: TextStyle(
-                  fontSize: 26,
+                  fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.onSurface,
+                  color: cs.onSurface,
+                  letterSpacing: -0.5,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
-                context.tr('choose_account'),
+                'Jionee mwenyewe/Look for yourself',
                 style: TextStyle(
-                  fontSize: 15,
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.6),
+                  fontSize: 14,
+                  color: cs.onSurface.withValues(alpha: 0.5),
                 ),
-                textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 32),
-              _accountCard(
-                tier: 'free',
-                title: context.tr('free'),
-                price: 'TSh 0',
-                period: context.tr('forever'),
-                features: [
-                  context.tr('free_feature_list'),
-                  context.tr('free_feature_ads'),
-                ],
-                color: Colors.green,
+              const Spacer(flex: 1),
+              _AccountCard(
+                icon: Icons.shopping_bag_outlined,
+                titleKey: 'account_buyer',
+                descKey: 'account_buyer_desc',
+                color: const Color(0xFF2D6A4F),
+                onTap: () => _select('buyer', context),
               ),
-              const SizedBox(height: 12),
-              _accountCard(
-                tier: 'premium',
-                title: context.tr('premium'),
-                price: 'TSh 15,000',
-                period: context.tr('per_month'),
-                features: [
-                  context.tr('premium_no_ads'),
-                  context.tr('premium_feature_support'),
-                  context.tr('premium_feature_badges'),
-                ],
-                color: Colors.amber,
+              const SizedBox(height: 14),
+              _AccountCard(
+                icon: Icons.store_outlined,
+                titleKey: 'account_seller',
+                descKey: 'account_seller_desc',
+                color: const Color(0xFF6C63FF),
+                onTap: () => _select('seller', context),
               ),
-              const SizedBox(height: 12),
-              _accountCard(
-                tier: 'silver',
-                title: context.tr('silver'),
-                price: 'TSh 35,000',
-                period: context.tr('per_month'),
-                features: [
-                  context.tr('silver_feature_visibility'),
-                  context.tr('silver_feature_badge'),
-                  context.tr('silver_feature_support'),
-                  context.tr('premium_no_ads'),
-                ],
-                color: Colors.blueGrey,
+              const SizedBox(height: 14),
+              _AccountCard(
+                icon: Icons.swap_horiz_rounded,
+                titleKey: 'account_both',
+                descKey: 'account_both_desc',
+                color: const Color(0xFF0088CC),
+                onTap: () => _select('both', context),
               ),
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _selectedTier == 'silver'
-                        ? Colors.blueGrey
-                        : _selectedTier == 'premium'
-                        ? Colors.amber
-                        : Colors.green,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+              const Spacer(flex: 2),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    context.tr('account_already'),
+                    style: TextStyle(color: cs.onSurface.withValues(alpha: 0.6)),
+                  ),
+                  TextButton(
+                    onPressed: () => context.replace(AppRoutes.login),
+                    child: Text(
+                      context.tr('login_prompt'),
+                      style: TextStyle(
+                        color: cs.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                    elevation: 0,
                   ),
-                  onPressed: _isSaving ? null : _continue,
-                  child: _isSaving
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2.5,
-                          ),
-                        )
-                      : Text(
-                          _selectedTier == 'free'
-                              ? context.tr('continue_free')
-                              : context.tr('pay_now'),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                ),
+                ],
               ),
-              const SizedBox(height: 16),
-              TextButton(
-                onPressed: _isSaving ? null : _continue,
-                child: Text(
-                  context.tr('skip_choose'),
-                  style: TextStyle(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.6),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 32),
+              const Spacer(flex: 1),
             ],
           ),
         ),
       ),
     );
   }
+}
 
-  Widget _accountCard({
-    required String tier,
-    required String title,
-    required String price,
-    required String period,
-    required List<String> features,
-    required Color color,
-  }) {
-    final isSelected = _selectedTier == tier;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedTier = tier),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isSelected ? color.withValues(alpha: 0.08) : Colors.grey[50],
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isSelected ? color : Colors.grey[300]!,
-            width: isSelected ? 2 : 1,
+class _AccountCard extends StatelessWidget {
+  final IconData icon;
+  final String titleKey;
+  final String descKey;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _AccountCard({
+    required this.icon,
+    required this.titleKey,
+    required this.descKey,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: color.withValues(alpha: 0.15)),
           ),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: isSelected
-                              ? Theme.of(context).colorScheme.onSurface
-                              : Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withValues(alpha: 0.7),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '$price/$period',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: isSelected
-                              ? color
-                              : Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withValues(alpha: 0.6),
-                        ),
-                      ),
-                    ],
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [color.withValues(alpha: 0.15), color.withValues(alpha: 0.05)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                  const SizedBox(height: 8),
-                  ...features.map(
-                    (f) => Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Row(
-                        children: [
-                          Icon(Icons.check, color: color, size: 16),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              f,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: isSelected
-                                    ? Theme.of(context).colorScheme.onSurface
-                                    : Theme.of(context).colorScheme.onSurface
-                                          .withValues(alpha: 0.6),
-                              ),
-                            ),
-                          ),
-                        ],
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: color, size: 24),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.tr(titleKey),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: cs.onSurface,
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            if (isSelected)
-              Icon(Icons.check_circle, color: color, size: 28)
-            else
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.grey[400]!),
+                    const SizedBox(height: 2),
+                    Text(
+                      context.tr(descKey),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: cs.onSurface.withValues(alpha: 0.5),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-          ],
+              Icon(Icons.chevron_right, color: cs.onSurface.withValues(alpha: 0.3)),
+            ],
+          ),
         ),
       ),
     );

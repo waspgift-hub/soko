@@ -1,18 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:go_router/go_router.dart';
-import 'dart:async';
-import '../../services/chat_service.dart';
 import '../../services/user_service.dart';
-import '../../services/group_service.dart';
-import '../../services/presence_service.dart';
-import '../../models/group_model.dart';
-import '../../models/message_model.dart';
+import '../../services/whatsapp_service.dart';
 import '../../extensions/context_tr.dart';
-import '../../app/routes.dart';
 import '../../widgets/google_loading.dart';
-import '../../widgets/verified_badge.dart';
 
 class ChatsListScreen extends StatefulWidget {
   const ChatsListScreen({super.key});
@@ -22,259 +14,236 @@ class ChatsListScreen extends StatefulWidget {
 }
 
 class _ChatsListScreenState extends State<ChatsListScreen> {
-  List<Conversation> _conversations = [];
-  List<GroupChat> _groups = [];
-  final Map<String, UserProfile> _userProfiles = {};
+  final _searchController = TextEditingController();
+  List<UserProfile> _allUsers = [];
+  List<UserProfile> _filteredUsers = [];
   bool _loading = true;
-  StreamSubscription? _convSub;
-  StreamSubscription? _groupSub;
 
   @override
   void initState() {
     super.initState();
-    _convSub = ChatService().getConversations().listen((c) {
-      if (mounted) {
-        setState(() => _conversations = c);
-        _loadAllProfiles();
-      }
-    });
-    _groupSub = GroupService().getGroups().listen((g) {
-      if (mounted) {
-        setState(() {
-          _groups = g;
-          _loading = false;
-        });
-        _loadAllProfiles();
-      }
-    });
-  }
-
-  Future<void> _loadAllProfiles() async {
-    final currentUid = FirebaseAuth.instance.currentUser?.uid;
-    final ids = <String>{};
-    for (final c in _conversations) {
-      for (final p in c.participants) {
-        if (p != currentUid) ids.add(p);
-      }
-    }
-    for (final g in _groups) {
-      for (final p in g.participantIds) {
-        if (p != currentUid) ids.add(p);
-      }
-    }
-    ids.removeAll(_userProfiles.keys);
-    if (ids.isEmpty) return;
-
-    final batches = <List<String>>[];
-    var batch = <String>[];
-    for (final id in ids) {
-      batch.add(id);
-      if (batch.length == 10) {
-        batches.add(batch);
-        batch = [];
-      }
-    }
-    if (batch.isNotEmpty) batches.add(batch);
-
-    for (final b in batches) {
-      try {
-        final snap = await FirebaseFirestore.instance
-            .collection('users')
-            .where(FieldPath.documentId, whereIn: b)
-            .get();
-        if (!mounted) return;
-        for (final doc in snap.docs) {
-          final data = doc.data();
-          _userProfiles[doc.id] = UserProfile(
-            uid: doc.id,
-            displayName: data['displayName'] as String? ?? '',
-            profileImage: data['profileImage'] as String? ?? '',
-            phone: data['phone'] as String? ?? '',
-            location: data['location'] as String? ?? '',
-            bio: data['bio'] as String? ?? '',
-            accountTier: data['accountTier'] as String? ?? 'basic',
-            paymentNumbers: Map<String, String>.from(data['paymentNumbers'] ?? {}),
-          );
-        }
-        if (mounted) setState(() {});
-      } catch (_) {}
-    }
+    _loadUsers();
+    _searchController.addListener(_filterUsers);
   }
 
   @override
   void dispose() {
-    _convSub?.cancel();
-    _groupSub?.cancel();
+    _searchController.dispose();
     super.dispose();
   }
 
-  void _deleteConversation(String otherUserId) {
-    ChatService().deleteConversation(otherUserId);
+  Future<void> _loadUsers() async {
+    try {
+      final currentUid = FirebaseAuth.instance.currentUser?.uid;
+      final snap = await FirebaseFirestore.instance.collection('users').get();
+      if (!mounted) return;
+      final users = snap.docs
+          .map((doc) => UserProfile.fromMap(doc.id, doc.data()))
+          .where((u) => u.uid != currentUid)
+          .toList();
+      users.sort((a, b) => a.displayName.compareTo(b.displayName));
+      setState(() {
+        _allUsers = users;
+        _filteredUsers = users;
+        _loading = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _filterUsers() {
+    final query = _searchController.text.trim().toLowerCase();
+    setState(() {
+      _filteredUsers = query.isEmpty
+          ? _allUsers
+          : _allUsers.where((u) {
+              final name = u.displayName.toLowerCase();
+              final phone = u.phone.toLowerCase();
+              final username = u.username.toLowerCase();
+              return name.contains(query) ||
+                  phone.contains(query) ||
+                  username.contains(query);
+            }).toList();
+    });
+  }
+
+  void _openWhatsApp(UserProfile user) {
+    final phone = user.phone;
+    if (phone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Namba ya simu haipatikani'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    final message =
+        'Habari ${user.displayName}, nimekuona kwenye Soko Langu na ningependa kufanya biashara na wewe.';
+    WhatsAppService().openWhatsApp(
+      phoneNumber: phone,
+      message: message,
+      onError: () {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Imeshindwa kufungua WhatsApp'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      },
+      onFallback: () {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('WhatsApp haipo, imefungua tovuti'),
+            ),
+          );
+        }
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    final hasItems = _conversations.isNotEmpty || _groups.isNotEmpty;
-
     return Scaffold(
-      appBar: AppBar(title: Text(context.tr('chats'))),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => context.push(AppRoutes.createGroup),
-        tooltip: context.tr('create_group'),
-        child: const Icon(Icons.add),
+      appBar: AppBar(
+        title: const Text('WhatsApp'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.group_add),
+            tooltip: context.tr('create_group'),
+            onPressed: () => _openWhatsAppGroup(),
+          ),
+        ],
       ),
-      body: _loading
-          ? const GoogleLoadingPage()
-          : !hasItems
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.chat_bubble_outline, size: 64, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4)),
-                      const SizedBox(height: 16),
-                      Text(context.tr('no_conversations'), style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6), fontSize: 16)),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: _conversations.length,
-                  itemBuilder: (context, index) {
-                    final conv = _conversations[index];
-                    final otherUserId = conv.participants.firstWhere(
-                      (id) => id != currentUser?.uid,
-                      orElse: () => conv.participants.isNotEmpty ? conv.participants.first : '',
-                    );
-                    final profile = _userProfiles[otherUserId];
-                    final storedName = conv.participantNames[otherUserId];
-                    final name = profile?.displayName.isNotEmpty == true 
-                        ? profile!.displayName 
-                        : (storedName?.isNotEmpty == true ? storedName! : otherUserId);
-                    final image = profile?.profileImage;
-                    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
-
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        leading: Stack(
-                          children: [
-                            CircleAvatar(
-                              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                              backgroundImage: image != null && image.isNotEmpty ? NetworkImage(image) : null,
-                              child: image == null || image.isEmpty ? Text(initial, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)) : null,
-                            ),
-                            Positioned(
-                              right: 0,
-                              bottom: 0,
-                              child: StreamBuilder<bool>(
-                                stream: PresenceService().isOnline(otherUserId),
-                                builder: (context, snap) {
-                                  final online = snap.data ?? false;
-                                  return Container(
-                                    width: 12,
-                                    height: 12,
-                                    decoration: BoxDecoration(
-                                      color: online ? Colors.greenAccent : Colors.grey,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(color: Colors.white, width: 2),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                        title: Row(
-                          children: [
-                            Expanded(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                            VerifiedBadge(tier: profile?.accountTier ?? 'basic', size: 14),
-                          ],
-                        ),
-                        subtitle: Text(conv.lastMessage, maxLines: 1, overflow: TextOverflow.ellipsis),
-                        trailing: Column(
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: context.tr('search_users'),
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: _loading
+                ? const GoogleLoadingPage()
+                : _filteredUsers.isEmpty
+                    ? Center(
+                        child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(_formatTime(conv.lastMessageTime), style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))),
-                            if (conv.unreadCount > 0)
-                              Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle),
-                                child: Text("${conv.unreadCount}", style: const TextStyle(color: Colors.white, fontSize: 12)),
+                            Icon(
+                              Icons.people_outline,
+                              size: 64,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurface
+                                  .withValues(alpha: 0.4),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              context.tr('no_users_found'),
+                              style: TextStyle(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withValues(alpha: 0.6),
+                                fontSize: 16,
                               ),
+                            ),
                           ],
                         ),
-                        onTap: () => context.push('${AppRoutes.chat}/$otherUserId', extra: {'name': name}),
-                        onLongPress: () => _showOptions(context, conv, otherUserId),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        itemCount: _filteredUsers.length,
+                        itemBuilder: (context, index) {
+                          final user = _filteredUsers[index];
+                          final initial = user.displayName.isNotEmpty
+                              ? user.displayName[0].toUpperCase()
+                              : '?';
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 6),
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: Theme.of(context)
+                                    .colorScheme
+                                    .primaryContainer,
+                                backgroundImage:
+                                    user.profileImage.isNotEmpty
+                                        ? NetworkImage(user.profileImage)
+                                        : null,
+                                child: user.profileImage.isEmpty
+                                    ? Text(
+                                        initial,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      )
+                                    : null,
+                              ),
+                              title: Text(
+                                user.displayName.isNotEmpty
+                                    ? user.displayName
+                                    : user.uid,
+                              ),
+                              subtitle: user.phone.isNotEmpty
+                                  ? Text(
+                                      user.phone,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[600],
+                                      ),
+                                    )
+                                  : null,
+                              trailing: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF25D366),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(
+                                  Icons.chat,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                              ),
+                              onTap: () => _openWhatsApp(user),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
+          ),
+        ],
+      ),
     );
   }
 
-  String _formatTime(DateTime time) {
-    final now = DateTime.now();
-    final diff = now.difference(time);
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inHours < 1) return '${diff.inMinutes}m';
-    if (diff.inDays < 1) {
-      final hour = time.hour.toString().padLeft(2, '0');
-      final min = time.minute.toString().padLeft(2, '0');
-      return '$hour:$min';
-    }
-    if (diff.inDays == 1) return 'Yesterday';
-    if (diff.inDays < 7) {
-      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      return days[time.weekday - 1];
-    }
-    return '${time.day}/${time.month}';
-  }
-
-  void _showOptions(BuildContext context, Conversation conv, String otherUserId) {
-    final chatService = ChatService();
-    showModalBottomSheet(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: Icon(conv.isPinned ? Icons.push_pin : Icons.push_pin_outlined),
-              title: Text(conv.isPinned ? context.tr('unpin_chat') : context.tr('pin_chat')),
-              onTap: () {
-                Navigator.pop(ctx);
-                conv.isPinned ? chatService.unpinConversation(otherUserId) : chatService.pinConversation(otherUserId);
-              },
+  void _openWhatsAppGroup() {
+    WhatsAppService().openWhatsApp(
+      phoneNumber: '',
+      message: 'Ninatengeneza kikundi cha Soko Langu. Tafadhali niongeze.',
+      onError: () {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Imeshindwa kufungua WhatsApp'),
+              backgroundColor: Colors.red,
             ),
-            ListTile(
-              leading: Icon(conv.isMuted ? Icons.notifications_off : Icons.notifications),
-              title: Text(conv.isMuted ? context.tr('unmute_chat') : context.tr('mute_chat')),
-              onTap: () {
-                Navigator.pop(ctx);
-                conv.isMuted ? chatService.unmuteConversation(otherUserId) : chatService.muteConversation(otherUserId);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.block, color: Colors.red),
-              title: Text(context.tr('block_user'), style: const TextStyle(color: Colors.red)),
-              onTap: () {
-                Navigator.pop(ctx);
-                chatService.blockUser(otherUserId);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('user_blocked'))));
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete, color: Colors.red),
-              title: Text(context.tr('delete_chat'), style: const TextStyle(color: Colors.red)),
-              onTap: () {
-                Navigator.pop(ctx);
-                _deleteConversation(otherUserId);
-              },
-            ),
-          ],
-        ),
-      ),
+          );
+        }
+      },
     );
   }
 }

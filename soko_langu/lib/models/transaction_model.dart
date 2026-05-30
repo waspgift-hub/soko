@@ -2,8 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class TransactionFeeBreakdown {
   final double productPrice;
-  final double processingFeePercent;
-  final double platformFeePercent;
+  static const double mongikeFixedFee = 180;
+  static const double platformCommissionPercent = 0.04;
   final double processingFee;
   final double platformFee;
   final double totalFee;
@@ -12,19 +12,16 @@ class TransactionFeeBreakdown {
 
   TransactionFeeBreakdown({
     required this.productPrice,
-    this.processingFeePercent = 0,
-    this.platformFeePercent = 0,
-  }) : processingFee = productPrice * processingFeePercent,
-       platformFee = productPrice * platformFeePercent,
-       totalFee = productPrice * (processingFeePercent + platformFeePercent),
-       totalAmount =
-           productPrice * (1 + processingFeePercent + platformFeePercent),
-       sellerReceives = productPrice;
+  }) : processingFee = mongikeFixedFee,
+       platformFee = productPrice * platformCommissionPercent,
+       totalFee = mongikeFixedFee + (productPrice * platformCommissionPercent),
+       totalAmount = productPrice,
+       sellerReceives = productPrice - (productPrice * platformCommissionPercent) - mongikeFixedFee;
 
   Map<String, dynamic> toMap() => {
     'productPrice': productPrice,
-    'processingFeePercent': processingFeePercent,
-    'platformFeePercent': platformFeePercent,
+    'mongikeFixedFee': mongikeFixedFee,
+    'platformCommissionPercent': platformCommissionPercent,
     'processingFee': processingFee,
     'platformFee': platformFee,
     'totalFee': totalFee,
@@ -47,6 +44,8 @@ class MarketplaceTransaction {
   final double productPrice;
   final double processingFee;
   final double platformFee;
+  final double mongikeFee;
+  final double sokoLanguCommission;
   final double totalAmount;
   final double sellerReceives;
   final TransactionStatus status;
@@ -66,6 +65,8 @@ class MarketplaceTransaction {
     required this.productPrice,
     required this.processingFee,
     required this.platformFee,
+    this.mongikeFee = 180,
+    this.sokoLanguCommission = 0,
     required this.totalAmount,
     required this.sellerReceives,
     required this.status,
@@ -75,6 +76,9 @@ class MarketplaceTransaction {
   });
 
   factory MarketplaceTransaction.fromMap(String id, Map<String, dynamic> data) {
+    final breakdown = TransactionFeeBreakdown(
+      productPrice: (data['productPrice'] ?? 0).toDouble(),
+    );
     return MarketplaceTransaction(
       id: id,
       buyerId: data['buyerId'] ?? '',
@@ -85,10 +89,12 @@ class MarketplaceTransaction {
       productId: data['productId'] ?? '',
       productName: data['productName'] ?? '',
       productPrice: (data['productPrice'] ?? 0).toDouble(),
-      processingFee: (data['processingFee'] ?? 0).toDouble(),
-      platformFee: (data['platformFee'] ?? 0).toDouble(),
-      totalAmount: (data['totalAmount'] ?? 0).toDouble(),
-      sellerReceives: (data['sellerReceives'] ?? 0).toDouble(),
+      processingFee: (data['processingFee'] ?? breakdown.processingFee).toDouble(),
+      platformFee: (data['platformFee'] ?? breakdown.platformFee).toDouble(),
+      mongikeFee: (data['mongikeFee'] ?? breakdown.processingFee).toDouble(),
+      sokoLanguCommission: (data['sokoLanguCommission'] ?? data['globaseCommission'] ?? breakdown.platformFee).toDouble(),
+      totalAmount: (data['totalAmount'] ?? breakdown.totalAmount).toDouble(),
+      sellerReceives: (data['sellerReceives'] ?? breakdown.sellerReceives).toDouble(),
       status: _parseStatus(data['status'] ?? 'pending'),
       paymentMethod: data['paymentMethod'] ?? 'Mongike',
       transactionReference: data['transactionReference'],
@@ -109,6 +115,8 @@ class MarketplaceTransaction {
     'productPrice': productPrice,
     'processingFee': processingFee,
     'platformFee': platformFee,
+    'mongikeFee': mongikeFee,
+    'sokoLanguCommission': sokoLanguCommission,
     'totalAmount': totalAmount,
     'sellerReceives': sellerReceives,
     'status': status.toString().split('.').last,

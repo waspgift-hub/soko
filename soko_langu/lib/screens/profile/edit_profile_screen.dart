@@ -8,7 +8,7 @@ import 'package:geocoding/geocoding.dart';
 import '../../services/user_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../utils/helpers.dart';
-
+import '../../widgets/rewarded_ad_gate.dart';
 import '../../widgets/google_loading.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -199,6 +199,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+
+    final passed = await RewardedAdGate.require(
+      context,
+      'edit_profile',
+      title: context.tr('watch_ad'),
+      message: context.tr('watch_ad_to_edit'),
+    );
+    if (!passed) return;
+
     setState(() => _saving = true);
 
     try {
@@ -293,11 +302,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           TextButton(
             onPressed: _saving ? null : _save,
             child: _saving
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                ? const GoogleLoading(size: 20, strokeWidth: 2)
                 : Text(
                     context.tr('save'),
                     style: const TextStyle(

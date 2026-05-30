@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/product_model.dart';
-import '../../main.dart';
-import '../widgets/tilt_card.dart';
+import 'google_loading.dart';
 import '../extensions/context_tr.dart';
 
 class ProductCard extends StatelessWidget {
@@ -13,10 +12,7 @@ class ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final config = AppConfig.of(context);
-    final isSilver = config.accountTier == 'silver';
-    final isPremium = config.accountTier == 'premium';
-    final radius = isSilver ? 20.0 : (isPremium ? 18.0 : 15.0);
+    const radius = 15.0;
 
     Widget card = Container(
       decoration: BoxDecoration(
@@ -27,14 +23,9 @@ class ProductCard extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: isSilver
-                ? Colors.blueGrey.withAlpha(40)
-                : isPremium
-                ? Colors.amber.withAlpha(25)
-                : Colors.green.withAlpha(25),
-            blurRadius: isSilver ? 20 : 15,
+            color: Colors.green.withAlpha(25),
+            blurRadius: 15,
             offset: const Offset(0, 5),
-            spreadRadius: isSilver ? 2 : 1,
           ),
         ],
       ),
@@ -53,15 +44,8 @@ class ProductCard extends StatelessWidget {
                           fit: BoxFit.cover,
                           placeholder: (context, url) => Container(
                             color: Colors.grey[100],
-                            child: Center(
-                              child: SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.green[400],
-                                ),
-                              ),
+                            child: const Center(
+                              child: GoogleLoading(size: 24, strokeWidth: 2),
                             ),
                           ),
                           errorWidget: (context, url, error) => Container(
@@ -103,11 +87,9 @@ class ProductCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  "${product.currency ?? 'Tsh'} ${product.price.toStringAsFixed(0)}",
-                  style: TextStyle(
-                    color: isSilver
-                        ? Colors.blueGrey
-                        : (isPremium ? Colors.amber[800] : Colors.green),
+                  context.formatPrice(product.price),
+                  style: const TextStyle(
+                    color: Colors.green,
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
                   ),
@@ -135,30 +117,6 @@ class ProductCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    if (product.sellerTier == 'silver' ||
-                        product.sellerTier == 'premium')
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 1,
-                        ),
-                        decoration: BoxDecoration(
-                          color: product.sellerTier == 'silver'
-                              ? Colors.blueGrey.withAlpha(30)
-                              : Colors.amber.withAlpha(30),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          product.sellerTier == 'silver' ? 'S' : 'P',
-                          style: TextStyle(
-                            fontSize: 9,
-                            color: product.sellerTier == 'silver'
-                                ? Colors.blueGrey[700]
-                                : Colors.amber[800],
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
                   ],
                 ),
                 if (product.rating > 0) ...[
@@ -185,10 +143,6 @@ class ProductCard extends StatelessWidget {
         ],
       ),
     );
-
-    if (isSilver) {
-      return TiltCard(tiltFactor: 0.03, onTap: onTap, child: card);
-    }
 
     return GestureDetector(onTap: onTap, child: card);
   }
@@ -222,46 +176,6 @@ class ProductCard extends StatelessWidget {
                     ),
                   ),
                 ],
-              ),
-            ),
-          ),
-        if (product.sellerTier == 'silver')
-          Positioned(
-            top: 8,
-            right: 8,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: Colors.blueGrey.withAlpha(200),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                context.tr('silver'),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-        if (product.sellerTier == 'premium')
-          Positioned(
-            top: 8,
-            right: 8,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: Colors.amber.withAlpha(200),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                context.tr('premium'),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                ),
               ),
             ),
           ),

@@ -3,7 +3,6 @@ class ProductComment {
   final String userId;
   final String userName;
   final String? userImage;
-  final String userTier;
   final String text;
   final DateTime createdAt;
   final int replyCount;
@@ -13,7 +12,6 @@ class ProductComment {
     required this.userId,
     required this.userName,
     this.userImage,
-    this.userTier = 'free',
     required this.text,
     required this.createdAt,
     this.replyCount = 0,
@@ -25,7 +23,6 @@ class ProductComment {
       userId: data['userId'] as String? ?? '',
       userName: data['userName'] as String? ?? 'Unknown',
       userImage: data['userImage'] as String?,
-      userTier: data['userTier'] as String? ?? 'free',
       text: data['text'] as String? ?? '',
       createdAt: (data['createdAt'] as dynamic)?.toDate() ?? DateTime.now(),
       replyCount: data['replyCount'] as int? ?? 0,
@@ -48,7 +45,6 @@ class ProductComment {
       'userId': userId,
       'userName': userName,
       'userImage': userImage,
-      'userTier': userTier,
       'text': text,
       'createdAt': createdAt,
       'replyCount': replyCount,
@@ -62,7 +58,6 @@ class CommentReply {
   final String userId;
   final String userName;
   final String? userImage;
-  final String userTier;
   final String text;
   final DateTime createdAt;
 
@@ -72,7 +67,6 @@ class CommentReply {
     required this.userId,
     required this.userName,
     this.userImage,
-    this.userTier = 'free',
     required this.text,
     required this.createdAt,
   });
@@ -88,7 +82,6 @@ class CommentReply {
       userId: data['userId'] as String? ?? '',
       userName: data['userName'] as String? ?? 'Unknown',
       userImage: data['userImage'] as String?,
-      userTier: data['userTier'] as String? ?? 'free',
       text: data['text'] as String? ?? '',
       createdAt: (data['createdAt'] as dynamic)?.toDate() ?? DateTime.now(),
     );
@@ -100,7 +93,6 @@ class CommentReply {
       'userId': userId,
       'userName': userName,
       'userImage': userImage,
-      'userTier': userTier,
       'text': text,
       'createdAt': createdAt,
     };

@@ -10,7 +10,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:344682929526:android:828e2523b15358a7c26e57",
         "android_client_info": {
-          "package_name": "com.example.soko_langu"
+          "package_name": "com.sokolangu.app"
         }
       },
       "oauth_client": [
@@ -35,7 +35,7 @@
               "client_id": "344682929526-3mu6jrlpdp199f76j2bbdd8pb0e12tru.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.example.sokoLangu"
+                "bundle_id": "com.sokolangu.app"
               }
             }
           ]

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Create Soko Langu Icon</title>
+</head>
+<body>
+    <canvas id="canvas" width="512" height="512"></canvas>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Green background
+        ctx.fillStyle = '#4CAF50';
+        ctx.fillRect(0, 0, 512, 512);
+        
+        // White text "Soko Langu"
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 40px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Soko Langu', 256, 256);
+        
+        // Download
+        const link = document.createElement('a');
+        link.download = 'soko_langu_icon.png';
+        link.href = canvas.toDataURL();
+        link.click();
+    </script>
+</body>
+</html>

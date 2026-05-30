@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
-import '../../models/notification_item.dart';
+import '../../services/notification_service.dart';
 import '../../services/product_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
@@ -16,174 +16,135 @@ class NotificationScreen extends StatefulWidget {
 }
 
 class _NotificationScreenState extends State<NotificationScreen> {
-  List<NotificationItem> _notifications = [];
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _setupListeners();
-  }
-
-  void _setupListeners() {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    FirebaseFirestore.instance
-        .collection("conversations")
-        .where("participants", arrayContains: user.uid)
-        .snapshots()
-        .listen((convSnapshot) {
-          _rebuildNotifications(convSnapshot.docs);
-        });
-  }
-
-  Future<void> _rebuildNotifications(
-    List<QueryDocumentSnapshot<Map<String, dynamic>>> convDocs,
-  ) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    final notifications = <NotificationItem>[];
-    final sellerIds = <String>{};
-
-    for (var doc in convDocs) {
-      final data = doc.data();
-      final participants = List<String>.from(data['participants'] ?? []);
-      final otherId = participants.firstWhere(
-        (id) => id != user.uid,
-        orElse: () => '',
-      );
-      if (otherId.isNotEmpty) sellerIds.add(otherId);
-
-      final unread = data['unreadCount'] ?? 0;
-      if (unread > 0) {
-        final lastMsg = data['lastMessage'] ?? '';
-        final otherName = data['otherUserName'] ?? 'Unknown';
-        final lastTime = data['lastMessageTime'] is Timestamp
-            ? (data['lastMessageTime'] as Timestamp).toDate()
-            : DateTime.now();
-
-        notifications.add(
-          NotificationItem(
-            id: 'chat_${doc.id}',
-            type: 'chat',
-            title: otherName,
-            body: lastMsg,
-            timestamp: lastTime,
-            otherUserId: otherId,
-            otherUserName: otherName,
-            otherUserImage: data['otherUserImage'] as String?,
-            isRead: false,
-            unreadCount: unread,
-          ),
-        );
-      }
-    }
-
-    if (sellerIds.isNotEmpty) {
-      try {
-        final productsSnapshot = await FirebaseFirestore.instance
-            .collection("products")
-            .where("isActive", isEqualTo: true)
-            .orderBy("createdAt", descending: true)
-            .limit(50)
-            .get();
-
-        for (var doc in productsSnapshot.docs) {
-          final data = doc.data();
-          final sellerId = data['sellerId'] as String? ?? '';
-          if (!sellerIds.contains(sellerId)) continue;
-
-          final created = data['createdAt'] is Timestamp
-              ? (data['createdAt'] as Timestamp).toDate()
-              : DateTime.now();
-          final images = List<String>.from(data['images'] ?? []);
-
-          notifications.add(
-            NotificationItem(
-              id: 'product_${doc.id}',
-              type: 'product',
-              title: data['sellerName'] ?? 'Seller',
-              body: data['name'] ?? '',
-              timestamp: created,
-              otherUserId: sellerId,
-              otherUserName: data['sellerName'] as String?,
-              productId: doc.id,
-              productImage: images.isNotEmpty ? images.first : null,
-            ),
-          );
-        }
-      } catch (e) {
-        debugPrint('NotificationScreen load: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('${context.tr('error')}: $e')),
-          );
-        }
-      }
-    }
-
-    notifications.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-
-    if (mounted) {
-      _notifications = notifications;
-      _loading = false;
-      setState(() {});
-    }
-  }
+  final NotificationService _notifService = NotificationService();
 
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return Scaffold(
+        appBar: AppBar(title: Text(context.tr('notifications'))),
+        body: Center(child: Text(context.tr('login_required'))),
+      );
+    }
+
     return Scaffold(
-      appBar: AppBar(title: Text(context.tr('notifications'))),
-      body: SafeArea(
-        child: _loading
-            ? const GoogleLoadingPage()
-            : _notifications.isEmpty
-            ? Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.notifications_none,
-                      size: 64,
-                      color: Colors.grey[400],
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      context.tr('no_notifications'),
-                      style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                    ),
-                  ],
-                ),
-              )
-            : ListView.separated(
-                padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(context).padding.bottom + 20,
-                ),
-                itemCount: _notifications.length,
-                separatorBuilder: (_, _) => const Divider(height: 1),
-                itemBuilder: (context, index) {
-                  final notif = _notifications[index];
-                  return _buildNotificationTile(notif);
-                },
+      appBar: AppBar(
+        title: Text(context.tr('notifications')),
+        actions: [
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('notifications')
+                .where('userId', isEqualTo: user.uid)
+                .where('isRead', isEqualTo: false)
+                .snapshots(),
+            builder: (context, snap) {
+              final unread = snap.data?.docs.length ?? 0;
+              if (unread == 0) return const SizedBox.shrink();
+              return TextButton(
+                onPressed: () => _notifService.markAllAsRead(),
+                child: Text('${context.tr('mark_all_read')} ($unread)'),
+              );
+            },
+          ),
+        ],
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('notifications')
+            .where('userId', isEqualTo: user.uid)
+            .snapshots(),
+        builder: (context, snap) {
+          if (snap.hasError) {
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.notifications_none, size: 64, color: Colors.grey[400]),
+                  const SizedBox(height: 16),
+                  Text(
+                    context.tr('no_notifications'),
+                    style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                  ),
+                ],
               ),
+            );
+          }
+          if (!snap.hasData) return const GoogleLoadingPage();
+
+          final docs = snap.data!.docs;
+          docs.sort((a, b) {
+            final ta = (a.data() as Map)['createdAt'];
+            final tb = (b.data() as Map)['createdAt'];
+            if (ta is Timestamp && tb is Timestamp) return tb.compareTo(ta);
+            return 0;
+          });
+          if (docs.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.notifications_none, size: 64, color: Colors.grey[400]),
+                  const SizedBox(height: 16),
+                  Text(
+                    context.tr('no_notifications'),
+                    style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return ListView.separated(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).padding.bottom + 20,
+            ),
+            itemCount: docs.length,
+            separatorBuilder: (_, _) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final doc = docs[index];
+              final data = doc.data() as Map<String, dynamic>;
+              return _buildTile(doc.id, data);
+            },
+          );
+        },
       ),
     );
   }
 
-  Widget _buildNotificationTile(NotificationItem notif) {
-    final isChat = notif.type == 'chat';
+  Widget _buildTile(String docId, Map<String, dynamic> data) {
+    final title = data['title'] as String? ?? '';
+    final body = data['body'] as String? ?? '';
+    final isRead = data['isRead'] as bool? ?? false;
+    final type = data['data'] is Map ? (data['data'] as Map)['type'] as String? : data['type'] as String?;
+    final notifType = type ?? 'general';
 
     IconData icon;
     Color iconColor;
-    if (isChat) {
-      icon = Icons.message;
-      iconColor = Colors.blue;
-    } else {
-      icon = Icons.shopping_bag;
-      iconColor = Colors.orange;
+    switch (notifType) {
+      case 'chat':
+        icon = Icons.message;
+        iconColor = Colors.blue;
+        break;
+      case 'flash_sale':
+        icon = Icons.flash_on;
+        iconColor = Colors.orange;
+        break;
+      case 'order':
+        icon = Icons.shopping_bag;
+        iconColor = Colors.green;
+        break;
+      case 'product':
+        icon = Icons.sell;
+        iconColor = Colors.purple;
+        break;
+      case 'system':
+        icon = Icons.info_outline;
+        iconColor = Colors.grey;
+        break;
+      default:
+        icon = Icons.notifications_outlined;
+        iconColor = Colors.teal;
     }
 
     return ListTile(
@@ -192,51 +153,52 @@ class _NotificationScreenState extends State<NotificationScreen> {
         child: Icon(icon, color: iconColor, size: 22),
       ),
       title: Text(
-        notif.title,
-        style: TextStyle(
-          fontWeight: notif.unreadCount > 0
-              ? FontWeight.bold
-              : FontWeight.normal,
-        ),
+        title,
+        style: TextStyle(fontWeight: isRead ? FontWeight.normal : FontWeight.bold),
       ),
       subtitle: Text(
-        notif.body,
+        body,
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(color: Colors.grey[600], fontSize: 13),
       ),
-      trailing: notif.unreadCount > 0
-          ? Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
+      trailing: isRead
+          ? null
+          : Container(
+              width: 10,
+              height: 10,
+              decoration: const BoxDecoration(
                 color: Colors.green,
-                borderRadius: BorderRadius.circular(12),
+                shape: BoxShape.circle,
               ),
-              child: Text(
-                '${notif.unreadCount}',
-                style: const TextStyle(color: Colors.white, fontSize: 12),
-              ),
-            )
-          : null,
-      onTap: () => _openNotification(notif),
+            ),
+      onTap: () {
+        if (!isRead) _notifService.markAsRead(docId);
+        _openNotification(notifType, data);
+      },
     );
   }
 
-  void _openNotification(NotificationItem notif) {
-    if (notif.type == 'chat' && notif.otherUserId != null) {
-      context.push(
-        '${AppRoutes.chat}/${notif.otherUserId}',
-        extra: {'name': notif.otherUserName ?? ''},
-      );
-    } else if (notif.type == 'product' && notif.productId != null) {
-      ProductService().getProductById(notif.productId!).then((product) {
-        if (product != null && mounted) {
-          context.push(
-            '${AppRoutes.productDetail}/${product.id}',
-            extra: product,
-          );
-        }
-      });
+  void _openNotification(String type, Map<String, dynamic> data) {
+    final notifData = data['data'] is Map ? data['data'] as Map<String, dynamic> : null;
+
+    if (type == 'chat') {
+      final otherId = notifData?['senderId'] as String? ?? '';
+      final otherName = notifData?['senderName'] as String? ?? '';
+      if (otherId.isNotEmpty) {
+        context.push('${AppRoutes.chat}/$otherId', extra: {'name': otherName});
+      }
+    } else if (type == 'flash_sale') {
+      context.push(AppRoutes.flashSale);
+    } else if (type == 'product') {
+      final productId = notifData?['productId'] as String? ?? '';
+      if (productId.isNotEmpty) {
+        ProductService().getProductById(productId).then((product) {
+          if (product != null && mounted) {
+            context.push('${AppRoutes.productDetail}/${product.id}', extra: product);
+          }
+        });
+      }
     }
   }
 }

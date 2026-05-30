@@ -4,11 +4,6 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
-import 'package:flutter_callkit_incoming/entities/call_kit_params.dart';
-import 'package:flutter_callkit_incoming/entities/android_params.dart';
-import 'package:flutter_callkit_incoming/entities/ios_params.dart';
-import 'package:flutter_callkit_incoming/entities/notification_params.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'api_config.dart';
@@ -23,10 +18,8 @@ class NotificationService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   static final GlobalKey<ScaffoldMessengerState> messengerKey =
       GlobalKey<ScaffoldMessengerState>();
-  static void Function(Map<String, dynamic> data)? onCallNotificationTap;
-  static void Function(Map<String, dynamic> data)? onForegroundCall;
-  static void Function(String callId)? onCallAcceptFromNotification;
-  static void Function(String callId)? onCallDeclineFromNotification;
+  static void Function(Map<String, dynamic> data)? onNotificationTap;
+  static void Function(Map<String, dynamic> data)? onPriceDropTap;
 
   static Future<void> initLocalNotifications() async {
     const androidSettings = AndroidInitializationSettings(
@@ -48,27 +41,11 @@ class NotificationService {
         if (payload == null) return;
         try {
           final data = jsonDecode(payload) as Map<String, dynamic>;
-          if (response.actionId == 'accept_call') {
-            onCallAcceptFromNotification?.call(data['callId'] as String);
-          } else if (response.actionId == 'decline_call') {
-            onCallDeclineFromNotification?.call(data['callId'] as String);
-          } else {
-            onCallNotificationTap?.call(data);
-          }
+          onNotificationTap?.call(data);
         } catch (_) {}
       },
     );
 
-    final callChannel = AndroidNotificationChannel(
-      'incoming_calls_v2',
-      'Incoming Calls',
-      description: 'Notifications for incoming voice and video calls',
-      importance: Importance.max,
-      playSound: true,
-      enableVibration: true,
-      showBadge: true,
-      enableLights: true,
-    );
     final chatChannel = AndroidNotificationChannel(
       'chat_messages_v2',
       'Chat Messages',
@@ -83,7 +60,6 @@ class NotificationService {
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
         >();
-    await plugin?.createNotificationChannel(callChannel);
     await plugin?.createNotificationChannel(chatChannel);
     await plugin?.requestNotificationsPermission();
   }
@@ -174,72 +150,6 @@ class NotificationService {
       return;
     }
 
-    if (data['type'] == 'call') {
-      if (onForegroundCall != null) {
-        onForegroundCall!(data);
-      } else {
-        final callId = data['callId'] as String? ?? '';
-        final callerName = data['callerName'] as String? ?? 'Incoming Call';
-        final callerImage = data['callerImage'] as String? ?? '';
-        final channelName = data['channelName'] as String? ?? '';
-        final callType = data['callType'] as String? ?? 'voice';
-
-        await FlutterCallkitIncoming.showCallkitIncoming(CallKitParams(
-          id: callId,
-          nameCaller: callerName,
-          appName: 'Soko Langu',
-          avatar: callerImage.isNotEmpty ? callerImage : null,
-          handle: callType == 'video' ? 'Video Call' : 'Voice Call',
-          type: callType == 'video' ? 1 : 0,
-          textAccept: 'Accept',
-          textDecline: 'Decline',
-          duration: 30000,
-          missedCallNotification: const NotificationParams(
-            showNotification: true,
-            isShowCallback: true,
-            callbackText: 'Call back',
-          ),
-          extra: <String, dynamic>{
-            'callId': callId,
-            'channelName': channelName,
-            'callType': callType,
-            'callerName': callerName,
-            'callerImage': callerImage,
-          },
-          android: AndroidParams(
-            isCustomNotification: true,
-            isShowLogo: false,
-            ringtonePath: 'system_ringtone_default',
-            backgroundColor: '#0D1B12',
-            backgroundUrl: null,
-            actionColor: '#2D6A4F',
-            textColor: '#FFFFFF',
-            incomingCallNotificationChannelName: 'Incoming Calls',
-            missedCallNotificationChannelName: 'Missed Calls',
-            isShowCallID: false,
-            isShowFullLockedScreen: true,
-          ),
-          ios: IOSParams(
-            iconName: 'CallKitLogo',
-            handleType: 'generic',
-            supportsVideo: true,
-            maximumCallGroups: 1,
-            maximumCallsPerCallGroup: 1,
-            audioSessionMode: 'default',
-            audioSessionActive: true,
-            audioSessionPreferredSampleRate: 44100.0,
-            audioSessionPreferredIOBufferDuration: 0.005,
-            supportsDTMF: false,
-            supportsHolding: false,
-            supportsGrouping: false,
-            supportsUngrouping: false,
-            ringtonePath: 'system_ringtone_default',
-          ),
-        ));
-      }
-      return;
-    }
-
     final title = message.notification?.title ?? '';
     final body = message.notification?.body ?? '';
     if (title.isNotEmpty && messengerKey.currentContext != null) {
@@ -255,8 +165,8 @@ class NotificationService {
 
   void _handleNotificationTap(RemoteMessage message) {
     final data = message.data;
-    if (data['type'] == 'call' && onCallNotificationTap != null) {
-      onCallNotificationTap!(data);
+    if (data['type'] == 'price_drop' && onPriceDropTap != null) {
+      onPriceDropTap!(data);
     }
   }
 
@@ -292,68 +202,6 @@ class NotificationService {
         ),
         payload: jsonEncode(data),
       );
-      return;
-    }
-    if (data['type'] == 'call') {
-      final callId = data['callId'] as String? ?? '';
-      final callerName = data['callerName'] as String? ?? 'Incoming Call';
-      final callerImage = data['callerImage'] as String? ?? '';
-      final channelName = data['channelName'] as String? ?? '';
-      final callType = data['callType'] as String? ?? 'voice';
-
-      await FlutterCallkitIncoming.showCallkitIncoming(CallKitParams(
-        id: callId,
-        nameCaller: callerName,
-        appName: 'Soko Langu',
-        avatar: callerImage.isNotEmpty ? callerImage : null,
-        handle: callType == 'video' ? 'Video Call' : 'Voice Call',
-        type: callType == 'video' ? 1 : 0,
-        textAccept: 'Accept',
-        textDecline: 'Decline',
-        duration: 30000,
-        missedCallNotification: const NotificationParams(
-          showNotification: true,
-          isShowCallback: true,
-          callbackText: 'Call back',
-        ),
-        extra: <String, dynamic>{
-          'callId': callId,
-          'channelName': channelName,
-          'callType': callType,
-          'callerName': callerName,
-          'callerImage': callerImage,
-        },
-        android: AndroidParams(
-          isCustomNotification: true,
-          isShowLogo: false,
-          ringtonePath: 'system_ringtone_default',
-          backgroundColor: '#0D1B12',
-          backgroundUrl: null,
-          actionColor: '#2D6A4F',
-          textColor: '#FFFFFF',
-          incomingCallNotificationChannelName: 'Incoming Calls',
-          missedCallNotificationChannelName: 'Missed Calls',
-          isShowCallID: false,
-          isShowFullLockedScreen: true,
-        ),
-        ios: IOSParams(
-          iconName: 'CallKitLogo',
-          handleType: 'generic',
-          supportsVideo: true,
-          maximumCallGroups: 1,
-          maximumCallsPerCallGroup: 1,
-          audioSessionMode: 'default',
-          audioSessionActive: true,
-          audioSessionPreferredSampleRate: 44100.0,
-          audioSessionPreferredIOBufferDuration: 0.005,
-          supportsDTMF: false,
-          supportsHolding: false,
-          supportsGrouping: false,
-          supportsUngrouping: false,
-          ringtonePath: 'system_ringtone_default',
-        ),
-      ));
-      return;
     }
   }
 
@@ -391,11 +239,16 @@ class NotificationService {
     return _db
         .collection('notifications')
         .where('userId', isEqualTo: user.uid)
-        .orderBy('createdAt', descending: true)
         .snapshots()
         .map(
           (snap) =>
-              snap.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList(),
+              snap.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList()
+            ..sort((a, b) {
+              final ta = a['createdAt'];
+              final tb = b['createdAt'];
+              if (ta is Timestamp && tb is Timestamp) return tb.compareTo(ta);
+              return 0;
+            }),
         );
   }
 
