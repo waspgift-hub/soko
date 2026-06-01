@@ -1,15 +1,19 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'api_config.dart';
 
-final FlutterLocalNotificationsPlugin localNotifications =
-    FlutterLocalNotificationsPlugin();
+final Int64List localHighVibrationPattern =
+    Int64List.fromList([0, 200, 100, 200, 100, 300]);
+
+int _notifIdCounter = 0;
+int get _nextId => ++_notifIdCounter;
 
 class NotificationService {
   static const String _key = 'push_notifications_enabled';
@@ -22,46 +26,49 @@ class NotificationService {
   static void Function(Map<String, dynamic> data)? onPriceDropTap;
 
   static Future<void> initLocalNotifications() async {
-    const androidSettings = AndroidInitializationSettings(
-      '@mipmap/ic_launcher',
-    );
-    const iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: false,
-      requestBadgePermission: false,
-      requestSoundPermission: false,
-    );
-    const settings = InitializationSettings(
-      android: androidSettings,
-      iOS: iosSettings,
-    );
-    await localNotifications.initialize(
-      settings: settings,
-      onDidReceiveNotificationResponse: (response) {
-        final payload = response.payload;
-        if (payload == null) return;
-        try {
-          final data = jsonDecode(payload) as Map<String, dynamic>;
-          onNotificationTap?.call(data);
-        } catch (_) {}
-      },
+    await AwesomeNotifications().initialize(
+      null,
+      [
+        NotificationChannel(
+          channelKey: 'chat_messages_v3',
+          channelName: 'Chat Messages',
+          channelDescription: 'New message notifications from chats',
+          defaultColor: const Color(0xFF40916C),
+          ledColor: const Color(0xFF40916C),
+          importance: NotificationImportance.Max,
+          channelShowBadge: true,
+          playSound: true,
+          // Samsung/Android can be strict about sound resources.
+          // If you don't have this file in android/app/src/main/res/raw,
+          // the safest option is to omit soundSource.
+          // soundSource: 'resource://raw/soko_notification',
+          vibrationPattern: localHighVibrationPattern,
+          enableVibration: true,
+          enableLights: true,
+          defaultPrivacy: NotificationPrivacy.Public,
+        ),
+        NotificationChannel(
+          channelKey: 'general_notifications_v3',
+          channelName: 'Soko Langu',
+          channelDescription: 'Flash sale, price drop & other notifications',
+          defaultColor: const Color(0xFF40916C),
+          ledColor: const Color(0xFF40916C),
+          importance: NotificationImportance.Max,
+          channelShowBadge: true,
+          playSound: true,
+          // soundSource: 'resource://raw/soko_notification',
+          vibrationPattern: localHighVibrationPattern,
+          enableVibration: true,
+          enableLights: true,
+        ),
+      ],
     );
 
-    final chatChannel = AndroidNotificationChannel(
-      'chat_messages_v2',
-      'Chat Messages',
-      description: 'New message notifications from chats',
-      importance: Importance.max,
-      playSound: true,
-      enableVibration: true,
-      showBadge: true,
-      enableLights: true,
-    );
-    final plugin = localNotifications
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >();
-    await plugin?.createNotificationChannel(chatChannel);
-    await plugin?.requestNotificationsPermission();
+    await requestNotificationPermission();
+  }
+
+  static Future<void> requestNotificationPermission() async {
+    await AwesomeNotifications().requestPermissionToSendNotifications();
   }
 
   Future<bool> isEnabled() async {
@@ -78,6 +85,8 @@ class NotificationService {
     try {
       if (!await isEnabled()) return;
 
+      await initLocalNotifications();
+
       NotificationSettings settings = await _fcm.requestPermission(
         alert: true,
         badge: true,
@@ -92,13 +101,35 @@ class NotificationService {
 
         _fcm.onTokenRefresh.listen(_saveToken);
 
+        _auth.authStateChanges().listen((user) async {
+          if (user != null) {
+            final t = await _fcm.getToken();
+            if (t != null) await _saveToken(t);
+          }
+        });
+
         FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-        FirebaseMessaging.onBackgroundMessage(_backgroundHandler);
+        FirebaseMessaging.onBackgroundMessage(notificationBackgroundHandler);
         FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
         final initialMsg = await _fcm.getInitialMessage();
         if (initialMsg != null) {
           _handleNotificationTap(initialMsg);
         }
+
+        await AwesomeNotifications().setListeners(
+          onActionReceivedMethod: (ReceivedAction receivedAction) async {
+            final rawPayload = receivedAction.payload;
+            if (rawPayload == null) return;
+            try {
+              final data = Map<String, dynamic>.from(rawPayload);
+              if (data['type'] == 'price_drop' && onPriceDropTap != null) {
+                onPriceDropTap!(data);
+              } else if (onNotificationTap != null) {
+                onNotificationTap!(data);
+              }
+            } catch (_) {}
+          },
+        );
       }
     } catch (e) {
       debugPrint('Notification init: $e');
@@ -120,44 +151,38 @@ class NotificationService {
     if (data['type'] == 'chat' || data['type'] == 'group_chat') {
       final senderName = data['senderName'] ?? 'New message';
       final body = message.notification?.body ?? data['body'] ?? '';
-      localNotifications.show(
-        id: DateTime.now().millisecondsSinceEpoch % 100000,
-        title: senderName,
-        body: body,
-        notificationDetails: const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'chat_messages_v2',
-            'Chat Messages',
-            channelDescription: 'New message notifications from chats',
-            importance: Importance.max,
-            priority: Priority.high,
-            playSound: true,
-            enableVibration: true,
-            enableLights: true,
-            fullScreenIntent: true,
-            category: AndroidNotificationCategory.message,
-            visibility: NotificationVisibility.public,
-          ),
-          iOS: DarwinNotificationDetails(
-            presentAlert: true,
-            presentBadge: true,
-            presentSound: true,
-            categoryIdentifier: 'chat_message',
-          ),
+      await AwesomeNotifications().createNotification(
+        content: NotificationContent(
+          id: _nextId,
+          channelKey: 'chat_messages_v3',
+          title: senderName,
+          body: body,
+          displayOnForeground: true,
+          displayOnBackground: true,
+          fullScreenIntent: true,
+          payload: data.map((k, v) => MapEntry(k, v?.toString())),
+          wakeUpScreen: true,
+          locked: true,
+          autoDismissible: false,
         ),
-        payload: jsonEncode(data),
       );
       return;
     }
 
-    final title = message.notification?.title ?? '';
-    final body = message.notification?.body ?? '';
-    if (title.isNotEmpty && messengerKey.currentContext != null) {
-      messengerKey.currentState?.showSnackBar(
-        SnackBar(
-          content: Text('$title\n$body'),
-          duration: const Duration(seconds: 4),
-          behavior: SnackBarBehavior.floating,
+    final title = message.notification?.title ?? data['title'] as String? ?? '';
+    final body = message.notification?.body ?? data['body'] as String? ?? '';
+    if (title.isNotEmpty) {
+      await AwesomeNotifications().createNotification(
+        content: NotificationContent(
+          id: _nextId,
+          channelKey: 'general_notifications_v3',
+          title: title,
+          body: body,
+          displayOnForeground: true,
+          displayOnBackground: true,
+          fullScreenIntent: true,
+          payload: data.map((k, v) => MapEntry(k, v?.toString())),
+          wakeUpScreen: true,
         ),
       );
     }
@@ -167,41 +192,8 @@ class NotificationService {
     final data = message.data;
     if (data['type'] == 'price_drop' && onPriceDropTap != null) {
       onPriceDropTap!(data);
-    }
-  }
-
-  static Future<void> _backgroundHandler(RemoteMessage message) async {
-    final data = message.data;
-    if (data['type'] == 'chat' || data['type'] == 'group_chat') {
-      final senderName = data['senderName'] ?? 'New message';
-      final body = message.notification?.body ?? '';
-      await localNotifications.show(
-        id: DateTime.now().millisecondsSinceEpoch % 100000,
-        title: senderName,
-        body: body,
-        notificationDetails: NotificationDetails(
-          android: AndroidNotificationDetails(
-            'chat_messages_v2',
-            'Chat Messages',
-            channelDescription: 'New message notifications from chats',
-            importance: Importance.max,
-            priority: Priority.high,
-            playSound: true,
-            enableVibration: true,
-            enableLights: true,
-            fullScreenIntent: true,
-            category: AndroidNotificationCategory.message,
-            visibility: NotificationVisibility.public,
-          ),
-          iOS: DarwinNotificationDetails(
-            presentAlert: true,
-            presentBadge: true,
-            presentSound: true,
-            categoryIdentifier: 'chat_message',
-          ),
-        ),
-        payload: jsonEncode(data),
-      );
+    } else if (onNotificationTap != null) {
+      onNotificationTap!(data);
     }
   }
 
@@ -275,5 +267,40 @@ class NotificationService {
       batch.update(doc.reference, {'isRead': true});
     }
     await batch.commit();
+  }
+}
+
+// ============================================================
+// 📥 BACKGROUND HANDLER — must be top-level function for firebase_messaging
+// ============================================================
+int _bgNotifIdCounter = 0;
+
+@pragma('vm:entry-point')
+Future<void> notificationBackgroundHandler(RemoteMessage message) async {
+  try {
+    await AwesomeNotifications().initialize(null, []);
+
+    final data = message.data;
+    final title = message.notification?.title ?? data['title'] ?? '';
+    final body = message.notification?.body ?? data['body'] ?? '';
+    if (title.isEmpty) return;
+
+    final isChat = data['type'] == 'chat' || data['type'] == 'group_chat';
+    final nid = ++_bgNotifIdCounter;
+
+    await AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: nid,
+        channelKey: isChat ? 'chat_messages_v3' : 'general_notifications_v3',
+        title: isChat ? (data['senderName'] ?? 'New message') : title,
+        body: body,
+        displayOnBackground: true,
+        fullScreenIntent: true,
+        payload: data.map((k, v) => MapEntry(k, v?.toString())),
+        wakeUpScreen: true,
+      ),
+    );
+  } catch (e) {
+    debugPrint('Background handler error: $e');
   }
 }
