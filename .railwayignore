@@ -1,0 +1,12 @@
+node_modules/
+.git/
+build/
+.android/
+.ios/
+.windows/
+.macos/
+.linux/
+.web/
+.dart_tool/
+.packages
+**/__pycache__/

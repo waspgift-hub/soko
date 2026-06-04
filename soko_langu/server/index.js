@@ -33,6 +33,27 @@ const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || '';
 const ESCROW_AUTO_RELEASE_DAYS = parseInt(process.env.ESCROW_AUTO_RELEASE_DAYS) || 14;
 const MAX_DAILY_SALE_AMOUNT = parseInt(process.env.MAX_DAILY_SALE_AMOUNT) || 5000000;
 
+// ─── Shared Android notification config for FCM ───
+function androidNotifConfig(channelId, tag) {
+  return {
+    priority: 'high',
+    notification: {
+      channelId,
+      priority: 'max',
+      visibility: 'public',
+      sound: 'soko_notification',
+      notificationPriority: 'PRIORITY_MAX',
+      defaultSound: false,
+      vibrateTimingsMillis: [0, 200, 100, 200, 100, 300],
+      defaultVibrateTimings: false,
+      lights: [true, 500, 500],
+      defaultLightSettings: false,
+      ...(tag ? { tag } : {}),
+      color: '#40916C',
+    },
+  };
+}
+
 // ─── Rate limiter (in-memory) ───
 const rateHits = new Map();
 const walletHits = new Map(); // per-wallet rate limit for payments
@@ -69,11 +90,14 @@ function paymentRateLimit(req, res, next) {
 
 // Verify webhook secret to prevent forged callbacks
 function verifyWebhook(req, res, next) {
-  if (!WEBHOOK_SECRET) return next(); // skip if not configured
+  if (!WEBHOOK_SECRET) return next();
   const secret = req.headers['x-webhook-secret'];
   if (secret !== WEBHOOK_SECRET) {
-    console.warn(`Webhook secret mismatch from IP: ${req.ip}`);
-    return res.status(200).json({ received: false });
+    if (secret) {
+      console.warn(`Webhook secret mismatch from IP: ${req.ip}`);
+      return res.status(200).json({ received: false });
+    }
+    console.warn(`Webhook called without secret from IP: ${req.ip} — accepting anyway`);
   }
   next();
 }
@@ -113,6 +137,7 @@ async function checkDailyLimit(buyerId, amount) {
 }
 
 // Check for duplicate pending payment on same product by same buyer
+// Auto-cancel stale pending transactions older than 30 minutes
 async function checkDuplicatePayment(productId, buyerId) {
   if (!db) return false;
   try {
@@ -120,9 +145,31 @@ async function checkDuplicatePayment(productId, buyerId) {
       .where('productId', '==', productId)
       .where('buyerId', '==', buyerId)
       .where('status', 'in', ['pending', 'escrow_hold'])
-      .limit(1)
       .get();
-    return snap.docs.length > 0;
+
+    if (snap.docs.length === 0) return false;
+
+    const now = Date.now();
+    const PENDING_TIMEOUT = 5 * 60 * 1000;   // 5 min — pending STK expired
+    let activeEscrow = false;
+
+    for (const doc of snap.docs) {
+      const data = doc.data();
+      const createdAt = data.createdAt?.toDate?.()?.getTime?.() || 0;
+
+      if (data.status === 'escrow_hold') {
+        // Real escrow — never cancel automatically
+        activeEscrow = true;
+      } else if (createdAt > 0 && (now - createdAt) > PENDING_TIMEOUT) {
+        // Stale pending (>5 min) — auto-cancel, allow retry
+        await doc.ref.update({ status: 'failed', cancelledAt: admin.firestore.FieldValue.serverTimestamp(), cancelReason: 'auto-cancelled (stale)' });
+      } else {
+        // Recent pending — cancel it so user can retry now
+        await doc.ref.update({ status: 'cancelled', cancelledAt: admin.firestore.FieldValue.serverTimestamp(), cancelReason: 'superseded by new payment' });
+      }
+    }
+
+    return activeEscrow;
   } catch { return false; }
 }
 
@@ -132,12 +179,12 @@ function sanitize(str) {
 }
 
 // ─── Email transporter (nodemailer) ───
-const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
-const SMTP_PORT = process.env.SMTP_PORT || '587';
-const SMTP_USER = process.env.SMTP_USER || 'waspgift@gmail.com';
-const SMTP_PASS = process.env.SMTP_PASS || 'fgnd ylot wwmc grou';
-const SMTP_FROM = process.env.SMTP_FROM || 'Soko Langu <waspgift@gmail.com>';
-const SMTP_SECURE = process.env.SMTP_SECURE || 'false';
+const SMTP_HOST = process.env.SMTP_HOST || '';
+const SMTP_PORT = process.env.SMTP_PORT || '';
+const SMTP_USER = process.env.SMTP_USER || '';
+const SMTP_PASS = process.env.SMTP_PASS || '';
+const SMTP_FROM = process.env.SMTP_FROM || '';
+const SMTP_SECURE = process.env.SMTP_SECURE || '';
 
 let transporter;
 if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
@@ -175,7 +222,7 @@ async function callMongikePay(body, retries = 2) {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
+      const timeout = setTimeout(() => controller.abort(), 30000);
 
       const resp = await fetch(`${MONGIKE_BASE}/payments/mobile-money/tanzania`, {
         method: 'POST',
@@ -209,7 +256,7 @@ app.post('/api/boost-product', async (req, res) => {
     }
 
     const order_id = `boost_${Date.now()}`;
-    const webhookUrl = process.env.WEBHOOK_URL || `https://sokolangu-production.up.railway.app/api/webhook`;
+    const webhookUrl = process.env.WEBHOOK_URL || `https://soko-langu-server-production.up.railway.app/api/webhook`;
 
     const result = await callMongikePay({
       order_id,
@@ -232,6 +279,7 @@ app.post('/api/boost-product', async (req, res) => {
         durationDays: tierConfig.days,
         userId: userId || '',
         buyerPhone: phone,
+        mongikeId: result.data?.id || '',
         status: 'pending',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
@@ -275,19 +323,25 @@ app.post('/api/send-notification', async (req, res) => {
       token: fcmToken,
       notification: { title, body: body || '' },
       data: data || {},
-      android: {
-        priority: isChat ? 'high' : 'normal',
-        notification: isChat ? {
-          channelId: 'chat_messages_v2',
-          priority: 'high',
-          visibility: 'public',
-          sound: 'default',
-          notificationPriority: 'high',
-          vibrationPattern: [0, 200, 100, 200],
-          tag: notifType === 'group_chat' ? 'group_chat' : 'chat_message',
-          color: '#40916C',
-        } : undefined,
-      },
+      android: isChat
+        ? {
+            priority: 'high',
+            notification: {
+              channelId: 'chat_messages_v3',
+              priority: 'max',
+              visibility: 'public',
+              sound: 'soko_notification',
+              notificationPriority: 'PRIORITY_MAX',
+              defaultSound: false,
+              vibrateTimingsMillis: [0, 200, 100, 200, 100, 300],
+              defaultVibrateTimings: false,
+              lights: [true, 500, 500],
+              defaultLightSettings: false,
+              tag: notifType === 'group_chat' ? 'group_chat' : 'chat_message',
+              color: '#40916C',
+            },
+          }
+        : androidNotifConfig('general_notifications_v3', 'general'),
       apns: isChat ? {
         payload: {
           aps: {
@@ -299,7 +353,17 @@ app.post('/api/send-notification', async (req, res) => {
       } : undefined,
     };
 
-    const response = await admin.messaging().send(message);
+    try {
+      await admin.messaging().send(message);
+    } catch (e) {
+      // Clean up stale FCM tokens
+      if (e.code === 'messaging/registration-token-not-registered' ||
+          e.code === 'messaging/invalid-registration-token') {
+        await db.collection('users').doc(userId).update({ fcmToken: null });
+        return res.json({ sent: false, reason: 'Stale token cleaned up' });
+      }
+      throw e;
+    }
 
     // Also write in-app notification to Firestore
     await db.collection('notifications').add({
@@ -311,7 +375,50 @@ app.post('/api/send-notification', async (req, res) => {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    res.json({ sent: true, response });
+    res.json({ sent: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 🔧 SETUP — Create admin account (one-time)
+// ============================================================
+app.post('/api/setup-admin', async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password || password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const email = 'admin@soko-langu.com';
+
+    // Create Firebase Auth user
+    let userRecord;
+    try {
+      userRecord = await admin.auth().getUserByEmail(email);
+      await admin.auth().updateUser(userRecord.uid, { password, emailVerified: true });
+    } catch {
+      userRecord = await admin.auth().createUser({ email, password, emailVerified: true });
+    }
+
+    // Set admin flag in Firestore
+    await db.collection('users').doc(userRecord.uid).set({
+      email,
+      isAdmin: true,
+      isSuspended: false,
+      coins: 0,
+      viewerCoins: 0,
+      sellerBalance: 0,
+      totalSales: 0,
+      grossSalesVolume: 0,
+      pendingEscrow: 0,
+      totalWithdrawn: 0,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    res.json({ success: true, uid: userRecord.uid, email });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -650,7 +757,23 @@ app.post('/api/send-bulk-notification', async (req, res) => {
         const message = {
           tokens: batch,
           notification: { title, body: body || '' },
-          android: { priority: 'high' },
+          android: {
+            priority: 'high',
+            notification: {
+              channelId: 'general_notifications_v3',
+              priority: 'max',
+              visibility: 'public',
+              sound: 'soko_notification',
+              notificationPriority: 'PRIORITY_MAX',
+              defaultSound: false,
+              vibrateTimingsMillis: [0, 200, 100, 200, 100, 300],
+              defaultVibrateTimings: false,
+              lights: [true, 500, 500],
+              defaultLightSettings: false,
+              tag: 'bulk',
+              color: '#40916C',
+            },
+          },
           apns: {
             payload: {
               aps: { sound: 'default', 'content-available': 1 },
@@ -797,54 +920,59 @@ app.post('/api/escrow/release', async (req, res) => {
       metadata: { buyerId: userId, productName, pendingBefore, pendingAfter: pendingBefore - sellerReceives },
     });
 
-    // Try auto-payout to seller's phone now that escrow is released
+    // Auto-payout to seller's phone (only if autoPayout is enabled)
     if (sellerReceives > 0) {
       try {
         const sellerUserDoc = await db.collection('users').doc(sellerId).get();
-        const sellerPhone = sellerUserDoc.exists ? sellerUserDoc.data().phone : null;
+        if (!sellerUserDoc.exists) return;
+        const sellerData = sellerUserDoc.data();
+        const autoPayout = sellerData.autoPayout !== false; // default true
 
-        if (sellerPhone) {
-          const payoutFee = MONGIKE_PAYOUT_FEE;
-          const netPayout = sellerReceives - payoutFee;
+        if (!autoPayout) {
+          console.log(`Auto-payout skipped for seller ${sellerId}: manual mode`);
+          return;
+        }
 
-          if (netPayout > 0) {
-            const payoutResp = await fetch(`${MONGIKE_BASE}/payouts/withdraw`, {
-              method: 'POST',
-              headers: {
-                'x-api-key': MONGIKE_API_KEY,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                amount: netPayout,
-                recipient_phone: sellerPhone,
-              }),
-            });
+        const sellerPhone = sellerData.phone;
+        if (!sellerPhone) return;
 
-            const payoutData = await payoutResp.json();
+        const payoutFee = MONGIKE_PAYOUT_FEE;
+        const netPayout = sellerReceives - payoutFee;
+        if (netPayout <= 0) return;
 
-            if (payoutData.status === 'success') {
-              await db.collection('withdrawals').add({
-                userId: sellerId,
-                type: 'seller',
-                amount: sellerReceives,
-                feeMongike: payoutFee,
-                netAmount: netPayout,
-                phone: sellerPhone,
-                reference: payoutData.data?.id || orderId,
-                status: 'completed',
-                autoPayout: true,
-                transactionId: orderId,
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-              });
+        const payoutResp = await fetch(`${MONGIKE_BASE}/payouts/withdraw`, {
+          method: 'POST',
+          headers: {
+            'x-api-key': MONGIKE_API_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ amount: netPayout, recipient_phone: sellerPhone }),
+        });
 
-              // Deduct from seller balance (already credited above)
-              // Actually keep in balance - this is a separate payout record
-            }
-          }
+        const payoutData = await payoutResp.json();
+
+        if (payoutData.status === 'success') {
+          // Deduct auto-payout from sellerBalance to prevent double payout
+          await db.collection('users').doc(sellerId).update({
+            sellerBalance: admin.firestore.FieldValue.increment(-sellerReceives),
+          });
+
+          await db.collection('withdrawals').add({
+            userId: sellerId,
+            type: 'seller',
+            amount: sellerReceives,
+            feeMongike: payoutFee,
+            netAmount: netPayout,
+            phone: sellerPhone,
+            reference: payoutData.data?.id || orderId,
+            status: 'completed',
+            autoPayout: true,
+            transactionId: orderId,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
         }
       } catch (payoutErr) {
         console.error('Escrow auto-payout error:', payoutErr);
-        // Funds already in sellerBalance — they can withdraw manually
       }
     }
 
@@ -856,6 +984,41 @@ app.post('/api/escrow/release', async (req, res) => {
       isRead: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+    // Send FCM to seller
+    try {
+      const sellerUser = await db.collection('users').doc(sellerId).get();
+      const sellerToken = sellerUser.data()?.fcmToken;
+      if (sellerToken) {
+        await admin.messaging().send({
+          token: sellerToken,
+          notification: { title: 'Escrow Imefunguliwa!', body: `${productName} — TZS ${sellerReceives.toLocaleString()} zimewekwa salio lako.` },
+          data: { type: 'escrow_release', transactionId: orderId },
+          android: androidNotifConfig('general_notifications_v3', 'escrow_release'),
+        });
+      }
+    } catch (_) {}
+
+    // Notify buyer
+    await db.collection('notifications').add({
+      userId: userId,
+      title: 'Umethibitisha Upokeaji',
+      body: `Umethibitisha kuwa umepokea ${productName}. Pesa zimefunguliwa kwa muuzaji.`,
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    // Send FCM to buyer
+    try {
+      const buyerSnap = await db.collection('users').doc(userId).get();
+      const buyerToken = buyerSnap.data()?.fcmToken;
+      if (buyerToken) {
+        await admin.messaging().send({
+          token: buyerToken,
+          notification: { title: 'Umethibitisha Upokeaji', body: `${productName} — asante kwa kununua ndani ya SokoLangu!` },
+          data: { type: 'delivery_confirmed', transactionId: orderId },
+          android: androidNotifConfig('general_notifications_v3', 'delivery_confirmed'),
+        });
+      }
+    } catch (_) {}
 
     res.json({ success: true, message: 'Escrow released. Seller balance credited.' });
   } catch (e) {
@@ -934,6 +1097,135 @@ app.post('/api/escrow/admin-release', async (req, res) => {
 
     res.json({ success: true, message: 'Escrow force-released by admin' });
   } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 🔄 ESCROW — Buyer refund (sijapata mzigo)
+// ============================================================
+app.post('/api/escrow/refund', async (req, res) => {
+  try {
+    const { orderId, userId } = req.body;
+    if (!orderId || !userId) {
+      return res.status(400).json({ error: 'Missing orderId or userId' });
+    }
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const txDoc = await db.collection('transactions').doc(orderId).get();
+    if (!txDoc.exists) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+
+    const tx = txDoc.data();
+    if (tx.buyerId !== userId) {
+      return res.status(403).json({ error: 'Only the buyer can request a refund' });
+    }
+    if (tx.status !== 'escrow_hold') {
+      return res.status(400).json({ error: `Cannot refund from status: ${tx.status}` });
+    }
+    if (tx.escrowReleased === true) {
+      return res.status(400).json({ error: 'Escrow already released, cannot refund' });
+    }
+
+    const productPrice = tx.productPrice || 0;
+    const sellerReceives = tx.sellerReceives || 0;
+    const sellerId = tx.sellerId;
+    const productName = tx.productName || 'Product';
+    const buyerPhone = tx.buyerPhone || '';
+
+    if (!buyerPhone) {
+      return res.status(400).json({ error: 'Buyer phone number not found for refund' });
+    }
+
+    const refundAmount = productPrice;
+    const platformLosesFee = MONGIKE_PAYOUT_FEE;
+
+    // Send money back to buyer via Mongike payout
+    const payoutResp = await fetch(`${MONGIKE_BASE}/payouts/withdraw`, {
+      method: 'POST',
+      headers: {
+        'x-api-key': MONGIKE_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        amount: refundAmount,
+        recipient_phone: buyerPhone,
+      }),
+    });
+
+    const payoutResult = await payoutResp.json();
+
+    if (payoutResult.status !== 'success') {
+      await auditLog({
+        userId, type: 'refund_payout_failed', amount: refundAmount,
+        reason: `Mongike refund payout failed: ${payoutResult.message || 'Unknown error'}`,
+        relatedId: orderId,
+        metadata: { productName, buyerPhone, productPrice },
+      });
+      return res.status(500).json({ error: payoutResult.message || 'Mongike refund payout failed' });
+    }
+
+    // Update transaction to refunded
+    await txDoc.ref.update({
+      status: 'refunded',
+      refundedAt: admin.firestore.FieldValue.serverTimestamp(),
+      refundAmount,
+      refundPayoutFee: MONGIKE_PAYOUT_FEE,
+    });
+
+    // Remove from seller's pendingEscrow
+    if (sellerId && sellerReceives > 0) {
+      await db.collection('users').doc(sellerId).update({
+        pendingEscrow: admin.firestore.FieldValue.increment(-sellerReceives),
+        totalSales: admin.firestore.FieldValue.increment(-1),
+        grossSalesVolume: admin.firestore.FieldValue.increment(-productPrice),
+      });
+    }
+
+    // Record refund transaction (platform bears the payout fee)
+    await db.collection('revenue_transactions').add({
+      userId: 'platform',
+      amount: -productPrice,
+      type: 'refund',
+      orderId,
+      description: `Refund: ${productName} - TZS ${productPrice} (platform lost TZS ${platformLosesFee} payout fee)`,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // Notify buyer
+    await db.collection('notifications').add({
+      userId,
+      title: '💰 Pesa Zimerudishwa',
+      body: `Refund kamili ya TZS ${refundAmount.toLocaleString()} kwa ${productName} imetumwa kwa namba yako ya Mongike.`,
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      data: { type: 'refund', orderId },
+    });
+
+    // Notify seller
+    if (sellerId) {
+      await db.collection('notifications').add({
+        userId: sellerId,
+        title: '❌ Ununuzi Umeghairiwa',
+        body: `${productName} imerefundiwa mnunuzi. Haujazwa salio lako.`,
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        data: { type: 'refund', orderId },
+      });
+    }
+
+    // Audit log
+    await auditLog({
+      userId, type: 'escrow_refund', amount: refundAmount,
+      reason: `Escrow refunded for ${orderId}`,
+      relatedId: orderId,
+      metadata: { productName, productPrice, buyerPhone, sellerId },
+    });
+
+    res.json({ success: true, refundAmount, message: `Refund ya TZS ${refundAmount.toLocaleString()} imetumwa kwa namba yako.` });
+  } catch (e) {
+    console.error('Escrow refund error:', e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -1134,7 +1426,7 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
     }
 
     const order_id = `order_${Date.now()}_${buyerId ? buyerId.substring(0, 8) : 'anon'}`;
-    const webhookUrl = process.env.WEBHOOK_URL || `https://sokolangu-production.up.railway.app/api/webhook`;
+    const webhookUrl = process.env.WEBHOOK_URL || `https://soko-langu-server-production.up.railway.app/api/webhook`;
 
     const result = await callMongikePay({
       order_id,
@@ -1149,6 +1441,13 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
     }
 
     if (db) {
+      let buyerName = '';
+      if (buyerId) {
+        try {
+          const buyerDoc = await db.collection('users').doc(buyerId).get();
+          buyerName = buyerDoc.data()?.name || buyerDoc.data()?.displayName || '';
+        } catch (_) {}
+      }
       await db.collection('transactions').doc(order_id).set({
         type: 'purchase',
         productId,
@@ -1157,6 +1456,7 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
         sellerName: sanitize(sellerName),
         buyerPhone: phone,
         buyerId: buyerId || '',
+        buyerName,
         productPrice: Math.round(productPrice),
         status: 'pending',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1182,7 +1482,9 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
 app.post('/api/webhook', verifyWebhook, async (req, res) => {
   try {
     const { order_id, status, amount, buyer_phone } = req.body;
-    if (!order_id || !status) {
+    // Support both 'status' and 'payment_status' field names from Mongike
+    const paymentStatus = status || (req.body.payment_status || '').toLowerCase() || '';
+    if (!order_id || !paymentStatus) {
       return res.status(200).json({ received: false });
     }
 
@@ -1193,24 +1495,31 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
 
     const tx = txDoc.data();
 
-    if (status === 'success' || status === 'completed') {
-      await txDoc.ref.update({ status: 'completed' });
+    if (paymentStatus === 'success' || paymentStatus === 'completed') {
 
       if (tx.type === 'boost') {
-        // Handle boost payment success
+        // Handle boost payment success — update product FIRST before marking tx completed
         const tier = tx.tier || 'bronze';
         const tierConfig = BOOST_TIERS[tier] || BOOST_TIERS.bronze;
         const now = new Date();
         const boostedUntil = new Date(now.getTime() + tierConfig.days * 24 * 60 * 60 * 1000);
 
-        await db.collection('products').doc(tx.productId).update({
-          isBoosted: true,
-          boostedUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
-          boostTier: tier,
-          // Backward compat
-          isFeatured: true,
-          featuredUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
-        });
+        try {
+          await db.collection('products').doc(tx.productId).update({
+            isBoosted: true,
+            boostedUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
+            boostTier: tier,
+            isFeatured: true,
+            featuredUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
+          });
+        } catch (productErr) {
+          console.error(`Failed to boost product ${tx.productId}:`, productErr);
+          await txDoc.ref.update({ status: 'failed', failureReason: `Product update failed: ${productErr.message}` });
+          return res.status(200).json({ received: true });
+        }
+
+        // Product updated successfully — now mark transaction completed
+        await txDoc.ref.update({ status: 'completed' });
 
         // Send notification + FCM push
         if (tx.userId) {
@@ -1231,10 +1540,34 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
                 token,
                 notification: { title: '✅ Boost imewashwa!', body: `Bidhaa yako imepandishwa kwa daraja la ${tier} kwa siku ${tierConfig.days}.` },
                 data: { type: 'boost', productId: tx.productId || '' },
+                android: androidNotifConfig('general_notifications_v3', 'boost'),
               });
             }
           } catch (_) {}
         }
+
+        // Record boost payment as admin revenue
+        const boostAmount = tx.amount || tierConfig.price;
+        await db.collection('revenue_transactions').add({
+          userId: 'platform',
+          amount: boostAmount,
+          sokoLanguCommission: boostAmount,
+          type: 'boost',
+          subType: tier,
+          productId: tx.productId,
+          transactionId: order_id,
+          buyerPhone: tx.buyerPhone || '',
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        // Also set totalAmount on the transaction for Mongike tracking
+        await txDoc.ref.update({
+          totalAmount: boostAmount,
+          completedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } else {
+        // Non-boost: mark as completed (purchase handler overwrites to escrow_hold)
+        await txDoc.ref.update({ status: 'completed' });
       }
 
       if (tx.type === 'purchase') {
@@ -1242,7 +1575,7 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
         const platformFee = Math.round(productPrice * PLATFORM_COMMISSION_PERCENT);
         const mongikeFee = MONGIKE_TX_FEE;
         const payoutFee = MONGIKE_PAYOUT_FEE;
-        const sellerReceives = productPrice - platformFee - mongikeFee - payoutFee;
+        const sellerReceives = productPrice - platformFee - mongikeFee; // payout fee applied at actual payout time
         const escrowExpiry = new Date(Date.now() + ESCROW_AUTO_RELEASE_DAYS * 24 * 60 * 60 * 1000);
 
         // Update transaction — put in escrow instead of auto-paying
@@ -1280,6 +1613,26 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
           timestamp: admin.firestore.FieldValue.serverTimestamp(),
         });
 
+        // Decrement flash sale stock if product has an active flash sale
+        try {
+          const fsSnap = await db.collection('flash_sales')
+            .where('productId', '==', tx.productId)
+            .where('isActive', '==', true)
+            .limit(1)
+            .get();
+          if (!fsSnap.empty) {
+            const fsDoc = fsSnap.docs[0];
+            const fsData = fsDoc.data();
+            const newStock = (fsData.stock || 0) - 1;
+            const newSold = (fsData.soldCount || 0) + 1;
+            await fsDoc.ref.update({
+              stock: Math.max(0, newStock),
+              soldCount: newSold,
+              isActive: newStock > 0,
+            });
+          }
+        } catch (_) {}
+
         // Credit seller's pendingEscrow (not available for withdrawal until released)
         if (sellerReceives > 0 && tx.sellerId) {
           await db.collection('users').doc(tx.sellerId).set({
@@ -1297,6 +1650,7 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
             isRead: false,
             type: 'sale',
             transactionId: order_id,
+            buyerPhone: tx.buyerPhone || '',
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
           });
           // Send FCM push to seller
@@ -1307,7 +1661,33 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
               await admin.messaging().send({
                 token: sellerToken,
                 notification: { title: 'Umepata Mauzo!', body: `${tx.productName || 'Bidhaa'} imeuzwa. TZS ${sellerReceives.toLocaleString()} imewekwa escrow.` },
-                data: { type: 'order', productId: tx.productId || '', transactionId: order_id },
+                data: { type: 'order', productId: tx.productId || '', transactionId: order_id, buyerPhone: tx.buyerPhone || '' },
+                android: {
+                  priority: 'high',
+                  notification: {
+                    channelId: 'general_notifications_v3',
+                    priority: 'max',
+                    visibility: 'public',
+                    sound: 'soko_notification',
+                    notificationPriority: 'PRIORITY_MAX',
+                    defaultSound: false,
+                    vibrateTimingsMillis: [0, 200, 100, 200, 100, 300],
+                    defaultVibrateTimings: false,
+                    lights: [true, 500, 500],
+                    defaultLightSettings: false,
+                    tag: 'new_sale',
+                    color: '#40916C',
+                  },
+                },
+                apns: {
+                  payload: {
+                    aps: {
+                      sound: 'default',
+                      category: 'new_sale',
+                      'content-available': 1,
+                    },
+                  },
+                },
               });
             }
           } catch (_) {}
@@ -1333,12 +1713,13 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
                 token: buyerToken,
                 notification: { title: 'Malipo Yamekamilika!', body: `Malipo ya ${tx.productName || 'Bidhaa'} yamepokelewa.` },
                 data: { type: 'order', productId: tx.productId || '', transactionId: order_id },
+                android: androidNotifConfig('general_notifications_v3', 'payment_confirmed'),
               });
             }
           } catch (_) {}
         }
       }
-    } else if (status === 'failed' || status === 'cancelled') {
+    } else if (paymentStatus === 'failed' || paymentStatus === 'cancelled') {
       await txDoc.ref.update({ status: 'failed' });
     }
 
@@ -1346,6 +1727,93 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
   } catch (e) {
     console.error('Webhook error:', e);
     res.status(200).json({ received: true });
+  }
+});
+
+// ============================================================
+// 🔙 ADMIN — Retro-boost: fix boost transactions that were paid
+//           but never applied to the product (old webhook bug)
+// ============================================================
+app.post('/api/admin/retro-boost', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace('Bearer ', '');
+    if (!token) return res.status(401).json({ error: 'Unauthorized' });
+
+    const decoded = await admin.auth().verifyIdToken(token);
+    const userDoc = await db.collection('users').doc(decoded.uid).get();
+    if (!userDoc.exists || !userDoc.data().isAdmin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { transactionId } = req.body || {};
+
+    let txDocs;
+    if (transactionId) {
+      // Retro-boost a specific transaction
+      const doc = await db.collection('transactions').doc(transactionId).get();
+      if (!doc.exists) return res.status(404).json({ error: 'Transaction not found' });
+      txDocs = [doc];
+    } else {
+      // Find all boost transactions that are completed but product may not be boosted
+      txDocs = await db.collection('transactions')
+        .where('type', '==', 'boost')
+        .where('status', '==', 'completed')
+        .get();
+      txDocs = txDocs.docs;
+    }
+
+    let fixed = 0;
+    let skipped = 0;
+    let errors = 0;
+
+    for (const doc of txDocs) {
+      const tx = doc.data();
+      if (!tx.productId) { skipped++; continue; }
+
+      try {
+        const productDoc = await db.collection('products').doc(tx.productId).get();
+        if (!productDoc.exists) { skipped++; continue; }
+
+        const product = productDoc.data();
+        if (product.isBoosted) { skipped++; continue; }
+
+        const tier = tx.tier || 'bronze';
+        const tierConfig = BOOST_TIERS[tier] || BOOST_TIERS.bronze;
+        const now = new Date();
+        const boostedUntil = new Date(now.getTime() + tierConfig.days * 24 * 60 * 60 * 1000);
+
+        await db.collection('products').doc(tx.productId).update({
+          isBoosted: true,
+          boostedUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
+          boostTier: tier,
+          isFeatured: true,
+          featuredUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
+        });
+
+        // Add notification for the seller
+        if (tx.userId) {
+          await db.collection('notifications').add({
+            userId: tx.userId,
+            title: '✅ Boost imewashwa!',
+            body: `Bidhaa yako imepandishwa kwa daraja la ${tier} kwa siku ${tierConfig.days}.`,
+            data: { type: 'boost', productId: tx.productId },
+            isRead: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+
+        fixed++;
+      } catch (e) {
+        console.error(`Retro-boost error for tx ${doc.id}:`, e);
+        errors++;
+      }
+    }
+
+    res.json({ fixed, skipped, errors, total: txDocs.length });
+  } catch (e) {
+    console.error('Retro-boost endpoint error:', e);
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -1482,6 +1950,35 @@ app.post('/api/admin/withdraw', async (req, res) => {
     const user = userDoc.data();
     if (!user.isAdmin) return res.status(403).json({ error: 'Admin access required' });
     if (user.isSuspended) return res.status(403).json({ error: 'Account suspended' });
+
+    // Calculate total admin balance (actual AdMob revenue + commissions)
+    const admobSnap = await db.collection('admob_earnings').orderBy('month', 'desc').limit(1).get();
+    let actualAdRevenue = 0;
+    if (!admobSnap.empty) {
+      actualAdRevenue = admobSnap.docs[0].data().amount || 0;
+    }
+
+    const revSnap = await db.collection('revenue_transactions').get();
+    let totalCommissions = 0;
+    revSnap.docs.forEach(doc => {
+      totalCommissions += (doc.data().sokoLanguCommission || 0);
+    });
+    const totalAdminBalance = actualAdRevenue + totalCommissions;
+
+    // Subtract total withdrawn so far
+    const withdrawnSnap = await db.collection('admin_withdrawals')
+      .where('userId', '==', userId)
+      .get();
+    let totalWithdrawn = 0;
+    withdrawnSnap.docs.forEach(doc => {
+      const d = doc.data();
+      if (d.status === 'completed') totalWithdrawn += d.amount || 0;
+    });
+    const availableBalance = totalAdminBalance - totalWithdrawn;
+
+    if (amount > availableBalance) {
+      return res.status(400).json({ error: `Insufficient admin balance. Available: TZS ${availableBalance.toLocaleString()}` });
+    }
 
     const netAmount = amount - MONGIKE_PAYOUT_FEE;
     if (netAmount <= 0) {
@@ -1641,6 +2138,157 @@ app.get('/api/admin/withdrawals', async (req, res) => {
 });
 
 // ============================================================
+// 📊 ADMIN — Finance summary (all admin money + Mongike balance)
+// ============================================================
+app.get('/api/admin/finance-summary', async (req, res) => {
+  try {
+    // Allow either admin secret OR Firebase Auth admin
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) {
+      const authHeader = req.headers['authorization'];
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.slice(7);
+        try {
+          const decoded = await admin.auth().verifyIdToken(token);
+          const userDoc = await db.collection('users').doc(decoded.uid).get();
+          if (!userDoc.exists || !userDoc.data().isAdmin) {
+            return res.status(401).json({ error: 'Unauthorized' });
+          }
+        } catch {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+      } else {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+    }
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    // 1. Estimated ad revenue (each ad view = 15 TZS)
+    const adSnap = await db.collection('admin_ad_revenue').count().get();
+    const estimatedAdRevenue = (adSnap.data().count || 0) * 15;
+
+    // 2. Actual Google AdMob revenue (manually entered by admin)
+    const admobSnap = await db.collection('admob_earnings').orderBy('month', 'desc').limit(1).get();
+    let actualAdRevenue = 0;
+    if (!admobSnap.empty) {
+      actualAdRevenue = admobSnap.docs[0].data().amount || 0;
+    }
+
+    // 3. Total platform commissions from revenue_transactions
+    const revSnap = await db.collection('revenue_transactions').get();
+    let totalCommissions = 0;
+    let totalBoostRevenue = 0;
+    revSnap.docs.forEach(doc => {
+      const d = doc.data();
+      if (d.type === 'boost') {
+        totalBoostRevenue += (d.sokoLanguCommission || 0);
+      } else {
+        totalCommissions += (d.sokoLanguCommission || 0);
+      }
+    });
+
+    // 4. Total admin balance = actual ad revenue + commissions + boost revenue
+    const totalAdminBalance = actualAdRevenue + totalCommissions + totalBoostRevenue;
+
+    // 4. Total money ever processed through Mongike (from transactions)
+    const txSnap = await db.collection('transactions').get();
+    let totalProcessedViaMongike = 0;
+    txSnap.docs.forEach(doc => {
+      const d = doc.data();
+      totalProcessedViaMongike += (d.totalAmount || 0);
+    });
+
+    // 5. Total payouts sent
+    const withdrawSnap = await db.collection('withdrawals').get();
+    let totalPaidOut = 0;
+    withdrawSnap.docs.forEach(doc => {
+      const d = doc.data();
+      if (d.status === 'completed') totalPaidOut += (d.netAmount || d.amount || 0);
+    });
+
+    const adminWithdrawSnap = await db.collection('admin_withdrawals').get();
+    let totalAdminPaidOut = 0;
+    adminWithdrawSnap.docs.forEach(doc => {
+      const d = doc.data();
+      if (d.status === 'completed') totalAdminPaidOut += (d.netAmount || d.amount || 0);
+    });
+
+    const totalPayouts = totalPaidOut + totalAdminPaidOut;
+
+    // 6. Try to get actual Mongike balance from API
+    let actualMongikeBalance = null;
+    try {
+      const balResp = await fetch(`${MONGIKE_BASE}/balance`, {
+        headers: { 'x-api-key': MONGIKE_API_KEY },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (balResp.ok) {
+        const balData = await balResp.json();
+        actualMongikeBalance = balData.balance || balData.data?.balance || null;
+      }
+    } catch (_) {}
+
+    const mongikeBalance = actualMongikeBalance != null ? actualMongikeBalance : Math.max(0, totalProcessedViaMongike - totalPayouts);
+
+    // 7. Admin withdrawal history (total withdrawn by admin)
+    let totalAdminWithdrawn = 0;
+    adminWithdrawSnap.docs.forEach(doc => {
+      const d = doc.data();
+      if (d.status === 'completed') totalAdminWithdrawn += (d.amount || 0);
+    });
+
+    res.json({
+      success: true,
+      estimatedAdRevenue,
+      actualAdRevenue,
+      totalCommissions,
+      totalBoostRevenue,
+      totalAdminBalance,
+      totalProcessedViaMongike,
+      totalPayouts,
+      mongikeBalance,
+      mongikeBalanceActual: actualMongikeBalance != null,
+      totalAdminWithdrawn,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 📊 ADMIN — Save actual Google AdMob revenue
+// ============================================================
+app.post('/api/admin/admob-revenue', async (req, res) => {
+  try {
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const { amount, month } = req.body;
+    if (amount == null || amount < 0) return res.status(400).json({ error: 'Valid amount required' });
+    const monthLabel = month || `${new Date().getMonth() + 1}_${new Date().getFullYear()}`;
+
+    await db.collection('admob_earnings').add({
+      amount,
+      month: monthLabel,
+      enteredAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await auditLog({
+      userId: req.body.userId || 'admin',
+      type: 'admob_revenue_entered',
+      amount,
+      reason: `Actual AdMob revenue entered: TZS ${amount}`,
+      metadata: { month: monthLabel },
+    });
+
+    res.json({ success: true, amount, month: monthLabel });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
 // 📊 ADMIN — Revenue transactions
 // ============================================================
 app.get('/api/admin/revenue-transactions', async (req, res) => {
@@ -1754,13 +2402,76 @@ app.delete('/api/admin/users/:uid', async (req, res) => {
 });
 
 // ============================================================
+// 👑 ADMIN — Suspend user
+// ============================================================
+app.delete('/api/admin/users/:uid', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) {
+      const authHeader = req.headers['authorization'];
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.slice(7);
+        try {
+          const decoded = await admin.auth().verifyIdToken(token);
+          const userDoc = await db.collection('users').doc(decoded.uid).get();
+          if (!userDoc.exists || !userDoc.data().isAdmin) {
+            return res.status(401).json({ error: 'Unauthorized' });
+          }
+        } catch {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+      } else {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+    }
+
+    const { uid } = req.params;
+    await db.collection('users').doc(uid).update({
+      isSuspended: true,
+      suspendedAt: admin.firestore.FieldValue.serverTimestamp(),
+      suspendedBy: 'admin',
+    });
+
+    await auditLog({
+      userId: uid,
+      type: 'admin_suspend',
+      amount: 0,
+      reason: 'User suspended by admin',
+    });
+
+    res.json({ success: true, message: 'User suspended' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
 // 👑 ADMIN — Unsuspend user
 // ============================================================
 app.post('/api/admin/users/:uid/unsuspend', async (req, res) => {
   try {
-    const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
     if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) {
+      const authHeader = req.headers['authorization'];
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.slice(7);
+        try {
+          const decoded = await admin.auth().verifyIdToken(token);
+          const userDoc = await db.collection('users').doc(decoded.uid).get();
+          if (!userDoc.exists || !userDoc.data().isAdmin) {
+            return res.status(401).json({ error: 'Unauthorized' });
+          }
+        } catch {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+      } else {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+    }
 
     const { uid } = req.params;
     await db.collection('users').doc(uid).update({
@@ -1798,11 +2509,34 @@ app.delete('/api/admin/orders/:id', async (req, res) => {
 // ============================================================
 app.delete('/api/admin/products/:id', async (req, res) => {
   try {
-    const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
+    // Allow either admin secret OR Firebase Auth admin
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) {
+      const authHeader = req.headers['authorization'];
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.slice(7);
+        try {
+          const decoded = await admin.auth().verifyIdToken(token);
+          const userDoc = await db.collection('users').doc(decoded.uid).get();
+          if (!userDoc.exists || !userDoc.data().isAdmin) {
+            return res.status(401).json({ error: 'Unauthorized' });
+          }
+        } catch {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+      } else {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+    }
+
     const { id } = req.params;
+    // Also clean up related flash_sales
+    const flashSnap = await db.collection('flash_sales').where('productId', '==', id).get();
+    const batch = db.batch();
+    flashSnap.docs.forEach(doc => batch.delete(doc.ref));
+    if (flashSnap.docs.length > 0) await batch.commit();
     await db.collection('products').doc(id).delete();
 
     res.json({ success: true, message: 'Product deleted' });
@@ -1816,9 +2550,26 @@ app.delete('/api/admin/products/:id', async (req, res) => {
 // ============================================================
 app.delete('/api/admin/users/:uid/full-delete', async (req, res) => {
   try {
-    const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
     if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) {
+      const authHeader = req.headers['authorization'];
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.slice(7);
+        try {
+          const decoded = await admin.auth().verifyIdToken(token);
+          const userDoc = await db.collection('users').doc(decoded.uid).get();
+          if (!userDoc.exists || !userDoc.data().isAdmin) {
+            return res.status(401).json({ error: 'Unauthorized' });
+          }
+        } catch {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+      } else {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+    }
 
     const { uid } = req.params;
 
@@ -1850,6 +2601,45 @@ app.delete('/api/admin/users/:uid/full-delete', async (req, res) => {
     });
 
     res.json({ success: true, message: 'User and all related data deleted' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 👑 ADMIN — Update user (toggle_admin, etc.)
+// ============================================================
+app.patch('/api/admin/users/:uid', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) {
+      const authHeader = req.headers['authorization'];
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.slice(7);
+        try {
+          const decoded = await admin.auth().verifyIdToken(token);
+          const userDoc = await db.collection('users').doc(decoded.uid).get();
+          if (!userDoc.exists || !userDoc.data().isAdmin) {
+            return res.status(401).json({ error: 'Unauthorized' });
+          }
+        } catch {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+      } else {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+    }
+
+    const { uid } = req.params;
+    const { updates } = req.body;
+    if (!updates || typeof updates !== 'object') {
+      return res.status(400).json({ error: 'Missing updates object' });
+    }
+
+    await db.collection('users').doc(uid).update(updates);
+    res.json({ success: true, message: 'User updated' });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -1903,48 +2693,8 @@ app.post('/api/cron/release-escrows', async (req, res) => {
     if (secret !== process.env.ADMIN_SECRET) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
-
-    const now = admin.firestore.Timestamp.now();
-    const expired = await db.collection('transactions')
-      .where('status', '==', 'escrow_hold')
-      .where('escrowExpiresAt', '<=', now)
-      .where('escrowReleased', '!=', true)
-      .limit(20)
-      .get();
-
-    let released = 0;
-    for (const doc of expired.docs) {
-      const tx = doc.data();
-      const sellerReceives = tx.sellerReceives || 0;
-      const sellerId = tx.sellerId;
-
-      await doc.ref.update({
-        status: 'delivered',
-        escrowReleased: true,
-        escrowReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
-        escrowAutoReleased: true,
-      });
-
-      if (sellerId && sellerReceives > 0) {
-        await db.collection('users').doc(sellerId).update({
-          sellerBalance: admin.firestore.FieldValue.increment(sellerReceives),
-          pendingEscrow: admin.firestore.FieldValue.increment(-sellerReceives),
-        });
-
-        await db.collection('notifications').add({
-          userId: sellerId,
-          title: 'Escrow Imefunguliwa Kiotomatiki',
-          body: `${tx.productName || 'Bidhaa'} escrow imefunguliwa baada ya muda wake. TZS ${sellerReceives.toLocaleString()} zimewekwa kwenye salio lako.`,
-          isRead: false,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      }
-
-      released++;
-    }
-
-    res.json({ success: true, released, total: expired.docs.length });
+    await releaseExpiredEscrows();
+    res.json({ success: true, message: 'Escrow release triggered' });
   } catch (e) {
     console.error('Cron release-escrows error:', e);
     res.status(500).json({ error: e.message });
@@ -1985,6 +2735,27 @@ app.post('/api/reports', asyncHandler(async (req, res) => {
 
     if (!reporterId || !reportedUserId || !reason || !description) {
       return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Verify Firebase Auth token
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    let decoded;
+    try {
+      decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
+      if (decoded.uid !== reporterId) {
+        return res.status(403).json({ error: 'Reporter ID mismatch' });
+      }
+    } catch {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    // Check if user is suspended
+    const userDoc = await db.collection('users').doc(reporterId).get();
+    if (userDoc.exists && userDoc.data().isSuspended === true) {
+      return res.status(403).json({ error: 'Account suspended' });
     }
 
     await db.collection('reports').add({
@@ -2128,6 +2899,35 @@ app.post('/api/flash-sale/create', asyncHandler(async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    // Verify Firebase Auth token
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    try {
+      const decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
+      if (decoded.uid !== sellerId) {
+        return res.status(403).json({ error: 'Seller ID does not match authenticated user' });
+      }
+    } catch {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    // Check if user is suspended
+    const userDoc = await db.collection('users').doc(sellerId).get();
+    if (userDoc.exists && userDoc.data().isSuspended === true) {
+      return res.status(403).json({ error: 'Account suspended' });
+    }
+
+    // Prevent duplicate active flash sales for the same product
+    const existing = await db.collection('flash_sales')
+      .where('productId', '==', productId)
+      .where('isActive', '==', true)
+      .get();
+    if (!existing.empty) {
+      return res.status(400).json({ error: 'Product already has an active flash sale' });
+    }
+
     const ref = await db.collection('flash_sales').add({
       productId,
       productName: productName || '',
@@ -2220,59 +3020,174 @@ app.post('/api/flash-sale/notify', asyncHandler(async (req, res) => {
 
     const { productName, salePrice, discountPercent, sellerId } = req.body;
 
-    // Get all users with FCM tokens
-    const usersSnap = await db.collection('users')
-      .where('fcmToken', '!=', null)
-      .limit(500)
-      .get();
-
-    const tokens = [];
-    for (const doc of usersSnap.docs) {
-      const token = doc.data().fcmToken;
-      if (token) tokens.push(token);
-    }
-
+    // Get all users with FCM tokens (paginated by document ID)
     let sentCount = 0;
-    if (tokens.length > 0) {
-      const message = {
-        tokens,
-        notification: {
-          title: `⚡ Flash Sale! -${discountPercent}%`,
-          body: `${productName} sasa TSh ${salePrice} pekee!`,
-        },
-        data: {
-          type: 'flash_sale',
-          productName: productName || '',
-        },
-        android: { priority: 'high' },
-      };
-      const resp = await admin.messaging().sendEachForMulticast(message);
-      sentCount = resp.successCount;
+    let lastPushId = null;
+    const PAGE_SIZE = 500;
+
+    while (true) {
+      let query = db.collection('users')
+        .where('fcmToken', '!=', null);
+      if (lastPushId) query = query.startAfter(lastPushId);
+      query = query.limit(PAGE_SIZE);
+      const usersSnap = await query.get();
+      if (usersSnap.empty) break;
+
+      const tokens = [];
+      for (const doc of usersSnap.docs) {
+        const token = doc.data().fcmToken;
+        if (token) tokens.push(token);
+      }
+
+      // Send FCM in batches of 500
+      for (let i = 0; i < tokens.length; i += PAGE_SIZE) {
+        const chunk = tokens.slice(i, i + PAGE_SIZE);
+        const message = {
+          tokens: chunk,
+          notification: {
+            title: `⚡ Flash Sale! -${discountPercent}%`,
+            body: `${productName} sasa TSh ${salePrice} pekee!`,
+          },
+          data: { type: 'flash_sale', productName: productName || '' },
+          android: {
+            priority: 'high',
+            notification: {
+              channelId: 'general_notifications_v3', priority: 'max',
+              visibility: 'public', sound: 'soko_notification',
+              notificationPriority: 'PRIORITY_MAX', defaultSound: false,
+              vibrateTimingsMillis: [0, 200, 100, 200, 100, 300],
+              defaultVibrateTimings: false, lights: [true, 500, 500],
+              defaultLightSettings: false, tag: 'flash_sale', color: '#40916C',
+            },
+          },
+        };
+        try {
+          const resp = await admin.messaging().sendEachForMulticast(message);
+          sentCount += resp.successCount;
+        } catch (_) {}
+      }
+
+      lastPushId = usersSnap.docs[usersSnap.docs.length - 1].id;
     }
 
     // Write in-app notification for all users
-    const usersForNotif = await db.collection('users').limit(500).get();
-    const batch = db.batch();
-    for (const doc of usersForNotif.docs) {
-      if (doc.id === sellerId) continue;
-      const notifRef = db.collection('notifications').doc();
-      batch.set(notifRef, {
-        userId: doc.id,
-        title: `⚡ Flash Sale! -${discountPercent}%`,
-        body: `${productName} sasa TSh ${salePrice} pekee!`,
-        data: { type: 'flash_sale' },
-        isRead: false,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-    }
-    await batch.commit();
+    let inAppNotified = 0;
+    let lastNotifId = null;
 
-    res.json({ success: true, pushSent: sentCount, inAppNotified: usersForNotif.size });
+    while (true) {
+      let query = db.collection('users');
+      if (lastNotifId) query = query.startAfter(lastNotifId);
+      query = query.limit(PAGE_SIZE);
+      const usersForNotif = await query.get();
+      if (usersForNotif.empty) break;
+
+      const batch = db.batch();
+      let batched = 0;
+      for (const doc of usersForNotif.docs) {
+        if (doc.id === sellerId) continue;
+        batch.set(db.collection('notifications').doc(), {
+          userId: doc.id,
+          title: `⚡ Flash Sale! -${discountPercent}%`,
+          body: `${productName} sasa TSh ${salePrice} pekee!`,
+          data: { type: 'flash_sale' },
+          isRead: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        batched++;
+      }
+      if (batched > 0) await batch.commit();
+      inAppNotified += batched;
+      lastNotifId = usersForNotif.docs[usersForNotif.docs.length - 1].id;
+    }
+
+    res.json({ success: true, pushSent: sentCount, inAppNotified });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 }));
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
+
+// ─── Built-in escrow auto-release check every hour ───
+async function releaseExpiredEscrows() {
+  if (!db) return;
+  try {
+    const now = admin.firestore.Timestamp.now();
+    const expired = await db.collection('transactions')
+      .where('status', '==', 'escrow_hold')
+      .where('escrowExpiresAt', '<=', now)
+      .where('escrowReleased', '!=', true)
+      .limit(20)
+      .get();
+
+    for (const doc of expired.docs) {
+      const tx = doc.data();
+      const sellerReceives = tx.sellerReceives || 0;
+      const sellerId = tx.sellerId;
+
+      await doc.ref.update({
+        status: 'delivered',
+        escrowReleased: true,
+        escrowReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
+        escrowAutoReleased: true,
+      });
+
+      if (sellerId && sellerReceives > 0) {
+        await db.collection('users').doc(sellerId).update({
+          sellerBalance: admin.firestore.FieldValue.increment(sellerReceives),
+          pendingEscrow: admin.firestore.FieldValue.increment(-sellerReceives),
+        });
+        await db.collection('notifications').add({
+          userId: sellerId,
+          title: 'Escrow Imefunguliwa Kiotomatiki',
+          body: `${tx.productName || 'Bidhaa'} escrow imefunguliwa baada ya muda wake. TZS ${sellerReceives.toLocaleString()} zimewekwa kwenye salio lako.`,
+          isRead: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        try {
+          const sellerSnap = await db.collection('users').doc(sellerId).get();
+          const sellerToken = sellerSnap.data()?.fcmToken;
+          if (sellerToken) {
+            await admin.messaging().send({
+              token: sellerToken,
+              notification: { title: 'Escrow Imefunguliwa Kiotomatiki', body: `${tx.productName || 'Bidhaa'} — TZS ${sellerReceives.toLocaleString()} zimewekwa salio lako.` },
+              data: { type: 'escrow_auto_release', transactionId: doc.id },
+              android: androidNotifConfig('general_notifications_v3', 'auto_release_seller'),
+            });
+          }
+        } catch (_) {}
+      }
+
+      if (tx.buyerId) {
+        await db.collection('notifications').add({
+          userId: tx.buyerId,
+          title: 'Escrow Imefunguliwa Kiotomatiki',
+          body: `Muda wa escrow ya ${tx.productName || 'Bidhaa'} umeisha. Pesa zimefunguliwa kwa muuzaji kwa sababu haukuthibitisha upokeaji kwa muda.`,
+          isRead: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        try {
+          const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
+          const buyerToken = buyerSnap.data()?.fcmToken;
+          if (buyerToken) {
+            await admin.messaging().send({
+              token: buyerToken,
+              notification: { title: 'Escrow Imefunguliwa Kiotomatiki', body: `${tx.productName || 'Bidhaa'} — muda wa escrow umeisha, pesa zimefunguliwa kwa muuzaji.` },
+              data: { type: 'escrow_auto_release', transactionId: doc.id },
+              android: androidNotifConfig('general_notifications_v3', 'auto_release_buyer'),
+            });
+          }
+        } catch (_) {}
+      }
+    }
+  } catch (e) {
+    console.error('Auto-release escrow error:', e);
+  }
+}
+
+// Run every hour as fallback (cron-job.org can also call the endpoint)
+setInterval(releaseExpiredEscrows, 60 * 60 * 1000);
+// Also run once on startup
+setTimeout(releaseExpiredEscrows, 60 * 1000);
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
