@@ -1731,6 +1731,175 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
 });
 
 // ============================================================
+// 🔁 RETRY PAYMENT — Manually process a pending transaction
+//     (fallback if webhook never arrived)
+// ============================================================
+app.post('/api/retry-payment', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace('Bearer ', '');
+    if (!token) return res.status(401).json({ error: 'Unauthorized' });
+
+    const decoded = await admin.auth().verifyIdToken(token);
+    const { order_id } = req.body || {};
+    if (!order_id) return res.status(400).json({ error: 'Missing order_id' });
+
+    const txDoc = await db.collection('transactions').doc(order_id).get();
+    if (!txDoc.exists) return res.status(404).json({ error: 'Transaction not found' });
+
+    const tx = txDoc.data();
+    if (tx.status !== 'pending') {
+      return res.status(400).json({ error: `Transaction is ${tx.status}, not pending` });
+    }
+
+    // Only the buyer or an admin can retry
+    if (tx.buyerId && tx.buyerId !== decoded.uid) {
+      const userDoc = await db.collection('users').doc(decoded.uid).get();
+      if (!userDoc.exists || !userDoc.data().isAdmin) {
+        return res.status(403).json({ error: 'Not authorized to retry this payment' });
+      }
+    }
+
+    // Must be pending for at least 30 seconds
+    const createdAt = tx.createdAt?.toDate?.() || new Date(0);
+    const elapsed = (Date.now() - createdAt.getTime()) / 1000;
+    if (elapsed < 30) {
+      return res.status(400).json({ error: `Transaction too recent (${Math.round(elapsed)}s). Wait and try again.` });
+    }
+
+    // Re-process the transaction the same way the webhook would
+    if (tx.type === 'boost') {
+      const tier = tx.tier || 'bronze';
+      const tierConfig = BOOST_TIERS[tier] || BOOST_TIERS.bronze;
+      const now = new Date();
+      const boostedUntil = new Date(now.getTime() + tierConfig.days * 24 * 60 * 60 * 1000);
+
+      await db.collection('products').doc(tx.productId).update({
+        isBoosted: true,
+        boostedUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
+        boostTier: tier,
+        isFeatured: true,
+        featuredUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
+      });
+
+      await txDoc.ref.update({ status: 'completed', completedAt: admin.firestore.FieldValue.serverTimestamp() });
+
+      // Notification
+      if (tx.userId) {
+        await db.collection('notifications').add({
+          userId: tx.userId,
+          title: '✅ Boost imewashwa!',
+          body: `Bidhaa yako imepandishwa kwa daraja la ${tier} kwa siku ${tierConfig.days}.`,
+          data: { type: 'boost', productId: tx.productId },
+          isRead: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+
+      // Revenue
+      const boostAmount = tx.amount || tierConfig.price;
+      await db.collection('revenue_transactions').add({
+        userId: 'platform',
+        amount: boostAmount,
+        sokoLanguCommission: boostAmount,
+        type: 'boost',
+        subType: tier,
+        productId: tx.productId,
+        transactionId: order_id,
+        buyerPhone: tx.buyerPhone || '',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      return res.json({ status: 'completed', message: `Boost ${tier} activated for ${tierConfig.days} days` });
+    }
+
+    if (tx.type === 'purchase') {
+      const productPrice = tx.productPrice || 0;
+      const platformFee = Math.round(productPrice * PLATFORM_COMMISSION_PERCENT);
+      const mongikeFee = MONGIKE_TX_FEE;
+      const payoutFee = MONGIKE_PAYOUT_FEE;
+      const sellerReceives = productPrice - platformFee - mongikeFee;
+      const escrowExpiry = new Date(Date.now() + ESCROW_AUTO_RELEASE_DAYS * 24 * 60 * 60 * 1000);
+
+      await txDoc.ref.update({
+        processingFee: mongikeFee,
+        platformFee,
+        mongikeFee,
+        payoutFee,
+        sokoLanguCommission: platformFee,
+        totalAmount: productPrice,
+        sellerReceives,
+        status: 'escrow_hold',
+        paymentMethod: 'Mongike',
+        buyerId: tx.buyerId || '',
+        buyerName: tx.buyerName || '',
+        escrowStatus: 'held',
+        escrowHeldAt: admin.firestore.FieldValue.serverTimestamp(),
+        escrowExpiresAt: admin.firestore.Timestamp.fromDate(escrowExpiry),
+      });
+
+      // Record platform commission
+      await db.collection('revenue_transactions').add({
+        userId: 'platform',
+        amount: platformFee,
+        type: 'commission',
+        description: `Commission for ${tx.productName || 'Product'} (escrow)`,
+        transactionId: order_id,
+        productName: tx.productName || '',
+        productPrice,
+        mongikeFee,
+        payoutFee,
+        sokoLanguCommission: platformFee,
+        buyerName: tx.buyerName || '',
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // Credit seller's pendingEscrow
+      if (sellerReceives > 0 && tx.sellerId) {
+        await db.collection('users').doc(tx.sellerId).set({
+          pendingEscrow: admin.firestore.FieldValue.increment(sellerReceives),
+          totalSales: admin.firestore.FieldValue.increment(1),
+          grossSalesVolume: admin.firestore.FieldValue.increment(productPrice),
+          lastSaleAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        // Notify seller
+        await db.collection('notifications').add({
+          userId: tx.sellerId,
+          title: 'Umepata Mauzo!',
+          body: `${tx.productName || 'Bidhaa'} imeuzwa. TZS ${sellerReceives.toLocaleString()} imewekwa escrow.`,
+          isRead: false,
+          type: 'sale',
+          transactionId: order_id,
+          buyerPhone: tx.buyerPhone || '',
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        // Notify buyer
+        if (tx.buyerId) {
+          await db.collection('notifications').add({
+            userId: tx.buyerId,
+            title: 'Malipo Yamekamilika!',
+            body: `Malipo ya ${tx.productName || 'Bidhaa'} yamepokelewa. Thibitisha upokeaji ili muuzaji apate hela zake.`,
+            isRead: false,
+            type: 'escrow_confirm',
+            transactionId: order_id,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+      }
+
+      return res.json({ status: 'escrow_hold', message: `Payment of TZS ${productPrice.toLocaleString()} processed. Seller credited TZS ${sellerReceives.toLocaleString()}.` });
+    }
+
+    res.status(400).json({ error: `Unknown transaction type: ${tx.type}` });
+  } catch (e) {
+    console.error('Retry-payment error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
 // 🔙 ADMIN — Retro-boost: fix boost transactions that were paid
 //           but never applied to the product (old webhook bug)
 // ============================================================

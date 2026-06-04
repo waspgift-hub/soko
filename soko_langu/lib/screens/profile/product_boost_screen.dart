@@ -1,14 +1,18 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:http/http.dart' as http;
 import '../../models/product_model.dart';
 import '../../models/boost_tier.dart';
 import '../../services/boost_service.dart';
+import '../../services/api_config.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
 import '../../app/routes.dart';
+import '../../theme/app_colors.dart';
 
 class ProductBoostScreen extends StatefulWidget {
   final Product product;
@@ -28,12 +32,10 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final bgColor = brightness == Brightness.dark
-        ? const Color(0xFF0D1117)
-        : const Color(0xFFF8F9FA);
+    final bgColor = Theme.of(context).colorScheme.surface;
     final cardBg = brightness == Brightness.dark
-        ? const Color(0xFF161B22)
-        : Colors.white;
+        ? Theme.of(context).colorScheme.surfaceContainerHigh
+        : Theme.of(context).colorScheme.surface;
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -66,7 +68,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withAlpha(20)),
+        border: Border.all(color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.08)),
       ),
       child: Row(
         children: [
@@ -75,15 +77,15 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
             child: Container(
               width: 64,
               height: 64,
-              color: Colors.grey.shade800,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
               child: widget.product.images.isNotEmpty
                   ? Image.network(
                       widget.product.images.first,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => const Icon(Icons.image,
-                          color: Colors.grey),
+                      errorBuilder: (_, _, _) => Icon(Icons.image,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant),
                     )
-                  : const Icon(Icons.image, color: Colors.grey),
+                  : Icon(Icons.image, color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           ),
           const SizedBox(width: 16),
@@ -116,14 +118,14 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.green.shade600.withAlpha(30),
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.green.shade600.withAlpha(80)),
+                border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.31)),
               ),
               child: Text(
                 'Active',
                 style: TextStyle(
-                  color: Colors.green.shade400,
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
@@ -152,13 +154,13 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
     IconData icon;
     switch (tier) {
       case BoostTier.bronze:
-        accentColor = const Color(0xFFCD7F32);
+        accentColor = Theme.of(context).colorScheme.boostBronze;
         icon = Icons.emoji_events;
       case BoostTier.silver:
-        accentColor = const Color(0xFF9E9E9E);
+        accentColor = Theme.of(context).colorScheme.boostSilver;
         icon = Icons.workspace_premium;
       case BoostTier.gold:
-        accentColor = const Color(0xFFFFD700);
+        accentColor = Theme.of(context).colorScheme.boostGold;
         icon = Icons.verified;
     }
 
@@ -169,11 +171,11 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: isSelected
-              ? accentColor.withAlpha(18)
+              ? accentColor.withValues(alpha: 0.07)
               : cardBg,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? accentColor : Colors.white.withAlpha(15),
+            color: isSelected ? accentColor : Theme.of(context).colorScheme.surface.withValues(alpha: 0.06),
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -182,7 +184,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: accentColor.withAlpha(30),
+                color: accentColor.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, color: accentColor, size: 28),
@@ -199,7 +201,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 17,
-                          color: isDark ? Colors.white : Colors.black87,
+                          color: isDark ? Theme.of(context).colorScheme.surface : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.87),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -207,7 +209,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
-                          color: accentColor.withAlpha(40),
+                          color: accentColor.withValues(alpha: 0.16),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
@@ -237,7 +239,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
                         '~TZS ${_nf.format(tier.pricePerDay.toInt())}/day',
                         style: TextStyle(
                           fontSize: 12,
-                          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                          color: isDark ? Theme.of(context).colorScheme.onSurfaceVariant : Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -252,12 +254,12 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
                 shape: BoxShape.circle,
                 color: isSelected ? accentColor : Colors.transparent,
                 border: Border.all(
-                  color: isSelected ? accentColor : Colors.grey.shade500,
+                  color: isSelected ? accentColor : Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                   width: 2,
                 ),
               ),
               child: isSelected
-                  ? const Icon(Icons.check, size: 16, color: Colors.white)
+                  ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.surface)
                   : null,
             ),
           ],
@@ -278,22 +280,22 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: _selectedTier == BoostTier.gold
-                    ? const Color(0xFFFFD700).withAlpha(15)
+                    ? Theme.of(context).colorScheme.boostGold.withValues(alpha: 0.06)
                     : _selectedTier == BoostTier.silver
-                        ? const Color(0xFF9E9E9E).withAlpha(15)
-                        : const Color(0xFFCD7F32).withAlpha(15),
+                        ? Theme.of(context).colorScheme.boostSilver.withValues(alpha: 0.06)
+                        : Theme.of(context).colorScheme.boostBronze.withValues(alpha: 0.06),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline, size: 18, color: Colors.grey),
+                  Icon(Icons.info_outline, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'You will be prompted to complete payment via Mongike after tapping continue.',
                       style: TextStyle(
                         fontSize: 12,
-                        color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                        color: isDark ? Theme.of(context).colorScheme.onSurfaceVariant : Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),
@@ -308,8 +310,8 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
             onPressed:
                 _selectedTier == null || _processing ? null : _processPayment,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF065535),
-              foregroundColor: Colors.white,
+              backgroundColor: Theme.of(context).colorScheme.successGreen,
+              foregroundColor: Theme.of(context).colorScheme.surface,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
@@ -414,97 +416,220 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
-        return StreamBuilder<DocumentSnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('transactions')
-              .doc(orderId)
-              .snapshots(),
-          builder: (context, snap) {
-            final data = snap.data?.data() as Map<String, dynamic>?;
-            final status = data?['status'] as String? ?? 'pending';
-
-            if (status == 'completed') {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                Navigator.pop(ctx);
-                if (mounted) _onPaymentSuccess();
-              });
-              return const AlertDialog(
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.check_circle, color: Colors.green, size: 64),
-                    SizedBox(height: 16),
-                    Text('Payment Successful!',
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold)),
-                    SizedBox(height: 8),
-                    Text('Your product is now boosted.',
-                        style: TextStyle(color: Colors.grey)),
-                  ],
-                ),
-              );
-            }
-
-            if (status == 'failed') {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                Navigator.pop(ctx);
-                if (mounted) _showError('Payment failed. Try again.');
-              });
-              return const AlertDialog(
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.cancel, color: Colors.red, size: 64),
-                    SizedBox(height: 16),
-                    Text('Payment Failed',
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-              );
-            }
-
-            return AlertDialog(
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const GoogleLoading(size: 24, strokeWidth: 2),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'Processing Payment...',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Complete payment on your phone via Mongike.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey[600], fontSize: 13),
-                  ),
-                ],
-              ),
-            );
+        return _PaymentDialog(
+          orderId: orderId!,
+          onSuccess: () {
+            Navigator.pop(ctx);
+            if (mounted) _onPaymentSuccess();
+          },
+          onError: (msg) {
+            Navigator.pop(ctx);
+            if (mounted) _showError(msg);
           },
         );
       },
     );
   }
 
-  void _onPaymentSuccess() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '${_selectedTier!.displayName} boost activated for ${_selectedTier!.durationDays} days!',
+  Future<void> _retryPayment(String orderId) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      final token = await user.getIdToken();
+      final resp = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/retry-payment'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'order_id': orderId}),
+      );
+      final body = jsonDecode(resp.body) as Map<String, dynamic>;
+      if (resp.statusCode == 200 && body['status'] == 'completed') {
+        // Success — the transaction is now completed
+      } else {
+        if (mounted) _showError(body['error'] as String? ?? 'Payment not confirmed yet');
+      }
+    } catch (e) {
+      debugPrint('retryPayment error: $e');
+    }
+  }
+
+  Future<void> _onPaymentSuccess() async {
+    // Boost the product immediately from client-side
+    // so the user doesn't have to wait for the server webhook
+    try {
+      await BoostService().handleBoostPaymentSuccess(
+        productId: widget.product.id,
+        tier: _selectedTier!,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${_selectedTier!.displayName} boost activated for ${_selectedTier!.durationDays} days!',
+          ),
+          backgroundColor: Theme.of(context).colorScheme.primary,
         ),
-        backgroundColor: Colors.green.shade600,
-      ),
-    );
-    context.go(AppRoutes.sellerDashboard);
+      );
+    } catch (e) {
+      debugPrint('Client boost failed, server webhook will handle it: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Payment received. Boosting will complete shortly...',
+          ),
+          backgroundColor: Theme.of(context).colorScheme.primary,
+        ),
+      );
+    }
+    if (mounted) context.go(AppRoutes.sellerDashboard);
   }
 
   void _showError(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.red),
+      SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.error),
+    );
+  }
+}
+
+class _PaymentDialog extends StatefulWidget {
+  final String orderId;
+  final VoidCallback onSuccess;
+  final void Function(String msg) onError;
+  const _PaymentDialog({required this.orderId, required this.onSuccess, required this.onError});
+  @override
+  State<_PaymentDialog> createState() => _PaymentDialogState();
+}
+
+class _PaymentDialogState extends State<_PaymentDialog> {
+  bool _timedOut = false;
+  bool _checking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(seconds: 120), () {
+      if (mounted) setState(() => _timedOut = true);
+    });
+  }
+
+  Future<void> _retry() async {
+    setState(() => _checking = true);
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      final token = await user.getIdToken();
+      final resp = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/retry-payment'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'order_id': widget.orderId}),
+      );
+      final body = jsonDecode(resp.body) as Map<String, dynamic>;
+      if (!mounted) return;
+      if (resp.statusCode == 200 && body['status'] == 'completed') {
+        widget.onSuccess();
+      } else {
+        widget.onError(body['error'] as String? ?? 'Payment not confirmed yet');
+      }
+    } catch (e) {
+      if (mounted) widget.onError('Network error: $e');
+    } finally {
+      if (mounted) setState(() => _checking = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('transactions')
+          .doc(widget.orderId)
+          .snapshots(),
+      builder: (context, snap) {
+        final data = snap.data?.data() as Map<String, dynamic>?;
+        final status = data?['status'] as String? ?? 'pending';
+
+        if (status == 'completed') {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            widget.onSuccess();
+          });
+          return AlertDialog(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.check_circle, color: cs.primary, size: 64),
+                const SizedBox(height: 16),
+                const Text('Payment Successful!',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                const Text('Your product is now boosted.',
+                    style: TextStyle(color: Colors.black54)),
+              ],
+            ),
+          );
+        }
+
+        if (status == 'failed') {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            widget.onError('Payment failed. Try again.');
+          });
+          return AlertDialog(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.cancel, color: Colors.red, size: 64),
+                SizedBox(height: 16),
+                Text('Payment Failed',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ],
+            ),
+          );
+        }
+
+        return AlertDialog(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (!_timedOut) ...[
+                const GoogleLoading(size: 24, strokeWidth: 2),
+                const SizedBox(height: 20),
+              ],
+              Text(
+                _timedOut ? 'Payment still processing?' : 'Processing Payment...',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _timedOut
+                    ? 'Check your phone and complete payment via Mongike.\nOrder: ${widget.orderId}'
+                    : 'Complete payment on your phone via Mongike.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+              ),
+              if (_timedOut) ...[
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _checking ? null : _retry,
+                    icon: _checking
+                        ? const SizedBox(width: 20, height: 20, child: GoogleLoading(size: 20, strokeWidth: 2))
+                        : const Icon(Icons.refresh, size: 18),
+                    label: Text(_checking ? 'Checking...' : 'Check Payment Status'),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }
