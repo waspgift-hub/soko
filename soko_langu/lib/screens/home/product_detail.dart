@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:share_plus/share_plus.dart';
@@ -15,10 +16,14 @@ import '../../widgets/ad_banner.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/review_section.dart';
 import '../../widgets/comment_section.dart';
+import '../../widgets/verified_badge.dart';
 import '../../services/product_service.dart';
-import '../../services/cart_service.dart';
 import '../../services/user_service.dart';
-import '../../models/cart_model.dart';
+import '../../services/flash_sale_service.dart';
+import '../../models/flash_sale_model.dart';
+import '../../theme/app_colors.dart';
+import '../../services/notification_service.dart';
+import '../../services/whatsapp_service.dart';
 
 class ProductDetailPage extends StatefulWidget {
   final Product product;
@@ -31,19 +36,41 @@ class ProductDetailPage extends StatefulWidget {
 
 class _ProductDetailPageState extends State<ProductDetailPage> {
   final WishlistService _wishlistService = WishlistService();
-  final CartService _cartService = CartService();
   final UserService _userService = UserService();
+  final FlashSaleService _flashSaleService = FlashSaleService();
   bool _isFav = false;
   String? _selectedVariantId;
   final PageController _imageController = PageController();
   int _currentImageIndex = 0;
   UserProfile? _sellerProfile;
+  bool _processing = false;
+  FlashSale? _flashSale;
+  Timer? _flashTimer;
+  StreamSubscription<FlashSale?>? _flashStreamSub;
 
   @override
   void initState() {
     super.initState();
     _checkFav();
     _loadSellerProfile();
+    _loadFlashSale();
+  }
+
+  void _loadFlashSale() {
+    _flashStreamSub = _flashSaleService
+        .streamFlashSaleByProductId(widget.product.id)
+        .listen((sale) {
+      if (!mounted) return;
+      setState(() => _flashSale = sale);
+      if (sale != null) {
+        _flashTimer?.cancel();
+        _flashTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+          if (mounted) setState(() {});
+        });
+      } else {
+        _flashTimer?.cancel();
+      }
+    });
   }
 
   Future<void> _loadSellerProfile() async {
@@ -53,6 +80,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   @override
   void dispose() {
+    _flashTimer?.cancel();
+    _flashStreamSub?.cancel();
     _imageController.dispose();
     super.dispose();
   }
@@ -69,8 +98,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }
 
   Future<void> _toggleFav() async {
+    final wasFav = _isFav;
     await _wishlistService.toggle(widget.product.id);
-    setState(() => _isFav = !_isFav);
+    setState(() => _isFav = !wasFav);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -81,6 +111,24 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           ),
         ),
       );
+    }
+    // Notify seller when product is liked
+    if (!wasFav) {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null && currentUser.uid != widget.product.sellerId) {
+        final userName =
+            currentUser.displayName ?? currentUser.email ?? 'Mtumiaji';
+        await NotificationService().sendNotification(
+          userId: widget.product.sellerId,
+          title: '$userName amependa bidhaa yako',
+          body: widget.product.name,
+          data: {
+            'type': 'wishlist',
+            'productId': widget.product.id,
+            'productName': widget.product.name,
+          },
+        );
+      }
     }
   }
 
@@ -110,19 +158,25 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           IconButton(
             icon: Icon(
               _isFav ? Icons.favorite : Icons.favorite_border,
-              color: _isFav ? Colors.red : null,
+              color: _isFav ? cs.error : null,
             ),
             onPressed: _toggleFav,
           ),
           if (currentUser != null && currentUser.uid != sellerId)
             IconButton(
-              icon: Icon(Icons.flag_outlined, color: Colors.red[300]),
-              onPressed: () => context.push(AppRoutes.report, extra: {
-                'reportedUserId': sellerId,
-                'reportedUserName': product.sellerName,
-                'productId': product.id,
-                'productName': product.name,
-              }),
+              icon: Icon(
+                Icons.flag_outlined,
+                color: cs.error.withValues(alpha: 0.7),
+              ),
+              onPressed: () => context.push(
+                AppRoutes.report,
+                extra: {
+                  'reportedUserId': sellerId,
+                  'reportedUserName': product.sellerName,
+                  'productId': product.id,
+                  'productName': product.name,
+                },
+              ),
             ),
         ],
       ),
@@ -159,13 +213,19 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                   placeholder: (context, url) => Container(
                                     color: cs.surfaceContainerLow,
                                     child: const Center(
-                                      child: GoogleLoading(size: 24, strokeWidth: 2),
+                                      child: GoogleLoading(
+                                        size: 24,
+                                        strokeWidth: 2,
+                                      ),
                                     ),
                                   ),
                                   errorWidget: (context, error, stackTrace) =>
                                       Container(
                                         color: cs.surfaceContainerHighest,
-                                        child: const Icon(Icons.image, size: 50),
+                                        child: const Icon(
+                                          Icons.image,
+                                          size: 50,
+                                        ),
                                       ),
                                 ),
                               );
@@ -192,10 +252,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: _currentImageIndex == index
-                                  ? Colors.white
-                                  : Colors.white.withValues(alpha: 0.5),
+                                  ? cs.surface
+                                  : cs.surface.withValues(alpha: 0.5),
                               border: Border.all(
-                                color: Colors.black.withValues(alpha: 0.2),
+                                color: cs.onSurface.withValues(alpha: 0.2),
                                 width: 1,
                               ),
                             ),
@@ -213,13 +273,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.6),
+                          color: cs.onSurface.withValues(alpha: 0.6),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
                           '${_currentImageIndex + 1}/${product.images.length}',
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: cs.surface,
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
                           ),
@@ -233,10 +293,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
                     children: [
-                      const Icon(Icons.photo_library, size: 16, color: Colors.grey),
+                      Icon(
+                        Icons.photo_library,
+                        size: 16,
+                        color: cs.onSurfaceVariant,
+                      ),
                       const SizedBox(width: 4),
                       Text(
-                        'Picha ${product.images.length}',
+                        context.tr('images_count').replaceAll('{0}', product.images.length.toString()),
                         style: TextStyle(
                           fontSize: 13,
                           color: cs.onSurface.withValues(alpha: 0.5),
@@ -259,27 +323,85 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      context.formatPrice(product.price),
-                      style: const TextStyle(
-                        color: Colors.blue,
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
+                    if (_flashSale != null) ...[
+                      Row(
+                        children: [
+                          Text(
+                            context.formatPrice(_flashSale!.salePrice),
+                            style: TextStyle(
+                              color: cs.error,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            context.formatPrice(_flashSale!.originalPrice),
+                            style: TextStyle(
+                              decoration: TextDecoration.lineThrough,
+                              color: cs.onSurface.withValues(alpha: 0.4),
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: cs.error,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              '-${_flashSale!.discountPercent.toStringAsFixed(0)}%',
+                              style: TextStyle(
+                                color: cs.surface,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    if (_selectedVariantId != null)
+                      const SizedBox(height: 4),
                       Text(
-                        "${context.tr('with_variant')} ${context.formatPrice(_getEffectivePrice())}",
+                        _flashSale!.remainingTime.isNegative
+                            ? context.tr('expired')
+                            : context.tr('flash_sale_ends_in').replaceAll('{0}', _fmtDuration(_flashSale!.remainingTime)),
                         style: TextStyle(
-                          color: cs.primary,
-                          fontSize: 14,
+                          color: cs.error,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
+                      Text(
+                        '${context.tr('ends')} ${_fmtDate(_flashSale!.endTime)}',
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ] else ...[
+                      Text(
+                        context.formatPrice(product.price),
+                        style: TextStyle(
+                          color: cs.secondary,
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (_selectedVariantId != null)
+                        Text(
+                          "${context.tr('with_variant')} ${context.formatPrice(_getEffectivePrice())}",
+                          style: TextStyle(color: cs.primary, fontSize: 14),
+                        ),
+                    ],
                     if (product.rating > 0) ...[
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          Icon(Icons.star, color: Colors.amber[700], size: 20),
+                          Icon(Icons.star, color: cs.tertiary, size: 20),
                           const SizedBox(width: 4),
                           Text(
                             "${product.rating.toStringAsFixed(1)} (${product.reviewCount} ${context.tr('reviews_count')})",
@@ -399,10 +521,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         ),
                         _buildDetailRow(
                           context.tr('price_adjustment'),
-                          context.formatPrice(_getSelectedVariant()?.priceAdjustment?.toDouble() ?? 0),
+                          context.formatPrice(
+                            _getSelectedVariant()?.priceAdjustment
+                                    ?.toDouble() ??
+                                0,
+                          ),
                         ),
-                       ],
-                     ],
+                      ],
+                    ],
                     const SizedBox(height: 20),
                     Container(
                       padding: const EdgeInsets.all(12),
@@ -426,14 +552,16 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                               text: TextSpan(
                                 children: [
                                   TextSpan(
-                                    text: 'Imepostiwa kwenye ',
+                                    text: context.tr('posted_on'),
                                     style: TextStyle(
                                       fontSize: 13,
-                                      color: cs.onSurface.withValues(alpha: 0.7),
+                                      color: cs.onSurface.withValues(
+                                        alpha: 0.7,
+                                      ),
                                     ),
                                   ),
                                   TextSpan(
-                                    text: 'Soko Langu',
+                                    text: 'Soko Vibe',
                                     style: TextStyle(
                                       fontSize: 13,
                                       fontWeight: FontWeight.bold,
@@ -441,10 +569,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                     ),
                                   ),
                                   TextSpan(
-                                    text: ' na ',
+                                    text: context.tr('posted_by'),
                                     style: TextStyle(
                                       fontSize: 13,
-                                      color: cs.onSurface.withValues(alpha: 0.7),
+                                      color: cs.onSurface.withValues(
+                                        alpha: 0.7,
+                                      ),
                                     ),
                                   ),
                                   TextSpan(
@@ -455,6 +585,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                       color: cs.onSurface,
                                     ),
                                   ),
+                                  if (product.sellerKycApproved)
+                                    WidgetSpan(
+                                      child: VerifiedBadge(size: 13),
+                                    ),
                                 ],
                               ),
                             ),
@@ -486,14 +620,19 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                 height: 100,
                                 width: double.infinity,
                                 decoration: BoxDecoration(
-                                  color: _sellerProfile!.shopBannerColor.isNotEmpty
-                                      ? Color(int.parse(
-                                              'FF${_sellerProfile!.shopBannerColor.replaceFirst('#', '')}',
-                                              radix: 16))
+                                  color:
+                                      _sellerProfile!.shopBannerColor.isNotEmpty
+                                      ? Color(
+                                          int.parse(
+                                            'FF${_sellerProfile!.shopBannerColor.replaceFirst('#', '')}',
+                                            radix: 16,
+                                          ),
+                                        )
                                       : cs.primaryContainer,
                                   image: DecorationImage(
                                     image: NetworkImage(
-                                        _sellerProfile!.shopBanner),
+                                      _sellerProfile!.shopBanner,
+                                    ),
                                     fit: BoxFit.cover,
                                   ),
                                 ),
@@ -502,26 +641,39 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                               padding: const EdgeInsets.all(12),
                               child: Row(
                                 children: [
-                                  Stack(
-                                    children: [
-                                      CircleAvatar(
-                                        backgroundColor: _sellerProfile?.shopAccentColor.isNotEmpty == true
-                                            ? Color(int.parse(
-                                                    'FF${_sellerProfile!.shopAccentColor.replaceFirst('#', '')}',
-                                                    radix: 16))
-                                            : cs.primaryContainer,
-                                        backgroundImage: _sellerProfile?.profileImage.isNotEmpty == true
-                                            ? NetworkImage(
-                                                _sellerProfile!.profileImage)
-                                            : null,
-                                        child: _sellerProfile?.profileImage.isNotEmpty == true
-                                            ? null
-                                            : const Icon(
-                                                Icons.person,
-                                                color: Colors.white,
-                                              ),
-                                      ),
-                                    ],
+                                  CircleAvatar(
+                                    radius: 24,
+                                    backgroundColor:
+                                        _sellerProfile
+                                                ?.shopAccentColor
+                                                .isNotEmpty ==
+                                            true
+                                        ? Color(
+                                            int.parse(
+                                              'FF${_sellerProfile!.shopAccentColor.replaceFirst('#', '')}',
+                                              radix: 16,
+                                            ),
+                                          )
+                                        : cs.primaryContainer,
+                                    backgroundImage:
+                                        _sellerProfile
+                                                ?.profileImage
+                                                .isNotEmpty ==
+                                            true
+                                        ? NetworkImage(
+                                            _sellerProfile!.profileImage,
+                                          )
+                                        : null,
+                                    child:
+                                        _sellerProfile
+                                                ?.profileImage
+                                                .isNotEmpty ==
+                                            true
+                                        ? null
+                                        : Icon(
+                                            Icons.person,
+                                            color: cs.surface,
+                                          ),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
@@ -529,78 +681,96 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        Text(
-                                          context.tr('seller'),
-                                          style: TextStyle(
-                                            color: cs.onSurface
-                                                .withValues(alpha: 0.6),
-                                          ),
+                                        Row(
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                product.sellerName,
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 15,
+                                                  color: cs.onSurface,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            if (product.sellerKycApproved)
+                                              VerifiedBadge(size: 14),
+                                          ],
                                         ),
-                                        Text(
-                                          product.sellerName,
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            color: cs.onSurface,
+                                        const SizedBox(height: 6),
+                                        if (currentUser == null)
+                                          Row(
+                                            children: [
+                                              TextButton(
+                                                onPressed: () => context.push(
+                                                  AppRoutes.login,
+                                                ),
+                                                child: Text(
+                                                  context.tr('view_store'),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              ElevatedButton.icon(
+                                                style:
+                                                    ElevatedButton.styleFrom(
+                                                  backgroundColor:
+                                                      cs.whatsappGreen,
+                                                ),
+                                                icon: Icon(
+                                                  Icons.chat,
+                                                  color: cs.surface,
+                                                  size: 18,
+                                                ),
+                                                onPressed: _openWhatsApp,
+                                                label: Text(
+                                                  context.tr('whatsapp'),
+                                                  style: TextStyle(
+                                                    color: cs.onPrimary,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          )
+                                        else if (currentUser.uid !=
+                                            sellerId)
+                                          Row(
+                                            children: [
+                                              TextButton(
+                                                onPressed: () =>
+                                                    context.push(
+                                                  '${AppRoutes.publicProfile}/$sellerId',
+                                                  extra: product.sellerName,
+                                                ),
+                                                child: Text(
+                                                  context.tr('view_store'),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              ElevatedButton.icon(
+                                                style:
+                                                    ElevatedButton.styleFrom(
+                                                  backgroundColor:
+                                                      cs.whatsappGreen,
+                                                ),
+                                                icon: Icon(
+                                                  Icons.chat,
+                                                  color: cs.surface,
+                                                  size: 18,
+                                                ),
+                                                onPressed: _openWhatsApp,
+                                                label: Text(
+                                                  context.tr('whatsapp'),
+                                                  style: TextStyle(
+                                                    color: cs.onPrimary,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
                                           ),
-                                        ),
                                       ],
                                     ),
                                   ),
-                                  if (currentUser == null) ...[
-                                    ElevatedButton.icon(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor:
-                                            const Color(0xFF25D366),
-                                      ),
-                                      icon: const Icon(Icons.chat,
-                                          color: Colors.white, size: 18),
-                                      onPressed: () => context.push(
-                                          '${AppRoutes.chat}/$sellerId',
-                                          extra: {
-                                            'name': product.sellerName
-                                          }),
-                                      label: Text(
-                                        context.tr('whatsapp'),
-                                        style:
-                                            TextStyle(color: cs.onPrimary),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    TextButton(
-                                      onPressed: () =>
-                                          context.push(AppRoutes.login),
-                                      child:
-                                          Text(context.tr('view_store')),
-                                    ),
-                                  ] else if (currentUser.uid != sellerId) ...[
-                                    ElevatedButton.icon(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor:
-                                            const Color(0xFF25D366),
-                                      ),
-                                      icon: const Icon(Icons.chat,
-                                          color: Colors.white, size: 18),
-                                      onPressed: () => context.push(
-                                          '${AppRoutes.chat}/$sellerId',
-                                          extra: {
-                                            'name': product.sellerName
-                                          }),
-                                      label: Text(
-                                        context.tr('whatsapp'),
-                                        style:
-                                            TextStyle(color: cs.onPrimary),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    TextButton(
-                                      onPressed: () => context.push(
-                                        '${AppRoutes.publicProfile}/$sellerId',
-                                        extra: product.sellerName,
-                                      ),
-                                      child: Text(
-                                          context.tr('view_store')),
-                                    ),
-                                  ],
                                 ],
                               ),
                             ),
@@ -630,112 +800,59 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       ),
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        child: Row(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF2D6A4F),
-                      side: const BorderSide(color: Color(0xFF2D6A4F)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    icon: const Icon(Icons.add_shopping_cart, size: 18),
-                    onPressed: () async {
-                      if (currentUser == null) {
-                        context.push(AppRoutes.login);
-                      } else if (currentUser.uid == sellerId) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(context.tr('cannot_buy_own'))),
-                        );
-                      } else {
-                        try {
-                          await _cartService.addToCart(CartItem(
-                            productId: widget.product.id,
-                            name: widget.product.name,
-                            image: widget.product.images.isNotEmpty ? widget.product.images.first : '',
-                            price: _getEffectivePrice(),
-                            sellerId: sellerId,
-                            sellerName: widget.product.sellerName,
-                          ));
-                          if (mounted) context.push(AppRoutes.cart);
-                        } catch (e) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(context.tr('cart_error').replaceAll('{0}', '$e'))),
-                            );
-                          }
-                        }
-                      }
-                    },
-                    label: Text(context.tr('cart'), style: TextStyle(fontSize: 13)),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF065535),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    icon: const Icon(Icons.shopping_cart_checkout, color: Colors.white, size: 18),
-                    onPressed: () async {
-                      if (currentUser == null) {
-                        context.push(AppRoutes.login);
-                      } else if (currentUser.uid == sellerId) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(context.tr('cannot_buy_own'))),
-                        );
-                      } else {
-                        try {
-                          await _cartService.addToCart(CartItem(
-                            productId: widget.product.id,
-                            name: widget.product.name,
-                            image: widget.product.images.isNotEmpty ? widget.product.images.first : '',
-                            price: _getEffectivePrice(),
-                            sellerId: sellerId,
-                            sellerName: widget.product.sellerName,
-                          ));
-                          if (mounted) context.push(AppRoutes.checkout, extra: [
-                            CartItem(
-                              productId: widget.product.id,
-                              name: widget.product.name,
-                              image: widget.product.images.isNotEmpty ? widget.product.images.first : '',
-                              price: _getEffectivePrice(),
-                              sellerId: sellerId,
-                              sellerName: widget.product.sellerName,
-                            )
-                          ]);
-                        } catch (e) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(context.tr('cart_error').replaceAll('{0}', '$e'))),
-                            );
-                          }
-                        }
-                      }
-                    },
-                    label: Text(context.tr('buy_now'), style: TextStyle(color: Colors.white, fontSize: 15)),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
+            Expanded(
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF25D366),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  backgroundColor: cs.whatsappGreen,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
-                icon: const Icon(Icons.chat, color: Colors.white, size: 18),
-                onPressed: () => context.push('${AppRoutes.chat}/$sellerId', extra: {'name': product.sellerName}),
-                label: Text(context.tr('whatsapp'), style: TextStyle(color: Colors.white, fontSize: 15)),
+                icon: Icon(Icons.chat, color: cs.surface, size: 18),
+                onPressed: _openWhatsApp,
+                label: Text(
+                  context.tr('whatsapp'),
+                  style: TextStyle(color: cs.surface, fontSize: 13),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: cs.successGreen,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                icon: Icon(
+                  Icons.shopping_cart_checkout,
+                  color: cs.surface,
+                  size: 18,
+                ),
+                onPressed: _processing
+                    ? null
+                    : () async {
+                        if (currentUser == null) {
+                          context.push(AppRoutes.login);
+                        } else if (currentUser.uid == sellerId) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(context.tr('cannot_buy_own')),
+                            ),
+                          );
+                        } else {
+                          await _processBuyNow();
+                        }
+                      },
+                label: Text(
+                  context.tr('buy_now'),
+                  style: TextStyle(color: cs.surface, fontSize: 14),
+                ),
               ),
             ),
           ],
@@ -771,8 +888,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   ProductVariant? _getSelectedVariant() {
     if (_selectedVariantId == null) return null;
-    final variants =
-        widget.product.variants.where((v) => v.id == _selectedVariantId);
+    final variants = widget.product.variants.where(
+      (v) => v.id == _selectedVariantId,
+    );
     return variants.isNotEmpty ? variants.first : null;
   }
 
@@ -800,10 +918,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     List<String> images,
     int initialIndex,
   ) {
+    final cs = Theme.of(context).colorScheme;
     Navigator.of(context).push(
       PageRouteBuilder(
         opaque: false,
-        barrierColor: Colors.black,
+        barrierColor: cs.onSurface,
         pageBuilder: (context, animation, secondaryAnimation) {
           return _FullScreenImageViewer(
             images: images,
@@ -817,6 +936,41 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     );
   }
 
+  Future<void> _processBuyNow() async {
+    if (!mounted) return;
+    context.push(AppRoutes.checkout, extra: widget.product);
+  }
+
+  void _openWhatsApp() {
+    final phone = _sellerProfile?.phone;
+    if (phone != null && phone.isNotEmpty) {
+      final msg = WhatsAppService.generateProductInquiryMessage(
+        sellerName: widget.product.sellerName,
+        productName: widget.product.name,
+        productPrice: widget.product.price,
+        currencySymbol:
+            LocalizationService.supportedCurrencies[widget.product.currency]
+                    ?['symbol'] ??
+                'TSh',
+      );
+      WhatsAppService().openWhatsApp(phoneNumber: phone, message: msg);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('whatsapp_number_missing'))),
+      );
+    }
+  }
+
+  String _fmtDuration(Duration d) {
+    final h = d.inHours;
+    final m = d.inMinutes.remainder(60);
+    final s = d.inSeconds.remainder(60);
+    return '${h}h ${m}m ${s}s';
+  }
+
+  String _fmtDate(DateTime dt) {
+    return '${dt.day}/${dt.month}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
 }
 
 class _FullScreenImageViewer extends StatefulWidget {
@@ -851,14 +1005,15 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: cs.onSurface,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: cs.surface),
         title: Text(
           '${_currentIndex + 1}/${widget.images.length}',
-          style: const TextStyle(color: Colors.white),
+          style: TextStyle(color: cs.surface),
         ),
         centerTitle: true,
         elevation: 0,
@@ -884,8 +1039,12 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                       placeholder: (context, url) => const Center(
                         child: GoogleLoading(size: 32, strokeWidth: 2),
                       ),
-                      errorWidget: (context, error, stackTrace) => const Center(
-                        child: Icon(Icons.broken_image, color: Colors.white, size: 80),
+                      errorWidget: (context, error, stackTrace) => Center(
+                        child: Icon(
+                          Icons.broken_image,
+                          color: cs.surface,
+                          size: 80,
+                        ),
                       ),
                     ),
                   ),
@@ -909,8 +1068,8 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: _currentIndex == index
-                          ? Colors.white
-                          : Colors.white.withValues(alpha: 0.4),
+                          ? cs.surface
+                          : cs.surface.withValues(alpha: 0.4),
                     ),
                   ),
                 ),

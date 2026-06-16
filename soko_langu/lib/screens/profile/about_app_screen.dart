@@ -31,7 +31,7 @@ class AboutAppScreen extends StatelessWidget {
               ClipRRect(
                 borderRadius: BorderRadius.circular(25),
                 child: Image.asset(
-                  'assets/soko_langu_logo.png',
+                  'assets/soko_vibe_logo.png',
                   width: 100,
                   height: 100,
                   fit: BoxFit.cover,
@@ -46,7 +46,7 @@ class AboutAppScreen extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: Colors.green,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
               ),
 
@@ -75,7 +75,7 @@ class AboutAppScreen extends StatelessWidget {
 
               const SizedBox(height: 12),
 
-              // Soko Langu Team
+              // Soko Vibe Team
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
@@ -141,6 +141,68 @@ class AboutAppScreen extends StatelessWidget {
 
               const SizedBox(height: 12),
 
+              // YouTube Tutorials
+              GestureDetector(
+                onTap: () async {
+                  final uri = Uri.parse('https://www.youtube.com/@badtz-xb');
+                  if (await url.canLaunchUrl(uri)) {
+                    await url.launchUrl(uri, mode: url.LaunchMode.externalApplication);
+                  }
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.red.shade400.withValues(alpha: 0.5),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(Icons.play_circle_fill, color: Colors.red.shade600, size: 28),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Mafunzo / Tutorials',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'youtube.com/@badtz-xb',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.red.shade600,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.open_in_new, color: Colors.red.shade400, size: 18),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
               // Features
               _buildInfoCard(
                 context,
@@ -174,7 +236,7 @@ class AboutAppScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      "Tunashukuru kwa kutumia Soko Langu!\nMaoni yako yanatusaidia kuboresha.",
+                      "Tunashukuru kwa kutumia Soko Vibe!\nMaoni yako yanatusaidia kuboresha.",
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 14,

@@ -15,10 +15,11 @@ class LoadingWidget extends StatelessWidget {
           const GoogleLoading(size: 24, strokeWidth: 2),
           if (message != null) ...[
             const SizedBox(height: 16),
-            Text(message!, style: const TextStyle(color: Color.fromARGB(240, 125, 176, 108))),
+            Text(message!, style: TextStyle(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.94))),
           ],
         ],
       ),
     );
   }
 }
+

@@ -82,8 +82,10 @@ String translateError(dynamic error) {
       msg.contains('Connection refused')) {
     return 'Poor internet connection. Please check your network.';
   }
-  if (msg.contains('PERMISSION_DENIED') || msg.contains('permission')) {
-    return 'You do not have permission to perform this action.';
+  if (msg.contains('PERMISSION_DENIED') ||
+      msg.contains('permission') ||
+      msg.contains('caller does not have permission')) {
+    return 'You do not have permission to perform this action. Please try logging out and back in.';
   }
 
   return 'Something went wrong. Please try again.';

@@ -165,6 +165,7 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen>
     );
     if (mounted) {
       setState(() {
+        _audio.resetPlaylist();
         _audio.songs = songs;
         _isLoading = false;
       });

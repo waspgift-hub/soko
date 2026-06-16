@@ -7,6 +7,7 @@ import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../widgets/google_loading.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../utils/responsive.dart';
 
 class MyAdsScreen extends StatefulWidget {
   const MyAdsScreen({super.key});
@@ -30,7 +31,7 @@ class _MyAdsScreenState extends State<MyAdsScreen> {
             child: Text(context.tr('cancel')),
           ),
           TextButton(
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(context.tr('delete')),
           ),
@@ -118,11 +119,11 @@ class _MyAdsScreenState extends State<MyAdsScreen> {
             }
             return GridView.builder(
               padding: const EdgeInsets.all(12),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: Responsive.gridColumns(context),
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
-                childAspectRatio: 0.8,
+                childAspectRatio: Responsive.cardAspectRatio(context),
               ),
               itemCount: products.length,
               itemBuilder: (context, index) {
@@ -182,12 +183,12 @@ class _MyAdsScreenState extends State<MyAdsScreen> {
                                   child: Container(
                                     padding: const EdgeInsets.all(4),
                                     decoration: BoxDecoration(
-                                      color: Colors.black45,
+                                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.45),
                                       borderRadius: BorderRadius.circular(4),
                                     ),
-                                    child: const Icon(
+                                    child: Icon(
                                       Icons.more_vert,
-                                      color: Colors.white,
+                                      color: Theme.of(context).colorScheme.surface,
                                       size: 18,
                                     ),
                                   ),
@@ -211,8 +212,8 @@ class _MyAdsScreenState extends State<MyAdsScreen> {
                               ),
                               Text(
                                 "${context.currencySymbol()}${product.price.toStringAsFixed(0)}",
-                                style: const TextStyle(
-                                  color: Colors.green,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.primary,
                                   fontSize: 13,
                                 ),
                               ),

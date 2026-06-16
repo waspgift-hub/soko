@@ -1,0 +1,9 @@
+node_modules/
+.env
+.env.example
+server.log
+server.err
+.git/
+.gitignore
+Dockerfile
+retroboost.js

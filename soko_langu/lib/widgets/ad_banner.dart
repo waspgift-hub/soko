@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../extensions/context_tr.dart';
 import '../services/api_config.dart';
@@ -21,7 +22,7 @@ class _AdBannerState extends State<AdBanner> {
   @override
   void initState() {
     super.initState();
-    if (_shouldShow) {
+    if (_shouldShow && !kIsWeb) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _loadAd());
     }
   }
@@ -64,7 +65,7 @@ class _AdBannerState extends State<AdBanner> {
   Widget build(BuildContext context) {
     if (_isLoaded && _bannerAd != null) {
       return Container(
-        color: Colors.grey[100],
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
         child: SizedBox(
           width: _bannerAd!.size.width.toDouble(),
           height: _bannerAd!.size.height.toDouble(),
@@ -79,10 +80,10 @@ class _AdBannerState extends State<AdBanner> {
       height: 50,
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: const Color(0xFFD8F3DC).withValues(alpha: 0.5),
+        color: Theme.of(context).colorScheme.tertiaryContainer.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: const Color(0xFF2D6A4F).withValues(alpha: 0.3),
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
         ),
       ),
       child: Center(
@@ -92,13 +93,13 @@ class _AdBannerState extends State<AdBanner> {
             Icon(
               Icons.ad_units,
               size: 16,
-              color: const Color(0xFF2D6A4F).withValues(alpha: 0.5),
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
             ),
             const SizedBox(width: 6),
             Text(
               context.tr('ad'),
               style: TextStyle(
-                color: const Color(0xFF2D6A4F).withValues(alpha: 0.5),
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
               ),
@@ -109,3 +110,4 @@ class _AdBannerState extends State<AdBanner> {
     );
   }
 }
+

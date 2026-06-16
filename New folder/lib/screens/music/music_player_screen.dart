@@ -117,6 +117,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
     if (mounted) {
       setState(() {
         _songs = songs;
+        _service.resetPlaylist();
         _service.songs = songs;
         _isLoading = false;
       });

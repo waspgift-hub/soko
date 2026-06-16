@@ -1,0 +1,16 @@
+{
+  "projects": {},
+  "targets": {
+    "sokonimoko-8c171-a8d14": {
+      "hosting": {
+        "privacy": [
+          "soko-langu-privacy"
+        ],
+        "app": [
+          "sokonimoko-8c171-a8d14"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

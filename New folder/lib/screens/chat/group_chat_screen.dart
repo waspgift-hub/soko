@@ -4,12 +4,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../services/group_service.dart';
 import '../../services/user_service.dart';
 import '../../models/group_model.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../widgets/google_loading.dart';
+import '../../utils/helpers.dart';
 
 class GroupChatScreen extends StatefulWidget {
   final String groupId;
@@ -86,6 +88,11 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   }
 
   Future<void> _sendImage() async {
+    final granted = await requestPermissionWithDialog(
+      context, Permission.photos, 'permission_photos',
+    );
+    if (!granted) return;
+
     final picker = ImagePicker();
     final image = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1200, maxHeight: 1200);
     if (image == null || !mounted) return;

@@ -2,35 +2,42 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class TransactionFeeBreakdown {
   final double productPrice;
-  static const double mongikeFixedFee = 180;
   static const double platformCommissionPercent = 0.04;
   final double processingFee;
   final double platformFee;
-  final double totalFee;
+  final double payoutFee;
+  final double totalFees;
   final double totalAmount;
   final double sellerReceives;
 
-  TransactionFeeBreakdown({
-    required this.productPrice,
-  }) : processingFee = mongikeFixedFee,
-       platformFee = productPrice * platformCommissionPercent,
-       totalFee = mongikeFixedFee + (productPrice * platformCommissionPercent),
-       totalAmount = productPrice,
-       sellerReceives = productPrice - (productPrice * platformCommissionPercent) - mongikeFixedFee;
+  TransactionFeeBreakdown({required this.productPrice})
+    : processingFee = 0,
+      platformFee = productPrice * platformCommissionPercent,
+      payoutFee = 0,
+      totalFees = productPrice * platformCommissionPercent,
+      totalAmount = productPrice,
+      sellerReceives = productPrice - (productPrice * platformCommissionPercent);
 
   Map<String, dynamic> toMap() => {
     'productPrice': productPrice,
-    'mongikeFixedFee': mongikeFixedFee,
-    'platformCommissionPercent': platformCommissionPercent,
     'processingFee': processingFee,
     'platformFee': platformFee,
-    'totalFee': totalFee,
+    'payoutFee': payoutFee,
+    'platformCommissionPercent': platformCommissionPercent,
+    'totalFees': totalFees,
     'totalAmount': totalAmount,
     'sellerReceives': sellerReceives,
   };
 }
 
-enum TransactionStatus { pending, completed, failed, refunded }
+enum TransactionStatus {
+  pending,
+  completed,
+  failed,
+  refunded,
+  escrowHold,
+  delivered,
+}
 
 class MarketplaceTransaction {
   final String id;
@@ -44,7 +51,6 @@ class MarketplaceTransaction {
   final double productPrice;
   final double processingFee;
   final double platformFee;
-  final double mongikeFee;
   final double sokoLanguCommission;
   final double totalAmount;
   final double sellerReceives;
@@ -65,12 +71,11 @@ class MarketplaceTransaction {
     required this.productPrice,
     required this.processingFee,
     required this.platformFee,
-    this.mongikeFee = 180,
     this.sokoLanguCommission = 0,
     required this.totalAmount,
     required this.sellerReceives,
     required this.status,
-    this.paymentMethod = 'Mongike',
+    this.paymentMethod = 'ClickPesa',
     this.transactionReference,
     required this.createdAt,
   });
@@ -89,14 +94,19 @@ class MarketplaceTransaction {
       productId: data['productId'] ?? '',
       productName: data['productName'] ?? '',
       productPrice: (data['productPrice'] ?? 0).toDouble(),
-      processingFee: (data['processingFee'] ?? breakdown.processingFee).toDouble(),
+      processingFee: (data['processingFee'] ?? breakdown.processingFee)
+          .toDouble(),
       platformFee: (data['platformFee'] ?? breakdown.platformFee).toDouble(),
-      mongikeFee: (data['mongikeFee'] ?? breakdown.processingFee).toDouble(),
-      sokoLanguCommission: (data['sokoLanguCommission'] ?? data['globaseCommission'] ?? breakdown.platformFee).toDouble(),
+      sokoLanguCommission:
+          (data['sokoLanguCommission'] ??
+                  data['globaseCommission'] ??
+                  breakdown.platformFee)
+              .toDouble(),
       totalAmount: (data['totalAmount'] ?? breakdown.totalAmount).toDouble(),
-      sellerReceives: (data['sellerReceives'] ?? breakdown.sellerReceives).toDouble(),
+      sellerReceives: (data['sellerReceives'] ?? breakdown.sellerReceives)
+          .toDouble(),
       status: _parseStatus(data['status'] ?? 'pending'),
-      paymentMethod: data['paymentMethod'] ?? 'Mongike',
+      paymentMethod: data['paymentMethod'] ?? 'ClickPesa',
       transactionReference: data['transactionReference'],
       createdAt: data['createdAt'] is Timestamp
           ? (data['createdAt'] as Timestamp).toDate()
@@ -115,11 +125,14 @@ class MarketplaceTransaction {
     'productPrice': productPrice,
     'processingFee': processingFee,
     'platformFee': platformFee,
-    'mongikeFee': mongikeFee,
     'sokoLanguCommission': sokoLanguCommission,
     'totalAmount': totalAmount,
     'sellerReceives': sellerReceives,
-    'status': status.toString().split('.').last,
+    'status': status == TransactionStatus.escrowHold
+        ? 'escrow_hold'
+        : status == TransactionStatus.delivered
+        ? 'delivered'
+        : status.toString().split('.').last,
     'paymentMethod': paymentMethod,
     'transactionReference': transactionReference,
     'createdAt': FieldValue.serverTimestamp(),
@@ -133,6 +146,10 @@ class MarketplaceTransaction {
         return TransactionStatus.failed;
       case 'refunded':
         return TransactionStatus.refunded;
+      case 'escrow_hold':
+        return TransactionStatus.escrowHold;
+      case 'delivered':
+        return TransactionStatus.delivered;
       default:
         return TransactionStatus.pending;
     }

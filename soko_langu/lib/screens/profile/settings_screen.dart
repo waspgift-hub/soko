@@ -73,7 +73,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Text(context.tr('cancel')),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
             onPressed: () async {
               if (pinController.text.isEmpty ||
                   pinController.text != confirmController.text) {
@@ -95,7 +95,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             },
             child: Text(
               context.tr('save'),
-              style: const TextStyle(color: Colors.white),
+              style:  TextStyle(color: Theme.of(context).colorScheme.surface),
             ),
           ),
         ],
@@ -125,7 +125,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: context.tr('push_notifications'),
                 trailing: Switch(
                   value: _notificationsEnabled,
-                  activeThumbColor: Colors.green,
+                  activeThumbColor: Theme.of(context).colorScheme.primary,
                   onChanged: (value) async {
                     final notif = NotificationService();
                     await notif.setEnabled(value);
@@ -172,7 +172,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   themeManager.isDark ? Icons.dark_mode : Icons.light_mode,
                   color: themeManager.isDark
                       ? const Color(0xFF39FF14)
-                      : const Color(0xFF2D6A4F),
+                      : Theme.of(context).colorScheme.primary,
                 ),
                 title: Text(
                   themeManager.isDark ? 'Dark Mode' : 'Light Mode',
@@ -198,6 +198,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 subtitle: context.tr('version'),
                 onTap: () => context.push(AppRoutes.about),
               ),
+              _buildTile(
+                icon: Icons.privacy_tip_outlined,
+                title: context.tr('privacy_policy'),
+                onTap: () => context.push(AppRoutes.privacyPolicy),
+              ),
+              _buildTile(
+                icon: Icons.article_outlined,
+                title: context.tr('terms_of_service'),
+                onTap: () => context.push(AppRoutes.termsOfService),
+              ),
               const SizedBox(height: 30),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -207,13 +217,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     if (!context.mounted) return;
                     Navigator.of(context).popUntil((route) => route.isFirst);
                   },
-                  icon: const Icon(Icons.logout, color: Colors.white),
+                  icon: Icon(Icons.logout, color: Theme.of(context).colorScheme.surface),
                   label: Text(
                     context.tr('logout'),
-                    style: const TextStyle(color: Colors.white),
+                    style:  TextStyle(color: Theme.of(context).colorScheme.surface),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
+                    backgroundColor: Theme.of(context).colorScheme.error,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
@@ -237,7 +247,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             onPressed: () => Navigator.pop(ctx, true),
                             child: Text(
                               context.tr('delete'),
-                              style: const TextStyle(color: Colors.red),
+                              style:  TextStyle(color: Theme.of(context).colorScheme.error),
                             ),
                           ),
                         ],
@@ -257,13 +267,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ).showSnackBar(SnackBar(content: Text('$e')));
                     }
                   },
-                  icon: const Icon(Icons.delete_forever, color: Colors.white),
+                  icon: Icon(Icons.delete_forever, color: Theme.of(context).colorScheme.surface),
                   label: Text(
                     context.tr('delete_account'),
-                    style: const TextStyle(color: Colors.white),
+                    style:  TextStyle(color: Theme.of(context).colorScheme.surface),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red.shade900,
+                    backgroundColor: Theme.of(context).colorScheme.error.withValues(alpha: 0.85),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
@@ -294,7 +304,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) => Column(
+      builder: (ctx) => SingleChildScrollView(
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
@@ -308,7 +319,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             (e) => ListTile(
               title: Text(e.value),
               trailing: config.langCode == e.key
-                  ? const Icon(Icons.check, color: Colors.green)
+                  ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
                   : null,
               onTap: () {
                 LocalizationService().setLanguage(e.key);
@@ -319,6 +330,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 16),
         ],
+      ),
       ),
     );
   }
@@ -347,7 +359,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               (e) => ListTile(
                 title: Text("${e.value['name']} (${e.value['symbol']})"),
                 trailing: config.currencyCode == e.key
-                    ? const Icon(Icons.check, color: Colors.green)
+                    ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
                     : null,
                 onTap: () {
                   LocalizationService().setCurrency(e.key);
@@ -385,7 +397,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     VoidCallback? onTap,
   }) {
     return ListTile(
-      leading: Icon(icon, color: Colors.green),
+      leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
       title: Text(
         title,
         style: TextStyle(color: Theme.of(context).colorScheme.onSurface),

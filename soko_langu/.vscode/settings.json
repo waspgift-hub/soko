@@ -1,3 +1,4 @@
 {
-    "cmake.sourceDirectory": "C:/Users/user/Desktop/ttr/soko_langu/linux"
+    "cmake.sourceDirectory": "C:/Users/user/Desktop/ttr/soko_langu/linux",
+    "CodeGPT.apiKey": "Ollama"
 }

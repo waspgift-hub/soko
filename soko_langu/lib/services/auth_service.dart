@@ -14,7 +14,10 @@ class AuthService {
 
   Future<UserCredential> register(String email, String password) async {
     return guardNetwork(
-      () => _auth.createUserWithEmailAndPassword(email: email, password: password),
+      () => _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      ),
     );
   }
 
@@ -71,7 +74,8 @@ class AuthService {
         return result;
       }
 
-      final GoogleSignInAccount googleUser = await GoogleSignIn.instance.authenticate();
+      final GoogleSignInAccount googleUser = await GoogleSignIn.instance
+          .authenticate();
       final GoogleSignInAuthentication googleAuth = googleUser.authentication;
       if (googleAuth.idToken == null) {
         throw NetworkError(
@@ -100,7 +104,8 @@ class AuthService {
       debugPrint('GoogleSignIn error: $e');
       throw NetworkError(
         message: 'Google Sign-In failed: $e',
-        userMessage: 'Google Sign-In imeshindwa. Tafadhali hakikisha umechagua akaunti na jaribu tena.',
+        userMessage:
+            'Google Sign-In imeshindwa. Tafadhali hakikisha umechagua akaunti na jaribu tena.',
         originalError: e,
       );
     }
@@ -119,7 +124,8 @@ class AuthService {
     if (digits.startsWith('0')) {
       digits = digits.substring(1);
     }
-    if (digits.length == 9 && (digits.startsWith('6') || digits.startsWith('7'))) {
+    if (digits.length == 9 &&
+        (digits.startsWith('6') || digits.startsWith('7'))) {
       return '+255$digits';
     }
     if (input.trim().startsWith('+') && digits.length >= 12) {
@@ -266,6 +272,27 @@ class AuthService {
 
   Future<void> logout() async {
     try {
+      final user = _auth.currentUser;
+      if (user != null) {
+        // Clean up FCM token
+        try {
+          await _db.collection('users').doc(user.uid).update({
+            'fcmToken': FieldValue.delete(),
+          });
+        } catch (_) {}
+        // Delete all user's notifications
+        try {
+          final notifs = await _db
+              .collection('notifications')
+              .where('userId', isEqualTo: user.uid)
+              .get();
+          final batch = _db.batch();
+          for (final doc in notifs.docs) {
+            batch.delete(doc.reference);
+          }
+          if (notifs.docs.isNotEmpty) await batch.commit();
+        } catch (_) {}
+      }
       if (!kIsWeb) {
         await GoogleSignIn.instance.signOut();
       }
@@ -275,16 +302,21 @@ class AuthService {
 
   Future<void> deleteAccount() async {
     final user = _auth.currentUser;
-    if (user == null) throw NetworkError(
-      message: 'No user logged in',
-      userMessage: 'Huna akaunti uliyoingia.',
-    );
+    if (user == null)
+      throw NetworkError(
+        message: 'No user logged in',
+        userMessage: 'Huna akaunti uliyoingia.',
+      );
     await _db.collection('users').doc(user.uid).delete();
     await user.delete();
     await _auth.signOut();
   }
 
-  Future<void> _createUserProfile(String uid, String displayName, String email) async {
+  Future<void> _createUserProfile(
+    String uid,
+    String displayName,
+    String email,
+  ) async {
     try {
       await _db.collection('users').doc(uid).set({
         'displayName': displayName,

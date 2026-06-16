@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../services/tier_visual_service.dart';
 import '../../extensions/context_tr.dart';
+import '../../utils/helpers.dart';
 
 class WallpaperScreen extends StatefulWidget {
   const WallpaperScreen({super.key});
@@ -25,6 +27,11 @@ class _WallpaperScreenState extends State<WallpaperScreen> {
   }
 
   Future<void> _pickWallpaper() async {
+    final granted = await requestPermissionWithDialog(
+      context, Permission.photos, 'permission_photos',
+    );
+    if (!granted) return;
+
     final path = await TierVisualService().pickAndSaveWallpaper();
     if (path != null && mounted) setState(() => _wallpaperPath = path);
   }

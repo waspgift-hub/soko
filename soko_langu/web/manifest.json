@@ -1,12 +1,11 @@
 {
-    "name": "soko_langu",
-    "short_name": "soko_langu",
+    "name": "Soko Vibe",
+    "short_name": "Soko Vibe",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#4CAF50",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "theme_color": "#40916C",
+    "description": "Soko Vibe - Marketplace ya Tanzania",
     "prefer_related_applications": false,
     "icons": [
         {

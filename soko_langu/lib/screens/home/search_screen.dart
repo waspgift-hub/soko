@@ -1,13 +1,17 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/product_service.dart';
 import '../../services/user_service.dart';
+import '../../services/flash_sale_service.dart';
 import '../../models/product_model.dart';
+import '../../models/flash_sale_model.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/ad_banner.dart';
 import '../../app/routes.dart';
 import '../../widgets/google_loading.dart';
+import '../../utils/responsive.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -20,22 +24,29 @@ class _SearchScreenState extends State<SearchScreen> {
   final TextEditingController _searchController = TextEditingController();
   final ProductService _productService = ProductService();
   final UserService _userService = UserService();
+  final FlashSaleService _flashSaleService = FlashSaleService();
   bool _loading = false;
   bool _hasSearched = false;
   bool _error = false;
   List<Product>? _lastResults;
   List<UserProfile>? _userResults;
+  Map<String, FlashSale> _flashSales = {};
+  StreamSubscription? _flashSub;
 
   @override
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
+    _flashSub = _flashSaleService.getActiveFlashSalesMap().listen((map) {
+      if (mounted) setState(() => _flashSales = map);
+    });
   }
 
   @override
   void dispose() {
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
+    _flashSub?.cancel();
     super.dispose();
   }
 
@@ -88,16 +99,16 @@ class _SearchScreenState extends State<SearchScreen> {
         backgroundColor: Colors.transparent,
         title: Container(
           decoration: BoxDecoration(
-            color: Colors.grey[100],
+            color: Theme.of(context).colorScheme.surfaceContainerLow,
             borderRadius: BorderRadius.circular(12),
           ),
           child: TextField(
             controller: _searchController,
             autofocus: true,
-            style: const TextStyle(color: Colors.black),
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
             decoration: InputDecoration(
               hintText: context.tr('search_products'),
-              hintStyle: const TextStyle(color: Colors.black54),
+              hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.54)),
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               suffixIcon: _searchController.text.isNotEmpty
@@ -122,7 +133,7 @@ class _SearchScreenState extends State<SearchScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.search, color: Colors.green),
+            icon: Icon(Icons.search, color: Theme.of(context).colorScheme.primary),
             onPressed: _performSearch,
           ),
         ],
@@ -150,7 +161,7 @@ class _SearchScreenState extends State<SearchScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.search, size: 48, color: Colors.green),
+            Icon(Icons.search, size: 48, color: Theme.of(context).colorScheme.primary),
             const SizedBox(height: 16),
             const GoogleLoading(size: 32, strokeWidth: 3),
             const SizedBox(height: 16),
@@ -161,7 +172,7 @@ class _SearchScreenState extends State<SearchScreen> {
             const SizedBox(height: 8),
             Text(
               context.tr('loading_results'),
-              style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+              style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6)),
             ),
           ],
         ),
@@ -176,20 +187,20 @@ class _SearchScreenState extends State<SearchScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.search, size: 72, color: Colors.grey[300]),
+            Icon(Icons.search, size: 72, color: Theme.of(context).colorScheme.outline),
             const SizedBox(height: 16),
             Text(
               context.tr('search_products'),
               style: TextStyle(
                 fontSize: 18,
-                color: Colors.grey[600],
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
                 fontWeight: FontWeight.w500,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               context.tr('find_products_people'),
-              style: TextStyle(fontSize: 14, color: Colors.grey[400]),
+              style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           ],
         ),
@@ -206,7 +217,7 @@ class _SearchScreenState extends State<SearchScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.search_off, size: 72, color: Colors.grey[300]),
+              Icon(Icons.search_off, size: 72, color: Theme.of(context).colorScheme.outline),
               const SizedBox(height: 16),
               Text(
                 context.tr('no_results_soko'),
@@ -218,7 +229,7 @@ class _SearchScreenState extends State<SearchScreen> {
               const SizedBox(height: 8),
               Text(
                 context.tr('try_different'),
-                style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6)),
               ),
             ],
           ),
@@ -234,7 +245,7 @@ class _SearchScreenState extends State<SearchScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.cloud_off, size: 72, color: Colors.grey[400]),
+            Icon(Icons.cloud_off, size: 72, color: Theme.of(context).colorScheme.onSurfaceVariant),
             const SizedBox(height: 16),
             Text(
               context.tr('trouble_connecting'),
@@ -243,7 +254,7 @@ class _SearchScreenState extends State<SearchScreen> {
             const SizedBox(height: 8),
             Text(
               context.tr('try_again'),
-              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+              style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6)),
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
@@ -251,8 +262,8 @@ class _SearchScreenState extends State<SearchScreen> {
               icon: const Icon(Icons.refresh),
               label: Text(context.tr('try_again')),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(context).colorScheme.surface,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -290,17 +301,18 @@ class _SearchScreenState extends State<SearchScreen> {
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: Responsive.gridColumns(context),
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
-              childAspectRatio: 0.7,
+              childAspectRatio: Responsive.cardAspectRatio(context),
             ),
             itemCount: products.length,
             itemBuilder: (context, index) {
               final product = products[index];
               return ProductCard(
                 product: product,
+                flashSale: _flashSales[product.id],
                 onTap: () => context.push(
                   '${AppRoutes.productDetail}/${product.id}',
                   extra: product,
@@ -321,13 +333,13 @@ class _SearchScreenState extends State<SearchScreen> {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey[200]!),
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         leading: CircleAvatar(
           radius: 24,
-          backgroundColor: Colors.green,
+          backgroundColor: Theme.of(context).colorScheme.primary,
           backgroundImage: user.profileImage.isNotEmpty
               ? NetworkImage(user.profileImage)
               : null,
@@ -336,11 +348,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   user.displayName.isNotEmpty
                       ? user.displayName[0].toUpperCase()
                       : '?',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 20, color: Theme.of(context).colorScheme.surface, fontWeight: FontWeight.bold),
                 )
               : null,
         ),
@@ -365,12 +373,12 @@ class _SearchScreenState extends State<SearchScreen> {
               : '',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: Colors.grey[600], fontSize: 13),
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13),
         ),
-        trailing: const Icon(
+        trailing: Icon(
           Icons.arrow_forward_ios,
           size: 14,
-          color: Colors.grey,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
         ),
         onTap: () => context.push(
           '${AppRoutes.publicProfile}/${user.uid}',

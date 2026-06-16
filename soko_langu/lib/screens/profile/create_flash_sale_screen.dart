@@ -51,7 +51,7 @@ class _CreateFlashSaleScreenState extends State<CreateFlashSaleScreen> {
             if (products.isEmpty) {
               return Center(
                 child: Text(context.tr('haujapakia_bidhaa_bado'),
-                    style: TextStyle(fontSize: 16, color: Colors.grey)),
+                    style: TextStyle(fontSize: 16, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               );
             }
             return SingleChildScrollView(
@@ -86,8 +86,8 @@ class _CreateFlashSaleScreenState extends State<CreateFlashSaleScreen> {
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
           color: _selectedProduct?.id == product.id
-              ? Colors.orange
-              : Colors.grey.shade300,
+              ? Theme.of(context).colorScheme.tertiary
+              : Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
           width: _selectedProduct?.id == product.id ? 2 : 1,
         ),
       ),
@@ -97,18 +97,18 @@ class _CreateFlashSaleScreenState extends State<CreateFlashSaleScreen> {
           child: Container(
             width: 56,
             height: 56,
-            color: Colors.grey[200],
+            color: Theme.of(context).colorScheme.outlineVariant,
             child: product.images.isNotEmpty
                 ? CachedNetworkImage(
                     imageUrl: product.images.first, fit: BoxFit.cover)
-                : const Icon(Icons.image, color: Colors.grey),
+                : Icon(Icons.image, color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
         ),
         title: Text(product.name,
             style: const TextStyle(fontWeight: FontWeight.w600)),
         subtitle: Text(
           'TSh ${product.price.toStringAsFixed(0)} | Stock: ${product.stock}',
-          style: TextStyle(color: Colors.grey[600], fontSize: 12),
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
         ),
         trailing: Radio<String>(
           value: product.id,
@@ -145,16 +145,16 @@ class _CreateFlashSaleScreenState extends State<CreateFlashSaleScreen> {
           max: 70,
           divisions: 13,
           label: '${_discountPercent.toStringAsFixed(0)}%',
-          activeColor: Colors.orange,
+          activeColor: Theme.of(context).colorScheme.tertiary,
           onChanged: (v) => setState(() => _discountPercent = v),
         ),
 
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.orange.withValues(alpha: 0.08),
+            color: Theme.of(context).colorScheme.tertiary.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.orange.shade200),
+            border: Border.all(color: Theme.of(context).colorScheme.tertiary.withValues(alpha: 0.8)),
           ),
           child: Row(
             children: [
@@ -163,11 +163,11 @@ class _CreateFlashSaleScreenState extends State<CreateFlashSaleScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(context.tr('bei_ya_awali'),
-                        style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
                     Text('TSh ${nf.format(_selectedProduct!.price.toInt())}',
-                        style: const TextStyle(
+                        style: TextStyle(
                             decoration: TextDecoration.lineThrough,
-                            color: Colors.grey)),
+                            color: Theme.of(context).colorScheme.onSurfaceVariant)),
                   ],
                 ),
               ),
@@ -176,10 +176,10 @@ class _CreateFlashSaleScreenState extends State<CreateFlashSaleScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(context.tr('bei_ya_flash_sale'),
-                        style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
                     Text('TSh ${nf.format(salePrice.toInt())}',
-                        style: const TextStyle(
-                            color: Colors.orange,
+                        style: TextStyle(
+                            color: Theme.of(context).colorScheme.tertiary,
                             fontWeight: FontWeight.bold,
                             fontSize: 18)),
                   ],
@@ -215,7 +215,7 @@ class _CreateFlashSaleScreenState extends State<CreateFlashSaleScreen> {
           title: Text(context.tr('muda_wa_kuanza')),
           subtitle: Text(
             DateFormat('dd/MM/yyyy HH:mm').format(_startTime),
-            style: TextStyle(color: Colors.grey[600]),
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
           trailing: const Icon(Icons.calendar_today),
           onTap: () => _pickDateTime(isStart: true),
@@ -226,7 +226,7 @@ class _CreateFlashSaleScreenState extends State<CreateFlashSaleScreen> {
           title: Text(context.tr('muda_wa_kuisha')),
           subtitle: Text(
             DateFormat('dd/MM/yyyy HH:mm').format(_endTime),
-            style: TextStyle(color: Colors.grey[600]),
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
           trailing: const Icon(Icons.calendar_today),
           onTap: () => _pickDateTime(isStart: false),
@@ -244,11 +244,11 @@ class _CreateFlashSaleScreenState extends State<CreateFlashSaleScreen> {
                     height: 20,
                     child: GoogleLoading(size: 16, strokeWidth: 2),
                   )
-                : const Icon(Icons.local_fire_department),
+                : Icon(Icons.local_fire_department),
             label: Text(_isCreating ? context.tr('inaunda') : context.tr('unda_flash_sale_btn')),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-              foregroundColor: Colors.white,
+              backgroundColor: Theme.of(context).colorScheme.tertiary,
+              foregroundColor: Theme.of(context).colorScheme.surface,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
             ),
@@ -354,7 +354,7 @@ class _CreateFlashSaleScreenState extends State<CreateFlashSaleScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(context.tr('flash_sale_imeundwa')),
-            backgroundColor: Colors.green,
+            backgroundColor: Theme.of(context).colorScheme.primary,
           ),
         );
         context.pop();
@@ -364,7 +364,7 @@ class _CreateFlashSaleScreenState extends State<CreateFlashSaleScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(context.tr('imeshindwa').replaceAll('{0}', '$e')),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }

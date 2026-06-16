@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/user_service.dart';
@@ -25,16 +26,27 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
   String _accentColor = '';
   bool _changed = false;
 
-  static const _presetColors = [
-    Color(0xFF2E7D32),
-    Color(0xFF1565C0),
-    Color(0xFF6A1B9A),
-    Color(0xFFC62828),
-    Color(0xFFEF6C00),
-    Color(0xFF00838F),
-    Color(0xFF4E342E),
-    Color(0xFF37474F),
-
+  List<Color> _presetColors() => [
+    const Color(0xFFE53935), // Red
+    const Color(0xFFD81B60), // Pink
+    const Color(0xFF8E24AA), // Purple
+    const Color(0xFF5E35B1), // Deep Purple
+    const Color(0xFF3949AB), // Indigo
+    const Color(0xFF1E88E5), // Blue
+    const Color(0xFF039BE5), // Light Blue
+    const Color(0xFF00ACC1), // Cyan
+    const Color(0xFF00897B), // Teal
+    const Color(0xFF43A047), // Green
+    const Color(0xFF7CB342), // Light Green
+    const Color(0xFFC0CA33), // Lime
+    const Color(0xFFFDD835), // Yellow
+    const Color(0xFFFFB300), // Amber
+    const Color(0xFFFB8C00), // Orange
+    const Color(0xFFFF7043), // Deep Orange
+    const Color(0xFF8D6E63), // Brown
+    const Color(0xFF78909C), // Blue Grey
+    const Color(0xFF212121), // Near Black
+    const Color(0xFFFFFFFF), // White
   ];
 
   @override
@@ -56,7 +68,11 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
   }
 
   Future<void> _pickBanner() async {
-    final file = await _picker.pickImage(source: ImageSource.gallery);
+    final file = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1024,
+      imageQuality: 80,
+    );
     if (file == null) return;
     setState(() => _loading = true);
     try {
@@ -112,6 +128,86 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
     return '#$r$g$b';
   }
 
+  Future<Color?> _pickColor({String? initialHex}) async {
+    final controller = TextEditingController(text: initialHex ?? '');
+    return showDialog<Color>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Custom Color'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                  labelText: 'Hex color (e.g. #FF5733)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _presetColors().map((c) {
+                  return GestureDetector(
+                    onTap: () => Navigator.pop(ctx, c),
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: c,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                var hex = controller.text.trim();
+                if (hex.isEmpty) return;
+                if (!hex.startsWith('#')) hex = '#$hex';
+                try {
+                  Navigator.pop(ctx, _parseColor(hex));
+                } catch (_) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Invalid hex color')),
+                  );
+                }
+              },
+              child: const Text('Apply'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildCustomColorButton({required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade200,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade400, width: 1.5),
+        ),
+        child: Icon(Icons.add, color: Colors.grey.shade600, size: 22),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -165,11 +261,11 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
               decoration: BoxDecoration(
                 color: _bannerColor.isNotEmpty
                     ? _parseColor(_bannerColor)
-                    : Colors.grey[200],
+                    : Theme.of(context).colorScheme.outlineVariant,
                 borderRadius: BorderRadius.circular(12),
                 image: _banner.isNotEmpty
                     ? DecorationImage(
-                        image: NetworkImage(_banner),
+                        image: CachedNetworkImageProvider(_banner),
                         fit: BoxFit.cover,
                       )
                     : null,
@@ -182,12 +278,12 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
                           Icon(
                             Icons.add_photo_alternate_outlined,
                             size: 40,
-                            color: Colors.grey[500],
+                            color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                           ),
                           const SizedBox(height: 8),
                           Text(
                             context.tr('shop_banner_hint'),
-                            style: TextStyle(color: Colors.grey[600]),
+                            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                           ),
                         ],
                       )
@@ -204,38 +300,51 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
           Wrap(
             spacing: 10,
             runSpacing: 10,
-            children: _presetColors.map((c) {
-              final hex = _colorToHex(c);
-              final selected = _bannerColor == hex;
-              return GestureDetector(
-                onTap: () => setState(() {
-                  _bannerColor = hex;
-                  _changed = true;
-                }),
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: c,
-                    borderRadius: BorderRadius.circular(12),
-                    border: selected
-                        ? Border.all(color: Colors.black, width: 3)
-                        : null,
-                    boxShadow: selected
-                        ? [
-                            BoxShadow(
-                              color: c.withValues(alpha: 0.5),
-                              blurRadius: 8,
-                            ),
-                          ]
+            children: [
+              ..._presetColors().map((c) {
+                final hex = _colorToHex(c);
+                final selected = _bannerColor == hex;
+                return GestureDetector(
+                  onTap: () => setState(() {
+                    _bannerColor = hex;
+                    _changed = true;
+                  }),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: c,
+                      borderRadius: BorderRadius.circular(12),
+                      border: selected
+                          ? Border.all(color: Theme.of(context).colorScheme.onSurface, width: 3)
+                          : null,
+                      boxShadow: selected
+                          ? [
+                              BoxShadow(
+                                color: c.withValues(alpha: 0.5),
+                                blurRadius: 8,
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: selected
+                        ? Icon(Icons.check, color: Theme.of(context).colorScheme.surface, size: 20)
                         : null,
                   ),
-                  child: selected
-                      ? const Icon(Icons.check, color: Colors.white, size: 20)
-                      : null,
-                ),
-              );
-            }).toList(),
+                );
+              }),
+              _buildCustomColorButton(
+                onTap: () async {
+                  final color = await _pickColor(initialHex: _bannerColor);
+                  if (color != null) {
+                    setState(() {
+                      _bannerColor = _colorToHex(color);
+                      _changed = true;
+                    });
+                  }
+                },
+              ),
+            ],
           ),
           const SizedBox(height: 20),
           Text(
@@ -245,44 +354,57 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
           const SizedBox(height: 4),
           Text(
             context.tr('shop_accent_color_hint'),
-            style: TextStyle(color: Colors.grey[500], fontSize: 13),
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 13),
           ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 10,
             runSpacing: 10,
-            children: _presetColors.map((c) {
-              final hex = _colorToHex(c);
-              final selected = _accentColor == hex;
-              return GestureDetector(
-                onTap: () => setState(() {
-                  _accentColor = hex;
-                  _changed = true;
-                }),
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: c,
-                    borderRadius: BorderRadius.circular(12),
-                    border: selected
-                        ? Border.all(color: Colors.black, width: 3)
-                        : null,
-                    boxShadow: selected
-                        ? [
-                            BoxShadow(
-                              color: c.withValues(alpha: 0.5),
-                              blurRadius: 8,
-                            ),
-                          ]
+            children: [
+              ..._presetColors().map((c) {
+                final hex = _colorToHex(c);
+                final selected = _accentColor == hex;
+                return GestureDetector(
+                  onTap: () => setState(() {
+                    _accentColor = hex;
+                    _changed = true;
+                  }),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: c,
+                      borderRadius: BorderRadius.circular(12),
+                      border: selected
+                          ? Border.all(color: Theme.of(context).colorScheme.onSurface, width: 3)
+                          : null,
+                      boxShadow: selected
+                          ? [
+                              BoxShadow(
+                                color: c.withValues(alpha: 0.5),
+                                blurRadius: 8,
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: selected
+                        ? Icon(Icons.check, color: Theme.of(context).colorScheme.surface, size: 20)
                         : null,
                   ),
-                  child: selected
-                      ? const Icon(Icons.check, color: Colors.white, size: 20)
-                      : null,
-                ),
-              );
-            }).toList(),
+                );
+              }),
+              _buildCustomColorButton(
+                onTap: () async {
+                  final color = await _pickColor(initialHex: _accentColor);
+                  if (color != null) {
+                    setState(() {
+                      _accentColor = _colorToHex(color);
+                      _changed = true;
+                    });
+                  }
+                },
+              ),
+            ],
           ),
           const Divider(height: 40),
           Text(
@@ -292,40 +414,52 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
           const SizedBox(height: 4),
           Text(
             'Change the entire app\'s color theme',
-            style: TextStyle(color: Colors.grey[500], fontSize: 13),
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 13),
           ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 10,
             runSpacing: 10,
-            children: _presetColors.map((c) {
-              final selected = themeManager.seedColor.value == c.value;
-              return GestureDetector(
-                onTap: () => themeManager.setSeedColor(c),
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: c,
-                    borderRadius: BorderRadius.circular(12),
-                    border: selected
-                        ? Border.all(color: Colors.black, width: 3)
-                        : null,
-                    boxShadow: selected
-                        ? [
-                            BoxShadow(
-                              color: c.withValues(alpha: 0.5),
-                              blurRadius: 8,
-                            ),
-                          ]
+            children: [
+              ..._presetColors().map((c) {
+                final selected = themeManager.seedColor.value == c.value;
+                return GestureDetector(
+                  onTap: () => themeManager.setSeedColor(c),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: c,
+                      borderRadius: BorderRadius.circular(12),
+                      border: selected
+                          ? Border.all(color: Theme.of(context).colorScheme.onSurface, width: 3)
+                          : null,
+                      boxShadow: selected
+                          ? [
+                              BoxShadow(
+                                color: c.withValues(alpha: 0.5),
+                                blurRadius: 8,
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: selected
+                        ? Icon(Icons.check, color: Theme.of(context).colorScheme.surface, size: 20)
                         : null,
                   ),
-                  child: selected
-                      ? const Icon(Icons.check, color: Colors.white, size: 20)
-                      : null,
-                ),
-              );
-            }).toList(),
+                );
+              }),
+              _buildCustomColorButton(
+                onTap: () async {
+                  final color = await _pickColor(
+                    initialHex: _colorToHex(themeManager.seedColor),
+                  );
+                  if (color != null) {
+                    themeManager.setSeedColor(color);
+                  }
+                },
+              ),
+            ],
           ),
           const SizedBox(height: 40),
         ],
@@ -336,10 +470,10 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
   Widget _buildPreview() {
     final accent = _accentColor.isNotEmpty
         ? _parseColor(_accentColor)
-        : Colors.green;
+        : Theme.of(context).colorScheme.primary;
     final bgColor = _bannerColor.isNotEmpty
         ? _parseColor(_bannerColor)
-        : Colors.grey[100]!;
+        : Theme.of(context).colorScheme.surfaceContainerLow;
 
     return Container(
       decoration: BoxDecoration(
@@ -363,14 +497,14 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
               ),
               image: _banner.isNotEmpty
                   ? DecorationImage(
-                      image: NetworkImage(_banner),
+                      image: CachedNetworkImageProvider(_banner),
                       fit: BoxFit.cover,
                     )
                   : null,
             ),
             child: _banner.isEmpty
                 ? Center(
-                    child: Icon(Icons.store, size: 48, color: Colors.white54),
+                    child: Icon(Icons.store, size: 48, color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.54)),
                   )
                 : null,
           ),
@@ -381,7 +515,7 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
                 CircleAvatar(
                   radius: 24,
                   backgroundColor: accent,
-                  child: Icon(Icons.person, color: Colors.white),
+                  child: Icon(Icons.person, color: Theme.of(context).colorScheme.surface),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -397,7 +531,7 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
                       ),
                       Text(
                         'Seller',
-                        style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13),
                       ),
                     ],
                   ),

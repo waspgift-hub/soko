@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_typography.dart';
 import 'google_loading.dart';
 
+
 class AuthPageShell extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -111,6 +112,7 @@ class AuthPrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return SizedBox(
       width: double.infinity,
       height: 50,
@@ -119,8 +121,8 @@ class AuthPrimaryButton extends StatelessWidget {
           : DecoratedBox(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(14),
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF2D6A4F), Color(0xFF40916C)],
+                gradient: LinearGradient(
+                  colors: [cs.primary, cs.tertiary],
                 ),
               ),
               child: ElevatedButton(
@@ -134,8 +136,8 @@ class AuthPrimaryButton extends StatelessWidget {
                 ),
                 child: Text(
                   label,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: cs.surface,
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                   ),
@@ -226,12 +228,18 @@ class AuthLoadingOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     if (!visible) return const SizedBox.shrink();
     return Positioned.fill(
       child: Container(
-        color: Colors.black.withValues(alpha: 0.28),
-        child: const Center(child: GoogleLoadingPage()),
+        color: cs.onSurface.withValues(alpha: 0.28),
+        child: Center(
+          child: const GoogleLoading(),
+        ),
       ),
     );
   }
 }
+
+
+

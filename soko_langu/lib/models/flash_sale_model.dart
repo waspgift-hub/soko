@@ -41,6 +41,12 @@ class FlashSale {
 
   factory FlashSale.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+    DateTime ts(dynamic v) {
+      if (v is Timestamp) return v.toDate();
+      if (v is String) return DateTime.parse(v);
+      return DateTime.now();
+    }
+
     return FlashSale(
       id: doc.id,
       productId: data['productId'] ?? '',
@@ -56,8 +62,8 @@ class FlashSale {
       stock: data['stock'] ?? 0,
       soldCount: data['soldCount'] ?? 0,
       isActive: data['isActive'] ?? true,
-      startTime: (data['startTime'] as Timestamp).toDate(),
-      endTime: (data['endTime'] as Timestamp).toDate(),
+      startTime: ts(data['startTime']),
+      endTime: ts(data['endTime']),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }

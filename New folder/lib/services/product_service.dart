@@ -117,13 +117,15 @@ class ProductService {
   }
 
   Stream<List<Product>> getProducts({int limitAmt = 30}) {
-    return _db.collection("products").limit(limitAmt).snapshots().map((
-      snapshot,
-    ) {
-      final products = snapshot.docs
-          .map((doc) => Product.fromFirestore(doc))
-          .where((p) => p.isActive)
-          .toList();
+    return _db
+        .collection("products")
+        .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(limitAmt)
+        .snapshots()
+        .map((snapshot) {
+      final products =
+          snapshot.docs.map((doc) => Product.fromFirestore(doc)).toList();
       _sortByTier(products);
       return products;
     });
@@ -132,16 +134,16 @@ class ProductService {
   Stream<List<Product>> getProductsByCategory(String category) {
     return _db
         .collection("products")
+        .where('isActive', isEqualTo: true)
         .where("category", isEqualTo: category)
+        .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
-          final products = snapshot.docs
-              .map((doc) => Product.fromFirestore(doc))
-              .where((p) => p.isActive)
-              .toList();
-          _sortByTier(products);
-          return products;
-        });
+      final products =
+          snapshot.docs.map((doc) => Product.fromFirestore(doc)).toList();
+      _sortByTier(products);
+      return products;
+    });
   }
 
   Stream<List<Product>> getProductsByCategoryAndSubcategory(
@@ -150,28 +152,32 @@ class ProductService {
   ) {
     return _db
         .collection("products")
+        .where('isActive', isEqualTo: true)
         .where("category", isEqualTo: category)
         .where("subcategory", isEqualTo: subcategory)
+        .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
-          final products = snapshot.docs
-              .map((doc) => Product.fromFirestore(doc))
-              .where((p) => p.isActive)
-              .toList();
-          _sortByTier(products);
-          return products;
-        });
+      final products =
+          snapshot.docs.map((doc) => Product.fromFirestore(doc)).toList();
+      _sortByTier(products);
+      return products;
+    });
   }
 
   Stream<List<Product>> searchProducts(String query) {
-    return _db.collection("products").snapshots().map((snapshot) {
+    return _db
+        .collection("products")
+        .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
       final products = snapshot.docs
           .map((doc) => Product.fromFirestore(doc))
           .where(
             (p) =>
-                p.isActive &&
-                (query.isEmpty ||
-                    p.name.toLowerCase().contains(query.toLowerCase())),
+                query.isEmpty ||
+                p.name.toLowerCase().contains(query.toLowerCase()),
           )
           .toList();
       _sortByTier(products);
@@ -182,16 +188,16 @@ class ProductService {
   Stream<List<Product>> getProductsByBrand(String brand) {
     return _db
         .collection("products")
+        .where('isActive', isEqualTo: true)
         .where("brand", isEqualTo: brand)
+        .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
-          final products = snapshot.docs
-              .map((doc) => Product.fromFirestore(doc))
-              .where((p) => p.isActive)
-              .toList();
-          _sortByTier(products);
-          return products;
-        });
+      final products =
+          snapshot.docs.map((doc) => Product.fromFirestore(doc)).toList();
+      _sortByTier(products);
+      return products;
+    });
   }
 
   Stream<List<Product>> getMyProducts() {
@@ -282,7 +288,43 @@ class ProductService {
 
   Future<void> deleteProduct(String productId) async {
     try {
-      await _db.collection("products").doc(productId).delete();
+      final ref = _db.collection("products").doc(productId);
+
+      // 1. Delete all comments + replies
+      final comments = await ref.collection("comments").get();
+      for (final comment in comments.docs) {
+        final replies = await comment.reference.collection("replies").get();
+        if (replies.docs.isNotEmpty) {
+          final batch = _db.batch();
+          for (final reply in replies.docs) batch.delete(reply.reference);
+          await batch.commit();
+        }
+        await comment.reference.delete();
+      }
+
+      // 2. End active flash sales for this product
+      final flashSales = await _db
+          .collection("flash_sales")
+          .where("productId", isEqualTo: productId)
+          .where("isActive", isEqualTo: true)
+          .get();
+      for (final sale in flashSales.docs) {
+        await sale.reference.update({"status": "ended", "isActive": false});
+      }
+
+      // 3. Delete cart items referencing this product
+      final cartItems = await _db
+          .collectionGroup("items")
+          .where(FieldPath.documentId, isEqualTo: productId)
+          .get();
+      if (cartItems.docs.isNotEmpty) {
+        final batch = _db.batch();
+        for (final item in cartItems.docs) batch.delete(item.reference);
+        await batch.commit();
+      }
+
+      // 4. Delete the product document
+      await ref.delete();
     } catch (e) {
       throw NetworkError(
           message: "Delete failed: $e",

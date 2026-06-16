@@ -168,8 +168,8 @@ class _ReportScreenState extends State<ReportScreen> {
                     : const Icon(Icons.flag),
                 label: Text(_submitting ? context.tr('submitting') : context.tr('submit_report')),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                  foregroundColor: Theme.of(context).colorScheme.surface,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),

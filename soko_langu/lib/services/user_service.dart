@@ -18,6 +18,7 @@ class UserProfile {
   final String shopBanner;
   final String shopBannerColor;
   final String shopAccentColor;
+  final bool kycApproved;
 
   UserProfile({
     required this.uid,
@@ -35,6 +36,7 @@ class UserProfile {
     this.shopBanner = '',
     this.shopBannerColor = '',
     this.shopAccentColor = '',
+    this.kycApproved = false,
   });
 
   factory UserProfile.fromMap(String uid, Map<String, dynamic> data) {
@@ -54,6 +56,7 @@ class UserProfile {
       shopBanner: data['shopBanner'] ?? '',
       shopBannerColor: data['shopBannerColor'] ?? '',
       shopAccentColor: data['shopAccentColor'] ?? '',
+      kycApproved: data['kyc']?['approved'] ?? false,
     );
   }
 

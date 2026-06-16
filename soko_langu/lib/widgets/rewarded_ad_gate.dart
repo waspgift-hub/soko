@@ -35,7 +35,7 @@ class RewardedAdGate {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            Icon(Icons.play_circle_outline, color: Colors.orange, size: 28),
+            Icon(Icons.play_circle_outline, color: Theme.of(context).colorScheme.tertiary, size: 28),
             const SizedBox(width: 8),
             Expanded(
               child: Text(title ?? context.tr('watch_ad')),
@@ -50,7 +50,7 @@ class RewardedAdGate {
             const SizedBox(height: 8),
             Text(
               context.tr('watch_ad_to_continue'),
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           ],
         ),
@@ -74,8 +74,8 @@ class RewardedAdGate {
             icon: const Icon(Icons.play_arrow, size: 18),
             label: Text(context.tr('watch_ad')),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-              foregroundColor: Colors.white,
+              backgroundColor: Theme.of(context).colorScheme.tertiary,
+              foregroundColor: Theme.of(context).colorScheme.surface,
             ),
           ),
         ],
@@ -85,3 +85,5 @@ class RewardedAdGate {
     return completer.future;
   }
 }
+
+

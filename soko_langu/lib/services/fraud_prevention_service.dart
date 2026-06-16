@@ -88,10 +88,6 @@ class FraudPreventionService {
   }
 
   Future<void> checkNewSeller(String sellerId, String sellerName) async {
-    if (isTestMode) {
-      debugPrint('FRAUD TEST MODE: Would check new seller $sellerId');
-      return;
-    }
     try {
       final userDoc = await _db.collection('users').doc(sellerId).get();
       final data = userDoc.data();
@@ -102,15 +98,7 @@ class FraudPreventionService {
 
       final accountAge = DateTime.now().difference(createdAt.toDate()).inDays;
       if (accountAge < 1) {
-        await _db.collection('fraud_alerts').add(FraudAlert(
-          id: '',
-          sellerId: sellerId,
-          sellerName: sellerName,
-          type: 'new_seller',
-          severity: 'medium',
-          description: 'New seller account (less than 1 day old)',
-          detectedAt: DateTime.now(),
-        ).toMap());
+        debugPrint('FRAUD: New seller $sellerId ($sellerName) - account < 1 day old');
       }
     } catch (e) {
       debugPrint('Fraud checkNewSeller error: $e');
@@ -125,22 +113,9 @@ class FraudPreventionService {
     required double price,
     required int sellerProductCount,
   }) async {
-    if (isTestMode) {
-      debugPrint('FRAUD TEST MODE: Would check listing $productName');
-      return;
-    }
     try {
       if (sellerProductCount > 20 && price > 1000000) {
-        await _db.collection('fraud_alerts').add(FraudAlert(
-          id: '',
-          sellerId: sellerId,
-          sellerName: sellerName,
-          type: 'bulk_high_value',
-          severity: 'high',
-          description: 'Seller has $sellerProductCount listings, high-value product: $productName at TZS $price',
-          detectedAt: DateTime.now(),
-          productId: productId,
-        ).toMap());
+        debugPrint('FRAUD: Bulk high-value listing - $sellerName has $sellerProductCount listings, product $productName at TZS $price');
       }
 
       final recentSnap = await _db.collection('products')
@@ -149,16 +124,7 @@ class FraudPreventionService {
           .count()
           .get();
       if ((recentSnap.count ?? 0) > 5) {
-        await _db.collection('fraud_alerts').add(FraudAlert(
-          id: '',
-          sellerId: sellerId,
-          sellerName: sellerName,
-          type: 'rapid_listing',
-          severity: 'medium',
-          description: 'Rapid listing: ${recentSnap.count} products in last hour',
-          detectedAt: DateTime.now(),
-          productId: productId,
-        ).toMap());
+        debugPrint('FRAUD: Rapid listing - $sellerName created ${recentSnap.count} products in last hour');
       }
     } catch (e) {
       debugPrint('Fraud checkSuspiciousListing error: $e');
@@ -171,34 +137,14 @@ class FraudPreventionService {
     required String sellerName,
     required double amount,
   }) async {
-    if (isTestMode) {
-      debugPrint('FRAUD TEST MODE: Would check transaction TZS $amount');
-      return;
-    }
     try {
       if (amount > 5000000) {
-        await _db.collection('fraud_alerts').add(FraudAlert(
-          id: '',
-          sellerId: sellerId,
-          sellerName: sellerName,
-          type: 'high_value_tx',
-          severity: 'high',
-          description: 'High-value transaction: TZS $amount',
-          detectedAt: DateTime.now(),
-        ).toMap());
+        debugPrint('FRAUD: High-value transaction - $sellerName, TZS $amount');
       }
 
       final sellerDoc = await _db.collection('users').doc(sellerId).get();
       if (sellerDoc.data()?['kyc']?['approved'] != true && amount > 100000) {
-        await _db.collection('fraud_alerts').add(FraudAlert(
-          id: '',
-          sellerId: sellerId,
-          sellerName: sellerName,
-          type: 'no_kyc_high_value',
-          severity: 'high',
-          description: 'Non-KYC seller receiving TZS $amount',
-          detectedAt: DateTime.now(),
-        ).toMap());
+        debugPrint('FRAUD: Non-KYC seller $sellerName receiving TZS $amount');
       }
 
       final recentTxSnap = await _db.collection('transactions')
@@ -208,15 +154,7 @@ class FraudPreventionService {
           .get();
       final dailyTotal = (recentTxSnap.count ?? 0) * amount;
       if (dailyTotal > 5000000) {
-        await _db.collection('fraud_alerts').add(FraudAlert(
-          id: '',
-          sellerId: sellerId,
-          sellerName: sellerName,
-          type: 'daily_limit_exceeded',
-          severity: 'high',
-          description: 'Daily transaction limit exceeded: TZS $dailyTotal in 24h',
-          detectedAt: DateTime.now(),
-        ).toMap());
+        debugPrint('FRAUD: Daily limit exceeded - $sellerName, TZS $dailyTotal in 24h');
       }
     } catch (e) {
       debugPrint('Fraud checkSuspiciousTransaction error: $e');

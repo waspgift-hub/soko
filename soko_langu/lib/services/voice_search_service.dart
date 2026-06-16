@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:record/record.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'env_config.dart';
 
 class VoiceSearchService {
   static final VoiceSearchService _instance = VoiceSearchService._internal();
@@ -53,7 +54,7 @@ class VoiceSearchService {
       final uri = Uri.parse('https://api.groq.com/openai/v1/audio/transcriptions');
       final request = http.MultipartRequest('POST', uri)
         ..headers['Authorization'] =
-            'Bearer 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'
+            'Bearer ${EnvConfig.groqApiKey}'
         ..files.add(await http.MultipartFile.fromPath('file', audioPath))
         ..fields['model'] = 'whisper-large-v3-turbo'
         ..fields['language'] = locale == 'en' ? 'en' : 'sw'

@@ -29,13 +29,15 @@ import '../screens/profile/product_boost_screen.dart';
 import '../screens/profile/help_center_screen.dart';
 import '../screens/profile/about_app_screen.dart';
 import '../screens/notification/notification_screen.dart';
-import '../screens/media/media_player_screen.dart';
-import '../screens/media/playlists_screen.dart';
+import '../screens/audio/audio_player_screen.dart';
+import '../screens/audio/audio_list_screen.dart';
+import '../screens/audio/audio_queue_screen.dart';
 import '../screens/onboarding/account_selection_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
-import '../screens/onboarding/welcome_screen.dart';
+
 import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_ad_revenue_screen.dart';
+import '../screens/admin/admin_wallet_screen.dart';
 import '../screens/seller/seller_earnings_screen.dart';
 import '../screens/orders/my_purchases_screen.dart';
 import '../screens/kyc/kyc_screen.dart';
@@ -43,9 +45,10 @@ import '../screens/home/flash_sale_screen.dart';
 import '../screens/profile/create_flash_sale_screen.dart';
 import '../screens/report/report_screen.dart';
 import '../screens/report/admin_reports_screen.dart';
-import '../screens/music/music_player_screen.dart';
 import '../screens/ai/ai_assistant_screen.dart';
-import '../screens/cart/cart_screen.dart';
+
+import '../screens/legal/privacy_policy_screen.dart';
+import '../screens/legal/terms_of_service_screen.dart';
 import '../models/status_model.dart';
 import '../screens/status/status_list_screen.dart';
 import '../screens/status/status_viewer_screen.dart';
@@ -60,7 +63,7 @@ GoRouter buildRouter() {
     navigatorKey: rootNavigatorKey,
     initialLocation: AppRoutes.home,
     redirect: (context, state) {
-      if (!app_state.onboardingSeen && state.uri.path != AppRoutes.onboarding) {
+      if (!app_state.onboardingSeen && state.uri.path != AppRoutes.onboarding && state.uri.path != AppRoutes.login && state.uri.path != AppRoutes.register) {
         return AppRoutes.onboarding;
       }
       return null;
@@ -181,16 +184,28 @@ GoRouter buildRouter() {
         },
       ),
       GoRoute(
-        path: AppRoutes.mediaPlayer,
-        builder: (context, state) => const MediaPlayerScreen(),
+        path: AppRoutes.audioList,
+        builder: (context, state) => const AudioListScreen(),
       ),
       GoRoute(
-        path: AppRoutes.playlists,
-        builder: (context, state) => const PlaylistsScreen(),
+        path: AppRoutes.audioQueue,
+        builder: (context, state) => const AudioQueueScreen(),
       ),
       GoRoute(
-        path: AppRoutes.musicPlayer,
-        builder: (context, state) => const MusicPlayerScreen(),
+        path: AppRoutes.audioPlayer,
+        builder: (context, state) {
+          final extra = state.extra as Map?;
+          return AudioPlayerScreen(
+            audioUrl: extra?['url'] as String?,
+            title: extra?['title'] as String?,
+            artist: extra?['artist'] as String?,
+            urls: extra?['urls'] is List ? (extra!['urls'] as List<String>) : null,
+            titles: extra?['titles'] is List ? (extra!['titles'] as List<String>) : null,
+            artists: extra?['artists'] is List ? (extra!['artists'] as List<String>) : null,
+            imageUrls: extra?['imageUrls'] is List ? (extra!['imageUrls'] as List<String>) : null,
+            initialIndex: extra?['initialIndex'] as int? ?? 0,
+          );
+        },
       ),
       GoRoute(
         path: AppRoutes.admin,
@@ -199,6 +214,10 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.adminAdRevenue,
         builder: (context, state) => const AdminAdRevenueScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.adminWallet,
+        builder: (context, state) => const AdminWalletScreen(),
       ),
       GoRoute(
         path: AppRoutes.createGroup,
@@ -215,10 +234,7 @@ GoRouter buildRouter() {
         path: AppRoutes.onboarding,
         builder: (context, state) => const OnboardingScreen(),
       ),
-      GoRoute(
-        path: AppRoutes.welcome,
-        builder: (context, state) => const WelcomeScreen(),
-      ),
+
       GoRoute(
         path: AppRoutes.status,
         builder: (context, state) => const StatusListScreen(),
@@ -286,12 +302,16 @@ GoRouter buildRouter() {
         builder: (context, state) => const FlashSaleScreen(),
       ),
       GoRoute(
-        path: AppRoutes.cart,
-        builder: (context, state) => const CartScreen(),
-      ),
-      GoRoute(
         path: AppRoutes.createFlashSale,
         builder: (context, state) => const CreateFlashSaleScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.privacyPolicy,
+        builder: (context, state) => const PrivacyPolicyScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.termsOfService,
+        builder: (context, state) => const TermsOfServiceScreen(),
       ),
     ],
   );

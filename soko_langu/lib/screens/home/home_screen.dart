@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../main.dart';
@@ -8,12 +9,16 @@ import '../../models/product_model.dart';
 import '../../models/category_model.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/ad_banner.dart';
-import '../../widgets/trending_carousel.dart';
+import '../../widgets/dynamic_banner.dart';
 import '../../widgets/flash_sale_banner.dart';
+import '../../widgets/price_drop_banner.dart';
 import '../../extensions/context_tr.dart';
+import '../../utils/responsive.dart';
 import '../../app/routes.dart';
 import '../../widgets/google_loading.dart';
-import '../../services/cart_service.dart';
+import '../../services/flash_sale_service.dart';
+import '../../models/flash_sale_model.dart';
+
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -22,13 +27,20 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen>
+    with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
+
+  @override
+  bool get wantKeepAlive => true;
   final ProductService _productService = ProductService();
-  final CartService _cartService = CartService();
+  final FlashSaleService _flashSaleService = FlashSaleService();
   String? _selectedBrand;
   bool _pageLoaded = false;
   int _retryKey = 0;
   final _searchCtrl = TextEditingController();
+  Map<String, FlashSale> _flashSales = {};
+  StreamSubscription? _flashSub;
+  int _flashRefreshKey = 0;
   List<String> _brands = [
     'Nike',
     'Adidas',
@@ -64,7 +76,7 @@ class _HomeScreenState extends State<HomeScreen> {
               (e) => ListTile(
                 title: Text("${e.value['name']} (${e.value['symbol']})"),
                 trailing: config.currencyCode == e.key
-                    ? const Icon(Icons.check, color: Colors.green)
+                    ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
                     : null,
                 onTap: () {
                   LocalizationService().setCurrency(e.key);
@@ -81,13 +93,42 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _subscribeFlashSales();
+  }
+
+  void _subscribeFlashSales() {
+    _flashSub?.cancel();
+    final now = DateTime.now();
+    _flashSub = _flashSaleService
+        .getActiveFlashSalesMapAtNow(now)
+        .listen(
+      (map) {
+        if (mounted) setState(() => _flashSales = map);
+      },
+      onError: (e) {
+        debugPrint('Flash sales stream error: $e');
+      },
+    );
+  }
+
+
+  @override
   void dispose() {
-    _searchCtrl.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+_searchCtrl.dispose();
+    _flashSub?.cancel();
     super.dispose();
   }
 
-  Stream<int> _cartCountStream() {
-    return _cartService.getCartStream().map((items) => items.length);
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      setState(() => _flashRefreshKey++);
+      _subscribeFlashSales();
+    }
   }
 
   Widget _brandChip(String label, String? brand) {
@@ -98,16 +139,16 @@ class _HomeScreenState extends State<HomeScreen> {
         margin: const EdgeInsets.only(right: 8),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF2D6A4F) : Colors.white,
+          color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? const Color(0xFF2D6A4F) : Colors.grey[300]!,
+            color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.outline,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? Colors.white : Colors.grey[700],
+            color: isSelected ? Theme.of(context).colorScheme.surface : Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.85),
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
             fontSize: 13,
           ),
@@ -118,6 +159,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -125,8 +167,8 @@ class _HomeScreenState extends State<HomeScreen> {
         centerTitle: false,
         title: Text(
           context.tr('main_market'),
-          style: const TextStyle(
-            color: Color(0xFF2D6A4F),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.primary,
             fontWeight: FontWeight.w900,
             fontSize: 28,
             fontStyle: FontStyle.italic,
@@ -135,42 +177,18 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(
+            icon: Icon(
               Icons.monetization_on_outlined,
-              color: Color(0xFF2D6A4F),
+              color: Theme.of(context).colorScheme.primary,
             ),
             onPressed: () => _showCurrencyPicker(context),
           ),
           IconButton(
-            icon: const Icon(
+            icon: Icon(
               Icons.notifications_outlined,
-              color: Color(0xFF2D6A4F),
+              color: Theme.of(context).colorScheme.primary,
             ),
             onPressed: () => context.push(AppRoutes.notifications),
-          ),
-          StreamBuilder<int>(
-            stream: _cartCountStream(),
-            builder: (context, snap) {
-              final count = snap.data ?? 0;
-              return Stack(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.shopping_cart_outlined, color: Color(0xFF2D6A4F)),
-                    onPressed: () => context.push(AppRoutes.cart),
-                  ),
-                  if (count > 0)
-                    Positioned(
-                      right: 6, top: 6,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                        constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                        child: Text('$count', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-                      ),
-                    ),
-                ],
-              );
-            },
           ),
         ],
       ),
@@ -188,10 +206,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                   child: Container(
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.surface,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: const Color(0xFF2D6A4F),
+                        color: Theme.of(context).colorScheme.primary,
                         width: 1.5,
                       ),
                     ),
@@ -201,13 +219,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       onTap: () => context.push(AppRoutes.search),
                       decoration: InputDecoration(
                         hintText: context.tr('search_products'),
-                        hintStyle: const TextStyle(
-                          color: Colors.black,
+                        hintStyle: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface,
                           fontSize: 14,
                         ),
                         prefixIcon: Icon(
                           Icons.search,
-                          color: const Color(0xFF2D6A4F),
+                          color: Theme.of(context).colorScheme.primary,
                           size: 22,
                         ),
                         border: InputBorder.none,
@@ -232,7 +250,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               // Flash Sale banner
-              const FlashSaleBanner(),
+              FlashSaleBanner(key: ValueKey('flash_banner_$_flashRefreshKey'), sales: _flashSales.values.toList()),
+              // Price Drop banner
+              const PriceDropBanner(),
               // Categories header
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
@@ -240,10 +260,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     Text(
                       context.tr('categories'),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF1B4332),
+                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85),
                       ),
                     ),
                     const Spacer(),
@@ -252,7 +272,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Text(
                         context.tr('see_all'),
                         style: TextStyle(
-                          color: Color(0xFF2D6A4F),
+                          color: Theme.of(context).colorScheme.primary,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -275,7 +295,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             return Center(
                   child: Text(
                     context.tr('no_categories'),
-                    style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 13),
                   ),
                             );
                           }
@@ -307,7 +327,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                                   ),
                                                   boxShadow: [
                                                     BoxShadow(
-                                                      color: Colors.black.withValues(alpha: 0.04),
+                                                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.04),
                                                       blurRadius: 8,
                                                       offset: const Offset(0, 3),
                                                     ),
@@ -341,7 +361,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
               // Trending
-              const TrendingCarousel(),
+              const DynamicBanner(),
               const SizedBox(height: 4),
               // Products area
               _buildProductsArea(),
@@ -353,16 +373,16 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       floatingActionButton: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           borderRadius: BorderRadius.all(Radius.circular(16)),
           gradient: LinearGradient(
-            colors: [Color(0xFF2D6A4F), Color(0xFF40916C)],
+            colors: [Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.tertiary],
           ),
           boxShadow: [
             BoxShadow(
-              color: Color(0x332D6A4F),
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
               blurRadius: 12,
-              offset: Offset(0, 4),
+              offset: const Offset(0, 4),
             ),
           ],
         ),
@@ -371,12 +391,12 @@ class _HomeScreenState extends State<HomeScreen> {
           backgroundColor: Colors.transparent,
           label: Text(
             context.tr('sell_product'),
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.surface,
               fontWeight: FontWeight.w600,
             ),
           ),
-          icon: const Icon(Icons.add, color: Colors.white),
+          icon: Icon(Icons.add, color: Theme.of(context).colorScheme.surface),
         ),
       ),
     );
@@ -389,13 +409,13 @@ class _HomeScreenState extends State<HomeScreen> {
           ? _productService.getProducts()
           : _productService.getProductsByBrand(_selectedBrand!),
       builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting && !_pageLoaded) {
+        if (snap.connectionState == ConnectionState.waiting && !snap.hasData && !snap.hasError) {
           return Padding(
             padding: const EdgeInsets.all(24),
             child: GoogleLoadingPage(),
           );
         }
-        if (!_pageLoaded && snap.hasData && snap.data!.isNotEmpty) {
+        if (!_pageLoaded && (snap.hasData || snap.hasError)) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) setState(() => _pageLoaded = true);
           });
@@ -409,10 +429,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   Text(
                     context.tr('latest_products'),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF1B4332),
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85),
                     ),
                   ),
                 ],
@@ -431,7 +451,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             Icon(
                               Icons.cloud_off,
                               size: 48,
-                              color: Colors.grey[400],
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                             const SizedBox(height: 12),
                             Text(
@@ -450,7 +470,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   : context.tr('please_try_again'),
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                color: Colors.grey[600],
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                                 fontSize: 13,
                               ),
                             ),
@@ -460,8 +480,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               icon: const Icon(Icons.refresh, size: 18),
                               label: Text(context.tr('try_again')),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF2D6A4F),
-                                foregroundColor: Colors.white,
+                                backgroundColor: Theme.of(context).colorScheme.primary,
+                                foregroundColor: Theme.of(context).colorScheme.surface,
                               ),
                             ),
                           ],
@@ -470,13 +490,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 }
                 final products = snap.data ?? [];
-                if (products.isEmpty && _pageLoaded) {
+                if (products.isEmpty) {
                   return Center(
                     child: Padding(
                       padding: const EdgeInsets.all(24),
                       child: Column(
                         children: [
-                          Icon(Icons.inventory_2, size: 48, color: Colors.grey[400]),
+                          Icon(Icons.inventory_2, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
                           const SizedBox(height: 12),
                           Text(
                             _selectedBrand == null
@@ -484,7 +504,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 : '${context.tr('no_products_for')} $_selectedBrand',
                             style: TextStyle(
                               fontSize: 16,
-                              color: Colors.grey[600],
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ],
@@ -496,16 +516,17 @@ class _HomeScreenState extends State<HomeScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: Responsive.gridColumns(context),
                     crossAxisSpacing: 12,
                     mainAxisSpacing: 12,
-                    childAspectRatio: 0.72,
+                    childAspectRatio: Responsive.cardAspectRatio(context),
                   ),
                   itemCount: products.length,
                   itemBuilder: (context, index) => RepaintBoundary(
                     child: ProductCard(
                       product: products[index],
+                      flashSale: _flashSales[products[index].id],
                       onTap: () => context.push(
                         '${AppRoutes.productDetail}/${products[index].id}',
                         extra: products[index],

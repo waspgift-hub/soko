@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
-import '../../services/mongike_service.dart';
+import '../../services/clickpesa_service.dart';
+import '../../utils/phone_utils.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
 
@@ -75,20 +76,18 @@ class _AdminAdRevenueScreenState extends State<AdminAdRevenueScreen> {
 
     setState(() => _withdrawing = true);
     try {
-      final result = await MongikeService.adminWithdraw(
+                  final result = await ClickPesaService.adminWithdraw(
         userId: uid,
         amount: tzsAmount,
         phone: phone,
       );
-
-      if (result == null) throw Exception('Withdrawal failed');
 
       if (mounted) {
         _phoneController.clear();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('${context.tr('withdrawal_success')} ${result['netAmount']} TZS → $phone'),
-            backgroundColor: const Color(0xFF2D6A4F),
+            backgroundColor: Theme.of(context).colorScheme.primary,
           ),
         );
         _loadStats();
@@ -102,7 +101,7 @@ class _AdminAdRevenueScreenState extends State<AdminAdRevenueScreen> {
 
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.red),
+      SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.error),
     );
   }
 
@@ -130,28 +129,28 @@ class _AdminAdRevenueScreenState extends State<AdminAdRevenueScreen> {
           children: [
             Card(
               elevation: 4,
-              color: const Color(0xFF2D6A4F).withValues(alpha: 0.1),
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
               child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   children: [
-                    const Icon(Icons.monetization_on, color: Color(0xFF2D6A4F), size: 48),
+                    Icon(Icons.monetization_on, color: Theme.of(context).colorScheme.primary, size: 48),
                     const SizedBox(height: 8),
                     Text(
                       context.tr('total_earned_label'),
-                      style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13),
                     ),
                     Text(
                       '${nf.format(_totalAdminCoins)} TZS',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 36,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF2D6A4F),
+                        color: Theme.of(context).colorScheme.primary,
                       ),
                     ),
                     Text(
                       '$_totalAdsWatched ${context.tr('total_ads_watched').toLowerCase()}',
-                      style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 12),
                     ),
                   ],
                 ),
@@ -172,14 +171,14 @@ class _AdminAdRevenueScreenState extends State<AdminAdRevenueScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('${context.tr('earned')}:', style: TextStyle(color: Colors.grey[600])),
-                        Text('${nf.format(_monthAdminCoins)} TZS', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.green)),
+                        Text('${context.tr('earned')}:', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                        Text('${nf.format(_monthAdminCoins)} TZS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Theme.of(context).colorScheme.primary)),
                       ],
                     ),
                     const SizedBox(height: 4),
                     Text(
                       '15 coins × ${_monthAdminCoins ~/ 15} ads',
-                      style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 12),
                     ),
                   ],
                 ),
@@ -212,18 +211,18 @@ class _AdminAdRevenueScreenState extends State<AdminAdRevenueScreen> {
                       child: ElevatedButton.icon(
                         onPressed: _monthAdminCoins >= 2001 && !_withdrawing ? _withdraw : null,
                         icon: _withdrawing
-                            ? const SizedBox(
+                            ? SizedBox(
                                 width: 18,
                                 height: 18,
-                                child: GoogleLoading(size: 18, strokeWidth: 2, color: Colors.white),
+                                child: GoogleLoading(size: 18, strokeWidth: 2, color: Theme.of(context).colorScheme.surface),
                               )
                             : const Icon(Icons.send),
                         label: Text(
                           _withdrawing ? context.tr('withdrawal_processing') : context.tr('withdraw'),
                         ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2D6A4F),
-                          foregroundColor: Colors.white,
+                          backgroundColor: Theme.of(context).colorScheme.primary,
+                          foregroundColor: Theme.of(context).colorScheme.surface,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
                       ),
@@ -233,7 +232,7 @@ class _AdminAdRevenueScreenState extends State<AdminAdRevenueScreen> {
                         padding: const EdgeInsets.only(top: 8),
                         child: Text(
                           context.tr('withdraw_min_amount'),
-                          style: TextStyle(color: Colors.red[400], fontSize: 12),
+                          style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12),
                         ),
                       ),
                   ],
@@ -265,7 +264,7 @@ class _AdminAdRevenueScreenState extends State<AdminAdRevenueScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(24),
                       child: Center(
-                        child: Text(context.tr('no_withdrawals'), style: TextStyle(color: Colors.grey[500])),
+                        child: Text(context.tr('no_withdrawals'), style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6))),
                       ),
                     ),
                   );
@@ -279,14 +278,14 @@ class _AdminAdRevenueScreenState extends State<AdminAdRevenueScreen> {
                     final ts = d['createdAt'] as Timestamp?;
                     final date = ts?.toDate() ?? DateTime.now();
                     final statusColors = {
-                      'processing': Colors.orange,
-                      'completed': Colors.green,
-                      'failed': Colors.red,
+                      'processing': Theme.of(context).colorScheme.tertiary,
+                      'completed': Theme.of(context).colorScheme.primary,
+                      'failed': Theme.of(context).colorScheme.error,
                     };
                     return Card(
                       child: ListTile(
-                        leading: Icon(Icons.history, color: statusColors[status] ?? Colors.grey),
-                        title: Text('${nf.format(amount)} TZS → $phone'),
+                        leading: Icon(Icons.history, color: statusColors[status] ?? Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6)),
+                        title: Text('${nf.format(amount)} TZS → ${PhoneUtils.formatForDisplay(phone)}'),
                         subtitle: Text('${DateFormat('MMM dd, yyyy HH:mm').format(date)} • $status'),
                       ),
                     );

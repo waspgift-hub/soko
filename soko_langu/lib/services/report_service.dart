@@ -1,11 +1,28 @@
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
 import '../models/report_model.dart';
+import 'api_config.dart';
 
 class ReportService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
   Future<void> submitReport(Report report) async {
-    await _db.collection('reports').add(report.toMap());
+    final token = await _auth.currentUser?.getIdToken();
+    final resp = await http.post(
+      Uri.parse('${ApiConfig.baseUrl}/api/reports'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(report.toMap()),
+    );
+    final result = jsonDecode(resp.body);
+    if (result['success'] != true) {
+      throw Exception(result['error'] ?? 'Failed to submit report');
+    }
   }
 
   Stream<List<Report>> getReports({String? status}) {

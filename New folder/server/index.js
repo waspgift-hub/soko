@@ -28,7 +28,6 @@ function asyncHandler(fn) {
   };
 }
 
-const MONGIKE_API_KEY = process.env.MONGIKE_API_KEY;
 const AGORA_APP_ID = process.env.AGORA_APP_ID;
 const AGORA_CERT = process.env.AGORA_APP_CERTIFICATE;
 const PORT = process.env.PORT || 3000;

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_colors.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/user_service.dart';
 import '../../services/whatsapp_service.dart';
 import '../../app/routes.dart';
+import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
 
 class ChatPage extends StatefulWidget {
@@ -49,14 +51,12 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void _openWhatsApp(UserProfile profile) {
-    String message;
-    if (widget.productName.isNotEmpty) {
-      message =
-          'Habari ${profile.displayName}, nimeona bidhaa yako "${widget.productName}" kwenye Soko Langu. Naomba kujua zaidi.';
-    } else {
-      message =
-          'Habari ${profile.displayName}, nimekuona kwenye Soko Langu na ningependa kufanya biashara na wewe.';
-    }
+    final message = widget.productName.isNotEmpty
+        ? context.tr('whatsapp_product_inquiry')
+            .replaceAll('{0}', profile.displayName)
+            .replaceAll('{1}', widget.productName)
+        : context.tr('whatsapp_profile_message')
+            .replaceAll('{0}', profile.displayName);
 
     WhatsAppService().openWhatsApp(
       phoneNumber: profile.phone,
@@ -64,9 +64,9 @@ class _ChatPageState extends State<ChatPage> {
       onError: () {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Imeshindwa kufungua WhatsApp'),
-              backgroundColor: Colors.red,
+            SnackBar(
+              content: Text(context.tr('whatsapp_open_failed')),
+              backgroundColor: Theme.of(context).colorScheme.error,
             ),
           );
         }
@@ -74,8 +74,8 @@ class _ChatPageState extends State<ChatPage> {
       onFallback: () {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('WhatsApp haipo, imefungua tovuti'),
+            SnackBar(
+              content: Text(context.tr('whatsapp_fallback')),
             ),
           );
         }
@@ -90,7 +90,7 @@ class _ChatPageState extends State<ChatPage> {
         title: Text(_sellerProfile?.displayName ?? widget.receiverName),
         actions: [
           IconButton(
-            icon: Icon(Icons.flag_outlined, color: Colors.red[300]),
+            icon: Icon(Icons.flag_outlined, color: Theme.of(context).colorScheme.error.withValues(alpha: 0.7)),
             onPressed: () => context.push(AppRoutes.report, extra: {
               'reportedUserId': widget.receiverId,
               'reportedUserName': widget.receiverName,
@@ -100,7 +100,7 @@ class _ChatPageState extends State<ChatPage> {
       ),
       body: _loading
           ? const GoogleLoadingPage()
-          : Center(
+          : SingleChildScrollView(
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Column(
@@ -131,7 +131,7 @@ class _ChatPageState extends State<ChatPage> {
                         _sellerProfile!.phone,
                         style: TextStyle(
                           fontSize: 16,
-                          color: Colors.grey[600],
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     const SizedBox(height: 32),
@@ -140,16 +140,16 @@ class _ChatPageState extends State<ChatPage> {
                       height: 56,
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF25D366),
-                          foregroundColor: Colors.white,
+                          backgroundColor: Theme.of(context).colorScheme.whatsappGreen,
+                          foregroundColor: Theme.of(context).colorScheme.surface,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
                         ),
                         icon: const Icon(Icons.chat, size: 24),
-                        label: const Text(
-                          'Tuma Ujumbe WhatsApp',
-                          style: TextStyle(fontSize: 16),
+                        label: Text(
+                          context.tr('send_whatsapp_message'),
+                          style: const TextStyle(fontSize: 16),
                         ),
                         onPressed: () {
                           if (_sellerProfile != null) {
@@ -160,10 +160,10 @@ class _ChatPageState extends State<ChatPage> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'Wasiliana na muuzaji moja kwa moja kupitia WhatsApp',
+                      context.tr('contact_seller_via_whatsapp'),
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Colors.grey[500],
+                        color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                         fontSize: 13,
                       ),
                     ),
@@ -174,3 +174,5 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 }
+
+

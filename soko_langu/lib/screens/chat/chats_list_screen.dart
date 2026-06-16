@@ -5,6 +5,7 @@ import '../../services/user_service.dart';
 import '../../services/whatsapp_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
+import '../../widgets/ad_banner.dart';
 
 class ChatsListScreen extends StatefulWidget {
   const ChatsListScreen({super.key});
@@ -80,7 +81,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
       return;
     }
     final message =
-        'Habari ${user.displayName}, nimekuona kwenye Soko Langu na ningependa kufanya biashara na wewe.';
+        'Habari ${user.displayName}, nimekuona kwenye Soko Vibe na ningependa kufanya biashara na wewe.';
     WhatsAppService().openWhatsApp(
       phoneNumber: phone,
       message: message,
@@ -227,13 +228,14 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
           ),
         ],
       ),
+      bottomNavigationBar: const AdBanner(),
     );
   }
 
   void _openWhatsAppGroup() {
     WhatsAppService().openWhatsApp(
       phoneNumber: '',
-      message: 'Ninatengeneza kikundi cha Soko Langu. Tafadhali niongeze.',
+      message: 'Ninatengeneza kikundi cha Soko Vibe. Tafadhali niongeze.',
       onError: () {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

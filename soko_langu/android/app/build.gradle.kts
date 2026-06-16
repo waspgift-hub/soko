@@ -61,7 +61,7 @@ android {
             )
         }
         getByName("debug") {
-            signingConfig = signingConfigs.getByName("release")
+            // Default debug keystore
         }
     }
 }
@@ -73,3 +73,4 @@ dependencies {
 flutter {
     source = "../.."
 }
+

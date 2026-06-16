@@ -45,32 +45,32 @@ class OrderService {
         'trackingNumber': null,
       });
 
-      _notif.sendNotification(
-        userId: sellerId,
-        title: '🛒 Agizo Jipya!',
-        body: '${user.displayName ?? "Mnunuzi"} ameorder: $productNames — TSh ${totalAmount.toStringAsFixed(0)}${isMongike ? ' (Mongike)' : ''}',
-        data: {
-          'type': 'order',
-          'orderId': docRef.id,
-          'buyerId': user.uid,
-          'buyerName': user.displayName ?? user.email ?? 'Mnunuzi',
-          'productNames': productNames,
-          'totalAmount': totalAmount.toStringAsFixed(0),
-          'paymentMethod': paymentMethod ?? 'Direct',
-        },
-      );
+    _notif.sendNotification(
+      userId: sellerId,
+      title: '🛒 Agizo Jipya!',
+      body: '${user.displayName ?? "Mnunuzi"} ameorder: $productNames — TSh ${totalAmount.toStringAsFixed(0)}',
+      data: {
+        'type': isMongike ? 'payment' : 'order',
+        'orderId': docRef.id,
+        'buyerId': user.uid,
+        'buyerName': user.displayName ?? user.email ?? 'Mnunuzi',
+        'productNames': productNames,
+        'totalAmount': totalAmount.toStringAsFixed(0),
+        'paymentMethod': paymentMethod ?? 'Direct',
+      },
+    );
 
-      _notif.sendNotification(
-        userId: user.uid,
-        title: '✅ Order Yako Imeundwa!',
-        body: 'Agizo #${docRef.id} limeundwa. ${isMongike ? 'Malipo yanafanywa kupitia Mongike.' : 'Tafadhali lipa kwa muuzaji.'}',
-        data: {
-          'type': 'order',
-          'orderId': docRef.id,
-          'productNames': productNames,
-          'totalAmount': totalAmount.toStringAsFixed(0),
-        },
-      );
+    _notif.sendNotification(
+      userId: user.uid,
+      title: '✅ Order Yako Imeundwa!',
+      body: 'Agizo #${docRef.id} limeundwa. ${isMongike ? 'Malipo yanafanywa kupitia ClickPesa.' : 'Tafadhali lipa kwa muuzaji.'}',
+      data: {
+        'type': 'order',
+        'orderId': docRef.id,
+        'productNames': productNames,
+        'totalAmount': totalAmount.toStringAsFixed(0),
+      },
+    );
 
       return docRef.id;
     } catch (e) {
@@ -279,14 +279,23 @@ class OrderService {
 
       _notif.sendNotification(
         userId: sellerId,
-        title: '💰 Malipo Yamefikishwa (Mongike)!',
-        body: 'Mnunuzi amethibitisha kupokea agizo #$orderId. TZS ${totalAmount.toStringAsFixed(0)} imeongezwa kwenye Mongike Wallet yako. Commission 5% imekatwa.',
+        title: '💰 Malipo Yamefikishwa!',
+        body: 'Mnunuzi amethibitisha kupokea agizo #$orderId. TZS ${totalAmount.toStringAsFixed(0)} imeongezwa kwenye wallet yako.',
+        data: {
+          'type': 'payment',
+          'orderId': orderId,
+          'amount': totalAmount.toStringAsFixed(0),
+        },
       );
 
       _notif.sendNotification(
         userId: user.uid,
         title: '🎉 Delivery Imethibitishwa!',
-        body: 'Umethibitisha kupokea bidhaa. Malipo yametolewa kwa muuzaji kupitia Mongike.',
+        body: 'Umethibitisha kupokea bidhaa. Malipo yametolewa kwa muuzaji.',
+        data: {
+          'type': 'payment',
+          'orderId': orderId,
+        },
       );
     } else {
       await _db.collection('users').doc(sellerId).update({
@@ -345,21 +354,22 @@ class OrderService {
 
     _notif.sendNotification(
       userId: sellerId,
-      title: '💳 Malipo Yamepokelewa (Mongike)',
-      body: 'Mnunuzi amelipa kupitia Mongike. Agizo #${orderId.substring(0, 8)} sasa limeconfirm. TSh ${totalAmount.toStringAsFixed(0)}',
+      title: '💳 Malipo Yamepokelewa!',
+      body: 'Mnunuzi amelipa. Agizo #${orderId.substring(0, 8)} sasa limeconfirm. TSh ${totalAmount.toStringAsFixed(0)}',
       data: {
-        'type': 'order',
+        'type': 'payment',
         'orderId': orderId,
         'status': 'confirmed',
+        'amount': totalAmount.toStringAsFixed(0),
       },
     );
 
     _notif.sendNotification(
       userId: buyerId,
-      title: '✅ Mongike Payment Confirmed',
-      body: 'Malipo yako ya Mongike yamethibitishwa. Muuzaji sasa anatumia bidhaa yako.',
+      title: '✅ Payment Confirmed',
+      body: 'Malipo yako yamethibitishwa. Muuzaji sasa anatumia bidhaa yako.',
       data: {
-        'type': 'order',
+        'type': 'payment',
         'orderId': orderId,
         'status': 'confirmed',
       },

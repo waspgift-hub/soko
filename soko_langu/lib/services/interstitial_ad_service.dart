@@ -20,6 +20,7 @@ class InterstitialAdService {
   }
 
   Future<bool> tryShow() async {
+    if (kIsWeb) return false;
     if (!_isCooldownPassed) return false;
     _lastShownAt = DateTime.now();
     await show();
@@ -27,6 +28,7 @@ class InterstitialAdService {
   }
 
   Future<void> load() async {
+    if (kIsWeb) return;
     if (_isLoading) return;
     _isLoading = true;
 

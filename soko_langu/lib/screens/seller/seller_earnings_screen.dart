@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:async/async.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
@@ -6,6 +8,8 @@ import '../../models/transaction_model.dart';
 import '../../models/withdrawal_model.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
+import '../../utils/phone_utils.dart';
+import '../../theme/app_colors.dart';
 
 class SellerEarningsScreen extends StatefulWidget {
   const SellerEarningsScreen({super.key});
@@ -65,22 +69,25 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
   }
 
   Widget _buildBalanceCard(ColorScheme cs, NumberFormat nf) {
-    return StreamBuilder<double>(
-      stream: _service.streamSellerBalance(),
+    return StreamBuilder<List<dynamic>>(
+      stream: StreamZip([_service.streamSellerBalance(), _service.streamSellerTotalWithdrawn()]),
       builder: (context, snap) {
-        final balance = snap.data ?? 0;
+        final data = snap.data ?? [0, 0];
+        final balance = (data[0] as num).toDouble();
+        final withdrawn = (data[1] as num).toDouble();
+        final totalEarned = balance + withdrawn;
         return Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF065535), Color(0xFF0B8043)],
+            gradient: LinearGradient(
+              colors: [cs.successGreen, cs.primary],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF065535).withAlpha(60),
+                color: cs.successGreen.withValues(alpha: 0.24),
                 blurRadius: 16,
                 offset: const Offset(0, 8),
               ),
@@ -89,47 +96,71 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withAlpha(30),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.account_balance_wallet,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Current Balance',
-                    style: TextStyle(
-                      color: Colors.white.withAlpha(200),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
               Text(
-                'TZS ${nf.format(balance)}',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 36,
-                  fontWeight: FontWeight.bold,
+                context.tr('inapatikana_kutoa'),
+                style: TextStyle(
+                  color: cs.surface.withValues(alpha: 0.78),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 4),
               Text(
-                'Available for withdrawal',
+                'TZS ${nf.format(balance)}',
                 style: TextStyle(
-                  color: Colors.white.withAlpha(180),
-                  fontSize: 13,
+                  color: cs.surface,
+                  fontSize: 36,
+                  fontWeight: FontWeight.bold,
                 ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          context.tr('jumla_ya_mapato_yote'),
+                          style: TextStyle(
+                            color: cs.surface.withValues(alpha: 0.78),
+                            fontSize: 12,
+                          ),
+                        ),
+                        Text(
+                          'TZS ${nf.format(totalEarned)}',
+                          style: TextStyle(
+                            color: cs.surface,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          context.tr('imetolewa'),
+                          style: TextStyle(
+                            color: cs.surface.withValues(alpha: 0.78),
+                            fontSize: 12,
+                          ),
+                        ),
+                        Text(
+                          'TZS ${nf.format(withdrawn)}',
+                          style: TextStyle(
+                            color: cs.surface,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -150,9 +181,9 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                 icon: Icons.receipt_long,
                 label: 'Total Sales',
                 value: '$count',
-                color: Colors.orange,
-                cs: cs,
-              );
+                color: cs.tertiary,
+                    cs: cs,
+                  );
             },
           ),
         ),
@@ -166,9 +197,9 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                 icon: Icons.trending_up,
                 label: 'Gross Volume',
                 value: 'TZS ${nf.format(volume)}',
-                color: Colors.blue,
-                cs: cs,
-              );
+                color: cs.secondary,
+                    cs: cs,
+                  );
             },
           ),
         ),
@@ -186,10 +217,10 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withAlpha(12),
+        color: color.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: color.withAlpha(50),
+          color: color.withValues(alpha: 0.20),
           width: 1,
         ),
       ),
@@ -211,7 +242,7 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
             label,
             style: TextStyle(
               fontSize: 12,
-              color: cs.onSurface.withAlpha(160),
+              color: cs.onSurface.withValues(alpha: 0.63),
             ),
           ),
         ],
@@ -252,15 +283,15 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
           ),
           const SizedBox(height: 6),
           _feeRow(
-            'Mongike Fee',
-            'Fixed TZS 180 per transaction',
+            'Processing Fee',
+            'ClickPesa fee per transaction',
             cs,
             nf,
             deduct: true,
           ),
           const SizedBox(height: 6),
           _feeRow(
-            'Soko Langu Commission',
+            'Soko Vibe Commission',
             '4% of product price',
             cs,
             nf,
@@ -272,13 +303,13 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
             padding: const EdgeInsets.only(top: 4),
             child: Row(
               children: [
-                Icon(Icons.check_circle, color: Colors.green.shade600, size: 18),
+                Icon(Icons.check_circle, color: cs.primary, size: 18),
                 const SizedBox(width: 8),
                 Text(
-                  'Net Earnings Formula: Price - (Price × 4%) - 180',
+                  'Net Earnings Formula: Price - (Price × 4%) - ClickPesa fee',
                   style: TextStyle(
                     fontSize: 12,
-                    color: cs.onSurface.withAlpha(160),
+                    color: cs.onSurface.withValues(alpha: 0.63),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -296,7 +327,7 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
         Icon(
           deduct ? Icons.remove_circle_outline : Icons.add_circle_outline,
           size: 16,
-          color: deduct ? Colors.red.shade400 : Colors.green.shade500,
+          color: deduct ? cs.error : cs.primary,
         ),
         const SizedBox(width: 8),
         Expanded(
@@ -309,7 +340,7 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
               ),
               Text(
                 subtitle,
-                style: TextStyle(fontSize: 11, color: cs.onSurface.withAlpha(120)),
+                style: TextStyle(fontSize: 11, color: cs.onSurface.withValues(alpha: 0.47)),
               ),
             ],
           ),
@@ -319,28 +350,21 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
   }
 
   Widget _buildWithdrawalCard(ColorScheme cs, NumberFormat nf) {
-    final now = DateTime.now();
-    final isFriday = now.weekday == DateTime.friday;
-    final nfNoDecimal = NumberFormat('#,###', 'en');
     const minWithdraw = 5000;
-    const payoutFee = 2000;
 
     return StreamBuilder<double>(
       stream: _service.streamSellerBalance(),
       builder: (context, snap) {
         final balance = snap.data ?? 0;
-        final canWithdraw = isFriday && balance >= minWithdraw;
-        final netAfterFee = balance > payoutFee ? balance - payoutFee : 0;
+        final canWithdraw = balance >= minWithdraw;
 
         return Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: isFriday
-                ? Colors.green.shade50
-                : cs.surfaceContainerLow,
+            color: cs.tertiaryContainer,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: isFriday ? Colors.green.shade200 : cs.outlineVariant,
+              color: cs.tertiaryContainer,
               width: 1.5,
             ),
           ),
@@ -352,14 +376,12 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: isFriday
-                          ? Colors.green.shade100
-                          : Colors.orange.shade100,
+                      color: cs.tertiaryContainer,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
-                      isFriday ? Icons.check_circle : Icons.lock_clock,
-                      color: isFriday ? Colors.green.shade700 : Colors.orange.shade700,
+                      Icons.account_balance_wallet,
+                      color: cs.primary.withValues(alpha: 0.85),
                       size: 22,
                     ),
                   ),
@@ -368,20 +390,18 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        isFriday ? 'Payout Available' : 'Payout Locked',
+                        'Payout',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
-                          color: isFriday ? Colors.green.shade800 : Colors.orange.shade800,
+                          color: cs.primary.withValues(alpha: 0.85),
                         ),
                       ),
                       Text(
-                        isFriday
-                            ? 'Ijumaa — Withdraw your earnings today!'
-                            : 'Next payout: ${_service.nextPayoutDate}',
+                        'Tuma pesa kwa mobile money yako',
                         style: TextStyle(
                           fontSize: 12,
-                          color: isFriday ? Colors.green.shade600 : Colors.orange.shade600,
+                          color: cs.primary,
                         ),
                       ),
                     ],
@@ -393,7 +413,7 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
                 decoration: InputDecoration(
-                  labelText: 'Phone Number',
+                  labelText: 'Namba ya Simu',
                   hintText: 'e.g. 0712345678',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -401,14 +421,6 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                   prefixIcon: const Icon(Icons.phone_android),
                   filled: true,
                   fillColor: cs.surface,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Fee: TZS ${nfNoDecimal.format(payoutFee)} | You receive: TZS ${nfNoDecimal.format(netAfterFee)}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: cs.onSurface.withAlpha(150),
                 ),
               ),
               const SizedBox(height: 12),
@@ -423,14 +435,12 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                       : const Icon(Icons.send),
                   label: Text(
                     _withdrawing
-                        ? 'Processing...'
-                        : isFriday
-                            ? 'Withdraw Now'
-                            : 'Wait until Friday',
+                        ? 'Inachakata...'
+                        : 'Toa Pesa Sasa',
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isFriday ? Colors.green : Colors.grey,
-                    foregroundColor: Colors.white,
+                    backgroundColor: canWithdraw ? cs.primary : cs.onSurfaceVariant.withValues(alpha: 0.6),
+                    foregroundColor: cs.surface,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -438,20 +448,12 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                   ),
                 ),
               ),
-              if (!canWithdraw && isFriday)
+              if (!canWithdraw)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
-                    'Minimum balance of TZS ${nfNoDecimal.format(minWithdraw)} required (net TZS ${nfNoDecimal.format(minWithdraw - payoutFee)} after TZS ${nfNoDecimal.format(payoutFee)} fee)',
-                    style: TextStyle(color: Colors.red.shade400, fontSize: 12),
-                  ),
-                ),
-              if (!canWithdraw && !isFriday)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    'Minimum balance: TZS ${nfNoDecimal.format(minWithdraw)} | Fee: TZS ${nfNoDecimal.format(payoutFee)}',
-                    style: TextStyle(color: cs.onSurface.withAlpha(120), fontSize: 12),
+                    'Salio la chini TZS 5,000 linahitajika',
+                    style: TextStyle(color: cs.error, fontSize: 12),
                   ),
                 ),
             ],
@@ -482,19 +484,26 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
         _showError(error);
       } else {
         _phoneController.clear();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Withdrawal successful! Money sent to your phone.'),
-            backgroundColor: Colors.green.shade600,
-          ),
-        );
+        _showSuccessWithdrawal();
       }
     }
   }
 
-  void _showError(String msg) {
+  void _showSuccessWithdrawal() {
+    final cs = Theme.of(context).colorScheme;
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.red),
+      SnackBar(
+        content: const Text('Withdrawal successful! Money sent to your phone.'),
+        backgroundColor: cs.primary,
+      ),
+    );
+  }
+
+  void _showError(String msg) {
+    final cs = Theme.of(context).colorScheme;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: cs.error),
     );
   }
 
@@ -530,11 +539,12 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
           return _emptyCard(context.tr('error_loading_transactions'), cs);
         }
         final txns = snap.data ?? [];
-        if (txns.isEmpty) {
+        final completedTxns = txns.where((t) => t.status == TransactionStatus.completed).toList();
+        if (completedTxns.isEmpty) {
           return _emptyCard(context.tr('no_transactions'), cs);
         }
         return Column(
-          children: txns.take(10).map((tx) => Container(
+          children: completedTxns.take(10).map((tx) => Container(
             margin: const EdgeInsets.only(bottom: 8),
             decoration: BoxDecoration(
               color: cs.surface,
@@ -548,10 +558,10 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.green.shade50,
+                      color: cs.tertiaryContainer,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(Icons.shopping_bag, color: Colors.green.shade600, size: 20),
+                    child: Icon(Icons.shopping_bag, color: cs.primary, size: 20),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -565,12 +575,12 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                         const SizedBox(height: 2),
                         Text(
                           '${tx.buyerName} | ${DateFormat('dd/MM/yy').format(tx.createdAt)}',
-                          style: TextStyle(fontSize: 12, color: cs.onSurface.withAlpha(130)),
+                          style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.51)),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Mongike: -TZS ${nf.format(tx.mongikeFee)} | Soko Langu: -TZS ${nf.format(tx.sokoLanguCommission)}',
-                          style: TextStyle(fontSize: 11, color: Colors.red.shade300),
+                          'Fee: -TZS ${nf.format(tx.processingFee)} | Soko Vibe: -TZS ${nf.format(tx.sokoLanguCommission)}',
+                          style: TextStyle(fontSize: 11, color: cs.error.withValues(alpha: 0.7)),
                         ),
                       ],
                     ),
@@ -580,7 +590,7 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
-                      color: Colors.green.shade700,
+                      color: cs.primary.withValues(alpha: 0.85),
                     ),
                   ),
                 ],
@@ -619,8 +629,8 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: w.status == WithdrawalStatus.completed
-                          ? Colors.green.shade50
-                          : Colors.red.shade50,
+                          ? cs.tertiaryContainer
+                          : cs.errorContainer,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
@@ -628,8 +638,8 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                           ? Icons.check_circle
                           : Icons.cancel,
                       color: w.status == WithdrawalStatus.completed
-                          ? Colors.green.shade600
-                          : Colors.red.shade600,
+                          ? cs.primary
+                          : cs.error,
                       size: 20,
                     ),
                   ),
@@ -639,7 +649,7 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'TZS ${nf.format(w.netAmount)} → ${w.phone}',
+                          'TZS ${nf.format(w.netAmount)} → ${PhoneUtils.formatForDisplay(w.phone)}',
                           style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                         ),
                         const SizedBox(height: 2),
@@ -650,8 +660,8 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                           style: TextStyle(
                             fontSize: 11,
                             color: w.status == WithdrawalStatus.completed
-                                ? cs.onSurface.withAlpha(130)
-                                : Colors.red.shade400,
+                                ? cs.onSurface.withValues(alpha: 0.51)
+                                : cs.error,
                           ),
                         ),
                       ],
@@ -662,7 +672,7 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
-                      color: Colors.red.shade600,
+                      color: cs.error,
                     ),
                   ),
                 ],
@@ -681,7 +691,7 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
         child: Center(
           child: Text(
             message,
-            style: TextStyle(color: cs.onSurface.withAlpha(120)),
+            style: TextStyle(color: cs.onSurface.withValues(alpha: 0.47)),
           ),
         ),
       ),

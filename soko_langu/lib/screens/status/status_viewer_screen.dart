@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_colors.dart';
 import '../../services/whatsapp_service.dart';
+import '../../extensions/context_tr.dart';
 
 class StatusViewerScreen extends StatelessWidget {
   final List<dynamic> updates;
@@ -14,7 +16,7 @@ class StatusViewerScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Theme.of(context).colorScheme.onSurface,
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -25,20 +27,20 @@ class StatusViewerScreen extends StatelessWidget {
                 width: 100,
                 height: 100,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF25D366).withValues(alpha: 0.2),
+                  color: Theme.of(context).colorScheme.whatsappGreen.withValues(alpha: 0.2),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.auto_awesome,
                   size: 50,
-                  color: Color(0xFF25D366),
+                  color: Theme.of(context).colorScheme.whatsappGreen,
                 ),
               ),
               const SizedBox(height: 24),
-              const Text(
-                'Tazama status kwenye WhatsApp',
+              Text(
+                context.tr('view_status_on_whatsapp'),
                 style: TextStyle(
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.surface,
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                 ),
@@ -47,8 +49,8 @@ class StatusViewerScreen extends StatelessWidget {
               const SizedBox(height: 32),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF25D366),
-                  foregroundColor: Colors.white,
+                  backgroundColor: Theme.of(context).colorScheme.whatsappGreen,
+                  foregroundColor: Theme.of(context).colorScheme.surface,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
@@ -58,9 +60,9 @@ class StatusViewerScreen extends StatelessWidget {
                   ),
                 ),
                 icon: const Icon(Icons.open_in_new),
-                label: const Text(
-                  'Fungua WhatsApp',
-                  style: TextStyle(fontSize: 16),
+                label: Text(
+                  context.tr('open_whatsapp'),
+                  style: const TextStyle(fontSize: 16),
                 ),
                 onPressed: () {
                   WhatsAppService().openWhatsApp(
@@ -69,9 +71,9 @@ class StatusViewerScreen extends StatelessWidget {
                     onError: () {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Imeshindwa kufungua WhatsApp'),
-                            backgroundColor: Colors.red,
+                          SnackBar(
+                            content: Text(context.tr('whatsapp_open_failed')),
+                            backgroundColor: Theme.of(context).colorScheme.error,
                           ),
                         );
                       }
@@ -82,9 +84,9 @@ class StatusViewerScreen extends StatelessWidget {
               const SizedBox(height: 24),
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text(
-                  'Rudi Nyuma',
-                  style: TextStyle(color: Colors.white54, fontSize: 14),
+                child: Text(
+                  context.tr('go_back'),
+                  style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.54), fontSize: 14),
                 ),
               ),
             ],

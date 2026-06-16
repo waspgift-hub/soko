@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:url_launcher/url_launcher.dart' as url_launcher;
+import 'localization_service.dart';
 
 class WhatsAppService {
   static final WhatsAppService _instance = WhatsAppService._internal();
@@ -25,13 +26,18 @@ class WhatsAppService {
     required double productPrice,
     String currencySymbol = 'TSh',
   }) {
-    return 'Habari $sellerName, nimeona bidhaa yako "$productName" yenye thamani ya $currencySymbol ${productPrice.toStringAsFixed(0)} kwenye Soko Langu. Naomba kujua zaidi.';
+    return LocalizationService.translate('whatsapp_product_inquiry', 'sw')
+        .replaceAll('{0}', sellerName)
+        .replaceAll('{1}', productName)
+        .replaceAll('{2}', currencySymbol)
+        .replaceAll('{3}', productPrice.toStringAsFixed(0));
   }
 
   static String generateProfileMessage({
     required String sellerName,
   }) {
-    return 'Habari $sellerName, nimekuona kwenye Soko Langu na ningependa kufanya biashara na wewe.';
+    return LocalizationService.translate('whatsapp_profile_message', 'sw')
+        .replaceAll('{0}', sellerName);
   }
 
   Future<void> openWhatsApp({

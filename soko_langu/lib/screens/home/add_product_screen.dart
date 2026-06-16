@@ -2,12 +2,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/product_service.dart';
+import '../../services/price_drop_service.dart';
 import '../../models/category_model.dart';
 import '../../models/product_model.dart';
 import '../../services/category_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
-import '../../widgets/rewarded_ad_gate.dart';
 
 class _VariantEntry {
   final TextEditingController nameCtrl = TextEditingController();
@@ -150,7 +150,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
   }
 
   Future<void> _pickImages() async {
-    final List<XFile> images = await _picker.pickMultiImage();
+    final List<XFile> images = await _picker.pickMultiImage(
+      maxWidth: 1024,
+      imageQuality: 80,
+    );
     if (images.isNotEmpty) {
       setState(() => _newImages.addAll(images));
     }
@@ -167,14 +170,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final passed = await RewardedAdGate.require(
-      context,
-      'post_product',
-      title: context.tr('watch_ad'),
-      message: context.tr('watch_ad_to_post'),
-    );
-    if (!passed) return;
-
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     final tr = context.tr;
@@ -188,11 +183,13 @@ class _AddProductScreenState extends State<AddProductScreen> {
     try {
       final variantData = _buildVariantData();
       if (_isEditing) {
+        final oldPrice = widget.product!.price;
+        final newPrice = double.parse(_priceController.text);
         await _productService.updateProduct(
           productId: widget.product!.id,
           name: _nameController.text,
           description: _descriptionController.text,
-          price: double.parse(_priceController.text),
+          price: newPrice,
           category: _selectedCategory,
           subcategory: _selectedSubcategory,
           stock: int.parse(_stockController.text),
@@ -205,6 +202,25 @@ class _AddProductScreenState extends State<AddProductScreen> {
           existingImages: _existingImages.isNotEmpty ? _existingImages : null,
           newImages: _newImages.isNotEmpty ? _newImages : null,
         );
+        if (newPrice < oldPrice) {
+          try {
+            final discount = ((oldPrice - newPrice) / oldPrice) * 100;
+            final ps = PriceDropService();
+            await ps.createPriceDrop(
+              product: widget.product!,
+              newPrice: newPrice,
+              aiReason: '',
+            );
+            await ps.broadcastToAllUsers(
+              productName: _nameController.text,
+              originalPrice: oldPrice,
+              newPrice: newPrice,
+              discountPercent: discount.toStringAsFixed(0),
+              sellerPhone: widget.product!.sellerPhone ?? '',
+              productId: widget.product!.id,
+            );
+          } catch (_) {}
+        }
       } else {
         await _productService.addProduct(
           name: _nameController.text,
@@ -235,9 +251,21 @@ class _AddProductScreenState extends State<AddProductScreen> {
       navigator.pop();
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text("${context.tr('error')}: $e")),
-      );
+      final msg = e.toString();
+      if (msg.contains('permission') || msg.contains('PERMISSION_DENIED') ||
+          msg.contains('caller does not have permission')) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              '${context.tr('error')}: ${context.tr('permission_denied')}. ${context.tr('try_again')}',
+            ),
+          ),
+        );
+      } else {
+        messenger.showSnackBar(
+          SnackBar(content: Text("${context.tr('error')}: $e")),
+        );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -251,7 +279,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
           _isEditing
               ? context.tr('update_product')
               : context.tr('sell_product'),
-          style: const TextStyle(color: Colors.green),
+          style: TextStyle(color: Theme.of(context).colorScheme.primary),
         ),
         actions: [
           TextButton(
@@ -262,7 +290,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     _isEditing
                         ? context.tr('update_product').toUpperCase()
                         : context.tr('sell_product').toUpperCase(),
-                    style: const TextStyle(color: Colors.green),
+                    style: TextStyle(color: Theme.of(context).colorScheme.primary),
                   ),
           ),
         ],
@@ -274,7 +302,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
             16,
             16,
             16,
-            MediaQuery.of(context).viewInsets.bottom + 20,
+            MediaQuery.of(context).viewInsets.bottom + 160,
           ),
           child: Form(
             key: _formKey,
@@ -283,11 +311,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
               children: [
                 Text(
                   context.tr('product_images'),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: Colors.green,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Theme.of(context).colorScheme.primary),
                 ),
                 const SizedBox(height: 8),
                 SizedBox(
@@ -300,7 +324,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                         child: Container(
                           width: 100,
                           decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey),
+                            border: Border.all(color: Theme.of(context).colorScheme.outline),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Icon(
@@ -333,14 +357,14 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                   _existingImages.indexOf(url),
                                 ),
                                 child: Container(
-                                  decoration: const BoxDecoration(
-                                    color: Colors.red,
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).colorScheme.error,
                                     shape: BoxShape.circle,
                                   ),
-                                  child: const Icon(
+                                  child: Icon(
                                     Icons.close,
                                     size: 18,
-                                    color: Colors.white,
+                                    color: Theme.of(context).colorScheme.surface,
                                   ),
                                 ),
                               ),
@@ -369,14 +393,14 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                 onTap: () =>
                                     _removeNewImage(_newImages.indexOf(file)),
                                 child: Container(
-                                  decoration: const BoxDecoration(
-                                    color: Colors.red,
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).colorScheme.error,
                                     shape: BoxShape.circle,
                                   ),
-                                  child: const Icon(
+                                  child: Icon(
                                     Icons.close,
                                     size: 18,
-                                    color: Colors.white,
+                                    color: Theme.of(context).colorScheme.surface,
                                   ),
                                 ),
                               ),
@@ -393,7 +417,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                   decoration: InputDecoration(
                     labelText: context.tr('product_name'),
                     border: const OutlineInputBorder(),
-                    labelStyle: const TextStyle(color: Colors.green),
+                    labelStyle: TextStyle(color: Theme.of(context).colorScheme.primary),
                   ),
                   validator: (v) => v!.isEmpty ? context.tr('required') : null,
                 ),
@@ -403,7 +427,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                   decoration: InputDecoration(
                     labelText: context.tr('description'),
                     border: const OutlineInputBorder(),
-                    labelStyle: const TextStyle(color: Colors.green),
+                    labelStyle: TextStyle(color: Theme.of(context).colorScheme.primary),
                   ),
                   maxLines: 3,
                   validator: (v) => v!.isEmpty ? context.tr('required') : null,
@@ -417,7 +441,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                         decoration: InputDecoration(
                           labelText: context.tr('price'),
                           border: const OutlineInputBorder(),
-                          labelStyle: const TextStyle(color: Colors.green),
+                          labelStyle: TextStyle(color: Theme.of(context).colorScheme.primary),
                         ),
                         keyboardType: TextInputType.number,
                         validator: (v) =>
@@ -431,7 +455,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                         decoration: InputDecoration(
                           labelText: context.tr('stock'),
                           border: const OutlineInputBorder(),
-                          labelStyle: const TextStyle(color: Colors.green),
+                          labelStyle: TextStyle(color: Theme.of(context).colorScheme.primary),
                         ),
                         keyboardType: TextInputType.number,
                         validator: (v) =>
@@ -446,7 +470,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                   decoration: InputDecoration(
                     labelText: context.tr('brand'),
                     border: const OutlineInputBorder(),
-                    labelStyle: const TextStyle(color: Colors.green),
+                    labelStyle: TextStyle(color: Theme.of(context).colorScheme.primary),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -455,22 +479,26 @@ class _AddProductScreenState extends State<AddProductScreen> {
                   decoration: InputDecoration(
                     labelText: context.tr('location'),
                     border: const OutlineInputBorder(),
-                    labelStyle: const TextStyle(color: Colors.green),
+                    labelStyle: TextStyle(color: Theme.of(context).colorScheme.primary),
                   ),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
+                  isExpanded: true,
                   initialValue: _selectedCategory,
                   decoration: InputDecoration(
                     labelText: context.tr('category'),
                     border: const OutlineInputBorder(),
-                    labelStyle: const TextStyle(color: Colors.green),
+                    labelStyle: TextStyle(color: Theme.of(context).colorScheme.primary),
                   ),
                   items: _categories
                       .map(
                         (cat) => DropdownMenuItem(
                           value: cat.name,
-                          child: Text('${cat.nameSw} | ${cat.name}'),
+                          child: Text(
+                            '${cat.nameSw} | ${cat.name}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       )
                       .toList(),
@@ -484,19 +512,23 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 const SizedBox(height: 12),
                 if (_subcategories.isNotEmpty)
                   DropdownButtonFormField<String>(
+                    isExpanded: true,
                     initialValue: _selectedSubcategory.isNotEmpty
                         ? _selectedSubcategory
                         : null,
                     decoration: InputDecoration(
                       labelText: context.tr('subcategory'),
                       border: const OutlineInputBorder(),
-                      labelStyle: const TextStyle(color: Colors.green),
+                      labelStyle: TextStyle(color: Theme.of(context).colorScheme.primary),
                     ),
                     items: _subcategories
                         .map(
                           (sub) => DropdownMenuItem(
                             value: sub.name,
-                            child: Text('${sub.nameSw} | ${sub.name}'),
+                            child: Text(
+                              '${sub.nameSw} | ${sub.name}',
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         )
                         .toList(),
@@ -505,11 +537,12 @@ class _AddProductScreenState extends State<AddProductScreen> {
                   ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
+                  isExpanded: true,
                   initialValue: _selectedCondition,
                   decoration: InputDecoration(
                     labelText: context.tr('condition'),
                     border: const OutlineInputBorder(),
-                    labelStyle: const TextStyle(color: Colors.green),
+                    labelStyle: TextStyle(color: Theme.of(context).colorScheme.primary),
                   ),
                   items: [
                     DropdownMenuItem(
@@ -529,24 +562,30 @@ class _AddProductScreenState extends State<AddProductScreen> {
                       setState(() => _selectedCondition = value!),
                 ),
                 const SizedBox(height: 12),
-                SwitchListTile(
-                  title: Text(
-                    context.tr('wholesale'),
-                    style: const TextStyle(color: Colors.green),
-                  ),
-                  value: _isWholesale,
-                  onChanged: (value) => setState(() => _isWholesale = value),
+                Row(
+                  children: [
+                    Text(
+                      context.tr('wholesale'),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const Spacer(),
+                    Switch(
+                      value: _isWholesale,
+                      onChanged: (value) => setState(() => _isWholesale = value),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 16),
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      context.tr('variants'),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: Colors.green,
+                    Expanded(
+                      child: Text(
+                        context.tr('variants'),
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Theme.of(context).colorScheme.primary),
                       ),
                     ),
                     TextButton.icon(
@@ -577,13 +616,19 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.close,
-                                  color: Colors.red,
+                              const SizedBox(width: 4),
+                              SizedBox(
+                                width: 36,
+                                height: 36,
+                                child: IconButton(
+                                  padding: EdgeInsets.zero,
+                                  icon: Icon(
+                                    Icons.close,
+                                    size: 20,
+                                    color: Theme.of(context).colorScheme.error,
+                                  ),
+                                  onPressed: () => _removeVariant(i),
                                 ),
-                                onPressed: () => _removeVariant(i),
                               ),
                             ],
                           ),
@@ -591,6 +636,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                           Row(
                             children: [
                               Expanded(
+                                flex: 3,
                                 child: TextField(
                                   controller: v.valueCtrl,
                                   decoration: InputDecoration(
@@ -601,8 +647,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              SizedBox(
-                                width: 80,
+                              Flexible(
+                                flex: 2,
                                 child: TextField(
                                   controller: v.priceCtrl,
                                   decoration: InputDecoration(
@@ -614,8 +660,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              SizedBox(
-                                width: 60,
+                              Flexible(
+                                flex: 1,
                                 child: TextField(
                                   controller: v.stockCtrl,
                                   decoration: InputDecoration(

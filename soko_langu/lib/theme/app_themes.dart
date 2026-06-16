@@ -20,7 +20,7 @@ ThemeData buildLightTheme(Color seed) {
   );
   return _base(Brightness.light, seed).copyWith(
     colorScheme: scheme,
-    scaffoldBackgroundColor: const Color(0xFFF0F9F1),
+    scaffoldBackgroundColor: scheme.surfaceContainerLow,
     appBarTheme: AppBarTheme(
       backgroundColor: Colors.transparent,
       foregroundColor: scheme.primary,
@@ -45,15 +45,15 @@ ThemeData buildLightTheme(Color seed) {
       ),
     ),
     cardTheme: CardThemeData(
-      color: Colors.white,
+      color: scheme.surface,
       elevation: 2,
       shadowColor: scheme.primary.withValues(alpha: 0.15),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
     ),
     bottomNavigationBarTheme: BottomNavigationBarThemeData(
-      backgroundColor: const Color(0xFFF0F9F1),
+      backgroundColor: scheme.surfaceContainerLow,
       selectedItemColor: scheme.primary,
-      unselectedItemColor: Colors.grey[400],
+      unselectedItemColor: scheme.onSurfaceVariant,
       type: BottomNavigationBarType.fixed,
       elevation: 0,
       selectedLabelStyle: const TextStyle(
@@ -69,16 +69,16 @@ ThemeData buildLightTheme(Color seed) {
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       filled: true,
-      fillColor: Colors.grey[50],
+      fillColor: scheme.surfaceContainerLowest,
     ),
     chipTheme: ChipThemeData(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: scheme.surfaceContainerLow,
       selectedColor: scheme.primary,
       labelStyle: TextStyle(color: scheme.onSurface),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
     ),
-    dividerTheme: DividerThemeData(color: Colors.grey[200], thickness: 1),
+    dividerTheme: DividerThemeData(color: scheme.outlineVariant, thickness: 1),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

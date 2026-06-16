@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Soko Langu Admin</title>
+<title>Soko Vibe Admin</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <style>
 * { box-sizing:border-box; }
@@ -44,7 +44,7 @@ pre { max-height:350px; overflow:auto; font-size:11px; background:#f7f9fc; paddi
 <div id="loginScreen" style="display:flex;align-items:center;justify-content:center;height:100vh;background:#f0f2f5">
   <div class="card" style="width:380px">
     <div class="card-body p-4">
-      <h4 style="text-align:center;margin-bottom:20px;color:#1b2a3b">Soko Langu Admin</h4>
+      <h4 style="text-align:center;margin-bottom:20px;color:#1b2a3b">Soko Vibe Admin</h4>
       <div class="mb-3">
         <label class="form-label fw500">Admin Secret</label>
         <input type="password" id="adminSecret" class="form-control" placeholder="Enter admin secret" onkeydown="if(event.key==='Enter')login()">
@@ -57,7 +57,7 @@ pre { max-height:350px; overflow:auto; font-size:11px; background:#f7f9fc; paddi
 
 <div id="app" style="display:none">
   <div class="sidebar">
-    <div class="brand">Soko Langu</div>
+    <div class="brand">Soko Vibe</div>
     <a class="active" onclick="show('dashboard')">📊 Dashboard</a>
     <a onclick="show('users')">👥 Users</a>
     <a onclick="show('orders')">📦 Orders</a>
@@ -92,7 +92,7 @@ pre { max-height:350px; overflow:auto; font-size:11px; background:#f7f9fc; paddi
     </div>
 
     <!-- TRANSACTIONS -->
-    <div id="section-transactions" style="display:none"><div class="page-title">Mongike Transactions <button class="refresh-btn" onclick="loadTransactions()">🔄</button></div>
+    <div id="section-transactions" style="display:none"><div class="page-title">ClickPesa Transactions <button class="refresh-btn" onclick="loadTransactions()">🔄</button></div>
       <div class="card"><div class="card-body p-0"><div class="table-responsive"><table class="table table-hover"><thead><tr>
         <th>ID</th><th>Type</th><th>Amount</th><th>Status</th><th>Buyer</th><th>Phone</th><th>Date</th><th></th>
       </tr></thead><tbody id="transactionsTable"></tbody></table></div></div></div>
@@ -169,7 +169,7 @@ pre { max-height:350px; overflow:auto; font-size:11px; background:#f7f9fc; paddi
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-const API = 'https://sokolangu-production.up.railway.app';
+const API = 'http://localhost:3002';
 let secret = '';
 let allUsers = [];
 let pendingAction = null;
@@ -452,7 +452,7 @@ async function loadWithdrawals() {
         <td><span class="badge ${w.type==='seller'?'bg-primary':'bg-secondary'}">${w.type||'viewer'}</span></td>
         <td><strong>${(w.amount||0).toLocaleString()}</strong> TZS</td>
         <td>${(w.netAmount||0).toLocaleString()} TZS</td>
-        <td>${(w.feeMongike||0).toLocaleString()} TZS</td>
+        <td>${(w.clickPesaFee || w.feeMongike || 0).toLocaleString()} TZS</td>
         <td>${w.phone||'-'}</td>
         <td style="font-size:11px">${w.createdAt ? new Date(w.createdAt.seconds*1000).toLocaleString() : '-'}</td>
         <td><button class="btn btn-sm btn-outline-danger" onclick="deleteWd('${w.id}')">🗑️</button></td>

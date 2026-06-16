@@ -1,4 +1,4 @@
-# soko_langu
+# Soko Vibe
 
 A new Flutter project.
 
