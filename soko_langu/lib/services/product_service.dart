@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -44,6 +45,9 @@ class ProductService {
       final user = _auth.currentUser;
       if (user == null) throw Exception("User not logged in");
 
+      // Force refresh auth token to ensure valid claims for Firestore writes
+      await user.getIdToken(true);
+
       List<String> imageUrls = [];
       for (var file in imageFiles) {
         final url = await uploadImage(file);
@@ -52,53 +56,20 @@ class ProductService {
 
       String sellerName = user.displayName ?? user.email ?? 'Anonymous';
       String sellerPhone = '';
+      bool sellerKycApproved = false;
 
       final userDoc = await _db.collection('users').doc(user.uid).get();
       if (userDoc.exists) {
         final data = userDoc.data()!;
         sellerPhone = data['phone'] as String? ?? '';
+        sellerKycApproved = data['kyc']?['approved'] ?? false;
       }
 
-      final docRef = await _db.collection("products").add({
-        "name": name,
-        "description": description,
-        "price": price,
-        "currency": currency,
-        "images": imageUrls,
-        "sellerId": user.uid,
-        "sellerName": sellerName,
-        "sellerPhone": sellerPhone,
-        "category": category,
-        "subcategory": subcategory,
-        "location": "Tanzania",
-        "stock": stock,
-        "isWholesale": isWholesale,
-        "wholesaleTiers": wholesaleTiers ?? [],
-        "variants": variants ?? [],
-        "attributes": attributes ?? {},
-        "brand": brand,
-        "condition": condition,
-        "rating": 0.0,
-        "reviewCount": 0,
-        "soldCount": 0,
-        "isActive": true,
-        "isFeatured": false,
-        "featuredUntil": null,
-        "createdAt": FieldValue.serverTimestamp(),
-      });
-
-      final fraud = FraudPreventionService();
-      await fraud.checkNewSeller(user.uid, sellerName);
-      final productCount = await _db.collection('products')
-          .where('sellerId', isEqualTo: user.uid)
-          .count().get();
-      await fraud.checkSuspiciousListing(
-        sellerId: user.uid,
-        sellerName: sellerName,
-        productId: docRef.id,
-        productName: name,
-        price: price,
-        sellerProductCount: productCount.count ?? 0,
+      await _writeProduct(
+        user.uid, name, description, price, currency, imageUrls,
+        category, subcategory, stock, sellerName, sellerPhone,
+        sellerKycApproved, isWholesale, wholesaleTiers, variants,
+        attributes, brand, condition,
       );
     } catch (e) {
       throw NetworkError(
@@ -109,21 +80,83 @@ class ProductService {
     }
   }
 
+  Future<String> _writeProduct(
+    String uid,
+    String name,
+    String description,
+    double price,
+    String currency,
+    List<String> imageUrls,
+    String category,
+    String subcategory,
+    int stock,
+    String sellerName,
+    String sellerPhone,
+    bool sellerKycApproved,
+    bool isWholesale,
+    List<Map<String, dynamic>>? wholesaleTiers,
+    List<Map<String, dynamic>>? variants,
+    Map<String, dynamic>? attributes,
+    String? brand,
+    String condition,
+  ) async {
+    final docRef = await _db.collection("products").add({
+      "name": name,
+      "description": description,
+      "price": price,
+      "currency": currency,
+      "images": imageUrls,
+      "sellerId": uid,
+      "sellerName": sellerName,
+      "sellerPhone": sellerPhone,
+      "category": category,
+      "subcategory": subcategory,
+      "location": "Tanzania",
+      "stock": stock,
+      "isWholesale": isWholesale,
+      "wholesaleTiers": wholesaleTiers ?? [],
+      "variants": variants ?? [],
+      "attributes": attributes ?? {},
+      "brand": brand,
+      "condition": condition,
+      "rating": 0.0,
+      "reviewCount": 0,
+      "soldCount": 0,
+      "isActive": true,
+      "isFeatured": false,
+      "featuredUntil": null,
+      "sellerKycApproved": sellerKycApproved,
+      "createdAt": FieldValue.serverTimestamp(),
+    });
+
+    final fraud = FraudPreventionService();
+    await fraud.checkNewSeller(uid, sellerName);
+    final productCount = await _db.collection('products')
+        .where('sellerId', isEqualTo: uid)
+        .count().get();
+    await fraud.checkSuspiciousListing(
+      sellerId: uid,
+      sellerName: sellerName,
+      productId: docRef.id,
+      productName: name,
+      price: price,
+      sellerProductCount: productCount.count ?? 0,
+    );
+    return docRef.id;
+  }
+
   Stream<List<Product>> getProducts({int limitAmt = 30}) {
     return _db
         .collection("products")
-        .orderBy("createdAt", descending: true)
-        .limit(limitAmt)
         .snapshots()
-        .map((
-      snapshot,
-    ) {
+        .map((snapshot) {
       final products = snapshot.docs
           .map((doc) => Product.fromFirestore(doc))
           .where((p) => p.isActive)
           .toList();
+      products.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       _sortByBoost(products);
-      return products;
+      return products.take(limitAmt).toList();
     });
   }
 
@@ -131,11 +164,11 @@ class ProductService {
     return _db
         .collection("products")
         .where("category", isEqualTo: category)
+        .where('isActive', isEqualTo: true)
         .snapshots()
         .map((snapshot) {
           final products = snapshot.docs
               .map((doc) => Product.fromFirestore(doc))
-              .where((p) => p.isActive)
               .toList();
           _sortByBoost(products);
           return products;
@@ -150,11 +183,11 @@ class ProductService {
         .collection("products")
         .where("category", isEqualTo: category)
         .where("subcategory", isEqualTo: subcategory)
+        .where('isActive', isEqualTo: true)
         .snapshots()
         .map((snapshot) {
           final products = snapshot.docs
               .map((doc) => Product.fromFirestore(doc))
-              .where((p) => p.isActive)
               .toList();
           _sortByBoost(products);
           return products;
@@ -162,14 +195,15 @@ class ProductService {
   }
 
   Stream<List<Product>> searchProducts(String query) {
-    return _db.collection("products").snapshots().map((snapshot) {
+    return _db.collection("products")
+        .where('isActive', isEqualTo: true)
+        .snapshots().map((snapshot) {
       final products = snapshot.docs
           .map((doc) => Product.fromFirestore(doc))
           .where(
             (p) =>
-                p.isActive &&
-                (query.isEmpty ||
-                    p.name.toLowerCase().contains(query.toLowerCase())),
+                query.isEmpty ||
+                p.name.toLowerCase().contains(query.toLowerCase()),
           )
           .toList();
       _sortByBoost(products);
@@ -181,11 +215,11 @@ class ProductService {
     return _db
         .collection("products")
         .where("brand", isEqualTo: brand)
+        .where('isActive', isEqualTo: true)
         .snapshots()
         .map((snapshot) {
           final products = snapshot.docs
               .map((doc) => Product.fromFirestore(doc))
-              .where((p) => p.isActive)
               .toList();
           _sortByBoost(products);
           return products;
@@ -203,7 +237,6 @@ class ProductService {
         .map((snapshot) {
           final products = snapshot.docs
               .map((doc) => Product.fromFirestore(doc))
-              .where((p) => p.isActive)
               .toList();
           products.sort((a, b) => b.createdAt.compareTo(a.createdAt));
           return products;
@@ -280,7 +313,10 @@ class ProductService {
 
   Future<void> deleteProduct(String productId) async {
     try {
-      await _db.collection("products").doc(productId).delete();
+      await _db.collection("products").doc(productId).update({
+        'isActive': false,
+        'deletedAt': FieldValue.serverTimestamp(),
+      });
     } catch (e) {
       throw NetworkError(
           message: "Delete failed: $e",
@@ -316,11 +352,12 @@ class ProductService {
     return _db
         .collection("products")
         .where("isBoosted", isEqualTo: true)
+        .where('isActive', isEqualTo: true)
         .snapshots()
         .map((snapshot) {
       final products = snapshot.docs
           .map((doc) => Product.fromFirestore(doc))
-          .where((p) => p.isActive && p.isBoostedValid)
+          .where((p) => p.isBoostedValid)
           .toList();
       products.sort((a, b) {
         final tierOrder = (b.boostTier).compareTo(a.boostTier);

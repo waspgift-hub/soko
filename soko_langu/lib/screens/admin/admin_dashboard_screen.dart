@@ -1,13 +1,17 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../services/analytics_service.dart';
+import '../../services/api_config.dart';
 import '../../services/fraud_prevention_service.dart';
 import '../../widgets/google_loading.dart';
 import '../report/admin_reports_screen.dart';
+import 'admin_wallet_screen.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 
@@ -41,7 +45,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this);
+    _tabController = TabController(length: 7, vsync: this);
     _checkAdmin();
   }
 
@@ -77,7 +81,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       return;
     }
     setState(() => _isAdmin = true);
-    await Future.wait([_loadAnalytics(), _loadUsers(), _loadProducts(), _loadFraudStats()]);
+    try {
+      await Future.wait([_loadAnalytics(), _loadUsers(), _loadProducts(), _loadFraudStats()]);
+    } catch (_) {}
     if (mounted) setState(() => _loading = false);
   }
 
@@ -148,12 +154,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           controller: _tabController,
           isScrollable: true,
           tabs: [
-            Tab(icon: const Icon(Icons.dashboard), text: 'Dashboard'),
-            Tab(icon: const Icon(Icons.analytics), text: 'Analytics'),
+            Tab(icon: const Icon(Icons.dashboard), text: context.tr('dashboard')),
+            Tab(icon: const Icon(Icons.analytics), text: context.tr('analytics')),
             Tab(icon: const Icon(Icons.people), text: context.tr('users')),
             Tab(icon: const Icon(Icons.inventory_2), text: context.tr('products')),
             Tab(icon: const Icon(Icons.flag), text: context.tr('reports')),
-            Tab(icon: const Icon(Icons.security), text: 'Fraud'),
+            Tab(icon: const Icon(Icons.security), text: context.tr('fraud')),
+            Tab(icon: const Icon(Icons.payments), text: context.tr('payout')),
           ],
         ),
       ),
@@ -167,6 +174,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             _buildProductsTab(),
             _buildReportsTab(),
             _buildFraudTab(),
+            _buildPayoutTab(),
           ],
         ),
       ),
@@ -175,54 +183,72 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   // ─── DASHBOARD TAB ─────────────────────────────────────────────
   Widget _buildDashboardTab() {
-    final a = _analytics!;
+    final a = _analytics ?? AnalyticsData();
+    final cs = Theme.of(context).colorScheme;
+    final nf = NumberFormat('#,###', 'en');
     return RefreshIndicator(
       onRefresh: () async {
         await Future.wait([_loadAnalytics(), _loadFraudStats()]);
       },
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          _kpiRow([
-            _kpiCard('Total Users', '${a.totalUsers}', Icons.people, Colors.blue, a.newUsersToday),
-            _kpiCard('Products', '${a.totalProducts}', Icons.inventory_2, Colors.green, a.activeProducts),
-          ]),
-          const SizedBox(height: 12),
-          _kpiRow([
-            _kpiCard('Orders', '${a.totalOrders}', Icons.receipt_long, Colors.orange, a.totalRevenue),
-            _kpiCard('Revenue', 'TZS ${a.totalRevenue.toStringAsFixed(0)}', Icons.account_balance, Colors.purple, a.revenueToday),
-          ]),
-          const SizedBox(height: 12),
-          _kpiRow([
-            _kpiCard('New Today', '${a.newUsersToday}', Icons.person_add, Colors.teal, null),
-            GestureDetector(
-              onTap: () => context.push(AppRoutes.adminReports),
-              child: _kpiCard('Reports', '${a.totalReports}', Icons.flag, Colors.red, null),
-            ),
-          ]),
-          const SizedBox(height: 12),
-          _kpiRow([
-            Expanded(child: _kpiCard('Fraud Alerts', '${_fraudStats['unresolved'] ?? 0}', Icons.security, Colors.orange, '${_fraudStats['high'] ?? 0} high')),
-            const SizedBox(width: 8),
-            Expanded(child: _kpiCard('Test Mode', _fraudService.isTestMode ? 'ON' : 'OFF', Icons.science, Colors.teal, null)),
-          ]),
+          _kpiCard(
+            icon: Icons.people,
+            label: context.tr('total_users'),
+            value: '${a.totalUsers}',
+            color: cs.primary,
+            sub: '${a.newUsersToday} ${context.tr('new_today')}',
+            nf: nf,
+          ),
+          const SizedBox(height: 10),
+          _kpiCard(
+            icon: Icons.inventory_2,
+            label: context.tr('products'),
+            value: '${a.totalProducts}',
+            color: cs.secondary,
+            sub: '${a.activeProducts} ${context.tr('active')}',
+            nf: nf,
+          ),
+          const SizedBox(height: 10),
+          _kpiCard(
+            icon: Icons.receipt_long,
+            label: context.tr('orders'),
+            value: '${a.totalOrders}',
+            color: cs.tertiary,
+            sub: 'TZS ${nf.format(a.totalRevenue)} ${context.tr('total_revenue')}',
+            nf: nf,
+          ),
+          const SizedBox(height: 10),
+          _kpiCard(
+            icon: Icons.account_balance,
+            label: context.tr('revenue_today'),
+            value: 'TZS ${nf.format(a.revenueToday)}',
+            color: cs.secondary,
+            sub: '${a.newUsersToday} ${context.tr('new_users')}',
+            nf: nf,
+          ),
           const SizedBox(height: 20),
-          Text('Revenue (7 days)', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+          _buildSectionHeader(context.tr('revenue_7_days'), cs),
           const SizedBox(height: 8),
           _buildBarChart(
             a.revenueOverTime.map((m) => BarEntry(m.date, m.count.toDouble())).toList(),
-            Colors.green,
-            (v) => 'TZS $v',
+            cs.primary,
+            (v) => 'TZS ${nf.format(v.toInt())}',
+            nf,
           ),
           const SizedBox(height: 20),
-          Text('User Growth (7 days)', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+          _buildSectionHeader(context.tr('user_growth_7_days'), cs),
           const SizedBox(height: 8),
           _buildBarChart(
             a.userGrowth.map((m) => BarEntry(m.date, m.count.toDouble())).toList(),
-            Colors.blue,
-            (v) => '$v users',
+            cs.secondary,
+            (v) => nf.format(v.toInt()),
+            nf,
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
+          _buildSectionHeader(context.tr('quick_actions'), cs),
+          const SizedBox(height: 12),
           _buildQuickActions(),
           const SizedBox(height: 20),
         ],
@@ -230,45 +256,80 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
-  Widget _kpiRow(List<Widget> cards) {
-    return Row(children: cards.map((c) => Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: c))).toList());
+  Widget _buildSectionHeader(String title, ColorScheme cs) {
+    return Row(
+      children: [
+        Container(width: 4, height: 20, decoration: BoxDecoration(color: cs.primary, borderRadius: BorderRadius.circular(2))),
+        const SizedBox(width: 10),
+        Text(title, style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: cs.onSurface)),
+      ],
+    );
   }
 
-  Widget _kpiCard(String title, String value, IconData icon, Color color, dynamic sub) {
+  Widget _kpiCard({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+    String? sub,
+    NumberFormat? nf,
+  }) {
     return Container(
-      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: color.withAlpha(15),
+        gradient: LinearGradient(
+          colors: [color.withValues(alpha: 0.08), color.withValues(alpha: 0.02)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.15), width: 1),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      child: Row(
         children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(height: 6),
-          Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
-          Text(title, style: TextStyle(color: color.withAlpha(180), fontSize: 12)),
-          if (sub != null) ...[
-            const SizedBox(height: 2),
-            Text(sub is double ? 'TZS ${sub.toStringAsFixed(0)} today' : '$sub today',
-                style: TextStyle(color: color.withAlpha(150), fontSize: 10)),
-          ],
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: color, size: 26),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
+                Text(label, style: TextStyle(fontSize: 13, color: color.withValues(alpha: 0.71))),
+              ],
+            ),
+          ),
+          if (sub != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(sub, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w500)),
+            ),
         ],
       ),
     );
   }
 
   // ─── BAR CHART ───────────────────────────────────────────
-  Widget _buildBarChart(List<BarEntry> entries, Color color, String Function(double) format) {
+  Widget _buildBarChart(List<BarEntry> entries, Color color, String Function(double) format, [NumberFormat? nf]) {
     if (entries.isEmpty) return const SizedBox();
     final maxVal = entries.map((e) => e.value).reduce((a, b) => a > b ? a : b);
     final maxBar = maxVal > 0 ? maxVal : 1.0;
     return Container(
-      height: 160,
-      padding: const EdgeInsets.only(top: 16, bottom: 4, left: 4, right: 4),
+      height: 180,
+      padding: const EdgeInsets.only(top: 20, bottom: 4, left: 8, right: 8),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -277,22 +338,28 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           final dayLabel = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][e.date.weekday - 1];
           return Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 3),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  Text(format(e.value), style: TextStyle(fontSize: 8, color: color.withAlpha(180))),
-                  const SizedBox(height: 2),
+                  Text(format(e.value), style: TextStyle(fontSize: 9, color: color.withValues(alpha: 0.71), fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 4),
                   ClipRRect(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
                     child: Container(
-                      height: 140 * fraction.clamp(0.02, 1.0),
+                      height: 140 * fraction.clamp(0.03, 1.0),
                       width: double.infinity,
-                      color: color.withAlpha(160),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [color.withValues(alpha: 0.5), color],
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                        ),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(dayLabel, style: TextStyle(fontSize: 9, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                  const SizedBox(height: 4),
+                  Text(dayLabel, style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 ],
               ),
             ),
@@ -304,32 +371,38 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   // ─── QUICK ACTIONS ─────────────────────────────────────
   Widget _buildQuickActions() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
       children: [
-        Text('Quick Actions', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _actionChip(Icons.monetization_on, 'Ad Revenue', () {
-            context.push(AppRoutes.adminAdRevenue);
-          }),
-          _actionChip(Icons.notifications, 'Send Notification', _showSendNotificationDialog),
-            _actionChip(Icons.download, 'Export Users CSV', _exportUsersCsv),
-            _actionChip(Icons.settings, 'Maintenance Mode', _toggleMaintenance),
-          ],
-        ),
+        _actionTile(Icons.account_balance_wallet, context.tr('wallet'), Theme.of(context).colorScheme.secondary, () => context.push(AppRoutes.adminWallet)),
+        _actionTile(Icons.monetization_on, context.tr('ad_revenue'), Theme.of(context).colorScheme.primary, () => context.push(AppRoutes.adminAdRevenue)),
+        _actionTile(Icons.notifications, context.tr('send_notification'), Theme.of(context).colorScheme.tertiary, _showSendNotificationDialog),
+        _actionTile(Icons.download, context.tr('export_users'), Theme.of(context).colorScheme.primary, _exportUsersCsv),
+        _actionTile(Icons.settings, context.tr('maintenance'), Theme.of(context).colorScheme.error, _toggleMaintenance),
       ],
     );
   }
 
-  Widget _actionChip(IconData icon, String label, VoidCallback onTap) {
-    return ActionChip(
-      avatar: Icon(icon, size: 18),
-      label: Text(label, style: const TextStyle(fontSize: 12)),
-      onPressed: onTap,
+  Widget _actionTile(IconData icon, String label, Color color, VoidCallback onTap) {
+    return Material(
+      color: color.withValues(alpha: 0.06),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          width: (MediaQuery.of(context).size.width - 52) / 3,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            children: [
+              Icon(icon, color: color, size: 28),
+              const SizedBox(height: 6),
+              Text(label, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w500), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -412,7 +485,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   // ─── ANALYTICS TAB ───────────────────────────────────────
   Widget _buildAnalyticsTab() {
-    final a = _analytics!;
+    final a = _analytics ?? AnalyticsData();
     return RefreshIndicator(
       onRefresh: _loadAnalytics,
       child: ListView(
@@ -442,7 +515,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           const SizedBox(height: 8),
           _buildBarChart(
             a.revenueOverTime.map((m) => BarEntry(m.date, m.count.toDouble())).toList(),
-            Colors.green,
+            Theme.of(context).colorScheme.primary,
             (v) => 'TZS $v',
           ),
           const SizedBox(height: 20),
@@ -450,7 +523,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           const SizedBox(height: 8),
           _buildBarChart(
             a.userGrowth.map((m) => BarEntry(m.date, m.count.toDouble())).toList(),
-            Colors.blue,
+            Theme.of(context).colorScheme.secondary,
             (v) => '$v',
           ),
           const SizedBox(height: 20),
@@ -508,7 +581,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       borderRadius: BorderRadius.circular(4),
                       child: LinearProgressIndicator(
                         value: e.value / total,
-                        backgroundColor: Colors.grey.withAlpha(30),
+                        backgroundColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.12),
                         minHeight: 8,
                       ),
                     ),
@@ -560,8 +633,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   child: ListTile(
                     leading: CircleAvatar(
-                      backgroundColor: suspended ? Colors.red : Colors.green,
-                      child: Text(name.toString()[0].toUpperCase(), style: const TextStyle(color: Colors.white)),
+                      backgroundColor: suspended ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.primary,
+                      child: Text(name.toString()[0].toUpperCase(), style: TextStyle(color: Theme.of(context).colorScheme.surface)),
                     ),
                     title: Text('$name${suspended ? ' (Suspended)' : ''}'),
                     subtitle: Text(phone),
@@ -570,6 +643,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       itemBuilder: (_) => [
                         const PopupMenuItem(value: 'toggle_admin', child: Text('Toggle Admin')),
                         PopupMenuItem(value: suspended ? 'unsuspend' : 'suspend', child: Text(suspended ? 'Unsuspend' : 'Suspend')),
+                        const PopupMenuItem(value: 'full_delete', child: Text('Full Delete', style: TextStyle(color: Colors.red))),
                       ],
                     ),
                   ),
@@ -584,6 +658,38 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   Future<void> _updateUser(String uid, String action) async {
     try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final authHeaders = {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      };
+
+      if (action == 'full_delete') {
+        final confirm = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Delete User Forever'),
+            content: const Text('This will permanently delete this user and all their data (orders, products, reviews, etc.). Are you sure?'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
+              ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete Forever', style: TextStyle(color: Colors.red))),
+            ],
+          ),
+        );
+        if (confirm != true) return;
+        final resp = await http.delete(
+          Uri.parse('${ApiConfig.baseUrl}/api/admin/users/$uid/full-delete'),
+          headers: authHeaders,
+        );
+        if (resp.statusCode != 200) {
+          throw Exception(jsonDecode(resp.body)['error'] ?? 'Delete failed');
+        }
+        _loadUsers();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('User permanently deleted')));
+        }
+        return;
+      }
       Map<String, dynamic> body = {};
       if (action == 'toggle_admin') {
         final user = _users.firstWhere((u) => u['uid'] == uid);
@@ -593,7 +699,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       } else if (action == 'unsuspend') {
         body = {'isSuspended': false};
       }
-      await FirebaseFirestore.instance.collection('users').doc(uid).update(body);
+      final resp = await http.patch(
+        Uri.parse('${ApiConfig.baseUrl}/api/admin/users/$uid'),
+        headers: authHeaders,
+        body: jsonEncode({'updates': body}),
+      );
+      if (resp.statusCode != 200) {
+        throw Exception(jsonDecode(resp.body)['error'] ?? 'Update failed');
+      }
       _loadUsers();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('User updated: $action')));
@@ -625,10 +738,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               leading: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
-                  width: 48, height: 48, color: Colors.grey[200],
+                  width: 48, height: 48, color: Theme.of(context).colorScheme.outlineVariant,
                   child: p['images'] != null && (p['images'] as List).isNotEmpty
                       ? CachedNetworkImage(imageUrl: (p['images'] as List).first, fit: BoxFit.cover)
-                      : const Icon(Icons.image, color: Colors.grey),
+                      : Icon(Icons.image, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6)),
                 ),
               ),
               title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -638,7 +751,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 itemBuilder: (_) => [
                   PopupMenuItem(value: active ? 'deactivate' : 'activate', child: Text(active ? context.tr('deactivate') : context.tr('activate'))),
                   PopupMenuItem(value: featured ? 'unfeature' : 'feature', child: Text(featured ? context.tr('remove_featured') : context.tr('mark_featured'))),
-                  PopupMenuItem(value: 'delete', child: Text(context.tr('delete'), style: TextStyle(color: Colors.red))),
+                  PopupMenuItem(value: 'delete', child: Text(context.tr('delete'), style: TextStyle(color: Theme.of(context).colorScheme.error))),
                 ],
               ),
             ),
@@ -658,12 +771,27 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             content: Text(context.tr('delete_confirm')),
             actions: [
               TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
-              ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.tr('delete'), style: TextStyle(color: Colors.red))),
+              ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.tr('delete'), style: TextStyle(color: Theme.of(context).colorScheme.error))),
             ],
           ),
         );
         if (confirm != true) return;
-        await FirebaseFirestore.instance.collection('products').doc(id).delete();
+        try {
+          final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+          final resp = await http.delete(
+            Uri.parse('${ApiConfig.baseUrl}/api/admin/products/$id'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+          );
+          final result = jsonDecode(resp.body);
+          if (result['success'] != true) {
+            throw Exception(result['error'] ?? 'Delete failed');
+          }
+        } catch (e) {
+          throw Exception(e.toString());
+        }
         _loadProducts();
         return;
       }
@@ -689,6 +817,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     return const AdminReportsScreen(embedded: true);
   }
 
+  // ─── PAYOUT TAB ───────────────────────────────────────────────
+  Widget _buildPayoutTab() {
+    return const AdminWalletScreen();
+  }
+
   // ─── FRAUD TAB ────────────────────────────────────────────────
   Widget _buildFraudTab() {
     return StreamBuilder<List<FraudAlert>>(
@@ -698,16 +831,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         final alerts = snap.data ?? [];
         if (alerts.isEmpty) {
           return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.security, size: 64, color: Colors.green[300]),
-                const SizedBox(height: 16),
-                Text('No active fraud alerts', style: TextStyle(color: Colors.grey[600])),
-                const SizedBox(height: 8),
-                Text('Test mode: ${_fraudService.isTestMode ? "ON (alerts logged only)" : "OFF (production)"}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[500])),
-              ],
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.security, size: 64, color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7)),
+                  const SizedBox(height: 16),
+                  Text('No active fraud alerts', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                  const SizedBox(height: 8),
+                  Text('Test mode: ${_fraudService.isTestMode ? "ON (alerts logged only)" : "OFF (production)"}',
+                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6))),
+                ],
+              ),
             ),
           );
         }
@@ -725,21 +860,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   Widget _buildFraudCard(FraudAlert alert) {
     final severityColor = alert.severity == 'high'
-        ? Colors.red
+        ? Theme.of(context).colorScheme.error
         : alert.severity == 'medium'
-            ? Colors.orange
-            : Colors.yellow[700]!;
+            ? Theme.of(context).colorScheme.tertiary
+            : Theme.of(context).colorScheme.tertiary;
     final dateStr = DateFormat('MMM dd, HH:mm').format(alert.detectedAt);
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: severityColor.withAlpha(25),
+          backgroundColor: severityColor.withValues(alpha: 0.10),
           child: Icon(Icons.warning_amber, color: severityColor, size: 22),
         ),
         title: Text(alert.sellerName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-        subtitle: Text('${alert.description}\n$dateStr', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+        subtitle: Text('${alert.description}\n$dateStr', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
         trailing: TextButton(
           onPressed: () => _fraudService.markResolved(alert.id),
           child: Text(context.tr('dismiss'), style: TextStyle(fontSize: 12)),

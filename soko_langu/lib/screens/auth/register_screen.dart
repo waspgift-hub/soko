@@ -49,13 +49,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void _showError(String msg) {
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(backgroundColor: Colors.red, content: Text(msg)));
+    ).showSnackBar(SnackBar(backgroundColor: Theme.of(context).colorScheme.error, content: Text(msg)));
   }
 
   void _showSuccess(String msg) {
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(backgroundColor: Colors.green, content: Text(msg)));
+    ).showSnackBar(SnackBar(backgroundColor: Theme.of(context).colorScheme.primary, content: Text(msg)));
   }
 
   Future<void> _register() async {
@@ -264,7 +264,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   const SizedBox(height: 12),
                   AuthPrimaryButton(
                     label: context.tr('register'),
-                    loading: _isLoading,
                     onPressed: _register,
                   ),
                   const SizedBox(height: 20),

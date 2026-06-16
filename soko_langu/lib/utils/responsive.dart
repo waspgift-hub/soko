@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 
 class Responsive {
@@ -24,6 +25,34 @@ class Responsive {
   static bool get isLandscape => _width > _height;
   static bool get isSmallPhone => _width < 360;
   static bool get isTablet => _width >= 600;
+  static bool get isDesktop => _width >= 900;
+
+  static int gridColumns(BuildContext context) {
+    final w = MediaQuery.of(context).size.width;
+    if (w >= 1200) return 5;
+    if (w >= 900) return 4;
+    if (w >= 600) return 3;
+    return 2;
+  }
+
+  static int profileGridColumns(BuildContext context) {
+    final w = MediaQuery.of(context).size.width;
+    if (w >= 900) return 5;
+    if (w >= 600) return 4;
+    return 3;
+  }
+
+  static double cardAspectRatio(BuildContext context) {
+    final cols = gridColumns(context);
+    if (cols >= 4) return 0.65;
+    if (cols >= 3) return 0.68;
+    return 0.72;
+  }
+
+  static double scaleFont(BuildContext context, double base) {
+    final w = MediaQuery.of(context).size.width;
+    return base * min(w / 375, 1.3);
+  }
 }
 
 Widget safeAreaWrapper(Widget child) {

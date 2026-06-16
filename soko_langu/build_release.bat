@@ -1,5 +1,5 @@
 @echo off
-echo Building Soko Langu Release APK with obfuscation...
+echo Building Soko Vibe Release APK with obfuscation...
 cd /d "%~dp0"
 flutter build apk --release --obfuscate --split-debug-info=build/app/outputs/symbols
 if %errorlevel% equ 0 (

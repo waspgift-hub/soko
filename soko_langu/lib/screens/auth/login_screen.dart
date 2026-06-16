@@ -44,7 +44,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void _showError(String msg) {
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(backgroundColor: Colors.red, content: Text(msg)));
+    ).showSnackBar(SnackBar(backgroundColor: Theme.of(context).colorScheme.error, content: Text(msg)));
   }
 
   Future<void> _finishLogin() async {
@@ -53,11 +53,11 @@ class _LoginScreenState extends State<LoginScreen> {
     if (user != null && !user.emailVerified) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          backgroundColor: Colors.orange.shade700,
+          backgroundColor: Theme.of(context).colorScheme.tertiary,
           content: Text(context.tr('verify_email_first')),
           action: SnackBarAction(
             label: context.tr('verify_email_title'),
-            textColor: Colors.white,
+            textColor: Theme.of(context).colorScheme.surface,
             onPressed: () => context.push(
               AppRoutes.verifyEmail,
               extra: {'email': user.email ?? _emailController.text.trim()},
@@ -141,7 +141,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return Stack(
       children: [
         AuthPageShell(
-          title: 'Soko Langu',
+          title: 'Soko Vibe',
           subtitle: context.tr('welcome_back'),
           footer: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -252,7 +252,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 8),
                   AuthPrimaryButton(
                     label: context.tr('login'),
-                    loading: _isLoading,
                     onPressed: login,
                   ),
                   const SizedBox(height: 20),

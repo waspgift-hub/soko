@@ -10,6 +10,7 @@ import '../../services/wishlist_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/account_switcher_sheet.dart';
 import '../../widgets/ad_banner.dart';
+import '../../widgets/verified_badge.dart';
 import '../../app/routes.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -19,7 +20,9 @@ class ProfilePage extends StatefulWidget {
   State<ProfilePage> createState() => _ProfilePageState();
 }
 
-class _ProfilePageState extends State<ProfilePage> {
+class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
   final ImagePicker _picker = ImagePicker();
   final UserService _userService = UserService();
   final WishlistService _wishlistService = WishlistService();
@@ -68,7 +71,11 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _pickImage() async {
     try {
-      final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        imageQuality: 80,
+      );
       if (image != null) {
         setState(() => _localImagePath = image.path);
         final url = await _userService.uploadProfileImage(image.path);
@@ -96,6 +103,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final user = FirebaseAuth.instance.currentUser;
     final imageUrl = _localImagePath ?? _profile?.profileImage;
 
@@ -112,11 +120,11 @@ class _ProfilePageState extends State<ProfilePage> {
               // Mint gradient header
               Container(
                 width: double.infinity,
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [Color(0xFFD8F3DC), Color(0xFFF0F9F1)],
+                    colors: [Theme.of(context).colorScheme.tertiaryContainer, Theme.of(context).colorScheme.surfaceContainerLow],
                   ),
                 ),
                 padding: EdgeInsets.only(
@@ -130,7 +138,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       children: [
                         CircleAvatar(
                           radius: 50,
-                          backgroundColor: Colors.white,
+                          backgroundColor: Theme.of(context).colorScheme.surface,
                           backgroundImage: imageUrl != null
                               ? (imageUrl.startsWith('http')
                                     ? NetworkImage(imageUrl) as ImageProvider
@@ -145,9 +153,9 @@ class _ProfilePageState extends State<ProfilePage> {
                                       : user?.email != null
                                       ? user!.email![0].toUpperCase()
                                       : "U",
-                                  style: const TextStyle(
+                                  style:  TextStyle(
                                     fontSize: 40,
-                                    color: Color(0xFF2D6A4F),
+                                    color: Theme.of(context).colorScheme.primary,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 )
@@ -160,18 +168,18 @@ class _ProfilePageState extends State<ProfilePage> {
                             onTap: _pickImage,
                             child: Container(
                               padding: const EdgeInsets.all(8),
-                              decoration: const BoxDecoration(
+                              decoration:  BoxDecoration(
                                 gradient: LinearGradient(
                                   colors: [
-                                    Color(0xFF2D6A4F),
-                                    Color(0xFF40916C),
+                                    Theme.of(context).colorScheme.primary,
+                                    Theme.of(context).colorScheme.tertiary,
                                   ],
                                 ),
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(
+                              child:  Icon(
                                 Icons.camera_alt,
-                                color: Colors.white,
+                                color: Theme.of(context).colorScheme.surface,
                                 size: 20,
                               ),
                             ),
@@ -188,12 +196,14 @@ class _ProfilePageState extends State<ProfilePage> {
                           _profile?.displayName.isNotEmpty == true
                               ? _profile!.displayName
                               : user?.displayName ?? context.tr('no_name'),
-                          style: const TextStyle(
-                            color: Color(0xFF1B4332),
+                          style:  TextStyle(
+                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85),
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
+                        if (_profile?.kycApproved == true)
+                          const VerifiedBadge(size: 16),
                       ],
                     ),
                     const SizedBox(height: 4),
@@ -203,7 +213,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         child: Text(
                           _profile!.bio,
                           style: TextStyle(
-                            color: Colors.grey[600],
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                             fontSize: 14,
                           ),
                           textAlign: TextAlign.center,
@@ -212,7 +222,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     const SizedBox(height: 2),
                     Text(
                       user?.email ?? context.tr('no_email'),
-                      style: TextStyle(color: Colors.grey[500], fontSize: 14),
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 14),
                     ),
                     const SizedBox(height: 16),
                     // Stats cards
@@ -327,11 +337,8 @@ class _ProfilePageState extends State<ProfilePage> {
       _ActionItem(Icons.explore, context.tr('discovery'), () {
         context.push(AppRoutes.discovery);
       }),
-      _ActionItem(Icons.play_circle_outline, context.tr('my_media'), () {
-        context.push(AppRoutes.mediaPlayer);
-      }),
-      _ActionItem(Icons.queue_music, context.tr('playlists'), () {
-        context.push(AppRoutes.playlists);
+      _ActionItem(Icons.play_circle_outline, context.tr('audio'), () {
+        context.push(AppRoutes.audioList);
       }),
       _ActionItem(Icons.receipt_long_outlined, 'Manunuzi Yangu', () {
         context.push(AppRoutes.myPurchases);
@@ -458,12 +465,12 @@ class _ProfilePageState extends State<ProfilePage> {
         width: double.infinity,
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [Colors.red[400]!, Colors.red[300]!],
+            colors: [Theme.of(context).colorScheme.error, Theme.of(context).colorScheme.error.withValues(alpha: 0.85)],
           ),
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.red.withValues(alpha: 0.2),
+              color: Theme.of(context).colorScheme.error.withValues(alpha: 0.2),
               blurRadius: 8,
               offset: const Offset(0, 3),
             ),
@@ -473,12 +480,12 @@ class _ProfilePageState extends State<ProfilePage> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.logout, color: Colors.white, size: 18),
+              Icon(Icons.logout, color: Theme.of(context).colorScheme.surface, size: 18),
               const SizedBox(width: 8),
               Text(
                 context.tr('logout'),
-                style: const TextStyle(
-                  color: Colors.white,
+                style:  TextStyle(
+                  color: Theme.of(context).colorScheme.surface,
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
                 ),

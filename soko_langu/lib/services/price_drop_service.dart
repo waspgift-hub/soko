@@ -1,7 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../models/product_model.dart';
+import 'api_config.dart';
 
 class PriceDropService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -54,6 +57,7 @@ class PriceDropService {
     try {
       final users = await _db.collection('users').get();
       final batch = _db.batch();
+      final List<String> fcmTokens = [];
 
       for (var userDoc in users.docs) {
         final notifRef = _db.collection('notifications').doc();
@@ -70,9 +74,38 @@ class PriceDropService {
           'isRead': false,
           'createdAt': FieldValue.serverTimestamp(),
         });
+        final token = userDoc.data()['fcmToken'] as String?;
+        if (token != null && token.isNotEmpty) {
+          fcmTokens.add(token);
+        }
       }
 
       await batch.commit();
+
+      // Send FCM push notifications
+      if (fcmTokens.isNotEmpty) {
+        try {
+          await http.post(
+            Uri.parse('${ApiConfig.baseUrl}/api/send-bulk-notification'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'title': 'Punguzo Kubwa! $productName',
+              'body': 'Ilishuka kutoka $originalPrice hadi $newPrice! Bonyeza kununua.',
+              'tokens': fcmTokens,
+              'data': {
+                'type': 'price_drop',
+                'productId': productId,
+                'productName': productName,
+                'sellerPhone': sellerPhone,
+                'originalPrice': originalPrice.toString(),
+                'newPrice': newPrice.toString(),
+              },
+            }),
+          );
+        } catch (e) {
+          debugPrint('broadcastPriceDrop FCM error: $e');
+        }
+      }
     } catch (e) {
       debugPrint('broadcastPriceDrop error: $e');
     }

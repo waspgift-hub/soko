@@ -27,7 +27,6 @@ function asyncHandler(fn) {
   };
 }
 
-const MONGIKE_API_KEY = process.env.MONGIKE_API_KEY;
 const PORT = process.env.PORT || 3000;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || '';
 const ESCROW_AUTO_RELEASE_DAYS = parseInt(process.env.ESCROW_AUTO_RELEASE_DAYS) || 14;
@@ -41,11 +40,11 @@ function androidNotifConfig(channelId, tag) {
       channelId,
       priority: 'max',
       visibility: 'public',
-      sound: 'soko_notification',
+      sound: 'default',
       notificationPriority: 'PRIORITY_MAX',
-      defaultSound: false,
+      defaultSound: true,
       vibrateTimingsMillis: [0, 200, 100, 200, 100, 300],
-      defaultVibrateTimings: false,
+      defaultVibrateTimings: true,
       lights: [true, 500, 500],
       defaultLightSettings: false,
       ...(tag ? { tag } : {}),
@@ -212,34 +211,303 @@ const BOOST_TIERS = {
   gold: { price: 10000, days: 30 },
 };
 
-const MONGIKE_TX_FEE = 180;          // Mongike charges TZS 180 per transaction
-const MONGIKE_PAYOUT_FEE = 2000;     // Mongike charges TZS 2,000 per payout
-const MONGIKE_BASE = 'https://mongike.com/api/v1';
 const PLATFORM_COMMISSION_PERCENT = 0.04; // 4% platform commission
 const MIN_WITHDRAWAL = 5000;          // Minimum withdrawal TZS 5,000
 
-async function callMongikePay(body, retries = 2) {
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 30000);
+// ─── ClickPesa Fees ───
+const CLICKPESA_PAYOUT_FEE_TIERS = [
+  { min: 100, max: 999, fee: 52 },
+  { min: 1000, max: 1999, fee: 72 },
+  { min: 2000, max: 2999, fee: 104 },
+  { min: 3000, max: 3999, fee: 116 },
+  { min: 4000, max: 4999, fee: 168 },
+  { min: 5000, max: 6999, fee: 234 },
+  { min: 7000, max: 7999, fee: 360 },
+  { min: 8000, max: 9999, fee: 430 },
+  { min: 10000, max: 14999, fee: 642 },
+  { min: 15000, max: 19999, fee: 680 },
+  { min: 20000, max: 29999, fee: 700 },
+  { min: 30000, max: 39999, fee: 980 },
+  { min: 40000, max: 49999, fee: 1038 },
+  { min: 50000, max: 99999, fee: 1460 },
+  { min: 100000, max: 199999, fee: 1868 },
+  { min: 200000, max: 299999, fee: 2220 },
+  { min: 300000, max: 399999, fee: 3180 },
+  { min: 400000, max: 499999, fee: 3764 },
+  { min: 500000, max: 599999, fee: 4672 },
+  { min: 600000, max: 699999, fee: 5712 },
+  { min: 700000, max: 799999, fee: 6560 },
+  { min: 800000, max: 899999, fee: 7800 },
+  { min: 900000, max: 1000000, fee: 8508 },
+  { min: 1000001, max: 3000000, fee: 9346 },
+  { min: 3000001, max: 5000000, fee: 9890 },
+];
 
-      const resp = await fetch(`${MONGIKE_BASE}/payments/mobile-money/tanzania`, {
-        method: 'POST',
-        headers: {
-          'x-api-key': MONGIKE_API_KEY,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
+const CLICKPESA_USSD_PUSH_FEE_TIERS = [
+  { min: 500, max: 999, fee: 54 },
+  { min: 1000, max: 1999, fee: 92 },
+  { min: 2000, max: 2999, fee: 124 },
+  { min: 3000, max: 3999, fee: 230 },
+  { min: 4000, max: 4999, fee: 380 },
+  { min: 5000, max: 9999, fee: 580 },
+  { min: 10000, max: 19999, fee: 920 },
+  { min: 20000, max: 39999, fee: 1150 },
+  { min: 40000, max: 49999, fee: 1572 },
+  { min: 50000, max: 99999, fee: 2136 },
+  { min: 100000, max: 199999, fee: 3240 },
+  { min: 200000, max: 299999, fee: 3660 },
+  { min: 300000, max: 399999, fee: 4080 },
+  { min: 400000, max: 499999, fee: 4340 },
+  { min: 500000, max: 599999, fee: 4820 },
+  { min: 600000, max: 799999, fee: 5230 },
+  { min: 800000, max: 999999, fee: 6146 },
+  { min: 1000000, max: 1999999, fee: 7210 },
+  { min: 2000000, max: 3000000, fee: 7960 },
+];
 
-      return await resp.json();
-    } catch (err) {
-      if (attempt === retries) throw err;
-      await new Promise(r => setTimeout(r, 1000));
-    }
+function getClickPesaUssdPushFee(amount) {
+  const tier = CLICKPESA_USSD_PUSH_FEE_TIERS.find(t => amount >= t.min && amount <= t.max);
+  return tier ? tier.fee : 7960;
+}
+
+function getClickPesaPayoutFee(amount) {
+  const tier = CLICKPESA_PAYOUT_FEE_TIERS.find(t => amount >= t.min && amount <= t.max);
+  return tier ? tier.fee : 9890;
+}
+
+function generatePayoutReference(prefix = 'po') {
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 8)}`;
+}
+
+const PAYOUT_RETRY_MAX = 3;
+const PAYOUT_STATUSES = { PENDING: 'pending', PROCESSING: 'processing', SUCCESS: 'success', FAILED: 'failed', REFUNDED: 'refunded', REVERSED: 'reversed' };
+
+async function createPayoutRecord({ userId, phone, amount, fee, netAmount, source, type, metadata }) {
+  const payoutId = generatePayoutReference();
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const record = {
+    payoutId,
+    userId,
+    userPhone: phone,
+    amount: Math.round(amount),
+    fee: Math.round(fee),
+    netAmount: Math.round(netAmount),
+    status: PAYOUT_STATUSES.PENDING,
+    type,
+    source: source || '',
+    retryCount: 0,
+    maxRetries: PAYOUT_RETRY_MAX,
+    createdAt: now,
+    updatedAt: now,
+    metadata: metadata || {},
+  };
+  await db.collection('payouts').doc(payoutId).set(record);
+  return payoutId;
+}
+
+async function updatePayoutStatus(payoutId, status, extra = {}) {
+  if (!db || !payoutId) return;
+  const updates = { status, updatedAt: admin.firestore.FieldValue.serverTimestamp(), ...extra };
+  if (status === PAYOUT_STATUSES.SUCCESS || status === PAYOUT_STATUSES.FAILED) {
+    updates.completedAt = admin.firestore.FieldValue.serverTimestamp();
+  }
+  await db.collection('payouts').doc(payoutId).update(updates);
+}
+
+async function processPayout({ payoutId, userId, phone, amount, fee, netAmount, source, type, metadata }) {
+  if (!payoutId) {
+    payoutId = await createPayoutRecord({ userId, phone, amount, fee, netAmount, source, type, metadata });
+  }
+  await updatePayoutStatus(payoutId, PAYOUT_STATUSES.PROCESSING);
+  const extId = payoutId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20);
+
+  const available = await getClickPesaBalance();
+  if (netAmount > available) {
+    await updatePayoutStatus(payoutId, PAYOUT_STATUSES.FAILED, {
+      failureReason: `Insufficient ClickPesa balance: TZS ${available} available, need TZS ${netAmount}`,
+      clickpesaReference: '',
+    });
+    throw new Error(`Insufficient ClickPesa balance: TZS ${available} available, need TZS ${netAmount}`);
+  }
+
+  const result = await clickPesaDisburse({ amount: netAmount, phone, externalId: extId });
+
+  const clickpesaRef = result.id || result.transactionId || result.data?.transactionId || '';
+  await updatePayoutStatus(payoutId, PAYOUT_STATUSES.SUCCESS, { clickpesaReference: clickpesaRef });
+
+  return { payoutId, clickpesaReference: clickpesaRef, netAmount, fee };
+}
+
+async function retryFailedPayout(payoutId) {
+  const doc = await db.collection('payouts').doc(payoutId).get();
+  if (!doc.exists) throw new Error('Payout not found');
+  const payout = doc.data();
+  if (payout.status !== PAYOUT_STATUSES.FAILED) throw new Error(`Cannot retry payout with status: ${payout.status}`);
+  if (payout.retryCount >= payout.maxRetries) throw new Error('Max retries reached');
+
+  await db.collection('payouts').doc(payoutId).update({
+    retryCount: admin.firestore.FieldValue.increment(1),
+    failureReason: '',
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  return processPayout({
+    payoutId, userId: payout.userId, phone: payout.userPhone,
+    amount: payout.amount, fee: payout.fee, netAmount: payout.netAmount,
+    source: payout.source, type: payout.type, metadata: payout.metadata,
+  });
+}
+
+// ─── ClickPesa Configuration ───
+const CLICKPESA_BASE_URL = 'https://api.clickpesa.com/third-parties';
+const CLICKPESA_CLIENT_ID = process.env.CLICKPESA_CLIENT_ID || '';
+const CLICKPESA_API_KEY = process.env.CLICKPESA_API_KEY || '';
+const CLICKPESA_CHECKSUM_KEY = process.env.CLICKPESA_CHECKSUM_KEY || '';
+
+let clickpesaToken = null;
+let clickpesaTokenExpiry = 0;
+
+/** Canonicalize object: sort keys recursively */
+function canonicalize(obj) {
+  if (obj === null || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(canonicalize);
+  return Object.keys(obj).sort().reduce((acc, k) => { acc[k] = canonicalize(obj[k]); return acc; }, {});
+}
+
+/** HMAC-SHA256 checksum for ClickPesa payloads */
+function createClickPesaChecksum(payload) {
+  const canonical = canonicalize(payload);
+  const json = JSON.stringify(canonical);
+  const hmac = crypto.createHmac('sha256', CLICKPESA_CHECKSUM_KEY);
+  hmac.update(json);
+  return hmac.digest('hex');
+}
+
+/** Get ClickPesa JWT token (cached, auto-refresh) */
+async function getClickPesaToken() {
+  if (clickpesaToken && Date.now() < clickpesaTokenExpiry) return clickpesaToken;
+
+  const resp = await fetch(`${CLICKPESA_BASE_URL}/generate-token`, {
+    method: 'POST',
+    headers: {
+      'client-id': CLICKPESA_CLIENT_ID,
+      'api-key': CLICKPESA_API_KEY,
+    },
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`ClickPesa auth failed (${resp.status}): ${errText}`);
+  }
+
+  const data = await resp.json();
+  clickpesaToken = data.token;
+  const expiresIn = 55 * 60 * 1000; // 55 min cache (token valid 1 hr)
+  clickpesaTokenExpiry = Date.now() + expiresIn;
+  return clickpesaToken;
+}
+
+/** Format phone to 2557XXXXXXXX (ClickPesa format) */
+function toClickPesaPhone(phone) {
+  return '255' + phone.replace(/[^0-9]/g, '').slice(-9);
+}
+
+/** USSD Push — send payment prompt to customer's phone */
+async function clickPesaMobileCheckout({ amount, phone, externalId }) {
+  const token = await getClickPesaToken();
+  const phoneNumber = toClickPesaPhone(phone);
+  let orderReference = externalId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20);
+  const payload = { amount: String(Math.round(amount)), orderReference, phoneNumber, currency: 'TZS' };
+  payload.checksum = createClickPesaChecksum(payload);
+
+  const resp = await fetch(`${CLICKPESA_BASE_URL}/payments/initiate-ussd-push-request`, {
+    method: 'POST',
+    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  const text = await resp.text();
+  let data = {};
+  try { data = JSON.parse(text); } catch (_) {}
+  if (!resp.ok) {
+    throw new Error(data.message || data.error || 'ClickPesa checkout failed');
+  }
+  return data;
+}
+
+/** Mobile money payout — disburse funds to recipient */
+async function clickPesaDisburse({ amount, phone, externalId }) {
+  const token = await getClickPesaToken();
+  const phoneNumber = toClickPesaPhone(phone);
+  const payload = { amount: Math.round(amount), orderReference: externalId.replace(/[^a-zA-Z0-9]/g, ''), phoneNumber, currency: 'TZS' };
+  payload.checksum = createClickPesaChecksum(payload);
+
+  const resp = await fetch(`${CLICKPESA_BASE_URL}/payouts/create-mobile-money-payout`, {
+    method: 'POST',
+    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  const text = await resp.text();
+  let data = {};
+  try { data = JSON.parse(text); } catch (_) {}
+  if (!resp.ok) {
+    throw new Error(data.message || data.error || 'ClickPesa disbursement failed');
+  }
+  return data;
+}
+
+/** Get ClickPesa account balance — returns TZS available balance (number) */
+async function getClickPesaBalance() {
+  const token = await getClickPesaToken();
+  const resp = await fetch(`${CLICKPESA_BASE_URL}/account/balance`, {
+    method: 'GET',
+    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+  });
+  const text = await resp.text();
+  let data = {};
+  try { data = JSON.parse(text); } catch (_) {}
+  if (!resp.ok) throw new Error(data.message || data.error || 'Failed to fetch balance');
+  // Response format: { balances: [{ currency: "TZS", balance: 0 }, ...] }
+  const tzsBalance = (data.balances || []).find(b => b.currency === 'TZS');
+  return tzsBalance ? tzsBalance.balance : 0;
+}
+
+/** Preview/validate a mobile money payout before sending */
+async function clickPesaPayoutPreview({ amount, phone, externalId }) {
+  const token = await getClickPesaToken();
+  const phoneNumber = toClickPesaPhone(phone);
+  const payload = { amount: Math.round(amount), orderReference: externalId.replace(/[^a-zA-Z0-9]/g, ''), phoneNumber, currency: 'TZS' };
+  payload.checksum = createClickPesaChecksum(payload);
+
+  const resp = await fetch(`${CLICKPESA_BASE_URL}/payouts/preview-mobile-money-payout`, {
+    method: 'POST',
+    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  const text = await resp.text();
+  let data = {};
+  try { data = JSON.parse(text); } catch (_) {}
+  if (!resp.ok) throw new Error(data.message || data.error || 'Payout preview failed');
+  return data;
+}
+
+async function updateSellerKycOnProducts(sellerId, kycApproved) {
+  if (!db || !sellerId) return;
+  try {
+    const productsSnap = await db.collection('products')
+      .where('sellerId', '==', sellerId)
+      .get();
+    const batch = db.batch();
+    let count = 0;
+    productsSnap.docs.forEach(doc => {
+      batch.update(doc.ref, { sellerKycApproved: kycApproved });
+      count++;
+    });
+    if (count > 0) await batch.commit();
+    console.log(`Updated sellerKycApproved=${kycApproved} on ${count} products for seller ${sellerId}`);
+  } catch (e) {
+    console.error(`Failed to update sellerKycApproved for ${sellerId}:`, e);
   }
 }
 
@@ -256,19 +524,13 @@ app.post('/api/boost-product', async (req, res) => {
     }
 
     const order_id = `boost_${Date.now()}`;
-    const webhookUrl = process.env.WEBHOOK_URL || `https://soko-langu-server-production.up.railway.app/api/webhook`;
 
-    const result = await callMongikePay({
-      order_id,
+    const result = await clickPesaMobileCheckout({
       amount: tierConfig.price,
-      buyer_phone: phone,
-      fee_payer: 'MERCHANT',
-      webhook_url: webhookUrl,
+      phone,
+      provider: 'Mpesa',
+      externalId: order_id,
     });
-
-    if (result.status !== 'success') {
-      return res.status(500).json({ error: result.message || 'Mongike error' });
-    }
 
     if (db) {
       await db.collection('transactions').doc(order_id).set({
@@ -279,21 +541,19 @@ app.post('/api/boost-product', async (req, res) => {
         durationDays: tierConfig.days,
         userId: userId || '',
         buyerPhone: phone,
-        mongikeId: result.data?.id || '',
+        clickpesaTransactionId: result.id || result.transactionId || result.data?.transactionId || '',
         status: 'pending',
+        paymentMethod: 'ClickPesa',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     }
 
     res.json({
       order_id,
-      mongikeId: result.data?.id || '',
-      message: 'Payment prompt sent to your phone. Check Mongike, Airtel Money, Mixx, or Halopesa and enter your PIN.',
+      clickpesaTransactionId: result.id || result.transactionId || result.data?.transactionId || '',
+      message: 'Tuma PIN yako kwenye simu ili kukamilisha malipo.',
     });
   } catch (e) {
-    if (e.name === 'AbortError') {
-      return res.status(504).json({ error: 'Mongike request timed out. Please try again.' });
-    }
     res.status(500).json({ error: e.message || 'Internal server error' });
   }
 });
@@ -599,7 +859,7 @@ app.post('/api/send-otp', async (req, res) => {
       await transporter.sendMail({
         from: SMTP_FROM,
         to: email,
-        subject: '🔐 Soko Langu — Reset Your Password',
+        subject: '🔐 Soko Vibe — Reset Your Password',
         html: `
           <!DOCTYPE html>
           <html>
@@ -612,7 +872,7 @@ app.post('/api/send-otp', async (req, res) => {
                   <tr>
                     <td style="background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 50%, #40916C 100%); padding:32px 24px; text-align:center;">
                       <div style="font-size:36px; margin-bottom:8px;">🏪</div>
-                      <h1 style="color:#ffffff; margin:0; font-size:24px; font-weight:700; letter-spacing:1px;">SOKO LANGU</h1>
+                      <h1 style="color:#ffffff; margin:0; font-size:24px; font-weight:700; letter-spacing:1px;">SOKO VIBE</h1>
                       <p style="color:#95D5B2; margin:4px 0 0; font-size:13px;">Tanzania's Trusted Marketplace</p>
                     </td>
                   </tr>
@@ -621,7 +881,7 @@ app.post('/api/send-otp', async (req, res) => {
                     <td style="padding:32px 24px;">
                       <h2 style="color:#1B4332; font-size:20px; margin:0 0 8px;">Password Reset Request</h2>
                       <p style="color:#555; font-size:14px; line-height:1.6; margin:0 0 20px;">
-                        Someone requested to reset the password for your Soko Langu account. 
+                        Someone requested to reset the password for your Soko Vibe account. 
                         Use the One-Time Password (OTP) below to proceed.
                       </p>
                       <!-- OTP Box -->
@@ -639,7 +899,7 @@ app.post('/api/send-otp', async (req, res) => {
                         </p>
                       </div>
                       <p style="color:#999; font-size:12px; line-height:1.5; margin:0; text-align:center;">
-                        Soko Langu &bull; Tanzania<br>
+                        Soko Vibe &bull; Tanzania<br>
                         Need help? Contact us through the app.
                       </p>
                     </td>
@@ -648,7 +908,7 @@ app.post('/api/send-otp', async (req, res) => {
                   <tr>
                     <td style="background:#1B4332; padding:16px 24px; text-align:center;">
                       <p style="color:#95D5B2; font-size:11px; margin:0;">
-                        &copy; ${new Date().getFullYear()} Soko Langu. All rights reserved.
+                        &copy; ${new Date().getFullYear()} Soko Vibe. All rights reserved.
                       </p>
                     </td>
                   </tr>
@@ -840,7 +1100,7 @@ app.post('/api/escrow/release', async (req, res) => {
       return res.status(404).json({ error: 'Transaction not found' });
     }
 
-    let sellerId, sellerReceives, productName, productPrice, escrowReleased, mongikeFee, platformFee;
+    let sellerId, sellerReceives, productName, productPrice, escrowReleased, platformFee;
 
     if (txDoc.exists) {
       const tx = txDoc.data();
@@ -858,7 +1118,6 @@ app.post('/api/escrow/release', async (req, res) => {
       productName = tx.productName || 'Product';
       productPrice = tx.productPrice || 0;
       escrowReleased = tx.escrowReleased;
-      mongikeFee = tx.mongikeFee || 0;
       platformFee = tx.platformFee || 0;
     } else {
       const order = orderDoc.data();
@@ -876,7 +1135,6 @@ app.post('/api/escrow/release', async (req, res) => {
       productName = order.items?.map(i => i.name).join(', ') || 'Product';
       productPrice = order.totalAmount || 0;
       escrowReleased = order.escrowReleased;
-      mongikeFee = 0;
       platformFee = 0;
     }
 
@@ -892,10 +1150,11 @@ app.post('/api/escrow/release', async (req, res) => {
     const balanceBefore = sellerDoc.exists ? (sellerDoc.data().sellerBalance || 0) : 0;
     const pendingBefore = sellerDoc.exists ? (sellerDoc.data().pendingEscrow || 0) : 0;
 
-    // Move from pendingEscrow to sellerBalance
+    // Move from pendingEscrow to sellerBalance (safe decrement)
+    const actualPending = Math.min(sellerReceives, pendingBefore);
     await db.collection('users').doc(sellerId).update({
       sellerBalance: admin.firestore.FieldValue.increment(sellerReceives),
-      pendingEscrow: admin.firestore.FieldValue.increment(-sellerReceives),
+      pendingEscrow: admin.firestore.FieldValue.increment(-actualPending),
     });
 
     // Record in revenue_transactions for seller
@@ -936,40 +1195,24 @@ app.post('/api/escrow/release', async (req, res) => {
         const sellerPhone = sellerData.phone;
         if (!sellerPhone) return;
 
-        const payoutFee = MONGIKE_PAYOUT_FEE;
-        const netPayout = sellerReceives - payoutFee;
+        const clickPesaFee = getClickPesaPayoutFee(sellerReceives);
+        const netPayout = sellerReceives - clickPesaFee;
         if (netPayout <= 0) return;
 
-        const payoutResp = await fetch(`${MONGIKE_BASE}/payouts/withdraw`, {
-          method: 'POST',
-          headers: {
-            'x-api-key': MONGIKE_API_KEY,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ amount: netPayout, recipient_phone: sellerPhone }),
-        });
+        try {
+          const payout = await processPayout({
+            userId: sellerId, phone: sellerPhone,
+            amount: sellerReceives, fee: clickPesaFee, netAmount: netPayout,
+            source: `escrow_${orderId}`,
+            type: 'escrow_release',
+            metadata: { orderId, sellerId, productName },
+          });
 
-        const payoutData = await payoutResp.json();
-
-        if (payoutData.status === 'success') {
-          // Deduct auto-payout from sellerBalance to prevent double payout
           await db.collection('users').doc(sellerId).update({
             sellerBalance: admin.firestore.FieldValue.increment(-sellerReceives),
           });
-
-          await db.collection('withdrawals').add({
-            userId: sellerId,
-            type: 'seller',
-            amount: sellerReceives,
-            feeMongike: payoutFee,
-            netAmount: netPayout,
-            phone: sellerPhone,
-            reference: payoutData.data?.id || orderId,
-            status: 'completed',
-            autoPayout: true,
-            transactionId: orderId,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
+        } catch (payoutErr) {
+          console.error('ClickPesa escrow auto-payout failed:', payoutErr);
         }
       } catch (payoutErr) {
         console.error('Escrow auto-payout error:', payoutErr);
@@ -1013,7 +1256,7 @@ app.post('/api/escrow/release', async (req, res) => {
       if (buyerToken) {
         await admin.messaging().send({
           token: buyerToken,
-          notification: { title: 'Umethibitisha Upokeaji', body: `${productName} — asante kwa kununua ndani ya SokoLangu!` },
+          notification: { title: 'Umethibitisha Upokeaji', body: `${productName} — asante kwa kununua ndani ya SokoVibe!` },
           data: { type: 'delivery_confirmed', transactionId: orderId },
           android: androidNotifConfig('general_notifications_v3', 'delivery_confirmed'),
         });
@@ -1081,9 +1324,12 @@ app.post('/api/escrow/admin-release', async (req, res) => {
     }
 
     if (sellerId) {
+      const adminSellerDoc = await db.collection('users').doc(sellerId).get();
+      const adminPending = adminSellerDoc.exists ? (adminSellerDoc.data().pendingEscrow || 0) : 0;
+      const actualPending = Math.min(sellerReceives, adminPending);
       await db.collection('users').doc(sellerId).update({
         sellerBalance: admin.firestore.FieldValue.increment(sellerReceives),
-        pendingEscrow: admin.firestore.FieldValue.increment(-sellerReceives),
+        pendingEscrow: admin.firestore.FieldValue.increment(-actualPending),
       });
       await db.collection('revenue_transactions').add({
         userId: sellerId,
@@ -1139,31 +1385,19 @@ app.post('/api/escrow/refund', async (req, res) => {
     }
 
     const refundAmount = productPrice;
-    const platformLosesFee = MONGIKE_PAYOUT_FEE;
+    const platformLosesFee = getClickPesaPayoutFee(refundAmount);
 
-    // Send money back to buyer via Mongike payout
-    const payoutResp = await fetch(`${MONGIKE_BASE}/payouts/withdraw`, {
-      method: 'POST',
-      headers: {
-        'x-api-key': MONGIKE_API_KEY,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        amount: refundAmount,
-        recipient_phone: buyerPhone,
-      }),
-    });
-
-    const payoutResult = await payoutResp.json();
-
-    if (payoutResult.status !== 'success') {
+    const extId = `refund_${orderId}`;
+    try {
+      await clickPesaDisburse({ amount: refundAmount, phone: buyerPhone, externalId: extId });
+    } catch (payoutErr) {
       await auditLog({
         userId, type: 'refund_payout_failed', amount: refundAmount,
-        reason: `Mongike refund payout failed: ${payoutResult.message || 'Unknown error'}`,
+        reason: `ClickPesa refund payout failed: ${payoutErr.message || 'Unknown error'}`,
         relatedId: orderId,
         metadata: { productName, buyerPhone, productPrice },
       });
-      return res.status(500).json({ error: payoutResult.message || 'Mongike refund payout failed' });
+      return res.status(500).json({ error: `Refund payment failed: ${payoutErr.message}` });
     }
 
     // Update transaction to refunded
@@ -1171,13 +1405,17 @@ app.post('/api/escrow/refund', async (req, res) => {
       status: 'refunded',
       refundedAt: admin.firestore.FieldValue.serverTimestamp(),
       refundAmount,
-      refundPayoutFee: MONGIKE_PAYOUT_FEE,
+      refundPayoutFee: platformLosesFee,
+      paymentMethod: 'ClickPesa',
     });
 
-    // Remove from seller's pendingEscrow
+    // Remove from seller's pendingEscrow (safe decrement)
     if (sellerId && sellerReceives > 0) {
+      const refundSellerDoc = await db.collection('users').doc(sellerId).get();
+      const refundPending = refundSellerDoc.exists ? (refundSellerDoc.data().pendingEscrow || 0) : 0;
+      const actualPending = Math.min(sellerReceives, refundPending);
       await db.collection('users').doc(sellerId).update({
-        pendingEscrow: admin.firestore.FieldValue.increment(-sellerReceives),
+        pendingEscrow: admin.firestore.FieldValue.increment(-actualPending),
         totalSales: admin.firestore.FieldValue.increment(-1),
         grossSalesVolume: admin.firestore.FieldValue.increment(-productPrice),
       });
@@ -1197,7 +1435,7 @@ app.post('/api/escrow/refund', async (req, res) => {
     await db.collection('notifications').add({
       userId,
       title: '💰 Pesa Zimerudishwa',
-      body: `Refund kamili ya TZS ${refundAmount.toLocaleString()} kwa ${productName} imetumwa kwa namba yako ya Mongike.`,
+      body: `Refund kamili ya TZS ${refundAmount.toLocaleString()} kwa ${productName} imetumwa kwa namba yako.`,
       isRead: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       data: { type: 'refund', orderId },
@@ -1292,6 +1530,11 @@ app.post('/api/kyc/submit', async (req, res) => {
       },
     });
 
+    // Update sellerKycApproved on all products if auto-approved
+    if (autoApproved && userId) {
+      await updateSellerKycOnProducts(userId, true);
+    }
+
     await auditLog({
       userId,
       type: `kyc_${status}`,
@@ -1365,6 +1608,11 @@ app.post('/api/admin/kyc/review', async (req, res) => {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
+    // Update sellerKycApproved on all products if approved
+    if (approve && userId) {
+      await updateSellerKycOnProducts(userId, true);
+    }
+
     await auditLog({
       userId,
       type: `kyc_${status}`,
@@ -1404,7 +1652,7 @@ app.get('/api/admin/kyc/pending', async (req, res) => {
 });
 
 // ============================================================
-// 🛒 MARKETPLACE — Initiate product purchase payment via Mongike
+// 🛒 MARKETPLACE — Initiate product purchase payment via ClickPesa
 // ============================================================
 app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, res) => {
   try {
@@ -1425,20 +1673,14 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
       if (!withinLimit) return res.status(400).json({ error: `Daily purchase limit of TZS ${MAX_DAILY_SALE_AMOUNT.toLocaleString()} exceeded` });
     }
 
-    const order_id = `order_${Date.now()}_${buyerId ? buyerId.substring(0, 8) : 'anon'}`;
-    const webhookUrl = process.env.WEBHOOK_URL || `https://soko-langu-server-production.up.railway.app/api/webhook`;
+    const order_id = `p${Date.now().toString(36)}${buyerId ? buyerId.substring(0, 4) : 'x'}`;
 
-    const result = await callMongikePay({
-      order_id,
-      amount: Math.round(productPrice),
-      buyer_phone: phone,
-      fee_payer: 'MERCHANT',
-      webhook_url: webhookUrl,
+    const result = await clickPesaMobileCheckout({
+      amount: productPrice,
+      phone,
+      provider: 'Mpesa',
+      externalId: order_id,
     });
-
-    if (result.status !== 'success') {
-      return res.status(500).json({ error: result.message || 'Mongike error' });
-    }
 
     if (db) {
       let buyerName = '';
@@ -1459,30 +1701,28 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
         buyerName,
         productPrice: Math.round(productPrice),
         status: 'pending',
+        paymentMethod: 'ClickPesa',
+        clickpesaTransactionId: result.id || result.transactionId || result.data?.transactionId || '',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     }
 
     res.json({
       order_id,
-      mongikeId: result.data?.id || '',
-      message: 'Payment prompt sent to your phone. Check Mongike, Airtel Money, Mixx, or Halopesa and enter your PIN.',
+      clickpesaTransactionId: result.id || result.transactionId || result.data?.transactionId || '',
+      message: 'Tuma PIN yako kwenye simu ili kukamilisha malipo.',
     });
   } catch (e) {
-    if (e.name === 'AbortError') {
-      return res.status(504).json({ error: 'Mongike request timed out. Please try again.' });
-    }
     res.status(500).json({ error: e.message || 'Internal server error' });
   }
 });
 
 // ============================================================
-// 🔔 MONGIKE WEBHOOK — Handle payment completion
+// 🔔 LEGACY WEBHOOK — Handle payment completion (legacy)
 // ============================================================
 app.post('/api/webhook', verifyWebhook, async (req, res) => {
   try {
     const { order_id, status, amount, buyer_phone } = req.body;
-    // Support both 'status' and 'payment_status' field names from Mongike
     const paymentStatus = status || (req.body.payment_status || '').toLowerCase() || '';
     if (!order_id || !paymentStatus) {
       return res.status(200).json({ received: false });
@@ -1560,7 +1800,7 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
 
-        // Also set totalAmount on the transaction for Mongike tracking
+        // Also set totalAmount on the transaction for ClickPesa tracking
         await txDoc.ref.update({
           totalAmount: boostAmount,
           completedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1573,22 +1813,22 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
       if (tx.type === 'purchase') {
         const productPrice = tx.productPrice || 0;
         const platformFee = Math.round(productPrice * PLATFORM_COMMISSION_PERCENT);
-        const mongikeFee = MONGIKE_TX_FEE;
-        const payoutFee = MONGIKE_PAYOUT_FEE;
-        const sellerReceives = productPrice - platformFee - mongikeFee; // payout fee applied at actual payout time
+        const payoutFee = getClickPesaPayoutFee(productPrice);
+        const processingFee = tx.clickPesaFee || 0;
+        const sellerReceives = productPrice - platformFee - processingFee;
         const escrowExpiry = new Date(Date.now() + ESCROW_AUTO_RELEASE_DAYS * 24 * 60 * 60 * 1000);
 
         // Update transaction — put in escrow instead of auto-paying
         await txDoc.ref.update({
-          processingFee: mongikeFee,
+          processingFee,
           platformFee,
-          mongikeFee,
+          clickPesaFee: processingFee,
           payoutFee,
           sokoLanguCommission: platformFee,
           totalAmount: productPrice,
           sellerReceives,
           status: 'escrow_hold',
-          paymentMethod: 'Mongike',
+          paymentMethod: 'ClickPesa',
           transactionReference: order_id,
           buyerId: tx.buyerId || '',
           buyerName: tx.buyerName || '',
@@ -1606,10 +1846,11 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
           transactionId: order_id,
           productName: tx.productName || '',
           productPrice,
-          mongikeFee,
+          clickPesaFee: processingFee,
           payoutFee,
           sokoLanguCommission: platformFee,
           buyerName: tx.buyerName || '',
+          paymentMethod: 'ClickPesa',
           timestamp: admin.firestore.FieldValue.serverTimestamp(),
         });
 
@@ -1816,21 +2057,21 @@ app.post('/api/retry-payment', async (req, res) => {
     if (tx.type === 'purchase') {
       const productPrice = tx.productPrice || 0;
       const platformFee = Math.round(productPrice * PLATFORM_COMMISSION_PERCENT);
-      const mongikeFee = MONGIKE_TX_FEE;
-      const payoutFee = MONGIKE_PAYOUT_FEE;
-      const sellerReceives = productPrice - platformFee - mongikeFee;
+      const payoutFee = getClickPesaPayoutFee(productPrice);
+      const processingFee = tx.clickPesaFee || 0;
+      const sellerReceives = productPrice - platformFee - processingFee;
       const escrowExpiry = new Date(Date.now() + ESCROW_AUTO_RELEASE_DAYS * 24 * 60 * 60 * 1000);
 
       await txDoc.ref.update({
-        processingFee: mongikeFee,
+        processingFee,
         platformFee,
-        mongikeFee,
+        clickPesaFee: processingFee,
         payoutFee,
         sokoLanguCommission: platformFee,
         totalAmount: productPrice,
         sellerReceives,
         status: 'escrow_hold',
-        paymentMethod: 'Mongike',
+        paymentMethod: 'ClickPesa',
         buyerId: tx.buyerId || '',
         buyerName: tx.buyerName || '',
         escrowStatus: 'held',
@@ -1847,7 +2088,7 @@ app.post('/api/retry-payment', async (req, res) => {
         transactionId: order_id,
         productName: tx.productName || '',
         productPrice,
-        mongikeFee,
+        clickPesaFee: processingFee,
         payoutFee,
         sokoLanguCommission: platformFee,
         buyerName: tx.buyerName || '',
@@ -2029,7 +2270,6 @@ app.post('/api/seller/withdraw', async (req, res) => {
 
     const sellerBalance = user.sellerBalance || 0;
 
-    // Minimum withdrawal check
     if (amount < MIN_WITHDRAWAL) {
       return res.status(400).json({ error: `Minimum withdrawal is TZS ${MIN_WITHDRAWAL.toLocaleString()}` });
     }
@@ -2038,64 +2278,43 @@ app.post('/api/seller/withdraw', async (req, res) => {
       return res.status(400).json({ error: 'Insufficient balance' });
     }
 
-    const netAmount = amount - MONGIKE_PAYOUT_FEE;
+    const clickPesaFee = getClickPesaPayoutFee(amount);
+    const netAmount = amount - clickPesaFee;
     if (netAmount <= 0) {
-      return res.status(400).json({ error: `Amount too small after TZS ${MONGIKE_PAYOUT_FEE.toLocaleString()} payout fee` });
+      return res.status(400).json({ error: `Amount too small after TZS ${clickPesaFee.toLocaleString()} payout fee` });
     }
 
-    const resp = await fetch(`${MONGIKE_BASE}/payouts/withdraw`, {
-      method: 'POST',
-      headers: {
-        'x-api-key': MONGIKE_API_KEY,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        amount: netAmount,
-        recipient_phone: phone,
-      }),
-    });
-
-    const result = await resp.json();
-
-    if (result.status !== 'success') {
-      await auditLog({
-        userId, type: 'withdraw_failed', amount, balanceBefore: sellerBalance, balanceAfter: sellerBalance,
-        reason: `Mongike payout failed: ${result.message || 'Unknown error'}`,
-        relatedId: '', metadata: { phone, netAmount },
+    let payoutId;
+    try {
+      const payout = await processPayout({
+        userId, phone, amount, fee: clickPesaFee, netAmount,
+        source: `seller_withdraw_${Date.now()}`,
+        type: 'seller_withdrawal',
+        metadata: { balanceBefore: sellerBalance },
       });
-      return res.status(500).json({ error: result.message || 'Mongike payout failed' });
+      payoutId = payout.payoutId;
+    } catch (payoutErr) {
+      return res.status(502).json({ error: `Payout failed: ${payoutErr.message}` });
     }
 
     await db.collection('users').doc(userId).update({
       sellerBalance: admin.firestore.FieldValue.increment(-amount),
     });
 
-    await db.collection('withdrawals').add({
-      userId,
-      type: 'seller',
-      amount,
-      feeMongike: MONGIKE_PAYOUT_FEE,
-      netAmount,
-      phone,
-      reference: result.data?.id || '',
-      status: 'completed',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
     await auditLog({
       userId, type: 'seller_withdraw', amount: -amount,
       balanceBefore: sellerBalance, balanceAfter: sellerBalance - amount,
       reason: `Seller withdrawal: TZS ${netAmount.toLocaleString()} to ${phone}`,
-      relatedId: result.data?.id || '',
-      metadata: { phone, netAmount, fee: MONGIKE_PAYOUT_FEE },
+      relatedId: payoutId,
+      metadata: { phone, netAmount, fee: clickPesaFee, payoutId },
     });
 
     res.json({
       success: true,
       netAmount,
-      fee: MONGIKE_PAYOUT_FEE,
-      reference: result.data?.id || '',
-      message: `TZS ${netAmount.toLocaleString()} sent to ${phone}`,
+      fee: clickPesaFee,
+      payoutId,
+      message: `TZS ${netAmount.toLocaleString()} zimetumwa kwa ${phone}`,
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -2120,7 +2339,6 @@ app.post('/api/admin/withdraw', async (req, res) => {
     if (!user.isAdmin) return res.status(403).json({ error: 'Admin access required' });
     if (user.isSuspended) return res.status(403).json({ error: 'Account suspended' });
 
-    // Calculate total admin balance (actual AdMob revenue + commissions)
     const admobSnap = await db.collection('admob_earnings').orderBy('month', 'desc').limit(1).get();
     let actualAdRevenue = 0;
     if (!admobSnap.empty) {
@@ -2134,7 +2352,6 @@ app.post('/api/admin/withdraw', async (req, res) => {
     });
     const totalAdminBalance = actualAdRevenue + totalCommissions;
 
-    // Subtract total withdrawn so far
     const withdrawnSnap = await db.collection('admin_withdrawals')
       .where('userId', '==', userId)
       .get();
@@ -2149,58 +2366,172 @@ app.post('/api/admin/withdraw', async (req, res) => {
       return res.status(400).json({ error: `Insufficient admin balance. Available: TZS ${availableBalance.toLocaleString()}` });
     }
 
-    const netAmount = amount - MONGIKE_PAYOUT_FEE;
+    const clickPesaFee = getClickPesaPayoutFee(amount);
+    const netAmount = amount - clickPesaFee;
     if (netAmount <= 0) {
-      return res.status(400).json({ error: `Amount too small after fee (min TZS ${MONGIKE_PAYOUT_FEE + 1})` });
+      return res.status(400).json({ error: `Amount too small after fee (min TZS ${clickPesaFee + 1})` });
     }
 
-    const resp = await fetch(`${MONGIKE_BASE}/payouts/withdraw`, {
-      method: 'POST',
-      headers: {
-        'x-api-key': MONGIKE_API_KEY,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        amount: netAmount,
-        recipient_phone: phone,
-      }),
-    });
-
-    const result = await resp.json();
-
-    if (result.status !== 'success') {
-      await auditLog({
-        userId, type: 'admin_withdraw_failed', amount,
-        reason: `Mongike payout failed: ${result.message || 'Unknown error'}`,
-        metadata: { phone, netAmount },
+    let payoutId;
+    try {
+      const payout = await processPayout({
+        userId, phone, amount, fee: clickPesaFee, netAmount,
+        source: `admin_withdraw_${Date.now()}`,
+        type: 'admin_withdrawal',
       });
-      return res.status(500).json({ error: result.message || 'Mongike payout failed' });
+      payoutId = payout.payoutId;
+    } catch (payoutErr) {
+      return res.status(502).json({ error: `Payout failed: ${payoutErr.message}` });
     }
 
     await db.collection('admin_withdrawals').add({
       userId,
       amount,
-      fee: MONGIKE_PAYOUT_FEE,
+      fee: clickPesaFee,
       netAmount,
       phone,
-      reference: result.data?.id || '',
+      payoutId,
       status: 'completed',
+      paymentMethod: 'ClickPesa',
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
     await auditLog({
       userId, type: 'admin_withdraw', amount: -amount,
       reason: `Admin ad revenue withdrawal: TZS ${netAmount} to ${phone}`,
-      relatedId: result.data?.id || '',
-      metadata: { phone, netAmount, fee: MONGIKE_PAYOUT_FEE },
+      relatedId: payoutId,
+      metadata: { phone, netAmount, fee: clickPesaFee, payoutId },
     });
 
     res.json({
       success: true,
       netAmount,
-      reference: result.data?.id || '',
-      message: `TZS ${netAmount} sent to ${phone}`,
+      fee: clickPesaFee,
+      payoutId,
+      message: `TZS ${netAmount.toLocaleString()} zimetumwa kwa ${phone}`,
     });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 💰 CLICKPESA BALANCE — Check merchant wallet balance
+// ============================================================
+app.get('/api/clickpesa/balance', async (req, res) => {
+  try {
+    const balance = await getClickPesaBalance();
+    res.json({ success: true, balance });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 🔍 PAYOUT PREVIEW — Validate payout details before sending
+// ============================================================
+app.post('/api/clickpesa/payout-preview', async (req, res) => {
+  try {
+    const { amount, phone } = req.body;
+    if (!amount || !phone) return res.status(400).json({ error: 'Missing amount or phone' });
+
+    const preview = await clickPesaPayoutPreview({
+      amount, phone,
+      externalId: 'preview_' + Date.now().toString(36),
+    });
+    res.json({ success: true, preview });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 💰 CREATE PAYOUT — Admin-initiated payout
+// ============================================================
+app.post('/api/create-payout', async (req, res) => {
+  try {
+    const { userId, amount, phone, type, source } = req.body;
+    if (!userId || !amount || !phone) {
+      return res.status(400).json({ error: 'Missing userId, amount, or phone' });
+    }
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    // Check for duplicate payout (same source reference)
+    if (source) {
+      const dupSnap = await db.collection('payouts')
+        .where('source', '==', source)
+        .where('status', 'in', [PAYOUT_STATUSES.PROCESSING, PAYOUT_STATUSES.SUCCESS])
+        .limit(1).get();
+      if (!dupSnap.empty) {
+        const dup = dupSnap.docs[0].data();
+        return res.status(400).json({ error: 'Duplicate payout', existingPayoutId: dup.payoutId });
+      }
+    }
+
+    const clickPesaFee = getClickPesaPayoutFee(amount);
+    const netAmount = amount - clickPesaFee;
+    if (netAmount <= 0) {
+      return res.status(400).json({ error: `Amount too small after fee (min TZS ${clickPesaFee + 1})` });
+    }
+
+    const payoutResult = await processPayout({
+      userId, phone, amount, fee: clickPesaFee, netAmount,
+      source: source || generatePayoutReference('src'),
+      type: type || 'manual',
+    });
+
+    await auditLog({
+      userId, type: 'admin_create_payout', amount: -amount,
+      reason: `Admin-created payout: TZS ${netAmount} to ${phone}`,
+      relatedId: payoutResult.payoutId,
+      metadata: { phone, netAmount, fee: clickPesaFee, source },
+    });
+
+    res.json({ success: true, ...payoutResult });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 📊 GET PAYOUT STATUS — Check payout status by ID
+// ============================================================
+app.get('/api/payout-status/:id', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const doc = await db.collection('payouts').doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Payout not found' });
+    res.json({ id: doc.id, ...doc.data() });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 📋 LIST PAYOUTS — Get payouts for a user or all
+// ============================================================
+app.get('/api/payouts', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const { userId, limit: qLimit } = req.query;
+    let query = db.collection('payouts').orderBy('createdAt', 'desc');
+    if (userId) query = query.where('userId', '==', userId);
+    const snap = await query.limit(parseInt(qLimit) || 50).get();
+    const payouts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    res.json({ payouts });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 🔁 RETRY PAYOUT — Retry a failed payout
+// ============================================================
+app.post('/api/payout/retry/:id', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const result = await retryFailedPayout(req.params.id);
+    res.json({ success: true, ...result });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -2271,7 +2602,7 @@ app.get('/api/admin/stats', async (req, res) => {
 });
 
 // ============================================================
-// 📊 ADMIN — All transactions (Mongike payments)
+// 📊 ADMIN — All transactions (ClickPesa payments)
 // ============================================================
 app.get('/api/admin/transactions', async (req, res) => {
   try {
@@ -2307,7 +2638,7 @@ app.get('/api/admin/withdrawals', async (req, res) => {
 });
 
 // ============================================================
-// 📊 ADMIN — Finance summary (all admin money + Mongike balance)
+// 📊 ADMIN — Finance summary (all admin money + ClickPesa balance)
 // ============================================================
 app.get('/api/admin/finance-summary', async (req, res) => {
   try {
@@ -2359,12 +2690,12 @@ app.get('/api/admin/finance-summary', async (req, res) => {
     // 4. Total admin balance = actual ad revenue + commissions + boost revenue
     const totalAdminBalance = actualAdRevenue + totalCommissions + totalBoostRevenue;
 
-    // 4. Total money ever processed through Mongike (from transactions)
+    // 4. Total money ever processed
     const txSnap = await db.collection('transactions').get();
-    let totalProcessedViaMongike = 0;
+    let totalProcessed = 0;
     txSnap.docs.forEach(doc => {
       const d = doc.data();
-      totalProcessedViaMongike += (d.totalAmount || 0);
+      totalProcessed += (d.totalAmount || 0);
     });
 
     // 5. Total payouts sent
@@ -2384,22 +2715,9 @@ app.get('/api/admin/finance-summary', async (req, res) => {
 
     const totalPayouts = totalPaidOut + totalAdminPaidOut;
 
-    // 6. Try to get actual Mongike balance from API
-    let actualMongikeBalance = null;
-    try {
-      const balResp = await fetch(`${MONGIKE_BASE}/balance`, {
-        headers: { 'x-api-key': MONGIKE_API_KEY },
-        signal: AbortSignal.timeout(5000),
-      });
-      if (balResp.ok) {
-        const balData = await balResp.json();
-        actualMongikeBalance = balData.balance || balData.data?.balance || null;
-      }
-    } catch (_) {}
+    const availableBalance = totalAdminBalance - totalAdminPaidOut;
 
-    const mongikeBalance = actualMongikeBalance != null ? actualMongikeBalance : Math.max(0, totalProcessedViaMongike - totalPayouts);
-
-    // 7. Admin withdrawal history (total withdrawn by admin)
+    // 6. Admin withdrawal history
     let totalAdminWithdrawn = 0;
     adminWithdrawSnap.docs.forEach(doc => {
       const d = doc.data();
@@ -2413,11 +2731,10 @@ app.get('/api/admin/finance-summary', async (req, res) => {
       totalCommissions,
       totalBoostRevenue,
       totalAdminBalance,
-      totalProcessedViaMongike,
-      totalPayouts,
-      mongikeBalance,
-      mongikeBalanceActual: actualMongikeBalance != null,
+      totalPaidOut: totalAdminPaidOut,
+      availableBalance,
       totalAdminWithdrawn,
+      paymentProcessor: 'ClickPesa',
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -3088,12 +3405,26 @@ app.post('/api/flash-sale/create', asyncHandler(async (req, res) => {
       return res.status(403).json({ error: 'Account suspended' });
     }
 
-    // Prevent duplicate active flash sales for the same product
+    // Prevent duplicate active flash sales for the same product.
+    // Deactivate any expired ones found so user can create a new one.
     const existing = await db.collection('flash_sales')
       .where('productId', '==', productId)
       .where('isActive', '==', true)
       .get();
-    if (!existing.empty) {
+    const now = new Date();
+    let hasActive = false;
+    const deactivateBatch = db.batch();
+    existing.docs.forEach(doc => {
+      const data = doc.data();
+      const end = data.endTime?.toDate ? data.endTime.toDate() : new Date(data.endTime);
+      if (end > now) {
+        hasActive = true;
+      } else {
+        deactivateBatch.update(doc.ref, { isActive: false });
+      }
+    });
+    await deactivateBatch.commit();
+    if (hasActive) {
       return res.status(400).json({ error: 'Product already has an active flash sale' });
     }
 
@@ -3148,7 +3479,14 @@ app.post('/api/flash-sale/scan', asyncHandler(async (req, res) => {
         .where('productId', '==', doc.id)
         .where('isActive', '==', true)
         .get();
-      if (!existing.empty) continue;
+      // Skip only if there is a truly active (non-expired) flash sale
+      const scanNow = new Date();
+      const hasActive = existing.docs.some(d => {
+        const d2 = d.data();
+        const e = d2.endTime?.toDate ? d2.endTime.toDate() : new Date(d2.endTime);
+        return e > scanNow;
+      });
+      if (hasActive) continue;
 
       const originalPrice = (data.price || 0).toDouble ? data.price : Number(data.price || 0);
       const discountPercent = soldCount === 0 ? 30 : 20;
@@ -3277,6 +3615,31 @@ app.post('/api/flash-sale/notify', asyncHandler(async (req, res) => {
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
+// ─── Deactivate expired flash sales so sellers can create new ones ───
+async function deactivateExpiredFlashSales() {
+  if (!db) return;
+  try {
+    const now = new Date();
+    const expired = await db.collection('flash_sales')
+      .where('isActive', '==', true)
+      .where('endTime', '<=', now)
+      .limit(100)
+      .get();
+    let deactivated = 0;
+    const batch = db.batch();
+    expired.docs.forEach(doc => {
+      batch.update(doc.ref, { isActive: false });
+      deactivated++;
+    });
+    if (deactivated > 0) {
+      await batch.commit();
+      console.log(`Deactivated ${deactivated} expired flash sales`);
+    }
+  } catch (e) {
+    console.error('deactivateExpiredFlashSales error:', e);
+  }
+}
+
 // ─── Built-in escrow auto-release check every hour ───
 async function releaseExpiredEscrows() {
   if (!db) return;
@@ -3302,9 +3665,12 @@ async function releaseExpiredEscrows() {
       });
 
       if (sellerId && sellerReceives > 0) {
+        const autoSellerDoc = await db.collection('users').doc(sellerId).get();
+        const autoPending = autoSellerDoc.exists ? (autoSellerDoc.data().pendingEscrow || 0) : 0;
+        const actualPending = Math.min(sellerReceives, autoPending);
         await db.collection('users').doc(sellerId).update({
           sellerBalance: admin.firestore.FieldValue.increment(sellerReceives),
-          pendingEscrow: admin.firestore.FieldValue.increment(-sellerReceives),
+          pendingEscrow: admin.firestore.FieldValue.increment(-actualPending),
         });
         await db.collection('notifications').add({
           userId: sellerId,
@@ -3356,7 +3722,251 @@ async function releaseExpiredEscrows() {
 
 // Run every hour as fallback (cron-job.org can also call the endpoint)
 setInterval(releaseExpiredEscrows, 60 * 60 * 1000);
+setInterval(deactivateExpiredFlashSales, 60 * 60 * 1000);
 // Also run once on startup
 setTimeout(releaseExpiredEscrows, 60 * 1000);
+setTimeout(deactivateExpiredFlashSales, 60 * 1000);
+
+// ============================================================
+// ClickPesa — Callback (webhook)
+// ============================================================
+app.post('/api/clickpesa-callback', async (req, res) => {
+  try {
+    let payload = req.body;
+    console.log('ClickPesa callback received:', JSON.stringify(payload));
+
+    // ClickPesa sends { event: "PAYMENT RECEIVED", data: { id, status, orderReference, ... } }
+    if (payload.data && payload.data.orderReference) {
+      payload = payload.data;
+    }
+
+    const txStatus = (payload.status || '').toLowerCase();
+    const externalId = payload.orderReference || '';
+    const reference = payload.id || '';
+
+    if (!externalId || !txStatus) {
+      return res.status(200).json({ received: false });
+    }
+
+    if (!db) return res.status(200).json({ received: false });
+
+    // Check if this is a payout callback (reference starts with po_)
+    if (externalId.startsWith('po_')) {
+      const payoutDoc = await db.collection('payouts').doc(externalId).get();
+      if (!payoutDoc.exists) {
+        console.warn(`ClickPesa callback: payout ${externalId} not found`);
+        return res.status(200).json({ received: false });
+      }
+
+      if (txStatus === 'success') {
+        await updatePayoutStatus(externalId, PAYOUT_STATUSES.SUCCESS, { clickpesaReference: reference });
+
+        const payout = payoutDoc.data();
+        if (payout.type === 'escrow_release' && payout.metadata?.sellerId) {
+          await db.collection('notifications').add({
+            userId: payout.metadata.sellerId,
+            title: '✅ Payout imefanikiwa!',
+            body: `TZS ${payout.netAmount?.toLocaleString() || payout.amount} zimetumwa kwenye mobile money yako.`,
+            isRead: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+      } else if (txStatus === 'failed') {
+        await updatePayoutStatus(externalId, PAYOUT_STATUSES.FAILED, {
+          failureReason: payload.message || payload.error || 'Payout failed',
+        });
+        // Auto-retry if under max retries
+        try {
+          await retryFailedPayout(externalId);
+        } catch (_) {}
+      } else if (txStatus === 'refunded') {
+        await updatePayoutStatus(externalId, PAYOUT_STATUSES.REFUNDED);
+      } else if (txStatus === 'reversed') {
+        await updatePayoutStatus(externalId, PAYOUT_STATUSES.REVERSED);
+        // Refund the user's balance since payout was reversed
+        const payout = payoutDoc.data();
+        if (payout && payout.userId && payout.type === 'seller_withdrawal') {
+          await db.collection('users').doc(payout.userId).update({
+            sellerBalance: admin.firestore.FieldValue.increment(payout.amount || 0),
+          });
+        }
+      }
+
+      return res.status(200).json({ received: true });
+    }
+
+    const txDoc = await db.collection('transactions').doc(externalId).get();
+    if (!txDoc.exists) {
+      console.warn(`ClickPesa callback: transaction ${externalId} not found`);
+      return res.status(200).json({ received: false });
+    }
+
+    const tx = txDoc.data();
+
+    if (txStatus === 'success') {
+      if (tx.type === 'boost') {
+        const tier = tx.tier || 'bronze';
+        const tierConfig = BOOST_TIERS[tier] || BOOST_TIERS.bronze;
+        const boostedUntil = new Date(Date.now() + tierConfig.days * 24 * 60 * 60 * 1000);
+
+        try {
+          await db.collection('products').doc(tx.productId).update({
+            isBoosted: true,
+            boostedUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
+            boostTier: tier,
+            isFeatured: true,
+            featuredUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
+          });
+        } catch (productErr) {
+          console.error(`ClickPesa: Failed to boost product ${tx.productId}:`, productErr);
+          await txDoc.ref.update({ status: 'failed', failureReason: `Product update failed: ${productErr.message}` });
+          return res.status(200).json({ received: true });
+        }
+
+        await txDoc.ref.update({ status: 'completed', clickpesaReference: reference });
+
+        if (tx.userId) {
+          await db.collection('notifications').add({
+            userId: tx.userId,
+            title: '✅ Boost imewashwa!',
+            body: `Bidhaa yako imepandishwa kwa daraja la ${tier} kwa siku ${tierConfig.days}.`,
+            data: { type: 'boost', productId: tx.productId },
+            isRead: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+
+        await db.collection('revenue_transactions').add({
+          userId: 'platform',
+          amount: tx.amount || tierConfig.price,
+          sokoLanguCommission: tx.amount || tierConfig.price,
+          type: 'boost',
+          subType: tier,
+          productId: tx.productId,
+          transactionId: externalId,
+          paymentMethod: 'ClickPesa',
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } else {
+        const productPrice = tx.productPrice || 0;
+        const platformFee = Math.round(productPrice * PLATFORM_COMMISSION_PERCENT);
+        const sellerReceives = productPrice - platformFee;
+        const escrowExpiry = new Date(Date.now() + ESCROW_AUTO_RELEASE_DAYS * 24 * 60 * 60 * 1000);
+
+        await txDoc.ref.update({
+          processingFee: 0,
+          platformFee,
+          totalAmount: productPrice,
+          sellerReceives,
+          status: 'escrow_hold',
+          paymentMethod: 'ClickPesa',
+          transactionReference: reference,
+          clickpesaReference: reference,
+          escrowStatus: 'held',
+          escrowHeldAt: admin.firestore.FieldValue.serverTimestamp(),
+          escrowExpiresAt: admin.firestore.Timestamp.fromDate(escrowExpiry),
+        });
+
+        await db.collection('revenue_transactions').add({
+          userId: 'platform',
+          amount: platformFee,
+          type: 'commission',
+          description: `Commission for ${tx.productName || 'Product'} (escrow)`,
+          transactionId: externalId,
+          productName: tx.productName || '',
+          productPrice,
+          sokoLanguCommission: platformFee,
+          paymentMethod: 'ClickPesa',
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        try {
+          const fsSnap = await db.collection('flash_sales')
+            .where('productId', '==', tx.productId)
+            .where('isActive', '==', true)
+            .limit(1).get();
+          if (!fsSnap.empty) {
+            const fsDoc = fsSnap.docs[0];
+            const fsData = fsDoc.data();
+            const newStock = Math.max(0, (fsData.stock || 0) - 1);
+            const newSold = (fsData.soldCount || 0) + 1;
+            await fsDoc.ref.update({ stock: newStock, soldCount: newSold, isActive: newStock > 0 });
+          }
+        } catch (_) {}
+
+        if (sellerReceives > 0 && tx.sellerId) {
+          await db.collection('users').doc(tx.sellerId).set({
+            pendingEscrow: admin.firestore.FieldValue.increment(sellerReceives),
+            totalSales: admin.firestore.FieldValue.increment(1),
+            grossSalesVolume: admin.firestore.FieldValue.increment(productPrice),
+            lastSaleAt: admin.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true });
+
+          await db.collection('notifications').add({
+            userId: tx.sellerId,
+            title: 'Umepata Mauzo!',
+            body: `${tx.productName || 'Bidhaa'} imeuzwa. TZS ${sellerReceives.toLocaleString()} imewekwa escrow.`,
+            isRead: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          try {
+            const sellerSnap = await db.collection('users').doc(tx.sellerId).get();
+            const sellerToken = sellerSnap.data()?.fcmToken;
+            if (sellerToken) {
+              await admin.messaging().send({
+                token: sellerToken,
+                notification: {
+                  title: 'Umepata Mauzo!',
+                  body: `${tx.productName || 'Bidhaa'} imeuzwa. TZS ${sellerReceives.toLocaleString()} imewekwa escrow.`,
+                },
+                data: { type: 'payment', transactionId: externalId },
+                android: androidNotifConfig('payments_notifications', 'payment'),
+              });
+            }
+          } catch (_) {}
+        }
+
+        // Notify buyer that payment was successful
+        if (tx.userId && tx.userId !== tx.sellerId) {
+          await db.collection('notifications').add({
+            userId: tx.userId,
+            title: 'Malipo Yamekamilika!',
+            body: `Malipo ya ${tx.productName || 'bidhaa'} yamekamilika. Tumeshika TZS ${productPrice.toLocaleString()} hadi muuzaji atakapotoa.`,
+            isRead: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          try {
+            const buyerSnap = await db.collection('users').doc(tx.userId).get();
+            const buyerToken = buyerSnap.data()?.fcmToken;
+            if (buyerToken) {
+              await admin.messaging().send({
+                token: buyerToken,
+                notification: {
+                  title: 'Malipo Yamekamilika!',
+                  body: `Malipo ya ${tx.productName || 'bidhaa'} yamekamilika kwa mafanikio.`,
+                },
+                data: { type: 'payment', transactionId: externalId },
+                android: androidNotifConfig('payments_notifications', 'payment'),
+              });
+            }
+          } catch (_) {}
+        }
+      }
+    } else if (txStatus === 'failed') {
+      await txDoc.ref.update({
+        status: 'failed',
+        failureReason: `ClickPesa: ${payload.message || payload.error || 'Payment failed'}`,
+        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+
+    res.status(200).json({ received: true });
+  } catch (e) {
+    console.error('ClickPesa callback error:', e);
+    res.status(200).json({ received: false });
+  }
+});
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

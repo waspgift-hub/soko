@@ -8,7 +8,6 @@ import 'package:geocoding/geocoding.dart';
 import '../../services/user_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../utils/helpers.dart';
-import '../../widgets/rewarded_ad_gate.dart';
 import '../../widgets/google_loading.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -118,7 +117,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       'permission_photos',
     );
     if (!granted) return;
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+    final XFile? image = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 512,
+      imageQuality: 80,
+    );
     if (image != null) {
       setState(() => _imagePath = image.path);
     }
@@ -200,14 +203,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final passed = await RewardedAdGate.require(
-      context,
-      'edit_profile',
-      title: context.tr('watch_ad'),
-      message: context.tr('watch_ad_to_edit'),
-    );
-    if (!passed) return;
-
     setState(() => _saving = true);
 
     try {
@@ -238,7 +233,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(context.tr('username_taken')),
-              backgroundColor: Colors.red,
+              backgroundColor: Theme.of(context).colorScheme.error,
             ),
           );
         }
@@ -305,8 +300,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ? const GoogleLoading(size: 20, strokeWidth: 2)
                 : Text(
                     context.tr('save'),
-                    style: const TextStyle(
-                      color: Colors.green,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -330,7 +325,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   children: [
                     CircleAvatar(
                       radius: 60,
-                      backgroundColor: Colors.green,
+                      backgroundColor: Theme.of(context).colorScheme.primary,
                       backgroundImage: _imagePath != null
                           ? (_imagePath!.startsWith('http')
                                 ? NetworkImage(_imagePath!)
@@ -343,9 +338,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   : user?.email != null
                                   ? user!.email![0].toUpperCase()
                                   : "U",
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 40,
-                                color: Colors.white,
+                                color: Theme.of(context).colorScheme.surface,
                               ),
                             )
                           : null,
@@ -357,13 +352,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         onTap: _pickImage,
                         child: Container(
                           padding: const EdgeInsets.all(8),
-                          decoration: const BoxDecoration(
-                            color: Colors.green,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primary,
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.camera_alt,
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.surface,
                             size: 20,
                           ),
                         ),
@@ -389,9 +384,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     labelText: 'Username',
                     hintText: context.tr('choose_username'),
                     border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(
+                    prefixIcon: Icon(
                       Icons.alternate_email,
-                      color: Colors.green,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                   ),
                   validator: (v) {
@@ -419,7 +414,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   decoration: InputDecoration(
                     labelText: context.tr('email'),
                     border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(Icons.email, color: Colors.green),
+                    prefixIcon: Icon(Icons.email, color: Theme.of(context).colorScheme.primary),
                   ),
                   keyboardType: TextInputType.emailAddress,
                 ),
@@ -428,7 +423,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   controller: _phoneController,
                   decoration: InputDecoration(
                     labelText: context.tr('phone'),
-                    hintText: '+255 712 345 678',
+                    hintText: '0712345678',
                     border: const OutlineInputBorder(),
                   ),
                   keyboardType: TextInputType.phone,
@@ -440,12 +435,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     labelText: context.tr('location'),
                     hintText: 'Dar es Salaam, Tanzania',
                     border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(
+                    prefixIcon: Icon(
                       Icons.location_on,
-                      color: Colors.green,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                     suffixIcon: IconButton(
-                      icon: const Icon(Icons.my_location, color: Colors.green),
+                      icon: Icon(Icons.my_location, color: Theme.of(context).colorScheme.primary),
                       onPressed: _getCurrentLocation,
                       tooltip: context.tr('get_location'),
                     ),
@@ -457,7 +452,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     alignment: Alignment.centerLeft,
                     child: Text(
                       '${_latitude!.toStringAsFixed(4)}, ${_longitude!.toStringAsFixed(4)}',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6)),
                     ),
                   ),
                 ],
@@ -468,14 +463,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     labelText: context.tr('mood'),
                     hintText: context.tr('how_feeling'),
                     border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(
+                    prefixIcon: Icon(
                       Icons.emoji_emotions,
-                      color: Colors.green,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                     suffixIcon: PopupMenuButton<String>(
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.arrow_drop_down,
-                        color: Colors.green,
+                        color: Theme.of(context).colorScheme.primary,
                       ),
                       onSelected: (v) => _moodController.text = v,
                       itemBuilder: (_) => _moodOptions
@@ -497,7 +492,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     ),
                     TextButton.icon(
                       onPressed: _addPaymentMethod,
-                      icon: const Icon(Icons.add, size: 18),
+                      icon: Icon(Icons.add, size: 18),
                       label: Text(context.tr('add_payment')),
                     ),
                   ],
@@ -555,7 +550,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             controller: entry.value,
                             decoration: InputDecoration(
                               labelText: context.tr('number'),
-                              hintText: '0712 345 678',
+                              hintText: '0712345678',
                               border: OutlineInputBorder(),
                               isDense: true,
                             ),
@@ -564,9 +559,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         ),
                         const SizedBox(width: 4),
                         IconButton(
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.remove_circle,
-                            color: Colors.red,
+                            color: Theme.of(context).colorScheme.error,
                           ),
                           onPressed: () => _removePaymentMethod(index),
                         ),

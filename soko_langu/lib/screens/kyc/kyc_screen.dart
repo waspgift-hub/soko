@@ -7,6 +7,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import '../../services/kyc_service.dart';
 import '../../widgets/google_loading.dart';
+import '../../theme/app_colors.dart';
+import '../../extensions/context_tr.dart';
 
 class KycScreen extends StatefulWidget {
   const KycScreen({super.key});
@@ -76,18 +78,18 @@ class _KycScreenState extends State<KycScreen> {
     final source = await showDialog<ImageSource>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Chagua chanzo'),
+        title: Text(context.tr('choose_source')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
               leading: const Icon(Icons.camera_alt),
-              title: const Text('Piga Picha'),
+              title: Text(context.tr('take_photo')),
               onTap: () => Navigator.pop(ctx, ImageSource.camera),
             ),
             ListTile(
               leading: const Icon(Icons.photo_library),
-              title: const Text('Chagua Kutoka Gallery'),
+              title: Text(context.tr('choose_from_gallery')),
               onTap: () => Navigator.pop(ctx, ImageSource.gallery),
             ),
           ],
@@ -113,19 +115,19 @@ class _KycScreenState extends State<KycScreen> {
     final idNumber = _idNumberController.text.trim();
 
     if (fullName.isEmpty) {
-      _showError('Tafadhali jaza jina lako kamili');
+      _showError(context.tr('enter_full_name_please'));
       return;
     }
     if (idNumber.isEmpty) {
-      _showError('Tafadhali jaza namba ya kitambulisho');
+      _showError(context.tr('enter_id_number_please'));
       return;
     }
     if (_idImageFile == null) {
-      _showError('Tafadhali pakia picha ya kitambulisho chako');
+      _showError(context.tr('upload_id_image_please'));
       return;
     }
     if (_selfieFile == null) {
-      _showError('Tafadhali piga selfie yako');
+      _showError(context.tr('take_selfie_please'));
       return;
     }
 
@@ -136,7 +138,7 @@ class _KycScreenState extends State<KycScreen> {
       final selfieUrl = await _uploadImage(_selfieFile!, 'selfie');
 
       if (idImageUrl == null || selfieUrl == null) {
-        _showError('Imeshindwa kupakia picha. Angalia muunganisho wako.');
+        _showError(context.tr('failed_to_upload_image'));
         setState(() => _submitting = false);
         return;
       }
@@ -156,16 +158,17 @@ class _KycScreenState extends State<KycScreen> {
       if (result != null && result['success'] == true) {
         final approved = result['approved'] == true;
         if (approved) {
-          _showSuccess('KYC imekubaliwa! Sasa unaweza kuuza bidhaa.');
+          _showSuccess(context.tr('kyc_approved_success'));
         } else {
-          _showSuccess('KYC imetumwa. Sababu: ${result['reason'] ?? 'Inakaguliwa...'}');
+          final reasonText = result['reason'] ?? context.tr('kyc_under_review');
+          _showSuccess('${context.tr('kyc_submitted')} ${context.tr('reason')}: $reasonText');
         }
         _loadStatus();
       } else {
-        _showError(result?['error'] ?? 'Imeshindwa kutuma KYC. Jaribu tena.');
+        _showError(result?['error'] ?? context.tr('failed_to_submit_kyc'));
       }
     } catch (e) {
-      _showError('Kosa: $e');
+      _showError('${context.tr('error')}: $e');
     }
 
     setState(() => _submitting = false);
@@ -176,7 +179,7 @@ class _KycScreenState extends State<KycScreen> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Uhalalishaji wa Akaunti (KYC)')),
+      appBar: AppBar(title: Text(context.tr('kyc_title'))),
       body: _status == null
           ? const GoogleLoadingPage()
           : _buildBody(cs),
@@ -191,15 +194,15 @@ class _KycScreenState extends State<KycScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.verified, size: 80, color: Colors.green.shade600),
+              Icon(Icons.verified, size: 80, color: Theme.of(context).colorScheme.primary),
               const SizedBox(height: 16),
-              const Text('KYC Imekubaliwa', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+              Text(context.tr('kyc_approved'), style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              const Text('Sasa unaweza kuuza bidhaa kwenye Soko Langu.',
+              Text(context.tr('kyc_approved_desc'),
                   textAlign: TextAlign.center, style: TextStyle(fontSize: 15)),
               if (_kycIdImageUrl != null) ...[
                 const SizedBox(height: 16),
-                const Text('Kitambulisho:', style: TextStyle(fontWeight: FontWeight.w600)),
+                Text(context.tr('identification_label'), style: TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
@@ -219,11 +222,11 @@ class _KycScreenState extends State<KycScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.hourglass_top, size: 80, color: Colors.orange.shade600),
+              Icon(Icons.hourglass_top, size: 80, color: Theme.of(context).colorScheme.tertiary),
               const SizedBox(height: 16),
-              const Text('KYC Inakaguliwa', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+              Text(context.tr('kyc_pending'), style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              const Text('Taarifa zako zinakaguliwa. Utapokea taarifa ukishakubaliwa.',
+              Text(context.tr('kyc_pending_desc'),
                   textAlign: TextAlign.center, style: TextStyle(fontSize: 15)),
             ],
           ),
@@ -238,18 +241,18 @@ class _KycScreenState extends State<KycScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.red.shade50,
+              color: Theme.of(context).colorScheme.errorContainer,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.red.shade200),
+              border: Border.all(color: Theme.of(context).colorScheme.error.withValues(alpha: 0.3)),
             ),
             child: Row(
               children: [
-                Icon(Icons.cancel, color: Colors.red.shade700, size: 24),
+                Icon(Icons.cancel, color: Theme.of(context).colorScheme.error, size: 24),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    _reviewNotes ?? 'KYC imekataliwa. Tuma tena baada ya kusahihisha.',
-                    style: TextStyle(color: Colors.red.shade800),
+                    _reviewNotes ?? context.tr('kyc_rejected_default'),
+                    style: TextStyle(color: Theme.of(context).colorScheme.error),
                   ),
                 ),
               ],
@@ -269,31 +272,31 @@ class _KycScreenState extends State<KycScreen> {
       padding: const EdgeInsets.all(16),
       children: [
         Text(
-          'Jaza taarifa zako za utambulisho',
+          context.tr('fill_identity_info'),
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: cs.onSurface),
         ),
         const SizedBox(height: 4),
         Text(
-          'Pakia picha ya kitambulisho chako na selfie kwa uthibitisho.',
-          style: TextStyle(color: cs.onSurface.withAlpha(150), fontSize: 13),
+          context.tr('upload_id_selfie_instruction'),
+          style: TextStyle(color: cs.onSurface.withValues(alpha: 0.59), fontSize: 13),
         ),
         const SizedBox(height: 24),
         TextField(
           controller: _fullNameController,
-          decoration: const InputDecoration(
-            labelText: 'Jina Kamili',
-            hintText: 'Kama ilivyo kwenye kitambulisho',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.person),
+          decoration: InputDecoration(
+            labelText: context.tr('full_name'),
+            hintText: context.tr('as_on_id'),
+            border: const OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.person),
           ),
         ),
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(
           initialValue: _idType,
-          decoration: const InputDecoration(
-            labelText: 'Aina ya Kitambulisho',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.badge),
+          decoration: InputDecoration(
+            labelText: context.tr('id_type'),
+            border: const OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.badge),
           ),
           items: _idTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
           onChanged: (v) => setState(() => _idType = v ?? 'National ID'),
@@ -301,10 +304,10 @@ class _KycScreenState extends State<KycScreen> {
         const SizedBox(height: 16),
         TextField(
           controller: _idNumberController,
-          decoration: const InputDecoration(
-            labelText: 'Namba ya Kitambulisho',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.numbers),
+          decoration: InputDecoration(
+            labelText: context.tr('id_number'),
+            border: const OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.numbers),
           ),
         ),
         const SizedBox(height: 24),
@@ -313,7 +316,7 @@ class _KycScreenState extends State<KycScreen> {
           children: [
             Expanded(
               child: _buildImagePicker(
-                label: 'Picha ya Kitambulisho',
+                label: context.tr('id_image_label'),
                 icon: Icons.credit_card,
                 file: _idImageFile,
                 imageUrl: _kycIdImageUrl,
@@ -323,7 +326,7 @@ class _KycScreenState extends State<KycScreen> {
             const SizedBox(width: 12),
             Expanded(
               child: _buildImagePicker(
-                label: 'Selfie Yako',
+                label: context.tr('your_selfie'),
                 icon: Icons.face,
                 file: _selfieFile,
                 imageUrl: _kycSelfieUrl,
@@ -340,10 +343,10 @@ class _KycScreenState extends State<KycScreen> {
             icon: _submitting
                 ? const GoogleLoading(size: 20, strokeWidth: 2)
                 : const Icon(Icons.send),
-            label: Text(_submitting ? 'Inatuma...' : 'Tuma KYC'),
+            label: Text(_submitting ? context.tr('submitting') : context.tr('submit_kyc')),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF065535),
-              foregroundColor: Colors.white,
+              backgroundColor: Theme.of(context).colorScheme.successGreen,
+              foregroundColor: Theme.of(context).colorScheme.surface,
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
@@ -366,10 +369,10 @@ class _KycScreenState extends State<KycScreen> {
       child: Container(
         height: 140,
         decoration: BoxDecoration(
-          color: hasImage ? Colors.transparent : Colors.grey.shade100,
+          color: hasImage ? Colors.transparent : Theme.of(context).colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: hasImage ? Colors.green.shade400 : Colors.grey.shade300,
+            color: hasImage ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.6) : Theme.of(context).colorScheme.outline,
             width: hasImage ? 2 : 1,
           ),
         ),
@@ -388,10 +391,10 @@ class _KycScreenState extends State<KycScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(2),
                         decoration: BoxDecoration(
-                          color: Colors.green.shade600,
+                          color: Theme.of(context).colorScheme.primary,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.check, color: Colors.white, size: 16),
+                        child: Icon(Icons.check, color: Theme.of(context).colorScheme.surface, size: 16),
                       ),
                     ),
                 ],
@@ -399,9 +402,9 @@ class _KycScreenState extends State<KycScreen> {
             : Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(icon, size: 32, color: Colors.grey.shade400),
+                  Icon(icon, size: 32, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   const SizedBox(height: 6),
-                  Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade600), textAlign: TextAlign.center),
+                  Text(label, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant), textAlign: TextAlign.center),
                 ],
               ),
       ),
@@ -411,14 +414,14 @@ class _KycScreenState extends State<KycScreen> {
   void _showError(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.red),
+      SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.error),
     );
   }
 
   void _showSuccess(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.green),
+      SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.primary),
     );
   }
 }

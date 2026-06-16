@@ -1,17 +1,16 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/flash_sale_model.dart';
 import '../../services/flash_sale_service.dart';
-import '../../services/whatsapp_service.dart';
+
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
+import '../../widgets/ad_banner.dart';
 import '../../app/routes.dart';
+import '../../theme/app_colors.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-
-const Color _darkGreen = Color(0xFF1B4332);
-const Color _midGreen = Color(0xFF2D6A4F);
-const Color _accentGreen = Color(0xFF52B788);
-const Color _lightGreen = Color(0xFF95D5B2);
+import '../../services/product_service.dart';
 
 class FlashSaleScreen extends StatefulWidget {
   const FlashSaleScreen({super.key});
@@ -20,32 +19,43 @@ class FlashSaleScreen extends StatefulWidget {
   State<FlashSaleScreen> createState() => _FlashSaleScreenState();
 }
 
-class _FlashSaleScreenState extends State<FlashSaleScreen> {
+class _FlashSaleScreenState extends State<FlashSaleScreen>
+    with WidgetsBindingObserver {
   final FlashSaleService _service = FlashSaleService();
-  final WhatsAppService _whatsapp = WhatsAppService();
+  Timer? _timer;
+  int _refreshKey = 0;
 
   @override
   void initState() {
     super.initState();
-    _tick();
-  }
-
-  void _tick() {
-    setState(() {});
-    Future.delayed(const Duration(seconds: 1), _tick);
+    WidgetsBinding.instance.addObserver(this);
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
   void dispose() {
+    _timer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      setState(() => _refreshKey++);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAF9),
+      backgroundColor: cs.surfaceContainerLow,
       body: StreamBuilder<List<FlashSale>>(
-        stream: _service.getActiveFlashSales(),
+        key: ValueKey('flash_sale_$_refreshKey'),
+        stream: _service.getActiveFlashSalesAtNow(DateTime.now()),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(child: GoogleLoading(size: 32));
@@ -56,16 +66,20 @@ class _FlashSaleScreenState extends State<FlashSaleScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.local_fire_department, size: 64, color: Colors.grey[300]),
+                  Icon(
+                    Icons.local_fire_department,
+                    size: 64,
+                    color: cs.outline,
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     'Hakuna Flash Sale kwa sasa',
-                    style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                    style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Subiri flash sale inayofuata!',
-                    style: TextStyle(fontSize: 13, color: Colors.grey[400]),
+                    style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
                   ),
                 ],
               ),
@@ -79,16 +93,27 @@ class _FlashSaleScreenState extends State<FlashSaleScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
                   child: Row(
                     children: [
-                      Icon(Icons.local_fire_department, color: _accentGreen, size: 20),
+                      Icon(
+                        Icons.local_fire_department,
+                        color: cs.tertiary.withValues(alpha: 0.8),
+                        size: 20,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         '${sales.length} Flash Deals',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _darkGreen),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: cs.primary.withValues(alpha: 0.85),
+                        ),
                       ),
                       const Spacer(),
                       Text(
                         'Inaisha muda wowote',
-                        style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                        ),
                       ),
                     ],
                   ),
@@ -105,108 +130,119 @@ class _FlashSaleScreenState extends State<FlashSaleScreen> {
           );
         },
       ),
+      bottomNavigationBar: const AdBanner(),
     );
   }
 
   Widget _buildHeroBanner(int saleCount) {
+    final cs = Theme.of(context).colorScheme;
     return SliverToBoxAdapter(
       child: Container(
-        height: 240,
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [_darkGreen, _midGreen],
+            colors: [cs.primary.withValues(alpha: 0.85), cs.primary],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
         ),
-        child: Stack(
-          children: [
-            Positioned(
-              top: 44,
-              left: 0, right: 0,
-              child: SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.arrow_back, color: Colors.white),
-                        onPressed: () => context.pop(),
+        child: SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(top: 12, bottom: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.arrow_back, color: cs.surface),
+                      onPressed: () => context.pop(),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
                       ),
-                      const Spacer(),
-                    ],
-                  ),
+                      decoration: BoxDecoration(
+                        color: cs.tertiary.withValues(alpha: 0.8),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '$saleCount Deals',
+                        style: TextStyle(
+                          color: cs.surface,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                 ),
-              ),
-            ),
-            Positioned(
-              right: -40,
-              top: -40,
-              child: Icon(Icons.local_fire_department, size: 200, color: Colors.white.withValues(alpha: 0.04)),
-            ),
-            Positioned(
-              bottom: -30,
-              left: -30,
-              child: Icon(Icons.local_fire_department, size: 140, color: Colors.white.withValues(alpha: 0.03)),
-            ),
-            Positioned.fill(
-              child: SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 60, 20, 20),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Row(
                     children: [
                       Expanded(
                         flex: 3,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
                               decoration: BoxDecoration(
-                                color: _accentGreen.withValues(alpha: 0.2),
+                                color: cs.tertiary.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.local_fire_department, color: _accentGreen, size: 12),
-                                  const SizedBox(width: 4),
-                                  const Text('SOKO LANGU', style: TextStyle(color: Color(0xFF95D5B2), fontSize: 9, letterSpacing: 1)),
-                                ],
+                              child: Text(
+                                'SOKO LANGU',
+                                style: TextStyle(
+                                  color: cs.tertiary,
+                                  fontSize: 9,
+                                  letterSpacing: 1,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 6),
                             Text(
                               'FLASH SALE',
                               style: TextStyle(
-                                color: _lightGreen,
-                                fontSize: 30,
+                                color: cs.surface,
+                                fontSize: 26,
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: 2,
-                                shadows: [Shadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 6, offset: const Offset(2, 3))],
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'BIG DISCOUNTS · LIMITED OFFERS',
+                              style: TextStyle(
+                                color: cs.surface.withValues(alpha: 0.7),
+                                fontSize: 10,
+                                letterSpacing: 0.5,
                               ),
                             ),
                             const SizedBox(height: 8),
-                            const Text(
-                              'BIG DISCOUNTS\nFLASH SALES\nLIMITED OFFERS',
-                              style: TextStyle(color: Color(0xFFB7E4C7), fontSize: 11, height: 1.6, letterSpacing: 0.8),
-                            ),
-                            const SizedBox(height: 12),
                             Row(
                               children: [
-                                Icon(Icons.phone, color: _accentGreen, size: 12),
+                                Icon(
+                                  Icons.local_fire_department,
+                                  color: cs.surface,
+                                  size: 12,
+                                ),
                                 const SizedBox(width: 4),
-                                Text('$saleCount deals live', style: const TextStyle(color: Color(0xFF95D5B2), fontSize: 10)),
-                                const Spacer(),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: _accentGreen,
-                                    borderRadius: BorderRadius.circular(12),
+                                Text(
+                                  '$saleCount deals live',
+                                  style: TextStyle(
+                                    color: cs.surface.withValues(alpha: 0.8),
+                                    fontSize: 10,
                                   ),
-                                  child: const Text('SHOP NOW', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                                 ),
                               ],
                             ),
@@ -216,23 +252,32 @@ class _FlashSaleScreenState extends State<FlashSaleScreen> {
                       Expanded(
                         flex: 2,
                         child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Container(
-                              width: 80,
-                              height: 80,
+                              width: 70,
+                              height: 70,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                border: Border.all(color: _accentGreen.withValues(alpha: 0.3), width: 3),
+                                border: Border.all(
+                                  color: cs.surface.withValues(alpha: 0.3),
+                                  width: 2,
+                                ),
                               ),
                               child: Center(
-                                child: Icon(Icons.local_fire_department, color: _accentGreen, size: 40),
+                                child: Icon(
+                                  Icons.local_fire_department,
+                                  color: cs.surface,
+                                  size: 36,
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 4),
                             Text(
                               '$saleCount Active',
-                              style: const TextStyle(color: Color(0xFF95D5B2), fontSize: 11),
+                              style: TextStyle(
+                                color: cs.surface.withValues(alpha: 0.8),
+                                fontSize: 10,
+                              ),
                             ),
                           ],
                         ),
@@ -240,15 +285,16 @@ class _FlashSaleScreenState extends State<FlashSaleScreen> {
                     ],
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildSaleCard(FlashSale sale) {
+    final cs = Theme.of(context).colorScheme;
     final remaining = sale.endTime.difference(DateTime.now());
     final hours = remaining.inHours;
     final minutes = remaining.inMinutes.remainder(60);
@@ -258,12 +304,14 @@ class _FlashSaleScreenState extends State<FlashSaleScreen> {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _lightGreen.withValues(alpha: 0.3)),
+        border: Border.all(
+          color: cs.tertiary.withValues(alpha: 0.5).withValues(alpha: 0.3),
+        ),
         boxShadow: [
           BoxShadow(
-            color: _darkGreen.withValues(alpha: 0.06),
+            color: cs.primary.withValues(alpha: 0.85).withValues(alpha: 0.06),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -274,9 +322,9 @@ class _FlashSaleScreenState extends State<FlashSaleScreen> {
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [_midGreen, _accentGreen],
+                colors: [cs.primary, cs.tertiary.withValues(alpha: 0.8)],
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
               ),
@@ -284,22 +332,33 @@ class _FlashSaleScreenState extends State<FlashSaleScreen> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.timer, color: Colors.white, size: 16),
+                Icon(Icons.timer, color: cs.surface, size: 16),
                 const SizedBox(width: 6),
                 Text(
                   '${hours}h ${minutes}m ${secs}s',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                  style: TextStyle(
+                    color: cs.surface,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
                 ),
                 const Spacer(),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
+                    color: cs.surface.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
                     '-${sale.discountPercent.toStringAsFixed(0)}%',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                    style: TextStyle(
+                      color: cs.surface,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
                   ),
                 ),
               ],
@@ -317,8 +376,20 @@ class _FlashSaleScreenState extends State<FlashSaleScreen> {
                     width: 90,
                     height: 90,
                     fit: BoxFit.cover,
-                    placeholder: (_, _) => Container(width: 90, height: 90, color: Colors.grey[200], child: const Center(child: GoogleLoading(size: 20, strokeWidth: 2))),
-                    errorWidget: (_, _, _) => Container(width: 90, height: 90, color: Colors.grey[200], child: const Icon(Icons.image, color: Colors.grey)),
+                    placeholder: (_, _) => Container(
+                      width: 90,
+                      height: 90,
+                      color: cs.outlineVariant,
+                      child: const Center(
+                        child: GoogleLoading(size: 20, strokeWidth: 2),
+                      ),
+                    ),
+                    errorWidget: (_, _, _) => Container(
+                      width: 90,
+                      height: 90,
+                      color: cs.outlineVariant,
+                      child: Icon(Icons.image, color: cs.onSurfaceVariant),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -328,7 +399,10 @@ class _FlashSaleScreenState extends State<FlashSaleScreen> {
                     children: [
                       Text(
                         sale.productName,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -337,26 +411,48 @@ class _FlashSaleScreenState extends State<FlashSaleScreen> {
                         children: [
                           Text(
                             context.formatPrice(sale.originalPrice),
-                            style: TextStyle(color: Colors.grey[400], fontSize: 13, decoration: TextDecoration.lineThrough),
+                            style: TextStyle(
+                              color: cs.onSurfaceVariant,
+                              fontSize: 13,
+                              decoration: TextDecoration.lineThrough,
+                            ),
                           ),
                           const SizedBox(width: 8),
                           Text(
                             context.formatPrice(sale.salePrice),
-                            style: TextStyle(color: _accentGreen, fontWeight: FontWeight.bold, fontSize: 20),
+                            style: TextStyle(
+                              color: cs.tertiary.withValues(alpha: 0.8),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 20,
+                            ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 4),
                       Text(
                         '${context.tr('you_save')} ${context.formatPrice(saved)}',
-                        style: TextStyle(color: _midGreen, fontSize: 12, fontWeight: FontWeight.w500),
+                        style: TextStyle(
+                          color: cs.primary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                       if (sale.location.isNotEmpty)
                         Row(
                           children: [
-                            Icon(Icons.location_on, size: 14, color: Colors.grey[500]),
+                            Icon(
+                              Icons.location_on,
+                              size: 14,
+                              color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                            ),
                             const SizedBox(width: 4),
-                            Text(sale.location, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                            Text(
+                              sale.location,
+                              style: TextStyle(
+                                color: cs.onSurfaceVariant,
+                                fontSize: 12,
+                              ),
+                            ),
                           ],
                         ),
                     ],
@@ -371,31 +467,41 @@ class _FlashSaleScreenState extends State<FlashSaleScreen> {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () => context.push('${AppRoutes.productDetail}/${sale.productId}'),
+                    onPressed: () async {
+                      final product = await ProductService().getProductById(sale.productId);
+                      if (product != null && context.mounted) {
+                        context.push(
+                          '${AppRoutes.productDetail}/${sale.productId}',
+                          extra: product,
+                        );
+                      }
+                    },
                     icon: const Icon(Icons.visibility, size: 18),
                     label: const Text('Angalia'),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: _midGreen,
-                      side: BorderSide(color: _midGreen),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      foregroundColor: cs.primary,
+                      side: BorderSide(color: cs.primary),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: () {
-                      _whatsapp.openWhatsApp(
-                        phoneNumber: sale.sellerPhone.isNotEmpty ? sale.sellerPhone : '255700000000',
-                        message: 'Habari ${sale.sellerName}, nimeona "${sale.productName}" ikiwa Flash Sale ${context.currencySymbol()} ${sale.salePrice.toStringAsFixed(0)} kwenye Soko Langu. Naomba kununua.',
-                      );
-                    },
+                    onPressed: () => context.push(
+                      '${AppRoutes.chat}/${sale.sellerId}',
+                      extra: {'name': sale.sellerName},
+                    ),
                     icon: const Icon(Icons.chat_outlined, size: 18),
-                    label: const Text('WhatsApp'),
+                    label: Text(context.tr('whatsapp')),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF25D366),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      backgroundColor: cs.whatsappGreen,
+                      foregroundColor: cs.surface,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ),

@@ -4,10 +4,9 @@ import '../screens/profile/profile_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/home/discovery_screen.dart';
 import '../screens/ai/ai_assistant_screen.dart';
+
 import '../extensions/context_tr.dart';
 import '../main.dart';
-import 'offline_banner.dart';
-
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -53,40 +52,40 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: OfflineBanner(
-        child: IndexedStack(index: _currentIndex, children: _screens),
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
-        type: BottomNavigationBarType.fixed,
-        items: [
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.storefront_outlined),
-            activeIcon: const Icon(Icons.storefront_rounded),
-            label: context.tr('home'),
-          ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.diamond_outlined),
-            activeIcon: const Icon(Icons.diamond_rounded),
-            label: context.tr('discovery'),
-          ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.rocket_launch_outlined),
-            activeIcon: const Icon(Icons.rocket_launch_rounded),
-            label: 'AI',
-          ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.workspace_premium_outlined),
-            activeIcon: const Icon(Icons.workspace_premium_rounded),
-            label: context.tr('profile'),
-          ),
-        ],
-      ),
+      body: IndexedStack(index: _currentIndex, children: _screens),
+       bottomNavigationBar: BottomNavigationBar(
+         currentIndex: _currentIndex,
+         onTap: (index) {
+           setState(() {
+             _currentIndex = index;
+           });
+         },
+         type: BottomNavigationBarType.fixed,
+         selectedItemColor: Theme.of(context).colorScheme.primary,
+         unselectedItemColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+         items: [
+           BottomNavigationBarItem(
+             icon: Icon(Icons.storefront_outlined),
+             activeIcon: Icon(Icons.storefront_rounded),
+             label: context.tr('home'),
+           ),
+           BottomNavigationBarItem(
+             icon: Icon(Icons.diamond_outlined),
+             activeIcon: Icon(Icons.diamond_rounded),
+             label: context.tr('discovery'),
+           ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.rocket_launch_outlined),
+              activeIcon: Icon(Icons.rocket_launch_rounded),
+              label: 'AI',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.workspace_premium_outlined),
+              activeIcon: Icon(Icons.workspace_premium_rounded),
+              label: context.tr('profile'),
+            ),
+         ],
+       ),
     );
   }
 }

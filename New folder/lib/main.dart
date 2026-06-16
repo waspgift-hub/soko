@@ -14,6 +14,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_callkit_incoming/entities/call_event.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'firebase_options.dart';
 import 'services/notification_service.dart';
 import 'services/localization_service.dart';
@@ -21,6 +22,7 @@ import 'services/presence_service.dart';
 import 'services/smart_ad_service.dart';
 import 'services/call_service.dart';
 import 'services/security_service.dart';
+import 'services/media_session_service.dart';
 import 'theme/theme_manager.dart';
 import 'utils/responsive.dart';
 import 'app/router.dart' as router_lib;
@@ -70,6 +72,16 @@ void main() async {
   } catch (e) { debugPrint('Prefs: $e'); }
 
   try { await NotificationService.initLocalNotifications(); } catch (e) { debugPrint('LocalNotif: $e'); }
+
+  // Initialize Media3 MediaSessionService for background playback + notification
+  MediaSessionService.instance.init();
+
+  // Request notification permission for Android 13+ media notifications
+  try {
+    if (await Permission.notification.request().isGranted) {
+      debugPrint('Notification permission granted');
+    }
+  } catch (e) { debugPrint('Notif perm: $e'); }
 
   NotificationService.onCallNotificationTap = (data) {
     final ctx = router_lib.rootNavigatorKey.currentContext;

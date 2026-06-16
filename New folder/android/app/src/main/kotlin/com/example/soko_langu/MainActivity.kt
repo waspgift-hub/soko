@@ -1,20 +1,39 @@
 package com.example.soko_langu
 
 import android.content.ContentUris
+import android.content.Intent
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
-import com.ryanheise.audioservice.AudioServiceActivity
+import androidx.core.content.ContextCompat
+import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
-class MainActivity : AudioServiceActivity() {
+class MainActivity : FlutterActivity() {
     private val VIDEO_CHANNEL = "soko_lang/video_query"
     private val DEVICE_CHANNEL = "soko_lang/device_info"
+    private val MEDIA_SESSION_CHANNEL = "soko_lang/media_session"
+    private val MEDIA_EVENTS_CHANNEL = "soko_lang/media_events"
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
+        setupVideoChannel(flutterEngine)
+        setupDeviceChannel(flutterEngine)
+        setupMediaSessionChannel(flutterEngine)
+
+        ContextCompat.startForegroundService(
+            this,
+            Intent(this, PlaybackService::class.java)
+        )
+    }
+
+    private fun setupVideoChannel(flutterEngine: FlutterEngine) {
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             VIDEO_CHANNEL,
@@ -25,7 +44,9 @@ class MainActivity : AudioServiceActivity() {
                 result.notImplemented()
             }
         }
+    }
 
+    private fun setupDeviceChannel(flutterEngine: FlutterEngine) {
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             DEVICE_CHANNEL,
@@ -36,6 +57,85 @@ class MainActivity : AudioServiceActivity() {
                 result.notImplemented()
             }
         }
+    }
+
+    private fun setupMediaSessionChannel(flutterEngine: FlutterEngine) {
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            MEDIA_SESSION_CHANNEL,
+        ).setMethodCallHandler { call, result ->
+            try {
+                when (call.method) {
+                    "initPlaylist" -> {
+                        val songs = call.argument<List<Map<String, Any?>>>("songs") ?: emptyList()
+                        PlaybackService.initPlaylist(songs)
+                        result.success(null)
+                    }
+                    "playAtIndex" -> {
+                        val index = call.argument<Int>("index") ?: 0
+                        PlaybackService.playAtIndex(index)
+                        result.success(null)
+                    }
+                    "play" -> {
+                        PlaybackService.play()
+                        result.success(null)
+                    }
+                    "pause" -> {
+                        PlaybackService.pause()
+                        result.success(null)
+                    }
+                    "togglePlayPause" -> {
+                        PlaybackService.togglePlayPause()
+                        result.success(null)
+                    }
+                    "seekTo" -> {
+                        val positionMs = call.argument<Long>("positionMs") ?: 0L
+                        PlaybackService.seekTo(positionMs)
+                        result.success(null)
+                    }
+                    "next" -> {
+                        PlaybackService.next()
+                        result.success(null)
+                    }
+                    "previous" -> {
+                        PlaybackService.previous()
+                        result.success(null)
+                    }
+                    "setRepeatMode" -> {
+                        val mode = call.argument<Int>("mode") ?: 0
+                        PlaybackService.setRepeatMode(mode)
+                        result.success(null)
+                    }
+                    "setShuffle" -> {
+                        val enabled = call.argument<Boolean>("enabled") ?: false
+                        PlaybackService.setShuffle(enabled)
+                        result.success(null)
+                    }
+                    "stop" -> {
+                        PlaybackService.stop()
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            } catch (e: Exception) {
+                result.error("ERROR", e.message, Log.getStackTraceString(e))
+            }
+        }
+
+        EventChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            MEDIA_EVENTS_CHANNEL,
+        ).setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
+                PlaybackService.eventSink = { state ->
+                    mainHandler.post { events.success(state) }
+                }
+            }
+
+            override fun onCancel(arguments: Any?) {
+                PlaybackService.eventSink = null
+            }
+        })
     }
 
     private fun queryVideos(): List<Map<String, Any?>> {

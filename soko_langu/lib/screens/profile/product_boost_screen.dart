@@ -292,7 +292,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'You will be prompted to complete payment via Mongike after tapping continue.',
+                      'You will be prompted to complete payment after tapping continue.',
                       style: TextStyle(
                         fontSize: 12,
                         color: isDark ? Theme.of(context).colorScheme.onSurfaceVariant : Theme.of(context).colorScheme.onSurfaceVariant,
@@ -608,8 +608,8 @@ class _PaymentDialogState extends State<_PaymentDialog> {
               const SizedBox(height: 8),
               Text(
                 _timedOut
-                    ? 'Check your phone and complete payment via Mongike.\nOrder: ${widget.orderId}'
-                    : 'Complete payment on your phone via Mongike.',
+                    ? 'Check your phone and complete payment.\nOrder: ${widget.orderId}'
+                    : 'Complete payment on your phone.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
               ),

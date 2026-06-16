@@ -38,6 +38,7 @@ class NotificationService {
   static void Function(String callId)? onCallDeclineFromNotification;
   static void Function(Map<String, dynamic> data)? onOrderNotificationTap;
   static void Function(Map<String, dynamic> data)? onOrderMessageTap;
+  static void Function(Map<String, dynamic> data)? onPaymentNotificationTap;
 
   static Future<void> initLocalNotifications() async {
     const androidSettings = AndroidInitializationSettings(
@@ -70,6 +71,8 @@ class NotificationService {
           } else {
             if (data['type'] == 'order') {
               onOrderNotificationTap?.call(data);
+            } else if (data['type'] == 'payment') {
+              onPaymentNotificationTap?.call(data);
             } else {
               onCallNotificationTap?.call(data);
             }
@@ -108,6 +111,36 @@ class NotificationService {
       showBadge: true,
       enableLights: true,
     );
+    final paymentsChannel = AndroidNotificationChannel(
+      'payments_notifications',
+      'Payments',
+      description: 'Notifications for payment transactions',
+      importance: Importance.high,
+      playSound: true,
+      enableVibration: true,
+      showBadge: true,
+      enableLights: true,
+    );
+    final generalChannel = AndroidNotificationChannel(
+      'general_notifications',
+      'General',
+      description: 'Other app notifications',
+      importance: Importance.defaultImportance,
+      playSound: true,
+      enableVibration: true,
+      showBadge: false,
+      enableLights: false,
+    );
+    final missedCallsChannel = AndroidNotificationChannel(
+      'missed_calls_v2',
+      'Missed Calls',
+      description: 'Notifications for missed calls',
+      importance: Importance.high,
+      playSound: true,
+      enableVibration: true,
+      showBadge: true,
+      enableLights: true,
+    );
     final plugin = localNotifications
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
@@ -115,6 +148,9 @@ class NotificationService {
     await plugin?.createNotificationChannel(callChannel);
     await plugin?.createNotificationChannel(chatChannel);
     await plugin?.createNotificationChannel(orderChannel);
+    await plugin?.createNotificationChannel(paymentsChannel);
+    await plugin?.createNotificationChannel(generalChannel);
+    await plugin?.createNotificationChannel(missedCallsChannel);
     await plugin?.requestNotificationsPermission();
   }
 
@@ -213,12 +249,12 @@ class NotificationService {
             actions: [
               AndroidNotificationAction(
                 'message_buyer',
-                '💬 Message Buyer',
+                'Message Buyer',
                 showsUserInterface: true,
               ),
               AndroidNotificationAction(
                 'view_order',
-                '📦 View Order',
+                'View Order',
                 showsUserInterface: true,
               ),
             ],
@@ -232,6 +268,38 @@ class NotificationService {
         ),
         payload: jsonEncode(data),
       );
+      return;
+    }
+    if (data['type'] == 'payment') {
+      final title = message.notification?.title ?? 'Payment Update';
+      final body = message.notification?.body ?? '';
+      await localNotifications.show(
+        id: DateTime.now().millisecondsSinceEpoch % 100000,
+        title: title,
+        body: body,
+        notificationDetails: NotificationDetails(
+          android: AndroidNotificationDetails(
+            'payments_notifications',
+            'Payments',
+            channelDescription: 'Notifications for payment transactions',
+            importance: Importance.high,
+            priority: Priority.high,
+            playSound: true,
+            enableVibration: true,
+            enableLights: true,
+            category: AndroidNotificationCategory.status,
+            visibility: NotificationVisibility.public,
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+        ),
+        payload: jsonEncode(data),
+      );
+      return;
+    }
       return;
     }
     if (data['type'] == 'call') {
@@ -342,6 +410,37 @@ class NotificationService {
       return;
     }
 
+    if (data['type'] == 'payment') {
+      final title = message.notification?.title ?? 'Payment Update';
+      final body = message.notification?.body ?? data['body'] ?? '';
+      localNotifications.show(
+        id: DateTime.now().millisecondsSinceEpoch % 100000,
+        title: title,
+        body: body,
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'payments_notifications',
+            'Payments',
+            channelDescription: 'Notifications for payment transactions',
+            importance: Importance.high,
+            priority: Priority.high,
+            playSound: true,
+            enableVibration: true,
+            enableLights: true,
+            category: AndroidNotificationCategory.status,
+            visibility: NotificationVisibility.public,
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+        ),
+        payload: jsonEncode(data),
+      );
+      return;
+    }
+
     if (data['type'] == 'order') {
       final title = message.notification?.title ?? 'Agizo Jipya!';
       final body = message.notification?.body ?? data['body'] ?? '';
@@ -362,12 +461,12 @@ class NotificationService {
             actions: [
               AndroidNotificationAction(
                 'message_buyer',
-                '💬 Message Buyer',
+                'Message Buyer',
                 showsUserInterface: true,
               ),
               AndroidNotificationAction(
                 'view_order',
-                '📦 View Order',
+                'View Order',
                 showsUserInterface: true,
               ),
             ],
@@ -452,13 +551,28 @@ class NotificationService {
 
     final title = message.notification?.title ?? '';
     final body = message.notification?.body ?? '';
-    if (title.isNotEmpty && messengerKey.currentContext != null) {
-      messengerKey.currentState?.showSnackBar(
-        SnackBar(
-          content: Text('$title\n$body'),
-          duration: const Duration(seconds: 4),
-          behavior: SnackBarBehavior.floating,
+    if (title.isNotEmpty) {
+      localNotifications.show(
+        id: DateTime.now().millisecondsSinceEpoch % 100000,
+        title: title,
+        body: body,
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'general_notifications',
+            'General',
+            channelDescription: 'Other app notifications',
+            importance: Importance.defaultImportance,
+            priority: Priority.defaultPriority,
+            playSound: true,
+            enableVibration: true,
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: false,
+            presentSound: true,
+          ),
         ),
+        payload: jsonEncode(data),
       );
     }
   }

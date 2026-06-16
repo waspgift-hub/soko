@@ -1,5 +1,5 @@
 name: soko_langu
-description: "Soko Langu - Your online marketplace for buying and selling goods. AI-powered, secure, and easy to use."
+description: "Soko Vibe - Your online marketplace for buying and selling goods. AI-powered, secure, and easy to use."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+version: 1.0.1+2
 
 environment:
   sdk: ^3.11.5
@@ -47,9 +47,8 @@ dependencies:
   audioplayers: ^6.6.0
   just_audio: ^0.9.43
   audio_session: ^0.1.25
+  audio_service: ^0.18.18
   just_audio_windows: ^0.2.3
-  just_audio_background: 
-    path: ./local_packages/just_audio_background-0.0.1-beta.17
   record: ^6.2.1
   permission_handler: ^12.0.1
   http: ^1.6.0
@@ -57,7 +56,6 @@ dependencies:
   intl: ^0.20.2
   cached_network_image: ^3.4.1
   google_mobile_ads: ^8.0.0
-  on_audio_query: ^2.9.0
   url_launcher: ^6.3.2
   google_fonts: ^8.1.0
   file_picker: 11.0.2
@@ -69,10 +67,17 @@ dependencies:
   uuid: ^4.5.3
   firebase_storage: ^13.4.1
   firebase_messaging: ^16.2.2
-  flutter_local_notifications: ^21.0.0
   firebase_app_check: ^0.4.4+1
   firebase_crashlytics: ^5.2.2
   firebase_performance: ^0.11.4+1
+  on_audio_query: ^2.9.0
+  awesome_notifications: ^0.11.0
+  flutter_map: ^6.1.0
+  latlong2: ^0.9.0
+  async: ^2.12.0
+  path_provider: ^2.1.5
+  just_audio_background: ^0.0.1-beta.17
+  carousel_slider: ^5.0.0
 
 
 dev_dependencies:
@@ -85,6 +90,13 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/app_icon.png"
+  adaptive_icon_foreground: "assets/app_icon.png"
+  adaptive_icon_background: "#2D6A4F"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

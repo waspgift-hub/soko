@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_colors.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/whatsapp_service.dart';
 
@@ -25,13 +26,13 @@ class AddStatusScreen extends StatelessWidget {
                 width: 100,
                 height: 100,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF25D366).withValues(alpha: 0.1),
+                  color: Theme.of(context).colorScheme.whatsappGreen.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.add_circle_outline,
                   size: 50,
-                  color: Color(0xFF25D366),
+                  color: Theme.of(context).colorScheme.whatsappGreen,
                 ),
               ),
               const SizedBox(height: 24),
@@ -44,11 +45,11 @@ class AddStatusScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                'Ongeza status yako kwenye WhatsApp',
+                context.tr('add_status_whatsapp'),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
-                  color: Colors.grey[600],
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
               const SizedBox(height: 32),
@@ -57,16 +58,16 @@ class AddStatusScreen extends StatelessWidget {
                 height: 52,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF25D366),
-                    foregroundColor: Colors.white,
+                    backgroundColor: Theme.of(context).colorScheme.whatsappGreen,
+                    foregroundColor: Theme.of(context).colorScheme.surface,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
                   icon: const Icon(Icons.open_in_new),
-                  label: const Text(
-                    'Fungua WhatsApp',
-                    style: TextStyle(fontSize: 16),
+                  label: Text(
+                    context.tr('open_whatsapp'),
+                    style: const TextStyle(fontSize: 16),
                   ),
                   onPressed: () {
                     WhatsAppService().openWhatsApp(
@@ -75,9 +76,9 @@ class AddStatusScreen extends StatelessWidget {
                       onError: () {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Imeshindwa kufungua WhatsApp'),
-                              backgroundColor: Colors.red,
+                            SnackBar(
+                              content: Text(context.tr('whatsapp_open_failed')),
+                              backgroundColor: Theme.of(context).colorScheme.error,
                             ),
                           );
                         }

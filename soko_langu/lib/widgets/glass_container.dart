@@ -28,7 +28,8 @@ class GlassContainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final radius = borderRadius ?? 16;
-    final color = tintColor ?? Colors.white;
+    final cs = Theme.of(context).colorScheme;
+    final color = tintColor ?? cs.surface;
 
     return Container(
       height: height,
@@ -41,10 +42,10 @@ class GlassContainer extends StatelessWidget {
           child: Container(
             padding: padding,
             decoration: BoxDecoration(
-              color: color.withAlpha((opacity * 255).round()),
+              color: color.withValues(alpha: opacity),
               borderRadius: BorderRadius.circular(radius),
               border: Border.all(
-                color: Colors.white.withAlpha(60),
+                color: cs.surface.withValues(alpha: 0.24),
                 width: 0.5,
               ),
             ),
@@ -55,3 +56,4 @@ class GlassContainer extends StatelessWidget {
     );
   }
 }
+

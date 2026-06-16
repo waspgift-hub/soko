@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../services/product_service.dart';
 import '../../services/user_service.dart';
 import '../../services/smart_ad_service.dart';
@@ -12,6 +13,7 @@ import '../../models/category_model.dart';
 import '../../models/product_model.dart';
 import '../../services/category_service.dart';
 import '../../extensions/context_tr.dart';
+import '../../utils/helpers.dart';
 
 class _VariantEntry {
   final TextEditingController nameCtrl = TextEditingController();
@@ -174,6 +176,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
   }
 
   Future<void> _pickImages() async {
+    final granted = await requestPermissionWithDialog(
+      context, Permission.photos, 'permission_photos',
+    );
+    if (!granted) return;
+
     final List<XFile> images = await _picker.pickMultiImage();
     if (images.isNotEmpty) {
       setState(() => _newImages.addAll(images));

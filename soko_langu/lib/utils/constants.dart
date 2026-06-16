@@ -1,5 +1,5 @@
 class AppConstants {
-  static const String appName = 'Soko Langu';
+  static const String appName = 'Soko Vibe';
   static const String currency = 'TZS';
   static const String country = 'Tanzania';
 
@@ -15,5 +15,4 @@ class AppConstants {
 
   static const double payoutFee = 4000;
   static const double payoutFeePlatform = 2000;
-  static const double payoutFeeMongike = 2000;
 }

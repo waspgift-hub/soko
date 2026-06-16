@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../main.dart';
@@ -5,9 +6,13 @@ import '../../extensions/context_tr.dart';
 import '../../models/category_model.dart';
 import '../../models/product_model.dart';
 import '../../services/product_service.dart';
+import '../../services/flash_sale_service.dart';
+import '../../models/flash_sale_model.dart';
 import '../../widgets/product_card.dart';
 import '../../app/routes.dart';
 import '../../widgets/google_loading.dart';
+import '../../widgets/ad_banner.dart';
+import '../../utils/responsive.dart';
 
 class CategoryProductsScreen extends StatefulWidget {
   final Category category;
@@ -17,9 +22,50 @@ class CategoryProductsScreen extends StatefulWidget {
   State<CategoryProductsScreen> createState() => _CategoryProductsScreenState();
 }
 
-class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
+class _CategoryProductsScreenState extends State<CategoryProductsScreen>
+    with WidgetsBindingObserver {
+
   final _productService = ProductService();
+  final _flashSaleService = FlashSaleService();
   String? _selectedSubcategory;
+  Map<String, FlashSale> _flashSales = {};
+  StreamSubscription? _flashSub;
+  int _flashRefreshKey = 0;
+
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _subscribeFlashSales();
+  }
+
+  void _subscribeFlashSales() {
+    _flashSub?.cancel();
+    final now = DateTime.now();
+    _flashSub = _flashSaleService.getActiveFlashSalesMapAtNow(now).listen(
+      (map) {
+        if (mounted) setState(() => _flashSales = map);
+      },
+    );
+  }
+
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _flashSub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      setState(() => _flashRefreshKey++);
+      _subscribeFlashSales();
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -33,11 +79,12 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
             Text(widget.category.nameSw, style: const TextStyle(fontSize: 16)),
             Text(
               widget.category.name,
-              style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           ],
         ),
       ),
+      bottomNavigationBar: const AdBanner(),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -88,7 +135,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
                   if (isSelected)
                     Text(
                       '✓',
-                      style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                      style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                 ],
               ),
@@ -151,16 +198,17 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
         final products = snapshot.data!;
         return GridView.builder(
           padding: const EdgeInsets.all(12),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: Responsive.gridColumns(context),
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
-            childAspectRatio: 0.7,
+            childAspectRatio: Responsive.cardAspectRatio(context),
           ),
           itemCount: products.length,
           itemBuilder: (context, index) {
             return ProductCard(
               product: products[index],
+              flashSale: _flashSales[products[index].id],
               onTap: () => context.push(
                 '${AppRoutes.productDetail}/${products[index].id}',
                 extra: products[index],

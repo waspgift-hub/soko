@@ -17,6 +17,13 @@ class _CommentSectionState extends State<CommentSection> {
   final _commentService = CommentService();
   final _commentController = TextEditingController();
   final _auth = FirebaseAuth.instance;
+  late final Stream<List<ProductComment>> _commentsStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _commentsStream = _commentService.getComments(widget.productId);
+  }
 
   @override
   void dispose() {
@@ -28,13 +35,21 @@ class _CommentSectionState extends State<CommentSection> {
     final text = _commentController.text.trim();
     if (text.isEmpty) return;
     if (_auth.currentUser == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(context.tr('login_required'))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('login_required'))),
+      );
       return;
     }
-    await _commentService.addComment(productId: widget.productId, text: text);
-    _commentController.clear();
+    try {
+      await _commentService.addComment(productId: widget.productId, text: text);
+      _commentController.clear();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${context.tr('something_wrong')}: $e')),
+        );
+      }
+    }
   }
 
   void _showReplySheet(String commentId) {
@@ -77,9 +92,9 @@ class _CommentSectionState extends State<CommentSection> {
                     sending
                         ? const GoogleLoading(size: 20, strokeWidth: 2)
                         : IconButton(
-                            icon: const Icon(
+                            icon: Icon(
                               Icons.send,
-                              color: Color(0xFF2D6A4F),
+                              color: Theme.of(context).colorScheme.primary,
                             ),
                             onPressed: () async {
                               final text = replyController.text.trim();
@@ -116,11 +131,11 @@ class _CommentSectionState extends State<CommentSection> {
             children: [
               Text(
                 context.tr('comments'),
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF2D6A4F),
-                ),
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
               ),
             ],
           ),
@@ -147,7 +162,7 @@ class _CommentSectionState extends State<CommentSection> {
               ),
               const SizedBox(width: 8),
               IconButton(
-                icon: const Icon(Icons.send, color: Color(0xFF2D6A4F)),
+                icon: Icon(Icons.send, color: Theme.of(context).colorScheme.primary),
                 onPressed: _addComment,
               ),
             ],
@@ -155,7 +170,7 @@ class _CommentSectionState extends State<CommentSection> {
         ),
         const SizedBox(height: 8),
         StreamBuilder<List<ProductComment>>(
-          stream: _commentService.getComments(widget.productId),
+          stream: _commentsStream,
           builder: (context, snap) {
             if (snap.connectionState == ConnectionState.waiting) {
               return const Padding(
@@ -170,7 +185,7 @@ class _CommentSectionState extends State<CommentSection> {
                 child: Center(
                   child: Text(
                     context.tr('no_comments_yet'),
-                    style: TextStyle(color: Colors.grey[500], fontSize: 14),
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 14),
                   ),
                 ),
               );
@@ -223,7 +238,7 @@ class _CommentTile extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 16,
-                backgroundColor: const Color(0xFFD8F3DC),
+                backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
                 backgroundImage: comment.userImage != null
                     ? NetworkImage(comment.userImage!)
                     : null,
@@ -232,10 +247,10 @@ class _CommentTile extends StatelessWidget {
                         comment.userName.isNotEmpty
                             ? comment.userName[0].toUpperCase()
                             : '?',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF2D6A4F),
+                          color: Theme.of(context).colorScheme.primary,
                         ),
                       )
                     : null,
@@ -249,10 +264,10 @@ class _CommentTile extends StatelessWidget {
                       children: [
                         Text(
                           comment.userName,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.w600,
                             fontSize: 13,
-                            color: Color(0xFF2D6A4F),
+                            color: Theme.of(context).colorScheme.primary,
                           ),
                         ),
                         const Spacer(),
@@ -260,7 +275,7 @@ class _CommentTile extends StatelessWidget {
                           _formatTime(comment.createdAt),
                           style: TextStyle(
                             fontSize: 11,
-                            color: Colors.grey[400],
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],
@@ -274,9 +289,9 @@ class _CommentTile extends StatelessWidget {
                           onTap: onReply,
                           child: Text(
                             context.tr('reply'),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12,
-                              color: Color(0xFF40916C),
+                              color: Theme.of(context).colorScheme.tertiary,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -289,7 +304,7 @@ class _CommentTile extends StatelessWidget {
                               '${comment.replyCount} ${context.tr('replies')}',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: Colors.grey[500],
+                                color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                               ),
                             ),
                           ),
@@ -320,7 +335,7 @@ class _CommentTile extends StatelessWidget {
                   icon: Icon(
                     Icons.more_vert,
                     size: 16,
-                    color: Colors.grey[400],
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
             ],
@@ -351,10 +366,10 @@ class _CommentTile extends StatelessWidget {
                 children: [
                   Text(
                     '${context.tr('replies')} (${comment.replyCount})',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF2D6A4F),
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -375,7 +390,7 @@ class _CommentTile extends StatelessWidget {
                           return Center(
                             child: Text(
                               context.tr('no_comments_yet'),
-                              style: TextStyle(color: Colors.grey[500]),
+                              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6)),
                             ),
                           );
                         }
@@ -395,7 +410,7 @@ class _CommentTile extends StatelessWidget {
                                 children: [
                                   CircleAvatar(
                                     radius: 14,
-                                    backgroundColor: const Color(0xFFD8F3DC),
+                                    backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
                                     backgroundImage: r.userImage != null
                                         ? NetworkImage(r.userImage!)
                                         : null,
@@ -404,10 +419,10 @@ class _CommentTile extends StatelessWidget {
                                             r.userName.isNotEmpty
                                                 ? r.userName[0].toUpperCase()
                                                 : '?',
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontSize: 12,
                                               fontWeight: FontWeight.bold,
-                                              color: Color(0xFF2D6A4F),
+                                              color: Theme.of(context).colorScheme.primary,
                                             ),
                                           )
                                         : null,
@@ -422,10 +437,10 @@ class _CommentTile extends StatelessWidget {
                                           children: [
                                             Text(
                                               r.userName,
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 fontWeight: FontWeight.w600,
                                                 fontSize: 12,
-                                                color: Color(0xFF2D6A4F),
+                                                color: Theme.of(context).colorScheme.primary,
                                               ),
                                             ),
                                             const Spacer(),
@@ -433,7 +448,7 @@ class _CommentTile extends StatelessWidget {
                                               _formatTime(r.createdAt),
                                               style: TextStyle(
                                                 fontSize: 10,
-                                                color: Colors.grey[400],
+                                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                                               ),
                                             ),
                                           ],
@@ -468,7 +483,7 @@ class _CommentTile extends StatelessWidget {
                                       icon: Icon(
                                         Icons.more_vert,
                                         size: 14,
-                                        color: Colors.grey[400],
+                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                                       ),
                                     ),
                                 ],
@@ -500,7 +515,7 @@ class _CommentTile extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       IconButton(
-                        icon: const Icon(Icons.send, color: Color(0xFF2D6A4F)),
+                        icon: Icon(Icons.send, color: Theme.of(context).colorScheme.primary),
                         onPressed: () async {
                           final text = replyController.text.trim();
                           if (text.isEmpty) return;

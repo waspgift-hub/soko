@@ -6,6 +6,8 @@ import 'package:http/http.dart' as http;
 import '../../services/api_config.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
+import '../../widgets/ad_banner.dart';
+import '../../utils/phone_utils.dart';
 
 class MyPurchasesScreen extends StatefulWidget {
   const MyPurchasesScreen({super.key});
@@ -15,13 +17,15 @@ class MyPurchasesScreen extends StatefulWidget {
 }
 
 class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
-  bool _releasing = false;
+  String? _releasingTxId;
+  String? _refundingTxId;
+  final Set<String> _autoReleased = {};
 
   Future<void> _confirmDelivery(String txId) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    setState(() => _releasing = true);
+    setState(() => _releasingTxId = txId);
 
     try {
       final resp = await http.post(
@@ -41,11 +45,54 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
       _showError('${context.tr('confirm_failed_msg')}: $e');
     }
 
-    setState(() => _releasing = false);
+    setState(() => _releasingTxId = null);
   }
+
+  Future<void> _requestRefund(String txId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('request_refund')),
+        content: Text(context.tr('refund_warning')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.tr('yes_refund'))),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    setState(() => _refundingTxId = txId);
+
+    try {
+      final resp = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/escrow/refund'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'orderId': txId, 'userId': user.uid}),
+      );
+
+      final result = jsonDecode(resp.body);
+
+      if (resp.statusCode == 200 && result['success'] == true) {
+        _showSuccess(result['message'] ?? context.tr('refund_sent'));
+      } else {
+        _showError(result['error'] ?? context.tr('refund_failed'));
+      }
+    } catch (e) {
+      _showError('${context.tr('refund_failed')}: $e');
+    }
+
+    setState(() => _refundingTxId = null);
+  }
+
+
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       return Scaffold(
@@ -67,11 +114,11 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.shopping_bag_outlined, size: 64, color: Colors.grey[400]),
+                  Icon(Icons.shopping_bag_outlined, size: 64, color: cs.onSurfaceVariant),
                   const SizedBox(height: 16),
                   Text(
                     context.tr('no_purchases_yet'),
-                    style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                    style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant),
                   ),
                 ],
               ),
@@ -85,6 +132,18 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
             if (ta is Timestamp && tb is Timestamp) return tb.compareTo(ta);
             return 0;
           });
+          // Auto-release expired escrow transactions
+          for (final doc in docs) {
+            final data = doc.data() as Map<String, dynamic>;
+            if (data['status'] != 'escrow_hold') continue;
+            if (_autoReleased.contains(doc.id)) continue;
+            final expiresAt = data['escrowExpiresAt'] as Timestamp?;
+            if (expiresAt == null) continue;
+            if (DateTime.now().isAfter(expiresAt.toDate())) {
+              _autoReleased.add(doc.id);
+              _confirmDelivery(doc.id);
+            }
+          }
           if (docs.isEmpty) {
             return Center(child: Text(context.tr('no_purchases_yet')));
           }
@@ -106,33 +165,38 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
               switch (status) {
                 case 'escrow_hold':
                   statusIcon = Icons.lock;
-                  statusColor = Colors.orange;
+                  statusColor = cs.tertiary;
                   statusText = context.tr('pending_confirmation');
                   canConfirm = true;
                   break;
                 case 'delivery_confirmed':
                   statusIcon = Icons.how_to_vote;
-                  statusColor = Colors.blue;
+                  statusColor = cs.secondary;
                   statusText = context.tr('confirmed_processing');
                   break;
                 case 'delivered':
                   statusIcon = Icons.check_circle;
-                  statusColor = Colors.green;
+                  statusColor = cs.primary;
                   statusText = context.tr('completed');
                   break;
                 case 'completed':
                   statusIcon = Icons.check_circle;
-                  statusColor = Colors.green;
+                  statusColor = cs.primary;
                   statusText = context.tr('completed');
+                  break;
+                case 'refunded':
+                  statusIcon = Icons.money_off;
+                  statusColor = cs.error;
+                  statusText = context.tr('refunded');
                   break;
                 case 'failed':
                   statusIcon = Icons.cancel;
-                  statusColor = Colors.red;
+                  statusColor = cs.error;
                   statusText = context.tr('failed');
                   break;
                 default:
                   statusIcon = Icons.hourglass_empty;
-                  statusColor = Colors.grey;
+                  statusColor = cs.onSurfaceVariant.withValues(alpha: 0.6);
                   statusText = context.tr('pending');
               }
 
@@ -172,9 +236,9 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                         Padding(
                           padding: const EdgeInsets.only(top: 4),
                           child: Text(
-                            '${context.tr('phone_label')}${d['buyerPhone']}',
+                            '${context.tr('phone_label')}${PhoneUtils.formatForDisplay(d['buyerPhone'] as String)}',
                             style: TextStyle(
-                              color: Colors.grey[600],
+                              color: cs.onSurfaceVariant,
                               fontSize: 12,
                             ),
                           ),
@@ -182,31 +246,54 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                       if (canConfirm)
                         Padding(
                           padding: const EdgeInsets.only(top: 12),
-                          child: SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: _releasing
-                                  ? null
-                                  : () => _confirmDelivery(docs[i].id),
-                              icon: _releasing
-                                  ? const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: GoogleLoading(
-                                        size: 16, strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(Icons.verified, size: 18),
-                              label: Text(
-                                _releasing
-                                    ? context.tr('processing')
-                                    : context.tr('confirm_receipt'),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: _releasingTxId == docs[i].id
+                                      ? null
+                                      : () => _confirmDelivery(docs[i].id),
+                                  icon: _releasingTxId == docs[i].id
+                                      ? const SizedBox(
+                                          width: 16, height: 16,
+                                          child: GoogleLoading(size: 16, strokeWidth: 2),
+                                        )
+                                      : const Icon(Icons.verified, size: 18),
+                                  label: Text(
+                                    _releasingTxId == docs[i].id
+                                        ? context.tr('processing')
+                                        : context.tr('confirm_receipt'),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: cs.primary,
+                                    foregroundColor: cs.surface,
+                                  ),
+                                ),
                               ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green.shade600,
-                                foregroundColor: Colors.white,
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: _refundingTxId == docs[i].id
+                                      ? null
+                                      : () => _requestRefund(docs[i].id),
+                                  icon: _refundingTxId == docs[i].id
+                                      ? const SizedBox(
+                                          width: 16, height: 16,
+                                          child: GoogleLoading(size: 16, strokeWidth: 2),
+                                        )
+                                      : const Icon(Icons.money_off, size: 18),
+                                  label: Text(
+                                    _refundingTxId == docs[i].id
+                                        ? context.tr('processing')
+                                        : context.tr('not_received_item'),
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: cs.error,
+                                    side: BorderSide(color: cs.error),
+                                  ),
+                                ),
                               ),
-                            ),
+                            ],
                           ),
                         ),
                     ],
@@ -217,6 +304,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
           );
         },
       ),
+      bottomNavigationBar: const AdBanner(),
     );
   }
 
@@ -224,13 +312,13 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
+    ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.error));
   }
 
   void _showSuccess(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.green));
+    ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.primary));
   }
 }

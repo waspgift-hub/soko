@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'cloudinary_service.dart';
+import 'secure_storage_service.dart';
 
 class UserProfile {
   final String uid;
@@ -281,42 +283,144 @@ class UserService {
     if (user == null) throw Exception('Not logged in');
     final uid = user.uid;
 
-    final batch = _db.batch();
-
+    // ─── 1. Products (with full cleanup via deleteProduct sub) ───
     final products = await _db.collection('products').where('sellerId', isEqualTo: uid).get();
     for (final doc in products.docs) {
-      batch.delete(doc.reference);
+      await _deleteProductsSubCollections(doc.reference, doc.id);
+      await doc.reference.delete();
     }
 
-    final orders = await _db.collection('orders').where('sellerId', isEqualTo: uid).get();
-    for (final doc in orders.docs) {
-      batch.delete(doc.reference);
+    // ─── 2. Orders (seller + buyer) ───
+    for (final role in ['sellerId', 'buyerId']) {
+      final orders = await _db.collection('orders').where(role, isEqualTo: uid).get();
+      for (final doc in orders.docs) {
+        await doc.reference.delete();
+      }
     }
 
-    final buyerOrders = await _db.collection('orders').where('buyerId', isEqualTo: uid).get();
-    for (final doc in buyerOrders.docs) {
-      batch.delete(doc.reference);
+    // ─── 3. Conversations + their messages ───
+    final conversations = await _db.collection('conversations').where('participants', arrayContains: uid).get();
+    for (final conv in conversations.docs) {
+      final messages = await conv.reference.collection('messages').get();
+      if (messages.docs.isNotEmpty) {
+        final batch = _db.batch();
+        for (final msg in messages.docs) batch.delete(msg.reference);
+        await batch.commit();
+      }
+      await conv.reference.delete();
     }
 
-    final chats = await _db.collection('chats').where('participants', arrayContains: uid).get();
-    for (final doc in chats.docs) {
-      batch.delete(doc.reference);
+    // ─── 4. Groups created by user + their messages ───
+    final groups = await _db.collection('groups').where('createdBy', isEqualTo: uid).get();
+    for (final group in groups.docs) {
+      final messages = await group.reference.collection('messages').get();
+      if (messages.docs.isNotEmpty) {
+        final batch = _db.batch();
+        for (final msg in messages.docs) batch.delete(msg.reference);
+        await batch.commit();
+      }
+      await group.reference.delete();
     }
 
-    final calls = await _db.collection('calls').where('callerId', isEqualTo: uid).get();
-    for (final doc in calls.docs) {
-      batch.delete(doc.reference);
-    }
-    final callsReceived = await _db.collection('calls').where('receiverId', isEqualTo: uid).get();
-    for (final doc in callsReceived.docs) {
-      batch.delete(doc.reference);
+    // ─── 5. Calls ───
+    for (final field in ['callerId', 'receiverId']) {
+      final calls = await _db.collection('calls').where(field, isEqualTo: uid).get();
+      for (final doc in calls.docs) await doc.reference.delete();
     }
 
-    batch.delete(_db.collection('users').doc(uid));
-    await batch.commit();
+    // ─── 6. Reviews by user ───
+    final reviews = await _db.collection('reviews').where('userId', isEqualTo: uid).get();
+    for (final doc in reviews.docs) await doc.reference.delete();
 
+    // ─── 7. Comments by user on all products ───
+    final comments = await _db.collectionGroup('comments').where('userId', isEqualTo: uid).get();
+    for (final doc in comments.docs) await doc.reference.delete();
+
+    // ─── 8. Statuses ───
+    final statuses = await _db.collection('statuses').where('userId', isEqualTo: uid).get();
+    for (final doc in statuses.docs) await doc.reference.delete();
+
+    // ─── 9. Notifications ───
+    final notifications = await _db.collection('notifications').where('userId', isEqualTo: uid).get();
+    for (final doc in notifications.docs) await doc.reference.delete();
+
+    // ─── 10. Cart items + cart document ───
+    final cartItems = await _db.collection('carts').doc(uid).collection('items').get();
+    if (cartItems.docs.isNotEmpty) {
+      final batch = _db.batch();
+      for (final doc in cartItems.docs) batch.delete(doc.reference);
+      await batch.commit();
+    }
+    await _db.collection('carts').doc(uid).delete();
+
+    // ─── 11. Wallet ───
+    await _db.collection('wallets').doc(uid).delete();
+
+    // ─── 12. Disputes ───
+    final disputes = await _db.collection('disputes').where('buyerId', isEqualTo: uid).get();
+    for (final doc in disputes.docs) await doc.reference.delete();
+
+    // ─── 13. Revenue transactions ───
+    final revenueTx = await _db.collection('revenue_transactions').where('userId', isEqualTo: uid).get();
+    for (final doc in revenueTx.docs) await doc.reference.delete();
+
+    // ─── 14. Blocked records ───
+    final blocked = await _db.collection('blocked').where('userId', isEqualTo: uid).get();
+    for (final doc in blocked.docs) await doc.reference.delete();
+
+    // ─── 15. Following / Followers ───
+    final following = await _db.collection('users').doc(uid).collection('following').get();
+    for (final doc in following.docs) await doc.reference.delete();
+    final followers = await _db.collection('users').doc(uid).collection('followers').get();
+    for (final doc in followers.docs) await doc.reference.delete();
+
+    // ─── 16. User document ───
+    await _db.collection('users').doc(uid).delete();
+
+    // ─── 17. Delete Firebase Auth account + sign out ───
     await user.delete();
     await _auth.signOut();
+
+    // ─── 18. Clear local storage ───
+    await SecureStorageService.deleteAll();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+  }
+
+  /// Helper: delete all subcollections under a product (comments, replies, cart items, flash sales)
+  Future<void> _deleteProductsSubCollections(DocumentReference productRef, String productId) async {
+    // Comments + replies
+    final comments = await productRef.collection('comments').get();
+    for (final comment in comments.docs) {
+      final replies = await comment.reference.collection('replies').get();
+      if (replies.docs.isNotEmpty) {
+        final batch = _db.batch();
+        for (final reply in replies.docs) batch.delete(reply.reference);
+        await batch.commit();
+      }
+      await comment.reference.delete();
+    }
+
+    // Cart items referencing this product
+    final cartItems = await _db
+        .collectionGroup('items')
+        .where(FieldPath.documentId, isEqualTo: productId)
+        .get();
+    if (cartItems.docs.isNotEmpty) {
+      final batch = _db.batch();
+      for (final item in cartItems.docs) batch.delete(item.reference);
+      await batch.commit();
+    }
+
+    // End flash sales
+    final flashSales = await _db
+        .collection('flash_sales')
+        .where('productId', isEqualTo: productId)
+        .where('isActive', isEqualTo: true)
+        .get();
+    for (final sale in flashSales.docs) {
+      await sale.reference.update({'status': 'ended', 'isActive': false});
+    }
   }
 
   Future<void> autoDowngradeExpired(String uid) async {

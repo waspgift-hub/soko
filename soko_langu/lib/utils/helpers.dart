@@ -114,7 +114,11 @@ Future<String?> pickAndUploadImage(BuildContext context) async {
   );
 
   try {
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    final XFile? image = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1024,
+      imageQuality: 80,
+    );
     if (image == null) {
       if (context.mounted) Navigator.pop(context);
       return null;

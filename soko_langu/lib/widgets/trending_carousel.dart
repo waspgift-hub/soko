@@ -1,10 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/product_service.dart';
+import '../services/flash_sale_service.dart';
 import '../models/product_model.dart';
+import '../models/flash_sale_model.dart';
 import '../extensions/context_tr.dart';
 import '../app/routes.dart';
+import '../theme/app_colors.dart';
 
 class TrendingCarousel extends StatefulWidget {
   const TrendingCarousel({super.key});
@@ -16,9 +20,21 @@ class TrendingCarousel extends StatefulWidget {
 class _TrendingCarouselState extends State<TrendingCarousel> {
   final PageController _pageCtrl = PageController(viewportFraction: 0.4);
   int _currentPage = 0;
+  final FlashSaleService _flashSaleService = FlashSaleService();
+  Map<String, FlashSale> _flashSales = {};
+  StreamSubscription? _flashSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _flashSub = _flashSaleService.getActiveFlashSalesMap().listen((map) {
+      if (mounted) setState(() => _flashSales = map);
+    });
+  }
 
   @override
   void dispose() {
+    _flashSub?.cancel();
     _pageCtrl.dispose();
     super.dispose();
   }
@@ -39,20 +55,20 @@ class _TrendingCarouselState extends State<TrendingCarousel> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
               child: Row(
                 children: [
-                  const Icon(Icons.trending_up, color: Color(0xFFFF6F00), size: 20),
+                  Icon(Icons.trending_up, color: Theme.of(context).colorScheme.trendingOrange, size: 20),
                   const SizedBox(width: 6),
                   Text(
                     'Trending',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF1B4332),
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85),
                     ),
                   ),
                   const Spacer(),
                   Text(
                     '${products.length} ${context.tr('products').toLowerCase()}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6)),
                   ),
                 ],
               ),
@@ -68,7 +84,7 @@ class _TrendingCarouselState extends State<TrendingCarousel> {
                       onPageChanged: (i) => setState(() => _currentPage = i),
                       itemBuilder: (context, index) {
                         final p = products[index];
-                        return _buildCard(p);
+                        return _buildCard(p, _flashSales[p.id]);
                       },
                     ),
                   ),
@@ -86,8 +102,8 @@ class _TrendingCarouselState extends State<TrendingCarousel> {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: _currentPage == i
-                                ? const Color(0xFFFF6F00)
-                                : Colors.grey[300],
+                                ? Theme.of(context).colorScheme.trendingOrange
+                                : Theme.of(context).colorScheme.outline,
                           ),
                         ),
                       ),
@@ -101,7 +117,7 @@ class _TrendingCarouselState extends State<TrendingCarousel> {
     );
   }
 
-  Widget _buildCard(Product p) {
+  Widget _buildCard(Product p, FlashSale? fs) {
     return GestureDetector(
       onTap: () => context.push(
         '${AppRoutes.productDetail}/${p.id}',
@@ -110,12 +126,12 @@ class _TrendingCarouselState extends State<TrendingCarousel> {
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFFF6F00).withValues(alpha: 0.3)),
+          border: Border.all(color: Theme.of(context).colorScheme.trendingOrange.withValues(alpha: 0.3)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.06),
               blurRadius: 8,
               offset: const Offset(0, 3),
             ),
@@ -129,14 +145,25 @@ class _TrendingCarouselState extends State<TrendingCarousel> {
               borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
               child: Container(
                 height: 100,
-                color: Colors.grey[100],
-                child: p.images.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: p.images.first,
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                      )
-                    : const Center(child: Icon(Icons.image, color: Colors.grey, size: 32)),
+                color: Theme.of(context).colorScheme.surfaceContainerLow,
+                child: Stack(children: [
+                  p.images.isNotEmpty
+                      ? CachedNetworkImage(
+                          imageUrl: p.images.first,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                        )
+                      : Center(child: Icon(Icons.image, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6), size: 32)),
+                  if (fs != null)
+                    Positioned(
+                      top: 4, left: 4,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        decoration: BoxDecoration(color: Colors.red.shade600, borderRadius: BorderRadius.circular(4)),
+                        child: Text('-${fs.discountPercent}%', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                ]),
               ),
             ),
             // Name
@@ -157,16 +184,14 @@ class _TrendingCarouselState extends State<TrendingCarousel> {
               padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
               child: Row(
                 children: [
-                  Text(
-                    context.formatPrice(p.price),
-                    style: const TextStyle(
-                      color: Color(0xFFFF6F00),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
+                  if (fs != null) ...[
+                    Text(context.formatPrice(fs.salePrice), style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
+                    const SizedBox(width: 4),
+                    Text(context.formatPrice(p.price), style: TextStyle(decoration: TextDecoration.lineThrough, color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 10)),
+                  ] else
+                    Text(context.formatPrice(p.price), style: TextStyle(color: Theme.of(context).colorScheme.trendingOrange, fontWeight: FontWeight.bold, fontSize: 12)),
                   const Spacer(),
-                  const Icon(Icons.star, color: Color(0xFFFF6F00), size: 12),
+                  Icon(Icons.star, color: Theme.of(context).colorScheme.trendingOrange, size: 12),
                 ],
               ),
             ),
@@ -176,3 +201,6 @@ class _TrendingCarouselState extends State<TrendingCarousel> {
     );
   }
 }
+
+
+

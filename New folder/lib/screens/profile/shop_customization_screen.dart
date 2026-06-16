@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../services/user_service.dart';
 import '../../services/cloudinary_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
+import '../../utils/helpers.dart';
 
 class ShopCustomizationScreen extends StatefulWidget {
   const ShopCustomizationScreen({super.key});
@@ -57,6 +59,11 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
   }
 
   Future<void> _pickBanner() async {
+    final granted = await requestPermissionWithDialog(
+      context, Permission.photos, 'permission_photos',
+    );
+    if (!granted) return;
+
     final file = await _picker.pickImage(source: ImageSource.gallery);
     if (file == null) return;
     setState(() => _loading = true);

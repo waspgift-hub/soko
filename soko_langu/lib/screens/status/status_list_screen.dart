@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_colors.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/whatsapp_service.dart';
 
@@ -23,11 +24,11 @@ class StatusListScreen extends StatelessWidget {
           ),
         ),
         flexibleSpace: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Color(0xFFD8F3DC), Color(0xFFF0F9F1)],
+              colors: [Theme.of(context).colorScheme.tertiaryContainer, Theme.of(context).colorScheme.surfaceContainerLow],
             ),
           ),
         ),
@@ -42,13 +43,13 @@ class StatusListScreen extends StatelessWidget {
                 width: 100,
                 height: 100,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF25D366).withValues(alpha: 0.1),
+                  color: Theme.of(context).colorScheme.whatsappGreen.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.auto_awesome,
                   size: 50,
-                  color: Color(0xFF25D366),
+                  color: Theme.of(context).colorScheme.whatsappGreen,
                 ),
               ),
               const SizedBox(height: 24),
@@ -61,11 +62,11 @@ class StatusListScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                'Tazama na ushiriki status kwenye WhatsApp',
+                context.tr('view_share_status_whatsapp'),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
-                  color: Colors.grey[600],
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
               const SizedBox(height: 32),
@@ -74,16 +75,16 @@ class StatusListScreen extends StatelessWidget {
                 height: 52,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF25D366),
-                    foregroundColor: Colors.white,
+                    backgroundColor: Theme.of(context).colorScheme.whatsappGreen,
+                    foregroundColor: Theme.of(context).colorScheme.surface,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
                   icon: const Icon(Icons.open_in_new),
-                  label: const Text(
-                    'Fungua Status za WhatsApp',
-                    style: TextStyle(fontSize: 16),
+                  label: Text(
+                    context.tr('open_whatsapp_status'),
+                    style: const TextStyle(fontSize: 16),
                   ),
                   onPressed: () => _openWhatsAppStatus(context),
                 ),
@@ -94,16 +95,16 @@ class StatusListScreen extends StatelessWidget {
                 height: 52,
                 child: OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF25D366),
-                    side: const BorderSide(color: Color(0xFF25D366)),
+                    foregroundColor: Theme.of(context).colorScheme.whatsappGreen,
+                    side: BorderSide(color: Theme.of(context).colorScheme.whatsappGreen),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
                   icon: const Icon(Icons.add_circle_outline),
-                  label: const Text(
-                    'Ongeza Status',
-                    style: TextStyle(fontSize: 16),
+                  label: Text(
+                    context.tr('add_status'),
+                    style: const TextStyle(fontSize: 16),
                   ),
                   onPressed: () => _openWhatsAppStatus(context),
                 ),
@@ -122,9 +123,9 @@ class StatusListScreen extends StatelessWidget {
       onError: () {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Imeshindwa kufungua WhatsApp'),
-              backgroundColor: Colors.red,
+            SnackBar(
+              content: Text(context.tr('whatsapp_open_failed')),
+              backgroundColor: Theme.of(context).colorScheme.error,
             ),
           );
         }
@@ -132,8 +133,8 @@ class StatusListScreen extends StatelessWidget {
       onFallback: () {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('WhatsApp haipo, imefungua tovuti'),
+            SnackBar(
+              content: Text(context.tr('whatsapp_not_installed')),
             ),
           );
         }

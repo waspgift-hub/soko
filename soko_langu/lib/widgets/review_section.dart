@@ -38,7 +38,7 @@ class _ReviewSectionState extends State<ReviewSection> {
                   return IconButton(
                     icon: Icon(
                       i < rating ? Icons.star : Icons.star_border,
-                      color: Colors.amber,
+                      color: Theme.of(context).colorScheme.tertiary,
                       size: 36,
                     ),
                     onPressed: () => setDialogState(() => rating = i + 1),
@@ -147,13 +147,13 @@ class _ReviewSectionState extends State<ReviewSection> {
                         children: [
                           CircleAvatar(
                             radius: 16,
-                            backgroundColor: Colors.green,
+                            backgroundColor: Theme.of(context).colorScheme.primary,
                             child: Text(
                               review.userName.isNotEmpty
                                   ? review.userName[0].toUpperCase()
                                   : "?",
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.surface,
                                 fontSize: 14,
                               ),
                             ),
@@ -172,7 +172,7 @@ class _ReviewSectionState extends State<ReviewSection> {
                                     ? Icons.star
                                     : Icons.star_border,
                                 size: 16,
-                                color: Colors.amber,
+                                color: Theme.of(context).colorScheme.tertiary,
                               ),
                             ),
                           ),
@@ -212,3 +212,4 @@ class _ReviewSectionState extends State<ReviewSection> {
     return "${dt.day}/${dt.month}/${dt.year}";
   }
 }
+

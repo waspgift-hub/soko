@@ -24,13 +24,6 @@ class _GoogleLoadingState extends State<GoogleLoading>
   late Animation<double> _arcStart;
   late Animation<double> _arcSweep;
 
-  static const _googleColors = [
-    Color(0xFF4285F4), // Blue
-    Color(0xFFEA4335), // Red
-    Color(0xFFFBBC05), // Yellow
-    Color(0xFF34A853), // Green
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -94,7 +87,7 @@ class _GoogleLoadingState extends State<GoogleLoading>
               rotation: _rotation.value,
               arcStart: _arcStart.value,
               arcSweep: _arcSweep.value,
-              colors: _googleColors,
+              colors: const [Color(0xFF4285F4), Color(0xFFEA4335), Color(0xFFFBBC05), Color(0xFF34A853)],
               strokeWidth: widget.strokeWidth,
             ),
           ),
@@ -165,60 +158,7 @@ class GoogleLoadingPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          GoogleLoading(size: size, color: color),
-          const SizedBox(height: 24),
-          _ShimmerText(),
-        ],
-      ),
-    );
-  }
-}
-
-class _ShimmerText extends StatefulWidget {
-  @override
-  State<_ShimmerText> createState() => _ShimmerTextState();
-}
-
-class _ShimmerTextState extends State<_ShimmerText>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat(reverse: true);
-    _animation = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeInOut,
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _animation,
-      child: Text(
-        'Loading...',
-        style: TextStyle(
-          fontSize: 14,
-          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-          fontWeight: FontWeight.w400,
-          letterSpacing: 0.5,
-        ),
-      ),
+      child: GoogleLoading(size: size, color: color),
     );
   }
 }
@@ -286,15 +226,15 @@ class _ShimmerEffectState extends State<_ShimmerEffect>
               begin: Alignment(_animation.value, 0),
               end: Alignment(_animation.value + 0.5, 0),
               colors: [
-                Colors.grey[300]!,
-                Colors.grey[100]!,
-                Colors.grey[300]!,
+                Theme.of(context).colorScheme.outline,
+                Theme.of(context).colorScheme.surfaceContainerLow,
+                Theme.of(context).colorScheme.outline,
               ],
             ).createShader(bounds);
           },
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.grey[300],
+              color: Theme.of(context).colorScheme.outline,
               borderRadius: BorderRadius.circular(8),
             ),
           ),
@@ -303,3 +243,4 @@ class _ShimmerEffectState extends State<_ShimmerEffect>
     );
   }
 }
+

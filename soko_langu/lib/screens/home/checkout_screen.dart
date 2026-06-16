@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 import '../../models/product_model.dart';
 import '../../services/payment_service.dart';
 import '../../services/fraud_prevention_service.dart';
-import '../../services/mongike_service.dart';
+import '../../services/clickpesa_service.dart';
 import '../../services/flash_sale_service.dart';
 import '../../services/api_config.dart';
 import '../../extensions/context_tr.dart';
@@ -137,7 +137,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           const SizedBox(height: 12),
           _detailRow(context.tr('total_price'), context.formatPrice(_totalPrice), cs),
           _detailRow(
-            context.tr('mongike_fee'),
+            context.tr('ussd_push_fee'),
+            '+ ${context.formatPriceInt(ClickPesaService.getUssdPushFee(_totalPrice.toInt()))}',
+            cs,
+            valueColor: cs.secondary,
+          ),
+          _detailRow(
+            context.tr('clickpesa_fee'),
             '- ${context.formatPrice(breakdown.processingFee)}',
             cs,
             valueColor: cs.error,
@@ -303,7 +309,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         sellerName: p.sellerName,
         amount: _totalPrice,
       );
-      final result = await MongikeService.initiateMarketplacePayment(
+                  final result = await ClickPesaService.initiateMarketplacePayment(
         productPrice: _totalPrice,
         productName: p.name,
         productId: p.id,
@@ -513,9 +519,9 @@ class _PaymentPendingDialogState extends State<_PaymentPendingDialog> {
               const SizedBox(height: 8),
               Text(
                 _timedOut
-                    ? context.tr('check_phone_ussd_mongike').replaceAll('{0}', widget.orderId)
+                    ? context.tr('check_phone_ussd').replaceAll('{0}', widget.orderId)
                     : context
-                          .tr('complete_payment_mongike')
+                          .tr('complete_payment_clickpesa')
                           .replaceAll('{0}', widget.orderId),
                 textAlign: TextAlign.center,
                 style: TextStyle(

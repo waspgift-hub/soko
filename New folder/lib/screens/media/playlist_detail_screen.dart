@@ -43,6 +43,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     if (idx >= 0) {
       _audio.playSong(idx);
     } else {
+      _audio.resetPlaylist();
       _audio.songs = widget.allSongs;
       _audio.playSong(widget.allSongs.indexOf(_songs[0]));
     }
@@ -54,6 +55,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     if (idx >= 0) {
       _audio.playSong(idx);
     } else {
+      _audio.resetPlaylist();
       _audio.songs = widget.allSongs;
       final globalIdx = widget.allSongs.indexOf(song);
       if (globalIdx >= 0) _audio.playSong(globalIdx);

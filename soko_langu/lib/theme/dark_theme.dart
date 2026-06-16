@@ -101,7 +101,7 @@ ThemeData buildDarkTheme(Color seed) {
         if (states.contains(WidgetState.selected)) {
           return scheme.primary;
         }
-        return Colors.grey[600];
+        return scheme.onSurfaceVariant;
       }),
       trackColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {

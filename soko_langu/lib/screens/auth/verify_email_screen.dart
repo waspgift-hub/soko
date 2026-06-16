@@ -28,7 +28,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: Colors.green,
+            backgroundColor: Theme.of(context).colorScheme.primary,
             content: Text(context.tr('email_verification_sent')),
           ),
         );
@@ -51,7 +51,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          backgroundColor: Colors.orange,
+          backgroundColor: Theme.of(context).colorScheme.tertiary,
           content: Text(context.tr('email_not_verified')),
         ),
       );

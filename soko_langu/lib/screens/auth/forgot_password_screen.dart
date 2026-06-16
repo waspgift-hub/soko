@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../services/api_config.dart';
 import '../../widgets/google_loading.dart';
+import '../../extensions/context_tr.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -32,29 +33,29 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   }
 
   String? _emailValidator(String? v) {
-    if (v == null || v.trim().isEmpty) return 'Tafadhali weka barua pepe';
+    if (v == null || v.trim().isEmpty) return context.tr('enter_email_please');
     if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v.trim())) {
-      return 'Barua pepe si sahihi';
+      return context.tr('invalid_email');
     }
     return null;
   }
 
   String? _otpValidator(String? v) {
-    if (v == null || v.trim().isEmpty) return 'Tafadhali weka OTP';
-    if (v.trim().length != 6) return 'OTP ina tarakimu 6';
-    if (!RegExp(r'^\d{6}$').hasMatch(v.trim())) return 'OTP ni namba pekee';
+    if (v == null || v.trim().isEmpty) return context.tr('enter_otp');
+    if (v.trim().length != 6) return context.tr('otp_6_digits');
+    if (!RegExp(r'^\d{6}$').hasMatch(v.trim())) return context.tr('otp_numbers_only');
     return null;
   }
 
   String? _passwordValidator(String? v) {
-    if (v == null || v.isEmpty) return 'Tafadhali weka nenosiri';
-    if (v.length < 6) return 'Nenosiri lazima iwe angalau herufi 6';
+    if (v == null || v.isEmpty) return context.tr('enter_password_please');
+    if (v.length < 6) return context.tr('password_short');
     return null;
   }
 
   String? _confirmValidator(String? v) {
-    if (v == null || v.isEmpty) return 'Tafadhali rudia nenosiri';
-    if (v != _passwordController.text) return 'Nenosiri hazilingani';
+    if (v == null || v.isEmpty) return context.tr('reenter_password');
+    if (v != _passwordController.text) return context.tr('password_mismatch');
     return null;
   }
 
@@ -74,16 +75,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              backgroundColor: const Color(0xFF2D6A4F),
-              content: Text('OTP imetumwa kwenye barua pepe yako. Angalia inbox.'),
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              content: Text(context.tr('otp_sent_email')),
             ),
           );
         }
       } else {
-        setState(() => _serverError = body['error'] ?? 'Failed to send OTP');
+        setState(() => _serverError = body['error'] ?? context.tr('failed_to_send_otp'));
       }
     } catch (e) {
-      setState(() => _serverError = 'Tatizo la mtandao. Tafadhali jaribu tena.');
+      setState(() => _serverError = context.tr('network_error_try_again'));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -106,10 +107,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       if (res.statusCode == 200 && body['valid'] == true) {
         setState(() => _step = 3);
       } else {
-        setState(() => _serverError = body['error'] ?? 'OTP si sahihi');
+        setState(() => _serverError = body['error'] ?? context.tr('otp_invalid'));
       }
     } catch (e) {
-      setState(() => _serverError = 'Tatizo la mtandao. Tafadhali jaribu tena.');
+      setState(() => _serverError = context.tr('network_error_try_again'));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -133,17 +134,17 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              backgroundColor: const Color(0xFF2D6A4F),
-              content: Text('Nenosiri limewekwa upya! Sasa unaweza kuingia.'),
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              content: Text(context.tr('password_reset_success_login')),
             ),
           );
           Navigator.pop(context);
         }
       } else {
-        setState(() => _serverError = body['error'] ?? 'Failed to reset password');
+        setState(() => _serverError = body['error'] ?? context.tr('failed_to_reset_password'));
       }
     } catch (e) {
-      setState(() => _serverError = 'Tatizo la mtandao. Tafadhali jaribu tena.');
+      setState(() => _serverError = context.tr('network_error_try_again'));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -204,20 +205,20 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               width: 36, height: 36,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: done || active ? const Color(0xFF2D6A4F) : cs.surfaceContainerHighest,
+                color: done || active ? Theme.of(context).colorScheme.primary : cs.surfaceContainerHighest,
               ),
               child: Center(
                 child: done
-                    ? const Icon(Icons.check, color: Colors.white, size: 18)
+                    ? Icon(Icons.check, color: Theme.of(context).colorScheme.surface, size: 18)
                     : Text('$s', style: TextStyle(
-                        color: done || active ? Colors.white : cs.onSurfaceVariant,
+                        color: done || active ? Theme.of(context).colorScheme.surface : cs.onSurfaceVariant,
                         fontWeight: FontWeight.bold,
                       )),
               ),
             ),
             if (s < 3) Container(
               width: 40, height: 3,
-              color: done ? const Color(0xFF2D6A4F) : cs.surfaceContainerHighest,
+              color: done ? Theme.of(context).colorScheme.primary : cs.surfaceContainerHighest,
             ),
           ],
         );
@@ -240,15 +241,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.red.shade50,
+                  color: Theme.of(context).colorScheme.errorContainer,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.red.shade200),
+                  border: Border.all(color: Theme.of(context).colorScheme.error.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.error_outline, color: Colors.red.shade700, size: 18),
+                    Icon(Icons.error_outline, color: Theme.of(context).colorScheme.error, size: 18),
                     const SizedBox(width: 8),
-                    Expanded(child: Text(_serverError!, style: TextStyle(color: Colors.red.shade800, fontSize: 13))),
+                    Expanded(child: Text(_serverError!, style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 13))),
                   ],
                 ),
               ),
@@ -264,18 +265,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         Container(
           width: 80, height: 80,
           decoration: BoxDecoration(
-            color: cs.primary.withAlpha(15), shape: BoxShape.circle,
+            color: cs.primary.withValues(alpha: 0.06), shape: BoxShape.circle,
           ),
           child: Icon(Icons.lock_reset_rounded, size: 40, color: cs.primary),
         ),
         const SizedBox(height: 20),
-        Text('Reset Password', style: TextStyle(color: cs.primary, fontSize: 24, fontWeight: FontWeight.bold)),
+        Text(context.tr('reset_password'), style: TextStyle(color: cs.primary, fontSize: 24, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
-        Text('Enter your email to receive a reset OTP.', textAlign: TextAlign.center, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14)),
+        Text(context.tr('enter_email_otp_hint'), textAlign: TextAlign.center, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14)),
         const SizedBox(height: 32),
         _buildEmailField(cs),
         const SizedBox(height: 24),
-        _buildActionButton('Send OTP', _sendOtp),
+        _buildActionButton(context.tr('send_otp'), _sendOtp),
       ],
     );
   }
@@ -286,14 +287,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         Container(
           width: 80, height: 80,
           decoration: BoxDecoration(
-            color: Colors.orange.withAlpha(20), shape: BoxShape.circle,
+            color: Theme.of(context).colorScheme.tertiary.withValues(alpha: 0.08), shape: BoxShape.circle,
           ),
-          child: const Icon(Icons.pin_rounded, size: 40, color: Colors.orange),
+          child: Icon(Icons.pin_rounded, size: 40, color: Theme.of(context).colorScheme.tertiary),
         ),
         const SizedBox(height: 20),
-        Text('Enter OTP', style: TextStyle(color: cs.primary, fontSize: 24, fontWeight: FontWeight.bold)),
+        Text(context.tr('enter_otp_title'), style: TextStyle(color: cs.primary, fontSize: 24, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
-        Text('Check your email for the 6-digit OTP.', textAlign: TextAlign.center, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14)),
+        Text(context.tr('check_email_otp_hint'), textAlign: TextAlign.center, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14)),
         const SizedBox(height: 32),
         TextFormField(
           controller: _otpController,
@@ -305,18 +306,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             hintText: '000000',
             counterText: '',
             filled: true,
-            fillColor: cs.surfaceContainerHighest.withAlpha(128),
+            fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.50),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.outlineVariant)),
             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.primary, width: 2)),
           ),
           validator: _otpValidator,
         ),
         const SizedBox(height: 24),
-        _buildActionButton('Verify OTP', _verifyOtp),
+        _buildActionButton(context.tr('verify_otp'), _verifyOtp),
         const SizedBox(height: 12),
         TextButton(
           onPressed: _sendOtp,
-          child: Text('Resend OTP', style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600)),
+          child: Text(context.tr('resend_otp'), style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600)),
         ),
       ],
     );
@@ -328,23 +329,23 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         Container(
           width: 80, height: 80,
           decoration: BoxDecoration(
-            color: cs.primary.withAlpha(15), shape: BoxShape.circle,
+            color: cs.primary.withValues(alpha: 0.06), shape: BoxShape.circle,
           ),
-          child: const Icon(Icons.key_rounded, size: 40, color: Color(0xFF2D6A4F)),
+          child: Icon(Icons.key_rounded, size: 40, color: cs.primary),
         ),
         const SizedBox(height: 20),
-        Text('New Password', style: TextStyle(color: cs.primary, fontSize: 24, fontWeight: FontWeight.bold)),
+        Text(context.tr('new_password'), style: TextStyle(color: cs.primary, fontSize: 24, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
-        Text('Choose a new password for your account.', textAlign: TextAlign.center, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14)),
+        Text(context.tr('choose_new_password_hint'), textAlign: TextAlign.center, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14)),
         const SizedBox(height: 32),
         TextFormField(
           controller: _passwordController,
           obscureText: true,
           decoration: InputDecoration(
-            hintText: 'New password (min 6 characters)',
+            hintText: context.tr('new_password_hint'),
             prefixIcon: const Icon(Icons.lock_outline),
             filled: true,
-            fillColor: cs.surfaceContainerHighest.withAlpha(128),
+            fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.50),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.outlineVariant)),
             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.primary, width: 2)),
           ),
@@ -355,17 +356,17 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           controller: _confirmPasswordController,
           obscureText: true,
           decoration: InputDecoration(
-            hintText: 'Repeat new password',
+            hintText: context.tr('repeat_new_password'),
             prefixIcon: const Icon(Icons.lock_outline),
             filled: true,
-            fillColor: cs.surfaceContainerHighest.withAlpha(128),
+            fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.50),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.outlineVariant)),
             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.primary, width: 2)),
           ),
           validator: _confirmValidator,
         ),
         const SizedBox(height: 24),
-        _buildActionButton('Reset Password', _resetPassword),
+        _buildActionButton(context.tr('reset_password'), _resetPassword),
       ],
     );
   }
@@ -377,10 +378,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       textInputAction: TextInputAction.done,
       onFieldSubmitted: (_) => _sendOtp(),
       decoration: InputDecoration(
-        hintText: 'Enter your email',
-        prefixIcon: Icon(Icons.email_outlined, color: cs.onSurface.withAlpha(150)),
+        hintText: context.tr('enter_email'),
+        prefixIcon: Icon(Icons.email_outlined, color: cs.onSurface.withValues(alpha: 0.59)),
         filled: true,
-        fillColor: cs.surfaceContainerHighest.withAlpha(128),
+        fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.50),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.outlineVariant)),
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.outlineVariant)),
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.primary, width: 2)),
@@ -398,7 +399,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           : Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(14),
-                gradient: const LinearGradient(colors: [Color(0xFF2D6A4F), Color(0xFF40916C)]),
+                gradient: LinearGradient(colors: [Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.tertiary]),
               ),
               child: ElevatedButton(
                 onPressed: onPressed,
@@ -407,9 +408,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   shadowColor: Colors.transparent,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
-                child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                child: Text(label, style: TextStyle(color: Theme.of(context).colorScheme.surface, fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ),
     );
   }
 }
+
+
+
+

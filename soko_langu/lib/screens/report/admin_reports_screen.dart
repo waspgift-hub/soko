@@ -58,7 +58,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
       result['status']!,
       adminNote: result['note'],
     );
-    if (newStatus == 'resolved' || newStatus == 'dismissed') {
+    if (newStatus == 'resolved') {
       _maybeSuspendUser(report);
     }
   }
@@ -73,7 +73,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
             child: const Text('Suspend'),
           ),
         ],
@@ -130,9 +130,9 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.flag, size: 64, color: Colors.grey[400]),
+                      Icon(Icons.flag, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
                       const SizedBox(height: 16),
-                      Text(context.tr('no_reports'), style: TextStyle(color: Colors.grey[600])),
+                      Text(context.tr('no_reports'), style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                     ],
                   ),
                 );
@@ -158,24 +158,24 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
       label: Text(label),
       selected: selected,
       onSelected: (_) => setState(() => _selectedFilter = filter),
-      selectedColor: Colors.red.withAlpha(30),
-      checkmarkColor: Colors.red,
+      selectedColor: Theme.of(context).colorScheme.error.withValues(alpha: 0.12),
+      checkmarkColor: Theme.of(context).colorScheme.error,
     );
   }
 
   Widget _buildReportCard(Report report) {
     final dateStr = DateFormat('MMM dd, yyyy HH:mm').format(report.createdAt);
     final statusColor = report.status == 'resolved'
-        ? Colors.green
+        ? Theme.of(context).colorScheme.primary
         : report.status == 'dismissed'
-            ? Colors.grey
-            : Colors.orange;
+            ? Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6)
+            : Theme.of(context).colorScheme.tertiary;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: ExpansionTile(
         leading: CircleAvatar(
-          backgroundColor: statusColor.withAlpha(30),
+          backgroundColor: statusColor.withValues(alpha: 0.12),
           child: Icon(Icons.flag, color: statusColor, size: 20),
         ),
         title: Text(
@@ -184,7 +184,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
         ),
         subtitle: Text(
           '${_reasonLabel(report.reason)} • $dateStr',
-          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+          style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
         children: [
           Padding(
@@ -202,7 +202,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.grey.withAlpha(20),
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -216,18 +216,18 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.blue.withAlpha(15),
+                      color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.06),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.blue.withAlpha(50)),
+                      border: Border.all(color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.20)),
                     ),
                     child: Text(
                       'Admin: ${report.adminNote}',
-                      style: const TextStyle(fontSize: 13, color: Colors.blue),
+                      style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.secondary),
                     ),
                   ),
                 ],
                 const SizedBox(height: 8),
-                Text(dateStr, style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                Text(dateStr, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6))),
                 const SizedBox(height: 8),
                 if (report.status == 'pending')
                   Row(
@@ -237,7 +237,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                         onPressed: () => _updateStatus(report, 'dismissed'),
                         icon: const Icon(Icons.close, size: 18),
                         label: Text(context.tr('dismiss')),
-                        style: TextButton.styleFrom(foregroundColor: Colors.grey),
+                        style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6)),
                       ),
                       const SizedBox(width: 8),
                       ElevatedButton.icon(
@@ -245,8 +245,8 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                         icon: const Icon(Icons.check, size: 18),
                         label: Text(context.tr('resolve')),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
+                          backgroundColor: Theme.of(context).colorScheme.primary,
+                          foregroundColor: Theme.of(context).colorScheme.surface,
                         ),
                       ),
                     ],
@@ -261,7 +261,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    backgroundColor: statusColor.withAlpha(20),
+                    backgroundColor: statusColor.withValues(alpha: 0.08),
                   ),
               ],
             ),
@@ -276,7 +276,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
-          Text('$label: ', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+          Text('$label: ', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
           Expanded(child: Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
         ],
       ),

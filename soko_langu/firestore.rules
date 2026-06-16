@@ -12,20 +12,27 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() && (
-        request.auth.token.email == 'admin@soko-langu.com' ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true
+        request.auth.token.email == 'admin@soko-vibe.com' ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true
+        )
       );
     }
 
     function kycApproved() {
       return isSignedIn() && (
-        request.auth.token.email == 'admin@soko-langu.com' ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.kyc.approved == true
+        request.auth.token.email == 'admin@soko-vibe.com' ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.kyc.approved == true
+        )
       );
     }
 
     function notSuspended() {
       return isSignedIn() && (
+        !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isSuspended != true
       );
     }
@@ -34,8 +41,8 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isSignedIn();
       allow create: if isOwner(userId);
-      allow update: if isOwner(userId);
-      allow delete: if isOwner(userId);
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isOwner(userId) || isAdmin();
 
       match /following/{followingId} {
         allow read, write: if isOwner(userId);
@@ -48,26 +55,30 @@ service cloud.firestore {
       match /admin_withdrawals/{wdId} {
         allow read, write: if isOwner(userId);
       }
+
+      match /cart/{itemId} {
+        allow read, write: if isOwner(userId);
+      }
     }
 
     // ─── PRODUCTS ───────────────────────────────────────────
     match /products/{productId} {
       allow read: if true;
-      allow create: if isSignedIn() && notSuspended() && request.resource.data.sellerId == request.auth.uid;
-      allow update: if isSignedIn() && notSuspended() && resource.data.sellerId == request.auth.uid;
-      allow delete: if isSignedIn() && notSuspended() && resource.data.sellerId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.sellerId == request.auth.uid;
+      allow update: if (isSignedIn() && notSuspended() && resource.data.sellerId == request.auth.uid) || isAdmin();
+      allow delete: if (isSignedIn() && notSuspended() && resource.data.sellerId == request.auth.uid) || isAdmin();
 
       match /comments/{commentId} {
         allow read: if true;
-        allow create: if isSignedIn() && notSuspended();
-        allow update: if isSignedIn() && notSuspended();
-        allow delete: if isSignedIn() && notSuspended();
+        allow create: if isSignedIn() && notSuspended() && request.resource.data.userId == request.auth.uid;
+        allow update: if isSignedIn() && notSuspended() && resource.data.userId == request.auth.uid;
+        allow delete: if isSignedIn() && notSuspended() && resource.data.userId == request.auth.uid;
 
         match /replies/{replyId} {
           allow read: if true;
-          allow create: if isSignedIn() && notSuspended();
-          allow update: if isSignedIn() && notSuspended();
-          allow delete: if isSignedIn() && notSuspended();
+          allow create: if isSignedIn() && notSuspended() && request.resource.data.userId == request.auth.uid;
+          allow update: if isSignedIn() && notSuspended() && resource.data.userId == request.auth.uid;
+          allow delete: if isSignedIn() && notSuspended() && resource.data.userId == request.auth.uid;
         }
       }
     }
@@ -127,13 +138,23 @@ service cloud.firestore {
     // ─── FLASH SALES ────────────────────────────────────────
     match /flash_sales/{saleId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create: if isSignedIn() && request.resource.data.sellerId == request.auth.uid;
+      allow update: if isAdmin() || (isSignedIn() && resource.data.sellerId == request.auth.uid);
+      allow delete: if isAdmin();
     }
 
     // ─── NOTIFICATIONS ──────────────────────────────────────
     match /notifications/{notifId} {
-      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow write: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAll(['title', 'body', 'userId'])
+        && request.resource.data.title is string
+        && request.resource.data.body is string;
+      allow update: if isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasOnly(['isRead']);
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
     // ─── REVIEWS ────────────────────────────────────────────

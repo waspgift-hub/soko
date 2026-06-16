@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/message_model.dart';
+import 'localization_service.dart';
 import 'notification_service.dart';
 
 class ChatService {
@@ -113,7 +114,7 @@ class ChatService {
         });
 
     final senderName = _auth.currentUser!.displayName ?? _auth.currentUser!.email ?? 'User';
-    final displayContent = messageType == 'image' ? '📷 Picha' : messageType == 'voice' ? '🎤 Sauti' : content;
+    final displayContent = messageType == 'image' ? '📷 ${LocalizationService.translate('photo_label', 'sw')}' : messageType == 'voice' ? '🎤 ${LocalizationService.translate('voice_label', 'sw')}' : content;
     await _db.collection("conversations").doc(conversationId).set({
       'participants': [_uid, receiverId],
       'lastMessage': displayContent,
@@ -180,9 +181,9 @@ class ChatService {
     final msgTime = (snap.data()?['timestamp'] as Timestamp?)?.toDate();
     if (msgTime == null) return;
     final diff = DateTime.now().difference(msgTime);
-    if (diff.inMinutes > 15) throw Exception('Muda umeisha. Unaweza futa ndani ya dakika 15 tu.');
+    if (diff.inMinutes > 15) throw Exception(LocalizationService.translate('delete_time_expired', 'sw'));
     await msgDoc.update({
-      'content': 'Umejumbe imefutwa',
+      'content': LocalizationService.translate('deleted_message', 'sw'),
       'isDeletedForEveryone': true,
       'isEdited': false,
     });
@@ -219,10 +220,10 @@ class ChatService {
           'messageType': data['messageType'] ?? 'text',
           'isDeletedForEveryone': false,
           'reactions': {},
-          'replyToContent': '↪️ Imetumwa tena',
+          'replyToContent': '↪️ ${LocalizationService.translate('forwarded_message', 'sw')}',
           'replyToSender': data['senderId'],
         });
-    final displayContent = (data['messageType'] ?? 'text') == 'image' ? '📷 Picha' : (data['content'] ?? '');
+    final displayContent = (data['messageType'] ?? 'text') == 'image' ? '📷 ${LocalizationService.translate('photo_label', 'sw')}' : (data['content'] ?? '');
     await _db.collection("conversations").doc(toConvId).set({
       'participants': [_uid, toUserId],
       'lastMessage': displayContent,

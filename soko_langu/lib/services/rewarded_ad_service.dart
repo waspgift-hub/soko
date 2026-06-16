@@ -18,6 +18,7 @@ class RewardedAdService {
   String get _adUnitId => ApiConfig.kAdsTestMode ? _testAdUnitId : _prodAdUnitId;
 
   Future<void> preload() async {
+    if (kIsWeb) return;
     if (_isLoading || _rewardedAd != null) return;
     _isLoading = true;
     await RewardedAd.load(
@@ -50,6 +51,7 @@ class RewardedAdService {
         ad.dispose();
         _rewardedAd = null;
         preload();
+        if (!completer.isCompleted) completer.complete(false);
       },
       onAdFailedToShowFullScreenContent: (ad, error) {
         ad.dispose();

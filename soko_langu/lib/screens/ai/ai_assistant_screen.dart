@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_colors.dart';
+import '../../utils/phone_utils.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -21,7 +23,9 @@ class AiAssistantScreen extends StatefulWidget {
 }
 
 class _AiAssistantScreenState extends State<AiAssistantScreen>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
   final AiService _ai = AiService.instance;
   final ProductSearchService _searcher = ProductSearchService();
   final VoiceSearchService _voice = VoiceSearchService();
@@ -87,12 +91,11 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
   }
 
   Future<void> _startRecording() async {
-    final locale = AppConfig.of(context).langCode;
     final started = await _voice.startRecording();
     if (!started) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(locale == 'en' ? 'Sorry, no microphone permission.' : 'Samahani, hakuna ruhusa ya kutumia maikrofoni.')),
+          SnackBar(content: Text(context.tr('ai_mic_permission_denied'))),
         );
       }
       return;
@@ -103,7 +106,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(locale == 'en' ? 'Recording... Tap mic again to stop.' : 'Kurekodi... Bonyeza tena maikrofoni kusimamisha.'),
+          content: Text(context.tr('ai_recording_hint')),
           duration: const Duration(seconds: 2),
         ),
       );
@@ -113,7 +116,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
   Future<void> _stopRecording() async {
     final locale = AppConfig.of(context).langCode;
     setState(() => _isRecording = false);
-    _messages.add(ChatMessage(text: locale == 'en' ? '[Recording stopped... waiting]' : '[Kurekodi kumesimama... nakusubiri]', isUser: true, isAudio: true));
+    _messages.add(ChatMessage(text: context.tr('ai_recording_stopped'), isUser: true, isAudio: true));
     _scrollToBottom();
 
     final path = await _voice.stopRecording();
@@ -127,9 +130,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
       setState(() {
         _messages.removeLast();
         _messages.add(ChatMessage(
-          text: locale == 'en'
-              ? 'Sorry boss, I could not hear clearly. Please try again or type the product name.'
-              : 'Samahani mkuu, siwezi kusikia vizuri. Tafadhali jaribu tena au andika jina la bidhaa.',
+          text: context.tr('ai_hear_error'),
           isUser: false,
         ));
         _isLoading = false;
@@ -259,9 +260,8 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
     } catch (_) {
       setState(() {
         _isLoading = false;
-        final locale = AppConfig.of(context).langCode;
         _messages.add(ChatMessage(
-          text: locale == 'en' ? 'Sorry boss, something went wrong. Please try again.' : 'Samahani mkuu, kuna tatizo. Tafadhali jaribu tena.',
+        text: context.tr('ai_generic_error'),
           isUser: false,
         ));
       });
@@ -336,16 +336,17 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       appBar: AppBar(
         title: Column(
           children: [
-            const Row(
+            Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.smart_toy_outlined, color: Color(0xFF2D6A4F), size: 22),
-                SizedBox(width: 8),
-                Text('AI Dalali', style: TextStyle(color: Color(0xFF2D6A4F), fontWeight: FontWeight.bold, fontSize: 18)),
+                Icon(Icons.smart_toy_outlined, color: Theme.of(context).colorScheme.primary, size: 22),
+                const SizedBox(width: 8),
+                Text('AI Dalali', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold, fontSize: 18)),
               ],
             ),
             Row(
@@ -354,15 +355,15 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
                 Container(
                   width: 7,
                   height: 7,
-                  decoration: const BoxDecoration(
-                    color: Colors.green,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary,
                     shape: BoxShape.circle,
                   ),
                 ),
                 const SizedBox(width: 5),
                 Text(
-                  'mtandaoni',
-                  style: TextStyle(color: Colors.green[700], fontSize: 11, fontWeight: FontWeight.w500),
+                  context.tr('online'),
+                  style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 11, fontWeight: FontWeight.w500),
                 ),
               ],
             ),
@@ -396,7 +397,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Theme.of(context).scaffoldBackgroundColor,
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -5))],
+              boxShadow: [BoxShadow(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -5))],
             ),
             child: SafeArea(
               child: Row(
@@ -408,24 +409,24 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
                       controller: _controller,
                       textInputAction: TextInputAction.send,
                       onSubmitted: _sendMessage,
-                      style: const TextStyle(color: Colors.black),
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
                       decoration: InputDecoration(
-                        hintText: 'Andika chochote... tafuta, ongea, omba ushauri',
+                        hintText: context.tr('ai_chat_hint'),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
                           borderSide: BorderSide.none,
                         ),
                         filled: true,
-                        fillColor: Colors.grey[100],
+                        fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
                         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                       ),
                     ),
                   ),
                   const SizedBox(width: 8),
                   CircleAvatar(
-                    backgroundColor: const Color(0xFF2D6A4F),
+                    backgroundColor: Theme.of(context).colorScheme.primary,
                     child: IconButton(
-                      icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                      icon: Icon(Icons.send_rounded, color: Theme.of(context).colorScheme.surface, size: 20),
                       onPressed: () => _sendMessage(_controller.text),
                     ),
                   ),
@@ -446,13 +447,13 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
         curve: Curves.easeInOut,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: _isRecording ? Colors.red[400] : Colors.grey[200],
+          color: _isRecording ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.outlineVariant,
         ),
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 200),
           child: _isRecording
-               ? const Icon(Icons.mic_rounded, color: Colors.white, size: 20, key: ValueKey('recording'))
-              : const Icon(Icons.mic_none_rounded, color: Color(0xFF2D6A4F), size: 20, key: ValueKey('idle')),
+               ? Icon(Icons.mic_rounded, color: Theme.of(context).colorScheme.surface, size: 20, key: ValueKey('recording'))
+              : Icon(Icons.mic_none_rounded, color: Theme.of(context).colorScheme.primary, size: 20, key: ValueKey('idle')),
         ),
       ),
     );
@@ -465,25 +466,25 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0xFFFF6F00), Color(0xFFFFA726)]),
+        gradient: LinearGradient(colors: [Theme.of(context).colorScheme.trendingOrange, Theme.of(context).colorScheme.trendingOrange.withValues(alpha: 0.7)]),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
-          const Icon(Icons.lightbulb_outline, color: Colors.white, size: 22),
+          Icon(Icons.lightbulb_outline, color: Theme.of(context).colorScheme.surface, size: 22),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Mkuu! Dalali ana ushauri',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                Text(
+                  context.tr('ai_tip_title'),
+                  style: TextStyle(color: Theme.of(context).colorScheme.surface, fontWeight: FontWeight.bold, fontSize: 13),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Bidhaa zako ${lowPerf.take(3).map((p) => p.name).join(', ')} hazijapata wateja. Jaribu kupunguza bei au kuboresha maelezo!',
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  context.tr('ai_seller_tip').replaceAll('{0}', lowPerf.take(3).map((p) => p.name).join(', ')),
+                  style: TextStyle(color: Theme.of(context).colorScheme.surface, fontSize: 12),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -492,8 +493,8 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
           ),
           TextButton(
             onPressed: () => setState(() => _showSellerTip = false),
-            style: TextButton.styleFrom(foregroundColor: Colors.white, padding: const EdgeInsets.all(4)),
-            child: const Text('Sawa', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+            style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.surface, padding: const EdgeInsets.all(4)),
+            child: Text(context.tr('ok'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
           ),
         ],
       ),
@@ -519,9 +520,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.grey[100],
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF2D6A4F).withValues(alpha: 0.35)),
+        border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.35)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -529,18 +530,18 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: const Color(0xFF2D6A4F),
+              color: Theme.of(context).colorScheme.primary,
               borderRadius: BorderRadius.circular(20),
             ),
-            child: const Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.verified_rounded, color: Colors.white, size: 14),
-                SizedBox(width: 4),
+                Icon(Icons.verified_rounded, color: Theme.of(context).colorScheme.surface, size: 14),
+                const SizedBox(width: 4),
                 Text(
-                  'IPO KWENYE SOKO LANGU',
+                  context.tr('in_soko_langu'),
                   style: TextStyle(
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.surface,
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
                   ),
@@ -564,25 +565,25 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
                   children: [
                     Text(product.productName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                     if (product.brand != null && product.brand!.isNotEmpty)
-                      Text(product.brand!, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                      Text(product.brand!, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
                   ],
                 ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: const Color(0xFF2D6A4F), borderRadius: BorderRadius.circular(12)),
-                child: Text(context.formatPrice(product.price), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, borderRadius: BorderRadius.circular(12)),
+                child: Text(context.formatPrice(product.price), style: TextStyle(color: Theme.of(context).colorScheme.surface, fontWeight: FontWeight.bold, fontSize: 13)),
               ),
             ],
           ),
           if (product.description.isNotEmpty) ...[
             const SizedBox(height: 6),
-            Text(product.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.grey[700], fontSize: 13)),
+            Text(product.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.85), fontSize: 13)),
           ],
           const SizedBox(height: 8),
           if (product.category.isNotEmpty) _infoRow(Icons.category, product.category),
           _infoRow(Icons.person, product.sellerName),
-          if (product.sellerPhone.isNotEmpty) _infoRow(Icons.phone, product.sellerPhone),
+          if (product.sellerPhone.isNotEmpty) _infoRow(Icons.phone, PhoneUtils.formatForDisplay(product.sellerPhone)),
           _infoRow(Icons.location_on, product.location),
           if (product.rating > 0) _infoRow(Icons.star, '${product.rating.toStringAsFixed(1)} (${product.reviewCount})'),
           if (product.condition != 'new') _infoRow(Icons.info_outline, 'Hali: ${product.condition}'),
@@ -594,10 +595,10 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
             child: ElevatedButton.icon(
               onPressed: () => _openProductWhatsApp(product),
               icon: const Icon(Icons.chat_outlined, size: 18),
-              label: const Text('Wasiliana na Muuzaji'),
+              label: Text(context.tr('contact_seller')),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF25D366),
-                foregroundColor: Colors.white,
+                backgroundColor: Theme.of(context).colorScheme.whatsappGreen,
+                foregroundColor: Theme.of(context).colorScheme.surface,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 padding: const EdgeInsets.symmetric(vertical: 12),
               ),
@@ -613,7 +614,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: Colors.grey[600]),
+          Icon(icon, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
           const SizedBox(width: 6),
           Expanded(child: Text(text, style: const TextStyle(fontSize: 13))),
         ],
@@ -628,15 +629,15 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
           ? Container(
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: const Color(0xFF2D6A4F), borderRadius: BorderRadius.circular(16)),
-              child: const Icon(Icons.image_outlined, color: Colors.white, size: 32),
+              decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, borderRadius: BorderRadius.circular(16)),
+              child: Icon(Icons.image_outlined, color: Theme.of(context).colorScheme.surface, size: 32),
             )
           : msg.isAudio
               ? Container(
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: const Color(0xFF2D6A4F), borderRadius: BorderRadius.circular(16)),
-                  child: const Icon(Icons.audio_file_rounded, color: Colors.white, size: 32),
+                  decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, borderRadius: BorderRadius.circular(16)),
+                  child: Icon(Icons.audio_file_rounded, color: Theme.of(context).colorScheme.surface, size: 32),
                 )
               : _buildBubble(msg.text, msg.isUser),
     );
@@ -648,7 +649,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
       decoration: BoxDecoration(
-        color: isUser ? const Color(0xFF2D6A4F) : Colors.grey[100],
+        color: isUser ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.only(
           topLeft: const Radius.circular(20),
           topRight: const Radius.circular(20),
@@ -656,7 +657,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
           bottomRight: isUser ? const Radius.circular(4) : const Radius.circular(20),
         ),
       ),
-      child: Text(text, style: TextStyle(color: isUser ? Colors.white : Colors.black87, fontSize: 14)),
+      child: Text(text, style: TextStyle(color: isUser ? Theme.of(context).colorScheme.surface : Theme.of(context).colorScheme.onSurface, fontSize: 14)),
     );
   }
 }
@@ -698,9 +699,9 @@ class _TypingIndicatorState extends State<_TypingIndicator>
           Padding(
             padding: const EdgeInsets.only(left: 4, bottom: 4),
             child: Text(
-              'AI anaandika...',
+              context.tr('ai_typing'),
               style: TextStyle(
-                color: Colors.grey[500],
+                color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                 fontSize: 11,
                 fontStyle: FontStyle.italic,
               ),
@@ -709,7 +710,7 @@ class _TypingIndicatorState extends State<_TypingIndicator>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              color: Colors.grey[100],
+              color: Theme.of(context).colorScheme.surfaceContainerLow,
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(20),
                 topRight: Radius.circular(20),
@@ -743,8 +744,8 @@ class _TypingIndicatorState extends State<_TypingIndicator>
             child: Container(
               width: 8,
               height: 8,
-              decoration: const BoxDecoration(
-                color: Color(0xFF2D6A4F),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary,
                 shape: BoxShape.circle,
               ),
             ),
@@ -770,3 +771,5 @@ class ChatMessage {
     this.products,
   });
 }
+
+

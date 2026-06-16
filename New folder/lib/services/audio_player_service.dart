@@ -1,8 +1,7 @@
 import 'dart:async';
-import 'dart:math';
 import 'package:flutter/foundation.dart';
-import 'package:just_audio/just_audio.dart' as ja;
 import 'package:on_audio_query/on_audio_query.dart';
+import 'media_session_service.dart';
 
 enum PlayerRepeatMode { off, all, one }
 
@@ -14,13 +13,8 @@ class AudioPlayerService {
   static AudioPlayerService get instance => _instance;
   factory AudioPlayerService() => _instance;
 
-  final ja.AudioPlayer _player = ja.AudioPlayer(
-    audioPipeline: ja.AudioPipeline(
-      androidAudioEffects: [
-        ja.AndroidLoudnessEnhancer(),
-      ],
-    ),
-  );
+  final MediaSessionService _native = MediaSessionService.instance;
+
   List<SongModel> songs = [];
   int? currentIndex;
   Duration position = Duration.zero;
@@ -37,63 +31,80 @@ class AudioPlayerService {
   PlayerRepeatMode get repeatMode => repeatNotifier.value;
   set repeatMode(PlayerRepeatMode value) => repeatNotifier.value = value;
 
-  Stream<Duration> get positionStream => _player.positionStream;
-  Stream<Duration?> get durationStream => _player.durationStream;
-  Stream<bool> get playingStream => _player.playingStream;
-  Stream<int?> get currentIndexStream => _currentIndexController.stream;
+  final _positionController = StreamController<Duration>.broadcast();
+  final _durationController = StreamController<Duration>.broadcast();
+  final _playingController = StreamController<bool>.broadcast();
   final _currentIndexController = StreamController<int?>.broadcast();
 
-  StreamSubscription? _playerStateSub;
-  StreamSubscription? _positionSub;
-  StreamSubscription? _durationSub;
-  StreamSubscription? _processingSub;
-  StreamSubscription? _currentIndexSub;
+  Stream<Duration> get positionStream => _positionController.stream;
+  Stream<Duration?> get durationStream => _durationController.stream;
+  Stream<bool> get playingStream => _playingController.stream;
+  Stream<int?> get currentIndexStream => _currentIndexController.stream;
+
+  StreamSubscription<Map<String, dynamic>>? _stateSub;
 
   void _init() {
-    _playerStateSub = _player.playerStateStream.listen(_onPlayerStateChanged);
-    _positionSub = _player.positionStream.listen((p) {
-      position = p;
-    });
-    _durationSub = _player.durationStream.listen((d) {
-      duration = d ?? Duration.zero;
-    });
-    _processingSub = _player.processingStateStream
-        .listen(_onProcessingStateChanged);
-    _currentIndexSub = _currentIndexController.stream.listen((idx) {
+    _stateSub = _native.stateStream.listen(_onNativeStateChanged);
+  }
+
+  void _onNativeStateChanged(Map<String, dynamic> state) {
+    final playing = state['playing'] as bool? ?? false;
+    final idx = state['currentIndex'] as int? ?? -1;
+    final pos = state['position'] as int? ?? 0;
+    final dur = state['duration'] as int? ?? 0;
+
+    isPlaying = playing;
+    if (idx >= 0) {
       currentIndex = idx;
-    });
-  }
-
-  void _onPlayerStateChanged(ja.PlayerState state) {
-    isPlaying = state.playing;
-  }
-
-  void _onProcessingStateChanged(ja.ProcessingState state) {
-    if (state == ja.ProcessingState.completed) {
-      _advanceToNext();
     }
+    position = Duration(milliseconds: pos);
+    duration = Duration(milliseconds: dur);
+
+    _playingController.add(playing);
+    _currentIndexController.add(idx >= 0 ? idx : null);
+    _positionController.add(position);
+    _durationController.add(duration);
+  }
+
+  bool _playlistInitialized = false;
+
+  Future<void> initPlaylist() async {
+    final songMaps = songs.asMap().entries.map((e) {
+      final song = e.value;
+      final artUri = song.albumId != null
+          ? 'content://media/external/audio/albumart/${song.albumId}'
+          : null;
+      return {
+        'index': e.key,
+        'filePath': song.data,
+        'title': song.title,
+        'artist': song.artist ?? '',
+        'album': song.album ?? '',
+        'durationMs': song.duration ?? 0,
+        if (artUri != null) 'artUri': artUri,
+      };
+    }).toList();
+    await _native.initPlaylist(songMaps);
+    _playlistInitialized = true;
+  }
+
+  void resetPlaylist() {
+    _playlistInitialized = false;
   }
 
   Future<void> playSong(int index) async {
     if (index < 0 || index >= songs.length) return;
     final song = songs[index];
     if (song.data.isEmpty) return;
-    try {
-      await _player.setFilePath(song.data);
-      _currentIndexController.add(index);
-      await _player.play();
-    } catch (e) {
-      debugPrint('playSong error: $e');
+
+    if (!_playlistInitialized) {
+      await initPlaylist();
     }
+    await _native.playAtIndex(index);
   }
 
   void togglePlayPause() {
-    if (currentIndex == null) return;
-    if (isPlaying) {
-      _player.pause();
-    } else {
-      _player.play();
-    }
+    _native.togglePlayPause();
   }
 
   void togglePlayPauseFromIndex(int index) {
@@ -104,66 +115,23 @@ class AudioPlayerService {
     }
   }
 
-  void _advanceToNext() {
-    if (songs.isEmpty) return;
-    if (repeatMode == PlayerRepeatMode.one) {
-      playSong(currentIndex!);
-      return;
-    }
-    int next;
-    if (shuffle) {
-      next = _randomIndex();
-    } else {
-      next = (currentIndex! + 1) % songs.length;
-    }
-    playSong(next);
-  }
-
   void next() {
-    if (currentIndex == null || songs.isEmpty) return;
-    if (repeatMode == PlayerRepeatMode.one) {
-      playSong(currentIndex!);
-      return;
-    }
-    int next;
-    if (shuffle) {
-      next = _randomIndex();
-    } else {
-      next = (currentIndex! + 1) % songs.length;
-    }
-    playSong(next);
+    if (songs.isEmpty) return;
+    _native.next();
   }
 
   void previous() {
-    if (currentIndex == null || songs.isEmpty) return;
-    if (repeatMode == PlayerRepeatMode.one) {
-      playSong(currentIndex!);
+    if (songs.isEmpty || currentIndex == null) return;
+    if (position.inSeconds > 3) {
+      _native.seekTo(Duration.zero);
       return;
     }
-    if (_player.position.inSeconds > 3) {
-      _player.seek(Duration.zero);
-      return;
-    }
-    int prev;
-    if (shuffle) {
-      prev = _randomIndex();
-    } else {
-      prev = (currentIndex! - 1 + songs.length) % songs.length;
-    }
-    playSong(prev);
-  }
-
-  int _randomIndex() {
-    if (songs.length <= 1) return 0;
-    int idx;
-    do {
-      idx = Random().nextInt(songs.length);
-    } while (idx == currentIndex);
-    return idx;
+    _native.previous();
   }
 
   void toggleShuffle() {
     shuffle = !shuffle;
+    _native.setShuffle(shuffle);
   }
 
   void cycleRepeat() {
@@ -172,26 +140,28 @@ class AudioPlayerService {
       PlayerRepeatMode.all => PlayerRepeatMode.one,
       PlayerRepeatMode.one => PlayerRepeatMode.off,
     };
+    _native.setRepeatMode(repeatMode.index);
   }
 
   Future<void> seek(Duration position) async {
-    await _player.seek(position);
+    await _native.seekTo(position);
   }
 
   Future<void> stop() async {
-    await _player.stop();
-    _currentIndexController.add(null);
+    await _native.stop();
+    currentIndex = null;
+    position = Duration.zero;
+    duration = Duration.zero;
+    isPlaying = false;
   }
 
   void dispose() {
-    _playerStateSub?.cancel();
-    _positionSub?.cancel();
-    _durationSub?.cancel();
-    _processingSub?.cancel();
-    _currentIndexSub?.cancel();
+    _stateSub?.cancel();
+    _positionController.close();
+    _durationController.close();
+    _playingController.close();
     _currentIndexController.close();
     shuffleNotifier.dispose();
     repeatNotifier.dispose();
-    _player.dispose();
   }
 }

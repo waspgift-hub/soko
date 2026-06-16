@@ -1,11 +1,15 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/wishlist_service.dart';
 import '../../services/product_service.dart';
+import '../../services/flash_sale_service.dart';
 import '../../models/product_model.dart';
+import '../../models/flash_sale_model.dart';
 import '../../app/routes.dart';
 import '../../widgets/google_loading.dart';
+import '../../widgets/ad_banner.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 class WishlistScreen extends StatefulWidget {
@@ -18,14 +22,26 @@ class WishlistScreen extends StatefulWidget {
 class _WishlistScreenState extends State<WishlistScreen> {
   final WishlistService _wishlistService = WishlistService();
   final ProductService _productService = ProductService();
+  final FlashSaleService _flashSaleService = FlashSaleService();
   List<String> _wishlistIds = [];
   Map<String, Product?> _products = {};
+  Map<String, FlashSale> _flashSales = {};
   bool _loading = true;
+  StreamSubscription? _flashSub;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _flashSub = _flashSaleService.getActiveFlashSalesMap().listen((map) {
+      if (mounted) setState(() => _flashSales = map);
+    });
+  }
+
+  @override
+  void dispose() {
+    _flashSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -127,11 +143,9 @@ class _WishlistScreenState extends State<WishlistScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      subtitle: Text(
-                        context.formatPrice(product.price),
-                      ),
+                      subtitle: _buildWishlistPrice(context, product),
                       trailing: IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
+                        icon: Icon(Icons.delete, color: Theme.of(context).colorScheme.error),
                         onPressed: () => _remove(id),
                       ),
                       onTap: () => context.push(
@@ -143,6 +157,33 @@ class _WishlistScreenState extends State<WishlistScreen> {
                 },
               ),
       ),
+      bottomNavigationBar: const AdBanner(),
+    );
+  }
+
+  Widget _buildWishlistPrice(BuildContext context, Product product) {
+    final fs = _flashSales[product.id];
+    if (fs == null) {
+      return Text(context.formatPrice(product.price));
+    }
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+          margin: const EdgeInsets.only(right: 6),
+          decoration: BoxDecoration(
+            color: Colors.red.shade600,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            '-${fs.discountPercent}%',
+            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+          ),
+        ),
+        Text(context.formatPrice(fs.salePrice), style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+        const SizedBox(width: 6),
+        Text(context.formatPrice(product.price), style: TextStyle(decoration: TextDecoration.lineThrough, color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
+      ],
     );
   }
 }

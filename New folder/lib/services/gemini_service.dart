@@ -6,7 +6,7 @@ import '../models/flash_sale_model.dart';
 import '../services/flash_sale_service.dart';
 import 'dart:math';
 
-const String _groqApiKey = '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';
+const String _groqApiKey = ''; // Provide via --dart-define=GROQ_API_KEY at build time
 const String _groqModel = 'llama-3.3-70b-versatile';
 
 class DiscountCalculator {

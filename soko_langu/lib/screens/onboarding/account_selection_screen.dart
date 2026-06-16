@@ -50,7 +50,7 @@ class AccountSelectionScreen extends StatelessWidget {
                 icon: Icons.shopping_bag_outlined,
                 titleKey: 'account_buyer',
                 descKey: 'account_buyer_desc',
-                color: const Color(0xFF2D6A4F),
+                color: cs.primary,
                 onTap: () => _select('buyer', context),
               ),
               const SizedBox(height: 14),
@@ -58,7 +58,7 @@ class AccountSelectionScreen extends StatelessWidget {
                 icon: Icons.store_outlined,
                 titleKey: 'account_seller',
                 descKey: 'account_seller_desc',
-                color: const Color(0xFF6C63FF),
+                color: cs.secondary,
                 onTap: () => _select('seller', context),
               ),
               const SizedBox(height: 14),
@@ -66,16 +66,21 @@ class AccountSelectionScreen extends StatelessWidget {
                 icon: Icons.swap_horiz_rounded,
                 titleKey: 'account_both',
                 descKey: 'account_both_desc',
-                color: const Color(0xFF0088CC),
+                color: cs.primary,
                 onTap: () => _select('both', context),
               ),
               const Spacer(flex: 2),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    context.tr('account_already'),
-                    style: TextStyle(color: cs.onSurface.withValues(alpha: 0.6)),
+                  Flexible(
+                    child: Text(
+                      context.tr('account_already'),
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: cs.onSurface.withValues(alpha: 0.6),
+                      ),
+                    ),
                   ),
                   TextButton(
                     onPressed: () => context.replace(AppRoutes.login),
@@ -135,7 +140,10 @@ class _AccountCard extends StatelessWidget {
                 height: 48,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [color.withValues(alpha: 0.15), color.withValues(alpha: 0.05)],
+                    colors: [
+                      color.withValues(alpha: 0.15),
+                      color.withValues(alpha: 0.05),
+                    ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -167,7 +175,10 @@ class _AccountCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: cs.onSurface.withValues(alpha: 0.3)),
+              Icon(
+                Icons.chevron_right,
+                color: cs.onSurface.withValues(alpha: 0.3),
+              ),
             ],
           ),
         ),

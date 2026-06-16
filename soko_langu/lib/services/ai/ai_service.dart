@@ -14,15 +14,15 @@ abstract class AiService {
   }
 
   static String buildInAppCatalogContext(String richProductBlocks) => '''
-DATA YA SOKO LANGU (HALISI — kutoka Firestore):
+DATA YA SOKO VIBE (HALISI — kutoka Firestore):
 $richProductBlocks
 ''';
 
   static String buildNotFoundCatalogContext(String query) => '''
-DATA YA SOKO LANGU: tupu — hakuna matokeo kwa "$query".
+DATA YA SOKO VIBE: tupu — hakuna matokeo kwa "$query".
 
 Kumbuka: chochote utakachosema kuhusu muuzaji, eneo, au bei ya nje YA APP lazima kiwe na lebo:
-"Hii taarifa HAITOKEI kwenye Soko Langu — ni mwongozo wa nje ya app."
+"Hii taarifa HAITOKEI kwenye Soko Vibe — ni mwongozo wa nje ya app."
 ''';
 
   Future<String> sendMessage(

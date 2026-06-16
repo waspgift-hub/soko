@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:go_router/go_router.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../services/user_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/wishlist_service.dart';
@@ -13,6 +14,7 @@ import '../../main.dart';
 import '../../widgets/tier_badge.dart';
 import '../../widgets/ad_banner.dart';
 import '../../app/routes.dart';
+import '../../utils/helpers.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -84,6 +86,11 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _pickImage() async {
+    final granted = await requestPermissionWithDialog(
+      context, Permission.photos, 'permission_photos',
+    );
+    if (!granted) return;
+
     try {
       final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
       if (image != null) {
