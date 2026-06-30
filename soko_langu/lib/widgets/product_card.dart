@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/product_model.dart';
 import '../../models/flash_sale_model.dart';
+import '../../services/product_service.dart';
+import '../../services/soko_cache_manager.dart';
 import 'google_loading.dart';
+import 'glass_widget.dart';
 import '../extensions/context_tr.dart';
 import '../theme/app_colors.dart';
 
@@ -26,21 +29,13 @@ class ProductCard extends StatelessWidget {
         final padding = (8.0 * scale).clamp(6.0, 12.0);
         const radius = 15.0;
 
-        Widget card = Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(radius),
-            border: Border.all(
-              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
-              width: 1.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                blurRadius: 15,
-                offset: const Offset(0, 5),
-              ),
-            ],
-          ),
+        Widget card = AnimatedGlassWidget(
+          blurSigma: 10,
+          opacity: 0.55,
+          borderRadius: radius,
+          borderWidth: 1.2,
+          borderColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
+          delay: const Duration(milliseconds: 200),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -52,7 +47,10 @@ class ProductCard extends StatelessWidget {
                           fit: StackFit.expand,
                           children: [
                             CachedNetworkImage(
-                              imageUrl: product.images.first,
+                              imageUrl: getThumbnailUrl(product.images.first),
+                              cacheManager: SokoCacheManager(),
+                              memCacheWidth: 360,
+                              memCacheHeight: 360,
                               fit: BoxFit.cover,
                               placeholder: (context, url) => Container(
                                 color: Theme.of(context).colorScheme.surfaceContainerLow,

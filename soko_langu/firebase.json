@@ -1,14 +1,13 @@
 {
   "hosting": {
-    "public": "build/web",
+    "public": "hosting",
     "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
+      "firebase.json"
     ]
   },
   "firestore": {
-    "rules": "firestore.rules"
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
   },
   "flutter": {
     "platforms": {

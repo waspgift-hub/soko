@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../extensions/context_tr.dart';
 
+
 class OfflineBanner extends StatefulWidget {
   final Widget child;
   const OfflineBanner({super.key, required this.child});
@@ -80,7 +81,7 @@ class _OfflineOverlay extends StatelessWidget {
               ),
               const SizedBox(height: 28),
               Text(
-                'Hakuna Mtandao',
+                context.tr('no_internet_connection'),
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
@@ -89,20 +90,9 @@ class _OfflineOverlay extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               Text(
-                'Tafadhali washa mtandao wako\nkuendelea kutumia Soko Vibe',
+                context.tr('enable_internet_to_continue'),
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 15, color: cs.surface.withValues(alpha: 0.7)),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'No Internet Connection',
-                style: TextStyle(fontSize: 13, color: cs.surface.withValues(alpha: 0.45)),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Please enable your internet\nto continue using Soko Vibe',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: cs.surface.withValues(alpha: 0.45)),
               ),
               const SizedBox(height: 40),
               SizedBox(

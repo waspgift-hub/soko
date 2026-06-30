@@ -1,12 +1,13 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../../app/routes.dart';
 import '../../extensions/context_tr.dart';
 import '../../models/saved_account.dart';
+import '../../notifiers/auth_notifier.dart';
 import '../../services/account_manager.dart';
-import '../../services/auth_service.dart';
 import '../../utils/network_error.dart';
 import '../../widgets/auth_form_widgets.dart';
 
@@ -19,7 +20,6 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _authService = AuthService();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -27,7 +27,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
-  bool _acceptedTerms = true;
+  bool _acceptedTerms = false;
 
   @override
   void dispose() {
@@ -47,15 +47,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(backgroundColor: Theme.of(context).colorScheme.error, content: Text(msg)));
-  }
-
-  void _showSuccess(String msg) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(backgroundColor: Theme.of(context).colorScheme.primary, content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: Theme.of(context).colorScheme.error,
+        content: Text(msg),
+      ),
+    );
   }
 
   Future<void> _register() async {
@@ -71,14 +68,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     setState(() => _isLoading = true);
     try {
-      await _authService.registerWithProfile(
+      await context.read<AuthNotifier>().register(
         email: _emailController.text.trim(),
         password: _passwordController.text,
         displayName: _nameController.text.trim(),
       );
-      try {
-        await _authService.sendEmailVerification();
-      } catch (_) {}
 
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
@@ -96,8 +90,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       }
 
       if (!mounted) return;
-      _showSuccess(context.tr('email_verification_sent'));
-      context.go(AppRoutes.accountSelection);
+      context.go(
+        AppRoutes.verifyEmail,
+        extra: {'email': _emailController.text.trim()},
+      );
     } catch (e) {
       if (mounted) {
         _showError(e is NetworkError ? e.userMessage : e.toString());
@@ -110,7 +106,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Future<void> _signInWithGoogle() async {
     setState(() => _isLoading = true);
     try {
-      await _authService.signInWithGoogle();
+      await context.read<AuthNotifier>().signInWithGoogle();
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         await AccountManager.instance.addOrUpdateAccount(
@@ -144,7 +140,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
           title: context.tr('register'),
           subtitle: context.tr('create_account'),
           footer: TextButton(
-            onPressed: _isLoading ? null : () => context.pop(),
+            onPressed: _isLoading
+                ? null
+                : () => context.replace(AppRoutes.login),
             child: Text(context.tr('login_prompt')),
           ),
           child: AuthGlassCard(
@@ -207,7 +205,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     validator: (v) {
                       if (v == null || v.isEmpty)
                         return context.tr('enter_password');
-                      if (v.length < 6) return context.tr('password_length');
+                      if (v.length < 8) return context.tr('password_length');
                       return null;
                     },
                   ),

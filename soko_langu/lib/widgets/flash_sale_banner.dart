@@ -27,6 +27,15 @@ class _FlashSaleBannerState extends State<FlashSaleBanner>
   }
 
   @override
+  void didUpdateWidget(FlashSaleBanner old) {
+    super.didUpdateWidget(old);
+    final newLength = widget.sales.length;
+    if (newLength < old.sales.length && _currentPage >= newLength && newLength > 0) {
+      _currentPage = 0;
+    }
+  }
+
+  @override
   void dispose() {
     _timer?.cancel();
     _pageController.dispose();
@@ -115,7 +124,7 @@ class _FlashSaleBannerState extends State<FlashSaleBanner>
                 color: cs.primary.withValues(alpha: 0.5), size: 32),
             const SizedBox(height: 8),
             Text(
-              'Flash Deals',
+              context.tr('flash_deals'),
               style: TextStyle(
                 color: cs.onSurfaceVariant.withValues(alpha: 0.6),
                 fontSize: 14,
@@ -124,7 +133,7 @@ class _FlashSaleBannerState extends State<FlashSaleBanner>
             ),
             const SizedBox(height: 4),
             Text(
-              'No active deals right now',
+              context.tr('no_active_deals'),
               style: TextStyle(
                 color: cs.onSurfaceVariant.withValues(alpha: 0.4),
                 fontSize: 11,
@@ -165,13 +174,13 @@ class _FlashSaleBannerState extends State<FlashSaleBanner>
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('SOKO LANGU',
-                      style: TextStyle(
+                  Text(context.tr('app_name').toUpperCase(),
+                      style: const TextStyle(
                           color: Colors.black87,
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
                           letterSpacing: 1)),
-                  const Text('FLASH SALE',
+                  Text(context.tr('flash_sale_label'),
                       style: TextStyle(
                           color: Colors.black54,
                           fontSize: 7,
@@ -181,9 +190,9 @@ class _FlashSaleBannerState extends State<FlashSaleBanner>
             ],
           ),
           const Spacer(),
-          const Text(
-            'FLASH DEALS',
-            style: TextStyle(
+          Text(
+            context.tr('flash_deals'),
+            style: const TextStyle(
               color: Colors.black,
               fontSize: 22,
               fontWeight: FontWeight.w900,
@@ -191,8 +200,8 @@ class _FlashSaleBannerState extends State<FlashSaleBanner>
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
-            'BIG DISCOUNTS\nFLASH SALES\nLIMITED OFFERS',
+          Text(
+            context.tr('banner_subtitle'),
             style: TextStyle(
                 color: Colors.black54,
                 fontSize: 10,
@@ -205,7 +214,7 @@ class _FlashSaleBannerState extends State<FlashSaleBanner>
               const Icon(Icons.phone,
                   color: Colors.black54, size: 11),
               const SizedBox(width: 4),
-              Text('$saleCount deals',
+              Text('$saleCount ${context.tr('deals')}',
                   style: const TextStyle(
                       color: Colors.black54, fontSize: 9)),
               const Spacer(),

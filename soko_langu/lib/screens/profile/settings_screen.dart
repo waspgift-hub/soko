@@ -1,10 +1,15 @@
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/localization_service.dart';
-import '../../services/auth_service.dart';
+import '../../notifiers/auth_notifier.dart';
 import '../../services/notification_service.dart';
 import '../../services/secure_storage_service.dart';
+import '../../services/app_lock_service.dart';
 import '../../services/user_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
@@ -19,19 +24,33 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true;
+  bool _pinConfigured = false;
 
   @override
   void initState() {
     super.initState();
     _load();
+    AppLockService.instance.addListener(_onLockStateChanged);
+  }
+
+  @override
+  void dispose() {
+    AppLockService.instance.removeListener(_onLockStateChanged);
+    super.dispose();
+  }
+
+  void _onLockStateChanged() {
+    if (mounted) setState(() => _pinConfigured = AppLockService.instance.pinConfigured);
   }
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
+    final pinSet = await AppLockService.instance.isPinSet();
     if (mounted) {
       setState(() {
         _notificationsEnabled =
             prefs.getBool('push_notifications_enabled') ?? true;
+        _pinConfigured = pinSet;
       });
     }
   }
@@ -75,19 +94,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
             onPressed: () async {
-              if (pinController.text.isEmpty ||
-                  pinController.text != confirmController.text) {
+              if (pinController.text.length < 4) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(context.tr('pin_too_short'))),
+                );
+                return;
+              }
+              if (pinController.text != confirmController.text) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text(context.tr('pin_mismatch'))),
                 );
                 return;
               }
+              final hashedPin = sha256.convert(utf8.encode(pinController.text)).toString();
               await SecureStorageService.write(
                 'app_lock_pin',
-                pinController.text,
+                hashedPin,
               );
+              await AppLockService.instance.onPinSaved();
               if (ctx.mounted) Navigator.pop(ctx);
               if (mounted) {
+                setState(() => _pinConfigured = true);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text(context.tr('pin_updated'))),
                 );
@@ -101,6 +128,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  Future<String?> _promptPassword() {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('enter_password')),
+        content: TextField(
+          controller: controller,
+          obscureText: true,
+          decoration: InputDecoration(
+            labelText: context.tr('password'),
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(context.tr('cancel')),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: Text(context.tr('confirm')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmRemovePin() async {
+    final remove = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('remove_pin')),
+        content: Text(context.tr('remove_pin_confirm')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(context.tr('cancel')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              context.tr('delete'),
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (remove != true || !mounted) return;
+    await AppLockService.instance.clearPin();
+    setState(() => _pinConfigured = false);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('pin_removed'))),
+      );
+    }
   }
 
   @override
@@ -129,7 +215,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onChanged: (value) async {
                     final notif = NotificationService();
                     await notif.setEnabled(value);
-                    setState(() => _notificationsEnabled = value);
+                    if (mounted) setState(() => _notificationsEnabled = value);
                   },
                 ),
               ),
@@ -156,8 +242,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _buildTile(
                 icon: Icons.pin,
                 title: context.tr('set_pin'),
+                subtitle: _pinConfigured ? context.tr('pin_enabled') : null,
                 onTap: _showPinSetupDialog,
               ),
+              if (_pinConfigured)
+                _buildTile(
+                  icon: Icons.lock_open,
+                  title: context.tr('remove_pin'),
+                  onTap: _confirmRemovePin,
+                ),
               const Divider(),
               _buildSectionTitle(context.tr('account')),
               _buildTile(
@@ -170,19 +263,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               SwitchListTile(
                 secondary: Icon(
                   themeManager.isDark ? Icons.dark_mode : Icons.light_mode,
-                  color: themeManager.isDark
-                      ? const Color(0xFF39FF14)
-                      : Theme.of(context).colorScheme.primary,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
                 title: Text(
-                  themeManager.isDark ? 'Dark Mode' : 'Light Mode',
-                  style: TextStyle(
-                    color: themeManager.isDark ? const Color(0xFF39FF14) : null,
-                  ),
+                  themeManager.isDark ? context.tr('dark_mode') : context.tr('light_mode'),
                 ),
                 subtitle: Text(context.tr('switch_theme')),
                 value: themeManager.isDark,
-                activeThumbColor: const Color(0xFF39FF14),
+                activeColor: Theme.of(context).colorScheme.primary,
                 onChanged: (val) => themeManager.setDark(val),
               ),
               const Divider(),
@@ -213,7 +301,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: ElevatedButton.icon(
                   onPressed: () async {
-                    await AuthService().logout();
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: Text(context.tr('confirm_logout')),
+                        content: Text(context.tr('logout_confirm_message')),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: Text(context.tr('cancel')),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: Text(
+                              context.tr('logout'),
+                              style: TextStyle(color: Theme.of(context).colorScheme.error),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm != true || !mounted) return;
+                    await context.read<AuthNotifier>().logout();
                     if (!context.mounted) return;
                     Navigator.of(context).popUntil((route) => route.isFirst);
                   },
@@ -254,18 +363,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     );
                     if (confirm != true) return;
-                    try {
-                      await UserService().deleteMyAccount();
-                      if (mounted)
-                        Navigator.of(
-                          context,
-                        ).popUntil((route) => route.isFirst);
-                    } catch (e) {
-                      if (mounted)
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text('$e')));
+
+                    // Reauthentication required for email/password accounts
+                    final hasPassword = FirebaseAuth.instance.currentUser?.providerData
+                        .any((p) => p.providerId == 'password') ?? false;
+                    if (hasPassword) {
+                      final password = await _promptPassword();
+                      if (password == null || !mounted) return;
+                      try {
+                        await UserService().reauthenticateAndDelete(password);
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(context.tr('delete_account_failed'))),
+                          );
+                        }
+                        return;
+                      }
+                    } else {
+                      try {
+                        await UserService().deleteMyAccount();
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(context.tr('delete_account_failed'))),
+                          );
+                        }
+                        return;
+                      }
                     }
+                    if (mounted)
+                      Navigator.of(context).popUntil((route) => route.isFirst);
                   },
                   icon: Icon(Icons.delete_forever, color: Theme.of(context).colorScheme.surface),
                   label: Text(

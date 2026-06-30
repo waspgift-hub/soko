@@ -53,6 +53,7 @@ class PriceDropService {
     required String discountPercent,
     required String sellerPhone,
     required String productId,
+    String productImage = '',
   }) async {
     try {
       final users = await _db.collection('users').get();
@@ -71,6 +72,11 @@ class PriceDropService {
           'sellerPhone': sellerPhone,
           'originalPrice': originalPrice,
           'newPrice': newPrice,
+          'image': productImage,
+          'data': {
+            'type': 'price_drop',
+            'image': productImage,
+          },
           'isRead': false,
           'createdAt': FieldValue.serverTimestamp(),
         });
@@ -99,6 +105,7 @@ class PriceDropService {
                 'sellerPhone': sellerPhone,
                 'originalPrice': originalPrice.toString(),
                 'newPrice': newPrice.toString(),
+                'image': productImage,
               },
             }),
           );

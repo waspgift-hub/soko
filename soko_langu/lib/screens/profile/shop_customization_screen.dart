@@ -46,7 +46,7 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
     const Color(0xFF8D6E63), // Brown
     const Color(0xFF78909C), // Blue Grey
     const Color(0xFF212121), // Near Black
-    const Color(0xFFFFFFFF), // White
+    const Color.fromARGB(255, 71, 7, 7), // rgb
   ];
 
   @override
@@ -134,15 +134,15 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          title: const Text('Custom Color'),
+          title: Text(context.tr('custom_color')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: controller,
-                decoration: const InputDecoration(
-                  labelText: 'Hex color (e.g. #FF5733)',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: context.tr('hex_color_hint'),
+                  border: const OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 16),
@@ -169,7 +169,7 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
+              child: Text(context.tr('cancel')),
             ),
             ElevatedButton(
               onPressed: () {
@@ -180,11 +180,11 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
                   Navigator.pop(ctx, _parseColor(hex));
                 } catch (_) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Invalid hex color')),
+                    SnackBar(content: Text(context.tr('invalid_hex_color'))),
                   );
                 }
               },
-              child: const Text('Apply'),
+              child: Text(context.tr('apply')),
             ),
           ],
         );
@@ -408,12 +408,12 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
           ),
           const Divider(height: 40),
           Text(
-            'App Theme Color',
+            context.tr('app_theme_color'),
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 4),
           Text(
-            'Change the entire app\'s color theme',
+            context.tr('change_app_color_theme'),
             style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 13),
           ),
           const SizedBox(height: 8),
@@ -523,14 +523,14 @@ class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Shop',
+                        context.tr('shop'),
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       Text(
-                        'Seller',
+                        context.tr('seller'),
                         style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13),
                       ),
                     ],

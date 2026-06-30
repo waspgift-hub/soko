@@ -43,6 +43,8 @@ class AppRoutes {
   static const String adminReports = '/admin/reports';
   static const String flashSale = '/flash-sale';
   static const String createFlashSale = '/create-flash-sale';
+  static const String sellerDispatch = '/seller-dispatch';
+  static const String magicLink = '/magic-link';
 
   static const String status = '/status';
   static const String statusViewer = '/status-viewer';
@@ -52,4 +54,6 @@ class AppRoutes {
   static const String termsOfService = '/terms-of-service';
   static const String audioList = '/audio-list';
   static const String audioQueue = '/audio-queue';
+  static const String youtubeSearch = '/youtube-search';
+  static const String youtubePlayer = '/youtube-player';
 }

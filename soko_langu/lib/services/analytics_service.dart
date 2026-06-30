@@ -12,26 +12,20 @@ class DailyMetric {
 }
 
 class AnalyticsData {
-  // Users
   final int totalUsers;
   final int newUsersToday;
   final int newUsersThisWeek;
   final int newUsersThisMonth;
   final List<DailyMetric> userGrowth;
-
-  // Products
   final int totalProducts;
   final int activeProducts;
   final int inactiveProducts;
   final Map<String, int> productsByCategory;
-
   final int totalOrders;
   final double totalRevenue;
   final double revenueToday;
   final double revenueThisMonth;
   final List<DailyMetric> revenueOverTime;
-
-  // Reports
   final int totalReports;
 
   AnalyticsData({
@@ -57,13 +51,28 @@ class AnalyticsService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  Future<List<String>> _collectFcmTokens() async {
+    final snap = await _db.collection('users').get();
+    return snap.docs
+        .map((d) => d.data()['fcmToken'] as String? ?? '')
+        .where((t) => t.isNotEmpty)
+        .toList();
+  }
+
+  Future<Map<String, String>> _adminHeaders() async {
+    final token = await _auth.currentUser?.getIdToken();
+    return {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
+  }
+
   Future<AnalyticsData> loadAnalytics() async {
     final now = DateTime.now();
     final todayStart = DateTime(now.year, now.month, now.day);
     final weekStart = todayStart.subtract(const Duration(days: 7));
     final monthStart = DateTime(now.year, now.month, 1);
 
-    // Users
     final usersSnap = await _db.collection('users').get();
     final allUsers = usersSnap.docs;
     final newToday = allUsers.where((d) {
@@ -79,7 +88,6 @@ class AnalyticsService {
       return ts != null && ts.toDate().isAfter(monthStart);
     }).length;
 
-    // User growth last 7 days
     final userGrowth = <DailyMetric>[];
     for (int i = 6; i >= 0; i--) {
       final day = todayStart.subtract(Duration(days: i));
@@ -93,10 +101,10 @@ class AnalyticsService {
       userGrowth.add(DailyMetric(date: day, count: cnt));
     }
 
-    // Products
     final productsSnap = await _db.collection('products').get();
     final allProducts = productsSnap.docs;
-    final activeProducts = allProducts.where((d) => d.data()['isActive'] != false).length;
+    final activeProducts =
+        allProducts.where((d) => d.data()['isActive'] != false).length;
     final inactiveProducts = allProducts.length - activeProducts;
 
     final catMap = <String, int>{};
@@ -105,44 +113,42 @@ class AnalyticsService {
       catMap[cat] = (catMap[cat] ?? 0) + 1;
     }
 
-    // Orders
-    final ordersSnap = await _db.collection('orders').get();
-    final allOrders = ordersSnap.docs;
+    // Revenue from completed transactions (real payment flow)
+    final txSnap = await _db
+        .collection('transactions')
+        .where('status', whereIn: ['completed', 'delivered'])
+        .get();
+    final allTx = txSnap.docs;
     double totalRev = 0, todayRev = 0, monthRev = 0;
-    for (final d in allOrders) {
+    for (final d in allTx) {
       final data = d.data();
-      final status = data['status'] as String? ?? 'pending';
-      if (status == 'delivered') {
-        final amt = (data['totalAmount'] ?? 0).toDouble();
-        totalRev += amt;
-        final ts = data['createdAt'] as Timestamp?;
-        if (ts != null) {
-          final date = ts.toDate();
-          if (date.isAfter(todayStart)) todayRev += amt;
-          if (date.isAfter(monthStart)) monthRev += amt;
-        }
+      final amt = (data['totalAmount'] ?? data['productPrice'] ?? 0).toDouble();
+      totalRev += amt;
+      final ts = data['createdAt'] as Timestamp?;
+      if (ts != null) {
+        final date = ts.toDate();
+        if (date.isAfter(todayStart)) todayRev += amt;
+        if (date.isAfter(monthStart)) monthRev += amt;
       }
     }
 
-    // Revenue over time last 7 days
     final revenueDays = <DailyMetric>[];
     for (int i = 6; i >= 0; i--) {
       final day = todayStart.subtract(Duration(days: i));
       final nextDay = day.add(const Duration(days: 1));
       double dayRev = 0;
-      for (final d in allOrders) {
+      for (final d in allTx) {
         final data = d.data();
         final ts = data['createdAt'] as Timestamp?;
         if (ts == null) continue;
         final date = ts.toDate();
-        if (date.isAfter(day) && date.isBefore(nextDay) && data['status'] == 'delivered') {
-          dayRev += (data['totalAmount'] ?? 0).toDouble();
+        if (date.isAfter(day) && date.isBefore(nextDay)) {
+          dayRev += (data['totalAmount'] ?? data['productPrice'] ?? 0).toDouble();
         }
       }
       revenueDays.add(DailyMetric(date: day, count: dayRev.round()));
     }
 
-    // Reports
     final reportsSnap = await _db.collection('reports').count().get();
     final totalReports = reportsSnap.count ?? 0;
 
@@ -156,7 +162,7 @@ class AnalyticsService {
       activeProducts: activeProducts,
       inactiveProducts: inactiveProducts,
       productsByCategory: catMap,
-      totalOrders: allOrders.length,
+      totalOrders: allTx.length,
       totalRevenue: totalRev,
       revenueToday: todayRev,
       revenueThisMonth: monthRev,
@@ -166,10 +172,11 @@ class AnalyticsService {
   }
 
   Future<void> sendPushToAll(String title, String body) async {
-    final tokensSnap = await _db.collection('fcm_tokens').get();
-    final tokens = tokensSnap.docs.map((d) => d.data()['token'] as String? ?? '').where((t) => t.isNotEmpty).toList();
+    final tokens = await _collectFcmTokens();
     debugPrint('sendPushToAll: ${tokens.length} tokens found');
+    if (tokens.isEmpty) return;
 
+    final headers = await _adminHeaders();
     for (int i = 0; i < tokens.length; i += 500) {
       final batch = tokens.skip(i).take(500).toList();
       try {
@@ -180,17 +187,19 @@ class AnalyticsService {
           'sentAt': FieldValue.serverTimestamp(),
           'recipientCount': batch.length,
         });
-        // Send via backend FCM relay
-        await http.post(
-          Uri.parse('${ApiConfig.baseUrl}/api/send-bulk-notification'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'title': title,
-            'body': body,
-            'tokens': batch,
-            'target': 'all',
-          }),
-        ).timeout(const Duration(seconds: 10));
+        await http
+            .post(
+              Uri.parse('${ApiConfig.baseUrl}/api/send-bulk-notification'),
+              headers: headers,
+              body: jsonEncode({
+                'title': title,
+                'body': body,
+                'tokens': batch,
+                'target': 'all',
+                'data': {'type': 'general'},
+              }),
+            )
+            .timeout(const Duration(seconds: 30));
       } catch (e) {
         debugPrint('sendPushToAll batch: $e');
       }
@@ -198,10 +207,11 @@ class AnalyticsService {
   }
 
   Future<void> sendPushToTier(String title, String body, String tier) async {
-    final tokensSnap = await _db.collection('fcm_tokens').get();
-    final tokens = tokensSnap.docs.map((d) => d.data()['token'] as String? ?? '').where((t) => t.isNotEmpty).toList();
+    final tokens = await _collectFcmTokens();
     debugPrint('sendPushToTier($tier): ${tokens.length} tokens');
+    if (tokens.isEmpty) return;
 
+    final headers = await _adminHeaders();
     try {
       await _db.collection('admin_notifications').add({
         'title': title,
@@ -210,17 +220,19 @@ class AnalyticsService {
         'sentAt': FieldValue.serverTimestamp(),
         'recipientCount': tokens.length,
       });
-      // Send via backend FCM relay
-      await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/send-bulk-notification'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'title': title,
-          'body': body,
-          'tokens': tokens,
-          'target': tier,
-        }),
-      ).timeout(const Duration(seconds: 10));
+      await http
+          .post(
+            Uri.parse('${ApiConfig.baseUrl}/api/send-bulk-notification'),
+            headers: headers,
+            body: jsonEncode({
+              'title': title,
+              'body': body,
+              'tokens': tokens,
+              'target': tier,
+              'data': {'type': 'general'},
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
     } catch (e) {
       debugPrint('sendPushToTier: $e');
     }

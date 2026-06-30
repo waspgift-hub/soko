@@ -42,7 +42,7 @@ class PaymentService {
       'productPrice': productPrice,
       'processingFee': breakdown.processingFee,
       'platformFee': breakdown.platformFee,
-      'sokoLanguCommission': breakdown.platformFee,
+      'sokovibeCommission': breakdown.platformFee,
       'totalAmount': breakdown.totalAmount,
       'sellerReceives': breakdown.sellerReceives,
       'status': 'completed',
@@ -66,7 +66,7 @@ class PaymentService {
       'transactionId': docRef.id,
       'productName': productName,
       'productPrice': productPrice,
-      'sokoLanguCommission': breakdown.platformFee,
+      'sokovibeCommission': breakdown.platformFee,
       'buyerName': buyerName,
       'timestamp': FieldValue.serverTimestamp(),
     });
@@ -109,7 +109,7 @@ class PaymentService {
         .get();
     return snap.docs.fold<double>(
       0,
-      (total, doc) => total + ((doc.data()['sokoLanguCommission'] ?? doc.data()['globaseCommission'] ?? doc.data()['platformFee'] ?? 0).toDouble()),
+      (total, doc) => total + ((doc.data()['sokovibeCommission'] ?? doc.data()['sokovibeCommission'] ?? doc.data()['platformFee'] ?? 0).toDouble()),
     );
   }
 
@@ -125,7 +125,7 @@ class PaymentService {
     int count = 0;
     for (var doc in all.docs) {
       final d = doc.data();
-      final pf = (d['sokoLanguCommission'] ?? d['globaseCommission'] ?? d['platformFee'] ?? 0).toDouble();
+      final pf = (d['sokovibeCommission'] ?? d['sokovibeCommission'] ?? d['platformFee'] ?? 0).toDouble();
       total += pf;
       final ts = d['createdAt'] as Timestamp?;
       if (ts != null) {

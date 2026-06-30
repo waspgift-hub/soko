@@ -41,6 +41,16 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Deep link intent filter for Firebase Email Link (Magic Link) auth -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="sokonimoko-8c171-a8d14.web.app"
+                    android:pathPrefix="/magic-link" />
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
@@ -51,14 +61,28 @@
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-3796499857968162~1098626149"/>
         <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="general_notifications_v3" />
+        <meta-data
             android:name="flutter_notification_icon"
             android:resource="@drawable/ic_notification" />
+        <!-- FCM display notification icon override (prevents grey box) -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
+        <!-- audio_service notification channel ID for persistent media playback -->
+        <meta-data
+            android:name="android.media.metadata.NOTIFICATION_CHANNEL_ID"
+            android:value="com.soko_vibe.music" />
         <service android:name="com.ryanheise.audioservice.AudioService"
             android:foregroundServiceType="mediaPlayback"
             android:exported="true"
             android:stopWithTask="false">
             <intent-filter>
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
         <receiver android:name="com.ryanheise.audioservice.MediaButtonReceiver"

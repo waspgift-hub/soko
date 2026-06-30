@@ -1,23 +1,27 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import '../../theme/app_colors.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../services/chat_service.dart';
+import '../../services/chat_typing.dart';
 import '../../services/user_service.dart';
 import '../../services/whatsapp_service.dart';
-import '../../app/routes.dart';
+import '../../models/message_model.dart';
 import '../../extensions/context_tr.dart';
-import '../../widgets/google_loading.dart';
+import '../../app/routes.dart';
 
 class ChatPage extends StatefulWidget {
   final String receiverId;
   final String receiverName;
   final String productName;
+  final String? productId;
 
   const ChatPage({
     super.key,
     required this.receiverId,
     this.receiverName = '',
     this.productName = '',
+    this.productId,
   });
 
   @override
@@ -25,154 +29,628 @@ class ChatPage extends StatefulWidget {
 }
 
 class _ChatPageState extends State<ChatPage> {
-  final UserService userService = UserService();
-  UserProfile? _sellerProfile;
-  bool _loading = true;
-  bool _redirected = false;
+  final ChatService _chatService = ChatService();
+  final ChatTyping _chatTyping = ChatTyping();
+  final TextEditingController _inputCtrl = TextEditingController();
+  final ScrollController _scrollCtrl = ScrollController();
+  final FocusNode _focusNode = FocusNode();
+
+  final UserService _userService = UserService();
+  List<Message> _messages = [];
+  bool _isTyping = false;
+  bool _otherTyping = false;
+  String? _replyTo;
+  String? _replyToContent;
+  String? _replyToSender;
+  Timer? _typingTimer;
+  bool _autoScrolling = false;
+  String? _receiverPhone;
+
+  String get _uid => FirebaseAuth.instance.currentUser?.uid ?? '';
+
+  StreamSubscription<bool>? _typingSub;
 
   @override
   void initState() {
     super.initState();
-    _loadSellerProfile();
+    _chatService.markAsRead(widget.receiverId);
+    _inputCtrl.addListener(_onInputChanged);
+    _fetchReceiverPhone();
+    _typingSub = _chatTyping.observeTyping(widget.receiverId).listen((t) {
+      if (mounted) setState(() => _otherTyping = t);
+    });
   }
 
-  Future<void> _loadSellerProfile() async {
-    final profile = await userService.getProfile(widget.receiverId);
-    if (mounted) {
-      setState(() {
-        _sellerProfile = profile;
-        _loading = false;
-      });
-    }
-    if (profile != null && profile.phone.isNotEmpty && !_redirected) {
-      _redirected = true;
-      _openWhatsApp(profile);
+  Future<void> _fetchReceiverPhone() async {
+    final profile = await _userService.getProfile(widget.receiverId);
+    if (mounted && profile != null) {
+      setState(() => _receiverPhone = profile.phone);
     }
   }
 
-  void _openWhatsApp(UserProfile profile) {
-    final message = widget.productName.isNotEmpty
-        ? context.tr('whatsapp_product_inquiry')
-            .replaceAll('{0}', profile.displayName)
-            .replaceAll('{1}', widget.productName)
-        : context.tr('whatsapp_profile_message')
-            .replaceAll('{0}', profile.displayName);
-
-    WhatsAppService().openWhatsApp(
-      phoneNumber: profile.phone,
-      message: message,
-      onError: () {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(context.tr('whatsapp_open_failed')),
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-          );
-        }
-      },
-      onFallback: () {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(context.tr('whatsapp_fallback')),
-            ),
-          );
-        }
-      },
+  void _openWhatsApp() {
+    final phone = _receiverPhone;
+    if (phone == null || phone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('phone_not_found'))),
+      );
+      return;
+    }
+    final msg = WhatsAppService.generateProfileMessage(
+      sellerName: widget.receiverName,
     );
+    WhatsAppService().openWhatsApp(phoneNumber: phone, message: msg);
   }
 
   @override
+  void dispose() {
+    _typingSub?.cancel();
+    _inputCtrl.dispose();
+    _scrollCtrl.dispose();
+    _focusNode.dispose();
+    _typingTimer?.cancel();
+    _chatTyping.stopTyping(widget.receiverId);
+    super.dispose();
+  }
+
+  void _onInputChanged() {
+    if (_inputCtrl.text.isNotEmpty && !_isTyping) {
+      _isTyping = true;
+      _chatTyping.startTyping(widget.receiverId);
+    }
+    _typingTimer?.cancel();
+    _typingTimer = Timer(const Duration(seconds: 2), () {
+      if (_isTyping) {
+        _isTyping = false;
+        _chatTyping.stopTyping(widget.receiverId);
+      }
+    });
+  }
+
+  void _sendMessage() {
+    final text = _inputCtrl.text.trim();
+    if (text.isEmpty) return;
+    _chatService.sendMessage(
+      receiverId: widget.receiverId,
+      content: text,
+      productId: widget.productId,
+      productName: widget.productName,
+      replyTo: _replyTo,
+      replyToContent: _replyToContent,
+      replyToSender: _replyToSender,
+    );
+    _inputCtrl.clear();
+    _replyTo = null;
+    _replyToContent = null;
+    _replyToSender = null;
+    setState(() {});
+    _scrollToBottom();
+  }
+
+  void _scrollToBottom() {
+    _autoScrolling = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollCtrl.hasClients) {
+        _scrollCtrl.animateTo(
+          _scrollCtrl.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+      }
+      _autoScrolling = false;
+    });
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(_sellerProfile?.displayName ?? widget.receiverName),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.pop(),
+        ),
+        title: GestureDetector(
+          onTap: () => context.push('${AppRoutes.publicProfile}/${widget.receiverId}',
+              extra: widget.receiverName),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(widget.receiverName,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              if (_otherTyping)
+                Text(context.tr('typing'),
+                    style: TextStyle(fontSize: 12, color: cs.primary)),
+            ],
+          ),
+        ),
         actions: [
           IconButton(
-            icon: Icon(Icons.flag_outlined, color: Theme.of(context).colorScheme.error.withValues(alpha: 0.7)),
-            onPressed: () => context.push(AppRoutes.report, extra: {
-              'reportedUserId': widget.receiverId,
-              'reportedUserName': widget.receiverName,
-            }),
+            icon: const Icon(Icons.chat, color: Color(0xFF25D366)),
+            tooltip: 'WhatsApp',
+            onPressed: _openWhatsApp,
+          ),
+          IconButton(
+            icon: const Icon(Icons.more_vert),
+            onPressed: () => _showOptions(cs),
           ),
         ],
       ),
-      body: _loading
-          ? const GoogleLoadingPage()
-          : SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircleAvatar(
-                      radius: 50,
-                      backgroundImage:
-                          _sellerProfile!.profileImage.isNotEmpty
-                              ? CachedNetworkImageProvider(
-                                  _sellerProfile!.profileImage)
-                              : null,
-                      child: _sellerProfile!.profileImage.isEmpty
-                          ? const Icon(Icons.person, size: 50)
-                          : null,
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      _sellerProfile?.displayName ?? widget.receiverName,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    if (_sellerProfile!.phone.isNotEmpty)
-                      Text(
-                        _sellerProfile!.phone,
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    const SizedBox(height: 32),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(context).colorScheme.whatsappGreen,
-                          foregroundColor: Theme.of(context).colorScheme.surface,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+      body: Column(
+        children: [
+          // Messages
+          Expanded(
+            child: StreamBuilder<List<Message>>(
+              stream: _chatService.getMessages(widget.receiverId),
+              builder: (context, snap) {
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final msgs = snap.data ?? [];
+                if (msgs != _messages) {
+                  _messages = msgs;
+                  if (!_autoScrolling) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (_scrollCtrl.hasClients) {
+                        _scrollCtrl.jumpTo(_scrollCtrl.position.maxScrollExtent);
+                      }
+                    });
+                  }
+                }
+                return GestureDetector(
+                  onTap: () => _focusNode.unfocus(),
+                  child: ListView.builder(
+                    controller: _scrollCtrl,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    itemCount: msgs.length,
+                    itemBuilder: (_, i) {
+                      final msg = msgs[i];
+                      final prevMsg = i > 0 ? msgs[i - 1] : null;
+                      final nextMsg = i < msgs.length - 1 ? msgs[i + 1] : null;
+                      final showDate =
+                          prevMsg == null || !_isSameDay(msg.timestamp, prevMsg.timestamp);
+                      final showTime = nextMsg == null ||
+                          nextMsg.senderId != msg.senderId ||
+                          nextMsg.timestamp.difference(msg.timestamp) >
+                              const Duration(minutes: 5);
+
+                      return Column(
+                        children: [
+                          if (showDate) _dateSeparator(msg.timestamp, cs),
+                          _MessageBubble(
+                            message: msg,
+                            isMe: msg.senderId == _uid,
+                            showTime: showTime,
+                            onReply: msg.senderId == _uid && msg.content != 'deleted'
+                                ? null
+                                : () {
+                                    _replyTo = msg.id;
+                                    _replyToContent = msg.content;
+                                    _replyToSender = widget.receiverName;
+                                    _focusNode.requestFocus();
+                                    setState(() {});
+                                  },
+                            onReact: (emoji) {
+                              _chatService.addReaction(
+                                otherUserId: widget.receiverId,
+                                messageId: msg.id,
+                                emoji: emoji,
+                              );
+                            },
+                            cs: cs,
                           ),
-                        ),
-                        icon: const Icon(Icons.chat, size: 24),
-                        label: Text(
-                          context.tr('send_whatsapp_message'),
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                        onPressed: () {
-                          if (_sellerProfile != null) {
-                            _openWhatsApp(_sellerProfile!);
-                          }
-                        },
-                      ),
+                        ],
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+          // Reply preview
+          if (_replyTo != null)
+            Container(
+              color: cs.surfaceContainerHighest,
+              padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(_replyToSender ?? '',
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: cs.primary,
+                                fontWeight: FontWeight.w600)),
+                        Text(_replyToContent ?? '',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 13, color: cs.onSurfaceVariant)),
+                      ],
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      context.tr('contact_seller_via_whatsapp'),
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 18),
+                    onPressed: () => setState(() {
+                      _replyTo = null;
+                      _replyToContent = null;
+                      _replyToSender = null;
+                    }),
+                  ),
+                ],
               ),
             ),
+          // Input bar
+          Container(
+            decoration: BoxDecoration(
+              color: cs.surface,
+              border: Border(top: BorderSide(color: cs.outlineVariant, width: 0.5)),
+            ),
+            padding: EdgeInsets.only(
+              left: 12,
+              right: 8,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 8,
+              top: 8,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _inputCtrl,
+                    focusNode: _focusNode,
+                    maxLines: 5,
+                    minLines: 1,
+                    decoration: InputDecoration(
+                      hintText: context.tr('type_message'),
+                      filled: true,
+                      fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.6),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 10),
+                    ),
+                    onSubmitted: (_) => _sendMessage(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                CircleAvatar(
+                  backgroundColor: cs.primary,
+                  child: IconButton(
+                    icon: const Icon(Icons.send, color: Colors.white, size: 20),
+                    onPressed: _sendMessage,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dateSeparator(DateTime dt, ColorScheme cs) {
+    final now = DateTime.now();
+    String label;
+    if (_isSameDay(dt, now)) {
+      label = 'Today';
+    } else if (_isSameDay(dt, now.subtract(const Duration(days: 1)))) {
+      label = 'Yesterday';
+    } else {
+      label = '${dt.day}/${dt.month}/${dt.year}';
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(label,
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+        ),
+      ),
+    );
+  }
+
+  void _showOptions(ColorScheme cs) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.person),
+              title: Text(context.tr('view_profile')),
+              onTap: () {
+                Navigator.pop(ctx);
+                context.push('${AppRoutes.publicProfile}/${widget.receiverId}',
+                    extra: widget.receiverName);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.block),
+              title: Text(context.tr('block')),
+              onTap: () async {
+                Navigator.pop(ctx);
+                await _chatService.blockUser(widget.receiverId);
+                if (mounted) context.pop();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete),
+              title: Text(context.tr('delete_conversation')),
+              onTap: () async {
+                Navigator.pop(ctx);
+                await _chatService.deleteConversation(widget.receiverId);
+                if (mounted) context.pop();
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
 
+class _MessageBubble extends StatelessWidget {
+  final Message message;
+  final bool isMe;
+  final bool showTime;
+  final VoidCallback? onReply;
+  final void Function(String emoji) onReact;
+  final ColorScheme cs;
 
+  const _MessageBubble({
+    required this.message,
+    required this.isMe,
+    required this.showTime,
+    this.onReply,
+    required this.onReact,
+    required this.cs,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDeleted = message.content == 'deleted' || message.isDeletedForEveryone;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Column(
+        crossAxisAlignment:
+            isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          // Reply preview
+          if (message.replyToContent != null && message.replyToContent!.isNotEmpty && !isDeleted)
+            Container(
+              margin: EdgeInsets.only(
+                bottom: 2,
+                left: isMe ? 48 : 0,
+                right: isMe ? 0 : 48,
+              ),
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 2),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest,
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(8),
+                  topRight: const Radius.circular(8),
+                  bottomLeft: isMe ? const Radius.circular(8) : Radius.zero,
+                  bottomRight: isMe ? Radius.zero : const Radius.circular(8),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(message.replyToSender ?? '',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: cs.primary,
+                          fontWeight: FontWeight.w600)),
+                  Text(message.replyToContent ?? '',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+                ],
+              ),
+            ),
+          // Message bubble
+          Container(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.75,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: isDeleted
+                  ? cs.surfaceContainerHighest
+                  : isMe
+                      ? cs.primary
+                      : cs.surfaceContainerHighest,
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(18),
+                topRight: const Radius.circular(18),
+                bottomLeft: isMe ? const Radius.circular(18) : Radius.zero,
+                bottomRight: isMe ? Radius.zero : const Radius.circular(18),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              children: [
+                // Product link
+                if (message.productName != null && message.productName!.isNotEmpty && !isDeleted)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: cs.tertiary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.shopping_bag, size: 14, color: cs.tertiary),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(message.productName!,
+                              style: TextStyle(fontSize: 12, color: cs.tertiary)),
+                        ),
+                      ],
+                    ),
+                  ),
+                // Message content
+                if (isDeleted)
+                  Text('Message deleted',
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontStyle: FontStyle.italic,
+                          color: cs.onSurfaceVariant))
+                else
+                  Text(message.content,
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: isMe ? cs.onPrimary : cs.onSurface,
+                      )),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (message.isEdited && !isDeleted)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 4),
+                        child: Text('edited',
+                            style: TextStyle(
+                                fontSize: 10, color: isMe ? cs.onPrimary.withValues(alpha: 0.7) : cs.onSurfaceVariant)),
+                      ),
+                    if (showTime)
+                      Text(
+                        _formatTimestamp(message.timestamp),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isMe
+                              ? cs.onPrimary.withValues(alpha: 0.7)
+                              : cs.onSurfaceVariant,
+                        ),
+                      ),
+                    if (isMe && !isDeleted)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4),
+                        child: _StatusIcon(
+                          isRead: message.isRead,
+                          isDelivered: message.isDelivered,
+                          color: cs.onPrimary.withValues(alpha: 0.7),
+                        ),
+                      ),
+                  ],
+                ),
+                // Reactions
+                if (message.reactions.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: message.reactions.entries.map((e) {
+                        return Container(
+                          margin: const EdgeInsets.only(right: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: cs.surface,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: cs.outlineVariant),
+                          ),
+                          child: Text(
+                            '${e.key} ${e.value.length}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          // Actions (long press)
+          if (!isDeleted)
+            Padding(
+              padding: EdgeInsets.only(top: 2, left: isMe ? 48 : 0, right: isMe ? 0 : 48),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (onReply != null)
+                    GestureDetector(
+                      onTap: onReply,
+                      child: Icon(Icons.reply, size: 14, color: cs.outline),
+                    ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () => _showReactions(context),
+                    child: Icon(Icons.add_reaction, size: 14, color: cs.outline),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _showReactions(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: ['👍', '❤️', '😂', '😮', '😢', '🙏'].map((e) {
+              return GestureDetector(
+                onTap: () {
+                  Navigator.pop(ctx);
+                  onReact(e);
+                },
+                child: Text(e, style: const TextStyle(fontSize: 32)),
+              );
+            }).toList(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatTimestamp(DateTime dt) {
+    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
+}
+
+class _StatusIcon extends StatelessWidget {
+  final bool isRead;
+  final bool isDelivered;
+  final Color color;
+
+  const _StatusIcon({
+    required this.isRead,
+    required this.isDelivered,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (isRead) {
+      return Icon(Icons.done_all, size: 14, color: Colors.lightBlue.shade300);
+    }
+    if (isDelivered) {
+      return Icon(Icons.done_all, size: 14, color: color);
+    }
+    return Icon(Icons.done, size: 14, color: color);
+  }
+}

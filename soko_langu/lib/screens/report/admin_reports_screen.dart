@@ -29,17 +29,17 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
     final result = await showDialog<Map<String, String>>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(newStatus == 'resolved' ? 'Resolve Report' : 'Dismiss Report'),
+        title: Text(newStatus == 'resolved' ? context.tr('resolve_report') : context.tr('dismiss_report')),
         content: TextField(
           controller: noteCtrl,
           maxLines: 3,
-          decoration: const InputDecoration(
-            hintText: 'Admin note (optional)',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            hintText: context.tr('admin_note_optional'),
+            border: const OutlineInputBorder(),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.tr('cancel'))),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx, {
@@ -47,7 +47,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                 'note': noteCtrl.text,
               });
             },
-            child: Text(newStatus == 'resolved' ? 'Resolve' : 'Dismiss'),
+            child: Text(newStatus == 'resolved' ? context.tr('resolve') : context.tr('dismiss')),
           ),
         ],
       ),
@@ -67,14 +67,14 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Suspend User?'),
-        content: Text('Suspend ${report.reportedUserName}?'),
+        title: Text(context.tr('suspend_user')),
+        content: Text(context.tr('suspend_user_confirm').replaceAll('{name}', report.reportedUserName)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('no'))),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
-            child: const Text('Suspend'),
+            child: Text(context.tr('suspend')),
           ),
         ],
       ),
@@ -86,7 +86,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
           .update({'isSuspended': true});
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${report.reportedUserName} suspended')),
+          SnackBar(content: Text(context.tr('user_suspended').replaceAll('{name}', report.reportedUserName))),
         );
       }
     }
@@ -138,7 +138,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                 );
               }
               return RefreshIndicator(
-                onRefresh: () async {},
+                onRefresh: () async => setState(() {}),
                 child: ListView.builder(
                   padding: const EdgeInsets.all(8),
                   itemCount: reports.length,
@@ -285,12 +285,12 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
 
   String _reasonLabel(String reason) {
     switch (reason) {
-      case 'fraud': return 'Fraud';
-      case 'fake_product': return 'Fake Product';
-      case 'scam': return 'Scam';
-      case 'inappropriate': return 'Inappropriate';
-      case 'harassment': return 'Harassment';
-      case 'other': return 'Other';
+      case 'fraud': return context.tr('reason_fraud');
+      case 'fake_product': return context.tr('reason_fake_product');
+      case 'scam': return context.tr('reason_scam');
+      case 'inappropriate': return context.tr('reason_inappropriate');
+      case 'harassment': return context.tr('reason_harassment');
+      case 'other': return context.tr('reason_other');
       default: return reason;
     }
   }

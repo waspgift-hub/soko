@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:record/record.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'env_config.dart';
+import '../env_config.dart';
 
 class VoiceSearchService {
   static final VoiceSearchService _instance = VoiceSearchService._internal();

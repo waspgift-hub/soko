@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:soko_langu/models/notification_item.dart';
+import 'package:soko_vibe/models/notification_item.dart';
 
 void main() {
   group('NotificationItem', () {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -29,6 +30,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final _paymentService = PaymentService();
   bool _processing = false;
   double? _salePrice;
+  String _deliveryType = 'local';
 
   double get _totalPrice => _salePrice ?? widget.product.price;
 
@@ -209,6 +211,23 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               prefixIcon: const Icon(Icons.phone_android),
             ),
           ),
+          const SizedBox(height: 16),
+          Text(
+            'Aina ya Usafirishaji',
+            style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14, color: cs.onSurface),
+          ),
+          const SizedBox(height: 8),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'local', label: Text('Mtaa (siku 3)'), icon: Icon(Icons.location_on, size: 18)),
+              ButtonSegment(value: 'regional', label: Text('Mikoa (siku 7)'), icon: Icon(Icons.map, size: 18)),
+            ],
+            selected: {_deliveryType},
+            onSelectionChanged: (v) => setState(() => _deliveryType = v.first),
+            style: ButtonStyle(
+              visualDensity: VisualDensity.compact,
+            ),
+          ),
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
@@ -318,6 +337,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         email: user.email ?? '',
         phone: phone,
         buyerId: user.uid,
+        deliveryType: _deliveryType,
       );
 
       if (result == null || result['order_id'] == null) {
@@ -403,17 +423,34 @@ class _PaymentPendingDialog extends StatefulWidget {
 class _PaymentPendingDialogState extends State<_PaymentPendingDialog> {
   bool _timedOut = false;
   bool _checking = false;
+  Timer? _autoRetryTimer;
 
   @override
   void initState() {
     super.initState();
-    // After 120s, show timeout message so user isn't stuck forever
-    Future.delayed(const Duration(seconds: 120), () {
-      if (mounted) setState(() => _timedOut = true);
+    // After 60s, enable auto-retry polling
+    Future.delayed(const Duration(seconds: 60), () {
+      if (mounted) {
+        setState(() => _timedOut = true);
+        _startAutoRetry();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _autoRetryTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startAutoRetry() {
+    _autoRetryTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) _retry();
     });
   }
 
   Future<void> _retry() async {
+    if (_checking) return;
     setState(() => _checking = true);
     try {
       final token = await widget.user.getIdToken();
@@ -428,18 +465,11 @@ class _PaymentPendingDialogState extends State<_PaymentPendingDialog> {
       final body = jsonDecode(resp.body) as Map<String, dynamic>;
       if (!mounted) return;
       if (resp.statusCode == 200 && (body['status'] == 'completed' || body['status'] == 'escrow_hold')) {
+        _autoRetryTimer?.cancel();
         widget.onSuccess(widget.orderId, widget.user);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(body['error'] as String? ?? 'Payment not confirmed yet'), backgroundColor: Theme.of(context).colorScheme.error),
-        );
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Network error: $e'), backgroundColor: Theme.of(context).colorScheme.error),
-        );
-      }
+    } catch (_) {
+      // Silently retry on next cycle
     } finally {
       if (mounted) setState(() => _checking = false);
     }
@@ -542,10 +572,20 @@ class _PaymentPendingDialogState extends State<_PaymentPendingDialog> {
                   ),
                 ),
                 const SizedBox(height: 8),
+                Text(
+                  'Auto-checking every 30s...',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 SizedBox(
                   width: double.infinity,
                   child: TextButton(
                     onPressed: () {
+                      _autoRetryTimer?.cancel();
                       widget.onTimeout();
                       Navigator.pop(context);
                     },

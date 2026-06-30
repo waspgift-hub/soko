@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 import '../../extensions/context_tr.dart';
+import '../../notifiers/auth_notifier.dart';
 import '../../services/localization_service.dart';
 import '../../app/routes.dart';
-import '../../app/app_state.dart' as app_state;
 import '../../main.dart' show AppConfig;
 
 class OnboardingScreen extends StatefulWidget {
@@ -61,13 +62,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Future<void> _complete() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('onboarding_seen', true);
+    await prefs.setBool('isFirstTimeUser', false);
     await prefs.setString('language_code', _selectedLang);
     await LocalizationService().setLanguage(_selectedLang);
     AppConfig.of(context).onSetLanguage(_selectedLang);
     if (_phoneCtrl.text.trim().isNotEmpty) {
       await prefs.setString('phone_number', _phoneCtrl.text.trim());
     }
-    app_state.onboardingSeen = true;
+    if (mounted) {
+      context.read<AuthNotifier>().completeOnboarding(_phoneCtrl.text.trim());
+    }
     if (mounted) context.replace(AppRoutes.accountSelection);
   }
 

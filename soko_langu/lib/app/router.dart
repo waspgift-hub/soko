@@ -29,17 +29,19 @@ import '../screens/profile/product_boost_screen.dart';
 import '../screens/profile/help_center_screen.dart';
 import '../screens/profile/about_app_screen.dart';
 import '../screens/notification/notification_screen.dart';
-import '../screens/audio/audio_player_screen.dart';
-import '../screens/audio/audio_list_screen.dart';
-import '../screens/audio/audio_queue_screen.dart';
+import '../screens/audio/player_screen.dart';
+import '../screens/audio/music_library_screen.dart';
+import '../screens/audio/music_queue_screen.dart';
 import '../screens/onboarding/account_selection_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
+import '../screens/auth/magic_link_screen.dart';
 
 import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_ad_revenue_screen.dart';
 import '../screens/admin/admin_wallet_screen.dart';
 import '../screens/seller/seller_earnings_screen.dart';
 import '../screens/orders/my_purchases_screen.dart';
+import '../screens/orders/seller_dispatch_screen.dart';
 import '../screens/kyc/kyc_screen.dart';
 import '../screens/home/flash_sale_screen.dart';
 import '../screens/profile/create_flash_sale_screen.dart';
@@ -58,14 +60,62 @@ import 'app_state.dart' as app_state;
 
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
+final List<String> _authRequiredRoutes = [
+  AppRoutes.checkout,
+  AppRoutes.kyc,
+  AppRoutes.addProduct,
+  AppRoutes.profile,
+  AppRoutes.settings,
+  AppRoutes.editProfile,
+  AppRoutes.shopCustomization,
+  AppRoutes.wishlist,
+  AppRoutes.myAds,
+  AppRoutes.sellerDashboard,
+  AppRoutes.sellerEarnings,
+  AppRoutes.sellerDispatch,
+  AppRoutes.myPurchases,
+  AppRoutes.productBoost,
+  AppRoutes.notifications,
+  AppRoutes.chats,
+  AppRoutes.chat,
+  AppRoutes.createGroup,
+  AppRoutes.groupChat,
+  AppRoutes.status,
+  AppRoutes.addStatus,
+  AppRoutes.createFlashSale,
+  AppRoutes.report,
+];
+
+final List<String> _adminOnlyRoutes = [
+  AppRoutes.admin,
+  AppRoutes.adminAdRevenue,
+  AppRoutes.adminWallet,
+  AppRoutes.adminReports,
+];
+
 GoRouter buildRouter() {
   return GoRouter(
     navigatorKey: rootNavigatorKey,
     initialLocation: AppRoutes.home,
+    refreshListenable: app_state.appStateNotifier,
     redirect: (context, state) {
-      if (!app_state.onboardingSeen && state.uri.path != AppRoutes.onboarding && state.uri.path != AppRoutes.login && state.uri.path != AppRoutes.register) {
-        return AppRoutes.onboarding;
+      if (!app_state.appStateNotifier.appInitialized) return null;
+
+      final location = state.uri.toString();
+      final isAuth = app_state.appStateNotifier.isAuthenticated;
+      final isAdmin = app_state.appStateNotifier.isAdmin;
+
+      // Admin-only routes
+      if (_adminOnlyRoutes.any((r) => location == r || location.startsWith('$r/'))) {
+        if (!isAuth) return AppRoutes.login;
+        if (!isAdmin) return AppRoutes.home;
       }
+
+      // Auth-required routes
+      if (_authRequiredRoutes.any((r) => location == r || location.startsWith('$r/'))) {
+        if (!isAuth) return AppRoutes.login;
+      }
+
       return null;
     },
     routes: [
@@ -88,6 +138,10 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.verifyEmail,
         builder: (context, state) => const VerifyEmailScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.magicLink,
+        builder: (context, state) => const MagicLinkScreen(),
       ),
       GoRoute(
         path: AppRoutes.accountSelection,
@@ -116,6 +170,7 @@ GoRouter buildRouter() {
             receiverId: receiverId,
             receiverName: extra?['name'] ?? '',
             productName: extra?['product'] ?? '',
+            productId: extra?['productId'],
           );
         },
       ),
@@ -185,27 +240,15 @@ GoRouter buildRouter() {
       ),
       GoRoute(
         path: AppRoutes.audioList,
-        builder: (context, state) => const AudioListScreen(),
+        builder: (context, state) => const MusicLibraryScreen(),
       ),
       GoRoute(
         path: AppRoutes.audioQueue,
-        builder: (context, state) => const AudioQueueScreen(),
+        builder: (context, state) => const MusicQueueScreen(),
       ),
       GoRoute(
         path: AppRoutes.audioPlayer,
-        builder: (context, state) {
-          final extra = state.extra as Map?;
-          return AudioPlayerScreen(
-            audioUrl: extra?['url'] as String?,
-            title: extra?['title'] as String?,
-            artist: extra?['artist'] as String?,
-            urls: extra?['urls'] is List ? (extra!['urls'] as List<String>) : null,
-            titles: extra?['titles'] is List ? (extra!['titles'] as List<String>) : null,
-            artists: extra?['artists'] is List ? (extra!['artists'] as List<String>) : null,
-            imageUrls: extra?['imageUrls'] is List ? (extra!['imageUrls'] as List<String>) : null,
-            initialIndex: extra?['initialIndex'] as int? ?? 0,
-          );
-        },
+        builder: (context, state) => const PlayerScreen(),
       ),
       GoRoute(
         path: AppRoutes.admin,
@@ -276,6 +319,10 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.myPurchases,
         builder: (context, state) => const MyPurchasesScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.sellerDispatch,
+        builder: (context, state) => const SellerDispatchScreen(),
       ),
       GoRoute(
         path: AppRoutes.kyc,

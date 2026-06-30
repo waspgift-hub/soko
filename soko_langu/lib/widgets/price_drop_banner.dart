@@ -109,12 +109,12 @@ class _PriceDropBannerState extends State<PriceDropBanner> {
                 child: Icon(Icons.trending_down, color: cs.surface, size: 14),
               ),
               const SizedBox(width: 6),
-              Text('PRICE DROP', style: TextStyle(color: cs.surface, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.8)),
+              Text(context.tr('price_drop').toUpperCase(), style: TextStyle(color: cs.surface, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.8)),
             ],
           ),
           const Spacer(),
           Text(
-            'PRICES\nDOWN',
+            context.tr('prices_down'),
             style: TextStyle(
               color: cs.surface.withValues(alpha: 0.9),
               fontSize: 24,
@@ -125,7 +125,7 @@ class _PriceDropBannerState extends State<PriceDropBanner> {
           ),
           const SizedBox(height: 6),
           Text(
-            '$dropCount deals',
+            '$dropCount ${context.tr('deals')}',
             style: TextStyle(color: cs.surface.withValues(alpha: 0.7), fontSize: 11, fontWeight: FontWeight.w600),
           ),
           const Spacer(),

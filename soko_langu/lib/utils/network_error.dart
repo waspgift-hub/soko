@@ -2,6 +2,61 @@ import 'dart:io';
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 
+/// Classifies Firestore / network failures for UI messaging.
+enum FirestoreErrorKind {
+  network,
+  permission,
+  missingIndex,
+  other,
+}
+
+class FirestoreErrorInfo {
+  final FirestoreErrorKind kind;
+  final String raw;
+
+  const FirestoreErrorInfo({required this.kind, required this.raw});
+}
+
+FirestoreErrorInfo classifyFirestoreError(dynamic error) {
+  final msg = error is FirebaseException
+      ? '${error.code} ${error.message ?? ''}'
+      : error.toString();
+
+  if (error is FirebaseException) {
+    switch (error.code) {
+      case 'permission-denied':
+        return FirestoreErrorInfo(kind: FirestoreErrorKind.permission, raw: msg);
+      case 'failed-precondition':
+        return FirestoreErrorInfo(kind: FirestoreErrorKind.missingIndex, raw: msg);
+      case 'unavailable':
+      case 'deadline-exceeded':
+        return FirestoreErrorInfo(kind: FirestoreErrorKind.network, raw: msg);
+    }
+  }
+
+  final lower = msg.toLowerCase();
+  if (lower.contains('permission-denied') ||
+      lower.contains('permission_denied') ||
+      lower.contains('caller does not have permission')) {
+    return FirestoreErrorInfo(kind: FirestoreErrorKind.permission, raw: msg);
+  }
+  if (lower.contains('failed-precondition') ||
+      lower.contains('requires an index')) {
+    return FirestoreErrorInfo(kind: FirestoreErrorKind.missingIndex, raw: msg);
+  }
+  if (lower.contains('unavailable') ||
+      lower.contains('network') ||
+      lower.contains('timeout') ||
+      lower.contains('timed out') ||
+      lower.contains('socketexception') ||
+      lower.contains('failed host lookup') ||
+      lower.contains('connection refused')) {
+    return FirestoreErrorInfo(kind: FirestoreErrorKind.network, raw: msg);
+  }
+
+  return FirestoreErrorInfo(kind: FirestoreErrorKind.other, raw: msg);
+}
+
 class NetworkError implements Exception {
   final String message;
   final String userMessage;
@@ -24,20 +79,23 @@ String translateError(dynamic error) {
     return 'Poor internet connection. Please check your network.';
   }
   if (error is FirebaseException) {
-    if (error.message?.contains('PERMISSION_DENIED') == true) {
-      return 'You do not have permission to perform this action.';
+    switch (error.code) {
+      case 'permission-denied':
+        return 'You do not have permission to perform this action. Please try logging out and back in.';
+      case 'unavailable':
+      case 'deadline-exceeded':
+        return 'Poor internet connection. Please check your network.';
+      case 'not-found':
+        return 'The requested information was not found.';
+      case 'already-exists':
+        return 'This item already exists.';
+      case 'failed-precondition':
+        return 'The database index is still building. Please try again shortly.';
+      case 'unauthenticated':
+        return 'Your session has expired. Please sign in again.';
+      default:
+        return error.message ?? 'Something went wrong. Please try again.';
     }
-    if (error.message?.contains('UNAVAILABLE') == true ||
-        error.message?.contains('UNAUTHENTICATED') == true) {
-      return 'Poor internet connection. Please check your network.';
-    }
-    if (error.message?.contains('NOT_FOUND') == true) {
-      return 'The requested information was not found.';
-    }
-    if (error.message?.contains('ALREADY_EXISTS') == true) {
-      return 'This item already exists.';
-    }
-    return error.message ?? 'Poor internet connection. Please check your network.';
   }
   if (error is FirebaseAuthException) {
     switch (error.code) {

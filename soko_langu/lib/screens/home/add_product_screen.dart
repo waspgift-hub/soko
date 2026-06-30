@@ -38,7 +38,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   final _priceController = TextEditingController();
   final _stockController = TextEditingController(text: '1');
   final _brandController = TextEditingController();
-  final _locationController = TextEditingController(text: 'Tanzania');
+  final _locationController = TextEditingController();
 
   String _selectedCategory = 'Electronics';
   String _selectedSubcategory = '';
@@ -199,6 +199,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
               ? _brandController.text
               : null,
           condition: _selectedCondition,
+          location: _locationController.text.isNotEmpty
+              ? _locationController.text
+              : null,
           existingImages: _existingImages.isNotEmpty ? _existingImages : null,
           newImages: _newImages.isNotEmpty ? _newImages : null,
         );
@@ -218,6 +221,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
               discountPercent: discount.toStringAsFixed(0),
               sellerPhone: widget.product!.sellerPhone ?? '',
               productId: widget.product!.id,
+              productImage: widget.product!.images.isNotEmpty ? widget.product!.images.first : '',
             );
           } catch (_) {}
         }
@@ -231,6 +235,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
           currency: 'TZS',
           stock: int.parse(_stockController.text),
           imageFiles: _newImages,
+          location: _locationController.text.isNotEmpty
+              ? _locationController.text
+              : 'Tanzania',
           isWholesale: _isWholesale,
           variants: variantData.isNotEmpty ? variantData : null,
           brand: _brandController.text.isNotEmpty

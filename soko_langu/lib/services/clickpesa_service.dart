@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'api_config.dart';
 
 class ClickPesaService {
@@ -47,6 +48,7 @@ class ClickPesaService {
     required String phone,
     String? buyerId,
     String? buyerName,
+    String deliveryType = 'local',
   }) async {
     try {
       final url = '${ApiConfig.baseUrl}/api/create-marketplace-payment-link';
@@ -64,6 +66,7 @@ class ClickPesaService {
           'phone': phone,
           'buyerId': buyerId ?? '',
           'buyerName': buyerName ?? '',
+          'deliveryType': deliveryType,
         }),
       );
 
@@ -104,9 +107,13 @@ class ClickPesaService {
     required int amount,
     required String phone,
   }) async {
+    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
     final resp = await http.post(
       Uri.parse('${ApiConfig.baseUrl}/api/admin/withdraw'),
-      headers: {'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      },
       body: jsonEncode({'userId': userId, 'amount': amount, 'phone': phone}),
     );
     final body = jsonDecode(resp.body) as Map<String, dynamic>;

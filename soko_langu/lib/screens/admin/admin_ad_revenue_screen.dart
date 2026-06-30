@@ -35,29 +35,25 @@ class _AdminAdRevenueScreenState extends State<AdminAdRevenueScreen> {
   }
 
   Future<void> _loadStats() async {
-    final adminSnap = await FirebaseFirestore.instance
-        .collection('admin_ad_revenue')
+    const tzsPerView = 15;
+    final totalAdsSnap = await FirebaseFirestore.instance
+        .collection('ad_views')
         .count()
         .get();
-    final totalCoins = adminSnap.count ?? 0;
 
     final now = DateTime.now();
+    final monthStart = DateTime(now.year, now.month, 1);
     final monthSnap = await FirebaseFirestore.instance
-        .collection('admin_ad_revenue')
-        .where('payoutMonth', isEqualTo: '${now.month}_${now.year}')
-        .count()
-        .get();
-
-    final totalAdsSnap = await FirebaseFirestore.instance
-        .collection('viewer_ad_views')
+        .collection('ad_views')
+        .where('timestamp', isGreaterThanOrEqualTo: monthStart)
         .count()
         .get();
 
     if (mounted) {
       setState(() {
-        _totalAdminCoins = totalCoins * 15;
-        _monthAdminCoins = monthSnap.count! * 15;
         _totalAdsWatched = totalAdsSnap.count ?? 0;
+        _totalAdminCoins = _totalAdsWatched * tzsPerView;
+        _monthAdminCoins = (monthSnap.count ?? 0) * tzsPerView;
       });
     }
   }

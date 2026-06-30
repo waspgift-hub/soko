@@ -41,7 +41,7 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
         centerTitle: true,
       ),
       body: uid.isEmpty
-          ? const Center(child: Text('Not logged in'))
+          ? Center(child: Text(context.tr('not_logged_in')))
           : RefreshIndicator(
               onRefresh: () async => setState(() {}),
               child: ListView(
@@ -179,7 +179,7 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
               final count = snap.data ?? 0;
               return _infoCard(
                 icon: Icons.receipt_long,
-                label: 'Total Sales',
+                label: context.tr('total_sales'),
                 value: '$count',
                 color: cs.tertiary,
                     cs: cs,
@@ -195,7 +195,7 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
               final volume = snap.data ?? 0;
               return _infoCard(
                 icon: Icons.trending_up,
-                label: 'Gross Volume',
+                label: context.tr('gross_volume'),
                 value: 'TZS ${nf.format(volume)}',
                 color: cs.secondary,
                     cs: cs,
@@ -265,7 +265,7 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
               Icon(Icons.info_outline, color: cs.primary, size: 20),
               const SizedBox(width: 8),
               Text(
-                'Fee Breakdown per Sale',
+                context.tr('fee_breakdown_per_sale'),
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 15,
@@ -276,23 +276,23 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
           ),
           const SizedBox(height: 12),
           _feeRow(
-            'Product Price',
-            'Full amount paid by buyer',
+            context.tr('product_price'),
+            context.tr('full_amount_paid_by_buyer'),
             cs,
             nf,
           ),
           const SizedBox(height: 6),
           _feeRow(
-            'Processing Fee',
-            'ClickPesa fee per transaction',
+            context.tr('processing_fee'),
+            context.tr('clickpesa_fee_per_transaction'),
             cs,
             nf,
             deduct: true,
           ),
           const SizedBox(height: 6),
           _feeRow(
-            'Soko Vibe Commission',
-            '4% of product price',
+            context.tr('soko_vibe_commission'),
+            context.tr('commission_percentage'),
             cs,
             nf,
             deduct: true,
@@ -305,8 +305,8 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
               children: [
                 Icon(Icons.check_circle, color: cs.primary, size: 18),
                 const SizedBox(width: 8),
-                Text(
-                  'Net Earnings Formula: Price - (Price × 4%) - ClickPesa fee',
+                  Text(
+                    context.tr('net_earnings_formula'),
                   style: TextStyle(
                     fontSize: 12,
                     color: cs.onSurface.withValues(alpha: 0.63),
@@ -390,7 +390,7 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Payout',
+                        context.tr('payout'),
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
@@ -414,7 +414,7 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                 keyboardType: TextInputType.phone,
                 decoration: InputDecoration(
                   labelText: 'Namba ya Simu',
-                  hintText: 'e.g. 0712345678',
+                  hintText: context.tr('phone_example'),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -466,7 +466,7 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
   Future<void> _processWithdrawal() async {
     final phone = _phoneController.text.trim();
     if (phone.isEmpty) {
-      _showError('Please enter your phone number');
+      _showError(context.tr('enter_phone'));
       return;
     }
 
@@ -494,7 +494,7 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Withdrawal successful! Money sent to your phone.'),
+        content: Text(context.tr('withdrawal_success')),
         backgroundColor: cs.primary,
       ),
     );
@@ -656,7 +656,7 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                         Text(
                           w.status == WithdrawalStatus.completed
                               ? 'Fee: TZS ${nf.format(w.fee)} | ${DateFormat('MMM dd, yyyy HH:mm').format(w.createdAt)}'
-                              : 'Failed: ${w.failureReason ?? "Unknown"}',
+                              : 'Failed: ${w.failureReason ?? context.tr('unknown')}',
                           style: TextStyle(
                             fontSize: 11,
                             color: w.status == WithdrawalStatus.completed

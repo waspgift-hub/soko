@@ -23,7 +23,7 @@ import '../../services/flash_sale_service.dart';
 import '../../models/flash_sale_model.dart';
 import '../../theme/app_colors.dart';
 import '../../services/notification_service.dart';
-import '../../services/whatsapp_service.dart';
+import '../../utils/chat_utils.dart';
 
 class ProductDetailPage extends StatefulWidget {
   final Product product;
@@ -42,11 +42,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   String? _selectedVariantId;
   final PageController _imageController = PageController();
   int _currentImageIndex = 0;
+  final Map<int, double> _imageRatios = {};
   UserProfile? _sellerProfile;
   bool _processing = false;
   FlashSale? _flashSale;
   Timer? _flashTimer;
   StreamSubscription<FlashSale?>? _flashStreamSub;
+  bool _viewIncremented = false;
 
   @override
   void initState() {
@@ -54,18 +56,34 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     _checkFav();
     _loadSellerProfile();
     _loadFlashSale();
+    if (!_viewIncremented) {
+      _viewIncremented = true;
+      ProductService().incrementViewCount(widget.product.id);
+    }
   }
+
+  String _lastDisplay = '';
 
   void _loadFlashSale() {
     _flashStreamSub = _flashSaleService
         .streamFlashSaleByProductId(widget.product.id)
         .listen((sale) {
       if (!mounted) return;
-      setState(() => _flashSale = sale);
+      setState(() {
+        _flashSale = sale;
+        _lastDisplay = '';
+      });
       if (sale != null) {
         _flashTimer?.cancel();
         _flashTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-          if (mounted) setState(() {});
+          if (!mounted) return;
+          final display = sale.remainingTime.isNegative
+              ? ''
+              : _fmtDuration(sale.remainingTime);
+          if (display != _lastDisplay) {
+            _lastDisplay = display;
+            setState(() {});
+          }
         });
       } else {
         _flashTimer?.cancel();
@@ -91,10 +109,18 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     if (mounted) setState(() => _isFav = fav);
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    ProductService().incrementViewCount(widget.product.id);
+  void _resolveImageSize(int index, ImageProvider provider) {
+    if (_imageRatios.containsKey(index)) return;
+    final stream = provider.resolve(ImageConfiguration.empty);
+    final listener = ImageStreamListener((info, _) {
+      if (!mounted) return;
+      final image = info.image;
+      final ratio = image.width / image.height;
+      if (ratio > 0 && _imageRatios[index] != ratio) {
+        setState(() => _imageRatios[index] = ratio);
+      }
+    });
+    stream.addListener(listener);
   }
 
   Future<void> _toggleFav() async {
@@ -191,50 +217,67 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             children: [
               Stack(
                 children: [
-                  SizedBox(
-                    height: MediaQuery.of(context).size.height * 0.3,
-                    child: product.images.isNotEmpty
-                        ? PageView.builder(
-                            controller: _imageController,
-                            itemCount: product.images.length,
-                            onPageChanged: (index) {
-                              setState(() => _currentImageIndex = index);
-                            },
-                            itemBuilder: (context, index) {
-                              return GestureDetector(
-                                onTap: () => _showFullScreenImage(
-                                  context,
-                                  product.images,
-                                  index,
-                                ),
-                                child: CachedNetworkImage(
-                                  imageUrl: product.images[index],
-                                  fit: BoxFit.cover,
-                                  placeholder: (context, url) => Container(
-                                    color: cs.surfaceContainerLow,
-                                    child: const Center(
-                                      child: GoogleLoading(
-                                        size: 24,
-                                        strokeWidth: 2,
-                                      ),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final width = constraints.maxWidth;
+                      final ratio = _imageRatios[_currentImageIndex];
+                      final height = ratio != null
+                          ? (width / ratio).clamp(200.0, width * 1.2)
+                          : width * 0.6;
+
+                      return SizedBox(
+                        width: width,
+                        height: height,
+                        child: product.images.isNotEmpty
+                            ? PageView.builder(
+                                controller: _imageController,
+                                itemCount: product.images.length,
+                                onPageChanged: (index) {
+                                  setState(() => _currentImageIndex = index);
+                                },
+                                itemBuilder: (context, index) {
+                                  return GestureDetector(
+                                    onTap: () => _showFullScreenImage(
+                                      context,
+                                      product.images,
+                                      index,
                                     ),
-                                  ),
-                                  errorWidget: (context, error, stackTrace) =>
-                                      Container(
+                                    child: CachedNetworkImage(
+                                      imageUrl: product.images[index],
+                                      fit: BoxFit.contain,
+                                      imageBuilder: (context, imageProvider) {
+                                        _resolveImageSize(
+                                            index, imageProvider);
+                                        return Image(
+                                          image: imageProvider,
+                                          fit: BoxFit.contain,
+                                        );
+                                      },
+                                      placeholder: (context, url) => Container(
+                                        color: cs.surfaceContainerLow,
+                                        child: const Center(
+                                          child: GoogleLoading(
+                                            size: 24,
+                                            strokeWidth: 2,
+                                          ),
+                                        ),
+                                      ),
+                                      errorWidget:
+                                          (context, error, stackTrace) =>
+                                              Container(
                                         color: cs.surfaceContainerHighest,
                                         child: const Icon(
                                           Icons.image,
                                           size: 50,
                                         ),
                                       ),
-                                ),
-                              );
-                            },
-                          )
-                        : Container(
-                            color: cs.surfaceContainerHighest,
-                            child: const Icon(Icons.image, size: 50),
-                          ),
+                                    ),
+                                  );
+                                },
+                              )
+                            : const SizedBox(),
+                      );
+                    },
                   ),
                   if (product.images.length > 1)
                     Positioned(
@@ -722,9 +765,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                                   color: cs.surface,
                                                   size: 18,
                                                 ),
-                                                onPressed: _openWhatsApp,
+                                                onPressed: _chatWithSeller,
                                                 label: Text(
-                                                  context.tr('whatsapp'),
+                                                  'Chat',
                                                   style: TextStyle(
                                                     color: cs.onPrimary,
                                                   ),
@@ -758,9 +801,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                                   color: cs.surface,
                                                   size: 18,
                                                 ),
-                                                onPressed: _openWhatsApp,
+                                                onPressed: _chatWithSeller,
                                                 label: Text(
-                                                  context.tr('whatsapp'),
+                                                  context.tr('chat'),
                                                   style: TextStyle(
                                                     color: cs.onPrimary,
                                                   ),
@@ -768,8 +811,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                               ),
                                             ],
                                           ),
-                                      ],
-                                    ),
+                                        ],
+                                      ),
                                   ),
                                 ],
                               ),
@@ -812,9 +855,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   ),
                 ),
                 icon: Icon(Icons.chat, color: cs.surface, size: 18),
-                onPressed: _openWhatsApp,
+                onPressed: _chatWithSeller,
                 label: Text(
-                  context.tr('whatsapp'),
+                  context.tr('chat'),
                   style: TextStyle(color: cs.surface, fontSize: 13),
                 ),
               ),
@@ -941,24 +984,16 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     context.push(AppRoutes.checkout, extra: widget.product);
   }
 
-  void _openWhatsApp() {
-    final phone = _sellerProfile?.phone;
-    if (phone != null && phone.isNotEmpty) {
-      final msg = WhatsAppService.generateProductInquiryMessage(
-        sellerName: widget.product.sellerName,
-        productName: widget.product.name,
-        productPrice: widget.product.price,
-        currencySymbol:
-            LocalizationService.supportedCurrencies[widget.product.currency]
-                    ?['symbol'] ??
-                'TSh',
-      );
-      WhatsAppService().openWhatsApp(phoneNumber: phone, message: msg);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('whatsapp_number_missing'))),
-      );
-    }
+  void _chatWithSeller() {
+    showChatOptions(
+      context: context,
+      sellerId: widget.product.sellerId,
+      sellerName: widget.product.sellerName,
+      phone: _sellerProfile?.phone,
+      productName: widget.product.name,
+      productPrice: widget.product.price,
+      currency: widget.product.currency,
+    );
   }
 
   String _fmtDuration(Duration d) {

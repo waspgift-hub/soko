@@ -3,10 +3,10 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
-  audioplayers_linux
   awesome_notifications
   file_selector_linux
   flutter_secure_storage_linux
+  gtk
   record_linux
   url_launcher_linux
 )

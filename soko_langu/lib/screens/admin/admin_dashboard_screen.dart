@@ -4,11 +4,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../services/analytics_service.dart';
 import '../../services/api_config.dart';
 import '../../services/fraud_prevention_service.dart';
+import '../../providers/product_feed_provider.dart';
 import '../../widgets/google_loading.dart';
 import '../report/admin_reports_screen.dart';
 import 'admin_wallet_screen.dart';
@@ -35,6 +37,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   AnalyticsData? _analytics;
   bool _loading = true;
   bool _isAdmin = false;
+  // ignore: unused_field
   Map<String, int> _fraudStats = {};
 
   List<Map<String, dynamic>> _users = [];
@@ -42,11 +45,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   bool _loadingUsers = false, _loadingProducts = false;
   String _userSearchQuery = '';
 
+  List<Map<String, dynamic>> _disputedTxs = [];
+  List<Map<String, dynamic>> _failedPayoutTxs = [];
+  List<Map<String, dynamic>> _pendingKycUsers = [];
+  bool _loadingExceptions = true;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 7, vsync: this);
     _checkAdmin();
+    _loadFraudStats();
   }
 
   @override
@@ -82,7 +91,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     }
     setState(() => _isAdmin = true);
     try {
-      await Future.wait([_loadAnalytics(), _loadUsers(), _loadProducts(), _loadFraudStats()]);
+      await Future.wait([_loadAnalytics(), _loadUsers(), _loadProducts(), _loadFraudStats(), _loadExceptions()]);
     } catch (_) {}
     if (mounted) setState(() => _loading = false);
   }
@@ -110,6 +119,64 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       final stats = await _fraudService.getFraudStats();
       if (mounted) setState(() => _fraudStats = stats);
     } catch (_) {}
+  }
+
+  Future<void> _loadExceptions() async {
+    setState(() => _loadingExceptions = true);
+    try {
+      final futures = <Future>[
+        FirebaseFirestore.instance
+            .collection('transactions')
+            .where('status', isEqualTo: 'disputed')
+            .get(),
+        FirebaseFirestore.instance
+            .collection('transactions')
+            .where('payoutStatus', isEqualTo: 'failed_retry')
+            .get(),
+      ];
+
+      // Try loading KYC pending from server
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      if (token != null) {
+        futures.add(_loadPendingKyc());
+      }
+
+      final results = await Future.wait(futures);
+      final disputedSnap = results[0] as QuerySnapshot;
+      final failedSnap = results[1] as QuerySnapshot;
+
+      if (mounted) {
+        setState(() {
+          _disputedTxs = disputedSnap.docs.map((d) => {'id': d.id, ...d.data() as Map<String, dynamic>}).toList();
+          _failedPayoutTxs = failedSnap.docs.map((d) => {'id': d.id, ...d.data() as Map<String, dynamic>}).toList();
+        });
+      }
+    } catch (e) {
+      debugPrint('Admin loadExceptions: $e');
+    }
+    if (mounted) setState(() => _loadingExceptions = false);
+  }
+
+  Future<void> _loadPendingKyc() async {
+    try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final resp = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/api/admin/kyc/pending'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 10));
+      if (resp.statusCode == 200) {
+        final body = jsonDecode(resp.body);
+        final pending = body['pending'] as List? ?? [];
+        if (mounted) {
+          setState(() => _pendingKycUsers = pending.cast<Map<String, dynamic>>());
+        }
+      }
+    } catch (e) {
+      debugPrint('Admin loadPendingKyc: $e');
+    }
   }
 
   Future<void> _loadProducts() async {
@@ -145,7 +212,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             icon: const Icon(Icons.refresh),
             onPressed: () {
               setState(() => _loading = true);
-              Future.wait([_loadAnalytics(), _loadUsers(), _loadProducts(), _loadFraudStats()])
+              Future.wait([_loadAnalytics(), _loadUsers(), _loadProducts(), _loadFraudStats(), _loadExceptions()])
                   .then((_) => setState(() => _loading = false));
             },
           ),
@@ -181,72 +248,80 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
-  // ─── DASHBOARD TAB ─────────────────────────────────────────────
+  // ─── DASHBOARD TAB — Exception-based management view ─────────
   Widget _buildDashboardTab() {
-    final a = _analytics ?? AnalyticsData();
+    if (_loadingExceptions) return const GoogleLoadingPage();
     final cs = Theme.of(context).colorScheme;
-    final nf = NumberFormat('#,###', 'en');
+    final disputeCount = _disputedTxs.length;
+    final failedCount = _failedPayoutTxs.length;
+    final kycCount = _pendingKycUsers.length;
+    final totalExceptions = disputeCount + failedCount + kycCount;
+
     return RefreshIndicator(
-      onRefresh: () async {
-        await Future.wait([_loadAnalytics(), _loadFraudStats()]);
-      },
+      onRefresh: _loadExceptions,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          _kpiCard(
-            icon: Icons.people,
-            label: context.tr('total_users'),
-            value: '${a.totalUsers}',
-            color: cs.primary,
-            sub: '${a.newUsersToday} ${context.tr('new_today')}',
-            nf: nf,
+          // Summary cards row
+          SizedBox(
+            height: 90,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                _exceptionSummaryCard(
+                  icon: Icons.gavel,
+                  count: disputeCount,
+                  label: context.tr('disputes'),
+                  color: Colors.orange,
+                ),
+                const SizedBox(width: 10),
+                _exceptionSummaryCard(
+                  icon: Icons.error_outline,
+                  count: failedCount,
+                  label: context.tr('failed_payouts'),
+                  color: Colors.red,
+                ),
+                const SizedBox(width: 10),
+                _exceptionSummaryCard(
+                  icon: Icons.verified_user,
+                  count: kycCount,
+                  label: context.tr('pending_kyc'),
+                  color: Colors.blue,
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
-          _kpiCard(
-            icon: Icons.inventory_2,
-            label: context.tr('products'),
-            value: '${a.totalProducts}',
-            color: cs.secondary,
-            sub: '${a.activeProducts} ${context.tr('active')}',
-            nf: nf,
-          ),
-          const SizedBox(height: 10),
-          _kpiCard(
-            icon: Icons.receipt_long,
-            label: context.tr('orders'),
-            value: '${a.totalOrders}',
-            color: cs.tertiary,
-            sub: 'TZS ${nf.format(a.totalRevenue)} ${context.tr('total_revenue')}',
-            nf: nf,
-          ),
-          const SizedBox(height: 10),
-          _kpiCard(
-            icon: Icons.account_balance,
-            label: context.tr('revenue_today'),
-            value: 'TZS ${nf.format(a.revenueToday)}',
-            color: cs.secondary,
-            sub: '${a.newUsersToday} ${context.tr('new_users')}',
-            nf: nf,
-          ),
-          const SizedBox(height: 20),
-          _buildSectionHeader(context.tr('revenue_7_days'), cs),
-          const SizedBox(height: 8),
-          _buildBarChart(
-            a.revenueOverTime.map((m) => BarEntry(m.date, m.count.toDouble())).toList(),
-            cs.primary,
-            (v) => 'TZS ${nf.format(v.toInt())}',
-            nf,
-          ),
-          const SizedBox(height: 20),
-          _buildSectionHeader(context.tr('user_growth_7_days'), cs),
-          const SizedBox(height: 8),
-          _buildBarChart(
-            a.userGrowth.map((m) => BarEntry(m.date, m.count.toDouble())).toList(),
-            cs.secondary,
-            (v) => nf.format(v.toInt()),
-            nf,
-          ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 12),
+
+          if (totalExceptions == 0)
+            _buildEmptyExceptions(cs)
+          else ...[
+            // Disputed transactions
+            if (disputeCount > 0) ...[
+              _buildSectionHeader('${context.tr('disputes')} ($disputeCount)', cs),
+              const SizedBox(height: 8),
+              ..._disputedTxs.map((tx) => _buildDisputeCard(tx, cs)),
+              const SizedBox(height: 16),
+            ],
+
+            // Failed payouts
+            if (failedCount > 0) ...[
+              _buildSectionHeader('${context.tr('failed_payouts')} ($failedCount)', cs),
+              const SizedBox(height: 8),
+              ..._failedPayoutTxs.map((tx) => _buildFailedPayoutCard(tx, cs)),
+              const SizedBox(height: 16),
+            ],
+
+            // Pending KYC
+            if (kycCount > 0) ...[
+              _buildSectionHeader('${context.tr('pending_kyc')} ($kycCount)', cs),
+              const SizedBox(height: 8),
+              ..._pendingKycUsers.map((u) => _buildKycCard(u, cs)),
+              const SizedBox(height: 16),
+            ],
+          ],
+
+          // Quick actions always visible
           _buildSectionHeader(context.tr('quick_actions'), cs),
           const SizedBox(height: 12),
           _buildQuickActions(),
@@ -254,6 +329,205 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         ],
       ),
     );
+  }
+
+  Widget _exceptionSummaryCard({
+    required IconData icon, required int count, required String label, required Color color,
+  }) {
+    return Container(
+      width: 140,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [color.withValues(alpha: 0.08), color.withValues(alpha: 0.02)],
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.15), width: 1),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('$count', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
+              Text(label, style: TextStyle(fontSize: 11, color: color.withValues(alpha: 0.71))),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyExceptions(ColorScheme cs) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 32),
+      child: Column(
+        children: [
+          Icon(Icons.check_circle_outline, size: 48, color: Colors.green.withValues(alpha: 0.5)),
+          const SizedBox(height: 12),
+          Text('Hakuna matatizo yanayohitaji umakini',
+              style: TextStyle(fontSize: 15, color: cs.onSurfaceVariant)),
+          const SizedBox(height: 4),
+          Text('Kila kitu kiko sawa!', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDisputeCard(Map<String, dynamic> tx, ColorScheme cs) {
+    final nf = NumberFormat('#,###', 'en');
+    final dateStr = _formatTimestamp(tx['createdAt']);
+    final productName = tx['productName'] ?? 'Bidhaa';
+    final price = (tx['productPrice'] ?? 0).toDouble();
+    final buyerName = tx['buyerName'] ?? tx['buyerId'] ?? '---';
+    final sellerName = tx['sellerName'] ?? tx['sellerId'] ?? '---';
+    final reason = tx['disputeInfo']?['reason'] ?? '---';
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Icon(Icons.gavel, size: 18, color: Colors.orange),
+              const SizedBox(width: 6),
+              Expanded(child: Text(productName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
+              Text('TZS ${nf.format(price.toInt())}', style: TextStyle(fontWeight: FontWeight.bold, color: cs.primary)),
+            ]),
+            const SizedBox(height: 6),
+            Text('Mnunuzi: $buyerName  |  Muuzaji: $sellerName', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+            Text('Sababu: $reason', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+            Text(dateStr, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.gavel, size: 16),
+                label: Text(context.tr('resolve_dispute')),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  textStyle: const TextStyle(fontSize: 12),
+                ),
+                onPressed: () => _showResolveDisputeDialog(tx),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFailedPayoutCard(Map<String, dynamic> tx, ColorScheme cs) {
+    final nf = NumberFormat('#,###', 'en');
+    final dateStr = _formatTimestamp(tx['payoutFailedAt'] ?? tx['createdAt']);
+    final productName = tx['productName'] ?? 'Bidhaa';
+    final price = (tx['productPrice'] ?? 0).toDouble();
+    final sellerName = tx['sellerName'] ?? tx['sellerId'] ?? '---';
+    final error = tx['payoutError'] ?? 'Unknown error';
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Icon(Icons.error_outline, size: 18, color: Colors.red),
+              const SizedBox(width: 6),
+              Expanded(child: Text(productName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
+              Text('TZS ${nf.format(price.toInt())}', style: TextStyle(fontWeight: FontWeight.bold, color: cs.error)),
+            ]),
+            const SizedBox(height: 6),
+            Text('Muuzaji: $sellerName', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+            Text('Hitilafu: $error', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+            Text(dateStr, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.refresh, size: 16),
+                label: Text(context.tr('retry_payout')),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  textStyle: const TextStyle(fontSize: 12),
+                ),
+                onPressed: () => _retryPayout(tx),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildKycCard(Map<String, dynamic> user, ColorScheme cs) {
+    final kyc = user['kyc'] as Map<String, dynamic>? ?? {};
+    final dateStr = _formatTimestamp(kyc['submittedAt']);
+    final fullName = kyc['fullName'] ?? user['displayName'] ?? '---';
+    final email = user['email'] ?? '---';
+    final phone = user['phone'] ?? '---';
+    final idType = kyc['idType'] ?? '---';
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Icon(Icons.verified_user, size: 18, color: Colors.blue),
+              const SizedBox(width: 6),
+              Expanded(child: Text(fullName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
+              Text(idType, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+            ]),
+            const SizedBox(height: 6),
+            Text(email, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+            Text(phone, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+            Text(dateStr, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.rate_review, size: 16),
+                label: Text(context.tr('review_kyc')),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  textStyle: const TextStyle(fontSize: 12),
+                ),
+                onPressed: () => _showKycReviewDialog(user),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatTimestamp(dynamic ts) {
+    if (ts == null) return '---';
+    try {
+      if (ts is Timestamp) {
+        return DateFormat('MMM dd, HH:mm').format(ts.toDate());
+      }
+      return ts.toString();
+    } catch (_) {
+      return '---';
+    }
   }
 
   Widget _buildSectionHeader(String title, ColorScheme cs) {
@@ -266,61 +540,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
-  Widget _kpiCard({
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color color,
-    String? sub,
-    NumberFormat? nf,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [color.withValues(alpha: 0.08), color.withValues(alpha: 0.02)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.15), width: 1),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(icon, color: color, size: 26),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
-                Text(label, style: TextStyle(fontSize: 13, color: color.withValues(alpha: 0.71))),
-              ],
-            ),
-          ),
-          if (sub != null)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(sub, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w500)),
-            ),
-        ],
-      ),
-    );
-  }
-
   // ─── BAR CHART ───────────────────────────────────────────
-  Widget _buildBarChart(List<BarEntry> entries, Color color, String Function(double) format, [NumberFormat? nf]) {
+  Widget _buildBarChart(List<BarEntry> entries, Color color, String Function(double) format) {
     if (entries.isEmpty) return const SizedBox();
     final maxVal = entries.map((e) => e.value).reduce((a, b) => a > b ? a : b);
     final maxBar = maxVal > 0 ? maxVal : 1.0;
@@ -335,7 +556,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         crossAxisAlignment: CrossAxisAlignment.end,
         children: entries.map((e) {
           final fraction = e.value / maxBar;
-          final dayLabel = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][e.date.weekday - 1];
+          final dayLabels = [context.tr('mon'), context.tr('tue'), context.tr('wed'), context.tr('thu'), context.tr('fri'), context.tr('sat'), context.tr('sun')];
+          final dayLabel = dayLabels[e.date.weekday - 1];
           return Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 3),
@@ -478,8 +700,261 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     await _analyticsService.toggleMaintenanceMode(!enabled);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Maintenance mode: ${!enabled ? 'ON' : 'OFF'}')),
+        SnackBar(content: Text(context.tr('maintenance_mode_status').replaceAll('{status}', !enabled ? 'ON' : 'OFF'))),
       );
+    }
+  }
+
+  // ─── ACTION: Resolve Dispute ───────────────────────────────
+  void _showResolveDisputeDialog(Map<String, dynamic> tx) {
+    final orderId = tx['id'] as String;
+    final productName = tx['productName'] ?? 'Bidhaa';
+    final nf = NumberFormat('#,###', 'en');
+    final price = (tx['productPrice'] ?? 0).toDouble();
+    final noteCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('resolve_dispute')),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('$productName — TZS ${nf.format(price.toInt())}',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text('${context.tr('reason')}: ${tx['disputeInfo']?['reason'] ?? '---'}'),
+              const SizedBox(height: 12),
+              TextField(
+                controller: noteCtrl,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  labelText: context.tr('admin_note'),
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(context.tr('choose_resolution'),
+                  style: TextStyle(fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.tr('cancel'))),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.person, size: 16),
+            label: Text(context.tr('release_to_seller')),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _resolveDispute(orderId, 'release', noteCtrl.text);
+            },
+          ),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.replay, size: 16),
+            label: Text(context.tr('refund_to_buyer')),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _resolveDispute(orderId, 'refund', noteCtrl.text);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _resolveDispute(String orderId, String resolution, String note) async {
+    try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final resp = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/escrow/admin-resolve-dispute'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'orderId': orderId, 'resolution': resolution, 'note': note}),
+      );
+      final result = jsonDecode(resp.body);
+      if (resp.statusCode == 200) {
+        _loadExceptions();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(result['message'] ?? context.tr('dispute_resolved')),
+          ));
+        }
+      } else {
+        throw Exception(result['error'] ?? 'Failed to resolve dispute');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+      }
+    }
+  }
+
+  // ─── ACTION: Retry Failed Payout ───────────────────────────
+  Future<void> _retryPayout(Map<String, dynamic> tx) async {
+    final orderId = tx['id'] as String;
+    final productName = tx['productName'] ?? 'Bidhaa';
+    final nf = NumberFormat('#,###', 'en');
+    final price = (tx['productPrice'] ?? 0).toDouble();
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('retry_payout')),
+        content: Text(context.tr('retry_payout_confirm').replaceAll('{product}', '$productName (TZS ${nf.format(price.toInt())})')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(context.tr('retry')),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final resp = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/escrow/retry-payout'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'orderId': orderId}),
+      );
+      final result = jsonDecode(resp.body);
+      if (resp.statusCode == 200) {
+        _loadExceptions();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(result['message'] ?? context.tr('payout_retried')),
+          ));
+        }
+      } else {
+        throw Exception(result['error'] ?? context.tr('retry_failed'));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+      }
+    }
+  }
+
+  // ─── ACTION: Review KYC ─────────────────────────────────────
+  void _showKycReviewDialog(Map<String, dynamic> user) {
+    final uid = user['uid'] as String;
+    final kyc = user['kyc'] as Map<String, dynamic>? ?? {};
+    final fullName = kyc['fullName'] ?? user['displayName'] ?? '---';
+    final idType = kyc['idType'] ?? '---';
+    final idNumber = kyc['idNumber'] ?? '---';
+    final idImageUrl = kyc['idImageUrl'] as String?;
+    final selfieUrl = kyc['selfieUrl'] as String?;
+    final notesCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('review_kyc')),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Jina: $fullName', style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text('Aina ya Kitambulisho: $idType'),
+              Text('Namba: $idNumber'),
+              if (idImageUrl != null) ...[
+                const SizedBox(height: 8),
+                Text('Kitambulisho:'),
+                const SizedBox(height: 4),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(idImageUrl, height: 120, fit: BoxFit.cover, errorBuilder: (_, _, _) => const Icon(Icons.broken_image)),
+                ),
+              ],
+              if (selfieUrl != null) ...[
+                const SizedBox(height: 8),
+                Text('Selfie:'),
+                const SizedBox(height: 4),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(selfieUrl, height: 120, fit: BoxFit.cover, errorBuilder: (_, _, _) => const Icon(Icons.broken_image)),
+                ),
+              ],
+              const SizedBox(height: 12),
+              TextField(
+                controller: notesCtrl,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Maelezo (sababu ya kukataa)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.tr('cancel'))),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.close, size: 16),
+            label: Text(context.tr('reject')),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _submitKycReview(uid, false, notesCtrl.text);
+            },
+          ),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.check, size: 16),
+            label: Text(context.tr('approve')),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _submitKycReview(uid, true, notesCtrl.text);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _submitKycReview(String uid, bool approve, String notes) async {
+    try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final resp = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/admin/kyc/review'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'userId': uid,
+          'approve': approve,
+          'notes': notes,
+        }),
+      );
+      final result = jsonDecode(resp.body);
+      if (resp.statusCode == 200) {
+        _loadExceptions();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(result['message'] ?? context.tr('kyc_status').replaceAll('{status}', approve ? 'approved' : 'rejected')),
+          ));
+        }
+      } else {
+        throw Exception(result['error'] ?? context.tr('kyc_review_failed'));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+      }
     }
   }
 
@@ -491,27 +966,27 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text('User Analytics', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+          Text(context.tr('user_analytics'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          _statRow('Total Users', '${a.totalUsers}', 'New Today: ${a.newUsersToday}', 'New Month: ${a.newUsersThisMonth}'),
+          _statRow(context.tr('total_users'), '${a.totalUsers}', '${context.tr('new_today')} ${a.newUsersToday}', '${context.tr('new_month')} ${a.newUsersThisMonth}'),
           const SizedBox(height: 16),
-          Text('Product Analytics', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+          Text(context.tr('product_analytics'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          _statRow('Total Products', '${a.totalProducts}', 'Active: ${a.activeProducts}', 'Inactive: ${a.inactiveProducts}'),
+          _statRow(context.tr('total_products'), '${a.totalProducts}', '${context.tr('active_label')} ${a.activeProducts}', '${context.tr('inactive_label')} ${a.inactiveProducts}'),
           const SizedBox(height: 16),
-          Text('Revenue', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+          Text(context.tr('revenue'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           _statRow(
-            'Total Revenue', 'TZS ${a.totalRevenue.toStringAsFixed(0)}',
+            context.tr('total_revenue'), 'TZS ${a.totalRevenue.toStringAsFixed(0)}',
             'Today: TZS ${a.revenueToday.toStringAsFixed(0)}',
             'Month: TZS ${a.revenueThisMonth.toStringAsFixed(0)}',
           ),
           const SizedBox(height: 20),
-          Text('Category Distribution', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+          Text(context.tr('category_distribution'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           _buildCategoryList(a.productsByCategory, a.totalProducts),
           const SizedBox(height: 20),
-          Text('Revenue Trend (7 days)', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+          Text(context.tr('revenue_trend_7_days'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           _buildBarChart(
             a.revenueOverTime.map((m) => BarEntry(m.date, m.count.toDouble())).toList(),
@@ -519,7 +994,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             (v) => 'TZS $v',
           ),
           const SizedBox(height: 20),
-          Text('New Users (7 days)', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+          Text(context.tr('new_users_7_days'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           _buildBarChart(
             a.userGrowth.map((m) => BarEntry(m.date, m.count.toDouble())).toList(),
@@ -563,7 +1038,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   Widget _buildCategoryList(Map<String, int> catMap, int total) {
-    if (catMap.isEmpty) return const Card(child: Padding(padding: EdgeInsets.all(16), child: Text('No products')));
+    if (catMap.isEmpty) return Card(child: Padding(padding: const EdgeInsets.all(16), child: Text(context.tr('no_products'))));
     final sorted = catMap.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
     return Card(
       child: Padding(
@@ -605,7 +1080,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         Padding(
           padding: const EdgeInsets.all(8),
           child: TextField(
-            decoration: const InputDecoration(hintText: 'Search users...', prefixIcon: Icon(Icons.search), border: OutlineInputBorder()),
+            decoration: InputDecoration(hintText: context.tr('search_users'), prefixIcon: const Icon(Icons.search), border: const OutlineInputBorder()),
             onChanged: (q) => setState(() => _userSearchQuery = q.toLowerCase()),
           ),
         ),
@@ -641,9 +1116,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     trailing: PopupMenuButton<String>(
                       onSelected: (v) => _updateUser(u['uid'] as String, v),
                       itemBuilder: (_) => [
-                        const PopupMenuItem(value: 'toggle_admin', child: Text('Toggle Admin')),
-                        PopupMenuItem(value: suspended ? 'unsuspend' : 'suspend', child: Text(suspended ? 'Unsuspend' : 'Suspend')),
-                        const PopupMenuItem(value: 'full_delete', child: Text('Full Delete', style: TextStyle(color: Colors.red))),
+                        PopupMenuItem(value: 'toggle_admin', child: Text(context.tr('toggle_admin'))),
+                        PopupMenuItem(value: suspended ? 'unsuspend' : 'suspend', child: Text(suspended ? context.tr('unsuspend') : context.tr('suspend'))),
+                        PopupMenuItem(value: 'full_delete', child: Text(context.tr('full_delete'), style: const TextStyle(color: Colors.red))),
                       ],
                     ),
                   ),
@@ -668,11 +1143,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         final confirm = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('Delete User Forever'),
-            content: const Text('This will permanently delete this user and all their data (orders, products, reviews, etc.). Are you sure?'),
+            title: Text(context.tr('delete_user_forever')),
+            content: Text(context.tr('delete_user_forever_confirm')),
             actions: [
               TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
-              ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete Forever', style: TextStyle(color: Colors.red))),
+              ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.tr('delete_forever'), style: const TextStyle(color: Colors.red))),
             ],
           ),
         );
@@ -682,11 +1157,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           headers: authHeaders,
         );
         if (resp.statusCode != 200) {
-          throw Exception(jsonDecode(resp.body)['error'] ?? 'Delete failed');
+          throw Exception(jsonDecode(resp.body)['error'] ?? context.tr('error'));
         }
         _loadUsers();
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('User permanently deleted')));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('user_permanently_deleted'))));
         }
         return;
       }
@@ -709,7 +1184,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       }
       _loadUsers();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('User updated: $action')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('user_updated').replaceAll('{action}', action))));
       }
     } catch (e) {
       if (mounted) {
@@ -745,7 +1220,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 ),
               ),
               title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
-              subtitle: Text('$seller — TZS $price${!active ? ' [HIDDEN]' : ''}${featured ? ' ⭐' : ''}'),
+              subtitle: Text('$seller — TZS $price${!active ? context.tr('hidden') : ''}${featured ? ' ⭐' : ''}'),
               trailing: PopupMenuButton<String>(
                 onSelected: (v) => _updateProduct(p['id'] as String, v),
                 itemBuilder: (_) => [
@@ -787,7 +1262,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           );
           final result = jsonDecode(resp.body);
           if (result['success'] != true) {
-            throw Exception(result['error'] ?? 'Delete failed');
+            throw Exception(result['error'] ?? context.tr('error'));
+          }
+          if (mounted) {
+            context.read<ProductFeedProvider>().removeProduct(id);
           }
         } catch (e) {
           throw Exception(e.toString());
@@ -803,7 +1281,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       await FirebaseFirestore.instance.collection('products').doc(id).update(body);
       _loadProducts();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Product updated: $action')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('product_updated').replaceAll('{action}', action))));
       }
     } catch (e) {
       if (mounted) {
@@ -819,12 +1297,26 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   // ─── PAYOUT TAB ───────────────────────────────────────────────
   Widget _buildPayoutTab() {
-    return const AdminWalletScreen();
+    return const AdminWalletScreen(embedded: true);
   }
 
   // ─── FRAUD TAB ────────────────────────────────────────────────
   Widget _buildFraudTab() {
-    return StreamBuilder<List<FraudAlert>>(
+    return Column(
+      children: [
+        if (_fraudStats.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+            child: Row(
+              children: [
+                _fraudStatChip(context.tr('total'), _fraudStats['total'] ?? 0),
+                _fraudStatChip(context.tr('open'), _fraudStats['unresolved'] ?? 0),
+                _fraudStatChip(context.tr('high'), _fraudStats['high'] ?? 0, isHigh: true),
+              ],
+            ),
+          ),
+        Expanded(
+          child: StreamBuilder<List<FraudAlert>>(
       stream: _fraudService.getFraudAlerts(resolved: false),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) return const GoogleLoadingPage();
@@ -837,9 +1329,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 children: [
                   Icon(Icons.security, size: 64, color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7)),
                   const SizedBox(height: 16),
-                  Text('No active fraud alerts', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                  const SizedBox(height: 8),
-                  Text('Test mode: ${_fraudService.isTestMode ? "ON (alerts logged only)" : "OFF (production)"}',
+                  Text(context.tr('no_active_fraud_alerts'), style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+
+                  Text(context.tr('test_mode_status').replaceAll('{status}', _fraudService.isTestMode ? 'ON' : 'OFF'),
                       style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6))),
                 ],
               ),
@@ -855,6 +1347,29 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           ),
         );
       },
+    ),
+        ),
+      ],
+    );
+  }
+
+  Widget _fraudStatChip(String label, int value, {bool isHigh = false}) {
+    final cs = Theme.of(context).colorScheme;
+    final color = isHigh ? cs.error : cs.primary;
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          children: [
+            Text('$value', style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 18)),
+            Text(label, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+          ],
+        ),
+      ),
     );
   }
 

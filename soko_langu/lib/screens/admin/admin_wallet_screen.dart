@@ -11,7 +11,9 @@ import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
 
 class AdminWalletScreen extends StatefulWidget {
-  const AdminWalletScreen({super.key});
+  final bool embedded;
+
+  const AdminWalletScreen({super.key, this.embedded = false});
 
   @override
   State<AdminWalletScreen> createState() => _AdminWalletScreenState();
@@ -190,11 +192,23 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
     if (amount == null) return;
     final now = DateTime.now();
     final month = '${now.month}_${now.year}';
-    await FirebaseFirestore.instance.collection('admob_earnings').add({
-      'amount': amount,
-      'month': month,
-      'enteredAt': FieldValue.serverTimestamp(),
-    });
+    try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final resp = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/admin/admob-revenue'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'amount': amount, 'month': month}),
+      );
+      if (resp.statusCode != 200) {
+        throw Exception(jsonDecode(resp.body)['error'] ?? 'Failed to save');
+      }
+    } catch (e) {
+      if (mounted) _showError('$e');
+      return;
+    }
     _loadFinanceData();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -230,14 +244,6 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
             backgroundColor: Theme.of(context).colorScheme.primary,
           ),
         );
-        await FirebaseFirestore.instance.collection('admin_withdrawals').add({
-          'userId': uid,
-          'amount': _availableBalance.round(),
-          'phone': phone,
-          'netAmount': result['netAmount'] is num ? (result['netAmount'] as num).toDouble() : _availableBalance,
-          'status': result['status'] ?? 'processing',
-          'createdAt': FieldValue.serverTimestamp(),
-        });
         _loadFinanceData();
       }
     } catch (e) {
@@ -258,14 +264,7 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
     final nf = NumberFormat('#,###', 'en');
     final cs = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      appBar: AppBar(
-          title: Text(context.tr('admin_wallet_title')),
-        actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadFinanceData),
-        ],
-      ),
-      body: _loading
+    final body = _loading
           ? const GoogleLoadingPage()
           : SafeArea(
               child: ListView(
@@ -282,7 +281,18 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
                   _buildWithdrawalHistory(cs, nf),
                 ],
               ),
-            ),
+            );
+
+    if (widget.embedded) return body;
+
+    return Scaffold(
+      appBar: AppBar(
+          title: Text(context.tr('admin_wallet_title')),
+        actions: [
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadFinanceData),
+        ],
+      ),
+      body: body,
     );
   }
 

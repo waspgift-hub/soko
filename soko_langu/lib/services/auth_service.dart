@@ -170,78 +170,6 @@ class AuthService {
     return null;
   }
 
-  Future<void> sendPhoneVerificationCode({
-    required String phoneNumberE164,
-    required void Function(String verificationId, int? resendToken) onCodeSent,
-    required void Function(FirebaseAuthException e) onFailed,
-    required void Function(PhoneAuthCredential credential) onAutoVerified,
-    int? forceResendingToken,
-  }) async {
-    await _auth.verifyPhoneNumber(
-      phoneNumber: phoneNumberE164,
-      timeout: const Duration(seconds: 120),
-      forceResendingToken: forceResendingToken,
-      verificationCompleted: onAutoVerified,
-      verificationFailed: onFailed,
-      codeSent: onCodeSent,
-      codeAutoRetrievalTimeout: (verificationId) {
-        onCodeSent(verificationId, forceResendingToken);
-      },
-    );
-  }
-
-  Future<UserCredential> signInWithPhoneSmsCode({
-    required String verificationId,
-    required String smsCode,
-  }) async {
-    try {
-      final credential = PhoneAuthProvider.credential(
-        verificationId: verificationId,
-        smsCode: smsCode.trim(),
-      );
-      return await _auth.signInWithCredential(credential);
-    } on FirebaseAuthException catch (e) {
-      throw NetworkError(
-        message: e.message ?? 'Phone verification failed',
-        userMessage: _swahiliAuthError(e.code),
-        originalError: e,
-      );
-    }
-  }
-
-  Future<UserCredential> signInWithPhoneCredential(
-    PhoneAuthCredential credential,
-  ) async {
-    try {
-      return await _auth.signInWithCredential(credential);
-    } on FirebaseAuthException catch (e) {
-      throw NetworkError(
-        message: e.message ?? 'Phone sign-in failed',
-        userMessage: _swahiliAuthError(e.code),
-        originalError: e,
-      );
-    }
-  }
-
-  Future<void> updatePasswordForCurrentUser(String newPassword) async {
-    final user = _auth.currentUser;
-    if (user == null) {
-      throw NetworkError(
-        message: 'No user',
-        userMessage: 'Hujathibitishwa. Tafadhali jaribu tena OTP.',
-      );
-    }
-    try {
-      await user.updatePassword(newPassword);
-    } on FirebaseAuthException catch (e) {
-      throw NetworkError(
-        message: e.message ?? 'Password update failed',
-        userMessage: _swahiliAuthError(e.code),
-        originalError: e,
-      );
-    }
-  }
-
   Future<void> syncPhoneOnProfile(String uid, String phoneE164) async {
     try {
       await _db.collection('users').doc(uid).set({
@@ -298,18 +226,6 @@ class AuthService {
       }
       await _auth.signOut();
     } catch (_) {}
-  }
-
-  Future<void> deleteAccount() async {
-    final user = _auth.currentUser;
-    if (user == null)
-      throw NetworkError(
-        message: 'No user logged in',
-        userMessage: 'Huna akaunti uliyoingia.',
-      );
-    await _db.collection('users').doc(user.uid).delete();
-    await user.delete();
-    await _auth.signOut();
   }
 
   Future<void> _createUserProfile(
@@ -378,7 +294,7 @@ class AuthService {
       case 'operation-not-allowed':
         return 'Njia hii ya kuingia haijawashwa. Jaribu tena baadaye.';
       case 'weak-password':
-        return 'Nenosiri ni fupi sana. Tumia angalau herufi 6 au zaidi.';
+        return 'Nenosiri ni fupi sana. Tumia angalau herufi 8 au zaidi.';
       case 'network-request-failed':
         return 'Mtandao dhaifu. Tafadhali angalia muunganisho wako wa intaneti.';
       case 'too-many-requests':

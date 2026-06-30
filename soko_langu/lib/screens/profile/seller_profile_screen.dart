@@ -12,6 +12,7 @@ import '../../widgets/google_loading.dart';
 import '../../widgets/verified_badge.dart';
 import '../../app/routes.dart';
 import '../../utils/responsive.dart';
+import '../../utils/chat_utils.dart';
 
 class SellerProfileScreen extends StatefulWidget {
   final String sellerId;
@@ -57,10 +58,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
         actions: [
           IconButton(
             icon: Icon(Icons.message, color: Theme.of(context).colorScheme.primary),
-            onPressed: () => context.push(
-              '${AppRoutes.chat}/${widget.sellerId}',
-              extra: {'name': widget.sellerName},
-            ),
+            onPressed: _chatWithSeller,
           ),
         ],
       ),
@@ -362,10 +360,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
         children: [
           Expanded(
             child: ElevatedButton.icon(
-              onPressed: () => context.push(
-                '${AppRoutes.chat}/${widget.sellerId}',
-                extra: {'name': widget.sellerName},
-              ),
+              onPressed: _chatWithSeller,
               icon: Icon(Icons.message, color: Theme.of(context).colorScheme.surface),
               label: Text(context.tr('message')),
               style: ElevatedButton.styleFrom(
@@ -380,6 +375,14 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _chatWithSeller() {
+    showChatOptions(
+      context: context,
+      sellerId: widget.sellerId,
+      sellerName: widget.sellerName,
     );
   }
 }

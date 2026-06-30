@@ -28,81 +28,36 @@ class _NotificationScreenState extends State<NotificationScreen> {
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(context.tr('notifications')),
-        actions: [
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('notifications')
-                .where('userId', isEqualTo: user.uid)
-                .where('isRead', isEqualTo: false)
-                .snapshots(),
-            builder: (context, snap) {
-              final unread = snap.data?.docs.length ?? 0;
-              if (unread == 0) return const SizedBox.shrink();
-              return TextButton(
-                onPressed: () => _markAllRead(),
-                child: Text('${context.tr('mark_all_read')} ($unread)'),
-              );
-            },
-          ),
-        ],
-      ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('notifications')
-            .where('userId', isEqualTo: user.uid)
-            .orderBy('createdAt', descending: true)
-            .snapshots(),
-        builder: (context, snap) {
-          if (snap.hasError) return _emptyState(context);
-          if (!snap.hasData) return const GoogleLoadingPage();
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('notifications')
+          .where('userId', isEqualTo: user.uid)
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snap) {
+        if (snap.hasError) return _buildErrorScaffold();
+        if (!snap.hasData) return _buildLoadingScaffold();
 
-          final docs = snap.data!.docs;
+        final docs = snap.data!.docs;
+        final unreadCount = docs.where((d) => !(d['isRead'] as bool)).length;
 
-          if (docs.isEmpty) return _emptyState(context);
-
-          return ListView.separated(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).padding.bottom + 20,
-            ),
-            itemCount: docs.length,
-            separatorBuilder: (_, _) => const Divider(height: 1),
-            itemBuilder: (context, index) {
-              final doc = docs[index];
-              final data = doc.data() as Map<String, dynamic>;
-              return Dismissible(
-                key: ValueKey(doc.id),
-                direction: DismissDirection.endToStart,
-                background: Container(
-                  color: Theme.of(context).colorScheme.error,
-                  alignment: Alignment.centerRight,
-                  padding: const EdgeInsets.only(right: 20),
-                  child: Icon(Icons.delete_outline,
-                      color: Theme.of(context).colorScheme.surface),
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(context.tr('notifications')),
+            actions: [
+              if (unreadCount > 0)
+                TextButton(
+                  onPressed: () => _markAllRead(),
+                  child: Text('${context.tr('mark_all_read')} ($unreadCount)'),
                 ),
-                confirmDismiss: (_) async {
-                  final deleted = await _notifService.deleteNotification(doc.id);
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(deleted
-                            ? context.tr('notification_deleted')
-                            : context.tr('something_wrong')),
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
-                  }
-                  return deleted;
-                },
-                child: _buildTile(doc.id, data),
-              );
-            },
-          );
-        },
-      ),
-      bottomNavigationBar: const AdBanner(),
+            ],
+          ),
+          body: docs.isEmpty
+              ? _emptyState(context)
+              : _buildNotificationList(docs),
+          bottomNavigationBar: const AdBanner(),
+        );
+      },
     );
   }
 
@@ -133,6 +88,62 @@ class _NotificationScreenState extends State<NotificationScreen> {
     }
   }
 
+  Widget _buildNotificationList(List<QueryDocumentSnapshot> docs) {
+    return ListView.separated(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).padding.bottom + 20,
+      ),
+      itemCount: docs.length,
+      separatorBuilder: (_, _) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        final doc = docs[index];
+        final data = doc.data() as Map<String, dynamic>;
+        return Dismissible(
+          key: ValueKey(doc.id),
+          direction: DismissDirection.endToStart,
+          background: Container(
+            color: Theme.of(context).colorScheme.error,
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 20),
+            child: Icon(Icons.delete_outline,
+                color: Theme.of(context).colorScheme.surface),
+          ),
+          confirmDismiss: (_) async {
+            final deleted = await _notifService.deleteNotification(doc.id);
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(deleted
+                      ? context.tr('notification_deleted')
+                      : context.tr('something_wrong')),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            }
+            return deleted;
+          },
+          child: _buildTile(doc.id, data),
+        );
+      },
+    );
+  }
+
+  Scaffold _buildLoadingScaffold() {
+    return Scaffold(
+      appBar: AppBar(title: Text(context.tr('notifications'))),
+      body: const GoogleLoadingPage(),
+      bottomNavigationBar: const AdBanner(),
+    );
+  }
+
+  Scaffold _buildErrorScaffold() {
+    return Scaffold(
+      appBar: AppBar(title: Text(context.tr('notifications'))),
+      body: _emptyState(context),
+      bottomNavigationBar: const AdBanner(),
+    );
+  }
+
   Widget _buildTile(String docId, Map<String, dynamic> data) {
     final cs = Theme.of(context).colorScheme;
     final title = data['title'] as String? ?? '';
@@ -157,6 +168,14 @@ class _NotificationScreenState extends State<NotificationScreen> {
       case 'escrow_release':
       case 'escrow_auto_release':
         icon = Icons.account_balance_wallet; color = Colors.indigo;
+      case 'dispatched':
+        icon = Icons.local_shipping; color = Colors.orange;
+      case 'disputed':
+        icon = Icons.gavel; color = Colors.red;
+      case 'failed_retry':
+        icon = Icons.warning_amber; color = Colors.deepOrange;
+      case 'dispute_resolved':
+        icon = Icons.balance; color = Colors.teal;
       case 'delivery_confirmed':
         icon = Icons.check_circle; color = Colors.green;
       case 'price_drop':
@@ -215,6 +234,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
           case 'escrow_release':
           case 'escrow_auto_release':
           case 'delivery_confirmed':
+          case 'dispatched':
+          case 'disputed':
+          case 'dispute_resolved':
+          case 'failed_retry':
             context.push(AppRoutes.myPurchases);
             break;
           case 'boost':
