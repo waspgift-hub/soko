@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:soko_langu/utils/validators.dart';
+import 'package:soko_vibe/utils/validators.dart';
 
 void main() {
   group('Validators.email', () {

@@ -1,4 +1,4 @@
-name: soko_langu
+name: soko_vibe
 description: "Soko Vibe - Your online marketplace for buying and selling goods. AI-powered, secure, and easy to use."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -44,17 +44,16 @@ dependencies:
   flutter_launcher_icons: ^0.14.4
   shared_preferences: ^2.5.5
   video_player: ^2.11.1
-  audioplayers: ^6.6.0
   just_audio: ^0.9.43
   audio_session: ^0.1.25
   audio_service: ^0.18.18
-  just_audio_windows: ^0.2.3
   record: ^6.2.1
   permission_handler: ^12.0.1
   http: ^1.6.0
   go_router: ^17.2.3
   intl: ^0.20.2
   cached_network_image: ^3.4.1
+  flutter_cache_manager: ^3.4.1
   google_mobile_ads: ^8.0.0
   url_launcher: ^6.3.2
   google_fonts: ^8.1.0
@@ -76,8 +75,12 @@ dependencies:
   latlong2: ^0.9.0
   async: ^2.12.0
   path_provider: ^2.1.5
-  just_audio_background: ^0.0.1-beta.17
   carousel_slider: ^5.0.0
+  youtube_explode_dart: ^2.3.9
+  app_links: ^6.3.3
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  crypto: ^3.0.6
 
 
 dev_dependencies:
@@ -94,8 +97,8 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/app_icon.png"
-  adaptive_icon_foreground: "assets/app_icon.png"
+  image_path: "assets/InShot_20260624_083700389.jpg"
+  adaptive_icon_foreground: "assets/InShot_20260624_083700389.jpg"
   adaptive_icon_background: "#2D6A4F"
 
 # For information on the generic Dart part of this file, see the

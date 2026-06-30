@@ -61,6 +61,26 @@ class BoostService {
     }
   }
 
+  Future<void> notifyBoost({
+    required String productId,
+    required String tierName,
+    String? sellerId,
+  }) async {
+    try {
+      await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/boost/notify'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'productId': productId,
+          'tier': tierName,
+          'sellerId': sellerId ?? '',
+        }),
+      );
+    } catch (e) {
+      debugPrint('BoostService notifyBoost: $e');
+    }
+  }
+
   static int getPriceForTier(BoostTier tier) => tier.priceTzs;
 
   static int getDurationForTier(BoostTier tier) => tier.durationDays;

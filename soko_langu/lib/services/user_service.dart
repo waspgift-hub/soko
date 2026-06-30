@@ -184,6 +184,25 @@ class UserService {
   Future<void> deleteMyAccount() async {
     final user = _auth.currentUser;
     if (user == null) throw Exception('Not logged in');
+
+    // Reauthenticate is required before deletion on production.
+    // Call reauthenticateAndDelete(password) instead.
+    if (user.providerData.any((p) => p.providerId == 'password')) {
+      throw Exception('reauth_required');
+    }
+    await _db.collection('users').doc(user.uid).delete();
+    await user.delete();
+    await _auth.signOut();
+  }
+
+  Future<void> reauthenticateAndDelete(String password) async {
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('Not logged in');
+    final credential = EmailAuthProvider.credential(
+      email: user.email!,
+      password: password,
+    );
+    await user.reauthenticateWithCredential(credential);
     await _db.collection('users').doc(user.uid).delete();
     await user.delete();
     await _auth.signOut();

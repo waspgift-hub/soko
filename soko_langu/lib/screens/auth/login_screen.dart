@@ -1,12 +1,13 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../../app/routes.dart';
 import '../../extensions/context_tr.dart';
 import '../../models/saved_account.dart';
+import '../../notifiers/auth_notifier.dart';
 import '../../services/account_manager.dart';
-import '../../services/auth_service.dart';
 import '../../utils/network_error.dart';
 import '../../widgets/account_switcher_sheet.dart';
 import '../../widgets/auth_form_widgets.dart';
@@ -20,7 +21,6 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _authService = AuthService();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
@@ -42,31 +42,23 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(backgroundColor: Theme.of(context).colorScheme.error, content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: Theme.of(context).colorScheme.error,
+        content: Text(msg),
+      ),
+    );
   }
 
   Future<void> _finishLogin() async {
     if (!mounted) return;
     final user = FirebaseAuth.instance.currentUser;
     if (user != null && !user.emailVerified) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: Theme.of(context).colorScheme.tertiary,
-          content: Text(context.tr('verify_email_first')),
-          action: SnackBarAction(
-            label: context.tr('verify_email_title'),
-            textColor: Theme.of(context).colorScheme.surface,
-            onPressed: () => context.push(
-              AppRoutes.verifyEmail,
-              extra: {'email': user.email ?? _emailController.text.trim()},
-            ),
-          ),
-        ),
-      );
+      final email = user.email ?? _emailController.text.trim();
+      context.go(AppRoutes.verifyEmail, extra: {'email': email});
+    } else {
+      context.go(AppRoutes.home);
     }
-    context.go(AppRoutes.home);
   }
 
   Future<void> _saveCurrentAccount() async {
@@ -105,7 +97,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
     try {
-      await _authService.login(
+      await context.read<AuthNotifier>().login(
         _emailController.text.trim(),
         _passwordController.text.trim(),
       );
@@ -123,7 +115,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> signInWithGoogle() async {
     setState(() => _isLoading = true);
     try {
-      await _authService.signInWithGoogle();
+      await context.read<AuthNotifier>().signInWithGoogle();
       await _saveCurrentGoogleAccount();
       await _finishLogin();
     } catch (e) {
@@ -236,7 +228,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     validator: (v) {
                       if (v == null || v.isEmpty)
                         return context.tr('enter_password');
-                      if (v.length < 6) return context.tr('password_length');
+                      if (v.length < 8) return context.tr('password_length');
                       return null;
                     },
                   ),
@@ -269,6 +261,23 @@ class _LoginScreenState extends State<LoginScreen> {
                   AuthGoogleButton(
                     label: context.tr('continue_google'),
                     onPressed: _isLoading ? null : signInWithGoogle,
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton.icon(
+                      onPressed: _isLoading
+                          ? null
+                          : () => context.push(AppRoutes.magicLink),
+                      icon: const Icon(Icons.email_outlined, size: 18),
+                      label: Text('Tuma Link kwenye Barua Pepe'),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),

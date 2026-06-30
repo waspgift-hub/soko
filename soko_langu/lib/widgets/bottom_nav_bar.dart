@@ -4,7 +4,6 @@ import '../screens/profile/profile_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/home/discovery_screen.dart';
 import '../screens/ai/ai_assistant_screen.dart';
-
 import '../extensions/context_tr.dart';
 import '../main.dart';
 class MainScreen extends StatefulWidget {

@@ -60,7 +60,6 @@ class Report {
     'description': description,
     'status': status,
     'adminNote': adminNote,
-    'createdAt': FieldValue.serverTimestamp(),
   };
 
   Report copyWith({String? status, String? adminNote}) => Report(

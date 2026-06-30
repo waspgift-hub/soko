@@ -163,7 +163,7 @@ class Product {
       sellerName: data['sellerName'] ?? '',
       category: data['category'] ?? 'General',
       subcategory: data['subcategory'] ?? '',
-      location: data['location'] ?? 'Tanzania',
+      location: data['location'] as String? ?? '',
       createdAt: data['createdAt'] is Timestamp
           ? (data['createdAt'] as Timestamp).toDate()
           : DateTime.now(),

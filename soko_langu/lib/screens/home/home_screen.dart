@@ -1,19 +1,19 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import '../../main.dart';
-import '../../services/product_service.dart';
 import '../../services/localization_service.dart';
 import '../../services/category_service.dart';
-import '../../models/product_model.dart';
 import '../../models/category_model.dart';
+import '../../providers/product_feed_provider.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/ad_banner.dart';
-import '../../widgets/dynamic_banner.dart';
-import '../../widgets/flash_sale_banner.dart';
-import '../../widgets/price_drop_banner.dart';
+import '../../widgets/banner_rotator.dart';
+
 import '../../extensions/context_tr.dart';
 import '../../utils/responsive.dart';
+import '../../utils/network_error.dart';
 import '../../app/routes.dart';
 import '../../widgets/google_loading.dart';
 import '../../services/flash_sale_service.dart';
@@ -32,15 +32,12 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   bool get wantKeepAlive => true;
-  final ProductService _productService = ProductService();
   final FlashSaleService _flashSaleService = FlashSaleService();
+  final CategoryService _categoryService = CategoryService();
   String? _selectedBrand;
-  bool _pageLoaded = false;
-  int _retryKey = 0;
   final _searchCtrl = TextEditingController();
   Map<String, FlashSale> _flashSales = {};
   StreamSubscription? _flashSub;
-  int _flashRefreshKey = 0;
   List<String> _brands = [
     'Nike',
     'Adidas',
@@ -97,6 +94,13 @@ class _HomeScreenState extends State<HomeScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _subscribeFlashSales();
+    // Lazy-load product feed — don't block startup
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final provider = context.read<ProductFeedProvider>();
+      if (provider.products.isEmpty && !provider.isLoading) {
+        provider.refresh();
+      }
+    });
   }
 
   void _subscribeFlashSales() {
@@ -126,15 +130,24 @@ _searchCtrl.dispose();
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && mounted) {
-      setState(() => _flashRefreshKey++);
       _subscribeFlashSales();
+    }
+  }
+
+  void _onBrandTap(String? brand) {
+    setState(() => _selectedBrand = brand);
+    final provider = context.read<ProductFeedProvider>();
+    if (brand == null) {
+      provider.refresh();
+    } else {
+      provider.loadByBrand(brand);
     }
   }
 
   Widget _brandChip(String label, String? brand) {
     final isSelected = _selectedBrand == brand;
     return GestureDetector(
-      onTap: () => setState(() => _selectedBrand = brand),
+      onTap: () => _onBrandTap(brand),
       child: Container(
         margin: const EdgeInsets.only(right: 8),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -249,10 +262,8 @@ _searchCtrl.dispose();
                   ],
                 ),
               ),
-              // Flash Sale banner
-              FlashSaleBanner(key: ValueKey('flash_banner_$_flashRefreshKey'), sales: _flashSales.values.toList()),
-              // Price Drop banner
-              const PriceDropBanner(),
+              // Banners
+              BannerRotator(flashSales: _flashSales.values.toList()),
               // Categories header
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
@@ -283,7 +294,7 @@ _searchCtrl.dispose();
               SizedBox(
                       height: 100,
                       child: StreamBuilder<List<Category>>(
-                        stream: CategoryService().getCategories(),
+                        stream: _categoryService.getCategories(),
                         builder: (context, snapshot) {
                           if (!snapshot.hasData) {
                             return Center(
@@ -360,9 +371,6 @@ _searchCtrl.dispose();
                         },
                       ),
                     ),
-              // Trending
-              const DynamicBanner(),
-              const SizedBox(height: 4),
               // Products area
               _buildProductsArea(),
               const SizedBox(height: 16),
@@ -403,142 +411,135 @@ _searchCtrl.dispose();
   }
 
   Widget _buildProductsArea() {
-    return StreamBuilder<List<Product>>(
-      key: ValueKey('products_${_selectedBrand ?? 'all'}_$_retryKey'),
-      stream: _selectedBrand == null
-          ? _productService.getProducts()
-          : _productService.getProductsByBrand(_selectedBrand!),
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting && !snap.hasData && !snap.hasError) {
-          return Padding(
-            padding: const EdgeInsets.all(24),
-            child: GoogleLoadingPage(),
-          );
-        }
-        if (!_pageLoaded && (snap.hasData || snap.hasError)) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) setState(() => _pageLoaded = true);
-          });
-        }
-        return Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    context.tr('latest_products'),
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85),
-                    ),
-                  ),
-                ],
+    final provider = context.watch<ProductFeedProvider>();
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                context.tr('latest_products'),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85),
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Builder(
-              builder: (context) {
-                if (snap.hasError) {
-                  final err = snap.error.toString();
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.cloud_off,
-                              size: 48,
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              context.tr('something_wrong'),
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              err.contains('permission-denied')
-                                  ? context.tr('permission_denied')
-                                  : err.contains('UNAVAILABLE')
-                                  ? context.tr('no_network')
-                                  : context.tr('please_try_again'),
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                fontSize: 13,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            ElevatedButton.icon(
-                              onPressed: () => setState(() => _retryKey++),
-                              icon: const Icon(Icons.refresh, size: 18),
-                              label: Text(context.tr('try_again')),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Theme.of(context).colorScheme.primary,
-                                foregroundColor: Theme.of(context).colorScheme.surface,
-                              ),
-                            ),
-                          ],
-                        ),
-                    ),
-                  );
-                }
-                final products = snap.data ?? [];
-                if (products.isEmpty) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        children: [
-                          Icon(Icons.inventory_2, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                          const SizedBox(height: 12),
-                          Text(
-                            _selectedBrand == null
-                                ? context.tr('no_products')
-                                : '${context.tr('no_products_for')} $_selectedBrand',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Builder(builder: (context) {
+          if (provider.error != null && provider.products.isEmpty) {
+            final kind = provider.errorKind;
+            final (icon, title, subtitle) = switch (kind) {
+              FirestoreErrorKind.permission => (
+                Icons.lock_outline,
+                context.tr('permission_denied'),
+                context.tr('firestore_permission_hint'),
+              ),
+              FirestoreErrorKind.missingIndex => (
+                Icons.hourglass_empty,
+                context.tr('something_wrong'),
+                context.tr('firestore_index_building'),
+              ),
+              FirestoreErrorKind.network => (
+                Icons.cloud_off,
+                context.tr('something_wrong'),
+                context.tr('no_network'),
+              ),
+              _ => (
+                Icons.error_outline,
+                context.tr('something_wrong'),
+                context.tr('please_try_again'),
+              ),
+            };
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    Icon(icon, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    const SizedBox(height: 12),
+                    Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Text(subtitle, textAlign: TextAlign.center,
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13)),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: () => provider.refresh(),
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: Text(context.tr('try_again')),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        foregroundColor: Theme.of(context).colorScheme.surface,
                       ),
                     ),
-                  );
+                  ],
+                ),
+              ),
+            );
+          }
+          if (provider.products.isEmpty && provider.isLoading) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: Center(child: GoogleLoading(size: 32, strokeWidth: 3)),
+            );
+          }
+          if (provider.products.isEmpty) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    Icon(Icons.inventory_2, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    const SizedBox(height: 12),
+                    Text(context.tr('no_products'),
+                      style: TextStyle(fontSize: 16, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                  ],
+                ),
+              ),
+            );
+          }
+          return NotificationListener<ScrollNotification>(
+            onNotification: (scrollInfo) {
+              if (scrollInfo.metrics.pixels >= scrollInfo.metrics.maxScrollExtent - 200) {
+                provider.loadNextPage();
+              }
+              return false;
+            },
+            child: GridView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: Responsive.gridColumns(context),
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: Responsive.cardAspectRatio(context),
+              ),
+              itemCount: provider.products.length + (provider.isLoading ? 2 : 0),
+              itemBuilder: (context, index) {
+                if (index >= provider.products.length) {
+                  return const Center(child: GoogleLoading(size: 24, strokeWidth: 2));
                 }
-                return GridView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: Responsive.gridColumns(context),
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: Responsive.cardAspectRatio(context),
-                  ),
-                  itemCount: products.length,
-                  itemBuilder: (context, index) => RepaintBoundary(
-                    child: ProductCard(
-                      product: products[index],
-                      flashSale: _flashSales[products[index].id],
-                      onTap: () => context.push(
-                        '${AppRoutes.productDetail}/${products[index].id}',
-                        extra: products[index],
-                      ),
+                return RepaintBoundary(
+                  child: ProductCard(
+                    product: provider.products[index],
+                    flashSale: _flashSales[provider.products[index].id],
+                    onTap: () => context.push(
+                      '${AppRoutes.productDetail}/${provider.products[index].id}',
+                      extra: provider.products[index],
                     ),
                   ),
                 );
               },
             ),
-          ],
-        );
-      },
+          );
+        }),
+      ],
     );
   }
 

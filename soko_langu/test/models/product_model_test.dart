@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:soko_langu/models/product_model.dart';
+import 'package:soko_vibe/models/product_model.dart';
 
 void main() {
   group('ProductVariant', () {

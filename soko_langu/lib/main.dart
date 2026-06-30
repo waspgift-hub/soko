@@ -1,38 +1,61 @@
 import 'dart:async';
 import 'dart:ui' as ui;
-import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:firebase_core/firebase_core.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_crashlytics/firebase_crashlytics.dart';
-import 'package:firebase_performance/firebase_performance.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'package:go_router/go_router.dart';
+
 import 'package:audio_service/audio_service.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_performance/firebase_performance.dart';
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+// --- App modules ---
+import 'app/app_state.dart' as app_state;
+import 'app/router.dart' as router_lib;
+import 'firebase_messaging_background.dart';
 import 'firebase_options.dart';
-import 'services/notification_service.dart';
-import 'services/localization_service.dart';
+import 'notifiers/auth_notifier.dart';
+import 'providers/music_state_notifier.dart';
+import 'providers/product_feed_provider.dart';
+import 'repositories/auth_repository.dart';
+import 'services/ai/ai_service.dart';
+import 'services/app_lock_service.dart';
+import 'services/audio_cache_service.dart';
+import 'services/audio_handler.dart';
+import 'widgets/mini_player.dart';
+import 'services/auth_service.dart';
+import 'services/exchange_rate_service.dart';
+import 'services/onboarding_service.dart';
+import 'services/magic_link_service.dart';
+import 'services/groq_service.dart';
 import 'services/interstitial_ad_service.dart';
+import 'services/localization_service.dart';
+import 'services/local_cache_service.dart';
+import 'services/notification_service.dart';
 import 'services/security_service.dart';
 import 'services/whatsapp_service.dart';
-import 'services/ai/ai_service.dart';
-import 'services/groq_service.dart';
-import 'services/exchange_rate_service.dart';
 import 'theme/theme_manager.dart';
 import 'utils/responsive.dart';
-import 'widgets/google_loading.dart';
-import 'widgets/audio_fab.dart';
-import 'widgets/offline_banner.dart';
-import 'app/router.dart' as router_lib;
-import 'app/app_state.dart' as app_state;
-import 'services/audio_handler.dart';
+import 'widgets/app_lock_overlay.dart';
+import 'widgets/maintenance_gate.dart';
+import 'widgets/connectivity_wrapper.dart';
+
+// ---------------------------------------------------------------------------
+// Global singletons — scoped to app lifetime, lazily resolved where possible.
+// ---------------------------------------------------------------------------
+
+AudioHandler? audioHandler;
 
 final NotificationService notificationService = NotificationService();
 final LocalizationService localizationService = LocalizationService();
+final SecurityService securityService = SecurityService();
 final InterstitialAdService interstitialAdService = InterstitialAdService();
 final ThemeManager themeManager = ThemeManager();
 final GoRouter appRouter = router_lib.buildRouter();
@@ -40,24 +63,102 @@ final GoRouter appRouter = router_lib.buildRouter();
 typedef LangCallback = void Function(String);
 typedef CurrencyCallback = void Function(String);
 
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Only Firebase is critical for the app to function — init everything else
-  // in the background after the first frame renders
+  // --- Firebase initialization (blocking — required before any Firestore call) ---
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    FirebaseFirestore.instance.settings = const Settings(
-      persistenceEnabled: true,
-    );
+    if (!kIsWeb) {
+      FirebaseFirestore.instance.settings = const Settings(
+        persistenceEnabled: true,
+      );
+    }
   } catch (e) {
     debugPrint('Firebase: initialization failed — $e');
   }
 
+  // --- Local cache (Hive) — must be ready before any repository reads ---
+  if (!kIsWeb) {
+    try {
+      await LocalCacheService.init();
+    } catch (e) {
+      debugPrint('LocalCacheService: init failed — $e');
+    }
+    try {
+      await AudioCacheService().init();
+    } catch (e) {
+      debugPrint('AudioCacheService: init failed — $e');
+    }
+  }
+
+  // --- Global error handlers (must be set before runApp to catch startup crashes) ---
+  _setupGlobalErrorHandlers();
+
+  // --- FCM background handler registration ---
+  // SAFE: only stores a callback reference; the handler itself calls Firebase.initializeApp.
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
   runApp(const SokoVibeApp());
+
+  // --- AudioService: deferred to avoid blocking the first frame ---
+  if (!kIsWeb) {
+    unawaited(_initAudioService());
+  }
 }
+
+/// Registers Crashlytics as the top-level error handler.
+/// Called before [runApp] so every error (including startup-phase) is captured.
+void _setupGlobalErrorHandlers() {
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FirebaseCrashlytics.instance.recordFlutterFatalError(details);
+  };
+
+  ui.PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
+    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    return true; // Prevent the isolate from crashing after reporting
+  };
+}
+
+/// Deferred AudioService initialization — runs after the first frame is painted.
+Future<void> _initAudioService({VoidCallback? onReady}) async {
+  try {
+    audioHandler = await AudioService.init(
+      builder: () {
+        final handler = MusicHandler();
+        bindMusicHandler(handler);
+        return handler;
+      },
+      config: AudioServiceConfig(
+        androidNotificationChannelId: 'com.soko_vibe.music',
+        androidNotificationChannelName: 'Soko Vibe Music',
+        androidNotificationChannelDescription:
+            'Audio playback controls for Soko Vibe',
+        androidNotificationIcon: 'ic_notification',
+        notificationColor: Color(0xFF40916C),
+        androidStopForegroundOnPause: false,
+        androidNotificationOngoing: true,
+        androidNotificationClickStartsActivity: true,
+        androidResumeOnClick: true,
+        androidShowNotificationBadge: true,
+        preloadArtwork: true,
+      ),
+    );
+    onReady?.call();
+  } catch (e) {
+    debugPrint('AudioService init failed: $e');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// AppConfig — InheritedWidget for language / currency propagation
+// ---------------------------------------------------------------------------
 
 class AppConfig extends InheritedWidget {
   final String langCode;
@@ -74,16 +175,14 @@ class AppConfig extends InheritedWidget {
     required super.child,
   });
 
-  static AppConfig? maybeOf(BuildContext context) {
-    return context.dependOnInheritedWidgetOfExactType<AppConfig>();
-  }
+  static AppConfig? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<AppConfig>();
 
   static AppConfig of(BuildContext context) {
     return maybeOf(context) ??
         (throw FlutterError(
-          'AppConfig.of() was called with a context that does not contain an AppConfig widget.\n'
-          'This can happen when the context used is not a descendant of SokoVibeApp.\n'
-          'Make sure AppConfig is placed above the widget that calls AppConfig.of(context).',
+          'AppConfig not found — ensure AppConfig is an ancestor of the calling widget.\n'
+          'This usually means AppConfig.of() was called too early or from a different widget tree.',
         ));
   }
 
@@ -91,6 +190,10 @@ class AppConfig extends InheritedWidget {
   bool updateShouldNotify(AppConfig old) =>
       langCode != old.langCode || currencyCode != old.currencyCode;
 }
+
+// ---------------------------------------------------------------------------
+// Root widget
+// ---------------------------------------------------------------------------
 
 class SokoVibeApp extends StatefulWidget {
   const SokoVibeApp({super.key});
@@ -103,11 +206,29 @@ class _SokoVibeAppState extends State<SokoVibeApp>
     with WidgetsBindingObserver {
   String _langCode = 'en';
   String _currencyCode = 'TZS';
-  bool _appReady = false;
+  late final ProductFeedProvider _productFeedProvider;
+  late final MusicStateNotifier _musicState;
+  late final AuthRepository _authRepository;
+  late final OnboardingService _onboardingService;
+  late final AuthNotifier _authNotifier;
+  MagicLinkService? _magicLinkService;
+
+  // -----------------------------------------------------------------------
+  // Lifecycle
+  // -----------------------------------------------------------------------
 
   @override
   void initState() {
     super.initState();
+    _productFeedProvider = ProductFeedProvider();
+    _musicState = MusicStateNotifier();
+    _authRepository = AuthRepository();
+    _musicState.init();
+    _onboardingService = OnboardingService();
+    _authNotifier = AuthNotifier(
+      authRepo: _authRepository,
+      onboardingService: _onboardingService,
+    );
     WidgetsBinding.instance.addObserver(this);
     themeManager.addListener(_onThemeChange);
     _initApp();
@@ -115,79 +236,127 @@ class _SokoVibeAppState extends State<SokoVibeApp>
 
   @override
   void dispose() {
+    _magicLinkService?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     themeManager.removeListener(_onThemeChange);
+    _productFeedProvider.dispose();
     super.dispose();
   }
 
+  // -----------------------------------------------------------------------
+  // App lifecycle observer
+  // -----------------------------------------------------------------------
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _appReady) {
-      setState(() {});
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      AppLockService.instance.onBackground();
+    } else if (state == AppLifecycleState.resumed) {
+      AppLockService.instance.onResume();
     }
   }
+
+  // -----------------------------------------------------------------------
+  // Theme change listener — triggers widget rebuild
+  // -----------------------------------------------------------------------
 
   void _onThemeChange() {
     if (mounted) setState(() {});
   }
 
+  // -----------------------------------------------------------------------
+  // App initialization
+  // -----------------------------------------------------------------------
+
+  /// Loads theme and preferences, then fires background services.
   Future<void> _initApp() async {
-    // Phase 1 — Fast local init (SharedPreferences, theme)
-    await themeManager.load();
-    final prefs = await SharedPreferences.getInstance();
-    if (!mounted) return;
-    app_state.onboardingSeen = prefs.getBool('onboarding_seen') ?? false;
-    setState(() {
-      _langCode = prefs.getString('language_code') ?? 'en';
-      _currencyCode = prefs.getString('currency') ?? 'TZS';
-      _appReady = true;
-    });
-    _setupNotificationCallbacks();
+    // Load theme asynchronously (UI already has valid defaults)
+    themeManager.load();
 
-    // Phase 2 — Heavy background init (fire-and-forget, doesn't block UI)
-    _initBackgroundServices(prefs);
-  }
+    try {
+      final prefs = await SharedPreferences.getInstance();
 
-  void _setupNotificationCallbacks() {
-    NotificationService.onNotificationTap = (data) {
-      final type = data['type'] as String?;
-      if (type == 'order' || type == 'boost') {
-        appRouter.push('/notifications');
-      } else if (type == 'flash_sale') {
-        appRouter.push('/flash-sale');
-      } else if (type == 'product') {
-        final productId = data['productId'] as String?;
-        if (productId != null) {
-          appRouter.push('/product/$productId');
+      setState(() {
+        _langCode = prefs.getString('language_code') ?? 'en';
+        _currencyCode = prefs.getString('currency') ?? 'TZS';
+      });
+
+      await _authNotifier.initialize();
+      app_state.appStateNotifier.setAppInitialized();
+
+      _magicLinkService = MagicLinkService(_authNotifier);
+      unawaited(_magicLinkService!.initialize());
+
+      // Sync phone from onboarding to Firestore if user is logged in
+      final phone = prefs.getString('phone_number');
+      if (phone != null && phone.isNotEmpty) {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null && !(prefs.getBool('phone_synced') ?? false)) {
+          AuthService().syncPhoneOnProfile(user.uid, phone);
+          await prefs.setBool('phone_synced', true);
         }
       }
+
+      // Load PIN lock state
+      await AppLockService.instance.load();
+
+      _setupNotificationCallbacks();
+
+      // Background services (fire-and-forget)
+      _initBackgroundServices(prefs);
+
+      // Now-playing state — retries internally until AudioService is ready
+    } catch (e) {
+      debugPrint('_initApp: error — $e');
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // Notification tap callbacks
+  // -----------------------------------------------------------------------
+
+  void _setupNotificationCallbacks() {
+    NotificationService.onNotificationTap = (Map<String, dynamic> data) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final type = data['type'] as String?;
+        switch (type) {
+          case 'order':
+          case 'boost':
+            appRouter.push('/notifications');
+          case 'flash_sale':
+            appRouter.push('/flash-sale');
+          case 'product':
+            final productId = data['productId'] as String?;
+            if (productId != null) {
+              appRouter.push('/product/$productId');
+            }
+        }
+      });
     };
 
-    NotificationService.onPriceDropTap = (data) {
+    NotificationService.onPriceDropTap = (Map<String, dynamic> data) {
       final phone = data['sellerPhone'] as String? ?? '';
       final productName = data['productName'] as String? ?? '';
       final newPrice = data['newPrice'] as num? ?? 0;
       if (phone.isEmpty) return;
-      final curSym =
+
+      final symbol =
           LocalizationService.supportedCurrencies['TZS']?['symbol'] ?? 'TSh';
-      final message = LocalizationService.translate('price_drop_whatsapp', 'sw')
+      final message = LocalizationService.translate('price_drop_whatsapp', _langCode)
           .replaceAll('{0}', productName)
-          .replaceAll('{1}', curSym)
+          .replaceAll('{1}', symbol)
           .replaceAll('{2}', newPrice.toStringAsFixed(0));
       WhatsAppService().openWhatsApp(phoneNumber: phone, message: message);
     };
   }
 
+  // -----------------------------------------------------------------------
+  // Phase 2 — Background service initialization
+  // -----------------------------------------------------------------------
+
   Future<void> _initBackgroundServices(SharedPreferences prefs) async {
     // Crashlytics
     try {
-      FlutterError.onError = (details) {
-        FirebaseCrashlytics.instance.recordFlutterFatalError(details);
-      };
-      ui.PlatformDispatcher.instance.onError = (error, stack) {
-        FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
-        return true;
-      };
       await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);
     } catch (e) {
       debugPrint('Crashlytics: failed — $e');
@@ -204,25 +373,35 @@ class _SokoVibeAppState extends State<SokoVibeApp>
       // App Check
       try {
         await FirebaseAppCheck.instance.activate(
-          providerAndroid: const AndroidPlayIntegrityProvider(),
+          providerAndroid: kDebugMode
+              ? const AndroidDebugProvider()
+              : const AndroidPlayIntegrityProvider(),
           providerApple: const AppleDeviceCheckProvider(),
         );
+        if (kDebugMode) {
+          final tokenStr = await FirebaseAppCheck.instance.getToken(true);
+          debugPrint('🔥 AppCheck Debug Token (register in Firebase Console):');
+          debugPrint(tokenStr ?? 'null');
+        }
       } catch (e) {
         debugPrint('AppCheck: failed — $e');
       }
+
       // AdMob
       try {
         await MobileAds.instance.initialize();
       } catch (e) {
         debugPrint('AdMob: failed — $e');
       }
-      // Security
+
+      // Security (root/jailbreak detection)
       try {
         await SecurityService().initialize();
       } catch (e) {
         debugPrint('SecurityService: failed — $e');
       }
-      // Local notifications
+
+      // Awesome Notifications (local channels)
       try {
         await NotificationService.initLocalNotifications();
       } catch (e) {
@@ -230,56 +409,28 @@ class _SokoVibeAppState extends State<SokoVibeApp>
       }
     }
 
-    try {
-      await GoogleSignIn.instance.initialize();
-    } catch (e) {
-      debugPrint('GoogleSignIn: failed — $e');
-    }
-
+    // FCM push + in-app notification service
     try {
       await notificationService.initialize();
     } catch (e) {
       debugPrint('notificationService: $e');
     }
 
+    // Exchange rates (for multi-currency display)
     try {
       await ExchangeRateService().initialize();
     } catch (e) {
       debugPrint('ExchangeRateService: failed — $e');
     }
 
+    // AI assistant
     AiService.initialize(GroqService());
 
-    if (!kIsWeb) {
-      try {
-        // Request notification permission for Android 13+
-        await Permission.notification.request();
-
-        final audioHandler = SokoAudioHandler();
-        await AudioService.init(
-          builder: () => audioHandler,
-          config: const AudioServiceConfig(
-            androidNotificationChannelId: 'com.soko_vibe.music',
-            androidNotificationChannelName: 'Soko Vibe Music',
-            androidNotificationChannelDescription:
-                'Audio playback controls for Soko Vibe',
-            androidNotificationIcon: 'ic_notification',
-
-            notificationColor: Color(0xFF40916C),
-            androidStopForegroundOnPause: false,
-            androidNotificationClickStartsActivity: true,
-            androidResumeOnClick: true,
-            androidNotificationOngoing: true,
-          ),
-        );
-        debugPrint('AudioService.init: SUCCESS');
-        final notifStatus = await Permission.notification.status;
-        debugPrint('Notification permission status: $notifStatus');
-      } catch (e) {
-        debugPrint('AudioService init failed: $e');
-      }
-    }
   }
+
+  // -----------------------------------------------------------------------
+  // Language / Currency setters
+  // -----------------------------------------------------------------------
 
   void _setLanguage(String code) {
     setState(() => _langCode = code);
@@ -289,76 +440,86 @@ class _SokoVibeAppState extends State<SokoVibeApp>
     setState(() => _currencyCode = code);
   }
 
+  // -----------------------------------------------------------------------
+  // Build
+  // -----------------------------------------------------------------------
+
   @override
   Widget build(BuildContext context) {
-    final isDark = themeManager.isDark;
-
-    if (!_appReady) {
-      return MaterialApp(
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: _productFeedProvider),
+        ChangeNotifierProvider.value(value: _musicState),
+        ChangeNotifierProvider.value(value: themeManager),
+        Provider.value(value: _authRepository),
+        Provider.value(value: _onboardingService),
+        ChangeNotifierProvider.value(value: _authNotifier),
+      ],
+      child: MaterialApp.router(
+        routerConfig: appRouter,
         debugShowCheckedModeBanner: false,
+        title: 'Soko Vibe',
         theme: themeManager.lightTheme,
         darkTheme: themeManager.darkTheme,
-        themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
-        home: const Scaffold(body: GoogleLoadingPage()),
+        themeMode: themeManager.isDark ? ThemeMode.dark : ThemeMode.light,
+        builder: _appBuilder,
+      ),
+    );
+  }
+
+  /// Extracted builder — keeps [build] clean and allows the closure to be
+  /// reused without unnecessary allocations.
+  Widget _appBuilder(BuildContext context, Widget? child) {
+    Responsive.init(context);
+    Widget content = child!;
+    final cs = Theme.of(context).colorScheme;
+
+    // Web desktop constraint
+    if (kIsWeb && Responsive.isDesktop) {
+      content = Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1200),
+          child: content,
+        ),
       );
     }
 
-    return MaterialApp.router(
-      routerConfig: appRouter,
-      debugShowCheckedModeBanner: false,
-      title: 'Soko Vibe',
-      theme: themeManager.lightTheme,
-      darkTheme: themeManager.darkTheme,
-      themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
-      builder: (context, child) {
-        Responsive.init(context);
-        Widget content = child!;
-        final cs = Theme.of(context).colorScheme;
+    // Glassmorphism — gradient background with subtle blur
+    content = Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            cs.primary.withValues(alpha: 0.06),
+            cs.surface,
+            cs.tertiary.withValues(alpha: 0.04),
+          ],
+        ),
+      ),
+      child: content,
+    );
 
-        if (kIsWeb && Responsive.isDesktop) {
-          content = Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1200),
-              child: content,
-            ),
-          );
-        }
+    // Cross-cutting overlays
+    content = ConnectivityWrapper(child: content);
+    content = MaintenanceGate(child: content);
+    content = AppLockOverlay(child: content);
 
-        if (isDark) {
-          content = Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  cs.surface,
-                  cs.surfaceContainerHighest.withValues(alpha: 0.3),
-                ],
-              ),
-            ),
-            child: content,
-          );
-        } else {
-          content = Container(color: cs.surface, child: content);
-        }
-        content = OfflineBanner(child: content);
-        return AppConfig(
-          langCode: _langCode,
-          currencyCode: _currencyCode,
-          onSetLanguage: _setLanguage,
-          onSetCurrency: _setCurrency,
-          child: Stack(
+    return AppConfig(
+      langCode: _langCode,
+      currencyCode: _currencyCode,
+      onSetLanguage: _setLanguage,
+      onSetCurrency: _setCurrency,
+      child: Stack(
+        children: [
+          Column(
             children: [
-              Column(
-                children: [
-                  Expanded(child: content),
-                ],
-              ),
-              const AudioFab(),
+              Expanded(child: content),
+              const MiniPlayer(),
             ],
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 }

@@ -115,7 +115,16 @@ class FlashSaleService {
     required DateTime startTime,
     required DateTime endTime,
   }) async {
-    final token = await _auth.currentUser?.getIdToken();
+    // Deactivate expired flash sales client-side so stale isActive flags don't block creation.
+    await _deactivateExpiredForProduct(productId);
+
+    if (await _hasActiveNonExpiredSale(productId)) {
+      throw Exception('FLASH_SALE_ALREADY_ACTIVE');
+    }
+
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('User not logged in');
+    final token = await user.getIdToken(true);
     final resp = await http.post(
       Uri.parse('${ApiConfig.baseUrl}/api/flash-sale/create'),
       headers: {
@@ -145,6 +154,40 @@ class FlashSaleService {
     return result['flashSaleId'] as String? ?? '';
   }
 
+  /// Marks expired flash sales inactive for [productId] (seller-owned docs only).
+  Future<void> _deactivateExpiredForProduct(String productId) async {
+    final snap = await _db
+        .collection('flash_sales')
+        .where('productId', isEqualTo: productId)
+        .where('isActive', isEqualTo: true)
+        .get();
+    final now = DateTime.now();
+    final batch = _db.batch();
+    var hasWrites = false;
+    for (final doc in snap.docs) {
+      final sale = FlashSale.fromFirestore(doc);
+      if (now.isAfter(sale.endTime)) {
+        batch.update(doc.reference, {'isActive': false});
+        hasWrites = true;
+      }
+    }
+    if (hasWrites) await batch.commit();
+  }
+
+  /// True when a flash sale exists with endTime still in the future.
+  Future<bool> _hasActiveNonExpiredSale(String productId) async {
+    final snap = await _db
+        .collection('flash_sales')
+        .where('productId', isEqualTo: productId)
+        .where('isActive', isEqualTo: true)
+        .get();
+    final now = DateTime.now();
+    return snap.docs.any((doc) {
+      final sale = FlashSale.fromFirestore(doc);
+      return sale.endTime.isAfter(now);
+    });
+  }
+
   Future<void> deleteFlashSale(String flashSaleId) async {
     await _db.collection('flash_sales').doc(flashSaleId).delete();
   }
@@ -170,6 +213,7 @@ class FlashSaleService {
           'salePrice': sale.salePrice,
           'discountPercent': sale.discountPercent,
           'sellerId': sale.sellerId,
+          'productImage': sale.productImage,
         }),
       );
     } catch (e) {

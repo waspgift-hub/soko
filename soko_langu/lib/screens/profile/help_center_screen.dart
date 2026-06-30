@@ -27,7 +27,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
               _buildSection(
                 icon: Icons.rocket_launch,
                 title: context.tr('getting_started'),
-                subtitle: context.tr('kuanza'),
+                subtitle: context.tr('getting_started_sub'),
                 children: [
                   _helpTile(
                     title: context.tr('register_login'),
@@ -37,13 +37,21 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                     title: context.tr('choose_account_type'),
                     content: context.tr('help_account_types'),
                   ),
+                  _helpTile(
+                    title: context.tr('browsing_products'),
+                    content: context.tr('help_browsing'),
+                  ),
+                  _helpTile(
+                    title: context.tr('buying'),
+                    content: context.tr('help_buying'),
+                  ),
                 ],
               ),
 
               _buildSection(
                 icon: Icons.store,
-                title: context.tr('selling'),
-                subtitle: context.tr('kuuza'),
+                title: context.tr('selling_title'),
+                subtitle: context.tr('selling_sub'),
                 children: [
                   _helpTile(
                     title: context.tr('list_product'),
@@ -56,6 +64,50 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                   _helpTile(
                     title: context.tr('seller_dashboard'),
                     content: context.tr('help_seller_dashboard'),
+                  ),
+                  _helpTile(
+                    title: context.tr('boosting'),
+                    content: context.tr('help_boosting'),
+                  ),
+                  _helpTile(
+                    title: context.tr('flash_sales'),
+                    content: context.tr('help_flash_sales'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              _buildSection(
+                icon: Icons.chat,
+                title: context.tr('communication'),
+                subtitle: context.tr('communication_sub'),
+                children: [
+                  _helpTile(
+                    title: context.tr('chat_feature'),
+                    content: context.tr('help_chat'),
+                  ),
+                  _helpTile(
+                    title: context.tr('audio_music'),
+                    content: context.tr('help_audio'),
+                  ),
+                  _helpTile(
+                    title: context.tr('youtube_music'),
+                    content: context.tr('help_youtube'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              _buildSection(
+                icon: Icons.verified_user,
+                title: context.tr('account_verification'),
+                subtitle: context.tr('verification_sub'),
+                children: [
+                  _helpTile(
+                    title: context.tr('kyc'),
+                    content: context.tr('help_kyc'),
+                  ),
+                  _helpTile(
+                    title: context.tr('app_lock'),
+                    content: context.tr('help_app_lock'),
                   ),
                 ],
               ),

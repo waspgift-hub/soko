@@ -1,11 +1,30 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/product_model.dart';
 import 'cloudinary_service.dart';
 import 'fraud_prevention_service.dart';
+import 'api_config.dart';
 import '../utils/network_error.dart';
+
+String getThumbnailUrl(String imageUrl, {int width = 300}) {
+  try {
+    final uri = Uri.parse(imageUrl);
+    if (uri.host.contains('cloudinary.com')) {
+      final segments = uri.pathSegments;
+      final uploadIdx = segments.indexOf('upload');
+      if (uploadIdx >= 0 && uploadIdx + 1 < segments.length) {
+        final before = segments.sublist(0, uploadIdx + 1).join('/');
+        final after = segments.sublist(uploadIdx + 1).join('/');
+        return '${uri.scheme}://${uri.host}/$before/w_$width,c_fill,q_auto,f_auto/$after';
+      }
+    }
+  } catch (_) {}
+  return imageUrl;
+}
 
 void _sortByBoost(List<Product> products) {
   products.sort((a, b) {
@@ -34,6 +53,7 @@ class ProductService {
     required String currency,
     required int stock,
     required List<XFile> imageFiles,
+    String location = 'Tanzania',
     bool isWholesale = false,
     List<Map<String, dynamic>>? wholesaleTiers,
     List<Map<String, dynamic>>? variants,
@@ -45,7 +65,8 @@ class ProductService {
       final user = _auth.currentUser;
       if (user == null) throw Exception("User not logged in");
 
-      // Force refresh auth token to ensure valid claims for Firestore writes
+      // Refresh session so Firestore rules see a valid auth token
+      await user.reload();
       await user.getIdToken(true);
 
       List<String> imageUrls = [];
@@ -69,7 +90,7 @@ class ProductService {
         user.uid, name, description, price, currency, imageUrls,
         category, subcategory, stock, sellerName, sellerPhone,
         sellerKycApproved, isWholesale, wholesaleTiers, variants,
-        attributes, brand, condition,
+        attributes, brand, condition, location,
       );
     } catch (e) {
       throw NetworkError(
@@ -99,6 +120,7 @@ class ProductService {
     Map<String, dynamic>? attributes,
     String? brand,
     String condition,
+    String location,
   ) async {
     final docRef = await _db.collection("products").add({
       "name": name,
@@ -111,7 +133,7 @@ class ProductService {
       "sellerPhone": sellerPhone,
       "category": category,
       "subcategory": subcategory,
-      "location": "Tanzania",
+      "location": location,
       "stock": stock,
       "isWholesale": isWholesale,
       "wholesaleTiers": wholesaleTiers ?? [],
@@ -143,6 +165,80 @@ class ProductService {
       sellerProductCount: productCount.count ?? 0,
     );
     return docRef.id;
+  }
+
+  /// Firestore paginated query — returns products and the last document cursor.
+  Future<(List<Product>, DocumentSnapshot<Map<String, dynamic>>?)> fetchProducts({
+    int limit = 30,
+    DocumentSnapshot<Map<String, dynamic>>? startAfter,
+  }) async {
+    var query = _db
+        .collection("products")
+        .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(limit);
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
+    final snapshot = await query.get();
+    final products = snapshot.docs
+        .map((doc) => Product.fromFirestore(doc))
+        .toList();
+    final lastDoc = snapshot.docs.isEmpty ? null : snapshot.docs.last;
+    return (products, lastDoc);
+  }
+
+  /// Paginated query for a specific brand.
+  Future<List<Product>> fetchProductsByBrand(String brand, {int limit = 30}) async {
+    final snapshot = await _db
+        .collection("products")
+        .where('isActive', isEqualTo: true)
+        .where("brand", isEqualTo: brand)
+        .orderBy('createdAt', descending: true)
+        .limit(limit)
+        .get();
+    final products = snapshot.docs
+        .map((doc) => Product.fromFirestore(doc))
+        .toList();
+    _sortByBoost(products);
+    return products;
+  }
+
+  /// Paginated query for a category + optional subcategory.
+  Future<List<Product>> fetchProductsByCategory(
+    String category, {
+    String? subcategory,
+    int limit = 30,
+  }) async {
+    var query = _db
+        .collection("products")
+        .where('isActive', isEqualTo: true)
+        .where("category", isEqualTo: category)
+        .orderBy('createdAt', descending: true)
+        .limit(limit);
+    if (subcategory != null) {
+      query = query.where("subcategory", isEqualTo: subcategory);
+    }
+    final snapshot = await query.get();
+    return snapshot.docs.map((doc) => Product.fromFirestore(doc)).toList();
+  }
+
+  /// Alias for [getProductById] — used by [ProductRepository].
+  Future<Product?> fetchProduct(String id) => getProductById(id);
+
+  /// Real-time stream wrapper — used by [ProductRepository].
+  Stream<List<Product>> watchProductsRealtime({int limit = 50}) {
+    return _db
+        .collection("products")
+        .where('isActive', isEqualTo: true)
+        .snapshots()
+        .map((snapshot) {
+      final products = snapshot.docs
+          .map((doc) => Product.fromFirestore(doc))
+          .toList();
+      products.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return products.take(limit).toList();
+    });
   }
 
   Stream<List<Product>> getProducts({int limitAmt = 30}) {
@@ -197,6 +293,7 @@ class ProductService {
   Stream<List<Product>> searchProducts(String query) {
     return _db.collection("products")
         .where('isActive', isEqualTo: true)
+        .limit(100)
         .snapshots().map((snapshot) {
       final products = snapshot.docs
           .map((doc) => Product.fromFirestore(doc))
@@ -274,6 +371,7 @@ class ProductService {
     String? condition,
     List<String>? existingImages,
     List<XFile>? newImages,
+    String? location,
   }) async {
     try {
       Map<String, dynamic> data = {};
@@ -289,6 +387,7 @@ class ProductService {
       if (variants != null) data["variants"] = variants;
       if (brand != null) data["brand"] = brand;
       if (condition != null) data["condition"] = condition;
+      if (location != null) data["location"] = location;
 
       if (existingImages != null || newImages != null) {
         List<String> allImages = existingImages ?? [];
@@ -313,10 +412,19 @@ class ProductService {
 
   Future<void> deleteProduct(String productId) async {
     try {
-      await _db.collection("products").doc(productId).update({
-        'isActive': false,
-        'deletedAt': FieldValue.serverTimestamp(),
-      });
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception('Not authenticated');
+
+      final token = await user.getIdToken();
+      final response = await http.delete(
+        Uri.parse('${ApiConfig.baseUrl}/api/products/$productId'),
+        headers: { 'Authorization': 'Bearer $token' },
+      );
+
+      if (response.statusCode != 200) {
+        final body = jsonDecode(response.body);
+        throw Exception(body['error'] ?? 'Delete failed');
+      }
     } catch (e) {
       throw NetworkError(
           message: "Delete failed: $e",

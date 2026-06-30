@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/phone_utils.dart';
-import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/ai/ai_service.dart';
@@ -13,7 +12,7 @@ import '../../services/localization_service.dart';
 import '../../models/product_model.dart';
 import '../../models/product_search_result.dart';
 import '../../extensions/context_tr.dart';
-import '../../app/routes.dart';
+import '../../utils/chat_utils.dart';
 
 class AiAssistantScreen extends StatefulWidget {
   const AiAssistantScreen({super.key});
@@ -246,17 +245,15 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
         locale: locale,
       );
 
-      setState(() => _isLoading = false);
-      _scrollToBottom();
-      await Future.delayed(const Duration(milliseconds: 400));
-
       setState(() {
+        _isLoading = false;
         _messages.add(ChatMessage(
           text: reply,
           isUser: false,
           products: products.isNotEmpty ? products : null,
         ));
       });
+      _scrollToBottom();
     } catch (_) {
       setState(() {
         _isLoading = false;
@@ -280,15 +277,14 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
         searchQuery: query,
         locale: locale,
       );
-      setState(() => _isLoading = false);
-      _scrollToBottom();
-      await Future.delayed(const Duration(milliseconds: 400));
       setState(() {
+        _isLoading = false;
         _messages.add(ChatMessage(
           text: reply,
           isUser: false,
         ));
       });
+      _scrollToBottom();
       return;
     }
 
@@ -302,24 +298,30 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
       searchQuery: query,
       locale: locale,
     );
-    setState(() => _isLoading = false);
-    _scrollToBottom();
-    await Future.delayed(const Duration(milliseconds: 400));
     setState(() {
+      _isLoading = false;
       _messages.add(ChatMessage(
         text: reply,
         isUser: false,
         products: products,
       ));
     });
+    _scrollToBottom();
   }
 
-  void _openProductWhatsApp(ProductSearchResult product) {
+  void _chatWithSeller(ProductSearchResult product) {
     final sellerId = product.sellerId.isNotEmpty
         ? product.sellerId
         : FirebaseAuth.instance.currentUser?.uid ?? '';
     if (sellerId.isEmpty) return;
-    context.push('${AppRoutes.chat}/$sellerId', extra: {'name': product.sellerName});
+    showChatOptions(
+      context: context,
+      sellerId: sellerId,
+      sellerName: product.sellerName,
+      productName: product.productName,
+      productPrice: product.price,
+      phone: product.sellerPhone.isNotEmpty ? product.sellerPhone : null,
+    );
   }
 
   void _scrollToBottom() {
@@ -593,7 +595,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: () => _openProductWhatsApp(product),
+              onPressed: () => _chatWithSeller(product),
               icon: const Icon(Icons.chat_outlined, size: 18),
               label: Text(context.tr('contact_seller')),
               style: ElevatedButton.styleFrom(

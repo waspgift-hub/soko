@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../models/saved_account.dart';
 import '../services/account_manager.dart';
 import '../app/routes.dart';
+import '../extensions/context_tr.dart';
 import 'google_loading.dart';
 
 class AccountSwitcherSheet extends StatefulWidget {
@@ -55,7 +56,7 @@ class _AccountSwitcherSheetState extends State<AccountSwitcherSheet> {
           context.go(AppRoutes.home);
         }
       } catch (e) {
-        if (mounted) _showError('Failed to switch: $e');
+        if (mounted) _showError('${context.tr('wrong_password_switch_error')}: $e');
       }
     } else {
       if (!mounted) return;
@@ -73,14 +74,14 @@ class _AccountSwitcherSheetState extends State<AccountSwitcherSheet> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Enter password to switch account'),
+            Text(context.tr('enter_password_to_switch')),
             const SizedBox(height: 16),
             TextField(
               controller: ctrl,
               obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Password',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: context.tr('password'),
+                border: const OutlineInputBorder(),
               ),
               autofocus: true,
             ),
@@ -89,7 +90,7 @@ class _AccountSwitcherSheetState extends State<AccountSwitcherSheet> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text(context.tr('cancel')),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -101,10 +102,10 @@ class _AccountSwitcherSheetState extends State<AccountSwitcherSheet> {
                 );
                 if (mounted) context.go(AppRoutes.home);
               } catch (e) {
-                if (mounted) _showError('Wrong password or error switching');
+                if (mounted) _showError(context.tr('wrong_password_switch_error'));
               }
             },
-            child: const Text('Switch'),
+            child: Text(context.tr('switch_account')),
           ),
         ],
       ),
@@ -121,22 +122,22 @@ class _AccountSwitcherSheetState extends State<AccountSwitcherSheet> {
 
   Future<void> _removeAccount(SavedAccount account) async {
     if (_accounts.length <= 1) {
-      _showError('Cannot remove your last account');
+      _showError(context.tr('cannot_remove_last_account'));
       return;
     }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Remove Account'),
-        content: Text('Remove ${account.email}?'),
+        title: Text(context.tr('remove_account')),
+        content: Text(context.tr('remove_account_confirm').replaceAll('{email}', account.email)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(context.tr('cancel')),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Remove'),
+            child: Text(context.tr('remove')),
           ),
         ],
       ),
@@ -182,7 +183,7 @@ class _AccountSwitcherSheetState extends State<AccountSwitcherSheet> {
             child: Row(
               children: [
                 Text(
-                  'Accounts',
+                  context.tr('accounts'),
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -213,7 +214,7 @@ class _AccountSwitcherSheetState extends State<AccountSwitcherSheet> {
               child: OutlinedButton.icon(
                 onPressed: _addAccount,
                 icon: const Icon(Icons.person_add_outlined, size: 20),
-                label: const Text('Add another account'),
+                label: Text(context.tr('add_another_account')),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
@@ -273,7 +274,7 @@ class _AccountSwitcherSheetState extends State<AccountSwitcherSheet> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                'Active',
+                context.tr('active'),
                 style: TextStyle(
                   fontSize: 10,
                   color: cs.primary,
@@ -291,7 +292,7 @@ class _AccountSwitcherSheetState extends State<AccountSwitcherSheet> {
             TextButton(
               onPressed: () => _switchAccount(account),
               child: Text(
-                'Switch',
+                context.tr('switch_account'),
                 style: TextStyle(
                   color: cs.primary,
                   fontWeight: FontWeight.w600,

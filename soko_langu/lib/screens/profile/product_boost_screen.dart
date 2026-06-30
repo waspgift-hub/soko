@@ -48,7 +48,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
         children: [
           _buildProductHeader(cardBg),
           const SizedBox(height: 24),
-          _buildSectionTitle('Choose your boost package'),
+          _buildSectionTitle(context.tr('choose_boost_package')),
           const SizedBox(height: 16),
           _buildTierCard(BoostTier.bronze, cardBg, brightness),
           const SizedBox(height: 12),
@@ -123,7 +123,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
                 border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.31)),
               ),
               child: Text(
-                'Active',
+                context.tr('active'),
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
                   fontSize: 12,
@@ -292,7 +292,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'You will be prompted to complete payment after tapping continue.',
+                      context.tr('payment_after_continue'),
                       style: TextStyle(
                         fontSize: 12,
                         color: isDark ? Theme.of(context).colorScheme.onSurfaceVariant : Theme.of(context).colorScheme.onSurfaceVariant,
@@ -321,7 +321,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
                 ? const GoogleLoading(size: 20, strokeWidth: 2)
                 : Text(
                     _selectedTier == null
-                        ? 'Select a package'
+                        ? context.tr('select_package')
                         : 'Continue — TZS ${_nf.format(_selectedTier!.priceTzs)}',
                     style: const TextStyle(
                       fontSize: 16,
@@ -383,7 +383,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
-        if (mounted) _showError('Please log in first');
+        if (mounted) _showError(context.tr('please_log_in_first'));
         return;
       }
 
@@ -395,7 +395,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
       );
 
       if (result == null || result['order_id'] == null) {
-        if (mounted) _showError('Payment initiation failed');
+        if (mounted) _showError(context.tr('payment_initiation_failed'));
         return;
       }
 
@@ -431,6 +431,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
     );
   }
 
+  // ignore: unused_element
   Future<void> _retryPayment(String orderId) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -448,7 +449,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
       if (resp.statusCode == 200 && body['status'] == 'completed') {
         // Success — the transaction is now completed
       } else {
-        if (mounted) _showError(body['error'] as String? ?? 'Payment not confirmed yet');
+        if (mounted) _showError(body['error'] as String? ?? context.tr('payment_not_confirmed'));
       }
     } catch (e) {
       debugPrint('retryPayment error: $e');
@@ -478,12 +479,21 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Payment received. Boosting will complete shortly...',
+            context.tr('boosting_will_complete'),
           ),
           backgroundColor: Theme.of(context).colorScheme.primary,
         ),
       );
     }
+
+    // Notify all users about this boost
+    final user = FirebaseAuth.instance.currentUser;
+    BoostService().notifyBoost(
+      productId: widget.product.id,
+      tierName: _selectedTier!.name,
+      sellerId: user?.uid,
+    );
+
     if (mounted) context.go(AppRoutes.sellerDashboard);
   }
 
@@ -538,7 +548,7 @@ class _PaymentDialogState extends State<_PaymentDialog> {
         widget.onError(body['error'] as String? ?? 'Payment not confirmed yet');
       }
     } catch (e) {
-      if (mounted) widget.onError('Network error: $e');
+      if (mounted) widget.onError(context.tr('network_error').replaceAll('{error}', '$e'));
     } finally {
       if (mounted) setState(() => _checking = false);
     }
@@ -566,11 +576,11 @@ class _PaymentDialogState extends State<_PaymentDialog> {
               children: [
                 Icon(Icons.check_circle, color: cs.primary, size: 64),
                 const SizedBox(height: 16),
-                const Text('Payment Successful!',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                Text(context.tr('payment_successful'),
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
-                const Text('Your product is now boosted.',
-                    style: TextStyle(color: Colors.black54)),
+                Text(context.tr('product_now_boosted'),
+                    style: const TextStyle(color: Colors.black54)),
               ],
             ),
           );
@@ -578,16 +588,16 @@ class _PaymentDialogState extends State<_PaymentDialog> {
 
         if (status == 'failed') {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            widget.onError('Payment failed. Try again.');
+            widget.onError(context.tr('payment_failed_try_again'));
           });
           return AlertDialog(
             content: Column(
               mainAxisSize: MainAxisSize.min,
-              children: const [
-                Icon(Icons.cancel, color: Colors.red, size: 64),
-                SizedBox(height: 16),
-                Text('Payment Failed',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              children: [
+                const Icon(Icons.cancel, color: Colors.red, size: 64),
+                const SizedBox(height: 16),
+                Text(context.tr('payment_failed'),
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               ],
             ),
           );
@@ -602,14 +612,14 @@ class _PaymentDialogState extends State<_PaymentDialog> {
                 const SizedBox(height: 20),
               ],
               Text(
-                _timedOut ? 'Payment still processing?' : 'Processing Payment...',
+                _timedOut ? context.tr('payment_not_confirmed') : context.tr('processing_payment'),
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               Text(
                 _timedOut
-                    ? 'Check your phone and complete payment.\nOrder: ${widget.orderId}'
-                    : 'Complete payment on your phone.',
+                    ? '${context.tr('check_phone_complete_payment')}\nOrder: ${widget.orderId}'
+                    : context.tr('complete_payment_on_phone'),
                 textAlign: TextAlign.center,
                 style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
               ),
@@ -622,7 +632,7 @@ class _PaymentDialogState extends State<_PaymentDialog> {
                     icon: _checking
                         ? const SizedBox(width: 20, height: 20, child: GoogleLoading(size: 20, strokeWidth: 2))
                         : const Icon(Icons.refresh, size: 18),
-                    label: Text(_checking ? 'Checking...' : 'Check Payment Status'),
+                    label: Text(_checking ? context.tr('checking') : context.tr('check_payment_status')),
                   ),
                 ),
               ],

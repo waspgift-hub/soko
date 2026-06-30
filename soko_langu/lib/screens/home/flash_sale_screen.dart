@@ -9,6 +9,7 @@ import '../../widgets/google_loading.dart';
 import '../../widgets/ad_banner.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
+import '../../utils/chat_utils.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../services/product_service.dart';
 
@@ -490,12 +491,16 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                 const SizedBox(width: 8),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: () => context.push(
-                      '${AppRoutes.chat}/${sale.sellerId}',
-                      extra: {'name': sale.sellerName},
+                    onPressed: () => showChatOptions(
+                      context: context,
+                      sellerId: sale.sellerId,
+                      sellerName: sale.sellerName,
+                      phone: sale.sellerPhone,
+                      productName: sale.productName,
+                      productPrice: sale.originalPrice,
                     ),
                     icon: const Icon(Icons.chat_outlined, size: 18),
-                    label: Text(context.tr('whatsapp')),
+                    label: Text('Chat'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: cs.whatsappGreen,
                       foregroundColor: cs.surface,

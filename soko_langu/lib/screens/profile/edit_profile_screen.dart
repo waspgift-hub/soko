@@ -381,7 +381,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 TextFormField(
                   controller: _usernameController,
                   decoration: InputDecoration(
-                    labelText: 'Username',
+                    labelText: context.tr('username'),
                     hintText: context.tr('choose_username'),
                     border: const OutlineInputBorder(),
                     prefixIcon: Icon(
@@ -423,7 +423,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   controller: _phoneController,
                   decoration: InputDecoration(
                     labelText: context.tr('phone'),
-                    hintText: '0712345678',
+                    hintText: context.tr('phone_hint_example'),
                     border: const OutlineInputBorder(),
                   ),
                   keyboardType: TextInputType.phone,
@@ -433,7 +433,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   controller: _locationController,
                   decoration: InputDecoration(
                     labelText: context.tr('location'),
-                    hintText: 'Dar es Salaam, Tanzania',
+                    hintText: context.tr('location_example'),
                     border: const OutlineInputBorder(),
                     prefixIcon: Icon(
                       Icons.location_on,

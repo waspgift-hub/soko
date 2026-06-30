@@ -12,6 +12,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() && (
+        request.auth.token.email == 'admin@soko-langu.com' ||
         request.auth.token.email == 'admin@soko-vibe.com' ||
         (
           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
@@ -22,6 +23,7 @@ service cloud.firestore {
 
     function kycApproved() {
       return isSignedIn() && (
+        request.auth.token.email == 'admin@soko-langu.com' ||
         request.auth.token.email == 'admin@soko-vibe.com' ||
         (
           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
@@ -99,7 +101,8 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.buyerId == request.auth.uid;
       allow update: if isSignedIn() && (
         resource.data.buyerId == request.auth.uid ||
-        resource.data.sellerId == request.auth.uid
+        resource.data.sellerId == request.auth.uid ||
+        isAdmin()
       );
       allow delete: if isAdmin();
     }
@@ -147,13 +150,13 @@ service cloud.firestore {
     match /notifications/{notifId} {
       allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
       allow create: if isSignedIn()
-        && request.resource.data.userId == request.auth.uid
+        && (request.resource.data.userId == request.auth.uid || isAdmin())
         && request.resource.data.keys().hasAll(['title', 'body', 'userId'])
         && request.resource.data.title is string
         && request.resource.data.body is string;
       allow update: if isSignedIn()
         && resource.data.userId == request.auth.uid
-        && request.resource.data.keys().hasOnly(['isRead']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
@@ -169,8 +172,30 @@ service cloud.firestore {
     match /ad_views/{adViewId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    // ─── ADMIN ADMOB EARNINGS ───────────────────────────────
+    match /admob_earnings/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ─── ADMIN NOTIFICATIONS LOG ──────────────────────────
+    match /admin_notifications/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ─── APP SETTINGS (maintenance mode, etc.) ─────────────
+    match /app_settings/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ─── PRICE DROPS ────────────────────────────────────────
+    match /price_drops/{docId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
     }
 
     // ─── ADMIN WITHDRAWALS ──────────────────────────────────
@@ -217,7 +242,7 @@ service cloud.firestore {
 
     // ─── WITHDRAWALS ────────────────────────────────────────
     match /withdrawals/{wdId} {
-      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
       allow write: if isAdmin();
     }
 
@@ -237,12 +262,11 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // ─── FRAUD ALERTS (server-managed + admin read) ─────────
+    // ─── FRAUD ALERTS ───────────────────────────────────────
     match /fraud_alerts/{alertId} {
       allow read: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
     }
 
     // ─── AUDIT LOG ──────────────────────────────────────────

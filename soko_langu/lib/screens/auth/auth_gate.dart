@@ -1,61 +1,41 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import '../../services/account_manager.dart';
-import '../../widgets/bottom_nav_bar.dart';
+import 'package:provider/provider.dart';
+import '../../notifiers/auth_notifier.dart';
 import '../../widgets/google_loading.dart';
+import '../../widgets/bottom_nav_bar.dart';
+import '../onboarding/onboarding_screen.dart' as onboarding;
 import 'login_screen.dart';
 
-class AuthGate extends StatefulWidget {
+class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
 
   @override
-  State<AuthGate> createState() => _AuthGateState();
+  Widget build(BuildContext context) {
+    return Consumer<AuthNotifier>(
+      builder: (context, notifier, _) {
+        switch (notifier.status) {
+          case AuthStatus.loading:
+            return const _LoadingPage();
+          case AuthStatus.onboarding:
+            return const onboarding.OnboardingScreen();
+          case AuthStatus.unauthenticated:
+            return const LoginScreen();
+          case AuthStatus.authenticated:
+            return const MainScreen();
+        }
+      },
+    );
+  }
 }
 
-class _AuthGateState extends State<AuthGate> {
-  bool _resolved = false;
+class _LoadingPage extends StatelessWidget {
+  const _LoadingPage();
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (context, snapshot) {
-        final justWaiting = snapshot.connectionState == ConnectionState.waiting;
-
-        if (justWaiting && !_resolved) {
-          return Scaffold(body: const GoogleLoadingPage());
-        }
-
-        if (justWaiting && _resolved) {
-          final user = snapshot.data ?? FirebaseAuth.instance.currentUser;
-          if (user != null) return const MainScreen();
-          return const LoginScreen();
-        }
-
-        if (!_resolved) _resolved = true;
-
-        if (AccountManager.instance.isSwitching) {
-          return Scaffold(
-            body: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  GoogleLoading(size: 32, strokeWidth: 3),
-                  SizedBox(height: 16),
-                  Text(
-                    'Switching account...',
-                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6)),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-        if (snapshot.hasData && snapshot.data != null) {
-          return const MainScreen();
-        }
-        return const LoginScreen();
-      },
+    return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      body: const GoogleLoadingPage(),
     );
   }
 }

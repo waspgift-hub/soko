@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import '../../services/product_service.dart';
 import '../../models/product_model.dart';
+import '../../providers/product_feed_provider.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../widgets/google_loading.dart';
@@ -43,6 +45,8 @@ class _MyAdsScreenState extends State<MyAdsScreen> {
     try {
       await _productService.deleteProduct(product.id);
       if (mounted) {
+        // Remove from the product feed immediately
+        context.read<ProductFeedProvider>().removeProduct(product.id);
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(context.tr('product_deleted'))));

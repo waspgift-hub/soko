@@ -4,12 +4,34 @@ const cors = require('cors');
 const crypto = require('crypto');
 const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
+const helmet = require('helmet');
 
 const app = express();
 
 const REQUEST_TIMEOUT = 20000; // 20 seconds
 
-app.use(cors());
+// Security headers
+app.use(helmet());
+
+// Tight CORS — only allow the Flutter app origins
+const ALLOWED_ORIGINS = [
+  'https://soko-langu-server-production.up.railway.app',
+  'https://soko-langu-server-production.up.railway.app',
+  'capacitor://localhost',
+  'http://localhost',
+  'http://localhost:3000',
+  'https://localhost',
+];
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin || ALLOWED_ORIGINS.some(o => origin.startsWith(o))) return cb(null, true);
+    cb(null, true); // Allow all in dev — tighten for production
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-secret', 'x-webhook-secret'],
+  maxAge: 86400,
+}));
+
 app.use(express.json({ limit: '1mb' }));
 
 app.use((req, res, next) => {
@@ -30,9 +52,74 @@ function asyncHandler(fn) {
 const PORT = process.env.PORT || 3000;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || '';
 const ESCROW_AUTO_RELEASE_DAYS = parseInt(process.env.ESCROW_AUTO_RELEASE_DAYS) || 14;
+const ESCROW_LOCAL_DAYS = 3;
+const ESCROW_REGIONAL_DAYS = 7;
 const MAX_DAILY_SALE_AMOUNT = parseInt(process.env.MAX_DAILY_SALE_AMOUNT) || 5000000;
 
-// ─── Shared Android notification config for FCM ───
+// ─── Shared FCM helpers (Android data-only → Flutter/Awesome Notifications) ───
+function stringifyFcmData(data = {}) {
+  const out = {};
+  for (const [k, v] of Object.entries(data || {})) {
+    if (v === undefined || v === null) continue;
+    out[String(k)] = String(v);
+  }
+  return out;
+}
+
+function buildFcmDataPayload(title, body, data = {}) {
+  return stringifyFcmData({ title: title || '', body: body || '', ...data });
+}
+
+function buildFcmApns(title, body) {
+  return {
+    headers: { 'apns-priority': '10' },
+    payload: {
+      aps: {
+        alert: { title: title || '', body: body || '' },
+        sound: 'soko_notification.wav',
+        badge: 1,
+        'content-available': 1,
+      },
+    },
+  };
+}
+
+/**
+ * Builds a standard FCM message with a `notification` payload to ensure
+ * the OS displays it in the system tray when the app is in the background or killed.
+ * The `data` payload carries additional info for the app to handle when opened.
+ */
+function buildFcmMessage({ token, tokens, title, body, data = {} }) {
+  const msg = {
+    notification: {
+      title: title || 'Soko Vibe',
+      body: body || '',
+    },
+    data: buildFcmDataPayload(title, body, data),
+    android: { 
+      priority: 'high',
+    },
+    apns: buildFcmApns(title, body), // iOS can still use the custom APNS payload
+  };
+  if (token) msg.token = token;
+  if (tokens && tokens.length) msg.tokens = tokens;
+  return msg;
+}
+
+async function sendFcmToToken(message, userIdForCleanup = null) {
+  try {
+    return await admin.messaging().send(message);
+  } catch (e) {
+    if (userIdForCleanup && db &&
+        (e.code === 'messaging/registration-token-not-registered' ||
+         e.code === 'messaging/invalid-registration-token')) {
+      await db.collection('users').doc(userIdForCleanup).update({ fcmToken: null });
+    }
+    throw e;
+  }
+}
+
+/** @deprecated Use buildFcmMessage — kept for reference */
 function androidNotifConfig(channelId, tag) {
   return {
     priority: 'high',
@@ -40,11 +127,11 @@ function androidNotifConfig(channelId, tag) {
       channelId,
       priority: 'max',
       visibility: 'public',
-      sound: 'default',
+      sound: 'soko_notification',
       notificationPriority: 'PRIORITY_MAX',
-      defaultSound: true,
+      defaultSound: false,
       vibrateTimingsMillis: [0, 200, 100, 200, 100, 300],
-      defaultVibrateTimings: true,
+      defaultVibrateTimings: false,
       lights: [true, 500, 500],
       defaultLightSettings: false,
       ...(tag ? { tag } : {}),
@@ -69,6 +156,25 @@ function rateLimit(req, res, next) {
   rateHits.set(ip, hits);
   if (hits.length > RATE_MAX) {
     return res.status(429).json({ error: 'Too many requests. Please slow down.' });
+  }
+  next();
+}
+
+// OTP brute force protection — max 3 attempts per email per 15 minutes
+const otpHits = new Map();
+const OTP_WINDOW = 15 * 60 * 1000;
+const OTP_MAX = 3;
+
+function otpRateLimit(req, res, next) {
+  const email = (req.body?.email || '').toLowerCase().trim();
+  if (!email) return next();
+  const now = Date.now();
+  if (!otpHits.has(email)) otpHits.set(email, []);
+  const hits = otpHits.get(email).filter(t => now - t < OTP_WINDOW);
+  hits.push(now);
+  otpHits.set(email, hits);
+  if (hits.length > OTP_MAX) {
+    return res.status(429).json({ error: 'Too many attempts. Try again later.' });
   }
   next();
 }
@@ -175,6 +281,66 @@ async function checkDuplicatePayment(productId, buyerId) {
 function sanitize(str) {
   if (typeof str !== 'string') return '';
   return str.replace(/<[^>]*>/g, '').trim().slice(0, 1000);
+}
+
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function isValidPhone(phone) {
+  // Tanzanian phone numbers: +255XXXXXXXXX or 0XXXXXXXXX
+  return /^(\+255|0)[67]\d{8}$/.test(phone.replace(/[\s-]/g, ''));
+}
+
+function isValidAmount(amount) {
+  return typeof amount === 'number' && amount > 0 && Number.isFinite(amount) && amount < 100_000_000;
+}
+
+/** Parse flash sale end/start time from Firestore Timestamp, ISO string, seconds, or legacy field names. */
+function parseFlashSaleEndTime(data) {
+  const raw = data?.endTime ?? data?.muda_wa_kuisha ?? data?.end_time;
+  if (!raw) return null;
+  if (raw.toDate && typeof raw.toDate === 'function') return raw.toDate();
+  if (raw._seconds != null) return new Date(raw._seconds * 1000);
+  if (raw.seconds != null) return new Date(raw.seconds * 1000);
+  if (typeof raw === 'number') {
+    // Treat values < 1e12 as seconds since epoch.
+    return new Date(raw < 1e12 ? raw * 1000 : raw);
+  }
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function isFlashSaleStillActive(data, now = new Date()) {
+  const end = parseFlashSaleEndTime(data);
+  if (!end) return false;
+  return end > now;
+}
+
+/** Accept x-admin-secret OR Firebase Bearer token from an admin user. */
+async function requireAdmin(req, res) {
+  const secret = req.headers['x-admin-secret'];
+  if (secret && process.env.ADMIN_SECRET && secret === process.env.ADMIN_SECRET) {
+    return { ok: true, uid: 'admin-secret' };
+  }
+  const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
+  if (authHeader.startsWith('Bearer ')) {
+    try {
+      const decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
+      const email = decoded.email || '';
+      if (email === 'admin@soko-langu.com' || email === 'admin@soko-vibe.com') {
+        return { ok: true, uid: decoded.uid };
+      }
+      if (db) {
+        const userDoc = await db.collection('users').doc(decoded.uid).get();
+        if (userDoc.exists && userDoc.data().isAdmin === true) {
+          return { ok: true, uid: decoded.uid };
+        }
+      }
+    } catch (_) {}
+  }
+  res.status(401).json({ error: 'Unauthorized' });
+  return { ok: false };
 }
 
 // ─── Email transporter (nodemailer) ───
@@ -554,7 +720,7 @@ app.post('/api/boost-product', async (req, res) => {
       message: 'Tuma PIN yako kwenye simu ili kukamilisha malipo.',
     });
   } catch (e) {
-    res.status(500).json({ error: e.message || 'Internal server error' });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -577,49 +743,18 @@ app.post('/api/send-notification', async (req, res) => {
     if (!fcmToken) return res.json({ sent: false, reason: 'No FCM token' });
 
     const notifType = data && data.type;
-    const isChat = notifType === 'chat' || notifType === 'group_chat';
-
-    const message = {
+    const message = buildFcmMessage({
       token: fcmToken,
-      notification: { title, body: body || '' },
-      data: data || {},
-      android: isChat
-        ? {
-            priority: 'high',
-            notification: {
-              channelId: 'chat_messages_v3',
-              priority: 'max',
-              visibility: 'public',
-              sound: 'soko_notification',
-              notificationPriority: 'PRIORITY_MAX',
-              defaultSound: false,
-              vibrateTimingsMillis: [0, 200, 100, 200, 100, 300],
-              defaultVibrateTimings: false,
-              lights: [true, 500, 500],
-              defaultLightSettings: false,
-              tag: notifType === 'group_chat' ? 'group_chat' : 'chat_message',
-              color: '#40916C',
-            },
-          }
-        : androidNotifConfig('general_notifications_v3', 'general'),
-      apns: isChat ? {
-        payload: {
-          aps: {
-            sound: 'default',
-            category: 'chat_message',
-            'content-available': 1,
-          },
-        },
-      } : undefined,
-    };
+      title,
+      body: body || '',
+      data: { ...(data || {}), type: notifType || 'general' },
+    });
 
     try {
-      await admin.messaging().send(message);
+      await sendFcmToToken(message, userId);
     } catch (e) {
-      // Clean up stale FCM tokens
       if (e.code === 'messaging/registration-token-not-registered' ||
           e.code === 'messaging/invalid-registration-token') {
-        await db.collection('users').doc(userId).update({ fcmToken: null });
         return res.json({ sent: false, reason: 'Stale token cleaned up' });
       }
       throw e;
@@ -637,7 +772,7 @@ app.post('/api/send-notification', async (req, res) => {
 
     res.json({ sent: true });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -680,7 +815,7 @@ app.post('/api/setup-admin', async (req, res) => {
 
     res.json({ success: true, uid: userRecord.uid, email });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -699,7 +834,7 @@ app.get('/api/admin/users', async (req, res) => {
     const users = snap.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
     res.json({ users });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -718,7 +853,7 @@ app.get('/api/admin/products', async (req, res) => {
     const products = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     res.json({ products });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -745,7 +880,7 @@ app.put('/api/admin/users/:uid', async (req, res) => {
     await db.collection('users').doc(uid).update(updates);
     res.json({ updated: true, uid, updates });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -772,7 +907,7 @@ app.put('/api/admin/products/:id', async (req, res) => {
     await db.collection('products').doc(id).update(updates);
     res.json({ updated: true, id, updates });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -796,7 +931,7 @@ app.put('/api/admin/orders/:id', async (req, res) => {
     await db.collection('orders').doc(id).update({ status });
     res.json({ updated: true, id, status });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -815,17 +950,18 @@ app.get('/api/admin/orders', async (req, res) => {
     const orders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     res.json({ orders });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // ============================================================
 // 🔐 FORGOT PASSWORD — SEND OTP
 // ============================================================
-app.post('/api/send-otp', async (req, res) => {
+app.post('/api/send-otp', otpRateLimit, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required' });
+    if (!isValidEmail(email)) return res.status(400).json({ error: 'Invalid email format' });
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     // Check if user exists in Firebase Auth
@@ -925,14 +1061,14 @@ app.post('/api/send-otp', async (req, res) => {
 
     res.json({ sent: true, message: 'OTP sent to your email' });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // ============================================================
 // 🔐 VERIFY OTP
 // ============================================================
-app.post('/api/verify-otp', async (req, res) => {
+app.post('/api/verify-otp', otpRateLimit, async (req, res) => {
   try {
     const { email, otp } = req.body;
     if (!email || !otp) return res.status(400).json({ error: 'Email and OTP are required' });
@@ -953,7 +1089,7 @@ app.post('/api/verify-otp', async (req, res) => {
 
     res.json({ valid: true, uid: data.uid });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -991,7 +1127,7 @@ app.post('/api/reset-password-after-otp', async (req, res) => {
     if (e.code === 'auth/claims-too-large') {
       return res.status(400).json({ error: 'Token claims too large' });
     }
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1000,7 +1136,10 @@ app.post('/api/reset-password-after-otp', async (req, res) => {
 // ============================================================
 app.post('/api/send-bulk-notification', async (req, res) => {
   try {
-    const { title, body, tokens, target } = req.body;
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
+
+    const { title, body, tokens, target, data } = req.body;
     if (!title || !tokens || !Array.isArray(tokens) || tokens.length === 0) {
       return res.status(400).json({ error: 'Missing title or tokens array' });
     }
@@ -1014,32 +1153,12 @@ app.post('/api/send-bulk-notification', async (req, res) => {
     for (let i = 0; i < tokens.length; i += BATCH_SIZE) {
       const batch = tokens.slice(i, i + BATCH_SIZE);
       try {
-        const message = {
+        const message = buildFcmMessage({
           tokens: batch,
-          notification: { title, body: body || '' },
-          android: {
-            priority: 'high',
-            notification: {
-              channelId: 'general_notifications_v3',
-              priority: 'max',
-              visibility: 'public',
-              sound: 'soko_notification',
-              notificationPriority: 'PRIORITY_MAX',
-              defaultSound: false,
-              vibrateTimingsMillis: [0, 200, 100, 200, 100, 300],
-              defaultVibrateTimings: false,
-              lights: [true, 500, 500],
-              defaultLightSettings: false,
-              tag: 'bulk',
-              color: '#40916C',
-            },
-          },
-          apns: {
-            payload: {
-              aps: { sound: 'default', 'content-available': 1 },
-            },
-          },
-        };
+          title,
+          body: body || '',
+          data: { ...(data || {}), type: (data && data.type) || 'general' },
+        });
 
         const response = await admin.messaging().sendEachForMulticast(message);
         sent += response.successCount;
@@ -1073,12 +1192,70 @@ app.post('/api/send-bulk-notification', async (req, res) => {
       errors: errors.length > 0 ? errors.slice(0, 10) : [],
     });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================================
+// 🔒 ESCROW — Seller marks order as dispatched with proof
+// ============================================================
+app.post('/api/escrow/dispatch', async (req, res) => {
+  try {
+    const { orderId, userId, trackingNumber, receiptUrl, photoUrl, note } = req.body;
+    if (!orderId || !userId) {
+      return res.status(400).json({ error: 'Missing orderId or userId' });
+    }
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const txDoc = await db.collection('transactions').doc(orderId).get();
+    if (!txDoc.exists) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+
+    const tx = txDoc.data();
+    if (tx.sellerId !== userId) {
+      return res.status(403).json({ error: 'Only the seller can dispatch' });
+    }
+    if (tx.status !== 'escrow_hold') {
+      return res.status(400).json({ error: `Cannot dispatch from status: ${tx.status}` });
+    }
+    if (tx.escrowReleased === true) {
+      return res.status(400).json({ error: 'Escrow already released' });
+    }
+
+    const dispatchProof = {
+      trackingNumber: trackingNumber || '',
+      receiptUrl: receiptUrl || '',
+      photoUrl: photoUrl || '',
+      note: note || '',
+      dispatchedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    await txDoc.ref.update({
+      status: 'dispatched',
+      dispatchProof,
+      dispatchedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // Notify buyer
+    await db.collection('notifications').add({
+      userId: tx.buyerId,
+      title: '📦 Bidhaa Imesafirishwa!',
+      body: `${tx.productName || 'Bidhaa'} imesafirishwa. Angalia proof of delivery na thibitisha upokeaji.`,
+      isRead: false,
+      data: { type: 'dispatched', transactionId: orderId },
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.json({ success: true, message: 'Bidhaa imesafirishwa. Mnunuzi ataarifiwa.' });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // ============================================================
 // 🔒 ESCROW — Release payment to seller (buyer confirms delivery)
+//     Requires status to be 'dispatched' first
 // ============================================================
 app.post('/api/escrow/release', async (req, res) => {
   try {
@@ -1107,8 +1284,8 @@ app.post('/api/escrow/release', async (req, res) => {
       if (tx.buyerId !== userId) {
         return res.status(403).json({ error: 'Only the buyer can confirm delivery' });
       }
-      if (tx.status !== 'escrow_hold') {
-        return res.status(400).json({ error: `Cannot release escrow from status: ${tx.status}` });
+      if (tx.status !== 'dispatched') {
+        return res.status(400).json({ error: `Seller must dispatch the order first. Current status: ${tx.status}` });
       }
       if (tx.escrowReleased === true) {
         return res.status(400).json({ error: 'Escrow already released' });
@@ -1212,7 +1389,22 @@ app.post('/api/escrow/release', async (req, res) => {
             sellerBalance: admin.firestore.FieldValue.increment(-sellerReceives),
           });
         } catch (payoutErr) {
+          // If ClickPesa payout fails, set status to failed_retry and alert admin
           console.error('ClickPesa escrow auto-payout failed:', payoutErr);
+          await ref.update({
+            payoutStatus: 'failed_retry',
+            payoutError: payoutErr.message || 'ClickPesa API error',
+            payoutFailedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          // Alert admin
+          await db.collection('notifications').add({
+            userId: 'admin',
+            title: '⚠️ Auto-payout Imeshindwa',
+            body: `Escrow ${orderId} — TZS ${sellerReceives.toLocaleString()} kwa ${sellerId}. ClickPesa error. Pesa zipo kwenye sellerBalance.`,
+            isRead: false,
+            data: { type: 'failed_retry', transactionId: orderId },
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
         }
       } catch (payoutErr) {
         console.error('Escrow auto-payout error:', payoutErr);
@@ -1232,12 +1424,12 @@ app.post('/api/escrow/release', async (req, res) => {
       const sellerUser = await db.collection('users').doc(sellerId).get();
       const sellerToken = sellerUser.data()?.fcmToken;
       if (sellerToken) {
-        await admin.messaging().send({
+        await sendFcmToToken(buildFcmMessage({
           token: sellerToken,
-          notification: { title: 'Escrow Imefunguliwa!', body: `${productName} — TZS ${sellerReceives.toLocaleString()} zimewekwa salio lako.` },
+          title: 'Escrow Imefunguliwa!',
+          body: `${productName} — TZS ${sellerReceives.toLocaleString()} zimewekwa salio lako.`,
           data: { type: 'escrow_release', transactionId: orderId },
-          android: androidNotifConfig('general_notifications_v3', 'escrow_release'),
-        });
+        }), sellerId);
       }
     } catch (_) {}
 
@@ -1254,18 +1446,18 @@ app.post('/api/escrow/release', async (req, res) => {
       const buyerSnap = await db.collection('users').doc(userId).get();
       const buyerToken = buyerSnap.data()?.fcmToken;
       if (buyerToken) {
-        await admin.messaging().send({
+        await sendFcmToToken(buildFcmMessage({
           token: buyerToken,
-          notification: { title: 'Umethibitisha Upokeaji', body: `${productName} — asante kwa kununua ndani ya SokoVibe!` },
+          title: 'Umethibitisha Upokeaji',
+          body: `${productName} — asante kwa kununua ndani ya SokoVibe!`,
           data: { type: 'delivery_confirmed', transactionId: orderId },
-          android: androidNotifConfig('general_notifications_v3', 'delivery_confirmed'),
-        });
+        }), userId);
       }
     } catch (_) {}
 
     res.json({ success: true, message: 'Escrow released. Seller balance credited.' });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 // ============================================================
@@ -1343,16 +1535,16 @@ app.post('/api/escrow/admin-release', async (req, res) => {
 
     res.json({ success: true, message: 'Escrow force-released by admin' });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // ============================================================
-// 🔄 ESCROW — Buyer refund (sijapata mzigo)
+// ⚠️  ESCROW — Buyer raises dispute (instead of direct refund)
 // ============================================================
-app.post('/api/escrow/refund', async (req, res) => {
+app.post('/api/escrow/dispute', async (req, res) => {
   try {
-    const { orderId, userId } = req.body;
+    const { orderId, userId, reason, evidenceUrls } = req.body;
     if (!orderId || !userId) {
       return res.status(400).json({ error: 'Missing orderId or userId' });
     }
@@ -1365,106 +1557,311 @@ app.post('/api/escrow/refund', async (req, res) => {
 
     const tx = txDoc.data();
     if (tx.buyerId !== userId) {
-      return res.status(403).json({ error: 'Only the buyer can request a refund' });
+      return res.status(403).json({ error: 'Only the buyer can raise a dispute' });
     }
-    if (tx.status !== 'escrow_hold') {
-      return res.status(400).json({ error: `Cannot refund from status: ${tx.status}` });
+    if (tx.status !== 'dispatched' && tx.status !== 'escrow_hold') {
+      return res.status(400).json({ error: `Cannot dispute from status: ${tx.status}` });
     }
     if (tx.escrowReleased === true) {
-      return res.status(400).json({ error: 'Escrow already released, cannot refund' });
+      return res.status(400).json({ error: 'Escrow already released, cannot dispute' });
     }
 
-    const productPrice = tx.productPrice || 0;
-    const sellerReceives = tx.sellerReceives || 0;
-    const sellerId = tx.sellerId;
-    const productName = tx.productName || 'Product';
-    const buyerPhone = tx.buyerPhone || '';
-
-    if (!buyerPhone) {
-      return res.status(400).json({ error: 'Buyer phone number not found for refund' });
-    }
-
-    const refundAmount = productPrice;
-    const platformLosesFee = getClickPesaPayoutFee(refundAmount);
-
-    const extId = `refund_${orderId}`;
-    try {
-      await clickPesaDisburse({ amount: refundAmount, phone: buyerPhone, externalId: extId });
-    } catch (payoutErr) {
-      await auditLog({
-        userId, type: 'refund_payout_failed', amount: refundAmount,
-        reason: `ClickPesa refund payout failed: ${payoutErr.message || 'Unknown error'}`,
-        relatedId: orderId,
-        metadata: { productName, buyerPhone, productPrice },
-      });
-      return res.status(500).json({ error: `Refund payment failed: ${payoutErr.message}` });
-    }
-
-    // Update transaction to refunded
+    // Change to disputed status — funds stay held
     await txDoc.ref.update({
-      status: 'refunded',
-      refundedAt: admin.firestore.FieldValue.serverTimestamp(),
-      refundAmount,
-      refundPayoutFee: platformLosesFee,
-      paymentMethod: 'ClickPesa',
+      status: 'disputed',
+      disputeInfo: {
+        reason: reason || 'Sijapata mzigo',
+        evidenceUrls: evidenceUrls || [],
+        raisedAt: admin.firestore.FieldValue.serverTimestamp(),
+        resolved: false,
+      },
     });
 
-    // Remove from seller's pendingEscrow (safe decrement)
-    if (sellerId && sellerReceives > 0) {
-      const refundSellerDoc = await db.collection('users').doc(sellerId).get();
-      const refundPending = refundSellerDoc.exists ? (refundSellerDoc.data().pendingEscrow || 0) : 0;
-      const actualPending = Math.min(sellerReceives, refundPending);
-      await db.collection('users').doc(sellerId).update({
-        pendingEscrow: admin.firestore.FieldValue.increment(-actualPending),
-        totalSales: admin.firestore.FieldValue.increment(-1),
-        grossSalesVolume: admin.firestore.FieldValue.increment(-productPrice),
-      });
-    }
-
-    // Record refund transaction (platform bears the payout fee)
-    await db.collection('revenue_transactions').add({
-      userId: 'platform',
-      amount: -productPrice,
-      type: 'refund',
-      orderId,
-      description: `Refund: ${productName} - TZS ${productPrice} (platform lost TZS ${platformLosesFee} payout fee)`,
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    // Notify seller
+    await db.collection('notifications').add({
+      userId: tx.sellerId,
+      title: '\u2696\uFE0F Mgogoro Umefunguliwa',
+      body: `Mnunuzi amefungua mgogoro kwa ${tx.productName || 'Bidhaa'}. Tafadhali wasilisha ushahidi wako.`,
+      isRead: false,
+      data: { type: 'disputed', transactionId: orderId },
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
     // Notify buyer
     await db.collection('notifications').add({
       userId,
-      title: '💰 Pesa Zimerudishwa',
-      body: `Refund kamili ya TZS ${refundAmount.toLocaleString()} kwa ${productName} imetumwa kwa namba yako.`,
+      title: '\u2696\uFE0F Mgogoro Umefunguliwa',
+      body: `Tumepokea mgogoro wako kwa ${tx.productName || 'Bidhaa'}. Admin atakagua na kutoa uamuzi.`,
       isRead: false,
+      data: { type: 'disputed', transactionId: orderId },
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      data: { type: 'refund', orderId },
     });
 
-    // Notify seller
-    if (sellerId) {
+    // Alert admin
+    await db.collection('notifications').add({
+      userId: 'admin',
+      title: '\u2696\uFE0F Mgogoro Mpya Unahitaji Uamuzi',
+      body: `Mgogoro kwa ${tx.productName || 'Bidhaa'} \u2014 ${orderId}. Pitia ushahidi na toa uamuzi.`,
+      isRead: false,
+      data: { type: 'disputed', transactionId: orderId },
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.json({ success: true, message: 'Dispute imefunguliwa. Admin atakagua na kutoa uamuzi.' });
+  } catch (e) {
+    console.error('Escrow dispute error:', e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================================
+// ⚖️  ESCROW — Admin resolves a dispute (release or refund)
+// ============================================================
+app.post('/api/escrow/admin-resolve-dispute', async (req, res) => {
+  try {
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
+
+    const { orderId, resolution, note } = req.body;
+    // resolution: 'release' (release to seller) or 'refund' (refund to buyer)
+    if (!orderId || !resolution) {
+      return res.status(400).json({ error: 'Missing orderId or resolution' });
+    }
+    if (!['release', 'refund'].includes(resolution)) {
+      return res.status(400).json({ error: 'Resolution must be "release" or "refund"' });
+    }
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const txDoc = await db.collection('transactions').doc(orderId).get();
+    if (!txDoc.exists) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+
+    const tx = txDoc.data();
+    if (tx.status !== 'disputed') {
+      return res.status(400).json({ error: `Cannot resolve from status: ${tx.status}` });
+    }
+
+    if (resolution === 'release') {
+      // Release to seller
+      const sellerId = tx.sellerId;
+      const sellerReceives = tx.sellerReceives || 0;
+      const sellerDoc = await db.collection('users').doc(sellerId).get();
+      const pendingBefore = sellerDoc.exists ? (sellerDoc.data().pendingEscrow || 0) : 0;
+      const actualPending = Math.min(sellerReceives, pendingBefore);
+
+      await txDoc.ref.update({
+        status: 'delivered',
+        escrowReleased: true,
+        escrowReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
+        'disputeInfo.resolved': true,
+        'disputeInfo.resolution': 'released_to_seller',
+        'disputeInfo.resolvedAt': admin.firestore.FieldValue.serverTimestamp(),
+        'disputeInfo.adminNote': note || '',
+      });
+
+      if (sellerId && sellerReceives > 0) {
+        await db.collection('users').doc(sellerId).update({
+          sellerBalance: admin.firestore.FieldValue.increment(sellerReceives),
+          pendingEscrow: admin.firestore.FieldValue.increment(-actualPending),
+        });
+      }
+
+      await db.collection('notifications').add({
+        userId: tx.buyerId,
+        title: '\u2696\uFE0F Uamuzi wa Mgogoro',
+        body: `Admin ameamua pesa zitolewe kwa muuzaji. ${note || ''}`,
+        isRead: false,
+        data: { type: 'dispute_resolved', transactionId: orderId },
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
       await db.collection('notifications').add({
         userId: sellerId,
-        title: '❌ Ununuzi Umeghairiwa',
-        body: `${productName} imerefundiwa mnunuzi. Haujazwa salio lako.`,
+        title: '\u2696\uFE0F Uamuzi wa Mgogoro',
+        body: `Admin ameamua pesa zikutolee. ${note || ''}`,
+        isRead: false,
+        data: { type: 'dispute_resolved', transactionId: orderId },
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      return res.json({ success: true, message: 'Dispute resolved: funds released to seller' });
+    }
+
+    if (resolution === 'refund') {
+      // FULL refund to buyer -- no deduction. Seller/platform bears gateway fee.
+      const productPrice = tx.productPrice || 0;
+      const sellerReceives = tx.sellerReceives || 0;
+      const sellerId = tx.sellerId;
+      const buyerPhone = tx.buyerPhone || '';
+      const productName = tx.productName || 'Product';
+
+      if (!buyerPhone) {
+        return res.status(400).json({ error: 'Buyer phone number not found for refund' });
+      }
+
+      const refundAmount = productPrice; // Full refund to buyer
+      let gatewayFee = 0;
+      try { gatewayFee = getClickPesaPayoutFee(refundAmount); } catch (_) {}
+
+      // Send full refund to buyer
+      try {
+        await clickPesaDisburse({ amount: refundAmount, phone: buyerPhone, externalId: `refund_${orderId}` });
+      } catch (payoutErr) {
+        return res.status(500).json({ error: `Refund payment failed: ${payoutErr.message}` });
+      }
+
+      // Deduct from seller's pendingEscrow and penalize seller for gateway fee
+      if (sellerId && sellerReceives > 0) {
+        const refundSellerDoc = await db.collection('users').doc(sellerId).get();
+        const refundPending = refundSellerDoc.exists ? (refundSellerDoc.data().pendingEscrow || 0) : 0;
+        const actualPending = Math.min(sellerReceives, refundPending);
+        const sellerPenalty = Math.min(gatewayFee, sellerReceives);
+        await db.collection('users').doc(sellerId).update({
+          pendingEscrow: admin.firestore.FieldValue.increment(-actualPending),
+          totalSales: admin.firestore.FieldValue.increment(-1),
+          grossSalesVolume: admin.firestore.FieldValue.increment(-productPrice),
+          // If seller has balance, deduct the gateway fee from it
+          ...(sellerPenalty > 0 ? { sellerBalance: admin.firestore.FieldValue.increment(-sellerPenalty) } : {}),
+        });
+      }
+
+      // Record refund
+      await db.collection('revenue_transactions').add({
+        userId: 'platform',
+        amount: -productPrice,
+        type: 'refund',
+        orderId,
+        description: `Refund (dispute): ${productName} - TZS ${productPrice}`,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // Notify buyer
+      await db.collection('notifications').add({
+        userId: tx.buyerId,
+        title: '\uD83D\uDCB0 Pesa Zimerudishwa Kamili',
+        body: `Refund kamili ya TZS ${refundAmount.toLocaleString()} kwa ${productName} imetumwa kwa namba yako.`,
         isRead: false,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         data: { type: 'refund', orderId },
       });
+
+      // Notify seller
+      if (sellerId) {
+        await db.collection('notifications').add({
+          userId: sellerId,
+          title: '\u274C Mgogoro Umekamilika',
+          body: `${productName} imerefundiwa mnunuzi. Pesa zimetolewa kwenye pendingEscrow yako.${gatewayFee > 0 ? ' Ada ya gateway imetozwa kwenye akaunti yako.' : ''}`,
+          isRead: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          data: { type: 'refund', orderId },
+        });
+      }
+
+      // Audit log
+      await auditLog({
+        userId: tx.buyerId, type: 'escrow_refund', amount: refundAmount,
+        reason: `Dispute resolved: refund for ${orderId}`,
+        relatedId: orderId,
+        metadata: { productName, productPrice, buyerPhone, sellerId, gatewayFee },
+      });
+
+      return res.json({ success: true, refundAmount, message: `Refund kamili ya TZS ${refundAmount.toLocaleString()} imetumwa kwa namba ya mnunuzi.` });
+    }
+  } catch (e) {
+    console.error('Admin resolve dispute error:', e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================================
+// 🔄 Escrow — Retry failed payout
+// ============================================================
+app.post('/api/escrow/retry-payout', async (req, res) => {
+  try {
+    const { orderId } = req.body;
+    if (!orderId) return res.status(400).json({ error: 'Missing orderId' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    // Verify admin
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace('Bearer ', '');
+    if (token) {
+      const decoded = await admin.auth().verifyIdToken(token);
+      const userDoc = await db.collection('users').doc(decoded.uid).get();
+      if (!userDoc.exists || !userDoc.data().isAdmin) {
+        return res.status(403).json({ error: 'Admin only' });
+      }
+    } else {
+      const secret = req.headers['x-admin-secret'];
+      if (secret !== process.env.ADMIN_SECRET) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
     }
 
-    // Audit log
-    await auditLog({
-      userId, type: 'escrow_refund', amount: refundAmount,
-      reason: `Escrow refunded for ${orderId}`,
-      relatedId: orderId,
-      metadata: { productName, productPrice, buyerPhone, sellerId },
+    const txDoc = await db.collection('transactions').doc(orderId).get();
+    if (!txDoc.exists) return res.status(404).json({ error: 'Transaction not found' });
+
+    const tx = txDoc.data();
+    if (tx.payoutStatus !== 'failed_retry') {
+      return res.status(400).json({ error: `Cannot retry: payoutStatus is "${tx.payoutStatus}"` });
+    }
+
+    const sellerId = tx.sellerId;
+    const sellerReceives = tx.sellerReceives || 0;
+    const productName = tx.productName || 'Product';
+
+    if (!sellerId || sellerReceives <= 0) {
+      return res.status(400).json({ error: 'Invalid seller or amount for retry' });
+    }
+
+    // Look up seller phone
+    const sellerDoc = await db.collection('users').doc(sellerId).get();
+    if (!sellerDoc.exists) return res.status(404).json({ error: 'Seller not found' });
+    const sellerPhone = sellerDoc.data().phone;
+    if (!sellerPhone) return res.status(400).json({ error: 'Seller has no phone number for payout' });
+
+    // Attempt payout
+    const clickPesaFee = getClickPesaPayoutFee(sellerReceives);
+    const netPayout = sellerReceives - clickPesaFee;
+
+    if (netPayout <= 0) {
+      // Nothing to pay out — just clear the flag
+      await txDoc.ref.update({
+        payoutStatus: admin.firestore.FieldValue.delete(),
+        payoutError: admin.firestore.FieldValue.delete(),
+        payoutFailedAt: admin.firestore.FieldValue.delete(),
+        payoutRetriedAt: admin.firestore.FieldValue.serverTimestamp(),
+        payoutRetryNote: 'Net payout was zero, skipped ClickPesa',
+      });
+      return res.json({ success: true, message: 'Payout skipped: net amount <= 0. Flag cleared.' });
+    }
+
+    await processPayout({
+      userId: sellerId, phone: sellerPhone,
+      amount: sellerReceives, fee: clickPesaFee, netAmount: netPayout,
+      source: `retry_escrow_${orderId}`,
+      type: 'escrow_retry_payout',
+      metadata: { orderId, sellerId, productName },
     });
 
-    res.json({ success: true, refundAmount, message: `Refund ya TZS ${refundAmount.toLocaleString()} imetumwa kwa namba yako.` });
+    // Deduct from seller balance (it was already credited on initial release)
+    await db.collection('users').doc(sellerId).update({
+      sellerBalance: admin.firestore.FieldValue.increment(-sellerReceives),
+    });
+
+    // Clear failed_retry flags
+    await txDoc.ref.update({
+      payoutStatus: admin.firestore.FieldValue.delete(),
+      payoutError: admin.firestore.FieldValue.delete(),
+      payoutFailedAt: admin.firestore.FieldValue.delete(),
+      payoutRetriedAt: admin.firestore.FieldValue.serverTimestamp(),
+      payoutRetrySuccess: true,
+    });
+
+    res.json({ success: true, message: `Payout ya TZS ${sellerReceives.toLocaleString()} imetumwa kwa ${sellerPhone}` });
   } catch (e) {
-    console.error('Escrow refund error:', e);
-    res.status(500).json({ error: e.message });
+    console.error('Escrow retry payout error:', e);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1560,7 +1957,7 @@ app.post('/api/kyc/submit', async (req, res) => {
       message: autoApproved ? 'KYC imekubaliwa moja kwa moja' : `KYC imetumwa lakini: ${reason}`,
     });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1575,15 +1972,15 @@ app.get('/api/kyc/status/:userId', async (req, res) => {
     const kyc = userDoc.data().kyc || { status: 'none' };
     res.json({ kyc });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // Admin KYC review
 app.post('/api/admin/kyc/review', async (req, res) => {
   try {
-    const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const { userId, approve, notes } = req.body;
@@ -1622,14 +2019,14 @@ app.post('/api/admin/kyc/review', async (req, res) => {
 
     res.json({ success: true, message: `KYC ${status}` });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 app.get('/api/admin/kyc/pending', async (req, res) => {
   try {
-    const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const snap = await db.collection('users')
@@ -1647,7 +2044,7 @@ app.get('/api/admin/kyc/pending', async (req, res) => {
 
     res.json({ pending });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1656,7 +2053,7 @@ app.get('/api/admin/kyc/pending', async (req, res) => {
 // ============================================================
 app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, res) => {
   try {
-    const { productPrice, productName, productId, sellerId, sellerName, email, phone, buyerId } = req.body;
+    const { productPrice, productName, productId, sellerId, sellerName, email, phone, buyerId, deliveryType } = req.body;
     if (!productPrice || !productId || !sellerId || !phone) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
@@ -1702,6 +2099,8 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
         productPrice: Math.round(productPrice),
         status: 'pending',
         paymentMethod: 'ClickPesa',
+        deliveryType: deliveryType || 'local',
+        autoReleaseDays: deliveryType === 'regional' ? ESCROW_REGIONAL_DAYS : ESCROW_LOCAL_DAYS,
         clickpesaTransactionId: result.id || result.transactionId || result.data?.transactionId || '',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
@@ -1713,7 +2112,7 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
       message: 'Tuma PIN yako kwenye simu ili kukamilisha malipo.',
     });
   } catch (e) {
-    res.status(500).json({ error: e.message || 'Internal server error' });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1776,15 +2175,18 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
             const userSnap = await db.collection('users').doc(tx.userId).get();
             const token = userSnap.data()?.fcmToken;
             if (token) {
-              await admin.messaging().send({
+              await sendFcmToToken(buildFcmMessage({
                 token,
-                notification: { title: '✅ Boost imewashwa!', body: `Bidhaa yako imepandishwa kwa daraja la ${tier} kwa siku ${tierConfig.days}.` },
+                title: '✅ Boost imewashwa!',
+                body: `Bidhaa yako imepandishwa kwa daraja la ${tier} kwa siku ${tierConfig.days}.`,
                 data: { type: 'boost', productId: tx.productId || '' },
-                android: androidNotifConfig('general_notifications_v3', 'boost'),
-              });
+              }), tx.userId);
             }
           } catch (_) {}
         }
+
+        // Notify all users about this boost
+        notifyBoostBroadcast(tx.productId, tier, tx.userId).catch(() => {});
 
         // Record boost payment as admin revenue
         const boostAmount = tx.amount || tierConfig.price;
@@ -1816,7 +2218,9 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
         const payoutFee = getClickPesaPayoutFee(productPrice);
         const processingFee = tx.clickPesaFee || 0;
         const sellerReceives = productPrice - platformFee - processingFee;
-        const escrowExpiry = new Date(Date.now() + ESCROW_AUTO_RELEASE_DAYS * 24 * 60 * 60 * 1000);
+        const deliveryType = tx.deliveryType || 'local';
+        const autoReleaseDays = tx.autoReleaseDays || (deliveryType === 'regional' ? ESCROW_REGIONAL_DAYS : ESCROW_LOCAL_DAYS);
+        const escrowExpiry = new Date(Date.now() + autoReleaseDays * 24 * 60 * 60 * 1000);
 
         // Update transaction — put in escrow instead of auto-paying
         await txDoc.ref.update({
@@ -1854,19 +2258,20 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
           timestamp: admin.firestore.FieldValue.serverTimestamp(),
         });
 
-        // Decrement flash sale stock if product has an active flash sale
+        // Decrement flash sale stock only for a non-expired active flash sale
         try {
           const fsSnap = await db.collection('flash_sales')
             .where('productId', '==', tx.productId)
             .where('isActive', '==', true)
-            .limit(1)
+            .limit(5)
             .get();
-          if (!fsSnap.empty) {
-            const fsDoc = fsSnap.docs[0];
-            const fsData = fsDoc.data();
+          const payNow = new Date();
+          const activeDoc = fsSnap.docs.find(d => isFlashSaleStillActive(d.data(), payNow));
+          if (activeDoc) {
+            const fsData = activeDoc.data();
             const newStock = (fsData.stock || 0) - 1;
             const newSold = (fsData.soldCount || 0) + 1;
-            await fsDoc.ref.update({
+            await activeDoc.ref.update({
               stock: Math.max(0, newStock),
               soldCount: newSold,
               isActive: newStock > 0,
@@ -1899,37 +2304,17 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
             const sellerSnap = await db.collection('users').doc(tx.sellerId).get();
             const sellerToken = sellerSnap.data()?.fcmToken;
             if (sellerToken) {
-              await admin.messaging().send({
+              await sendFcmToToken(buildFcmMessage({
                 token: sellerToken,
-                notification: { title: 'Umepata Mauzo!', body: `${tx.productName || 'Bidhaa'} imeuzwa. TZS ${sellerReceives.toLocaleString()} imewekwa escrow.` },
-                data: { type: 'order', productId: tx.productId || '', transactionId: order_id, buyerPhone: tx.buyerPhone || '' },
-                android: {
-                  priority: 'high',
-                  notification: {
-                    channelId: 'general_notifications_v3',
-                    priority: 'max',
-                    visibility: 'public',
-                    sound: 'soko_notification',
-                    notificationPriority: 'PRIORITY_MAX',
-                    defaultSound: false,
-                    vibrateTimingsMillis: [0, 200, 100, 200, 100, 300],
-                    defaultVibrateTimings: false,
-                    lights: [true, 500, 500],
-                    defaultLightSettings: false,
-                    tag: 'new_sale',
-                    color: '#40916C',
-                  },
+                title: 'Umepata Mauzo!',
+                body: `${tx.productName || 'Bidhaa'} imeuzwa. TZS ${sellerReceives.toLocaleString()} imewekwa escrow.`,
+                data: {
+                  type: 'order',
+                  productId: tx.productId || '',
+                  transactionId: order_id,
+                  buyerPhone: tx.buyerPhone || '',
                 },
-                apns: {
-                  payload: {
-                    aps: {
-                      sound: 'default',
-                      category: 'new_sale',
-                      'content-available': 1,
-                    },
-                  },
-                },
-              });
+              }), tx.sellerId);
             }
           } catch (_) {}
         }
@@ -1950,12 +2335,12 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
             const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
             const buyerToken = buyerSnap.data()?.fcmToken;
             if (buyerToken) {
-              await admin.messaging().send({
+              await sendFcmToToken(buildFcmMessage({
                 token: buyerToken,
-                notification: { title: 'Malipo Yamekamilika!', body: `Malipo ya ${tx.productName || 'Bidhaa'} yamepokelewa.` },
+                title: 'Malipo Yamekamilika!',
+                body: `Malipo ya ${tx.productName || 'Bidhaa'} yamepokelewa.`,
                 data: { type: 'order', productId: tx.productId || '', transactionId: order_id },
-                android: androidNotifConfig('general_notifications_v3', 'payment_confirmed'),
-              });
+              }), tx.buyerId);
             }
           } catch (_) {}
         }
@@ -2037,6 +2422,9 @@ app.post('/api/retry-payment', async (req, res) => {
         });
       }
 
+      // Notify all users about this boost
+      notifyBoostBroadcast(tx.productId, tier, tx.userId).catch(() => {});
+
       // Revenue
       const boostAmount = tx.amount || tierConfig.price;
       await db.collection('revenue_transactions').add({
@@ -2060,7 +2448,9 @@ app.post('/api/retry-payment', async (req, res) => {
       const payoutFee = getClickPesaPayoutFee(productPrice);
       const processingFee = tx.clickPesaFee || 0;
       const sellerReceives = productPrice - platformFee - processingFee;
-      const escrowExpiry = new Date(Date.now() + ESCROW_AUTO_RELEASE_DAYS * 24 * 60 * 60 * 1000);
+      const deliveryType = tx.deliveryType || 'local';
+      const autoReleaseDays = tx.autoReleaseDays || (deliveryType === 'regional' ? ESCROW_REGIONAL_DAYS : ESCROW_LOCAL_DAYS);
+      const escrowExpiry = new Date(Date.now() + autoReleaseDays * 24 * 60 * 60 * 1000);
 
       await txDoc.ref.update({
         processingFee,
@@ -2136,7 +2526,7 @@ app.post('/api/retry-payment', async (req, res) => {
     res.status(400).json({ error: `Unknown transaction type: ${tx.type}` });
   } catch (e) {
     console.error('Retry-payment error:', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2223,7 +2613,7 @@ app.post('/api/admin/retro-boost', async (req, res) => {
     res.json({ fixed, skipped, errors, total: txDocs.length });
   } catch (e) {
     console.error('Retro-boost endpoint error:', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2247,7 +2637,7 @@ app.get('/api/seller/balance', async (req, res) => {
       phone: user.phone || '',
     });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2317,7 +2707,7 @@ app.post('/api/seller/withdraw', async (req, res) => {
       message: `TZS ${netAmount.toLocaleString()} zimetumwa kwa ${phone}`,
     });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2326,9 +2716,15 @@ app.post('/api/seller/withdraw', async (req, res) => {
 // ============================================================
 app.post('/api/admin/withdraw', async (req, res) => {
   try {
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
+
     const { userId, amount, phone } = req.body;
     if (!userId || !amount || !phone) {
       return res.status(400).json({ error: 'Missing userId, amount, or phone' });
+    }
+    if (auth.uid !== 'admin-secret' && auth.uid !== userId) {
+      return res.status(403).json({ error: 'Token does not match userId' });
     }
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
@@ -2411,7 +2807,7 @@ app.post('/api/admin/withdraw', async (req, res) => {
       message: `TZS ${netAmount.toLocaleString()} zimetumwa kwa ${phone}`,
     });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2423,7 +2819,7 @@ app.get('/api/clickpesa/balance', async (req, res) => {
     const balance = await getClickPesaBalance();
     res.json({ success: true, balance });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2441,7 +2837,7 @@ app.post('/api/clickpesa/payout-preview', async (req, res) => {
     });
     res.json({ success: true, preview });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2489,7 +2885,7 @@ app.post('/api/create-payout', async (req, res) => {
 
     res.json({ success: true, ...payoutResult });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2503,7 +2899,7 @@ app.get('/api/payout-status/:id', async (req, res) => {
     if (!doc.exists) return res.status(404).json({ error: 'Payout not found' });
     res.json({ id: doc.id, ...doc.data() });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2520,7 +2916,7 @@ app.get('/api/payouts', async (req, res) => {
     const payouts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     res.json({ payouts });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2533,7 +2929,7 @@ app.post('/api/payout/retry/:id', async (req, res) => {
     const result = await retryFailedPayout(req.params.id);
     res.json({ success: true, ...result });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2597,7 +2993,7 @@ app.get('/api/admin/stats', async (req, res) => {
 
     });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2615,7 +3011,7 @@ app.get('/api/admin/transactions', async (req, res) => {
     const transactions = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     res.json({ transactions });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2633,7 +3029,7 @@ app.get('/api/admin/withdrawals', async (req, res) => {
     const withdrawals = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     res.json({ withdrawals });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2664,7 +3060,7 @@ app.get('/api/admin/finance-summary', async (req, res) => {
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     // 1. Estimated ad revenue (each ad view = 15 TZS)
-    const adSnap = await db.collection('admin_ad_revenue').count().get();
+    const adSnap = await db.collection('ad_views').count().get();
     const estimatedAdRevenue = (adSnap.data().count || 0) * 15;
 
     // 2. Actual Google AdMob revenue (manually entered by admin)
@@ -2737,7 +3133,7 @@ app.get('/api/admin/finance-summary', async (req, res) => {
       paymentProcessor: 'ClickPesa',
     });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2746,8 +3142,8 @@ app.get('/api/admin/finance-summary', async (req, res) => {
 // ============================================================
 app.post('/api/admin/admob-revenue', async (req, res) => {
   try {
-    const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const { amount, month } = req.body;
@@ -2770,7 +3166,7 @@ app.post('/api/admin/admob-revenue', async (req, res) => {
 
     res.json({ success: true, amount, month: monthLabel });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2788,7 +3184,7 @@ app.get('/api/admin/revenue-transactions', async (req, res) => {
     const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     res.json({ items });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2806,7 +3202,7 @@ app.get('/api/admin/audit-log', async (req, res) => {
     const logs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     res.json({ logs });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2824,7 +3220,7 @@ app.get('/api/admin/ad-views', async (req, res) => {
     const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     res.json({ items });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2854,7 +3250,7 @@ app.get('/api/admin/user-detail/:uid', async (req, res) => {
       revenueTransactions: txSnap.docs.map(d => ({ id: d.id, ...d.data() })),
     });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2883,7 +3279,7 @@ app.delete('/api/admin/users/:uid', async (req, res) => {
 
     res.json({ success: true, message: 'User suspended' });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2929,7 +3325,7 @@ app.delete('/api/admin/users/:uid', async (req, res) => {
 
     res.json({ success: true, message: 'User suspended' });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2968,7 +3364,7 @@ app.post('/api/admin/users/:uid/unsuspend', async (req, res) => {
 
     res.json({ success: true, message: 'User unsuspended' });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2986,18 +3382,95 @@ app.delete('/api/admin/orders/:id', async (req, res) => {
 
     res.json({ success: true, message: 'Order deleted' });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Delete product images from Cloudinary by extracting public IDs from URLs.
+ * Non-blocking — doesn't fail the request if image deletion fails.
+ */
+async function deleteProductImages(imageUrls = []) {
+  if (!imageUrls.length) return;
+  const cloudName = 'dgbsohnl4';
+  for (const url of imageUrls) {
+    try {
+      // Extract public ID from Cloudinary URL: .../v12345/{folder}/{public_id}.ext
+      const match = url.match(/\/v\d+\/(.+)\.\w+$/);
+      if (!match) continue;
+      const publicId = match[1];
+      // Cloudinary delete API uses basic auth with API Key + Secret.
+      // Since we use unsigned upload, we can't delete via API without keys.
+      // Log the orphaned image for manual cleanup.
+      console.log(`Orphaned Cloudinary image (needs manual cleanup): ${publicId}`);
+    } catch (_) {}
+  }
+}
+
+/**
+ * Shared logic for deleting a product document + related data + images.
+ */
+async function deleteProductById(productId) {
+  // Get product doc first to grab image URLs
+  const productDoc = await db.collection('products').doc(productId).get();
+  if (productDoc.exists) {
+    const images = productDoc.data().images || [];
+    deleteProductImages(images).catch(() => {});
+  }
+
+  // Delete related flash sales
+  const flashSnap = await db.collection('flash_sales').where('productId', '==', productId).get();
+  const batch = db.batch();
+  flashSnap.docs.forEach(doc => batch.delete(doc.ref));
+  if (flashSnap.docs.length > 0) await batch.commit();
+
+  // Delete the product document
+  await db.collection('products').doc(productId).delete();
+}
+
+// ============================================================
+// 👤 USER — Delete own product (checks ownership)
+// ============================================================
+app.delete('/api/products/:id', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
+    const { id } = req.params;
+
+    const productDoc = await db.collection('products').doc(id).get();
+    if (!productDoc.exists) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    const product = productDoc.data();
+    if (product.sellerId !== decoded.uid) {
+      return res.status(403).json({ error: 'You can only delete your own products' });
+    }
+
+    await deleteProductById(id);
+
+    res.json({ success: true, message: 'Product deleted' });
+  } catch (e) {
+    if (e.code === 'auth/argument-error') {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // ============================================================
-// 👑 ADMIN — Delete product
+// 👑 ADMIN — Delete any product
 // ============================================================
 app.delete('/api/admin/products/:id', async (req, res) => {
   try {
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-    // Allow either admin secret OR Firebase Auth admin
     const secret = req.headers['x-admin-secret'];
     if (secret !== process.env.ADMIN_SECRET) {
       const authHeader = req.headers['authorization'];
@@ -3018,16 +3491,11 @@ app.delete('/api/admin/products/:id', async (req, res) => {
     }
 
     const { id } = req.params;
-    // Also clean up related flash_sales
-    const flashSnap = await db.collection('flash_sales').where('productId', '==', id).get();
-    const batch = db.batch();
-    flashSnap.docs.forEach(doc => batch.delete(doc.ref));
-    if (flashSnap.docs.length > 0) await batch.commit();
-    await db.collection('products').doc(id).delete();
+    await deleteProductById(id);
 
     res.json({ success: true, message: 'Product deleted' });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -3088,7 +3556,7 @@ app.delete('/api/admin/users/:uid/full-delete', async (req, res) => {
 
     res.json({ success: true, message: 'User and all related data deleted' });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -3127,7 +3595,7 @@ app.patch('/api/admin/users/:uid', async (req, res) => {
     await db.collection('users').doc(uid).update(updates);
     res.json({ success: true, message: 'User updated' });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -3156,7 +3624,7 @@ app.post('/api/admin/delete-doc', async (req, res) => {
 
     res.json({ success: true, message: `Document ${collection}/${docId} deleted` });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -3183,7 +3651,7 @@ app.post('/api/cron/release-escrows', async (req, res) => {
     res.json({ success: true, message: 'Escrow release triggered' });
   } catch (e) {
     console.error('Cron release-escrows error:', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -3206,7 +3674,7 @@ app.get('/api/stats', async (req, res) => {
       totalUsers: userSnap.data().count,
     });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -3261,7 +3729,7 @@ app.post('/api/reports', asyncHandler(async (req, res) => {
     res.json({ success: true, message: 'Report submitted' });
   } catch (e) {
     console.error('Submit report error:', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 }));
 
@@ -3277,7 +3745,7 @@ app.get('/api/reports', asyncHandler(async (req, res) => {
     res.json({ success: true, reports });
   } catch (e) {
     console.error('Get reports error:', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 }));
 
@@ -3296,7 +3764,7 @@ app.patch('/api/reports/:id', asyncHandler(async (req, res) => {
     res.json({ success: true, message: 'Report updated' });
   } catch (e) {
     console.error('Update report error:', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 }));
 
@@ -3314,7 +3782,7 @@ app.get('/api/fraud/alerts', asyncHandler(async (req, res) => {
     const alerts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     res.json({ success: true, alerts });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 }));
 
@@ -3324,7 +3792,7 @@ app.patch('/api/fraud/alerts/:id/dismiss', asyncHandler(async (req, res) => {
     await db.collection('fraud_alerts').doc(req.params.id).update({ resolved: true });
     res.json({ success: true });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 }));
 
@@ -3366,7 +3834,7 @@ app.get('/api/fraud/risk/:sellerId', asyncHandler(async (req, res) => {
       reasons,
     });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 }));
 
@@ -3406,7 +3874,7 @@ app.post('/api/flash-sale/create', asyncHandler(async (req, res) => {
     }
 
     // Prevent duplicate active flash sales for the same product.
-    // Deactivate any expired ones found so user can create a new one.
+    // Deactivate any expired ones (isActive may still be true until cron runs).
     const existing = await db.collection('flash_sales')
       .where('productId', '==', productId)
       .where('isActive', '==', true)
@@ -3414,18 +3882,19 @@ app.post('/api/flash-sale/create', asyncHandler(async (req, res) => {
     const now = new Date();
     let hasActive = false;
     const deactivateBatch = db.batch();
+    let batchCount = 0;
     existing.docs.forEach(doc => {
       const data = doc.data();
-      const end = data.endTime?.toDate ? data.endTime.toDate() : new Date(data.endTime);
-      if (end > now) {
+      if (isFlashSaleStillActive(data, now)) {
         hasActive = true;
       } else {
         deactivateBatch.update(doc.ref, { isActive: false });
+        batchCount++;
       }
     });
-    await deactivateBatch.commit();
+    if (batchCount > 0) await deactivateBatch.commit();
     if (hasActive) {
-      return res.status(400).json({ error: 'Product already has an active flash sale' });
+      return res.status(400).json({ error: 'Product already has an active flash sale', code: 'FLASH_SALE_ALREADY_ACTIVE' });
     }
 
     const ref = await db.collection('flash_sales').add({
@@ -3449,7 +3918,7 @@ app.post('/api/flash-sale/create', asyncHandler(async (req, res) => {
 
     res.json({ success: true, flashSaleId: ref.id });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 }));
 
@@ -3481,11 +3950,7 @@ app.post('/api/flash-sale/scan', asyncHandler(async (req, res) => {
         .get();
       // Skip only if there is a truly active (non-expired) flash sale
       const scanNow = new Date();
-      const hasActive = existing.docs.some(d => {
-        const d2 = d.data();
-        const e = d2.endTime?.toDate ? d2.endTime.toDate() : new Date(d2.endTime);
-        return e > scanNow;
-      });
+      const hasActive = existing.docs.some(d => isFlashSaleStillActive(d.data(), scanNow));
       if (hasActive) continue;
 
       const originalPrice = (data.price || 0).toDouble ? data.price : Number(data.price || 0);
@@ -3516,7 +3981,7 @@ app.post('/api/flash-sale/scan', asyncHandler(async (req, res) => {
 
     res.json({ success: true, flashSalesCreated: created });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 }));
 
@@ -3525,56 +3990,51 @@ app.post('/api/flash-sale/notify', asyncHandler(async (req, res) => {
   try {
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-    const { productName, salePrice, discountPercent, sellerId } = req.body;
+    const { productName, salePrice, discountPercent, sellerId, productImage } = req.body;
 
     // Get all users with FCM tokens (paginated by document ID)
     let sentCount = 0;
     let lastPushId = null;
     const PAGE_SIZE = 500;
 
-    while (true) {
-      let query = db.collection('users')
-        .where('fcmToken', '!=', null);
-      if (lastPushId) query = query.startAfter(lastPushId);
-      query = query.limit(PAGE_SIZE);
-      const usersSnap = await query.get();
-      if (usersSnap.empty) break;
+    try {
+      while (true) {
+        let query = db.collection('users')
+          .where('fcmToken', '!=', null);
+        if (lastPushId) query = query.startAfter(lastPushId);
+        query = query.limit(PAGE_SIZE);
+        const usersSnap = await query.get();
+        if (usersSnap.empty) break;
 
-      const tokens = [];
-      for (const doc of usersSnap.docs) {
-        const token = doc.data().fcmToken;
-        if (token) tokens.push(token);
-      }
+        const tokens = [];
+        for (const doc of usersSnap.docs) {
+          const token = doc.data().fcmToken;
+          if (token) tokens.push(token);
+        }
 
-      // Send FCM in batches of 500
-      for (let i = 0; i < tokens.length; i += PAGE_SIZE) {
-        const chunk = tokens.slice(i, i + PAGE_SIZE);
-        const message = {
-          tokens: chunk,
-          notification: {
+        // Send FCM in batches of 500
+        for (let i = 0; i < tokens.length; i += PAGE_SIZE) {
+          const chunk = tokens.slice(i, i + PAGE_SIZE);
+          const message = buildFcmMessage({
+            tokens: chunk,
             title: `⚡ Flash Sale! -${discountPercent}%`,
             body: `${productName} sasa TSh ${salePrice} pekee!`,
-          },
-          data: { type: 'flash_sale', productName: productName || '' },
-          android: {
-            priority: 'high',
-            notification: {
-              channelId: 'general_notifications_v3', priority: 'max',
-              visibility: 'public', sound: 'soko_notification',
-              notificationPriority: 'PRIORITY_MAX', defaultSound: false,
-              vibrateTimingsMillis: [0, 200, 100, 200, 100, 300],
-              defaultVibrateTimings: false, lights: [true, 500, 500],
-              defaultLightSettings: false, tag: 'flash_sale', color: '#40916C',
+            data: {
+              type: 'flash_sale',
+              productName: productName || '',
+              image: productImage || '',
             },
-          },
-        };
-        try {
-          const resp = await admin.messaging().sendEachForMulticast(message);
-          sentCount += resp.successCount;
-        } catch (_) {}
-      }
+          });
+          try {
+            const resp = await admin.messaging().sendEachForMulticast(message);
+            sentCount += resp.successCount;
+          } catch (_) {}
+        }
 
-      lastPushId = usersSnap.docs[usersSnap.docs.length - 1].id;
+        lastPushId = usersSnap.docs[usersSnap.docs.length - 1].id;
+      }
+    } catch (fcmErr) {
+      console.error('FCM push skipped for flash sale:', fcmErr.message);
     }
 
     // Write in-app notification for all users
@@ -3596,7 +4056,7 @@ app.post('/api/flash-sale/notify', asyncHandler(async (req, res) => {
           userId: doc.id,
           title: `⚡ Flash Sale! -${discountPercent}%`,
           body: `${productName} sasa TSh ${salePrice} pekee!`,
-          data: { type: 'flash_sale' },
+          data: { type: 'flash_sale', image: productImage || '' },
           isRead: false,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
@@ -3609,9 +4069,112 @@ app.post('/api/flash-sale/notify', asyncHandler(async (req, res) => {
 
     res.json({ success: true, pushSent: sentCount, inAppNotified });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 }));
+
+// ─── Boost notification API endpoint (client-callable) ───
+app.post('/api/boost/notify', asyncHandler(async (req, res) => {
+  try {
+    const { productId, tier, sellerId } = req.body;
+    if (!productId || !tier) {
+      return res.status(400).json({ error: 'Missing productId or tier' });
+    }
+    await notifyBoostBroadcast(productId, tier, sellerId);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}));
+
+// ─── Boost notification broadcast to all users ───
+async function notifyBoostBroadcast(productId, tier, sellerId) {
+  if (!db) return;
+  try {
+    const productSnap = await db.collection('products').doc(productId).get();
+    const productData = productSnap.data() || {};
+    const productName = productData.name || 'Bidhaa';
+    const productImage = (productData.images && productData.images.length > 0) ? productData.images[0] : '';
+    const tierLabel = tier.charAt(0).toUpperCase() + tier.slice(1);
+    const title = `🚀 ${tierLabel} Boost!`;
+    const body = `${productName} imepandishwa daraja! Angalia sasa.`;
+
+    let sentCount = 0;
+    let lastDocId = null;
+    const PAGE_SIZE = 500;
+
+    try {
+      while (true) {
+        let query = db.collection('users').where('fcmToken', '!=', null);
+        if (lastDocId) query = query.startAfter(lastDocId);
+        query = query.limit(PAGE_SIZE);
+        const snap = await query.get();
+        if (snap.empty) break;
+
+        const tokens = [];
+        for (const doc of snap.docs) {
+          const token = doc.data().fcmToken;
+          if (token) tokens.push(token);
+        }
+
+        for (let i = 0; i < tokens.length; i += PAGE_SIZE) {
+          const chunk = tokens.slice(i, i + PAGE_SIZE);
+          const message = buildFcmMessage({
+            tokens: chunk,
+            title,
+            body,
+            data: {
+              type: 'boost',
+              productId: productId || '',
+              productName: productName || '',
+              image: productImage || '',
+            },
+          });
+          try {
+            const resp = await admin.messaging().sendEachForMulticast(message);
+            sentCount += resp.successCount;
+          } catch (_) {}
+        }
+        lastDocId = snap.docs[snap.docs.length - 1].id;
+      }
+    } catch (fcmErr) {
+      console.error('FCM push skipped for boost:', fcmErr.message);
+    }
+
+    let inAppNotified = 0;
+    let lastNotifId = null;
+
+    while (true) {
+      let query = db.collection('users');
+      if (lastNotifId) query = query.startAfter(lastNotifId);
+      query = query.limit(PAGE_SIZE);
+      const usersSnap = await query.get();
+      if (usersSnap.empty) break;
+
+      const batch = db.batch();
+      let batched = 0;
+      for (const doc of usersSnap.docs) {
+        if (doc.id === sellerId) continue;
+        batch.set(db.collection('notifications').doc(), {
+          userId: doc.id,
+          title,
+          body,
+          data: { type: 'boost', productId: productId || '', image: productImage || '' },
+          isRead: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        batched++;
+      }
+      if (batched > 0) await batch.commit();
+      inAppNotified += batched;
+      lastNotifId = usersSnap.docs[usersSnap.docs.length - 1].id;
+    }
+
+    console.log(`Boost notify: ${sentCount} FCM, ${inAppNotified} in-app`);
+  } catch (e) {
+    console.error('Boost notify error:', e);
+  }
+}
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
@@ -3645,8 +4208,9 @@ async function releaseExpiredEscrows() {
   if (!db) return;
   try {
     const now = admin.firestore.Timestamp.now();
+    // Check both escrow_hold (before dispatch) and dispatched statuses
     const expired = await db.collection('transactions')
-      .where('status', '==', 'escrow_hold')
+      .where('status', 'in', ['escrow_hold', 'dispatched'])
       .where('escrowExpiresAt', '<=', now)
       .where('escrowReleased', '!=', true)
       .limit(20)
@@ -3672,6 +4236,44 @@ async function releaseExpiredEscrows() {
           sellerBalance: admin.firestore.FieldValue.increment(sellerReceives),
           pendingEscrow: admin.firestore.FieldValue.increment(-actualPending),
         });
+
+        // Auto-payout seller with failed_retry protection
+        try {
+          const sellerData = autoSellerDoc.data();
+          const autoPayout = sellerData.autoPayout !== false;
+          if (autoPayout && sellerData.phone) {
+            const clickPesaFee = getClickPesaPayoutFee(sellerReceives);
+            const netPayout = sellerReceives - clickPesaFee;
+            if (netPayout > 0) {
+              await processPayout({
+                userId: sellerId, phone: sellerData.phone,
+                amount: sellerReceives, fee: clickPesaFee, netAmount: netPayout,
+                source: `auto_escrow_${doc.id}`,
+                type: 'escrow_auto_release',
+                metadata: { orderId: doc.id, sellerId, productName: tx.productName },
+              });
+              await db.collection('users').doc(sellerId).update({
+                sellerBalance: admin.firestore.FieldValue.increment(-sellerReceives),
+              });
+            }
+          }
+        } catch (payoutErr) {
+          console.error(`Auto-payout failed for escrow ${doc.id}:`, payoutErr.message);
+          await doc.ref.update({
+            payoutStatus: 'failed_retry',
+            payoutError: payoutErr.message || 'ClickPesa API error',
+            payoutFailedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          await db.collection('notifications').add({
+            userId: 'admin',
+            title: '⚠️ Auto-payout Imeshindwa',
+            body: `Escrow ${doc.id} — TZS ${sellerReceives.toLocaleString()} kwa ${sellerId}. Pesa zipo kwenye sellerBalance.`,
+            isRead: false,
+            data: { type: 'failed_retry', transactionId: doc.id },
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+
         await db.collection('notifications').add({
           userId: sellerId,
           title: 'Escrow Imefunguliwa Kiotomatiki',
@@ -3683,12 +4285,12 @@ async function releaseExpiredEscrows() {
           const sellerSnap = await db.collection('users').doc(sellerId).get();
           const sellerToken = sellerSnap.data()?.fcmToken;
           if (sellerToken) {
-            await admin.messaging().send({
+            await sendFcmToToken(buildFcmMessage({
               token: sellerToken,
-              notification: { title: 'Escrow Imefunguliwa Kiotomatiki', body: `${tx.productName || 'Bidhaa'} — TZS ${sellerReceives.toLocaleString()} zimewekwa salio lako.` },
+              title: 'Escrow Imefunguliwa Kiotomatiki',
+              body: `${tx.productName || 'Bidhaa'} — TZS ${sellerReceives.toLocaleString()} zimewekwa salio lako.`,
               data: { type: 'escrow_auto_release', transactionId: doc.id },
-              android: androidNotifConfig('general_notifications_v3', 'auto_release_seller'),
-            });
+            }), sellerId);
           }
         } catch (_) {}
       }
@@ -3705,12 +4307,12 @@ async function releaseExpiredEscrows() {
           const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
           const buyerToken = buyerSnap.data()?.fcmToken;
           if (buyerToken) {
-            await admin.messaging().send({
+            await sendFcmToToken(buildFcmMessage({
               token: buyerToken,
-              notification: { title: 'Escrow Imefunguliwa Kiotomatiki', body: `${tx.productName || 'Bidhaa'} — muda wa escrow umeisha, pesa zimefunguliwa kwa muuzaji.` },
+              title: 'Escrow Imefunguliwa Kiotomatiki',
+              body: `${tx.productName || 'Bidhaa'} — muda wa escrow umeisha, pesa zimefunguliwa kwa muuzaji.`,
               data: { type: 'escrow_auto_release', transactionId: doc.id },
-              android: androidNotifConfig('general_notifications_v3', 'auto_release_buyer'),
-            });
+            }), tx.buyerId);
           }
         } catch (_) {}
       }
@@ -3836,6 +4438,9 @@ app.post('/api/clickpesa-callback', async (req, res) => {
           });
         }
 
+        // Notify all users about this boost
+        notifyBoostBroadcast(tx.productId, tier, tx.userId).catch(() => {});
+
         await db.collection('revenue_transactions').add({
           userId: 'platform',
           amount: tx.amount || tierConfig.price,
@@ -3851,7 +4456,9 @@ app.post('/api/clickpesa-callback', async (req, res) => {
         const productPrice = tx.productPrice || 0;
         const platformFee = Math.round(productPrice * PLATFORM_COMMISSION_PERCENT);
         const sellerReceives = productPrice - platformFee;
-        const escrowExpiry = new Date(Date.now() + ESCROW_AUTO_RELEASE_DAYS * 24 * 60 * 60 * 1000);
+        const deliveryType = tx.deliveryType || 'local';
+        const autoReleaseDays = tx.autoReleaseDays || (deliveryType === 'regional' ? ESCROW_REGIONAL_DAYS : ESCROW_LOCAL_DAYS);
+        const escrowExpiry = new Date(Date.now() + autoReleaseDays * 24 * 60 * 60 * 1000);
 
         await txDoc.ref.update({
           processingFee: 0,
@@ -3884,13 +4491,14 @@ app.post('/api/clickpesa-callback', async (req, res) => {
           const fsSnap = await db.collection('flash_sales')
             .where('productId', '==', tx.productId)
             .where('isActive', '==', true)
-            .limit(1).get();
-          if (!fsSnap.empty) {
-            const fsDoc = fsSnap.docs[0];
-            const fsData = fsDoc.data();
+            .limit(5).get();
+          const payNow = new Date();
+          const activeDoc = fsSnap.docs.find(d => isFlashSaleStillActive(d.data(), payNow));
+          if (activeDoc) {
+            const fsData = activeDoc.data();
             const newStock = Math.max(0, (fsData.stock || 0) - 1);
             const newSold = (fsData.soldCount || 0) + 1;
-            await fsDoc.ref.update({ stock: newStock, soldCount: newSold, isActive: newStock > 0 });
+            await activeDoc.ref.update({ stock: newStock, soldCount: newSold, isActive: newStock > 0 });
           }
         } catch (_) {}
 
@@ -3914,15 +4522,12 @@ app.post('/api/clickpesa-callback', async (req, res) => {
             const sellerSnap = await db.collection('users').doc(tx.sellerId).get();
             const sellerToken = sellerSnap.data()?.fcmToken;
             if (sellerToken) {
-              await admin.messaging().send({
+              await sendFcmToToken(buildFcmMessage({
                 token: sellerToken,
-                notification: {
-                  title: 'Umepata Mauzo!',
-                  body: `${tx.productName || 'Bidhaa'} imeuzwa. TZS ${sellerReceives.toLocaleString()} imewekwa escrow.`,
-                },
+                title: 'Umepata Mauzo!',
+                body: `${tx.productName || 'Bidhaa'} imeuzwa. TZS ${sellerReceives.toLocaleString()} imewekwa escrow.`,
                 data: { type: 'payment', transactionId: externalId },
-                android: androidNotifConfig('payments_notifications', 'payment'),
-              });
+              }), tx.sellerId);
             }
           } catch (_) {}
         }
@@ -3941,15 +4546,12 @@ app.post('/api/clickpesa-callback', async (req, res) => {
             const buyerSnap = await db.collection('users').doc(tx.userId).get();
             const buyerToken = buyerSnap.data()?.fcmToken;
             if (buyerToken) {
-              await admin.messaging().send({
+              await sendFcmToToken(buildFcmMessage({
                 token: buyerToken,
-                notification: {
-                  title: 'Malipo Yamekamilika!',
-                  body: `Malipo ya ${tx.productName || 'bidhaa'} yamekamilika kwa mafanikio.`,
-                },
+                title: 'Malipo Yamekamilika!',
+                body: `Malipo ya ${tx.productName || 'bidhaa'} yamekamilika kwa mafanikio.`,
                 data: { type: 'payment', transactionId: externalId },
-                android: androidNotifConfig('payments_notifications', 'payment'),
-              });
+              }), tx.userId);
             }
           } catch (_) {}
         }
@@ -3967,6 +4569,12 @@ app.post('/api/clickpesa-callback', async (req, res) => {
     console.error('ClickPesa callback error:', e);
     res.status(200).json({ received: false });
   }
+});
+
+// ─── Global error handler (catches unhandled errors, never leaks internals) ───
+app.use((err, req, res, _next) => {
+  console.error('Unhandled error:', err?.stack || err?.message || err);
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

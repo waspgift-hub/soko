@@ -79,7 +79,7 @@ class _BoostedCarousel extends StatelessWidget {
                     Icon(Icons.star, color: Colors.white, size: 12),
                     const SizedBox(width: 4),
                     Text(
-                      'Featured',
+                      context.tr('featured'),
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 10,
@@ -140,7 +140,7 @@ class _BoostedCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
-                        'BOOSTED',
+                        context.tr('boosted'),
                         style: TextStyle(
                           color: cs.boostBronze,
                           fontSize: 9,
@@ -278,7 +278,7 @@ class EarnMoneyBanner extends StatelessWidget {
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        'PATA PESA',
+                        context.tr('earn_money_title'),
                         style: TextStyle(
                           color: cs.primary,
                           fontSize: 10,
@@ -288,8 +288,8 @@ class EarnMoneyBanner extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    Text(
-                      'Uza Bidhaa Yako\nLeo Hii!',
+                      Text(
+                        context.tr('earn_money_subtitle'),
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w900,
@@ -298,8 +298,8 @@ class EarnMoneyBanner extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Text(
-                      'Wateja wako subiri. Anza kuuza\nbure na upate pesa papo hapa.',
+                      Text(
+                        context.tr('earn_money_desc'),
                       style: TextStyle(
                         color: cs.onSurfaceVariant,
                         fontSize: 11.5,
@@ -315,7 +315,7 @@ class EarnMoneyBanner extends StatelessWidget {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        'Anza Kuuza',
+                        context.tr('start_selling'),
                         style: TextStyle(
                           color: cs.surface,
                           fontSize: 12,
@@ -346,7 +346,7 @@ class EarnMoneyBanner extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '+ Tsh',
+                        '+${context.currencySymbol()}',
                         style: TextStyle(
                           color: cs.primary,
                           fontWeight: FontWeight.bold,

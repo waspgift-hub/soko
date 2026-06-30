@@ -87,6 +87,27 @@ class FraudPreventionService {
     };
   }
 
+  Future<void> _raiseAlert({
+    required String sellerId,
+    required String sellerName,
+    required String type,
+    required String severity,
+    required String description,
+    String? productId,
+  }) async {
+    await _db.collection('fraud_alerts').add({
+      'sellerId': sellerId,
+      'sellerName': sellerName,
+      'type': type,
+      'severity': severity,
+      'description': description,
+      'productId': productId,
+      'resolved': false,
+      'detectedAt': FieldValue.serverTimestamp(),
+    });
+    debugPrint('FRAUD ALERT [$severity]: $description');
+  }
+
   Future<void> checkNewSeller(String sellerId, String sellerName) async {
     try {
       final userDoc = await _db.collection('users').doc(sellerId).get();
@@ -98,7 +119,13 @@ class FraudPreventionService {
 
       final accountAge = DateTime.now().difference(createdAt.toDate()).inDays;
       if (accountAge < 1) {
-        debugPrint('FRAUD: New seller $sellerId ($sellerName) - account < 1 day old');
+        await _raiseAlert(
+          sellerId: sellerId,
+          sellerName: sellerName,
+          type: 'new_seller',
+          severity: 'low',
+          description: 'New seller account less than 1 day old',
+        );
       }
     } catch (e) {
       debugPrint('Fraud checkNewSeller error: $e');
@@ -115,16 +142,35 @@ class FraudPreventionService {
   }) async {
     try {
       if (sellerProductCount > 20 && price > 1000000) {
-        debugPrint('FRAUD: Bulk high-value listing - $sellerName has $sellerProductCount listings, product $productName at TZS $price');
+        await _raiseAlert(
+          sellerId: sellerId,
+          sellerName: sellerName,
+          type: 'bulk_high_value',
+          severity: 'high',
+          description:
+              'Seller has $sellerProductCount listings; new product "$productName" at TZS $price',
+          productId: productId,
+        );
       }
 
-      final recentSnap = await _db.collection('products')
+      final recentSnap = await _db
+          .collection('products')
           .where('sellerId', isEqualTo: sellerId)
-          .where('createdAt', isGreaterThanOrEqualTo: DateTime.now().subtract(const Duration(hours: 1)))
+          .where('createdAt',
+              isGreaterThanOrEqualTo:
+                  DateTime.now().subtract(const Duration(hours: 1)))
           .count()
           .get();
       if ((recentSnap.count ?? 0) > 5) {
-        debugPrint('FRAUD: Rapid listing - $sellerName created ${recentSnap.count} products in last hour');
+        await _raiseAlert(
+          sellerId: sellerId,
+          sellerName: sellerName,
+          type: 'rapid_listing',
+          severity: 'medium',
+          description:
+              'Seller created ${recentSnap.count} products in the last hour',
+          productId: productId,
+        );
       }
     } catch (e) {
       debugPrint('Fraud checkSuspiciousListing error: $e');
@@ -139,22 +185,24 @@ class FraudPreventionService {
   }) async {
     try {
       if (amount > 5000000) {
-        debugPrint('FRAUD: High-value transaction - $sellerName, TZS $amount');
+        await _raiseAlert(
+          sellerId: sellerId,
+          sellerName: sellerName,
+          type: 'high_value_tx',
+          severity: 'high',
+          description: 'High-value transaction: TZS $amount',
+        );
       }
 
       final sellerDoc = await _db.collection('users').doc(sellerId).get();
       if (sellerDoc.data()?['kyc']?['approved'] != true && amount > 100000) {
-        debugPrint('FRAUD: Non-KYC seller $sellerName receiving TZS $amount');
-      }
-
-      final recentTxSnap = await _db.collection('transactions')
-          .where('sellerId', isEqualTo: sellerId)
-          .where('createdAt', isGreaterThanOrEqualTo: DateTime.now().subtract(const Duration(hours: 24)))
-          .count()
-          .get();
-      final dailyTotal = (recentTxSnap.count ?? 0) * amount;
-      if (dailyTotal > 5000000) {
-        debugPrint('FRAUD: Daily limit exceeded - $sellerName, TZS $dailyTotal in 24h');
+        await _raiseAlert(
+          sellerId: sellerId,
+          sellerName: sellerName,
+          type: 'non_kyc_payment',
+          severity: 'medium',
+          description: 'Non-KYC seller receiving TZS $amount',
+        );
       }
     } catch (e) {
       debugPrint('Fraud checkSuspiciousTransaction error: $e');

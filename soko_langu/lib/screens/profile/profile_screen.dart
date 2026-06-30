@@ -337,7 +337,7 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
       _ActionItem(Icons.explore, context.tr('discovery'), () {
         context.push(AppRoutes.discovery);
       }),
-      _ActionItem(Icons.play_circle_outline, context.tr('audio'), () {
+      _ActionItem(Icons.library_music_outlined, context.tr('music_player'), () {
         context.push(AppRoutes.audioList);
       }),
       _ActionItem(Icons.receipt_long_outlined, 'Manunuzi Yangu', () {

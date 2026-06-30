@@ -115,6 +115,8 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                       const SizedBox(height: 16),
                       _buildPayoutPrefsCard(),
                       const SizedBox(height: 16),
+                      _buildDispatchButton(),
+                      const SizedBox(height: 16),
                       _buildCustomizeShopButton(),
                       const SizedBox(height: 16),
                       _buildFlashSaleCard(productSnap.data ?? []),
@@ -538,6 +540,58 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildDispatchButton() {
+    return GestureDetector(
+      onTap: () => context.push(AppRoutes.sellerDispatch),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.orange.shade700, Colors.orange.shade500],
+          ),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.local_shipping, color: Colors.white, size: 28),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Tuma Bidhaa',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Weka proof of delivery na tracking number',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.8),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 18),
+          ],
+        ),
+      ),
     );
   }
 

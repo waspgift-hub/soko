@@ -68,7 +68,7 @@ class AudioContentService {
         id: s.id.toString(),
         title: s.title,
         artist: s.artist ?? 'Unknown',
-        url: s.uri ?? s.data,
+        url: s.uri ?? 'file://${s.data}',
         imageUrl: null,
         duration: Duration(milliseconds: s.duration ?? 0),
       );

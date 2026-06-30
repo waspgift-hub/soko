@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/secure_storage_service.dart';
@@ -23,8 +25,9 @@ class _LockScreenState extends State<LockScreen> {
   }
 
   Future<void> _unlock() async {
-    final savedPin = await SecureStorageService.read('app_lock_pin') ?? '';
-    if (_pinController.text == savedPin) {
+    final savedHash = await SecureStorageService.read('app_lock_pin') ?? '';
+    final inputHash = sha256.convert(utf8.encode(_pinController.text)).toString();
+    if (inputHash == savedHash) {
       widget.onUnlock();
     } else {
       setState(() => _error = context.tr('wrong_pin'));

@@ -361,9 +361,10 @@ class _CreateFlashSaleScreenState extends State<CreateFlashSaleScreen> {
       }
     } catch (e) {
       if (mounted) {
+        final msg = _flashSaleErrorMessage(context, e);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(context.tr('imeshindwa').replaceAll('{0}', '$e')),
+            content: Text(msg),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -371,5 +372,14 @@ class _CreateFlashSaleScreenState extends State<CreateFlashSaleScreen> {
     } finally {
       if (mounted) setState(() => _isCreating = false);
     }
+  }
+
+  String _flashSaleErrorMessage(BuildContext context, Object e) {
+    final raw = e.toString();
+    if (raw.contains('FLASH_SALE_ALREADY_ACTIVE') ||
+        raw.contains('Product already has an active flash sale')) {
+      return context.tr('bidhaa_ina_flash_sale');
+    }
+    return context.tr('imeshindwa').replaceAll('{0}', raw);
   }
 }

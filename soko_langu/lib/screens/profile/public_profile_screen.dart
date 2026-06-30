@@ -15,7 +15,7 @@ import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/phone_utils.dart';
 import '../../utils/responsive.dart';
-import '../../services/whatsapp_service.dart';
+import '../../utils/chat_utils.dart';
 
 class PublicProfileScreen extends StatefulWidget {
   final String userId;
@@ -53,18 +53,13 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     super.dispose();
   }
 
-  void _openWhatsApp() {
-    final phone = _profile?.phone;
-    if (phone != null && phone.isNotEmpty) {
-      final msg = WhatsAppService.generateProfileMessage(
-        sellerName: widget.userName,
-      );
-      WhatsAppService().openWhatsApp(phoneNumber: phone, message: msg);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('whatsapp_number_missing'))),
-      );
-    }
+  void _chatWithSeller() {
+    showChatOptions(
+      context: context,
+      sellerId: widget.userId,
+      sellerName: widget.userName,
+      phone: _profile?.phone,
+    );
   }
 
   @override
@@ -82,7 +77,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                 Icons.chat,
                 color: Theme.of(context).colorScheme.whatsappGreen,
               ),
-              onPressed: _openWhatsApp,
+              onPressed: _chatWithSeller,
             ),
             IconButton(
               icon: Icon(
@@ -394,12 +389,12 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
         children: [
           Expanded(
             child: ElevatedButton.icon(
-              onPressed: _openWhatsApp,
+              onPressed: _chatWithSeller,
               icon: Icon(
                 Icons.chat,
                 color: Theme.of(context).colorScheme.surface,
               ),
-              label: Text(context.tr('whatsapp')),
+              label: Text('Chat'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Theme.of(context).colorScheme.whatsappGreen,
                 foregroundColor: Theme.of(context).colorScheme.surface,

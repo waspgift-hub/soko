@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "344682929526.com.sokolangu.app",
+        "paths": ["/magic-link*"]
+      }
+    ]
+  }
+}

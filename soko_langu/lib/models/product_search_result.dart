@@ -68,7 +68,7 @@ class ProductSearchResult {
 
   String toContextBlock(int index, {String currencySymbol = 'TSh'}) {
     final buffer = StringBuffer()
-      ..writeln('--- BIDHAA #$index | ✅ IPO KWENYE SOKO LANGU (chanzo: database ya app) ---')
+      ..writeln('--- BIDHAA #$index | ✅ IPO KWENYE SOKO VIBE (chanzo: database ya app) ---')
       ..writeln('ID: $productId')
       ..writeln('Jina: $productName')
       ..writeln('Maelezo: $description')

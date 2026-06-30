@@ -18,8 +18,7 @@ class MyPurchasesScreen extends StatefulWidget {
 
 class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
   String? _releasingTxId;
-  String? _refundingTxId;
-  final Set<String> _autoReleased = {};
+  String? _disputingTxId;
 
   Future<void> _confirmDelivery(String txId) async {
     final user = FirebaseAuth.instance.currentUser;
@@ -48,15 +47,31 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     setState(() => _releasingTxId = null);
   }
 
-  Future<void> _requestRefund(String txId) async {
+  Future<void> _raiseDispute(String txId) async {
+    final reasonCtrl = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(context.tr('request_refund')),
-        content: Text(context.tr('refund_warning')),
+        title: const Text('Fungua Mgogoro'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Je, hukupata bidhaa? Eleza sababu na tutakagua.'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Sababu',
+                hintText: 'Sijapata mzigo...',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.tr('yes_refund'))),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Fungua Mgogoro')),
         ],
       ),
     );
@@ -65,30 +80,33 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    setState(() => _refundingTxId = txId);
+    setState(() => _disputingTxId = txId);
 
     try {
       final resp = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/escrow/refund'),
+        Uri.parse('${ApiConfig.baseUrl}/api/escrow/dispute'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'orderId': txId, 'userId': user.uid}),
+        body: jsonEncode({
+          'orderId': txId,
+          'userId': user.uid,
+          'reason': reasonCtrl.text,
+          'evidenceUrls': [],
+        }),
       );
 
       final result = jsonDecode(resp.body);
 
       if (resp.statusCode == 200 && result['success'] == true) {
-        _showSuccess(result['message'] ?? context.tr('refund_sent'));
+        _showSuccess('Mgogoro umefunguliwa. Admin atakagua.');
       } else {
-        _showError(result['error'] ?? context.tr('refund_failed'));
+        _showError(result['error'] ?? 'Failed to raise dispute');
       }
     } catch (e) {
-      _showError('${context.tr('refund_failed')}: $e');
+      _showError('Error: $e');
     }
 
-    setState(() => _refundingTxId = null);
+    setState(() => _disputingTxId = null);
   }
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -132,18 +150,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
             if (ta is Timestamp && tb is Timestamp) return tb.compareTo(ta);
             return 0;
           });
-          // Auto-release expired escrow transactions
-          for (final doc in docs) {
-            final data = doc.data() as Map<String, dynamic>;
-            if (data['status'] != 'escrow_hold') continue;
-            if (_autoReleased.contains(doc.id)) continue;
-            final expiresAt = data['escrowExpiresAt'] as Timestamp?;
-            if (expiresAt == null) continue;
-            if (DateTime.now().isAfter(expiresAt.toDate())) {
-              _autoReleased.add(doc.id);
-              _confirmDelivery(doc.id);
-            }
-          }
+
           if (docs.isEmpty) {
             return Center(child: Text(context.tr('no_purchases_yet')));
           }
@@ -156,18 +163,32 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
               final status = d['status'] as String? ?? 'pending';
               final productName = d['productName'] as String? ?? 'Product';
               final price = (d['productPrice'] ?? 0).toDouble();
+              final dispatchProof = d['dispatchProof'] as Map<String, dynamic>?;
 
               IconData statusIcon;
               Color statusColor;
               String statusText;
               bool canConfirm = false;
+              bool canDispute = false;
 
               switch (status) {
                 case 'escrow_hold':
                   statusIcon = Icons.lock;
                   statusColor = cs.tertiary;
-                  statusText = context.tr('pending_confirmation');
+                  statusText = 'Inasubiri muuzaji atume';
+                  canDispute = true;
+                  break;
+                case 'dispatched':
+                  statusIcon = Icons.local_shipping;
+                  statusColor = Colors.orange;
+                  statusText = 'Imesafirishwa — thibitisha upokeaji';
                   canConfirm = true;
+                  canDispute = true;
+                  break;
+                case 'disputed':
+                  statusIcon = Icons.gavel;
+                  statusColor = Colors.red;
+                  statusText = 'Mgogoro — Admin anakagua';
                   break;
                 case 'delivery_confirmed':
                   statusIcon = Icons.how_to_vote;
@@ -211,15 +232,16 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                         children: [
                           Icon(statusIcon, color: statusColor, size: 20),
                           const SizedBox(width: 8),
-                          Text(
-                            statusText,
-                            style: TextStyle(
-                              color: statusColor,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
+                          Expanded(
+                            child: Text(
+                              statusText,
+                              style: TextStyle(
+                                color: statusColor,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
                             ),
                           ),
-                          const Spacer(),
                           Text(
                             context.formatPrice(price.toDouble()),
                             style: const TextStyle(
@@ -243,56 +265,74 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                             ),
                           ),
                         ),
-                      if (canConfirm)
+                      if (dispatchProof != null && dispatchProof['dispatchedAt'] != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Tracking: ${dispatchProof['trackingNumber'] ?? '-'}',
+                            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                          ),
+                        ),
+                      if (status == 'escrow_hold')
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Inasubiri muuzaji kusafirisha. Hatua inayofuata: usafirishaji.',
+                            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                          ),
+                        ),
+                      if (canConfirm || canDispute)
                         Padding(
                           padding: const EdgeInsets.only(top: 12),
                           child: Row(
                             children: [
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: _releasingTxId == docs[i].id
-                                      ? null
-                                      : () => _confirmDelivery(docs[i].id),
-                                  icon: _releasingTxId == docs[i].id
-                                      ? const SizedBox(
-                                          width: 16, height: 16,
-                                          child: GoogleLoading(size: 16, strokeWidth: 2),
-                                        )
-                                      : const Icon(Icons.verified, size: 18),
-                                  label: Text(
-                                    _releasingTxId == docs[i].id
-                                        ? context.tr('processing')
-                                        : context.tr('confirm_receipt'),
-                                  ),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: cs.primary,
-                                    foregroundColor: cs.surface,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: _refundingTxId == docs[i].id
-                                      ? null
-                                      : () => _requestRefund(docs[i].id),
-                                  icon: _refundingTxId == docs[i].id
-                                      ? const SizedBox(
-                                          width: 16, height: 16,
-                                          child: GoogleLoading(size: 16, strokeWidth: 2),
-                                        )
-                                      : const Icon(Icons.money_off, size: 18),
-                                  label: Text(
-                                    _refundingTxId == docs[i].id
-                                        ? context.tr('processing')
-                                        : context.tr('not_received_item'),
-                                  ),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: cs.error,
-                                    side: BorderSide(color: cs.error),
+                              if (canConfirm)
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    onPressed: _releasingTxId == docs[i].id
+                                        ? null
+                                        : () => _confirmDelivery(docs[i].id),
+                                    icon: _releasingTxId == docs[i].id
+                                        ? const SizedBox(
+                                            width: 16, height: 16,
+                                            child: GoogleLoading(size: 16, strokeWidth: 2),
+                                          )
+                                        : const Icon(Icons.verified, size: 18),
+                                    label: Text(
+                                      _releasingTxId == docs[i].id
+                                          ? context.tr('processing')
+                                          : context.tr('confirm_receipt'),
+                                    ),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: cs.primary,
+                                      foregroundColor: cs.surface,
+                                    ),
                                   ),
                                 ),
-                              ),
+                              if (canConfirm && canDispute) const SizedBox(width: 8),
+                              if (canDispute)
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: _disputingTxId == docs[i].id
+                                        ? null
+                                        : () => _raiseDispute(docs[i].id),
+                                    icon: _disputingTxId == docs[i].id
+                                        ? const SizedBox(
+                                            width: 16, height: 16,
+                                            child: GoogleLoading(size: 16, strokeWidth: 2),
+                                          )
+                                        : const Icon(Icons.gavel, size: 18),
+                                    label: Text(
+                                      _disputingTxId == docs[i].id
+                                          ? context.tr('processing')
+                                          : 'Sijapata mzigo',
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: cs.error,
+                                      side: BorderSide(color: cs.error),
+                                    ),
+                                  ),
+                                ),
                             ],
                           ),
                         ),

@@ -63,7 +63,7 @@ class FlashSale {
       soldCount: data['soldCount'] ?? 0,
       isActive: data['isActive'] ?? true,
       startTime: ts(data['startTime']),
-      endTime: ts(data['endTime']),
+      endTime: ts(data['endTime'] ?? data['muda_wa_kuisha']),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }

@@ -1,4 +1,5 @@
--keep class com.sokolangu.app.** { *; }
+-keep class com.ryanheise.audioservice.** { *; }
+-keep class com.ryanheise.just_audio.** { *; }
 -keep class com.google.firebase.** { *; }
 -keep class com.google.android.gms.** { *; }
 -keep class io.flutter.** { *; }
