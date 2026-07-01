@@ -40,7 +40,6 @@ import 'services/localization_service.dart';
 import 'services/local_cache_service.dart';
 import 'services/notification_service.dart';
 import 'services/security_service.dart';
-import 'services/whatsapp_service.dart';
 import 'theme/theme_manager.dart';
 import 'utils/responsive.dart';
 import 'widgets/app_lock_overlay.dart';
@@ -50,8 +49,6 @@ import 'widgets/connectivity_wrapper.dart';
 // ---------------------------------------------------------------------------
 // Global singletons — scoped to app lifetime, lazily resolved where possible.
 // ---------------------------------------------------------------------------
-
-AudioHandler? audioHandler;
 
 final NotificationService notificationService = NotificationService();
 final LocalizationService localizationService = LocalizationService();
@@ -105,12 +102,14 @@ void main() async {
   // SAFE: only stores a callback reference; the handler itself calls Firebase.initializeApp.
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
-  runApp(const SokoVibeApp());
-
-  // --- AudioService: deferred to avoid blocking the first frame ---
+  // --- AudioService: init before runApp on non-web, so the handler
+  // Completer resolves before the first widget tree is built. This
+  // eliminates the retry loop that MusicStateNotifier previously needed.
   if (!kIsWeb) {
-    unawaited(_initAudioService());
+    await _initAudioService();
   }
+
+  runApp(const SokoVibeApp());
 }
 
 /// Registers Crashlytics as the top-level error handler.
@@ -126,10 +125,13 @@ void _setupGlobalErrorHandlers() {
   };
 }
 
-/// Deferred AudioService initialization — runs after the first frame is painted.
-Future<void> _initAudioService({VoidCallback? onReady}) async {
+/// Initialize AudioService before the first frame.
+///
+/// Must run before [runApp] so [musicHandlerFuture] resolves before any
+/// widget (e.g. [MiniPlayer], [PlayerScreen]) tries to read playback state.
+Future<void> _initAudioService() async {
   try {
-    audioHandler = await AudioService.init(
+    await AudioService.init(
       builder: () {
         final handler = MusicHandler();
         bindMusicHandler(handler);
@@ -150,7 +152,6 @@ Future<void> _initAudioService({VoidCallback? onReady}) async {
         preloadArtwork: true,
       ),
     );
-    onReady?.call();
   } catch (e) {
     debugPrint('AudioService init failed: $e');
   }
@@ -223,7 +224,6 @@ class _SokoVibeAppState extends State<SokoVibeApp>
     _productFeedProvider = ProductFeedProvider();
     _musicState = MusicStateNotifier();
     _authRepository = AuthRepository();
-    _musicState.init();
     _onboardingService = OnboardingService();
     _authNotifier = AuthNotifier(
       authRepo: _authRepository,
@@ -305,7 +305,9 @@ class _SokoVibeAppState extends State<SokoVibeApp>
       // Background services (fire-and-forget)
       _initBackgroundServices(prefs);
 
-      // Now-playing state — retries internally until AudioService is ready
+      // Start MusicStateNotifier streams (handler already ready since
+      // AudioService.init completed before runApp).
+      _musicState.init();
     } catch (e) {
       debugPrint('_initApp: error — $e');
     }
@@ -334,19 +336,14 @@ class _SokoVibeAppState extends State<SokoVibeApp>
       });
     };
 
-    NotificationService.onPriceDropTap = (Map<String, dynamic> data) {
-      final phone = data['sellerPhone'] as String? ?? '';
-      final productName = data['productName'] as String? ?? '';
-      final newPrice = data['newPrice'] as num? ?? 0;
-      if (phone.isEmpty) return;
-
-      final symbol =
-          LocalizationService.supportedCurrencies['TZS']?['symbol'] ?? 'TSh';
-      final message = LocalizationService.translate('price_drop_whatsapp', _langCode)
-          .replaceAll('{0}', productName)
-          .replaceAll('{1}', symbol)
-          .replaceAll('{2}', newPrice.toStringAsFixed(0));
-      WhatsAppService().openWhatsApp(phoneNumber: phone, message: message);
+    NotificationService.onPaymentNotificationTap =
+        (Map<String, dynamic> data) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final orderId = (data['orderId'] ?? data['transactionId']) as String?;
+        if (orderId != null) {
+          appRouter.push('/receipt/$orderId');
+        }
+      });
     };
   }
 
@@ -484,17 +481,24 @@ class _SokoVibeAppState extends State<SokoVibeApp>
       );
     }
 
-    // Glassmorphism — gradient background with subtle blur
+    // Cosmic Slate gradient background
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     content = Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            cs.primary.withValues(alpha: 0.06),
-            cs.surface,
-            cs.tertiary.withValues(alpha: 0.04),
-          ],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: isDark
+              ? [
+                  cs.surface.withValues(alpha: 0.97),
+                  cs.surfaceContainerLow,
+                  cs.surface.withValues(alpha: 0.97),
+                ]
+              : [
+                  cs.surface.withValues(alpha: 0.95),
+                  cs.surfaceContainerLow,
+                  cs.surface.withValues(alpha: 0.95),
+                ],
         ),
       ),
       child: content,
