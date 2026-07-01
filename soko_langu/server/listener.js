@@ -65,73 +65,91 @@ async function sendFcm(message, userIdForCleanup = null) {
 // ─── Track known statuses to avoid re-sending on every field update ───
 const knownStatus = new Map();
 
-// ─── Firestore Listener ─────────────────────────────────────────────
-console.log('[LISTENER] Starting Firestore transaction listener...');
+// ─── Start listener after loading existing pending transactions ──────
+console.log('[LISTENER] Loading existing pending transactions...');
 
-db.collection('transactions').onSnapshot(
-  (snapshot) => {
-    snapshot.docChanges().forEach((change) => {
-      if (change.type !== 'modified') return;
+function startListener() {
+  console.log('[LISTENER] Starting Firestore transaction listener...');
 
-      const orderId = change.doc.id;
-      const after = change.doc.data();
-      const beforeStatus = knownStatus.get(orderId);
-      const newStatus = after?.status;
+  db.collection('transactions').onSnapshot(
+    (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type !== 'modified') return;
 
-      // Store the new status for next comparison
-      knownStatus.set(orderId, newStatus);
+        const orderId = change.doc.id;
+        const after = change.doc.data();
+        const beforeStatus = knownStatus.get(orderId);
+        const newStatus = after?.status;
 
-      // Only trigger on pending → completed / escrow_hold
-      if (beforeStatus && beforeStatus !== 'pending') return;
-      if (newStatus !== 'completed' && newStatus !== 'escrow_hold') return;
+        knownStatus.set(orderId, newStatus);
 
-      const buyerId = after.buyerId;
-      if (!buyerId) {
-        console.log(`[LISTENER] ${orderId}: no buyerId, skipping`);
-        return;
-      }
+        // Skip if we don't know the previous status (fresh restart)
+        if (beforeStatus === undefined) return;
+        // Only trigger on pending → completed / escrow_hold
+        if (beforeStatus !== 'pending') return;
+        if (newStatus !== 'completed' && newStatus !== 'escrow_hold') return;
 
-      console.log(`[LISTENER] ${orderId}: ${beforeStatus} → ${newStatus} (buyer: ${buyerId})`);
+        const buyerId = after.buyerId;
+        if (!buyerId) {
+          console.log(`[LISTENER] ${orderId}: no buyerId, skipping`);
+          return;
+        }
 
-      // Fetch buyer's FCM token
-      db.collection('users').doc(buyerId).get()
-        .then((userSnap) => {
-          const fcmToken = userSnap.data()?.fcmToken;
-          if (!fcmToken) {
-            console.log(`[LISTENER] ${orderId}: no FCM token for buyer ${buyerId}`);
-            return;
-          }
+        console.log(`[LISTENER] ${orderId}: ${beforeStatus} → ${newStatus} (buyer: ${buyerId})`);
 
-          const productName = after.productName || 'item';
-          const title = newStatus === 'completed'
-            ? 'Payment Successful'
-            : 'Payment Received – Escrow Held';
-          const body = newStatus === 'completed'
-            ? `Your payment for ${productName} has been completed.`
-            : `Your payment for ${productName} is held in escrow.`;
+        db.collection('users').doc(buyerId).get()
+          .then((userSnap) => {
+            const fcmToken = userSnap.data()?.fcmToken;
+            if (!fcmToken) {
+              console.log(`[LISTENER] ${orderId}: no FCM token for buyer ${buyerId}`);
+              return;
+            }
 
-          const message = buildFcmMessage({
-            token: fcmToken,
-            title,
-            body,
-            data: { type: 'payment', orderId, status: newStatus },
+            const productName = after.productName || 'item';
+            const title = newStatus === 'completed'
+              ? 'Payment Successful'
+              : 'Payment Received – Escrow Held';
+            const body = newStatus === 'completed'
+              ? `Your payment for ${productName} has been completed.`
+              : `Your payment for ${productName} is held in escrow.`;
+
+            const message = buildFcmMessage({
+              token: fcmToken,
+              title,
+              body,
+              data: { type: 'payment', orderId, status: newStatus },
+            });
+
+            return sendFcm(message, buyerId);
+          })
+          .then(() => {
+            console.log(`[LISTENER] ${orderId}: FCM sent to buyer ${buyerId}`);
+          })
+          .catch((err) => {
+            console.error(`[LISTENER] ${orderId}: FCM failed for buyer ${buyerId}:`, err.message);
           });
+      });
+    },
+    (error) => {
+      console.error('[LISTENER] Fatal: Firestone listener error:', error);
+    }
+  );
 
-          return sendFcm(message, buyerId);
-        })
-        .then(() => {
-          console.log(`[LISTENER] ${orderId}: FCM sent to buyer ${buyerId}`);
-        })
-        .catch((err) => {
-          console.error(`[LISTENER] ${orderId}: FCM failed for buyer ${buyerId}:`, err.message);
-        });
-    });
-  },
-  (error) => {
-    console.error('[LISTENER] Fatal: Firestone listener error:', error);
-    // Don't crash — let the process restart on Railway
-  }
-);
+  console.log('[LISTENER] Ready. Listening for transaction changes...');
+}
 
-// Keep process alive
-console.log('[LISTENER] Ready. Listening for transaction changes...');
+// Seed knownStatus with existing pending transactions so we don't
+// trigger false notifications on first modification after restart.
+db.collection('transactions')
+  .where('status', '==', 'pending')
+  .get()
+  .then((snap) => {
+    snap.docs.forEach((doc) => knownStatus.set(doc.id, 'pending'));
+    console.log(`[LISTENER] Loaded ${snap.docs.length} existing pending transactions`);
+  })
+  .catch((err) => {
+    console.error('[LISTENER] Failed to load pending transactions:', err.message);
+  })
+  .finally(() => {
+    startListener();
+  });
