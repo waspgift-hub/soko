@@ -328,7 +328,7 @@ async function requireAdmin(req, res) {
     try {
       const decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
       const email = decoded.email || '';
-      if (email === 'admin@soko-langu.com' || email === 'admin@soko-vibe.com') {
+      if (ADMIN_EMAILS.includes(email)) {
         return { ok: true, uid: decoded.uid };
       }
       if (db) {
@@ -739,8 +739,18 @@ app.post('/api/send-notification', async (req, res) => {
     const userDoc = await db.collection('users').doc(userId).get();
     if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
 
+    // Write in-app notification to Firestore (always, even without FCM token)
+    await db.collection('notifications').add({
+      userId,
+      title,
+      body: body || '',
+      data: data || {},
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
     const fcmToken = userDoc.data().fcmToken;
-    if (!fcmToken) return res.json({ sent: false, reason: 'No FCM token' });
+    if (!fcmToken) return res.json({ sent: true, reason: 'No FCM token, in-app only' });
 
     const notifType = data && data.type;
     const message = buildFcmMessage({
@@ -755,20 +765,11 @@ app.post('/api/send-notification', async (req, res) => {
     } catch (e) {
       if (e.code === 'messaging/registration-token-not-registered' ||
           e.code === 'messaging/invalid-registration-token') {
-        return res.json({ sent: false, reason: 'Stale token cleaned up' });
+        await db.collection('users').doc(userId).update({ fcmToken: admin.firestore.FieldValue.delete() });
+        return res.json({ sent: true, reason: 'Stale token cleaned, in-app written' });
       }
       throw e;
     }
-
-    // Also write in-app notification to Firestore
-    await db.collection('notifications').add({
-      userId,
-      title,
-      body: body || '',
-      data: data || {},
-      isRead: false,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
 
     res.json({ sent: true });
   } catch (e) {
@@ -4091,13 +4092,17 @@ app.post('/api/boost/notify', asyncHandler(async (req, res) => {
 async function notifyBoostBroadcast(productId, tier, sellerId) {
   if (!db) return;
   try {
-    const productSnap = await db.collection('products').doc(productId).get();
+    const [productSnap, sellerSnap] = await Promise.all([
+      db.collection('products').doc(productId).get(),
+      sellerId ? db.collection('users').doc(sellerId).get() : Promise.resolve(null),
+    ]);
     const productData = productSnap.data() || {};
     const productName = productData.name || 'Bidhaa';
     const productImage = (productData.images && productData.images.length > 0) ? productData.images[0] : '';
-    const tierLabel = tier.charAt(0).toUpperCase() + tier.slice(1);
-    const title = `🚀 ${tierLabel} Boost!`;
-    const body = `${productName} imepandishwa daraja! Angalia sasa.`;
+    const sellerName = sellerSnap?.data()?.displayName || sellerSnap?.data()?.name || 'Muuzaji';
+    const title = 'Bidhaa Mpya ya Moto! 🔥';
+    const body = `${sellerName} ame-boost bidhaa mpya, angalia sasa!`;
+    const imageUrl = productImage;
 
     let sentCount = 0;
     let lastDocId = null;
@@ -4127,7 +4132,7 @@ async function notifyBoostBroadcast(productId, tier, sellerId) {
               type: 'boost',
               productId: productId || '',
               productName: productName || '',
-              image: productImage || '',
+              image: imageUrl || '',
             },
           });
           try {
@@ -4159,7 +4164,7 @@ async function notifyBoostBroadcast(productId, tier, sellerId) {
           userId: doc.id,
           title,
           body,
-          data: { type: 'boost', productId: productId || '', image: productImage || '' },
+          data: { type: 'boost', productId: productId || '', image: imageUrl || '' },
           isRead: false,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
@@ -4571,6 +4576,225 @@ app.post('/api/clickpesa-callback', async (req, res) => {
   }
 });
 
+// ─── TRANSACTIONS: CREATE ───────────────────────────────────
+app.post('/api/transactions/create', asyncHandler(async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not configured' });
+  const { buyerId, buyerName, buyerPhone, sellerId, sellerName, productId, productName, productPrice, transactionReference } = req.body;
+  if (!buyerId || !sellerId || !productId || !productName || productPrice == null) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  let decoded;
+  try {
+    decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
+  } catch {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+  if (decoded.uid !== buyerId) {
+    return res.status(403).json({ error: 'Buyer ID does not match authenticated user' });
+  }
+  const userDoc = await db.collection('users').doc(sellerId).get();
+  if (userDoc.exists && userDoc.data().isSuspended === true) {
+    return res.status(403).json({ error: 'Seller is suspended' });
+  }
+
+  const price = Number(productPrice);
+  const processingFee = price * 0.02;
+  const platformFee = price * 0.03;
+  const totalAmount = price + processingFee + platformFee;
+  const sellerReceives = price - platformFee;
+
+  const txRef = await db.collection('transactions').doc();
+  await txRef.set({
+    buyerId, buyerName: buyerName || '', buyerPhone: buyerPhone || '',
+    sellerId, sellerName: sellerName || '',
+    productId, productName,
+    productPrice: price, processingFee, platformFee,
+    sokovibeCommission: platformFee,
+    totalAmount, sellerReceives,
+    status: 'completed',
+    paymentMethod: 'ClickPesa',
+    transactionReference: transactionReference || '',
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  await db.collection('users').doc(sellerId).set({
+    sellerBalance: admin.firestore.FieldValue.increment(sellerReceives),
+    totalSales: admin.firestore.FieldValue.increment(1),
+    grossSalesVolume: admin.firestore.FieldValue.increment(price),
+    lastSaleAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  await db.collection('revenue_transactions').add({
+    userId: sellerId,
+    amount: sellerReceives,
+    type: 'sale',
+    description: `Sale of ${productName}`,
+    transactionId: txRef.id,
+    productName,
+    productPrice: price,
+    sokovibeCommission: platformFee,
+    buyerName: buyerName || '',
+    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  res.json({ success: true, transactionId: txRef.id });
+}));
+
+// ─── CATEGORIES: ADD DEFAULTS ───────────────────────────────
+app.post('/api/categories/add-defaults', asyncHandler(async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not configured' });
+  const auth = await requireAdmin(req, res);
+  if (!auth.ok) return;
+  const categories = [
+    { id: 'electronics', name: 'Electronics', icon: 'electronics', order: 1, isActive: true },
+    { id: 'fashion', name: 'Fashion & Clothing', icon: 'fashion', order: 2, isActive: true },
+    { id: 'home', name: 'Home & Garden', icon: 'home', order: 3, isActive: true },
+    { id: 'vehicles', name: 'Vehicles', icon: 'vehicles', order: 4, isActive: true },
+    { id: 'property', name: 'Property', icon: 'property', order: 5, isActive: true },
+    { id: 'services', name: 'Services', icon: 'services', order: 6, isActive: true },
+    { id: 'jobs', name: 'Jobs', icon: 'jobs', order: 7, isActive: true },
+    { id: 'agriculture', name: 'Agriculture', icon: 'agriculture', order: 8, isActive: true },
+    { id: 'health', name: 'Health & Beauty', icon: 'health', order: 9, isActive: true },
+    { id: 'education', name: 'Education', icon: 'education', order: 10, isActive: true },
+    { id: 'sports', name: 'Sports & Leisure', icon: 'sports', order: 11, isActive: true },
+    { id: 'pets', name: 'Pets', icon: 'pets', order: 12, isActive: true },
+    { id: 'food', name: 'Food & Drinks', icon: 'food', order: 13, isActive: true },
+    { id: 'phones', name: 'Phones & Tablets', icon: 'phones', order: 14, isActive: true },
+    { id: 'computing', name: 'Computing', icon: 'computing', order: 15, isActive: true },
+  ];
+  const batch = db.batch();
+  for (const cat of categories) {
+    batch.set(db.collection('categories').doc(cat.id), cat);
+  }
+  await batch.commit();
+  res.json({ success: true });
+}));
+
+// ─── CATEGORIES: UPDATE ─────────────────────────────────────
+app.post('/api/categories/update', asyncHandler(async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not configured' });
+  const auth = await requireAdmin(req, res);
+  if (!auth.ok) return;
+  const { categoryId, data } = req.body;
+  if (!categoryId || !data) {
+    return res.status(400).json({ error: 'categoryId and data required' });
+  }
+  await db.collection('categories').doc(categoryId).update(data);
+  res.json({ success: true });
+}));
+
+// ─── FLASH SALES: DEACTIVATE EXPIRED ──────────────────────────
+app.post('/api/flash-sales/deactivate-expired', asyncHandler(async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not configured' });
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    await admin.auth().verifyIdToken(authHeader.slice(7));
+  } catch {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+  const { productId } = req.body;
+  if (!productId) return res.status(400).json({ error: 'productId required' });
+  const snap = await db.collection('flash_sales')
+    .where('productId', '==', productId)
+    .where('isActive', '==', true)
+    .get();
+  const now = new Date();
+  const batch = db.batch();
+  let count = 0;
+  snap.forEach(doc => {
+    const sale = doc.data();
+    if (now > sale.endTime.toDate()) {
+      batch.update(doc.ref, { isActive: false });
+      count++;
+    }
+  });
+  if (count > 0) await batch.commit();
+  res.json({ success: true, deactivated: count });
+}));
+
+// ─── FLASH SALES: DELETE ─────────────────────────────────────
+app.post('/api/flash-sales/delete', asyncHandler(async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not configured' });
+  const auth = await requireAdmin(req, res);
+  if (!auth.ok) return;
+  const { flashSaleId } = req.body;
+  if (!flashSaleId) return res.status(400).json({ error: 'flashSaleId required' });
+  await db.collection('flash_sales').doc(flashSaleId).delete();
+  res.json({ success: true });
+}));
+
+// ─── NOTIFICATIONS: BROADCAST TO ALL USERS ──────────────────
+app.post('/api/notifications/broadcast', asyncHandler(async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not configured' });
+  const auth = await requireAdmin(req, res);
+  if (!auth.ok) return;
+  const { title, body, data } = req.body;
+  if (!title) return res.status(400).json({ error: 'title required' });
+
+  const usersSnap = await db.collection('users').get();
+  const tokens = [];
+  let notifCount = 0;
+  const batch = db.batch();
+
+  for (const userDoc of usersSnap.docs) {
+    const uid = userDoc.id;
+    const notifRef = db.collection('notifications').doc();
+    batch.set(notifRef, {
+      userId: uid,
+      title,
+      body: body || '',
+      data: data || {},
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    notifCount++;
+    const token = userDoc.data().fcmToken;
+    if (token && typeof token === 'string' && token.length > 0) {
+      tokens.push(token);
+    }
+  }
+
+  await batch.commit();
+
+  let sent = 0;
+  if (tokens.length > 0) {
+    const BATCH_SIZE = 500;
+    for (let i = 0; i < tokens.length; i += BATCH_SIZE) {
+      const tokenBatch = tokens.slice(i, i + BATCH_SIZE);
+      try {
+        const message = buildFcmMessage({
+          tokens: tokenBatch,
+          title,
+          body: body || '',
+          data: { ...(data || {}), type: (data && data.type) || 'general' },
+        });
+        const response = await admin.messaging().sendEachForMulticast(message);
+        sent += response.successCount;
+      } catch (e) {
+        console.error('Broadcast FCM batch error:', e.message);
+      }
+    }
+  }
+
+  await db.collection('admin_notifications').add({
+    title,
+    body,
+    target: 'all',
+    sentCount: sent,
+    notifCount,
+    sentAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  res.json({ success: true, notifications: notifCount, fcmSent: sent });
+}));
+
 // ─── Global error handler (catches unhandled errors, never leaks internals) ───
 app.use((err, req, res, _next) => {
   console.error('Unhandled error:', err?.stack || err?.message || err);
@@ -4578,3 +4802,5 @@ app.use((err, req, res, _next) => {
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+// deploy-trigger: 20260701132433
