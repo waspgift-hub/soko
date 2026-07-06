@@ -5255,16 +5255,31 @@ app.use((err, req, res, _next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// ─── Diagnostic: test FCM push for a specific user ─────────────────
+// ─── Diagnostic: test FCM push (by userId, email, or direct token) ─────
 app.post('/api/test-fcm', async (req, res) => {
   try {
-    const { userId, title, body } = req.body;
-    if (!userId || !title) return res.status(400).json({ error: 'userId and title required' });
+    const { userId, email, token: directToken, title, body } = req.body;
+    if (!title) return res.status(400).json({ error: 'title required' });
+    if (!userId && !email && !directToken) return res.status(400).json({ error: 'Provide userId, email, or token' });
     if (!db) return res.status(503).json({ error: 'Database not configured' });
-    const userDoc = await db.collection('users').doc(userId).get();
-    if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
-    const fcmToken = userDoc.data().fcmToken;
-    if (!fcmToken) return res.status(400).json({ error: 'No FCM token for this user. Open the app first.' });
+
+    let fcmToken = directToken;
+    if (!fcmToken) {
+      let uid = userId;
+      if (!uid && email) {
+        // Look up by email via Firebase Auth
+        try {
+          const userRecord = await admin.auth().getUserByEmail(email);
+          uid = userRecord.uid;
+        } catch (authErr) {
+          return res.status(404).json({ error: `User not found by email: ${authErr.message}` });
+        }
+      }
+      const userDoc = await db.collection('users').doc(uid).get();
+      if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
+      fcmToken = userDoc.data().fcmToken;
+      if (!fcmToken) return res.status(400).json({ error: 'No FCM token for this user. Open the app first.' });
+    }
 
     // Try sending via Admin SDK
     try {
@@ -5275,7 +5290,6 @@ app.post('/api/test-fcm', async (req, res) => {
       });
       return res.json({ success: true, method: 'admin-sdk', messageId: result, tokenPrefix: fcmToken.substring(0, 8) + '...' });
     } catch (adminErr) {
-      // Fallback: try legacy HTTP v1 API directly
       console.error('[FCM-DIAG] Admin SDK failed:', adminErr.code || adminErr.message);
       const projectId = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '{}').project_id;
       return res.status(502).json({
