@@ -5291,6 +5291,28 @@ app.get('/api/fcm-check', async (req, res) => {
     } catch (e) {
       results.topicSend = { code: e.code, message: e.message };
     }
+    // Test 3: try subscribing user token to topic
+    if (req.query.uid) {
+      try {
+        const userDoc = await db.collection('users').doc(req.query.uid).get();
+        if (userDoc.exists) {
+          const token = userDoc.data().fcmToken;
+          if (token) {
+            const subResult = await admin.messaging().subscribeToTopic([token], 'test_user_topic');
+            results.subscribeToTopic = subResult;
+            // Now try sending to that topic
+            const topicMsgId2 = await admin.messaging().send({
+              topic: 'test_user_topic',
+              data: { title: 'Topic Test', body: 'Sent via topic after subscribe attempt', type: 'general' },
+              android: { priority: 'high' },
+            });
+            results.sendToSubscribedTopic = { success: true, messageId: topicMsgId2 };
+          }
+        }
+      } catch (e) {
+        results.subscribeToTopic = { code: e.code, message: e.message };
+      }
+    }
     return res.json({ status: 'complete', projectId, results });
   } catch (e) {
     res.status(500).json({ error: e.message });
