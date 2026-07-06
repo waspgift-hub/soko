@@ -33,7 +33,6 @@ dependencies:
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
-  cupertino_icons: ^1.0.8
   firebase_core: ^4.7.0
   firebase_auth: ^6.4.0
   cloud_firestore: ^6.3.0
@@ -41,9 +40,7 @@ dependencies:
   google_sign_in: ^7.2.0
   image_picker: ^1.2.2
   provider: ^6.1.5+1
-  flutter_launcher_icons: ^0.14.4
   shared_preferences: ^2.5.5
-  video_player: ^2.11.1
   just_audio: ^0.9.43
   audio_session: ^0.1.25
   audio_service: ^0.18.18
@@ -71,16 +68,19 @@ dependencies:
   firebase_performance: ^0.11.4+1
   on_audio_query: ^2.9.0
   awesome_notifications: ^0.11.0
-  flutter_map: ^6.1.0
-  latlong2: ^0.9.0
+  flutter_map: 8.3.1
   async: ^2.12.0
   path_provider: ^2.1.5
   carousel_slider: ^5.0.0
-  youtube_explode_dart: ^2.3.9
+  youtube_explode_dart: 3.1.0
   app_links: ^6.3.3
   hive: ^2.2.3
   hive_flutter: ^1.1.0
   crypto: ^3.0.6
+  qr_flutter: ^4.1.0
+  gal: ^2.3.2
+  youtube_player_flutter: ^10.0.1
+  video_player: ^2.9.2
 
 
 dev_dependencies:
@@ -93,12 +93,13 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/InShot_20260624_083700389.jpg"
-  adaptive_icon_foreground: "assets/InShot_20260624_083700389.jpg"
+  image_path: "assets/app_icon.png"
+  adaptive_icon_foreground: "assets/app_icon.png"
   adaptive_icon_background: "#2D6A4F"
 
 # For information on the generic Dart part of this file, see the

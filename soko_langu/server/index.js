@@ -3,7 +3,6 @@ const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
 const admin = require('firebase-admin');
-const nodemailer = require('nodemailer');
 const helmet = require('helmet');
 const { mongikeCollect, mongikePayout, mongikeBalance, COLLECTION_FEE, PAYOUT_FEE } = require('./mongike');
 
@@ -99,8 +98,9 @@ function buildFcmMessage({ token, tokens, title, body, data = {} }) {
       body: body || '',
     },
     data: buildFcmDataPayload(title, body, data),
-    android: { 
+    android: {
       priority: 'high',
+      notification: { channel_id: 'general_notifications_v3' },
     },
     apns: buildFcmApns(title, body), // iOS can still use the custom APNS payload
   };
@@ -111,11 +111,14 @@ function buildFcmMessage({ token, tokens, title, body, data = {} }) {
 
 async function sendFcmToToken(message, userIdForCleanup = null) {
   try {
-    return await admin.messaging().send(message);
+    const result = await admin.messaging().send(message);
+    return result;
   } catch (e) {
+    console.error(`[FCM] send failed for user ${userIdForCleanup || '?'}: ${e.code || e.message}`, e.errorInfo || '');
     if (userIdForCleanup && db &&
         (e.code === 'messaging/registration-token-not-registered' ||
          e.code === 'messaging/invalid-registration-token')) {
+      console.log(`[FCM] Cleaning stale FCM token for user ${userIdForCleanup}`);
       await db.collection('users').doc(userIdForCleanup).update({ fcmToken: null });
     }
     throw e;
@@ -159,25 +162,6 @@ function rateLimit(req, res, next) {
   rateHits.set(ip, hits);
   if (hits.length > RATE_MAX) {
     return res.status(429).json({ error: 'Too many requests. Please slow down.' });
-  }
-  next();
-}
-
-// OTP brute force protection — max 3 attempts per email per 15 minutes
-const otpHits = new Map();
-const OTP_WINDOW = 15 * 60 * 1000;
-const OTP_MAX = 3;
-
-function otpRateLimit(req, res, next) {
-  const email = (req.body?.email || '').toLowerCase().trim();
-  if (!email) return next();
-  const now = Date.now();
-  if (!otpHits.has(email)) otpHits.set(email, []);
-  const hits = otpHits.get(email).filter(t => now - t < OTP_WINDOW);
-  hits.push(now);
-  otpHits.set(email, hits);
-  if (hits.length > OTP_MAX) {
-    return res.status(429).json({ error: 'Too many attempts. Try again later.' });
   }
   next();
 }
@@ -286,10 +270,6 @@ function sanitize(str) {
   return str.replace(/<[^>]*>/g, '').trim().slice(0, 1000);
 }
 
-function isValidEmail(email) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
 function isValidPhone(phone) {
   // Tanzanian phone numbers: +255XXXXXXXXX or 0XXXXXXXXX
   return /^(\+255|0)[67]\d{8}$/.test(phone.replace(/[\s-]/g, ''));
@@ -344,24 +324,6 @@ async function requireAdmin(req, res) {
   }
   res.status(401).json({ error: 'Unauthorized' });
   return { ok: false };
-}
-
-// ─── Email transporter (nodemailer) ───
-const SMTP_HOST = process.env.SMTP_HOST || '';
-const SMTP_PORT = process.env.SMTP_PORT || '';
-const SMTP_USER = process.env.SMTP_USER || '';
-const SMTP_PASS = process.env.SMTP_PASS || '';
-const SMTP_FROM = process.env.SMTP_FROM || '';
-const SMTP_SECURE = process.env.SMTP_SECURE || '';
-
-let transporter;
-if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
-  transporter = nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: parseInt(SMTP_PORT),
-    secure: SMTP_SECURE === 'true',
-    auth: { user: SMTP_USER, pass: SMTP_PASS },
-  });
 }
 
 let db;
@@ -567,15 +529,21 @@ app.post('/api/sms/send', async (req, res) => {
       console.error('/api/sms/send: MESEJI_API_KEY not configured');
       return res.status(500).json({ error: 'SMS not configured' });
     }
+    const digits = phone.replace(/\D/g, '');
+    const normalized = digits.startsWith('0') ? '255' + digits.slice(1) : !digits.startsWith('255') ? '255' + digits : digits;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     const resp = await fetch('https://meseji.co.tz/api/v1/sms/send', {
       method: 'POST',
+      signal: controller.signal,
       headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         sender_id: process.env.MESEJI_SENDER_ID || 'MESEJI',
         message,
-        contacts: phone,
+        contacts: normalized,
       }),
     });
+    clearTimeout(timeout);
     if (!resp.ok) {
       const err = await resp.text();
       console.error(`/api/sms/send: Meseji returned ${resp.status}: ${err}`);
@@ -593,15 +561,21 @@ async function sendSms(phone, message) {
   try {
     const apiKey = process.env.MESEJI_API_KEY;
     if (!apiKey) { console.error('sendSms: MESEJI_API_KEY not configured'); return false; }
+    const digits = phone.replace(/\D/g, '');
+    const normalized = digits.startsWith('0') ? '255' + digits.slice(1) : !digits.startsWith('255') ? '255' + digits : digits;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     const resp = await fetch('https://meseji.co.tz/api/v1/sms/send', {
       method: 'POST',
+      signal: controller.signal,
       headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         sender_id: process.env.MESEJI_SENDER_ID || 'MESEJI',
         message,
-        contacts: phone,
+        contacts: normalized,
       }),
     });
+    clearTimeout(timeout);
     if (!resp.ok) {
       const err = await resp.text();
       console.error(`sendSms: Meseji returned ${resp.status}: ${err}`);
@@ -609,8 +583,39 @@ async function sendSms(phone, message) {
     }
     return true;
   } catch (e) {
-    console.error('sendSms error:', e.message);
+    if (e.name === 'AbortError') {
+      console.error('sendSms: request timed out after 15s for', phone);
+    } else {
+      console.error('sendSms error:', e.message);
+    }
     return false;
+  }
+}
+
+// ─── Admin notification helper — sends FCM + in-app to ALL admins ───
+async function notifyAdmins(title, body, data = {}) {
+  try {
+    const adminSnap = await db.collection('users').where('isAdmin', '==', true).get();
+    const promises = [];
+    adminSnap.forEach(doc => {
+      const uid = doc.id;
+      const fcmToken = doc.data().fcmToken;
+      promises.push(db.collection('notifications').add({
+        userId: uid,
+        title, body,
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        data,
+      }));
+      if (fcmToken) {
+        promises.push(sendFcmToToken(buildFcmMessage({
+          token: fcmToken, title, body, data,
+        }), uid).catch(() => {}));
+      }
+    });
+    await Promise.allSettled(promises);
+  } catch (e) {
+    console.error('notifyAdmins error:', e.message);
   }
 }
 
@@ -640,9 +645,6 @@ app.post('/api/auth/send-otp', otpPhoneRateLimit, async (req, res) => {
     if (!phone) return res.status(400).json({ error: 'Phone number is required' });
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-    const apiKey = process.env.MESEJI_API_KEY;
-    if (!apiKey) return res.status(500).json({ error: 'SMS service not configured' });
-
     // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const hashed = crypto.createHash('sha256').update(otp).digest('hex');
@@ -658,29 +660,25 @@ app.post('/api/auth/send-otp', otpPhoneRateLimit, async (req, res) => {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    // Send OTP via Meseji SMS
+    // Send OTP via Meseji SMS — reuse shared sendSms helper
     const message = `Soko Vibe: OTP yako ni ${otp}. Inaisha kwa dakika 10.`;
+    const sent = await sendSms(cleanPhone, message);
 
-    const resp = await fetch('https://meseji.co.tz/api/v1/sms/send', {
-      method: 'POST',
-      headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sender_id: process.env.MESEJI_SENDER_ID || 'MESEJI',
-        message,
-        contacts: cleanPhone,
-      }),
-    });
+    // Save send status to the same OTP document for debugging
+    await db.collection('otp_codes').doc(cleanPhone).update({
+      smsSent: sent,
+      smsAttemptedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }).catch(() => {});
 
-    if (!resp.ok) {
-      const err = await resp.text();
-      console.error(`otp-send: Meseji returned ${resp.status}: ${err}`);
+    if (!sent) {
+      console.error('/api/auth/send-otp: sendSms returned false for', cleanPhone);
       return res.status(502).json({ error: 'Imeshindwa kutuma OTP. Jaribu tena.' });
     }
 
     res.json({ sent: true, message: 'OTP imetumwa kwa simu yako' });
   } catch (e) {
     console.error('/api/auth/send-otp error:', e.message);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Imeshindwa kutuma OTP. Jaribu tena.' });
   }
 });
 
@@ -1017,183 +1015,6 @@ app.get('/api/admin/orders', async (req, res) => {
     const orders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     res.json({ orders });
   } catch (e) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ============================================================
-// 🔐 FORGOT PASSWORD — SEND OTP
-// ============================================================
-app.post('/api/send-otp', otpRateLimit, async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email is required' });
-    if (!isValidEmail(email)) return res.status(400).json({ error: 'Invalid email format' });
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
-
-    // Check if user exists in Firebase Auth
-    let userRecord;
-    try {
-      userRecord = await admin.auth().getUserByEmail(email);
-    } catch {
-      return res.status(404).json({ error: 'No account found with this email' });
-    }
-
-    if (!transporter) {
-      return res.status(503).json({ error: 'Email service not configured. Contact admin.' });
-    }
-
-    // Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const hashed = crypto.createHash('sha256').update(otp).digest('hex');
-    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
-
-    // Save to Firestore
-    await db.collection('password_resets').doc(email.toLowerCase()).set({
-      otpHash: hashed,
-      expiresAt,
-      used: false,
-      uid: userRecord.uid,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    // Send email
-    try {
-      await transporter.sendMail({
-        from: SMTP_FROM,
-        to: email,
-        subject: '🔐 Soko Vibe — Reset Your Password',
-        html: `
-          <!DOCTYPE html>
-          <html>
-          <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-          <body style="margin:0; padding:0; background-color:#f4f7f6; font-family: 'Segoe UI', Arial, sans-serif;">
-            <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f7f6; padding:20px 0;">
-              <tr><td align="center">
-                <table width="480" cellpadding="0" cellspacing="0" style="background-color:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-                  <!-- Header -->
-                  <tr>
-                    <td style="background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 50%, #40916C 100%); padding:32px 24px; text-align:center;">
-                      <div style="font-size:36px; margin-bottom:8px;">🏪</div>
-                      <h1 style="color:#ffffff; margin:0; font-size:24px; font-weight:700; letter-spacing:1px;">SOKO VIBE</h1>
-                      <p style="color:#95D5B2; margin:4px 0 0; font-size:13px;">Tanzania's Trusted Marketplace</p>
-                    </td>
-                  </tr>
-                  <!-- Body -->
-                  <tr>
-                    <td style="padding:32px 24px;">
-                      <h2 style="color:#1B4332; font-size:20px; margin:0 0 8px;">Password Reset Request</h2>
-                      <p style="color:#555; font-size:14px; line-height:1.6; margin:0 0 20px;">
-                        Someone requested to reset the password for your Soko Vibe account. 
-                        Use the One-Time Password (OTP) below to proceed.
-                      </p>
-                      <!-- OTP Box -->
-                      <div style="background:#F0F9F1; border:2px dashed #2D6A4F; border-radius:12px; padding:20px; text-align:center; margin-bottom:20px;">
-                        <p style="color:#2D6A4F; font-size:13px; font-weight:600; margin:0 0 10px; text-transform:uppercase; letter-spacing:1px;">Your OTP</p>
-                        <div style="font-size:36px; font-weight:800; color:#1B4332; letter-spacing:12px; font-family:'Courier New', monospace;">
-                          ${otp}
-                        </div>
-                        <p style="color:#888; font-size:12px; margin:12px 0 0;">Valid for 10 minutes</p>
-                      </div>
-                      <!-- Instructions -->
-                      <div style="background:#FFF8E1; border-left:4px solid #FFA000; padding:12px 16px; border-radius:8px; margin-bottom:20px;">
-                        <p style="color:#795548; font-size:13px; margin:0; line-height:1.5;">
-                          <strong>⚡ Didn't request this?</strong> Ignore this email. Your password will not be changed.
-                        </p>
-                      </div>
-                      <p style="color:#999; font-size:12px; line-height:1.5; margin:0; text-align:center;">
-                        Soko Vibe &bull; Tanzania<br>
-                        Need help? Contact us through the app.
-                      </p>
-                    </td>
-                  </tr>
-                  <!-- Footer -->
-                  <tr>
-                    <td style="background:#1B4332; padding:16px 24px; text-align:center;">
-                      <p style="color:#95D5B2; font-size:11px; margin:0;">
-                        &copy; ${new Date().getFullYear()} Soko Vibe. All rights reserved.
-                      </p>
-                    </td>
-                  </tr>
-                </table>
-              </td></tr>
-            </table>
-          </body>
-          </html>
-        `,
-      });
-    } catch (mailErr) {
-      return res.status(500).json({ error: 'Failed to send email. Try again.' });
-    }
-
-    res.json({ sent: true, message: 'OTP sent to your email' });
-  } catch (e) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ============================================================
-// 🔐 VERIFY OTP
-// ============================================================
-app.post('/api/verify-otp', otpRateLimit, async (req, res) => {
-  try {
-    const { email, otp } = req.body;
-    if (!email || !otp) return res.status(400).json({ error: 'Email and OTP are required' });
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
-
-    const doc = await db.collection('password_resets').doc(email.toLowerCase()).get();
-    if (!doc.exists) return res.status(400).json({ error: 'No OTP found. Request a new one.' });
-
-    const data = doc.data();
-    if (data.used) return res.status(400).json({ error: 'OTP already used' });
-    if (Date.now() > data.expiresAt) return res.status(400).json({ error: 'OTP expired. Request a new one.' });
-
-    const hashed = crypto.createHash('sha256').update(otp).digest('hex');
-    if (hashed !== data.otpHash) return res.status(400).json({ error: 'Invalid OTP' });
-
-    // Mark as used
-    await doc.ref.update({ used: true });
-
-    res.json({ valid: true, uid: data.uid });
-  } catch (e) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ============================================================
-// 🔐 RESET PASSWORD AFTER OTP
-// ============================================================
-app.post('/api/reset-password-after-otp', async (req, res) => {
-  try {
-    const { email, newPassword } = req.body;
-    if (!email || !newPassword) {
-      return res.status(400).json({ error: 'Email and new password are required' });
-    }
-    if (newPassword.length < 6) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters' });
-    }
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
-
-    const doc = await db.collection('password_resets').doc(email.toLowerCase()).get();
-    if (!doc.exists) return res.status(400).json({ error: 'No verified OTP found' });
-
-    const data = doc.data();
-    if (!data.used) return res.status(400).json({ error: 'OTP not yet verified' });
-
-    // Update password via Firebase Admin SDK
-    await admin.auth().updateUser(data.uid, { password: newPassword });
-
-    // Generate a custom token so user can sign in automatically
-    const customToken = await admin.auth().createCustomToken(data.uid);
-
-    // Clean up the OTP doc
-    await doc.ref.delete();
-
-    res.json({ success: true, customToken });
-  } catch (e) {
-    if (e.code === 'auth/claims-too-large') {
-      return res.status(400).json({ error: 'Token claims too large' });
-    }
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1830,6 +1651,38 @@ app.post('/api/mongike/webhook', verifyWebhook, async (req, res) => {
         failureReason: payload.message || payload.error || 'Mongike payment failed',
         completedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+
+      // Notify buyer of failed payment
+      if (tx.buyerId) {
+        await db.collection('notifications').add({
+          userId: tx.buyerId,
+          title: 'Malipo Yameshindikana',
+          body: `Malipo ya ${tx.productName || 'Bidhaa'} hayakukamilika. Jaribu tena au wasiliana nasi. Sababu: ${payload.message || payload.error || 'Mongike payment failed'}`,
+          isRead: false,
+          type: 'payment_failed',
+          transactionId: orderId,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        try {
+          const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
+          const buyerToken = buyerSnap.data()?.fcmToken;
+          if (buyerToken) {
+            await sendFcmToToken(buildFcmMessage({
+              token: buyerToken,
+              title: 'Malipo Yameshindikana',
+              body: `Malipo ya ${tx.productName || 'Bidhaa'} hayakukamilika. Jaribu tena kwenye app.`,
+              data: { type: 'payment_failed', productId: tx.productId || '', transactionId: orderId },
+            }), tx.buyerId);
+          }
+        } catch (_) {}
+        try {
+          const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
+          const buyerPhone = buyerSnap.data()?.phone;
+          if (buyerPhone) {
+            sendSms(buyerPhone, `Soko Vibe: Malipo ya ${tx.productName || 'Bidhaa'} hayakukamilika. Tafadhali jaribu tena kwenye app.`).catch(() => {});
+          }
+        } catch (_) {}
+      }
     }
 
     res.status(200).json({ received: true });
@@ -2006,6 +1859,18 @@ app.post('/api/escrow/cancel', async (req, res) => {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       data: { type: 'refund', orderId },
     });
+    try {
+      const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
+      const buyerToken = buyerSnap.data()?.fcmToken;
+      if (buyerToken) {
+        await sendFcmToToken(buildFcmMessage({
+          token: buyerToken,
+          title: '💰 Pesa Zimerudishwa Kamili',
+          body: `Refund kamili ya TZS ${productPrice.toLocaleString()} kwa ${productName} imetumwa kwa namba yako.`,
+          data: { type: 'refund', orderId },
+        }), tx.buyerId);
+      }
+    } catch (_) {}
 
     // Notify seller
     if (sellerId) {
@@ -2017,6 +1882,18 @@ app.post('/api/escrow/cancel', async (req, res) => {
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         data: { type: 'cancelled', orderId },
       });
+      try {
+        const sellerSnap = await db.collection('users').doc(sellerId).get();
+        const sellerToken = sellerSnap.data()?.fcmToken;
+        if (sellerToken) {
+          await sendFcmToToken(buildFcmMessage({
+            token: sellerToken,
+            title: '❌ Oda Imeghairiwa',
+            body: `${productName} imeghairiwa na mnunuzi. Pesa zimetolewa kwenye pendingEscrow yako.`,
+            data: { type: 'cancelled', orderId },
+          }), sellerId);
+        }
+      } catch (_) {}
     }
 
     res.json({ success: true, refundAmount: productPrice, message: 'Oda imeghairiwa. Hela yako imerudishwa.' });
@@ -2064,35 +1941,58 @@ app.post('/api/escrow/dispute', async (req, res) => {
       },
     });
 
+    const productName = tx.productName || 'Bidhaa';
+
     // Notify seller
     await db.collection('notifications').add({
       userId: tx.sellerId,
       title: '\u2696\uFE0F Mgogoro Umefunguliwa',
-      body: `Mnunuzi amefungua mgogoro kwa ${tx.productName || 'Bidhaa'}. Tafadhali wasilisha ushahidi wako.`,
+      body: `Mnunuzi amefungua mgogoro kwa ${productName}. Tafadhali wasilisha ushahidi wako.`,
       isRead: false,
       data: { type: 'disputed', transactionId: orderId },
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+    try {
+      const sellerSnap = await db.collection('users').doc(tx.sellerId).get();
+      const sellerToken = sellerSnap.data()?.fcmToken;
+      if (sellerToken) {
+        await sendFcmToToken(buildFcmMessage({
+          token: sellerToken,
+          title: '\u2696\uFE0F Mgogoro Umefunguliwa',
+          body: `Mnunuzi amefungua mgogoro kwa ${productName}. Tafadhali wasilisha ushahidi wako.`,
+          data: { type: 'disputed', transactionId: orderId },
+        }), tx.sellerId);
+      }
+    } catch (_) {}
 
     // Notify buyer
     await db.collection('notifications').add({
       userId,
       title: '\u2696\uFE0F Mgogoro Umefunguliwa',
-      body: `Tumepokea mgogoro wako kwa ${tx.productName || 'Bidhaa'}. Admin atakagua na kutoa uamuzi.`,
+      body: `Tumepokea mgogoro wako kwa ${productName}. Admin atakagua na kutoa uamuzi.`,
       isRead: false,
       data: { type: 'disputed', transactionId: orderId },
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+    try {
+      const buyerSnap = await db.collection('users').doc(userId).get();
+      const buyerToken = buyerSnap.data()?.fcmToken;
+      if (buyerToken) {
+        await sendFcmToToken(buildFcmMessage({
+          token: buyerToken,
+          title: '\u2696\uFE0F Mgogoro Umefunguliwa',
+          body: `Tumepokea mgogoro wako kwa ${productName}. Admin atakagua na kutoa uamuzi.`,
+          data: { type: 'disputed', transactionId: orderId },
+        }), userId);
+      }
+    } catch (_) {}
 
     // Alert admin
-    await db.collection('notifications').add({
-      userId: 'admin',
-      title: '\u2696\uFE0F Mgogoro Mpya Unahitaji Uamuzi',
-      body: `Mgogoro kwa ${tx.productName || 'Bidhaa'} \u2014 ${orderId}. Pitia ushahidi na toa uamuzi.`,
-      isRead: false,
-      data: { type: 'disputed', transactionId: orderId },
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    notifyAdmins(
+      '\u2696\uFE0F Mgogoro Mpya Unahitaji Uamuzi',
+      `Mgogoro kwa ${productName} \u2014 ${orderId}. Pitia ushahidi na toa uamuzi.`,
+      { type: 'disputed', transactionId: orderId },
+    );
 
     res.json({ success: true, message: 'Dispute imefunguliwa. Admin atakagua na kutoa uamuzi.' });
   } catch (e) {
@@ -2162,6 +2062,18 @@ app.post('/api/escrow/admin-resolve-dispute', async (req, res) => {
         data: { type: 'dispute_resolved', transactionId: orderId },
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      try {
+        const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
+        const buyerToken = buyerSnap.data()?.fcmToken;
+        if (buyerToken) {
+          await sendFcmToToken(buildFcmMessage({
+            token: buyerToken,
+            title: '\u2696\uFE0F Uamuzi wa Mgogoro',
+            body: `Admin ameamua pesa zitolewe kwa muuzaji. ${note || ''}`,
+            data: { type: 'dispute_resolved', transactionId: orderId },
+          }), tx.buyerId);
+        }
+      } catch (_) {}
       await db.collection('notifications').add({
         userId: sellerId,
         title: '\u2696\uFE0F Uamuzi wa Mgogoro',
@@ -2170,6 +2082,18 @@ app.post('/api/escrow/admin-resolve-dispute', async (req, res) => {
         data: { type: 'dispute_resolved', transactionId: orderId },
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      try {
+        const sellerSnap = await db.collection('users').doc(sellerId).get();
+        const sellerToken = sellerSnap.data()?.fcmToken;
+        if (sellerToken) {
+          await sendFcmToToken(buildFcmMessage({
+            token: sellerToken,
+            title: '\u2696\uFE0F Uamuzi wa Mgogoro',
+            body: `Admin ameamua pesa zikutolee. ${note || ''}`,
+            data: { type: 'dispute_resolved', transactionId: orderId },
+          }), sellerId);
+        }
+      } catch (_) {}
 
       return res.json({ success: true, message: 'Dispute resolved: funds released to seller' });
     }
@@ -2233,6 +2157,18 @@ app.post('/api/escrow/admin-resolve-dispute', async (req, res) => {
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         data: { type: 'refund', orderId },
       });
+      try {
+        const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
+        const buyerToken = buyerSnap.data()?.fcmToken;
+        if (buyerToken) {
+          await sendFcmToToken(buildFcmMessage({
+            token: buyerToken,
+            title: '\uD83D\uDCB0 Pesa Zimerudishwa Kamili',
+            body: `Refund kamili ya TZS ${refundAmount.toLocaleString()} kwa ${productName} imetumwa kwa namba yako.`,
+            data: { type: 'refund', orderId },
+          }), tx.buyerId);
+        }
+      } catch (_) {}
 
       // Notify seller
       if (sellerId) {
@@ -2244,6 +2180,18 @@ app.post('/api/escrow/admin-resolve-dispute', async (req, res) => {
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           data: { type: 'refund', orderId },
         });
+        try {
+          const sellerSnap = await db.collection('users').doc(sellerId).get();
+          const sellerToken = sellerSnap.data()?.fcmToken;
+          if (sellerToken) {
+            await sendFcmToToken(buildFcmMessage({
+              token: sellerToken,
+              title: '\u274C Mgogoro Umekamilika',
+              body: `${productName} imerefundiwa mnunuzi. Pesa zimetolewa kwenye pendingEscrow yako.${gatewayFee > 0 ? ' Ada ya gateway imetozwa kwenye akaunti yako.' : ''}`,
+              data: { type: 'refund', orderId },
+            }), sellerId);
+          }
+        } catch (_) {}
       }
 
       // Audit log
@@ -2446,6 +2394,22 @@ app.post('/api/kyc/submit', async (req, res) => {
       isRead: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+    try {
+      const userSnap = await db.collection('users').doc(userId).get();
+      const fcmToken = userSnap.data()?.fcmToken;
+      if (fcmToken) {
+        const kycTitle = autoApproved ? 'KYC Imekubaliwa!' : 'KYC Inahitaji Ukaguzi';
+        const kycBody = autoApproved
+          ? 'Umekubaliwa kuuza bidhaa. Sasa unaweza kuongeza bidhaa zako.'
+          : `KYC yako inahitaji marekebisho: ${reason}. Tuma tena baada ya kusahihisha.`;
+        await sendFcmToToken(buildFcmMessage({
+          token: fcmToken,
+          title: kycTitle,
+          body: kycBody,
+          data: { type: 'kyc', status: autoApproved ? 'approved' : 'pending' },
+        }), userId);
+      }
+    } catch (_) {}
 
     res.json({
       success: true,
@@ -2501,6 +2465,22 @@ app.post('/api/admin/kyc/review', async (req, res) => {
       isRead: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+    try {
+      const userSnap = await db.collection('users').doc(userId).get();
+      const fcmToken = userSnap.data()?.fcmToken;
+      if (fcmToken) {
+        const kycTitle = approve ? 'KYC Imekubaliwa!' : 'KYC Imekataliwa';
+        const kycBody = approve
+          ? 'Umekubaliwa kuuza bidhaa. Sasa unaweza kuongeza bidhaa mpya.'
+          : `KYC yako imekataliwa. Sababu: ${notes || 'Tafadhali wasiliana na msaada'}. Wasilisha tena baada ya kurekebisha.`;
+        await sendFcmToToken(buildFcmMessage({
+          token: fcmToken,
+          title: kycTitle,
+          body: kycBody,
+          data: { type: 'kyc', status: approve ? 'approved' : 'rejected' },
+        }), userId);
+      }
+    } catch (_) {}
 
     // Update sellerKycApproved on all products if approved
     if (approve && userId) {
@@ -3237,6 +3217,28 @@ app.post('/api/seller/withdraw', async (req, res) => {
       metadata: { phone, netAmount, fee: PAYOUT_FEE, payoutId: payoutResult.payoutId },
     });
 
+    // Notify seller about withdrawal initiation
+    try {
+      const userSnap = await db.collection('users').doc(userId).get();
+      const fcmToken = userSnap.data()?.fcmToken;
+      await db.collection('notifications').add({
+        userId,
+        title: '💰 Utoaji wa Pesa Umeanzishwa',
+        body: `TZS ${netAmount.toLocaleString()} zinaandaliwa kutuma kwa ${phone}.`,
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        data: { type: 'withdrawal', payoutId: payoutResult.payoutId },
+      });
+      if (fcmToken) {
+        await sendFcmToToken(buildFcmMessage({
+          token: fcmToken,
+          title: '💰 Utoaji wa Pesa Umeanzishwa',
+          body: `TZS ${netAmount.toLocaleString()} zinaandaliwa kutuma kwa ${phone}.`,
+          data: { type: 'withdrawal', payoutId: payoutResult.payoutId },
+        }), userId);
+      }
+    } catch (_) {}
+
     res.json({
       success: true,
       netAmount,
@@ -3799,6 +3801,26 @@ app.delete('/api/admin/users/:uid', async (req, res) => {
       amount: 0,
       reason: 'User suspended by admin',
     });
+    try {
+      await db.collection('notifications').add({
+        userId: uid,
+        title: 'Akaunti Yako Imesitishwa',
+        body: 'Akaunti yako imesitishwa. Wasiliana na msaada kwa maelezo zaidi.',
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        data: { type: 'account', status: 'suspended' },
+      });
+      const userSnap = await db.collection('users').doc(uid).get();
+      const fcmToken = userSnap.data()?.fcmToken;
+      if (fcmToken) {
+        await sendFcmToToken(buildFcmMessage({
+          token: fcmToken,
+          title: 'Akaunti Yako Imesitishwa',
+          body: 'Akaunti yako imesitishwa. Wasiliana na msaada kwa maelezo zaidi.',
+          data: { type: 'account', status: 'suspended' },
+        }), uid);
+      }
+    } catch (_) {}
 
     res.json({ success: true, message: 'User suspended' });
   } catch (e) {
@@ -3838,6 +3860,26 @@ app.post('/api/admin/users/:uid/unsuspend', async (req, res) => {
       suspendedAt: admin.firestore.FieldValue.delete(),
       suspendedBy: admin.firestore.FieldValue.delete(),
     });
+    try {
+      await db.collection('notifications').add({
+        userId: uid,
+        title: 'Akaunti Yako Imerejeshwa',
+        body: 'Akaunti yako imerejeshwa. Sasa unaweza kuendelea kutumia Soko Vibe.',
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        data: { type: 'account', status: 'unsuspended' },
+      });
+      const userSnap = await db.collection('users').doc(uid).get();
+      const fcmToken = userSnap.data()?.fcmToken;
+      if (fcmToken) {
+        await sendFcmToToken(buildFcmMessage({
+          token: fcmToken,
+          title: 'Akaunti Yako Imerejeshwa',
+          body: 'Akaunti yako imerejeshwa. Sasa unaweza kuendelea kutumia Soko Vibe.',
+          data: { type: 'account', status: 'unsuspended' },
+        }), uid);
+      }
+    } catch (_) {}
 
     res.json({ success: true, message: 'User unsuspended' });
   } catch (e) {
@@ -4202,6 +4244,12 @@ app.post('/api/reports', asyncHandler(async (req, res) => {
       adminNote: null,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+
+    notifyAdmins(
+      '🚩 Ripoti Mpya Imewasilishwa',
+      `${reporterName || 'Mtumiaji'} ameripoti ${reportedUserName || 'mtumiaji'}. Sababu: ${reason}`,
+      { type: 'report', reporterId, reportedUserId },
+    );
 
     res.json({ success: true, message: 'Report submitted' });
   } catch (e) {
@@ -4891,13 +4939,26 @@ app.post('/api/mongike/payout-webhook', verifyWebhook, async (req, res) => {
       } catch (_) {}
 
       if (payout.metadata?.sellerId) {
+        const sellerId = payout.metadata.sellerId;
         await db.collection('notifications').add({
-          userId: payout.metadata.sellerId,
+          userId: sellerId,
           title: 'Payout imefanikiwa!',
           body: `TZS ${(payout.netAmount || payout.amount).toLocaleString()} zimetumwa kwenye mobile money yako.`,
           isRead: false,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
+        try {
+          const sellerSnap = await db.collection('users').doc(sellerId).get();
+          const fcmToken = sellerSnap.data()?.fcmToken;
+          if (fcmToken) {
+            await sendFcmToToken(buildFcmMessage({
+              token: fcmToken,
+              title: 'Payout imefanikiwa!',
+              body: `TZS ${(payout.netAmount || payout.amount).toLocaleString()} zimetumwa kwenye mobile money yako.`,
+              data: { type: 'withdrawal', status: 'completed' },
+            }), sellerId);
+          }
+        } catch (_) {}
       }
     } else if (eventStatus === 'FAILED') {
       await updatePayoutStatus(payoutRef, PAYOUT_STATUSES.FAILED, {
@@ -4930,6 +4991,30 @@ app.post('/api/mongike/payout-webhook', verifyWebhook, async (req, res) => {
         } catch (reverseErr) {
           console.error(`CRITICAL: Failed to reverse payout ${payoutRef} for user ${payout.userId}:`, reverseErr);
         }
+      }
+
+      // Notify user about failed payout
+      if (payout.userId) {
+        try {
+          await db.collection('notifications').add({
+            userId: payout.userId,
+            title: '❌ Utoaji wa Pesa Umeshindwa',
+            body: `TZS ${(payout.netAmount || payout.amount).toLocaleString()} hazikutumwa. Pesa zimerudishwa kwenye pochi yako. Jaribu tena.`,
+            isRead: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            data: { type: 'withdrawal', status: 'failed', payoutId: payoutRef },
+          });
+          const userSnap = await db.collection('users').doc(payout.userId).get();
+          const fcmToken = userSnap.data()?.fcmToken;
+          if (fcmToken) {
+            await sendFcmToToken(buildFcmMessage({
+              token: fcmToken,
+              title: '❌ Utoaji wa Pesa Umeshindwa',
+              body: `TZS ${(payout.netAmount || payout.amount).toLocaleString()} hazikutumwa. Pesa zimerudishwa kwenye pochi yako. Jaribu tena.`,
+              data: { type: 'withdrawal', status: 'failed', payoutId: payoutRef },
+            }), payout.userId);
+          }
+        } catch (_) {}
       }
 
       // Attempt auto-retry if under max retries
@@ -5170,6 +5255,40 @@ app.use((err, req, res, _next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
+// ─── Diagnostic: test FCM push for a specific user ─────────────────
+app.post('/api/test-fcm', async (req, res) => {
+  try {
+    const { userId, title, body } = req.body;
+    if (!userId || !title) return res.status(400).json({ error: 'userId and title required' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
+    const fcmToken = userDoc.data().fcmToken;
+    if (!fcmToken) return res.status(400).json({ error: 'No FCM token for this user. Open the app first.' });
+
+    // Try sending via Admin SDK
+    try {
+      const result = await admin.messaging().send({
+        token: fcmToken,
+        notification: { title, body: body || 'Test body' },
+        android: { priority: 'high', notification: { channel_id: 'general_notifications_v3' } },
+      });
+      return res.json({ success: true, method: 'admin-sdk', messageId: result, tokenPrefix: fcmToken.substring(0, 8) + '...' });
+    } catch (adminErr) {
+      // Fallback: try legacy HTTP v1 API directly
+      console.error('[FCM-DIAG] Admin SDK failed:', adminErr.code || adminErr.message);
+      const projectId = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '{}').project_id;
+      return res.status(502).json({
+        success: false,
+        error: adminErr.code || adminErr.message,
+        hint: projectId ? `Enable FCM v1 API at https://console.cloud.google.com/apis/library/fcm.googleapis.com?project=${projectId}` : 'Check FIREBASE_SERVICE_ACCOUNT_JSON',
+      });
+    }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 startChatListener();
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
@@ -5178,6 +5297,7 @@ function startChatListener() {
   if (!db) return;
   console.log('[CHAT] Starting chat message listener...');
   let knownMessageIds = new Set();
+  const listenerStartedAt = admin.firestore.Timestamp.now();
   db.collectionGroup('messages')
     .orderBy('timestamp', 'desc')
     .limit(200)
@@ -5188,15 +5308,17 @@ function startChatListener() {
     })
     .catch((err) => console.error('[CHAT] Failed to load recent messages:', err.message));
   db.collectionGroup('messages')
-    .where('timestamp', '>=', admin.firestore.Timestamp.now())
     .onSnapshot(
       (snapshot) => {
         snapshot.docChanges().forEach((change) => {
           if (change.type !== 'added') return;
           const msgId = change.doc.id;
           if (knownMessageIds.has(msgId)) return;
-          knownMessageIds.add(msgId);
           const msg = change.doc.data();
+          // Skip messages older than listener start (in-memory filter, no index needed)
+          const msgTime = msg.timestamp;
+          if (msgTime && msgTime < listenerStartedAt) return;
+          knownMessageIds.add(msgId);
           const senderId = msg.sender_id || '';
           const text = msg.text || '';
           if (!senderId || !text) return;

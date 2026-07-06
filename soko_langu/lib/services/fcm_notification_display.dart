@@ -28,7 +28,7 @@ class FcmNotificationDisplay {
     final isChat = type == 'chat' || type == 'group_chat';
     final isPayment = type == 'payment';
     final isBigPicture =
-        ['flash_sale', 'boost', 'price_drop'].contains(type);
+        ['flash_sale', 'boost'].contains(type);
     final imageUrl = data['image'] as String?;
     final payload = data.map((k, v) => MapEntry(k, v?.toString()));
     final channelKey = isChat

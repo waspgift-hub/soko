@@ -33,7 +33,7 @@ function buildFcmMessage({ token, title, body, data = {} }) {
   return {
     notification: { title: title || 'Soko Vibe', body: body || '' },
     data: stringifyFcmData({ title: title || '', body: body || '', ...data }),
-    android: { priority: 'high' },
+    android: { priority: 'high', notification: { channel_id: 'general_notifications_v3' } },
     apns: {
       headers: { 'apns-priority': '10' },
       payload: {
@@ -52,14 +52,56 @@ async function sendFcm(message, userIdForCleanup = null) {
   try {
     return await admin.messaging().send(message);
   } catch (e) {
+    console.error(`[LISTENER][FCM] send failed for user ${userIdForCleanup || '?'}: ${e.code || e.message}`, e.errorInfo || '');
     if (userIdForCleanup && db &&
         (e.code === 'messaging/registration-token-not-registered' ||
          e.code === 'messaging/invalid-registration-token')) {
-      console.log(`[LISTENER] Cleaning stale FCM token for user ${userIdForCleanup}`);
+      console.log(`[LISTENER][FCM] Cleaning stale FCM token for user ${userIdForCleanup}`);
       await db.collection('users').doc(userIdForCleanup).update({ fcmToken: null });
     }
     throw e;
   }
+}
+
+// ─── SMS sender (same pattern as index.js) ──────────────────────────
+async function sendSms(phone, message) {
+  const apiKey = process.env.MESEJI_API_KEY;
+  if (!apiKey) {
+    console.error('[LISTENER] MESEJI_API_KEY not configured');
+    return;
+  }
+  const digits = phone.replace(/\D/g, '');
+  const normalized = digits.startsWith('0') ? '255' + digits.slice(1) : !digits.startsWith('255') ? '255' + digits : digits;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    const resp = await fetch('https://meseji.co.tz/api/v1/sms/send', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sender_id: process.env.MESEJI_SENDER_ID || 'MESEJI',
+        message,
+        contacts: normalized,
+      }),
+    });
+    clearTimeout(timeout);
+    if (!resp.ok) {
+      const err = await resp.text();
+      console.error(`[LISTENER] SMS failed (${resp.status}): ${err}`);
+    }
+  } catch (e) {
+    console.error(`[LISTENER] SMS error: ${e.message}`);
+  }
+}
+
+// ─── Helpers: look up user phone ─────────────────────────────────────
+async function getUserPhone(userId) {
+  if (!userId || !db) return null;
+  try {
+    const snap = await db.collection('users').doc(userId).get();
+    return snap.data()?.phone || null;
+  } catch { return null; }
 }
 
 // ─── Track known statuses to avoid re-sending on every field update ───
@@ -85,49 +127,109 @@ function startListener() {
 
         // Skip if we don't know the previous status (fresh restart)
         if (beforeStatus === undefined) return;
-        // Only trigger on pending → completed / escrow_hold
-        if (beforeStatus !== 'pending') return;
-        if (newStatus !== 'completed' && newStatus !== 'escrow_hold') return;
 
+        const productName = after.productName || 'item';
         const buyerId = after.buyerId;
-        if (!buyerId) {
-          console.log(`[LISTENER] ${orderId}: no buyerId, skipping`);
-          return;
+        const sellerId = after.sellerId;
+
+        // ── pending → escrow_hold / paid_escrow_held / completed ──
+        if (beforeStatus === 'pending' && (newStatus === 'escrow_hold' || newStatus === 'paid_escrow_held' || newStatus === 'completed')) {
+          console.log(`[LISTENER] ${orderId}: ${beforeStatus} → ${newStatus}`);
+
+          // Notify buyer via FCM
+          if (buyerId) {
+            db.collection('users').doc(buyerId).get()
+              .then((userSnap) => {
+                const fcmToken = userSnap.data()?.fcmToken;
+                if (fcmToken) {
+                  const title = 'Payment Received – Escrow Held';
+                  const body = `Your payment for ${productName} is held in escrow.`;
+                  return sendFcm(buildFcmMessage({ token: fcmToken, title, body, data: { type: 'payment', orderId, status: newStatus } }), buyerId);
+                }
+              })
+              .then(() => console.log(`[LISTENER] ${orderId}: FCM sent to buyer ${buyerId}`))
+              .catch((err) => console.error(`[LISTENER] ${orderId}: FCM failed for buyer:`, err.message));
+          }
+
+          // SMS buyer + seller
+          const grandTotal = (after.productPrice || 0) + (after.shippingCost || 0);
+          Promise.all([
+            getUserPhone(buyerId).then(phone => phone && sendSms(phone, `Soko Vibe: Malipo ya TZS ${grandTotal.toLocaleString()} kwa Oda #${orderId} yamepokelewa na kuwekwa salama Escrow. Muuzaji anajiandaa kutuma mzigo wako.`)),
+            getUserPhone(sellerId).then(phone => phone && sendSms(phone, `Soko Vibe: Oda #${orderId} imelipiwa! Fedha ipo salama Escrow. Tafadhali kamilisha usafirishaji stendi na ujaze risiti ya basi kwenye app.`)),
+          ]);
         }
 
-        console.log(`[LISTENER] ${orderId}: ${beforeStatus} → ${newStatus} (buyer: ${buyerId})`);
+        // ── escrow_hold / paid_escrow_held → dispatched ──
+        if ((beforeStatus === 'escrow_hold' || beforeStatus === 'paid_escrow_held') && newStatus === 'dispatched') {
+          console.log(`[LISTENER] ${orderId}: ${beforeStatus} → dispatched`);
 
-        db.collection('users').doc(buyerId).get()
-          .then((userSnap) => {
-            const fcmToken = userSnap.data()?.fcmToken;
-            if (!fcmToken) {
-              console.log(`[LISTENER] ${orderId}: no FCM token for buyer ${buyerId}`);
-              return;
-            }
+          const busName = after.busName || 'basi';
+          const plateNumber = after.plateNumber || '';
 
-            const productName = after.productName || 'item';
-            const title = newStatus === 'completed'
-              ? 'Payment Successful'
-              : 'Payment Received – Escrow Held';
-            const body = newStatus === 'completed'
-              ? `Your payment for ${productName} has been completed.`
-              : `Your payment for ${productName} is held in escrow.`;
-
-            const message = buildFcmMessage({
-              token: fcmToken,
-              title,
-              body,
-              data: { type: 'payment', orderId, status: newStatus },
-            });
-
-            return sendFcm(message, buyerId);
-          })
-          .then(() => {
-            console.log(`[LISTENER] ${orderId}: FCM sent to buyer ${buyerId}`);
-          })
-          .catch((err) => {
-            console.error(`[LISTENER] ${orderId}: FCM failed for buyer ${buyerId}:`, err.message);
+          // SMS buyer
+          getUserPhone(buyerId).then(phone => {
+            if (phone) sendSms(phone, `Soko Vibe: Mzigo wa Oda #${orderId} umesafirishwa kupitia basi la ${busName} (${plateNumber}). Fungua app kuona risiti yako ya kidijitali.`);
           });
+        }
+
+        // ── dispatched → delivered ──
+        if (beforeStatus === 'dispatched' && newStatus === 'delivered') {
+          console.log(`[LISTENER] ${orderId}: dispatched → delivered`);
+
+          const sellerReceives = after.sellerReceives || after.totalAmount || 0;
+
+          // SMS seller
+          getUserPhone(sellerId).then(phone => {
+            if (phone) sendSms(phone, `Soko Vibe: Mteja amethibitisha kupokea mzigo #${orderId}. TZS ${sellerReceives.toLocaleString()} zimetolewa Escrow na kuwekwa kwenye pochi yako.`);
+          });
+        }
+
+        // ── any → failed (payment failure, cancellation, etc.) ──
+        if (newStatus === 'failed' && beforeStatus !== 'failed') {
+          console.log(`[LISTENER] ${orderId}: ${beforeStatus} → failed`);
+
+          // FCM to buyer
+          if (buyerId) {
+            db.collection('users').doc(buyerId).get()
+              .then((userSnap) => {
+                const fcmToken = userSnap.data()?.fcmToken;
+                if (fcmToken) {
+                  const title = 'Malipo Yameshindikana';
+                  const body = `Malipo ya ${productName} hayakukamilika. Fungua app ili ujaribu tena.`;
+                  return sendFcm(buildFcmMessage({ token: fcmToken, title, body, data: { type: 'payment_failed', orderId, status: 'failed' } }), buyerId);
+                }
+              })
+              .catch((err) => console.error(`[LISTENER] ${orderId}: FCM failed for buyer:`, err.message));
+          }
+
+          // SMS buyer
+          getUserPhone(buyerId).then(phone => {
+            if (phone) sendSms(phone, `Soko Vibe: Malipo ya ${productName} hayakukamilika. Tafadhali fungua app na ujaribu tena.`);
+          });
+        }
+
+        // ── any → refunded ──
+        if (newStatus === 'refunded' && beforeStatus !== 'refunded') {
+          console.log(`[LISTENER] ${orderId}: ${beforeStatus} → refunded`);
+
+          if (buyerId) {
+            db.collection('users').doc(buyerId).get()
+              .then((userSnap) => {
+                const fcmToken = userSnap.data()?.fcmToken;
+                if (fcmToken) {
+                  const title = 'Fedha Zimerudishwa';
+                  const body = `Fedha za ${productName} zimerudishwa kwenye akaunti yako.`;
+                  return sendFcm(buildFcmMessage({ token: fcmToken, title, body, data: { type: 'refund', orderId, status: 'refunded' } }), buyerId);
+                }
+              })
+              .catch((err) => console.error(`[LISTENER] ${orderId}: FCM failed for buyer:`, err.message));
+          }
+
+          // SMS buyer
+          getUserPhone(buyerId).then(phone => {
+            if (phone) sendSms(phone, `Soko Vibe: Fedha za ${productName} (Oda #${orderId}) zimerudishwa kwenye akaunti yako.`);
+          });
+        }
       });
     },
     (error) => {
@@ -138,8 +240,138 @@ function startListener() {
   console.log('[LISTENER] Ready. Listening for transaction changes...');
 }
 
-// Seed knownStatus with existing pending transactions so we don't
-// trigger false notifications on first modification after restart.
+// ─── Chat message listener: notify recipient on new message ─────
+function startChatListener() {
+  console.log('[LISTENER] Starting chat message listener...');
+
+  let knownMessageIds = new Set();
+  const listenerStartedAt = admin.firestore.Timestamp.now();
+
+  // Load recent message IDs to avoid re-sending on startup
+  db.collectionGroup('messages')
+    .orderBy('timestamp', 'desc')
+    .limit(200)
+    .get()
+    .then((snap) => {
+      snap.docs.forEach((doc) => knownMessageIds.add(doc.id));
+      console.log(`[LISTENER] Loaded ${snap.docs.length} recent chat messages`);
+    })
+    .catch((err) => {
+      console.error('[LISTENER] Failed to load recent messages:', err.message);
+    });
+
+  // Watch all messages subcollections — no .where() to avoid needing a composite index.
+  // We filter in-memory using knownMessageIds (dedup) and listenerStartedAt (cutoff).
+  db.collectionGroup('messages')
+    .onSnapshot(
+      (snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type !== 'added') return;
+          const msgId = change.doc.id;
+          // Skip messages already known from the initial load
+          if (knownMessageIds.has(msgId)) return;
+          const msgData = change.doc.data();
+          // Skip messages older than listener start (in-memory filter, no index needed)
+          const msgTime = msgData.timestamp;
+          if (msgTime && msgTime < listenerStartedAt) return;
+          knownMessageIds.add(msgId);
+
+          const senderId = msgData.sender_id || '';
+          const text = msgData.text || '';
+
+          if (!senderId || !text) return;
+
+          // Get the room ID from the document reference path
+          const roomId = change.doc.ref.parent.parent?.id;
+          if (!roomId) return;
+
+          // Skip AI Dalali messages
+          if (senderId === 'ai_dalali') return;
+
+          console.log(`[LISTENER] New chat message in room ${roomId} from ${senderId}`);
+
+          // Look up room participants
+          db.collection('chat_rooms').doc(roomId).get()
+            .then((roomSnap) => {
+              if (!roomSnap.exists) return;
+              const room = roomSnap.data();
+              const participants = room.participants || [];
+
+              // Find recipient (the other participant)
+              const receiverId = participants.find(p => p !== senderId);
+              if (!receiverId) return;
+
+              // Look up sender's display name
+              return db.collection('users').doc(senderId).get()
+                .then((senderSnap) => {
+                  const senderData = senderSnap.data() || {};
+                  const senderName = senderData.displayName || senderData.name || 'Mtumiaji';
+
+                  // Look up recipient's FCM token
+                  return db.collection('users').doc(receiverId).get()
+                    .then((receiverSnap) => {
+                      const receiverData = receiverSnap.data() || {};
+                      const fcmToken = receiverData.fcmToken;
+                      if (!fcmToken) {
+                        console.log(`[LISTENER] No FCM token for user ${receiverId}`);
+                        return;
+                      }
+
+                      // Send notification
+                      const title = senderName;
+                      const body = text;
+
+                      const message = {
+                        notification: { title, body },
+                        data: {
+                          title,
+                          body,
+                          type: 'chat',
+                          senderId,
+                          senderName,
+                          roomId,
+                        },
+                        token: fcmToken,
+    android: { priority: 'high', notification: { channel_id: 'chat_messages_v3' } },
+                        apns: {
+                          headers: { 'apns-priority': '10' },
+                          payload: {
+                            aps: {
+                              alert: { title, body },
+                              sound: 'soko_notification.wav',
+                              badge: 1,
+                              'content-available': 1,
+                            },
+                          },
+                        },
+                      };
+
+                      return admin.messaging().send(message)
+                        .then(() => {
+                          console.log(`[LISTENER] Chat notification sent to ${receiverId}`);
+                        })
+                        .catch((err) => {
+                          if (err.code === 'messaging/registration-token-not-registered' ||
+                              err.code === 'messaging/invalid-registration-token') {
+                            return db.collection('users').doc(receiverId).update({ fcmToken: null });
+                          }
+                          console.error(`[LISTENER] FCM failed for ${receiverId}:`, err.message);
+                        });
+                    });
+                });
+            })
+            .catch((err) => {
+              console.error('[LISTENER] Chat notification error:', err.message);
+            });
+        });
+      },
+      (error) => {
+        console.error('[LISTENER] Chat listener error:', error);
+      }
+    );
+}
+
+// Seed and start both listeners
 db.collection('transactions')
   .where('status', '==', 'pending')
   .get()
@@ -152,4 +384,5 @@ db.collection('transactions')
   })
   .finally(() => {
     startListener();
+    startChatListener();
   });
