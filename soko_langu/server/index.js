@@ -87,16 +87,13 @@ function buildFcmApns(title, body) {
 }
 
 /**
- * Builds a standard FCM message with a `notification` payload to ensure
- * the OS displays it in the system tray when the app is in the background or killed.
- * The `data` payload carries additional info for the app to handle when opened.
+ * Builds a data-only FCM message. The client background handler always
+ * processes via Awesome Notifications (no system auto-display), so we
+ * avoid the `notification` payload to prevent duplicate notifications.
+ * The `data` payload carries title, body, and extras for the client.
  */
 function buildFcmMessage({ token, tokens, title, body, data = {} }) {
   const msg = {
-    notification: {
-      title: title || 'Soko Vibe',
-      body: body || '',
-    },
     data: buildFcmDataPayload(title, body, data),
     android: {
       priority: 'high',
@@ -5285,7 +5282,7 @@ app.post('/api/test-fcm', async (req, res) => {
     try {
       const result = await admin.messaging().send({
         token: fcmToken,
-        notification: { title, body: body || 'Test body' },
+        data: { title: title || '', body: body || 'Test body', type: 'general' },
         android: { priority: 'high', notification: { channel_id: 'general_notifications_v3' } },
       });
       return res.json({ success: true, method: 'admin-sdk', messageId: result, tokenPrefix: fcmToken.substring(0, 8) + '...' });

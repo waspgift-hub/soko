@@ -31,7 +31,6 @@ function stringifyFcmData(data = {}) {
 
 function buildFcmMessage({ token, title, body, data = {} }) {
   return {
-    notification: { title: title || 'Soko Vibe', body: body || '' },
     data: stringifyFcmData({ title: title || '', body: body || '', ...data }),
     android: { priority: 'high', notification: { channel_id: 'general_notifications_v3' } },
     apns: {
@@ -317,12 +316,11 @@ function startChatListener() {
                         return;
                       }
 
-                      // Send notification
+                      // Send notification (data-only — client background handler creates via Awesome Notifications)
                       const title = senderName;
                       const body = text;
 
                       const message = {
-                        notification: { title, body },
                         data: {
                           title,
                           body,
@@ -332,7 +330,7 @@ function startChatListener() {
                           roomId,
                         },
                         token: fcmToken,
-    android: { priority: 'high', notification: { channel_id: 'chat_messages_v3' } },
+                        android: { priority: 'high', notification: { channel_id: 'chat_messages_v3' } },
                         apns: {
                           headers: { 'apns-priority': '10' },
                           payload: {
