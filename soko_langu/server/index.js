@@ -5261,8 +5261,8 @@ app.post('/api/test-fcm', async (req, res) => {
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     let fcmToken = directToken;
+    let uid = userId || '';
     if (!fcmToken) {
-      let uid = userId;
       if (!uid && email) {
         // Look up by email via Firebase Auth
         try {
@@ -5285,13 +5285,15 @@ app.post('/api/test-fcm', async (req, res) => {
         data: { title: title || '', body: body || 'Test body', type: 'general' },
         android: { priority: 'high', notification: { channel_id: 'general_notifications_v3' } },
       });
-      return res.json({ success: true, method: 'admin-sdk', messageId: result, tokenPrefix: fcmToken.substring(0, 8) + '...' });
+      return res.json({ success: true, method: 'admin-sdk', messageId: result, tokenPrefix: fcmToken.substring(0, 8) + '...', uid });
     } catch (adminErr) {
       console.error('[FCM-DIAG] Admin SDK failed:', adminErr.code || adminErr.message);
       const projectId = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '{}').project_id;
       return res.status(502).json({
         success: false,
         error: adminErr.code || adminErr.message,
+        tokenPrefix: fcmToken.substring(0, 12) + '...',
+        uid,
         hint: projectId ? `Enable FCM v1 API at https://console.cloud.google.com/apis/library/fcm.googleapis.com?project=${projectId}` : 'Check FIREBASE_SERVICE_ACCOUNT_JSON',
       });
     }
