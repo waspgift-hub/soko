@@ -55,7 +55,20 @@ async function sendFcm(message, userIdForCleanup = null) {
     if (userIdForCleanup && db &&
         (e.code === 'messaging/registration-token-not-registered' ||
          e.code === 'messaging/invalid-registration-token')) {
-      console.log(`[LISTENER][FCM] Cleaning stale FCM token for user ${userIdForCleanup}`);
+      console.log(`[LISTENER][FCM] Token stale for ${userIdForCleanup}, trying topic fallback...`);
+      try {
+        const topicMsg = {
+          topic: `user_${userIdForCleanup}`,
+          data: message.data || {},
+          android: { priority: 'high' },
+        };
+        if (message.notification) topicMsg.notification = message.notification;
+        const topicResult = await admin.messaging().send(topicMsg);
+        console.log(`[LISTENER][FCM] Topic fallback succeeded for ${userIdForCleanup}: ${topicResult}`);
+        return topicResult;
+      } catch (topicErr) {
+        console.error(`[LISTENER][FCM] Topic fallback failed for ${userIdForCleanup}: ${topicErr.code || topicErr.message}`);
+      }
       await db.collection('users').doc(userIdForCleanup).update({ fcmToken: null });
     }
     throw e;
@@ -344,7 +357,7 @@ function startChatListener() {
                         },
                       };
 
-                      return admin.messaging().send(message)
+                      return sendFcm(message, receiverId)
                         .then(() => {
                           console.log(`[LISTENER] Chat notification sent to ${receiverId}`);
                         })
@@ -353,7 +366,9 @@ function startChatListener() {
                               err.code === 'messaging/invalid-registration-token') {
                             return db.collection('users').doc(receiverId).update({ fcmToken: null });
                           }
-                          console.error(`[LISTENER] FCM failed for ${receiverId}:`, err.message);
+                          if (err.code !== 'messaging/registration-token-not-registered') {
+                            console.error('[LISTENER] Chat FCM error:', err.code || err.message);
+                          }
                         });
                     });
                 });

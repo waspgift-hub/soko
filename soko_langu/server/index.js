@@ -115,7 +115,22 @@ async function sendFcmToToken(message, userIdForCleanup = null) {
     if (userIdForCleanup && db &&
         (e.code === 'messaging/registration-token-not-registered' ||
          e.code === 'messaging/invalid-registration-token')) {
-      console.log(`[FCM] Cleaning stale FCM token for user ${userIdForCleanup}`);
+      console.log(`[FCM] Token stale for ${userIdForCleanup}, trying topic fallback...`);
+      // Try sending via user-specific topic as fallback
+      try {
+        const topicMsg = {
+          topic: `user_${userIdForCleanup}`,
+          data: message.data || {},
+          android: { priority: 'high' },
+        };
+        if (message.notification) topicMsg.notification = message.notification;
+        const topicResult = await admin.messaging().send(topicMsg);
+        console.log(`[FCM] Topic fallback succeeded for ${userIdForCleanup}: ${topicResult}`);
+        return topicResult;
+      } catch (topicErr) {
+        console.error(`[FCM] Topic fallback also failed for ${userIdForCleanup}: ${topicErr.code || topicErr.message}`);
+      }
+      // Still clean the stale token so next attempt gets fresh data
       await db.collection('users').doc(userIdForCleanup).update({ fcmToken: null });
     }
     throw e;
