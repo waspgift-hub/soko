@@ -16,16 +16,6 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     NotificationService.channels,
   );
 
-  // Prevent double notifications:
-  // If the FCM message has a 'notification' payload (title/body at top level),
-  // Firebase system service will auto-display it. Only create a manual local
-  // notification for data-only messages to avoid duplicates.
-  if (message.notification != null) {
-    debugPrint('FCM background: display notification — letting system handle it');
-    return;
-  }
-
-  // Data-only message — manually display via Awesome Notifications
   await FcmNotificationDisplay.show(
     message,
     notificationId: message.messageId.hashCode.abs().clamp(1, 2147483647),
