@@ -5252,25 +5252,31 @@ app.use((err, req, res, _next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// ─── Diagnostic: check FCM credentials (no token, just validates setup) ──
+// ─── Diagnostic: check FCM credentials + topic test ──────────────────
 app.get('/api/fcm-check', async (req, res) => {
   try {
     const projectId = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '{}').project_id;
     if (!admin.messaging) return res.json({ status: 'error', msg: 'admin.messaging unavailable' });
-    // Try a dry-run (validation-only) send to a bogus token — we want to see
-    // if the error is about auth or token format.
+    const results = {};
+    // Test 1: dry-run with bogus token
     try {
-      await admin.messaging().send({ token: '__test__', data: { a: '1' } }, true /* dryRun */);
-      return res.json({ status: 'unexpected', msg: 'dry-run succeeded on bogus token' });
+      await admin.messaging().send({ token: '__test__', data: { a: '1' } }, true);
+      results.dryRun = 'unexpected-success';
     } catch (e) {
-      return res.json({
-        status: 'info',
-        code: e.code || 'unknown',
-        message: e.message || String(e),
-        projectId,
-        hint: projectId ? `Enable FCM v1 API at https://console.cloud.google.com/apis/library/fcm.googleapis.com?project=${projectId}` : 'Check FIREBASE_SERVICE_ACCOUNT_JSON',
-      });
+      results.dryRun = { code: e.code, message: e.message };
     }
+    // Test 2: send to a topic (no registration needed)
+    try {
+      const topicMsgId = await admin.messaging().send({
+        topic: 'test_diagnostic',
+        data: { title: 'FCM Check', body: 'This is a test', type: 'general' },
+        android: { priority: 'high' },
+      });
+      results.topicSend = { success: true, messageId: topicMsgId };
+    } catch (e) {
+      results.topicSend = { code: e.code, message: e.message };
+    }
+    return res.json({ status: 'complete', projectId, results });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
