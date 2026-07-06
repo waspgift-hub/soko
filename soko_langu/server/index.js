@@ -5252,6 +5252,30 @@ app.use((err, req, res, _next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
+// ─── Diagnostic: check FCM credentials (no token, just validates setup) ──
+app.get('/api/fcm-check', async (req, res) => {
+  try {
+    const projectId = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '{}').project_id;
+    if (!admin.messaging) return res.json({ status: 'error', msg: 'admin.messaging unavailable' });
+    // Try a dry-run (validation-only) send to a bogus token — we want to see
+    // if the error is about auth or token format.
+    try {
+      await admin.messaging().send({ token: '__test__', data: { a: '1' } }, true /* dryRun */);
+      return res.json({ status: 'unexpected', msg: 'dry-run succeeded on bogus token' });
+    } catch (e) {
+      return res.json({
+        status: 'info',
+        code: e.code || 'unknown',
+        message: e.message || String(e),
+        projectId,
+        hint: projectId ? `Enable FCM v1 API at https://console.cloud.google.com/apis/library/fcm.googleapis.com?project=${projectId}` : 'Check FIREBASE_SERVICE_ACCOUNT_JSON',
+      });
+    }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Diagnostic: test FCM push (by userId, email, or direct token) ─────
 app.post('/api/test-fcm', async (req, res) => {
   try {
