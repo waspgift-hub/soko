@@ -141,6 +141,17 @@ class NotificationService {
       final token = await _fcm.getToken();
       if (token != null) await _saveToken(token);
 
+      // Subscribe to personal topic for reliable push delivery
+      final user = _auth.currentUser;
+      if (user != null) {
+        try {
+          await _fcm.subscribeToTopic('user_${user.uid}');
+          debugPrint('FCM: subscribed to topic user_${user.uid}');
+        } catch (e) {
+          debugPrint('FCM: topic subscribe failed: $e');
+        }
+      }
+
       final initialMsg = await _fcm.getInitialMessage();
       if (initialMsg != null) _handleNotificationTap(initialMsg);
     } catch (e) {
