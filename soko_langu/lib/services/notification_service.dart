@@ -25,7 +25,6 @@ class NotificationService {
   static final GlobalKey<ScaffoldMessengerState> messengerKey =
       GlobalKey<ScaffoldMessengerState>();
   static void Function(Map<String, dynamic> data)? onNotificationTap;
-  static void Function(Map<String, dynamic> data)? onPriceDropTap;
   static void Function(Map<String, dynamic> data)? onPaymentNotificationTap;
 
   static List<NotificationChannel> get channels => _channels;
@@ -49,7 +48,7 @@ class NotificationService {
         NotificationChannel(
           channelKey: 'general_notifications_v3',
           channelName: 'Soko Vibe',
-          channelDescription: 'Flash sale, price drop & other notifications',
+          channelDescription: 'Flash sale & other notifications',
           defaultColor: const Color(0xFF40916C),
           ledColor: const Color(0xFF40916C),
           importance: NotificationImportance.High,
@@ -117,8 +116,7 @@ class NotificationService {
 
       if (settings.authorizationStatus != AuthorizationStatus.authorized &&
           settings.authorizationStatus != AuthorizationStatus.provisional) {
-        debugPrint('FCM: permission not granted');
-        return;
+        debugPrint('FCM: display permission not granted — FCM token still saved');
       }
 
       if (!_handlersRegistered) {
@@ -135,18 +133,7 @@ class NotificationService {
         await AwesomeNotifications().setListeners(
           onActionReceivedMethod: (ReceivedAction receivedAction) async {
             final rawPayload = receivedAction.payload;
-            if (rawPayload == null) return;
-            try {
-              final data = Map<String, dynamic>.from(rawPayload);
-              if (data['type'] == 'price_drop' && onPriceDropTap != null) {
-                onPriceDropTap!(data);
-              } else if (data['type'] == 'payment' &&
-                  onPaymentNotificationTap != null) {
-                onPaymentNotificationTap!(data);
-              } else if (onNotificationTap != null) {
-                onNotificationTap!(data);
-              }
-            } catch (_) {}
+            if (rawPayload != null) _onNotificationTapped(rawPayload);
           },
         );
       }
@@ -192,10 +179,11 @@ class NotificationService {
   }
 
   void _handleNotificationTap(RemoteMessage message) {
-    final data = message.data;
-    if (data['type'] == 'price_drop' && onPriceDropTap != null) {
-      onPriceDropTap!(data);
-    } else if (data['type'] == 'payment' && onPaymentNotificationTap != null) {
+    _onNotificationTapped(message.data);
+  }
+
+  static void _onNotificationTapped(Map<String, dynamic> data) {
+    if (data['type'] == 'payment' && onPaymentNotificationTap != null) {
       onPaymentNotificationTap!(data);
     } else if (onNotificationTap != null) {
       onNotificationTap!(data);

@@ -70,6 +70,27 @@ class YoutubeAudioService {
     }
   }
 
+  /// Returns the best available muxed (audio+video) stream URL for [videoId].
+  ///
+  /// Muxed streams contain both audio and video tracks, suitable for
+  /// [VideoPlayer]. Falls back to lower resolutions if progressive is
+  /// unavailable. Returns `null` if no muxed stream exists.
+  Future<String?> getBestMuxedStream(String videoId) async {
+    try {
+      final manifest = await _yt.videos.streamsClient.getManifest(videoId);
+      final muxed = manifest.muxed.sortByVideoQuality().toList();
+      if (muxed.isEmpty) return null;
+      // Prefer lowest resolution for fastest load, or highest for quality
+      return muxed.last.url.toString();
+    } on VideoUnplayableException catch (e) {
+      debugPrint('VideoUnplayableException for $videoId: $e');
+      return null;
+    } catch (e) {
+      debugPrint('getBestMuxedStream error for $videoId: $e');
+      return null;
+    }
+  }
+
   /// Legacy wrapper — returns just the URL string for backward compat.
   Future<String?> getAudioUrl(String videoId) async {
     final info = await getBestAudioStream(videoId);
