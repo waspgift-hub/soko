@@ -72,20 +72,6 @@ function buildFcmDataPayload(title, body, data = {}) {
   return stringifyFcmData({ title: title || '', body: body || '', ...data });
 }
 
-function buildFcmApns(title, body) {
-  return {
-    headers: { 'apns-priority': '10' },
-    payload: {
-      aps: {
-        alert: { title: title || '', body: body || '' },
-        sound: 'soko_notification.wav',
-        badge: 1,
-        'content-available': 1,
-      },
-    },
-  };
-}
-
 /**
  * Builds a data-only FCM message. The client background handler always
  * processes via Awesome Notifications (no system auto-display), so we
@@ -95,11 +81,7 @@ function buildFcmApns(title, body) {
 function buildFcmMessage({ token, tokens, title, body, data = {} }) {
   const msg = {
     data: buildFcmDataPayload(title, body, data),
-    android: {
-      priority: 'high',
-      notification: { channel_id: 'general_notifications_v3' },
-    },
-    apns: buildFcmApns(title, body), // iOS can still use the custom APNS payload
+    android: { priority: 'high' },
   };
   if (token) msg.token = token;
   if (tokens && tokens.length) msg.tokens = tokens;
@@ -839,12 +821,11 @@ app.post('/api/send-notification', async (req, res) => {
     try {
       await sendFcmToToken(message, userId);
     } catch (e) {
-      if (e.code === 'messaging/registration-token-not-registered' ||
-          e.code === 'messaging/invalid-registration-token') {
-        await db.collection('users').doc(userId).update({ fcmToken: admin.firestore.FieldValue.delete() });
-        return res.json({ sent: true, reason: 'Stale token cleaned, in-app written' });
+      // sendFcmToToken already cleaned the stale token and tried topic fallback
+      if (e.code !== 'messaging/registration-token-not-registered' &&
+          e.code !== 'messaging/invalid-registration-token') {
+        throw e;
       }
-      throw e;
     }
 
     res.json({ sent: true });
