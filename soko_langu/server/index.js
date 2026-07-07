@@ -5345,7 +5345,7 @@ app.post('/api/test-fcm', async (req, res) => {
       const result = await admin.messaging().send({
         token: fcmToken,
         data: { title: title || '', body: body || 'Test body', type: 'general' },
-        android: { priority: 'high', notification: { channel_id: 'general_notifications_v3' } },
+        android: { priority: 'high' },
       });
       return res.json({ success: true, method: 'admin-sdk', messageId: result, tokenPrefix: fcmToken.substring(0, 8) + '...', uid });
     } catch (adminErr) {
