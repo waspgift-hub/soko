@@ -323,27 +323,9 @@ function startChatListener() {
                       const body = text;
 
                       const message = {
-                        data: {
-                          title,
-                          body,
-                          type: 'chat',
-                          senderId,
-                          senderName,
-                          roomId,
-                        },
+                        data: { title, body, type: 'chat', senderId, senderName, roomId },
                         token: fcmToken,
-                        android: { priority: 'high', notification: { channel_id: 'chat_messages_v3' } },
-                        apns: {
-                          headers: { 'apns-priority': '10' },
-                          payload: {
-                            aps: {
-                              alert: { title, body },
-                              sound: 'soko_notification.wav',
-                              badge: 1,
-                              'content-available': 1,
-                            },
-                          },
-                        },
+                        android: { priority: 'high' },
                       };
 
                       return sendFcm(message, receiverId)
