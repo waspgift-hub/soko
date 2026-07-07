@@ -123,11 +123,11 @@ class NotificationService {
         _handlersRegistered = true;
         FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
         FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
-        _fcm.onTokenRefresh.listen(_saveToken);
+        _fcm.onTokenRefresh.listen(_saveAndSubscribe);
         _auth.authStateChanges().listen((user) async {
           if (user != null && await isEnabled()) {
             final t = await _fcm.getToken();
-            if (t != null) await _saveToken(t);
+            if (t != null) await _saveAndSubscribe(t);
           }
         });
         await AwesomeNotifications().setListeners(
@@ -139,7 +139,7 @@ class NotificationService {
       }
 
       final token = await _fcm.getToken();
-      if (token != null) await _saveToken(token);
+      if (token != null) await _saveAndSubscribe(token);
 
       // Subscribe to personal topic for reliable push delivery
       final user = _auth.currentUser;
@@ -174,7 +174,7 @@ class NotificationService {
     }
   }
 
-  Future<void> _saveToken(String token) async {
+  Future<void> _saveAndSubscribe(String token) async {
     if (!await isEnabled()) return;
     final user = _auth.currentUser;
     if (user == null) return;
@@ -182,6 +182,12 @@ class NotificationService {
       'fcmToken': token,
       'email': user.email,
     }, SetOptions(merge: true));
+    try {
+      await _fcm.subscribeToTopic('user_${user.uid}');
+      debugPrint('FCM: subscribed to user_${user.uid} on token save');
+    } catch (e) {
+      debugPrint('FCM: topic subscribe failed: $e');
+    }
   }
 
   Future<void> _handleForegroundMessage(RemoteMessage message) async {

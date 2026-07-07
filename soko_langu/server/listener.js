@@ -32,18 +32,7 @@ function stringifyFcmData(data = {}) {
 function buildFcmMessage({ token, title, body, data = {} }) {
   return {
     data: stringifyFcmData({ title: title || '', body: body || '', ...data }),
-    android: { priority: 'high', notification: { channel_id: 'general_notifications_v3' } },
-    apns: {
-      headers: { 'apns-priority': '10' },
-      payload: {
-        aps: {
-          alert: { title: title || '', body: body || '' },
-          sound: 'soko_notification.wav',
-          badge: 1,
-          'content-available': 1,
-        },
-      },
-    },
+    android: { priority: 'high' },
   };
 }
 
@@ -362,11 +351,9 @@ function startChatListener() {
                           console.log(`[LISTENER] Chat notification sent to ${receiverId}`);
                         })
                         .catch((err) => {
-                          if (err.code === 'messaging/registration-token-not-registered' ||
-                              err.code === 'messaging/invalid-registration-token') {
-                            return db.collection('users').doc(receiverId).update({ fcmToken: null });
-                          }
-                          if (err.code !== 'messaging/registration-token-not-registered') {
+                          // sendFcm already cleaned stale token and tried topic fallback
+                          if (err.code !== 'messaging/registration-token-not-registered' &&
+                              err.code !== 'messaging/invalid-registration-token') {
                             console.error('[LISTENER] Chat FCM error:', err.code || err.message);
                           }
                         });
