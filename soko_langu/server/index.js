@@ -5267,6 +5267,20 @@ app.use((err, req, res, _next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
+// ─── Clear stale FCM token for a user (forces fresh token on next app open) ──
+app.post('/api/clear-token', async (req, res) => {
+  try {
+    const { uid } = req.body;
+    if (!uid) return res.status(400).json({ error: 'uid required' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    await db.collection('users').doc(uid).update({ fcmToken: admin.firestore.FieldValue.delete() });
+    console.log(`[FCM] Cleared token for user ${uid}`);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Diagnostic: check FCM credentials + topic test ──────────────────
 app.get('/api/fcm-check', async (req, res) => {
   try {
