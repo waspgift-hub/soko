@@ -247,6 +247,8 @@ class AuthService {
         'shopBanner': '',
         'shopBannerColor': '',
         'shopAccentColor': '',
+        'gender': '',
+        'dateOfBirth': '',
         'latitude': null,
         'longitude': null,
         'coins': 0,

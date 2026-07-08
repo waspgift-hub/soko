@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../main.dart';
 import '../services/localization_service.dart';
 import '../services/exchange_rate_service.dart';
@@ -19,7 +20,8 @@ extension ContextTr on BuildContext {
     final code = currencyOverride ?? config.currencyCode;
     final symbol = LocalizationService.supportedCurrencies[code]?['symbol'] ?? 'TSh';
     final converted = ExchangeRateService().convert(price, code);
-    final formatted = converted.toStringAsFixed(converted >= 1 ? 0 : 2);
+    final formatter = NumberFormat('#,##0.00', 'en_US');
+    final formatted = formatter.format(converted);
     return '$symbol $formatted';
   }
 
@@ -28,7 +30,8 @@ extension ContextTr on BuildContext {
     final code = currencyOverride ?? config.currencyCode;
     final symbol = LocalizationService.supportedCurrencies[code]?['symbol'] ?? 'TSh';
     final converted = ExchangeRateService().convert(price.toDouble(), code);
-    final formatted = converted.toStringAsFixed(converted >= 1 ? 0 : 2);
+    final formatter = NumberFormat('#,##0.00', 'en_US');
+    final formatted = formatter.format(converted);
     return '$symbol $formatted';
   }
 }

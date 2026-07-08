@@ -5,12 +5,15 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/user_service.dart';
-import '../../services/auth_service.dart';
+import '../../notifiers/auth_notifier.dart';
+import 'package:provider/provider.dart';
 import '../../services/wishlist_service.dart';
 import '../../extensions/context_tr.dart';
+import '../../services/permission_service.dart';
 import '../../widgets/account_switcher_sheet.dart';
 import '../../widgets/ad_banner.dart';
 import '../../widgets/verified_badge.dart';
+import '../../widgets/premium_widgets.dart';
 import '../../app/routes.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -41,20 +44,13 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
     try {
       final wishlist = await _wishlistService.getWishlist();
       final reviewSnap = await FirebaseFirestore.instance
-          .collection('reviews')
-          .where('sellerId', isEqualTo: uid)
-          .get();
+          .collection('reviews').where('sellerId', isEqualTo: uid).get();
       double total = 0;
       for (final doc in reviewSnap.docs) {
         total += (doc.data()['rating'] ?? 0).toDouble();
       }
       if (mounted) {
-        setState(() {
-          _wishlistCount = wishlist.length;
-          _avgRating = reviewSnap.docs.isEmpty
-              ? 0
-              : total / reviewSnap.docs.length;
-        });
+        setState(() { _wishlistCount = wishlist.length; _avgRating = reviewSnap.docs.isEmpty ? 0 : total / reviewSnap.docs.length; });
       }
     } catch (_) {}
   }
@@ -63,18 +59,17 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     var profile = await _userService.getProfile(user.uid);
-    if (mounted) {
-      setState(() => _profile = profile);
-    }
+    if (mounted) setState(() => _profile = profile);
     _loadStats(user.uid);
   }
 
   Future<void> _pickImage() async {
+    final granted = await PermissionService.instance.requestWithDialog(context, AppPermission.storage);
+    if (!granted) return;
+
     try {
       final XFile? image = await _picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 512,
-        imageQuality: 80,
+        source: ImageSource.gallery, maxWidth: 512, imageQuality: 80,
       );
       if (image != null) {
         setState(() => _localImagePath = image.path);
@@ -82,16 +77,12 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
         await _userService.updateProfileImage(url);
         await _loadProfile();
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(context.tr('photo_updated'))));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('photo_updated'))));
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("${context.tr('error')}: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${context.tr('error')}: $e")));
       }
     }
   }
@@ -104,396 +95,239 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final cs = Theme.of(context).colorScheme;
     final user = FirebaseAuth.instance.currentUser;
     final imageUrl = _localImagePath ?? _profile?.profileImage;
 
     return Scaffold(
-      body: SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).padding.bottom + 20,
-          ),
-          child: Column(
-            children: [
-              // Mint gradient header
-              Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Theme.of(context).colorScheme.tertiaryContainer, Theme.of(context).colorScheme.surfaceContainerLow],
+      body: PremiumScaffold(
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 20),
+            child: Column(
+              children: [
+                // Premium header
+                Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [cs.primary.withValues(alpha: 0.08), cs.surface],
+                    ),
                   ),
-                ),
-                padding: EdgeInsets.only(
-                  top: MediaQuery.of(context).padding.top + 16,
-                  bottom: 24,
-                ),
-                child: Column(
-                  children: [
-                    // Avatar
-                    Stack(
-                      children: [
-                        CircleAvatar(
-                          radius: 50,
-                          backgroundColor: Theme.of(context).colorScheme.surface,
-                          backgroundImage: imageUrl != null
-                              ? (imageUrl.startsWith('http')
-                                    ? NetworkImage(imageUrl) as ImageProvider
-                                    : FileImage(File(imageUrl)))
-                              : null,
-                          child: imageUrl == null
-                              ? Text(
-                                  _profile?.displayName.isNotEmpty == true
-                                      ? _profile!.displayName[0].toUpperCase()
-                                      : user?.displayName != null
-                                      ? user!.displayName![0].toUpperCase()
-                                      : user?.email != null
-                                      ? user!.email![0].toUpperCase()
-                                      : "U",
-                                  style:  TextStyle(
-                                    fontSize: 40,
-                                    color: Theme.of(context).colorScheme.primary,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                )
-                              : null,
-                        ),
-                        Positioned(
-                          bottom: 0,
-                          right: 0,
-                          child: GestureDetector(
-                            onTap: _pickImage,
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration:  BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Theme.of(context).colorScheme.primary,
-                                    Theme.of(context).colorScheme.tertiary,
-                                  ],
-                                ),
-                                shape: BoxShape.circle,
+                  padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 24, bottom: 24),
+                  child: Column(
+                    children: [
+                      Stack(
+                        children: [
+                          Container(
+                            width: 104, height: 104,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                colors: [cs.primary.withValues(alpha: 0.3), cs.surface],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
                               ),
-                              child:  Icon(
-                                Icons.camera_alt,
-                                color: Theme.of(context).colorScheme.surface,
-                                size: 20,
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(3),
+                              child: CircleAvatar(
+                                radius: 49,
+                                backgroundColor: cs.surface,
+                                backgroundImage: imageUrl != null
+                                    ? (imageUrl.startsWith('http') ? NetworkImage(imageUrl) as ImageProvider : FileImage(File(imageUrl)))
+                                    : null,
+                                child: imageUrl == null
+                                    ? Text(
+                                        _profile?.displayName.isNotEmpty == true ? _profile!.displayName[0].toUpperCase()
+                                            : user?.displayName != null ? user!.displayName![0].toUpperCase()
+                                            : user?.email != null ? user!.email![0].toUpperCase()
+                                            : "U",
+                                        style: TextStyle(fontSize: 40, color: cs.primary, fontWeight: FontWeight.bold),
+                                      )
+                                    : null,
                               ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    // Name + badge
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _profile?.displayName.isNotEmpty == true
-                              ? _profile!.displayName
-                              : user?.displayName ?? context.tr('no_name'),
-                          style:  TextStyle(
-                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85),
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
+                          Positioned(bottom: 2, right: 2,
+                            child: GestureDetector(
+                              onTap: _pickImage,
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: cs.primary,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [BoxShadow(color: cs.primary.withValues(alpha: 0.3), blurRadius: 8)],
+                                ),
+                                child: Icon(Icons.camera_alt, color: cs.onPrimary, size: 18),
+                              ),
+                            ),
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: AppInsets.lg),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _profile?.displayName.isNotEmpty == true ? _profile!.displayName : user?.displayName ?? context.tr('no_name'),
+                            style: TextStyle(fontSize: AppFontSize.xxl, fontWeight: FontWeight.w700, color: cs.onSurface, letterSpacing: -0.3),
+                          ),
+                          if (_profile?.kycApproved == true) ...[
+                            const SizedBox(width: AppInsets.sm),
+                            const VerifiedBadge(size: 16),
+                          ],
+                        ],
+                      ),
+                      if (_profile?.bio.isNotEmpty == true)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: AppInsets.xxl),
+                          child: Text(_profile!.bio, style: TextStyle(color: cs.onSurfaceVariant, fontSize: AppFontSize.md), textAlign: TextAlign.center),
                         ),
-                        if (_profile?.kycApproved == true)
-                          const VerifiedBadge(size: 16),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    if (_profile?.bio.isNotEmpty == true)
+                      const SizedBox(height: AppInsets.xs),
+                      Text(user?.email ?? context.tr('no_email'), style: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6), fontSize: AppFontSize.sm)),
+                      const SizedBox(height: AppInsets.lg),
+                      // Stats
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 32),
-                        child: Text(
-                          _profile!.bio,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            fontSize: 14,
-                          ),
-                          textAlign: TextAlign.center,
+                        padding: const EdgeInsets.symmetric(horizontal: AppInsets.xl),
+                        child: Row(
+                          children: [
+                            Expanded(child: _statCard(Icons.favorite_rounded, context.tr('wishlist'), '$_wishlistCount', cs)),
+                            const SizedBox(width: AppInsets.md),
+                            Expanded(child: _statCard(Icons.star_rounded, 'Rating', _avgRating.toStringAsFixed(1), cs)),
+                          ],
                         ),
                       ),
-                    const SizedBox(height: 2),
-                    Text(
-                      user?.email ?? context.tr('no_email'),
-                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 14),
-                    ),
-                    const SizedBox(height: 16),
-                    // Stats cards
-                    _buildStatsRow(),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              // Action grid
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _buildActionGrid(),
-              ),
-              const SizedBox(height: 16),
-              // Settings
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _buildSettingsSection(),
-              ),
-              const SizedBox(height: 16),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
-                child: AdBanner(),
-              ),
-              const SizedBox(height: 16),
-              // Logout
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _buildLogoutButton(),
-              ),
-              const SizedBox(height: 32),
-            ],
+                const SizedBox(height: AppInsets.sm),
+                // Action grid
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+                  child: _buildActionGrid(cs),
+                ),
+                const SizedBox(height: AppInsets.lg),
+                // Settings
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+                  child: GlassCard(
+                    onTap: () => context.push(AppRoutes.settings),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(color: cs.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+                          child: Icon(Icons.settings_rounded, color: cs.primary, size: 22),
+                        ),
+                        const SizedBox(width: AppInsets.md),
+                        Expanded(child: Text(context.tr('settings'), style: TextStyle(fontSize: AppFontSize.lg, fontWeight: FontWeight.w600, color: cs.onSurface))),
+                        Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppInsets.lg),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: AppInsets.lg),
+                  child: AdBanner(),
+                ),
+                const SizedBox(height: AppInsets.lg),
+                // Logout
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        await context.read<AuthNotifier>().logout();
+                      },
+                      icon: const Icon(Icons.logout_rounded, size: 18),
+                      label: Text(context.tr('logout')),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: cs.error,
+                        side: BorderSide(color: cs.error.withValues(alpha: 0.3)),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppInsets.xxl),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildStatsRow() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Row(
+  Widget _statCard(IconData icon, String label, String value, ColorScheme cs) {
+    return GlassCard(
+      child: Column(
         children: [
-          _statCard(Icons.favorite, context.tr('wishlist'), '$_wishlistCount'),
-          _statCard(Icons.star, 'Rating', _avgRating.toStringAsFixed(1)),
+          Icon(icon, color: cs.primary, size: 22),
+          const SizedBox(height: AppInsets.xs),
+          Text(value, style: TextStyle(fontWeight: FontWeight.w700, fontSize: AppFontSize.lg, color: cs.onSurface)),
+          Text(label, style: TextStyle(fontSize: AppFontSize.xs, color: cs.onSurfaceVariant)),
         ],
       ),
     );
   }
 
-  Widget _statCard(IconData icon, String label, String value) {
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
-            width: 1.5,
-          ),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: Theme.of(context).colorScheme.primary, size: 22),
-            const SizedBox(height: 4),
-            Text(
-              value,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionGrid() {
-    final isAdmin = _profile?.email == 'admin@soko-langu.com';
-
+  Widget _buildActionGrid(ColorScheme cs) {
+    final user = FirebaseAuth.instance.currentUser;
+    final isAdmin = _profile?.email == 'admin@soko-langu.com' ||
+        user?.email?.toLowerCase() == 'admin@soko-langu.com';
     final actions = [
-      _ActionItem(Icons.swap_horiz_rounded, 'Accounts', () {
-        AccountSwitcherSheet.show(context);
-      }),
-      _ActionItem(Icons.edit, context.tr('edit_profile'), () async {
-        await context.push(AppRoutes.editProfile);
-        _refreshProfile();
-      }),
-      _ActionItem(Icons.favorite, context.tr('wishlist'), () {
-        context.push(AppRoutes.wishlist);
-      }),
-      _ActionItem(Icons.shopping_bag, context.tr('my_ads'), () {
-        context.push(AppRoutes.myAds);
-      }),
-      _ActionItem(Icons.store, context.tr('customize_shop'), () {
-        context.push(AppRoutes.shopCustomization);
-      }),
-      _ActionItem(Icons.dashboard, context.tr('dashboard'), () {
-        context.push(AppRoutes.sellerDashboard);
-      }),
-      _ActionItem(Icons.explore, context.tr('discovery'), () {
-        context.push(AppRoutes.discovery);
-      }),
-      _ActionItem(Icons.library_music_outlined, context.tr('music_player'), () {
-        context.push(AppRoutes.audioList);
-      }),
-      _ActionItem(Icons.receipt_long_outlined, 'Manunuzi Yangu', () {
-        context.push(AppRoutes.myPurchases);
-      }),
-      _ActionItem(Icons.verified_outlined, 'KYC', () {
-        context.push(AppRoutes.kyc);
-      }),
+      _ActionItem(Icons.swap_horiz_rounded, 'Accounts', () => AccountSwitcherSheet.show(context)),
+      _ActionItem(Icons.edit_rounded, context.tr('edit_profile'), () async { await context.push(AppRoutes.editProfile); _refreshProfile(); }),
+      _ActionItem(Icons.favorite_rounded, context.tr('wishlist'), () => context.push(AppRoutes.wishlist)),
+      _ActionItem(Icons.shopping_bag_rounded, context.tr('my_ads'), () => context.push(AppRoutes.myAds)),
+      _ActionItem(Icons.store_rounded, context.tr('customize_shop'), () => context.push(AppRoutes.shopCustomization)),
+      _ActionItem(Icons.dashboard_rounded, context.tr('dashboard'), () => context.push(AppRoutes.sellerDashboard)),
+      _ActionItem(Icons.analytics_rounded, 'Takwimu', () => context.push(AppRoutes.sellerAnalytics)),
+      _ActionItem(Icons.explore_rounded, context.tr('discovery'), () => context.push(AppRoutes.discovery)),
+      _ActionItem(Icons.library_music_rounded, context.tr('music_player'), () => context.push(AppRoutes.audioList)),
+      _ActionItem(Icons.receipt_long_rounded, 'Manunuzi Yangu', () => context.push(AppRoutes.myPurchases)),
+      _ActionItem(Icons.verified_rounded, 'KYC', () => context.push(AppRoutes.kyc)),
     ];
-
     if (isAdmin) {
-      actions.add(
-        _ActionItem(
-          Icons.admin_panel_settings,
-          context.tr('admin_dashboard'),
-          () => context.push(AppRoutes.admin),
-        ),
-      );
+      actions.add(_ActionItem(Icons.admin_panel_settings_rounded, context.tr('admin_dashboard'), () => context.push(AppRoutes.admin)));
     }
-
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        childAspectRatio: 0.95,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
+        crossAxisCount: 3, childAspectRatio: 1.0, crossAxisSpacing: 10, mainAxisSpacing: 10,
       ),
       itemCount: actions.length,
       itemBuilder: (context, index) {
         final item = actions[index];
-        return GestureDetector(
+        return GlassCard(
           onTap: item.onTap,
-          child: Container(
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: Theme.of(
-                  context,
-                ).colorScheme.primary.withValues(alpha: 0.5),
-                width: 1.5,
+          padding: const EdgeInsets.symmetric(vertical: AppInsets.lg, horizontal: AppInsets.sm),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(item.icon, color: cs.primary, size: 24),
               ),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    item.icon,
-                    color: Theme.of(context).colorScheme.onPrimaryContainer,
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  item.label,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Theme.of(context).colorScheme.onSurface,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
+              const SizedBox(height: AppInsets.sm),
+              Text(item.label, style: TextStyle(fontSize: AppFontSize.xs, color: cs.onSurface, fontWeight: FontWeight.w500),
+                textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
+            ],
           ),
         );
       },
-    );
-  }
-
-  Widget _buildSettingsSection() {
-    return GestureDetector(
-      onTap: () => context.push(AppRoutes.settings),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
-            width: 1.5,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.settings, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(width: 12),
-            Text(
-              context.tr('settings'),
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
-            ),
-            const Spacer(),
-            Icon(
-              Icons.arrow_forward_ios,
-              size: 16,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLogoutButton() {
-    return GestureDetector(
-      onTap: () async {
-        await AuthService().logout();
-      },
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        width: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Theme.of(context).colorScheme.error, Theme.of(context).colorScheme.error.withValues(alpha: 0.85)],
-          ),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Theme.of(context).colorScheme.error.withValues(alpha: 0.2),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Center(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.logout, color: Theme.of(context).colorScheme.surface, size: 18),
-              const SizedBox(width: 8),
-              Text(
-                context.tr('logout'),
-                style:  TextStyle(
-                  color: Theme.of(context).colorScheme.surface,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

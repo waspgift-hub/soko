@@ -17,7 +17,6 @@ class AppRoutes {
   static const String search = '/search';
   static const String category = '/category';
   static const String categoryProducts = '/category-products';
-  static const String verifyEmail = '/verify-email';
   static const String accountSelection = '/account-selection';
   static const String myAds = '/my-ads';
   static const String wishlist = '/wishlist';
@@ -27,7 +26,6 @@ class AppRoutes {
   static const String addProduct = '/add-product';
   static const String help = '/help';
   static const String about = '/about';
-  static const String adminAdRevenue = '/admin-ad-revenue';
   static const String createGroup = '/create-group';
   static const String groupChat = '/group-chat';
   static const String onboarding = '/onboarding';
@@ -44,16 +42,17 @@ class AppRoutes {
   static const String flashSale = '/flash-sale';
   static const String createFlashSale = '/create-flash-sale';
   static const String sellerDispatch = '/seller-dispatch';
+  static const String sellerQuote = '/seller-quote';
   static const String magicLink = '/magic-link';
 
-  static const String status = '/status';
-  static const String statusViewer = '/status-viewer';
-  static const String addStatus = '/add-status';
   static const String aiAssistant = '/ai-assistant';
+  static const String receipt = '/receipt';
   static const String privacyPolicy = '/privacy-policy';
   static const String termsOfService = '/terms-of-service';
+  static const String audioHome = '/audio-home';
   static const String audioList = '/audio-list';
   static const String audioQueue = '/audio-queue';
   static const String youtubeSearch = '/youtube-search';
   static const String youtubePlayer = '/youtube-player';
+  static const String sellerAnalytics = '/seller-analytics';
 }

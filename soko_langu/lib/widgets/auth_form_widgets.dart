@@ -39,7 +39,7 @@ class AuthPageShell extends StatelessWidget {
               ClipRRect(
                 borderRadius: BorderRadius.circular(20),
                 child: Image.asset(
-                  'assets/InShot_20260624_083700389.jpg',
+                  'assets/app_icon.png',
                   width: 88,
                   height: 88,
                   fit: BoxFit.cover,

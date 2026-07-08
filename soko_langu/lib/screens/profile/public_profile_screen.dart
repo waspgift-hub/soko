@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/product_model.dart';
 import '../../models/flash_sale_model.dart';
 import '../../services/product_service.dart';
@@ -15,7 +16,7 @@ import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/phone_utils.dart';
 import '../../utils/responsive.dart';
-import '../../utils/chat_utils.dart';
+import '../chat/chat_navigation.dart';
 
 class PublicProfileScreen extends StatefulWidget {
   final String userId;
@@ -36,7 +37,6 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   final FlashSaleService _flashSaleService = FlashSaleService();
   Map<String, FlashSale> _flashSales = {};
   StreamSubscription? _flashSub;
-  UserProfile? _profile;
 
   @override
   void initState() {
@@ -54,12 +54,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   }
 
   void _chatWithSeller() {
-    showChatOptions(
-      context: context,
-      sellerId: widget.userId,
-      sellerName: widget.userName,
-      phone: _profile?.phone,
-    );
+    ChatNavigation.openSellerChat(context, widget.userId, widget.userName);
   }
 
   @override
@@ -104,7 +99,6 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
             if (snap.connectionState == ConnectionState.waiting)
               return const GoogleLoadingPage();
             final profile = snap.data;
-            if (profile != null) _profile = profile;
             return CustomScrollView(
               slivers: [
                 SliverToBoxAdapter(child: _buildHeader(context, profile)),
@@ -159,13 +153,12 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                       );
                     }
                     return SliverGrid(
-                      gridDelegate:
-                          SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: Responsive.gridColumns(context),
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 12,
-                            childAspectRatio: Responsive.cardAspectRatio(context),
-                          ),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: Responsive.gridColumns(context),
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: Responsive.cardAspectRatio(context),
+                      ),
                       delegate: SliverChildBuilderDelegate(
                         (context, index) => ProductCard(
                           product: products[index],
@@ -188,142 +181,179 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     );
   }
 
+  Color? _hexToColor(String? hex) {
+    if (hex == null || hex.isEmpty) return null;
+    try {
+      final clean = hex.replaceFirst('#', '');
+      if (clean.length != 6) return null;
+      return Color(int.parse('FF$clean', radix: 16));
+    } catch (_) {
+      return null;
+    }
+  }
+
   Widget _buildHeader(BuildContext context, UserProfile? profile) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        children: [
-          Stack(
+    final cs = Theme.of(context).colorScheme;
+    final accentColor = _hexToColor(profile?.shopAccentColor);
+    return Column(
+      children: [
+        if (profile != null &&
+            (profile.shopBanner.isNotEmpty ||
+                profile.shopBannerColor.isNotEmpty))
+          Container(
+            height: 140,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color:
+                  _hexToColor(profile.shopBannerColor) ?? cs.primaryContainer,
+              image: profile.shopBanner.isNotEmpty
+                  ? DecorationImage(
+                      image: CachedNetworkImageProvider(profile.shopBanner),
+                      fit: BoxFit.cover,
+                    )
+                  : null,
+            ),
+          ),
+        Container(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+          child: Column(
             children: [
-              CircleAvatar(
-                radius: 50,
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                backgroundImage: profile?.profileImage.isNotEmpty == true
-                    ? NetworkImage(profile!.profileImage)
-                    : null,
-                child: profile?.profileImage.isEmpty != false
-                    ? Text(
-                        (profile?.displayName.isNotEmpty == true
-                                ? profile!.displayName
-                                : widget.userName)[0]
-                            .toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 40,
-                          color: Theme.of(context).colorScheme.surface,
-                        ),
-                      )
-                    : null,
+              Stack(
+                children: [
+                  CircleAvatar(
+                    radius: 50,
+                    backgroundColor:
+                        accentColor ?? Theme.of(context).colorScheme.primary,
+                    backgroundImage: profile?.profileImage.isNotEmpty == true
+                        ? NetworkImage(profile!.profileImage)
+                        : null,
+                    child: profile?.profileImage.isEmpty != false
+                        ? Text(
+                            (profile?.displayName.isNotEmpty == true
+                                    ? profile!.displayName
+                                    : widget.userName)[0]
+                                .toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 40,
+                              color: Theme.of(context).colorScheme.surface,
+                            ),
+                          )
+                        : null,
+                  ),
+                  Positioned(
+                    right: 4,
+                    bottom: 4,
+                    child: StreamBuilder<bool>(
+                      stream: Stream.value(false),
+                      builder: (context, snap) {
+                        final online = snap.data ?? false;
+                        return Container(
+                          width: 16,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            color: online
+                                ? Theme.of(context).colorScheme.primary
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Theme.of(context).colorScheme.surface,
+                              width: 2,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
-              Positioned(
-                right: 4,
-                bottom: 4,
-                child: StreamBuilder<bool>(
-                  stream: Stream.value(false),
-                  builder: (context, snap) {
-                    final online = snap.data ?? false;
-                    return Container(
-                      width: 16,
-                      height: 16,
-                      decoration: BoxDecoration(
-                        color: online
-                            ? Theme.of(context).colorScheme.primary
-                            : Theme.of(context).colorScheme.onSurfaceVariant,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Theme.of(context).colorScheme.surface,
-                          width: 2,
+              const SizedBox(height: 12),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    profile?.displayName.isNotEmpty == true
+                        ? profile!.displayName
+                        : widget.userName,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (profile?.kycApproved == true)
+                    const VerifiedBadge(size: 16),
+                ],
+              ),
+              if (profile?.bio.isNotEmpty == true) ...[
+                const SizedBox(height: 4),
+                Text(
+                  profile!.bio,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: 14,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+              if (profile?.location.isNotEmpty == true) ...[
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.location_on,
+                      size: 16,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                    ),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        profile!.location,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                profile?.displayName.isNotEmpty == true
-                    ? profile!.displayName
-                    : widget.userName,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              if (profile?.kycApproved == true)
-                const VerifiedBadge(size: 16),
-            ],
-          ),
-          if (profile?.bio.isNotEmpty == true) ...[
-            const SizedBox(height: 4),
-            Text(
-              profile!.bio,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                fontSize: 14,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-          if (profile?.location.isNotEmpty == true) ...[
-            const SizedBox(height: 4),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.location_on,
-                  size: 16,
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                ),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    profile!.location,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
-                  ),
+                  ],
                 ),
               ],
-            ),
-          ],
-          if (profile?.phone.isNotEmpty == true) ...[
-            const SizedBox(height: 4),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.phone,
-                  size: 16,
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                ),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    PhoneUtils.formatForDisplay(profile!.phone),
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+              if (profile?.phone.isNotEmpty == true) ...[
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.phone,
+                      size: 16,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                     ),
-                  ),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        PhoneUtils.formatForDisplay(profile!.phone),
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
-            ),
-          ],
-          const SizedBox(height: 12),
-          _buildStats(context, profile),
-        ],
-      ),
+              const SizedBox(height: 12),
+              _buildStats(context, profile),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

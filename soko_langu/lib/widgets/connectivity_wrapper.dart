@@ -150,7 +150,7 @@ class _OfflineFallback extends StatelessWidget {
                 width: 96,
                 height: 96,
                 errorBuilder: (_, _, _) => Icon(
-                  Icons.wifi_off_rounded,
+                  Icons.wifi_off,
                   size: 80,
                   color: cs.onSurface.withValues(alpha: 0.3),
                 ),
@@ -228,7 +228,7 @@ class _OfflineBanner extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.wifi_off_rounded, size: 16, color: cs.onPrimary.withValues(alpha: 0.7)),
+          Icon(Icons.wifi_off, size: 16, color: cs.onPrimary.withValues(alpha: 0.7)),
           const SizedBox(width: 8),
           Text(
             context.tr('no_internet_connection_lower'),

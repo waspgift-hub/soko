@@ -5,6 +5,7 @@ class AudioItem {
   final String url;
   final String? imageUrl;
   final Duration duration;
+  final String? youtubeVideoId;
 
   const AudioItem({
     required this.id,
@@ -13,5 +14,6 @@ class AudioItem {
     required this.url,
     this.imageUrl,
     this.duration = Duration.zero,
+    this.youtubeVideoId,
   });
 }

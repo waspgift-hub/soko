@@ -5,7 +5,6 @@ import '../../models/flash_sale_model.dart';
 import '../../services/product_service.dart';
 import '../../services/soko_cache_manager.dart';
 import 'google_loading.dart';
-import 'glass_widget.dart';
 import '../extensions/context_tr.dart';
 import '../theme/app_colors.dart';
 
@@ -18,6 +17,7 @@ class ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return LayoutBuilder(
       builder: (context, constraints) {
         final cardWidth = constraints.maxWidth;
@@ -29,13 +29,19 @@ class ProductCard extends StatelessWidget {
         final padding = (8.0 * scale).clamp(6.0, 12.0);
         const radius = 15.0;
 
-        Widget card = AnimatedGlassWidget(
-          blurSigma: 10,
-          opacity: 0.55,
-          borderRadius: radius,
-          borderWidth: 1.2,
-          borderColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
-          delay: const Duration(milliseconds: 200),
+        Widget card = Container(
+          decoration: BoxDecoration(
+            color: cs.surface,
+            borderRadius: BorderRadius.circular(radius),
+            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -53,50 +59,32 @@ class ProductCard extends StatelessWidget {
                               memCacheHeight: 360,
                               fit: BoxFit.cover,
                               placeholder: (context, url) => Container(
-                                color: Theme.of(context).colorScheme.surfaceContainerLow,
-                                child: const Center(
-                                  child: GoogleLoading(size: 24, strokeWidth: 2),
-                                ),
+                                color: cs.surfaceContainerLow,
+                                child: const Center(child: GoogleLoading(size: 24, strokeWidth: 2)),
                               ),
                               errorWidget: (context, url, error) => Container(
-                                color: Theme.of(context).colorScheme.outlineVariant,
-                                child: Icon(
-                                  Icons.image,
-                                  size: 40,
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                ),
+                                color: cs.outlineVariant,
+                                child: Icon(Icons.image, size: 40, color: cs.onSurfaceVariant),
                               ),
                             ),
-                            _buildSellerBadge(context, badgeSize),
+                            _buildSellerBadge(context, badgeSize, cs),
                             if (flashSale != null)
                               Positioned(
-                                top: 8,
-                                right: 8,
+                                top: 8, right: 8,
                                 child: Container(
                                   padding: EdgeInsets.symmetric(horizontal: 6 * scale, vertical: 3 * scale),
                                   decoration: BoxDecoration(
-                                    color: Theme.of(context).colorScheme.error,
+                                    color: cs.error,
                                     borderRadius: BorderRadius.circular(10),
                                   ),
-                                  child: Text(
-                                    '-${flashSale!.discountPercent.toStringAsFixed(0)}%',
-                                    style: TextStyle(
-                                      color: Theme.of(context).colorScheme.surface,
-                                      fontSize: badgeSize,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                  child: Text('-${flashSale!.discountPercent.toStringAsFixed(0)}%',
+                                    style: TextStyle(color: cs.surface, fontSize: badgeSize, fontWeight: FontWeight.bold),
                                   ),
                                 ),
                               ),
                           ],
                         )
-                      : Center(
-                          child: Icon(
-                            Icons.image,
-                            size: 40,
-                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                          ),
-                        ),
+                      : Center(child: Icon(Icons.image, size: 40, color: cs.onSurface.withValues(alpha: 0.6))),
                 ),
               ),
               Padding(
@@ -104,59 +92,30 @@ class ProductCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      product.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: nameSize,
-                      ),
+                    Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: nameSize, color: cs.onSurface),
                     ),
                     SizedBox(height: 4 * scale),
                     if (flashSale != null) ...[
-                      Text(
-                        context.formatPrice(flashSale!.salePrice),
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                          fontWeight: FontWeight.bold,
-                          fontSize: priceSize,
-                        ),
+                      Text(context.formatPrice(flashSale!.salePrice),
+                        style: TextStyle(color: cs.error, fontWeight: FontWeight.w700, fontSize: priceSize),
                       ),
                       SizedBox(height: 2 * scale),
-                      Text(
-                        context.formatPrice(flashSale!.originalPrice),
-                        style: TextStyle(
-                          decoration: TextDecoration.lineThrough,
-                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-                          fontSize: smallSize,
-                        ),
+                      Text(context.formatPrice(flashSale!.originalPrice),
+                        style: TextStyle(decoration: TextDecoration.lineThrough, color: cs.onSurface.withValues(alpha: 0.5), fontSize: smallSize),
                       ),
                     ] else
-                      Text(
-                        context.formatPrice(product.price),
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: priceSize,
-                        ),
+                      Text(context.formatPrice(product.price),
+                        style: TextStyle(color: cs.primary, fontWeight: FontWeight.w700, fontSize: priceSize),
                       ),
                     SizedBox(height: 4 * scale),
                     Row(
                       children: [
-                        Icon(
-                          Icons.location_on,
-                          size: 12 * scale,
-                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                        ),
+                        Icon(Icons.location_on, size: 12 * scale, color: cs.onSurface.withValues(alpha: 0.5)),
                         SizedBox(width: 2 * scale),
                         Expanded(
-                          child: Text(
-                            product.location,
-                            style: TextStyle(
-                              fontSize: smallSize,
-                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                            ),
+                          child: Text(product.location,
+                            style: TextStyle(fontSize: smallSize, color: cs.onSurface.withValues(alpha: 0.5)),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -166,14 +125,10 @@ class ProductCard extends StatelessWidget {
                       SizedBox(height: 2 * scale),
                       Row(
                         children: [
-                          Icon(Icons.star, size: 12 * scale, color: Theme.of(context).colorScheme.tertiary),
+                          Icon(Icons.star, size: 12 * scale, color: cs.trendingOrange),
                           SizedBox(width: 2 * scale),
-                          Text(
-                            "${product.rating.toStringAsFixed(1)} (${product.reviewCount})",
-                            style: TextStyle(
-                              fontSize: smallSize,
-                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                            ),
+                          Text("${product.rating.toStringAsFixed(1)} (${product.reviewCount})",
+                            style: TextStyle(fontSize: smallSize, color: cs.onSurface.withValues(alpha: 0.5)),
                           ),
                         ],
                       ),
@@ -190,32 +145,25 @@ class ProductCard extends StatelessWidget {
     );
   }
 
-  Widget _buildSellerBadge(BuildContext context, double badgeSize) {
+  Widget _buildSellerBadge(BuildContext context, double badgeSize, ColorScheme cs) {
     return Stack(
       children: [
         if (product.isFeaturedValid)
           Positioned(
-            top: 8,
-            left: 8,
+            top: 8, left: 8,
             child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Theme.of(context).colorScheme.trendingOrange, Theme.of(context).colorScheme.trendingOrange.withValues(alpha: 0.7)],
-                ),
+                gradient: LinearGradient(colors: [cs.trendingOrange, cs.trendingOrange.withValues(alpha: 0.7)]),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.verified, size: badgeSize, color: Theme.of(context).colorScheme.surface),
-                  SizedBox(width: 3),
-                  Text(
-                    context.tr('featured'),
-                    style: TextStyle(color: Theme.of(context).colorScheme.surface,
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  Icon(Icons.verified, size: badgeSize, color: cs.surface),
+                  const SizedBox(width: 3),
+                  Text(context.tr('featured'),
+                    style: TextStyle(color: cs.surface, fontSize: 9, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -225,6 +173,3 @@ class ProductCard extends StatelessWidget {
     );
   }
 }
-
-
-

@@ -3,8 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/product_service.dart';
+import '../../services/product_search_service.dart';
+import '../../models/product_search_result.dart';
 import '../../services/user_service.dart';
 import '../../services/flash_sale_service.dart';
+import '../../services/search_history_service.dart';
 import '../../models/product_model.dart';
 import '../../models/flash_sale_model.dart';
 import '../../widgets/product_card.dart';
@@ -22,9 +25,12 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
   final ProductService _productService = ProductService();
   final UserService _userService = UserService();
   final FlashSaleService _flashSaleService = FlashSaleService();
+  final SearchHistoryService _historyService = SearchHistoryService();
+  final ProductSearchService _suggestionService = ProductSearchService();
   bool _loading = false;
   bool _hasSearched = false;
   bool _error = false;
@@ -32,37 +38,93 @@ class _SearchScreenState extends State<SearchScreen> {
   List<UserProfile>? _userResults;
   Map<String, FlashSale> _flashSales = {};
   StreamSubscription? _flashSub;
+  List<String> _searchHistory = [];
+
+  List<ProductSearchResult> _suggestions = [];
+  Timer? _suggestionDebounce;
 
   @override
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
+    _focusNode.addListener(_onFocusChanged);
     _flashSub = _flashSaleService.getActiveFlashSalesMap().listen((map) {
       if (mounted) setState(() => _flashSales = map);
     });
+    _loadHistory();
   }
 
   @override
   void dispose() {
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
+    _focusNode.removeListener(_onFocusChanged);
+    _focusNode.dispose();
     _flashSub?.cancel();
+    _suggestionDebounce?.cancel();
     super.dispose();
   }
 
+  Future<void> _loadHistory() async {
+    final history = await _historyService.getHistory();
+    if (mounted) {
+      setState(() {
+        _searchHistory = history;
+      });
+    }
+  }
+
+  void _onFocusChanged() {
+    if (_focusNode.hasFocus && _searchController.text.isEmpty && mounted) {
+      _loadHistory();
+      setState(() => _suggestions = []);
+    }
+  }
+
   void _onSearchChanged() {
-    if (_searchController.text.isEmpty) {
+    if (!_focusNode.hasFocus) return;
+    final query = _searchController.text.trim();
+    if (query.isEmpty) {
+      _loadHistory();
       setState(() {
         _hasSearched = false;
         _loading = false;
         _error = false;
+        _suggestions = [];
       });
+      return;
     }
+    _suggestionDebounce?.cancel();
+    _suggestionDebounce = Timer(const Duration(milliseconds: 300), () {
+      _fetchSuggestions(query);
+    });
+  }
+
+  Future<void> _fetchSuggestions(String query) async {
+    try {
+      final results = await _suggestionService.searchProducts(query);
+      if (mounted) {
+        setState(() => _suggestions = results.take(5).toList());
+      }
+    } catch (_) {}
+  }
+
+  void _selectQuery(String query) {
+    _searchController.text = query;
+    _searchController.selection = TextSelection.fromPosition(
+      TextPosition(offset: query.length),
+    );
+    _performSearch();
   }
 
   Future<void> _performSearch() async {
     final query = _searchController.text.trim();
     if (query.isEmpty) return;
+
+    await _historyService.addQuery(query);
+    _searchHistory.remove(query);
+    _searchHistory.insert(0, query);
+    if (_searchHistory.length > 10) _searchHistory = _searchHistory.sublist(0, 10);
 
     setState(() {
       _loading = true;
@@ -92,6 +154,40 @@ class _SearchScreenState extends State<SearchScreen> {
     }
   }
 
+  void _clearField() {
+    _searchController.clear();
+    _loadHistory();
+    setState(() {
+      _hasSearched = false;
+      _loading = false;
+      _error = false;
+      _lastResults = null;
+      _userResults = null;
+    });
+  }
+
+  Future<void> _removeHistoryItem(String query) async {
+    await _historyService.removeQuery(query);
+    if (mounted) {
+      setState(() => _searchHistory.remove(query));
+    }
+  }
+
+  Future<void> _clearAllHistory() async {
+    await _historyService.clearAll();
+    if (mounted) {
+      setState(() => _searchHistory.clear());
+    }
+  }
+
+  List<String> get _filteredHistory {
+    final q = _searchController.text.trim().toLowerCase();
+    if (q.isEmpty) return _searchHistory;
+    return _searchHistory
+        .where((h) => h.toLowerCase().contains(q))
+        .toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -104,6 +200,7 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
           child: TextField(
             controller: _searchController,
+            focusNode: _focusNode,
             autofocus: true,
             style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
             decoration: InputDecoration(
@@ -114,16 +211,7 @@ class _SearchScreenState extends State<SearchScreen> {
               suffixIcon: _searchController.text.isNotEmpty
                   ? IconButton(
                       icon: const Icon(Icons.clear),
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() {
-                          _hasSearched = false;
-                          _loading = false;
-                          _error = false;
-                          _lastResults = null;
-                          _userResults = null;
-                        });
-                      },
+                      onPressed: _clearField,
                     )
                   : null,
             ),
@@ -145,7 +233,17 @@ class _SearchScreenState extends State<SearchScreen> {
   Widget _buildBody() {
     if (_loading) return _buildLoadingState();
     if (_error) return _buildErrorState();
-    if (!_hasSearched) return _buildInitialState();
+    if (!_hasSearched) {
+      if (_focusNode.hasFocus) {
+        if (_searchController.text.isNotEmpty && _suggestions.isNotEmpty) {
+          return _buildSuggestionsPanel();
+        }
+        if (_searchController.text.isEmpty) {
+          return _buildHistoryPanel();
+        }
+      }
+      return _buildInitialState();
+    }
 
     final products = _lastResults ?? [];
     final users = _userResults ?? [];
@@ -154,9 +252,139 @@ class _SearchScreenState extends State<SearchScreen> {
     return _buildResults(users, products);
   }
 
+  Widget _buildHistoryPanel() {
+    final filtered = _filteredHistory;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (filtered.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  context.tr('recent_searches'),
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                TextButton.icon(
+                  onPressed: _clearAllHistory,
+                  icon: const Icon(Icons.delete_sweep, size: 18),
+                  label: Text(context.tr('clear_all')),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: filtered.length,
+              itemBuilder: (context, index) {
+                final query = filtered[index];
+                return ListTile(
+                  leading: Icon(
+                    Icons.history,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    size: 20,
+                  ),
+                  title: Text(query),
+                  onTap: () => _selectQuery(query),
+                  trailing: IconButton(
+                    icon: Icon(
+                      Icons.close,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                    onPressed: () => _removeHistoryItem(query),
+                  ),
+                );
+              },
+            ),
+          ),
+        ] else if (_searchController.text.isNotEmpty) ...[
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 48),
+              child: Column(
+                children: [
+                  Icon(Icons.search, size: 48, color: Theme.of(context).colorScheme.primary),
+                  const SizedBox(height: 12),
+                  Text(
+                    '${context.tr('search_for')} "${_searchController.text}"',
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: _performSearch,
+                    child: Text(context.tr('search')),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ] else ...[
+          Expanded(child: _buildInitialState()),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildSuggestionsPanel() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Text(
+            context.tr('suggestions'),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          ),
+        ),
+        Expanded(
+          child: ListView.builder(
+            itemCount: _suggestions.length,
+            itemBuilder: (context, index) {
+              final s = _suggestions[index];
+              return ListTile(
+                leading: Icon(
+                  Icons.search,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  size: 20,
+                ),
+                title: Text(s.productName),
+                subtitle: s.brand != null && s.brand!.isNotEmpty
+                    ? Text(s.brand!, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant))
+                    : null,
+                trailing: Text(
+                  context.formatPrice(s.price),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                onTap: () {
+                  _searchController.text = s.productName;
+                  _searchController.selection = TextSelection.fromPosition(
+                    TextPosition(offset: s.productName.length),
+                  );
+                  _performSearch();
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildLoadingState() {
     return SingleChildScrollView(
-      physics: AlwaysScrollableScrollPhysics(),
+      physics: const AlwaysScrollableScrollPhysics(),
       child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -182,7 +410,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Widget _buildInitialState() {
     return SingleChildScrollView(
-      physics: AlwaysScrollableScrollPhysics(),
+      physics: const AlwaysScrollableScrollPhysics(),
       child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -210,7 +438,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Widget _buildEmptyState() {
     return SingleChildScrollView(
-      physics: AlwaysScrollableScrollPhysics(),
+      physics: const AlwaysScrollableScrollPhysics(),
       child: Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -240,7 +468,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Widget _buildErrorState() {
     return SingleChildScrollView(
-      physics: AlwaysScrollableScrollPhysics(),
+      physics: const AlwaysScrollableScrollPhysics(),
       child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

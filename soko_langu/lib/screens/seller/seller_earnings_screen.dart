@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:async/async.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -284,7 +283,7 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
           const SizedBox(height: 6),
           _feeRow(
             context.tr('processing_fee'),
-            context.tr('clickpesa_fee_per_transaction'),
+            context.tr('mongike_fee_per_transaction'),
             cs,
             nf,
             deduct: true,

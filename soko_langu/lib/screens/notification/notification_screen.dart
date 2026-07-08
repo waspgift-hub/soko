@@ -139,7 +139,26 @@ class _NotificationScreenState extends State<NotificationScreen> {
   Scaffold _buildErrorScaffold() {
     return Scaffold(
       appBar: AppBar(title: Text(context.tr('notifications'))),
-      body: _emptyState(context),
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.cloud_off, size: 64, color: Theme.of(context).colorScheme.error),
+            const SizedBox(height: 16),
+            Text(
+              context.tr('trouble_connecting'),
+              style: const TextStyle(fontSize: 16),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () => setState(() {}),
+              icon: const Icon(Icons.refresh),
+              label: Text(context.tr('try_again')),
+            ),
+          ],
+        ),
+      ),
       bottomNavigationBar: const AdBanner(),
     );
   }
@@ -163,6 +182,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
         icon = Icons.shopping_bag; color = Colors.green;
       case 'boost':
         icon = Icons.rocket_launch; color = Colors.orange;
+      case 'comment':
+        icon = Icons.chat_bubble_outline; color = Colors.blueGrey;
+      case 'comment_reply':
+        icon = Icons.reply; color = Colors.teal;
       case 'flash_sale':
         icon = Icons.flash_on; color = Colors.amber;
       case 'escrow_release':
@@ -178,8 +201,6 @@ class _NotificationScreenState extends State<NotificationScreen> {
         icon = Icons.balance; color = Colors.teal;
       case 'delivery_confirmed':
         icon = Icons.check_circle; color = Colors.green;
-      case 'price_drop':
-        icon = Icons.trending_down; color = Colors.red;
       case 'bulk':
         icon = Icons.campaign; color = Colors.purple;
       default:
@@ -243,11 +264,18 @@ class _NotificationScreenState extends State<NotificationScreen> {
           case 'boost':
             context.push(AppRoutes.notifications);
             break;
+          case 'comment':
+          case 'comment_reply': {
+            final pid = rawData?['productId'] as String?;
+            if (pid != null) {
+              context.push('/product/$pid');
+            } else {
+              context.push(AppRoutes.notifications);
+            }
+            break;
+          }
           case 'flash_sale':
             context.push(AppRoutes.flashSale);
-            break;
-          case 'price_drop':
-            context.push(AppRoutes.notifications);
             break;
           case 'product':
             context.push(AppRoutes.notifications);

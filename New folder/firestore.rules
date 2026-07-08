@@ -11,7 +11,14 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.email == 'admin@soko-langu.com';
+      return isSignedIn() && (
+        request.auth.token.email == 'admin@soko-langu.com' ||
+        request.auth.token.email == 'admin@soko-vibe.com' ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true
+        )
+      );
     }
 
     // ─── USERS ──────────────────────────────────────────────
@@ -116,6 +123,37 @@ service cloud.firestore {
       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow create: if isSignedIn();
       allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // ─── CHAT ROOMS ───────────────────────────────────────────
+    match /chat_rooms/{roomId} {
+      allow read: if isSignedIn() && (
+        request.auth.uid in resource.data.participants ||
+        isAdmin()
+      );
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasAll(['participants'])
+        && request.auth.uid in request.resource.data.participants;
+      allow update: if isSignedIn() && (
+        request.auth.uid in resource.data.participants ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        allow read: if isSignedIn() && (
+          request.auth.uid in get(/databases/$(database)/documents/chat_rooms/$(roomId)).data.participants ||
+          isAdmin()
+        );
+        allow create: if isSignedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/chat_rooms/$(roomId)).data.participants
+          && (request.resource.data.sender_id == request.auth.uid || request.resource.data.senderId == request.auth.uid);
+        allow update: if isSignedIn() && (
+          request.auth.uid in get(/databases/$(database)/documents/chat_rooms/$(roomId)).data.participants ||
+          isAdmin()
+        );
+        allow delete: if isAdmin();
+      }
     }
 
     // ─── FLASH SALES ─────────────────────────────────────────
@@ -249,9 +287,17 @@ service cloud.firestore {
     }
 
     match /transactions/{txId} {
-      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAdmin();
+      allow read: if isSignedIn() && (
+        resource.data.buyerId == request.auth.uid ||
+        resource.data.sellerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && request.resource.data.buyerId == request.auth.uid;
+      allow update: if isSignedIn() && (
+        resource.data.buyerId == request.auth.uid ||
+        resource.data.sellerId == request.auth.uid ||
+        isAdmin()
+      );
       allow delete: if isAdmin();
     }
 
@@ -260,6 +306,35 @@ service cloud.firestore {
       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isAdmin();
+    }
+
+    // ─── PRODUCT ANALYTICS (views & impressions) ────────────
+    match /product_analytics/{productId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+
+      match /views/{viewId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    match /boost_analytics/{productId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+
+      match /impressions/{impressionId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    // ─── APP SETTINGS ────────────────────────────────────────
+    match /app_settings/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
 
     // ─── ADMIN EXPORTS ──────────────────────────────────────

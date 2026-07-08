@@ -1,10 +1,13 @@
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/comment_model.dart';
 import '../utils/network_error.dart';
+import 'notification_service.dart';
 
 class CommentService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final NotificationService _notif = NotificationService();
 
   CollectionReference _commentsRef(String productId) =>
       _db.collection('products').doc(productId).collection('comments');
@@ -29,6 +32,8 @@ class CommentService {
       'createdAt': FieldValue.serverTimestamp(),
       'replyCount': 0,
     });
+
+    _notifySeller(productId, user);
   }
 
   Future<void> addReply({
@@ -51,6 +56,60 @@ class CommentService {
     await _commentsRef(
       productId,
     ).doc(commentId).update({'replyCount': FieldValue.increment(1)});
+
+    _notifyCommentAuthor(productId, commentId, user, text);
+  }
+
+  Future<void> _notifySeller(String productId, User user) async {
+    try {
+      final productDoc = await _db.collection('products').doc(productId).get();
+      if (!productDoc.exists) return;
+      final sellerId = productDoc.data()?['sellerId'] as String?;
+      if (sellerId == null || sellerId == user.uid) return;
+      final name = user.displayName ?? user.email ?? 'Someone';
+      _notif.sendNotification(
+        userId: sellerId,
+        title: 'New Comment on your listing!',
+        body: '$name commented on your product',
+        data: {
+          'type': 'comment',
+          'productId': productId,
+        },
+      );
+    } catch (e) {
+      debugPrint('CommentService _notifySeller: $e');
+    }
+  }
+
+  Future<void> _notifyCommentAuthor(
+    String productId,
+    String commentId,
+    User user,
+    String replyText,
+  ) async {
+    try {
+      final commentSnap =
+          await _commentsRef(productId).doc(commentId).get();
+      if (!commentSnap.exists) return;
+      final commentData = commentSnap.data() as Map<String, dynamic>?;
+      final authorId = commentData?['userId'] as String?;
+      if (authorId == null || authorId == user.uid) return;
+      final name = user.displayName ?? user.email ?? 'Someone';
+      final truncated =
+          replyText.length > 80 ? '${replyText.substring(0, 80)}…' : replyText;
+      _notif.sendNotification(
+        userId: authorId,
+        title: 'New reply to your comment!',
+        body: '$name replied: "$truncated"',
+        data: {
+          'type': 'comment_reply',
+          'productId': productId,
+          'commentId': commentId,
+        },
+      );
+    } catch (e) {
+      debugPrint('CommentService _notifyCommentAuthor: $e');
+    }
   }
 
   Future<void> deleteComment({

@@ -42,9 +42,16 @@ class _KycScreenState extends State<KycScreen> {
   Future<void> _loadStatus() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    Map<String, dynamic>? kyc;
+    try {
+      final result = await KycService.getKycStatus(user.uid);
+      kyc = result?['kyc'] as Map<String, dynamic>?;
+    } catch (_) {}
+    if (kyc == null) {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      kyc = doc.data()?['kyc'] as Map<String, dynamic>?;
+    }
     if (!mounted) return;
-    final kyc = doc.data()?['kyc'] as Map<String, dynamic>?;
     setState(() {
       _status = kyc?['status'] as String? ?? 'none';
       _reviewNotes = kyc?['reviewNotes'] as String?;

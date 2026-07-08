@@ -29,8 +29,12 @@ class BoostService {
       );
 
       if (resp.statusCode != 200) {
-        final body = jsonDecode(resp.body);
-        throw Exception(body['error'] ?? 'Boost payment failed');
+        try {
+          final body = jsonDecode(resp.body);
+          throw Exception(body['error'] ?? body['message'] ?? 'Boost payment failed');
+        } on FormatException {
+          throw Exception('Server error (${resp.statusCode}). Tafadhali jaribu tena.');
+        }
       }
 
       return jsonDecode(resp.body) as Map<String, dynamic>;

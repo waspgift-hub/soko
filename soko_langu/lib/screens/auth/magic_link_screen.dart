@@ -64,10 +64,12 @@ class _MagicLinkScreenState extends State<MagicLinkScreen> {
         return Stack(
           children: [
             AuthPageShell(
-              title: 'Soko Vibe',
+              title: context.tr('app_name'),
               subtitle: isSent
-                  ? 'Link imetumwa kwenye ${_emailController.text.trim()}'
-                  : 'Ingia kwa link ya barua pepe',
+                  ? context
+                        .tr('link_sent_to')
+                        .replaceAll('{0}', _emailController.text.trim())
+                  : context.tr('login_with_email_link'),
               footer: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -117,14 +119,14 @@ class _MagicLinkScreenState extends State<MagicLinkScreen> {
           ),
           const SizedBox(height: 20),
           AuthPrimaryButton(
-            label: 'Tuma Link',
+            label: context.tr('send_link'),
             onPressed: _sendLink,
           ),
           const SizedBox(height: 12),
           TextButton(
             onPressed: () => context.pop(),
             child: Text(
-              'Rudi kwenye kuingia',
+              context.tr('back_to_login'),
               style: TextStyle(color: cs.onSurface.withValues(alpha: 0.7)),
             ),
           ),
@@ -137,30 +139,34 @@ class _MagicLinkScreenState extends State<MagicLinkScreen> {
     final email = _emailController.text.trim();
     return Column(
       children: [
-        Icon(Icons.mark_email_unread, size: 64, color: Theme.of(context).colorScheme.primary),
+        Icon(
+          Icons.mark_email_unread,
+          size: 64,
+          color: Theme.of(context).colorScheme.primary,
+        ),
         const SizedBox(height: 16),
         Text(
-          'Angalia barua pepe yako',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
+          context.tr('check_your_email'),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 8),
         Text(
-          'Tumetuma link ya kuingia kwenye $email. Bonyeza link kwenye barua pepe yako kuingia.',
+          context.tr('magic_link_sent_body').replaceAll('{0}', email),
           style: Theme.of(context).textTheme.bodyMedium,
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 24),
         AuthPrimaryButton(
-          label: 'Tuma Link Tena',
+          label: context.tr('resend_link'),
           onPressed: _sendLink,
         ),
         const SizedBox(height: 12),
         TextButton(
           onPressed: () => context.read<AuthNotifier>().resetMagicLink(),
-          child: const Text('Badilisha barua pepe'),
+          child: Text(context.tr('change_email')),
         ),
       ],
     );

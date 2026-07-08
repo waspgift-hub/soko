@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
-import '../../services/clickpesa_service.dart';
+import '../../services/mongike_service.dart';
 import '../../services/api_config.dart';
 import '../../utils/phone_utils.dart';
 import '../../extensions/context_tr.dart';
@@ -25,14 +25,13 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
   bool _withdrawing = false;
   bool _loading = true;
 
-  double _actualAdRevenue = 0;
   double _totalCommissions = 0;
   double _totalBoostRevenue = 0;
   double _totalAdminBalance = 0;
   double _availableBalance = 0;
   double _totalProcessed = 0;
   double _totalPayouts = 0;
-  double _clickPesaBalance = 0;
+  double _mongikeBalance = 0;
   double _totalAdminWithdrawn = 0;
 
   @override
@@ -50,7 +49,7 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
   Future<void> _loadFinanceData() async {
     setState(() => _loading = true);
     try {
-      // Try API first (gives actual ClickPesa balance if available)
+      // Try API first (gives actual Mongike balance if available)
       final token = await FirebaseAuth.instance.currentUser?.getIdToken();
       if (token != null) {
         final resp = await http.get(
@@ -64,7 +63,6 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
           final result = jsonDecode(resp.body);
           if (result['success'] == true) {
             if (mounted) setState(() {
-              _actualAdRevenue = (result['actualAdRevenue'] as num?)?.toDouble() ?? 0;
               _totalCommissions = (result['totalCommissions'] as num?)?.toDouble() ?? 0;
               _totalBoostRevenue = (result['totalBoostRevenue'] as num?)?.toDouble() ?? 0;
               _totalAdminBalance = (result['totalAdminBalance'] as num?)?.toDouble() ?? 0;
@@ -73,7 +71,7 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
               if (_availableBalance < 0) _availableBalance = 0;
               _totalProcessed = (result['totalProcessed'] as num?)?.toDouble() ?? 0;
               _totalPayouts = (result['totalPaidOut'] as num?)?.toDouble() ?? 0;
-              _clickPesaBalance = _availableBalance;
+              _mongikeBalance = _availableBalance;
             });
             if (mounted) setState(() => _loading = false);
             return;
@@ -84,16 +82,6 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
 
     // Fallback: Firestore direct calculations
     try {
-      double actualAd = 0;
-      final admobSnap = await FirebaseFirestore.instance
-          .collection('admob_earnings')
-          .orderBy('month', descending: true)
-          .limit(1)
-          .get();
-      if (admobSnap.docs.isNotEmpty) {
-        actualAd = (admobSnap.docs.first.data()['amount'] as num?)?.toDouble() ?? 0;
-      }
-
       double commissions = 0;
       double boostRevenue = 0;
       final revSnap = await FirebaseFirestore.instance
@@ -140,14 +128,13 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
         }
       }
 
-      final totalBalance = actualAd + commissions + boostRevenue;
-      double clickPesaBalanceCalc = processed - (payouts + adminPayouts);
-      if (clickPesaBalanceCalc < 0) clickPesaBalanceCalc = 0;
+      final totalBalance = commissions + boostRevenue;
+      double mongikeBalanceCalc = processed - (payouts + adminPayouts);
+      if (mongikeBalanceCalc < 0) mongikeBalanceCalc = 0;
       final available = totalBalance - adminWithdrawn;
 
       if (mounted) {
         setState(() {
-          _actualAdRevenue = actualAd;
           _totalCommissions = commissions;
           _totalBoostRevenue = boostRevenue;
           _totalAdminBalance = totalBalance;
@@ -155,66 +142,11 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
           _availableBalance = available < 0 ? 0 : available;
           _totalProcessed = processed;
           _totalPayouts = payouts + adminPayouts;
-          _clickPesaBalance = clickPesaBalanceCalc;
+          _mongikeBalance = mongikeBalanceCalc;
         });
       }
     } catch (_) {}
     if (mounted) setState(() => _loading = false);
-  }
-
-  Future<void> _inputActualAdRevenue() async {
-    final ctrl = TextEditingController();
-    final amount = await showDialog<double>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Ingiza Mapato Halisi ya Google AdMob'),
-        content: TextField(
-          controller: ctrl,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            hintText: 'Kiasi halisi TZS',
-            border: OutlineInputBorder(),
-            prefixText: 'TZS ',
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.tr('cancel'))),
-          ElevatedButton(
-            onPressed: () {
-              final v = double.tryParse(ctrl.text);
-              if (v != null && v >= 0) Navigator.pop(ctx, v);
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-    if (amount == null) return;
-    final now = DateTime.now();
-    final month = '${now.month}_${now.year}';
-    try {
-      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-      final resp = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/admin/admob-revenue'),
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({'amount': amount, 'month': month}),
-      );
-      if (resp.statusCode != 200) {
-        throw Exception(jsonDecode(resp.body)['error'] ?? 'Failed to save');
-      }
-    } catch (e) {
-      if (mounted) _showError('$e');
-      return;
-    }
-    _loadFinanceData();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('AdMob revenue saved: TZS ${amount.round()}')),
-      );
-    }
   }
 
   Future<void> _withdraw() async {
@@ -230,9 +162,9 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
 
     setState(() => _withdrawing = true);
     try {
-                  final result = await ClickPesaService.adminWithdraw(
+                  final result = await MongikeService.adminWithdraw(
         userId: uid,
-        amount: _availableBalance.round(),
+        amount: _availableBalance.round().toDouble(),
         phone: phone,
       );
       
@@ -274,7 +206,7 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
                   const SizedBox(height: 16),
                   _buildBreakdownCard(cs, nf),
                   const SizedBox(height: 16),
-                  _buildClickPesaCard(cs, nf),
+                  _buildMongikeCard(cs, nf),
                   const SizedBox(height: 20),
                   _buildWithdrawCard(cs, nf),
                   const SizedBox(height: 20),
@@ -342,20 +274,8 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(context.tr('revenue_breakdown'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                TextButton.icon(
-                  onPressed: _inputActualAdRevenue,
-                  icon: const Icon(Icons.edit, size: 16),
-                  label: Text(context.tr('enter_actual'), style: const TextStyle(fontSize: 12)),
-                ),
-              ],
-            ),
+            Text(context.tr('revenue_breakdown'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const Divider(),
-            _row(context.tr('actual_ad_revenue'), _actualAdRevenue, cs.tertiary, nf),
-            const SizedBox(height: 8),
             _row(context.tr('sales_commissions'), _totalCommissions, cs.primary, nf),
             const SizedBox(height: 4),
             _row(context.tr('boost_revenue'), _totalBoostRevenue, Colors.orange, nf),
@@ -372,7 +292,7 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
     );
   }
 
-  Widget _buildClickPesaCard(ColorScheme cs, NumberFormat nf) {
+  Widget _buildMongikeCard(ColorScheme cs, NumberFormat nf) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -387,14 +307,14 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
               ],
             ),
             const Divider(),
-            _row('Jumla iliyopitia ClickPesa', _totalProcessed, cs.tertiary, nf),
+            _row('Jumla iliyopitia Mongike', _totalProcessed, cs.tertiary, nf),
             const SizedBox(height: 8),
             _row('Malipo yaliyotolewa', _totalPayouts, cs.error, nf),
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Divider(thickness: 2),
             ),
-            _row('Salio', _clickPesaBalance, cs.primary, nf, bold: true),
+            _row('Salio', _mongikeBalance, cs.primary, nf, bold: true),
           ],
         ),
       ),

@@ -13,7 +13,7 @@ class ExchangeRateService {
 
   static const String _ratesKey = 'cached_exchange_rates';
   static const String _lastFetchKey = 'cached_exchange_rates_time';
-  static const Duration _cacheDuration = Duration(hours: 1);
+  static const Duration _cacheDuration = Duration(minutes: 15);
 
   bool get isReady => _rates != null;
 

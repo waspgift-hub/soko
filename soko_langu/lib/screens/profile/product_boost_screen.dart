@@ -10,7 +10,11 @@ import '../../models/boost_tier.dart';
 import '../../services/boost_service.dart';
 import '../../services/api_config.dart';
 import '../../extensions/context_tr.dart';
+import '../../services/sms_notification_service.dart';
+import '../../models/boost_receipt.dart';
+import '../../models/payment_model.dart';
 import '../../widgets/google_loading.dart';
+import '../../widgets/boost_receipt_card.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 
@@ -285,19 +289,46 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
                         ? Theme.of(context).colorScheme.boostSilver.withValues(alpha: 0.06)
                         : Theme.of(context).colorScheme.boostBronze.withValues(alpha: 0.06),
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _selectedTier == BoostTier.gold
+                      ? Theme.of(context).colorScheme.boostGold.withValues(alpha: 0.3)
+                      : _selectedTier == BoostTier.silver
+                          ? Theme.of(context).colorScheme.boostSilver.withValues(alpha: 0.3)
+                          : Theme.of(context).colorScheme.boostBronze.withValues(alpha: 0.3),
+                ),
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.info_outline, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      context.tr('payment_after_continue'),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? Theme.of(context).colorScheme.onSurfaceVariant : Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+                  Text(
+                    context.tr('order_summary'),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  _summaryRow(context.tr('plan'), _selectedTier!.displayName, Theme.of(context).colorScheme.onSurfaceVariant),
+                  const SizedBox(height: 4),
+                  _summaryRow(context.tr('duration'), '${_selectedTier!.durationDays} ${context.tr('days')}', Theme.of(context).colorScheme.onSurfaceVariant),
+                  const SizedBox(height: 4),
+                  _summaryRow(context.tr('total'), 'TZS ${_nf.format(_selectedTier!.priceTzs)}', Theme.of(context).colorScheme.primary),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.info_outline, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          context.tr('payment_after_continue'),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark ? Theme.of(context).colorScheme.onSurfaceVariant : Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -322,7 +353,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
                 : Text(
                     _selectedTier == null
                         ? context.tr('select_package')
-                        : 'Continue — TZS ${_nf.format(_selectedTier!.priceTzs)}',
+                        : '${context.tr("proceed_to_checkout")} — TZS ${_nf.format(_selectedTier!.priceTzs)}',
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -330,6 +361,16 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
                   ),
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _summaryRow(String label, String value, Color valueColor) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: valueColor)),
       ],
     );
   }
@@ -464,26 +505,8 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
         productId: widget.product.id,
         tier: _selectedTier!,
       );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '${_selectedTier!.displayName} boost activated for ${_selectedTier!.durationDays} days!',
-          ),
-          backgroundColor: Theme.of(context).colorScheme.primary,
-        ),
-      );
     } catch (e) {
       debugPrint('Client boost failed, server webhook will handle it: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            context.tr('boosting_will_complete'),
-          ),
-          backgroundColor: Theme.of(context).colorScheme.primary,
-        ),
-      );
     }
 
     // Notify all users about this boost
@@ -494,7 +517,49 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
       sellerId: user?.uid,
     );
 
-    if (mounted) context.go(AppRoutes.sellerDashboard);
+    // SMS seller about boost payment (server also sends via callback)
+    final sellerPhone = widget.product.sellerPhone ?? '';
+    final expiry = DateTime.now().add(Duration(days: _selectedTier!.durationDays));
+    if (sellerPhone.isNotEmpty) {
+      SmsNotificationService.notifyBoostPaid(
+        sellerPhone: sellerPhone,
+        amountPaid: _selectedTier!.priceTzs.toString(),
+        boostExpiryDate: DateFormat('dd/MM/yyyy').format(expiry),
+      );
+    }
+
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Boost Imekamilika'),
+        content: SingleChildScrollView(
+          child: BoostReceiptCard(
+            receipt: BoostReceipt(
+              boostTransactionId: '',
+              sellerName: widget.product.sellerName,
+              productId: widget.product.id,
+              boostPackageName: _selectedTier!.displayName,
+              amountPaid: _selectedTier!.priceTzs.toDouble(),
+              paymentMethod: 'Mongike',
+              timestamp: DateTime.now(),
+              boostExpiryDate: expiry,
+              paymentStatus: PaymentStatus.completed,
+            ),
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              if (mounted) context.go(AppRoutes.sellerDashboard);
+            },
+            child: Text(context.tr('continue')),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showError(String msg) {

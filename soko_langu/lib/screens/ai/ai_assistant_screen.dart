@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../theme/app_colors.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../utils/phone_utils.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -13,6 +13,7 @@ import '../../models/product_model.dart';
 import '../../models/product_search_result.dart';
 import '../../extensions/context_tr.dart';
 import '../../utils/chat_utils.dart';
+import '../../widgets/staggered_fade_in.dart';
 
 class AiAssistantScreen extends StatefulWidget {
   const AiAssistantScreen({super.key});
@@ -224,10 +225,8 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
     _controller.clear();
 
     try {
-      // STEP 1: Search products FIRST
       final products = await _searcher.searchProducts(text);
 
-      // STEP 2: Build rich context from real data
       String? richContext;
       if (products.isNotEmpty) {
         richContext = await _buildRichContext(products);
@@ -339,6 +338,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
         title: Column(
@@ -346,26 +346,22 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.smart_toy_outlined, color: Theme.of(context).colorScheme.primary, size: 22),
+                Icon(Icons.smart_toy_outlined, color: cs.primary, size: 22),
                 const SizedBox(width: 8),
-                Text('AI Dalali', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold, fontSize: 18)),
+                Text('AI Dalali', style: GoogleFonts.spaceGrotesk(color: cs.onSurface, fontWeight: FontWeight.w600, fontSize: 18)),
               ],
             ),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary,
-                    shape: BoxShape.circle,
-                  ),
+                  width: 6, height: 6,
+                  decoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle),
                 ),
                 const SizedBox(width: 5),
                 Text(
                   context.tr('online'),
-                  style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 11, fontWeight: FontWeight.w500),
+                  style: GoogleFonts.jetBrainsMono(color: cs.onSurfaceVariant, fontSize: 10, fontWeight: FontWeight.w500, letterSpacing: 0.3),
                 ),
               ],
             ),
@@ -381,7 +377,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               itemCount: _messages.length + (_isLoading ? 1 : 0),
               itemBuilder: (context, index) {
                 if (_isLoading && index == _messages.length) {
@@ -389,73 +385,100 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
                 }
                 final msg = _messages[index];
                 if (msg.products != null && msg.products!.isNotEmpty) {
-                  return _buildProductResults(msg);
+                  return StaggeredFadeIn(
+                    index: index,
+                    child: _buildProductResults(msg),
+                  );
                 }
-                return _buildMessageBubble(msg);
+                return StaggeredFadeIn(
+                  index: index,
+                  child: _buildMessageBubble(msg),
+                );
               },
             ),
           ),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Theme.of(context).scaffoldBackgroundColor,
-              boxShadow: [BoxShadow(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -5))],
-            ),
-            child: SafeArea(
-              child: Row(
-                  children: [
-                  _buildMicButton(),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: _sendMessage,
-                      style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-                      decoration: InputDecoration(
-                        hintText: context.tr('ai_chat_hint'),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
-                          borderSide: BorderSide.none,
-                        ),
-                        filled: true,
-                        fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  CircleAvatar(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    child: IconButton(
-                      icon: Icon(Icons.send_rounded, color: Theme.of(context).colorScheme.surface, size: 20),
-                      onPressed: () => _sendMessage(_controller.text),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          _buildInputBar(cs),
         ],
       ),
     );
   }
 
-  Widget _buildMicButton() {
+  Widget _buildInputBar(ColorScheme cs) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.05))),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            _buildMicButton(cs),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: _controller,
+                textInputAction: TextInputAction.send,
+                onSubmitted: _sendMessage,
+                style: TextStyle(color: cs.onSurface, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: context.tr('ai_chat_hint'),
+                  hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.4), fontSize: 14),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(24),
+                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(24),
+                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(24),
+                    borderSide: BorderSide(color: cs.primary.withValues(alpha: 0.3)),
+                  ),
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.04),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              decoration: BoxDecoration(
+                color: cs.primary,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+              ),
+              child: IconButton(
+                icon: Icon(Icons.send_rounded, color: cs.onPrimary, size: 18),
+                onPressed: () => _sendMessage(_controller.text),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMicButton(ColorScheme cs) {
     return GestureDetector(
       onTap: _toggleRecording,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeInOut,
+        width: 44, height: 44,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: _isRecording ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.outlineVariant,
+          color: _isRecording ? cs.error : Colors.white.withValues(alpha: 0.06),
+          border: Border.all(
+            color: _isRecording ? cs.error : Colors.white.withValues(alpha: 0.05),
+          ),
         ),
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 200),
           child: _isRecording
-               ? Icon(Icons.mic_rounded, color: Theme.of(context).colorScheme.surface, size: 20, key: ValueKey('recording'))
-              : Icon(Icons.mic_none_rounded, color: Theme.of(context).colorScheme.primary, size: 20, key: ValueKey('idle')),
+            ? Icon(Icons.mic_rounded, color: cs.onError, size: 20, key: const ValueKey('recording'))
+            : Icon(Icons.mic_none_rounded, color: cs.onSurface.withValues(alpha: 0.6), size: 20, key: const ValueKey('idle')),
         ),
       ),
     );
@@ -464,16 +487,17 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
   Widget _buildSellerTip() {
     final lowPerf = _sellerProducts.where((p) => p.soldCount == 0 && p.viewCount < 20).toList();
     if (lowPerf.isEmpty) return const SizedBox.shrink();
+    final cs = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [Theme.of(context).colorScheme.trendingOrange, Theme.of(context).colorScheme.trendingOrange.withValues(alpha: 0.7)]),
+        gradient: LinearGradient(colors: [cs.primary, cs.primary.withValues(alpha: 0.7)]),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
-          Icon(Icons.lightbulb_outline, color: Theme.of(context).colorScheme.surface, size: 22),
+          Icon(Icons.lightbulb_outline, color: cs.onPrimary, size: 22),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -481,12 +505,12 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
               children: [
                 Text(
                   context.tr('ai_tip_title'),
-                  style: TextStyle(color: Theme.of(context).colorScheme.surface, fontWeight: FontWeight.bold, fontSize: 13),
+                  style: GoogleFonts.spaceGrotesk(color: cs.onPrimary, fontWeight: FontWeight.w600, fontSize: 13),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   context.tr('ai_seller_tip').replaceAll('{0}', lowPerf.take(3).map((p) => p.name).join(', ')),
-                  style: TextStyle(color: Theme.of(context).colorScheme.surface, fontSize: 12),
+                  style: TextStyle(color: cs.onPrimary.withValues(alpha: 0.9), fontSize: 12),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -495,8 +519,8 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
           ),
           TextButton(
             onPressed: () => setState(() => _showSellerTip = false),
-            style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.surface, padding: const EdgeInsets.all(4)),
-            child: Text(context.tr('ok'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+            style: TextButton.styleFrom(foregroundColor: cs.onPrimary, padding: const EdgeInsets.all(4)),
+            child: Text(context.tr('ok'), style: GoogleFonts.jetBrainsMono(fontWeight: FontWeight.w600, fontSize: 11, color: cs.onPrimary)),
           ),
         ],
       ),
@@ -510,7 +534,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
         if (msg.text.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: _buildBubble(msg.text, false),
+            child: _buildAiBubble(msg.text),
           ),
         ...msg.products!.map((p) => _buildProductCard(p)),
       ],
@@ -518,38 +542,43 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
   }
 
   Widget _buildProductCard(ProductSearchResult product) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        color: Colors.white.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.35)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.verified_rounded, color: Theme.of(context).colorScheme.surface, size: 14),
-                const SizedBox(width: 4),
-                Text(
-                  context.tr('in_soko_langu'),
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.surface,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
                 ),
-              ],
-            ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.verified_rounded, color: cs.primary, size: 12),
+                    const SizedBox(width: 4),
+                    Text(
+                      context.tr('in_soko_langu'),
+                      style: GoogleFonts.jetBrainsMono(
+                        color: cs.primary, fontSize: 10,
+                        fontWeight: FontWeight.w600, letterSpacing: 0.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
           Row(
@@ -565,43 +594,47 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(product.productName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    Text(product.productName, style: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w600, fontSize: 15, color: cs.onSurface)),
                     if (product.brand != null && product.brand!.isNotEmpty)
-                      Text(product.brand!, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(product.brand!, style: GoogleFonts.jetBrainsMono(color: cs.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 10, letterSpacing: 0.2)),
+                      ),
                   ],
                 ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, borderRadius: BorderRadius.circular(12)),
-                child: Text(context.formatPrice(product.price), style: TextStyle(color: Theme.of(context).colorScheme.surface, fontWeight: FontWeight.bold, fontSize: 13)),
               ),
             ],
           ),
           if (product.description.isNotEmpty) ...[
             const SizedBox(height: 6),
-            Text(product.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.85), fontSize: 13)),
+            Text(product.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.7), fontSize: 13)),
           ],
           const SizedBox(height: 8),
-          if (product.category.isNotEmpty) _infoRow(Icons.category, product.category),
-          _infoRow(Icons.person, product.sellerName),
-          if (product.sellerPhone.isNotEmpty) _infoRow(Icons.phone, PhoneUtils.formatForDisplay(product.sellerPhone)),
-          _infoRow(Icons.location_on, product.location),
-          if (product.rating > 0) _infoRow(Icons.star, '${product.rating.toStringAsFixed(1)} (${product.reviewCount})'),
-          if (product.condition != 'new') _infoRow(Icons.info_outline, 'Hali: ${product.condition}'),
-          if (product.stock > 0) _infoRow(Icons.inventory, 'Stock: ${product.stock}'),
-          if (product.soldCount > 0) _infoRow(Icons.trending_up, 'Imeuzwa: ${product.soldCount}'),
+          if (product.category.isNotEmpty) _infoRow(Icons.category_outlined, product.category, cs),
+          _infoRow(Icons.person_outline, product.sellerName, cs),
+          if (product.sellerPhone.isNotEmpty) _infoRow(Icons.phone_outlined, PhoneUtils.formatForDisplay(product.sellerPhone), cs),
+          _infoRow(Icons.location_on_outlined, product.location, cs),
+          if (product.rating > 0) _infoRow(Icons.star_outline, '${product.rating.toStringAsFixed(1)} (${product.reviewCount})', cs),
+          if (product.condition != 'new') _infoRow(Icons.info_outline, 'Hali: ${product.condition}', cs),
+          if (product.stock > 0) _infoRow(Icons.inventory_2_outlined, 'Stock: ${product.stock}', cs),
+          if (product.soldCount > 0) _infoRow(Icons.trending_up, 'Imeuzwa: ${product.soldCount}', cs),
           const SizedBox(height: 10),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: () => _chatWithSeller(product),
-              icon: const Icon(Icons.chat_outlined, size: 18),
-              label: Text(context.tr('contact_seller')),
+              icon: const Icon(Icons.chat_outlined, size: 16),
+              label: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Text(context.tr('contact_seller'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.whatsappGreen,
-                foregroundColor: Theme.of(context).colorScheme.surface,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                backgroundColor: cs.primary,
+                foregroundColor: cs.onPrimary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+                ),
                 padding: const EdgeInsets.symmetric(vertical: 12),
               ),
             ),
@@ -611,14 +644,14 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
     );
   }
 
-  Widget _infoRow(IconData icon, String text) {
+  Widget _infoRow(IconData icon, String text, ColorScheme cs) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
+          Icon(icon, size: 14, color: cs.onSurface.withValues(alpha: 0.4)),
           const SizedBox(width: 6),
-          Expanded(child: Text(text, style: const TextStyle(fontSize: 13))),
+          Expanded(child: Text(text, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12))),
         ],
       ),
     );
@@ -628,39 +661,164 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
     return Align(
       alignment: msg.isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: msg.isImage
-          ? Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, borderRadius: BorderRadius.circular(16)),
-              child: Icon(Icons.image_outlined, color: Theme.of(context).colorScheme.surface, size: 32),
-            )
+          ? _buildMediaBubble(Icons.image_outlined)
           : msg.isAudio
-              ? Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, borderRadius: BorderRadius.circular(16)),
-                  child: Icon(Icons.audio_file_rounded, color: Theme.of(context).colorScheme.surface, size: 32),
-                )
-              : _buildBubble(msg.text, msg.isUser),
+              ? _buildMediaBubble(Icons.audio_file_rounded)
+              : StaggeredFadeIn(
+                  index: 0,
+                  child: msg.isUser
+                      ? _buildUserBubble(msg.text)
+                      : _buildAiBubble(msg.text),
+                ),
     );
   }
 
-  Widget _buildBubble(String text, bool isUser) {
+  Widget _buildMediaBubble(IconData icon) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+      ),
+      child: Icon(icon, color: cs.onSurface.withValues(alpha: 0.5), size: 28),
+    );
+  }
+
+  Widget _buildUserBubble(String text) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
       decoration: BoxDecoration(
-        color: isUser ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.only(
-          topLeft: const Radius.circular(20),
-          topRight: const Radius.circular(20),
-          bottomLeft: isUser ? const Radius.circular(20) : const Radius.circular(4),
-          bottomRight: isUser ? const Radius.circular(4) : const Radius.circular(20),
+        color: cs.primary.withValues(alpha: 0.15),
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(20),
+          topRight: Radius.circular(20),
+          bottomLeft: Radius.circular(20),
+          bottomRight: Radius.circular(4),
         ),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
       ),
-      child: Text(text, style: TextStyle(color: isUser ? Theme.of(context).colorScheme.surface : Theme.of(context).colorScheme.onSurface, fontSize: 14)),
+      child: Text(text, style: TextStyle(color: cs.onSurface, fontSize: 14, height: 1.4)),
     );
+  }
+
+  Widget _buildAiBubble(String text) {
+    final cs = Theme.of(context).colorScheme;
+    final glassBorder = Colors.white.withValues(alpha: 0.05);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(20),
+          topRight: Radius.circular(20),
+          bottomLeft: Radius.circular(4),
+          bottomRight: Radius.circular(20),
+        ),
+        border: Border.all(color: glassBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.auto_awesome, size: 12, color: cs.primary),
+              const SizedBox(width: 4),
+              Text('AI', style: GoogleFonts.jetBrainsMono(color: cs.primary, fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _buildFormattedText(text, cs),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFormattedText(String text, ColorScheme cs) {
+    final lines = text.split('\n');
+    final children = <InlineSpan>[];
+    final boldRegex = RegExp(r'\*\*(.+?)\*\*');
+    final headerRegex = RegExp(r'^#{1,3}\s+(.+)', multiLine: false);
+
+    for (int i = 0; i < lines.length; i++) {
+      final line = lines[i];
+
+      if (line.trim().isEmpty) {
+        if (children.isNotEmpty) {
+          children.add(const TextSpan(text: '\n'));
+        }
+        continue;
+      }
+
+      if (headerRegex.hasMatch(line)) {
+        final headerText = headerRegex.firstMatch(line)!.group(1)!;
+        children.add(TextSpan(
+          text: '$headerText\n',
+          style: GoogleFonts.spaceGrotesk(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: cs.onSurface,
+            height: 1.5,
+          ),
+        ));
+        continue;
+      }
+
+      if (line.trimLeft().startsWith('- ') || line.trimLeft().startsWith('* ')) {
+        final bulletText = line.trimLeft().substring(2);
+        children.add(TextSpan(
+          text: '  ${String.fromCharCode(0x2022)}  ',
+          style: TextStyle(color: cs.primary, fontSize: 14, height: 1.6),
+        ));
+        _addBoldText(bulletText, boldRegex, children, cs, isListItem: true);
+        children.add(const TextSpan(text: '\n'));
+        continue;
+      }
+
+      _addBoldText(line, boldRegex, children, cs);
+      if (i < lines.length - 1) {
+        children.add(const TextSpan(text: '\n'));
+      }
+    }
+
+    return RichText(
+      text: TextSpan(
+        style: TextStyle(color: cs.onSurface, fontSize: 14, height: 1.5),
+        children: children,
+      ),
+    );
+  }
+
+  void _addBoldText(String text, RegExp boldRegex, List<InlineSpan> spans, ColorScheme cs, {bool isListItem = false}) {
+    final matches = boldRegex.allMatches(text).toList();
+    if (matches.isEmpty) {
+      spans.add(TextSpan(text: text));
+      return;
+    }
+
+    int lastEnd = 0;
+    for (final m in matches) {
+      if (m.start > lastEnd) {
+        spans.add(TextSpan(text: text.substring(lastEnd, m.start)));
+      }
+      spans.add(TextSpan(
+        text: m.group(1),
+        style: TextStyle(fontWeight: FontWeight.w600, color: cs.onSurface),
+      ));
+      lastEnd = m.end;
+    }
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(text: text.substring(lastEnd)));
+    }
   }
 }
 
@@ -692,6 +850,7 @@ class _TypingIndicatorState extends State<_TypingIndicator>
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Align(
       alignment: Alignment.centerLeft,
       child: Column(
@@ -702,27 +861,28 @@ class _TypingIndicatorState extends State<_TypingIndicator>
             padding: const EdgeInsets.only(left: 4, bottom: 4),
             child: Text(
               context.tr('ai_typing'),
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                fontSize: 11,
-                fontStyle: FontStyle.italic,
+              style: GoogleFonts.jetBrainsMono(
+                color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                fontSize: 10,
+                letterSpacing: 0.3,
               ),
             ),
           ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerLow,
+              color: Colors.white.withValues(alpha: 0.04),
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(20),
                 topRight: Radius.circular(20),
                 bottomLeft: Radius.circular(4),
                 bottomRight: Radius.circular(20),
               ),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
-              children: List.generate(3, (i) => _dot(i)),
+              children: List.generate(3, (i) => _dot(i, cs)),
             ),
           ),
         ],
@@ -730,7 +890,7 @@ class _TypingIndicatorState extends State<_TypingIndicator>
     );
   }
 
-  Widget _dot(int index) {
+  Widget _dot(int index, ColorScheme cs) {
     final delay = index * 200;
     return AnimatedBuilder(
       animation: _controller,
@@ -744,10 +904,9 @@ class _TypingIndicatorState extends State<_TypingIndicator>
           child: Transform.scale(
             scale: scale,
             child: Container(
-              width: 8,
-              height: 8,
+              width: 7, height: 7,
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary,
+                color: cs.primary.withValues(alpha: 0.6),
                 shape: BoxShape.circle,
               ),
             ),
@@ -773,5 +932,3 @@ class ChatMessage {
     this.products,
   });
 }
-
-
