@@ -110,7 +110,7 @@ class _AnimatedGlassWidgetState extends State<AnimatedGlassWidget>
                   borderRadius: BorderRadius.circular(widget.borderRadius),
                   border: Border.all(
                     color: widget.borderColor ??
-                        cs.primary.withValues(alpha: 0.2),
+                        Colors.white.withValues(alpha: 0.05),
                     width: widget.borderWidth,
                   ),
                 ),

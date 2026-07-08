@@ -2,7 +2,10 @@ import 'dart:async';
 import 'package:app_links/app_links.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../app/routes.dart';
+import '../app/router.dart';
 import '../notifiers/auth_notifier.dart';
 
 class MagicLinkService {
@@ -25,6 +28,13 @@ class MagicLinkService {
   Future<void> _processLink(Uri uri) async {
     try {
       final link = uri.toString();
+
+      // Handle /register deep link — navigate to Register screen
+      if (uri.path == '/register') {
+        rootNavigatorKey.currentContext?.go(AppRoutes.register);
+        return;
+      }
+
       if (!FirebaseAuth.instance.isSignInWithEmailLink(link)) return;
 
       final prefs = await SharedPreferences.getInstance();

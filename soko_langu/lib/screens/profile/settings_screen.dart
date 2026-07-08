@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/localization_service.dart';
+import '../../services/sms_language_preference.dart';
 import '../../notifiers/auth_notifier.dart';
 import '../../services/notification_service.dart';
 import '../../services/secure_storage_service.dart';
@@ -25,6 +26,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true;
   bool _pinConfigured = false;
+  String _smsLang = 'sw';
 
   @override
   void initState() {
@@ -51,6 +53,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _notificationsEnabled =
             prefs.getBool('push_notifications_enabled') ?? true;
         _pinConfigured = pinSet;
+        _smsLang = prefs.getString('sms_language') ?? 'sw';
       });
     }
   }
@@ -237,6 +240,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 subtitle:
                     "${config.currencyCode} (${LocalizationService.supportedCurrencies[config.currencyCode]?['symbol'] ?? 'TSh'})",
                 onTap: () => _showCurrencyPicker(context, config),
+              ),
+              _buildTile(
+                icon: Icons.sms,
+                title: context.tr('sms_language'),
+                subtitle: LocalizationService.supportedLanguages[_smsLang] ?? 'Swahili',
+                onTap: () => _showSmsLanguagePicker(context),
               ),
               const Divider(),
               _buildTile(
@@ -492,6 +501,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onTap: () {
                   LocalizationService().setCurrency(e.key);
                   config.onSetCurrency(e.key);
+                  Navigator.pop(ctx);
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showSmsLanguagePicker(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                context.tr('select_sms_language'),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+            ...LocalizationService.supportedLanguages.entries.map(
+              (e) => ListTile(
+                title: Text(e.value),
+                trailing: _smsLang == e.key
+                    ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
+                    : null,
+                onTap: () {
+                  SmsLanguagePreference().set(e.key);
+                  setState(() => _smsLang = e.key);
                   Navigator.pop(ctx);
                 },
               ),

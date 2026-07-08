@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'app_themes.dart';
-import 'dark_theme.dart';
 
 class ThemeManager extends ChangeNotifier {
   static const String _darkKey = 'app_dark_mode';
   static const String _seedKey = 'theme_seed_color';
-  static const int _defaultSeed = 0xFF2D6A4F;
+  static const int _defaultSeed = 0xFF0F172A;
 
-  bool _isDark = false;
+  bool _isDark = true;
   Color _seedColor = const Color(_defaultSeed);
 
   bool get isDark => _isDark;

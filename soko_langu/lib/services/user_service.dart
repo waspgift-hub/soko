@@ -19,6 +19,8 @@ class UserProfile {
   final String shopBannerColor;
   final String shopAccentColor;
   final bool kycApproved;
+  final String gender;
+  final String dateOfBirth;
 
   UserProfile({
     required this.uid,
@@ -37,6 +39,8 @@ class UserProfile {
     this.shopBannerColor = '',
     this.shopAccentColor = '',
     this.kycApproved = false,
+    this.gender = '',
+    this.dateOfBirth = '',
   });
 
   factory UserProfile.fromMap(String uid, Map<String, dynamic> data) {
@@ -57,6 +61,8 @@ class UserProfile {
       shopBannerColor: data['shopBannerColor'] ?? '',
       shopAccentColor: data['shopAccentColor'] ?? '',
       kycApproved: data['kyc']?['approved'] ?? false,
+      gender: data['gender'] ?? '',
+      dateOfBirth: data['dateOfBirth'] ?? '',
     );
   }
 
@@ -75,6 +81,8 @@ class UserProfile {
     'shopBanner': shopBanner,
     'shopBannerColor': shopBannerColor,
     'shopAccentColor': shopAccentColor,
+    'gender': gender,
+    'dateOfBirth': dateOfBirth,
   };
 }
 
@@ -102,7 +110,7 @@ class UserService {
   }
 
   Future<void> saveProfile(UserProfile profile) async {
-    await _db.collection('users').doc(profile.uid).set(profile.toMap());
+    await _db.collection('users').doc(profile.uid).set(profile.toMap(), SetOptions(merge: true));
   }
 
   Future<String> uploadProfileImage(String filePath) async {

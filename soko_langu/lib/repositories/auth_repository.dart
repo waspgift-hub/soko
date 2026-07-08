@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:http/http.dart' as http;
+import '../services/api_config.dart';
 import '../services/fraud_prevention_service.dart';
 import '../utils/network_error.dart';
 
@@ -29,6 +32,48 @@ class AuthRepository {
     }
   }
 
+  Future<UserCredential> loginWithPhone(String phone, String otp) async {
+    try {
+      final clean = phone.replaceAll(RegExp(r'\D'), '');
+      final normalized = clean.startsWith('0')
+          ? '255${clean.substring(1)}'
+          : clean.startsWith('255')
+              ? clean
+              : '255$clean';
+
+      final res = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/phone-login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'phone': normalized, 'otp': otp}),
+      );
+
+      final body = jsonDecode(res.body);
+      if (res.statusCode != 200 || body['success'] != true) {
+        throw NetworkError(
+          message: 'Phone login failed: ${body['error']}',
+          userMessage: body['error'] ?? 'Hakuna akaunti kwa namba hii',
+        );
+      }
+
+      final cred = await _auth.signInWithCustomToken(body['token'] as String);
+      await _ensureProfileExists(cred.user);
+      return cred;
+    } on NetworkError {
+      rethrow;
+    } on FirebaseAuthException catch (e) {
+      throw NetworkError(
+        message: e.message ?? 'Phone login failed',
+        userMessage: _mapError(e.code),
+        originalError: e,
+      );
+    } catch (e) {
+      throw NetworkError(
+        message: 'Phone login error: $e',
+        userMessage: 'Mtandao dhaifu. Angalia muunganisho wako.',
+      );
+    }
+  }
+
   Future<UserCredential> register({
     required String email,
     required String password,
@@ -48,6 +93,38 @@ class AuthRepository {
     } on FirebaseAuthException catch (e) {
       throw NetworkError(
         message: e.message ?? 'Registration failed',
+        userMessage: _mapError(e.code),
+        originalError: e,
+      );
+    }
+  }
+
+  static String phoneToEmail(String phone) {
+    final clean = phone.replaceAll(RegExp(r'\D'), '');
+    return 'phone_$clean@soko-vibe.com';
+  }
+
+  Future<UserCredential> registerWithPhone({
+    required String phone,
+    required String password,
+    required String displayName,
+  }) async {
+    try {
+      final email = phoneToEmail(phone);
+      final cred = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      final user = cred.user;
+      if (user != null) {
+        await user.updateDisplayName(displayName);
+        await _createProfile(user.uid, displayName, email,
+            phone: phone);
+      }
+      return cred;
+    } on FirebaseAuthException catch (e) {
+      throw NetworkError(
+        message: e.message ?? 'Phone registration failed',
         userMessage: _mapError(e.code),
         originalError: e,
       );
@@ -202,15 +279,16 @@ class AuthRepository {
   Future<void> _createProfile(
     String uid,
     String displayName,
-    String email,
-  ) async {
+    String email, {
+    String phone = '',
+  }) async {
     try {
       await _db.collection('users').doc(uid).set({
         'displayName': displayName,
         'email': email,
         'username': '',
         'bio': '',
-        'phone': '',
+        'phone': phone,
         'location': '',
         'mood': '',
         'profileImage': '',

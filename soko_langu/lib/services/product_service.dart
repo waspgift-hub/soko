@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
@@ -69,6 +68,13 @@ class ProductService {
       await user.reload();
       await user.getIdToken(true);
 
+      final userDoc = await _db.collection('users').doc(user.uid).get();
+      final userData = userDoc.data();
+      final kycApproved = userData?['kyc']?['approved'] == true;
+      if (!kycApproved) {
+        throw Exception("KYC not approved. You must complete KYC verification before selling products.");
+      }
+
       List<String> imageUrls = [];
       for (var file in imageFiles) {
         final url = await uploadImage(file);
@@ -77,13 +83,11 @@ class ProductService {
 
       String sellerName = user.displayName ?? user.email ?? 'Anonymous';
       String sellerPhone = '';
-      bool sellerKycApproved = false;
+      bool sellerKycApproved = true;
 
-      final userDoc = await _db.collection('users').doc(user.uid).get();
       if (userDoc.exists) {
         final data = userDoc.data()!;
         sellerPhone = data['phone'] as String? ?? '';
-        sellerKycApproved = data['kyc']?['approved'] ?? false;
       }
 
       await _writeProduct(
@@ -194,7 +198,6 @@ class ProductService {
         .collection("products")
         .where('isActive', isEqualTo: true)
         .where("brand", isEqualTo: brand)
-        .orderBy('createdAt', descending: true)
         .limit(limit)
         .get();
     final products = snapshot.docs

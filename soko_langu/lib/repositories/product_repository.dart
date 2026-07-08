@@ -134,7 +134,11 @@ class ProductRepository {
   ///
   /// Fires whenever a product is added, updated, or removed in Firestore.
   /// Used by [ProductFeedProvider] to keep the home screen live.
-  Stream<List<Product>> watchProductsRealtime({int limit = 50}) {
+  /// If [brand] is provided, only products matching that brand are streamed.
+  Stream<List<Product>> watchProductsRealtime({int limit = 50, String? brand}) {
+    if (brand != null) {
+      return _remote.getProductsByBrand(brand);
+    }
     return _remote.watchProductsRealtime(limit: limit);
   }
 

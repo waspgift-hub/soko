@@ -115,6 +115,8 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                       const SizedBox(height: 16),
                       _buildPayoutPrefsCard(),
                       const SizedBox(height: 16),
+                      _buildQuoteButton(),
+                      const SizedBox(height: 16),
                       _buildDispatchButton(),
                       const SizedBox(height: 16),
                       _buildCustomizeShopButton(),
@@ -540,6 +542,58 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildQuoteButton() {
+    return GestureDetector(
+      onTap: () => context.push(AppRoutes.sellerQuote),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.primary.withValues(alpha: 0.6)],
+          ),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.price_check, color: Colors.white, size: 28),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Toa Gharama ya Usafirishaji',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Weka gharama ya usafirishaji kwa ombi la mnunuzi',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.8),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 18),
+          ],
+        ),
+      ),
     );
   }
 

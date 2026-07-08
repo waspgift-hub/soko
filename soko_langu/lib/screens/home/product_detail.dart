@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 import '../../models/product_model.dart';
 import '../../models/category_model.dart';
 import '../../services/wishlist_service.dart';
-import '../../services/ad_revenue_service.dart';
 import '../../services/category_service.dart';
 import '../../services/localization_service.dart';
 import '../../extensions/context_tr.dart';
@@ -19,11 +18,23 @@ import '../../widgets/comment_section.dart';
 import '../../widgets/verified_badge.dart';
 import '../../services/product_service.dart';
 import '../../services/user_service.dart';
+import '../../services/analytics_service.dart';
 import '../../services/flash_sale_service.dart';
 import '../../models/flash_sale_model.dart';
 import '../../theme/app_colors.dart';
 import '../../services/notification_service.dart';
-import '../../utils/chat_utils.dart';
+import '../chat/chat_navigation.dart';
+
+Color? _hexToColor(String? hex) {
+  if (hex == null || hex.isEmpty) return null;
+  try {
+    final clean = hex.replaceFirst('#', '');
+    if (clean.length != 6) return null;
+    return Color(int.parse('FF$clean', radix: 16));
+  } catch (_) {
+    return null;
+  }
+}
 
 class ProductDetailPage extends StatefulWidget {
   final Product product;
@@ -59,6 +70,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     if (!_viewIncremented) {
       _viewIncremented = true;
       ProductService().incrementViewCount(widget.product.id);
+      AnalyticsService().trackProductView(widget.product.id);
     }
   }
 
@@ -68,27 +80,27 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     _flashStreamSub = _flashSaleService
         .streamFlashSaleByProductId(widget.product.id)
         .listen((sale) {
-      if (!mounted) return;
-      setState(() {
-        _flashSale = sale;
-        _lastDisplay = '';
-      });
-      if (sale != null) {
-        _flashTimer?.cancel();
-        _flashTimer = Timer.periodic(const Duration(seconds: 1), (_) {
           if (!mounted) return;
-          final display = sale.remainingTime.isNegative
-              ? ''
-              : _fmtDuration(sale.remainingTime);
-          if (display != _lastDisplay) {
-            _lastDisplay = display;
-            setState(() {});
+          setState(() {
+            _flashSale = sale;
+            _lastDisplay = '';
+          });
+          if (sale != null) {
+            _flashTimer?.cancel();
+            _flashTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+              if (!mounted) return;
+              final display = sale.remainingTime.isNegative
+                  ? ''
+                  : _fmtDuration(sale.remainingTime);
+              if (display != _lastDisplay) {
+                _lastDisplay = display;
+                setState(() {});
+              }
+            });
+          } else {
+            _flashTimer?.cancel();
           }
         });
-      } else {
-        _flashTimer?.cancel();
-      }
-    });
   }
 
   Future<void> _loadSellerProfile() async {
@@ -246,8 +258,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                       imageUrl: product.images[index],
                                       fit: BoxFit.contain,
                                       imageBuilder: (context, imageProvider) {
-                                        _resolveImageSize(
-                                            index, imageProvider);
+                                        _resolveImageSize(index, imageProvider);
                                         return Image(
                                           image: imageProvider,
                                           fit: BoxFit.contain,
@@ -265,12 +276,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                       errorWidget:
                                           (context, error, stackTrace) =>
                                               Container(
-                                        color: cs.surfaceContainerHighest,
-                                        child: const Icon(
-                                          Icons.image,
-                                          size: 50,
-                                        ),
-                                      ),
+                                                color:
+                                                    cs.surfaceContainerHighest,
+                                                child: const Icon(
+                                                  Icons.image,
+                                                  size: 50,
+                                                ),
+                                              ),
                                     ),
                                   );
                                 },
@@ -343,7 +355,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        context.tr('images_count').replaceAll('{0}', product.images.length.toString()),
+                        context
+                            .tr('images_count')
+                            .replaceAll(
+                              '{0}',
+                              product.images.length.toString(),
+                            ),
                         style: TextStyle(
                           fontSize: 13,
                           color: cs.onSurface.withValues(alpha: 0.5),
@@ -411,7 +428,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       Text(
                         _flashSale!.remainingTime.isNegative
                             ? context.tr('expired')
-                            : context.tr('flash_sale_ends_in').replaceAll('{0}', _fmtDuration(_flashSale!.remainingTime)),
+                            : context
+                                  .tr('flash_sale_ends_in')
+                                  .replaceAll(
+                                    '{0}',
+                                    _fmtDuration(_flashSale!.remainingTime),
+                                  ),
                         style: TextStyle(
                           color: cs.error,
                           fontSize: 13,
@@ -629,9 +651,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                     ),
                                   ),
                                   if (product.sellerKycApproved)
-                                    WidgetSpan(
-                                      child: VerifiedBadge(size: 13),
-                                    ),
+                                    WidgetSpan(child: VerifiedBadge(size: 13)),
                                 ],
                               ),
                             ),
@@ -645,39 +665,42 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       borderRadius: BorderRadius.circular(12),
                       clipBehavior: Clip.antiAlias,
                       child: InkWell(
-                        onTap: () {
-                          if (currentUser == null) {
-                            context.push(AppRoutes.login);
-                          } else {
-                            context.push(
-                              '${AppRoutes.publicProfile}/$sellerId',
-                              extra: product.sellerName,
-                            );
-                          }
-                        },
+                          onTap: () {
+                            if (currentUser == null) {
+                              context.push(AppRoutes.login);
+                            } else if (sellerId.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Hitilafu: muuzaji hajulikani.')),
+                              );
+                            } else {
+                              context.push(
+                                '${AppRoutes.publicProfile}/$sellerId',
+                                extra: product.sellerName,
+                              );
+                            }
+                          },
                         child: Column(
                           children: [
                             if (_sellerProfile != null &&
-                                _sellerProfile!.shopBanner.isNotEmpty)
+                                (_sellerProfile!.shopBanner.isNotEmpty ||
+                                    _sellerProfile!.shopBannerColor.isNotEmpty))
                               Container(
                                 height: 100,
                                 width: double.infinity,
                                 decoration: BoxDecoration(
                                   color:
-                                      _sellerProfile!.shopBannerColor.isNotEmpty
-                                      ? Color(
-                                          int.parse(
-                                            'FF${_sellerProfile!.shopBannerColor.replaceFirst('#', '')}',
-                                            radix: 16,
+                                      _hexToColor(
+                                        _sellerProfile!.shopBannerColor,
+                                      ) ??
+                                      cs.primaryContainer,
+                                  image: _sellerProfile!.shopBanner.isNotEmpty
+                                      ? DecorationImage(
+                                          image: CachedNetworkImageProvider(
+                                            _sellerProfile!.shopBanner,
                                           ),
+                                          fit: BoxFit.cover,
                                         )
-                                      : cs.primaryContainer,
-                                  image: DecorationImage(
-                                    image: NetworkImage(
-                                      _sellerProfile!.shopBanner,
-                                    ),
-                                    fit: BoxFit.cover,
-                                  ),
+                                      : null,
                                 ),
                               ),
                             Padding(
@@ -687,17 +710,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                   CircleAvatar(
                                     radius: 24,
                                     backgroundColor:
-                                        _sellerProfile
-                                                ?.shopAccentColor
-                                                .isNotEmpty ==
-                                            true
-                                        ? Color(
-                                            int.parse(
-                                              'FF${_sellerProfile!.shopAccentColor.replaceFirst('#', '')}',
-                                              radix: 16,
-                                            ),
-                                          )
-                                        : cs.primaryContainer,
+                                        _hexToColor(
+                                          _sellerProfile?.shopAccentColor,
+                                        ) ??
+                                        cs.primaryContainer,
                                     backgroundImage:
                                         _sellerProfile
                                                 ?.profileImage
@@ -713,10 +729,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                                 .isNotEmpty ==
                                             true
                                         ? null
-                                        : Icon(
-                                            Icons.person,
-                                            color: cs.surface,
-                                          ),
+                                        : Icon(Icons.person, color: cs.surface),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
@@ -755,8 +768,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                               ),
                                               const SizedBox(width: 8),
                                               ElevatedButton.icon(
-                                                style:
-                                                    ElevatedButton.styleFrom(
+                                                style: ElevatedButton.styleFrom(
                                                   backgroundColor:
                                                       cs.whatsappGreen,
                                                 ),
@@ -775,24 +787,29 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                               ),
                                             ],
                                           )
-                                        else if (currentUser.uid !=
-                                            sellerId)
+                                        else if (currentUser.uid != sellerId)
                                           Row(
                                             children: [
                                               TextButton(
-                                                onPressed: () =>
+                                                onPressed: () {
+                                                  if (sellerId.isEmpty) {
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      const SnackBar(content: Text('Hitilafu: muuzaji hajulikani.')),
+                                                    );
+                                                  } else {
                                                     context.push(
-                                                  '${AppRoutes.publicProfile}/$sellerId',
-                                                  extra: product.sellerName,
-                                                ),
+                                                      '${AppRoutes.publicProfile}/$sellerId',
+                                                      extra: product.sellerName,
+                                                    );
+                                                  }
+                                                },
                                                 child: Text(
                                                   context.tr('view_store'),
                                                 ),
                                               ),
                                               const SizedBox(width: 8),
                                               ElevatedButton.icon(
-                                                style:
-                                                    ElevatedButton.styleFrom(
+                                                style: ElevatedButton.styleFrom(
                                                   backgroundColor:
                                                       cs.whatsappGreen,
                                                 ),
@@ -811,8 +828,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                               ),
                                             ],
                                           ),
-                                        ],
-                                      ),
+                                      ],
+                                    ),
                                   ),
                                 ],
                               ),
@@ -829,10 +846,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     const Divider(height: 32),
                     CommentSection(productId: product.id),
                     const Divider(height: 8),
-                    _AdViewTracker(
-                      sellerId: widget.product.sellerId,
-                      productId: widget.product.id,
-                    ),
                     const AdBanner(),
                   ],
                 ),
@@ -985,15 +998,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }
 
   void _chatWithSeller() {
-    showChatOptions(
-      context: context,
-      sellerId: widget.product.sellerId,
-      sellerName: widget.product.sellerName,
-      phone: _sellerProfile?.phone,
-      productName: widget.product.name,
-      productPrice: widget.product.price,
-      currency: widget.product.currency,
-    );
+    ChatNavigation.openSellerChat(context, widget.product.sellerId, widget.product.sellerName);
   }
 
   String _fmtDuration(Duration d) {
@@ -1114,34 +1119,4 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
       ),
     );
   }
-}
-
-class _AdViewTracker extends StatefulWidget {
-  final String sellerId;
-  final String productId;
-  const _AdViewTracker({required this.sellerId, required this.productId});
-
-  @override
-  State<_AdViewTracker> createState() => _AdViewTrackerState();
-}
-
-class _AdViewTrackerState extends State<_AdViewTracker> {
-  @override
-  void initState() {
-    super.initState();
-    _track();
-  }
-
-  Future<void> _track() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-
-    await AdRevenueService().recordAdView(
-      sellerId: widget.sellerId,
-      productId: widget.productId,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) => const SizedBox.shrink();
 }

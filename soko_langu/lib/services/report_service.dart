@@ -25,10 +25,13 @@ class ReportService {
     }
   }
 
-  Stream<List<Report>> getReports({String? status}) {
+  Stream<List<Report>> getReports({String? status, String? productId}) {
     Query query = _db.collection('reports').orderBy('createdAt', descending: true);
     if (status != null && status.isNotEmpty) {
       query = query.where('status', isEqualTo: status);
+    }
+    if (productId != null && productId.isNotEmpty) {
+      query = query.where('productId', isEqualTo: productId);
     }
     return query.snapshots().map((snap) =>
         snap.docs.map((doc) => Report.fromFirestore(doc)).toList());

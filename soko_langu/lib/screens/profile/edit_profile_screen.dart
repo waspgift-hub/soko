@@ -26,6 +26,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _phoneController = TextEditingController();
   final _locationController = TextEditingController();
   final _moodController = TextEditingController();
+  final _genderController = TextEditingController();
+  final _dobController = TextEditingController();
   final _picker = ImagePicker();
   final _userService = UserService();
 
@@ -68,6 +70,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _phoneController.dispose();
     _locationController.dispose();
     _moodController.dispose();
+    _genderController.dispose();
+    _dobController.dispose();
     for (final e in _paymentEntries) {
       e.key.dispose();
       e.value.dispose();
@@ -92,6 +96,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _phoneController.text = profile?.phone ?? '';
         _locationController.text = profile?.location ?? '';
         _moodController.text = profile?.mood ?? '';
+        _genderController.text = profile?.gender ?? '';
+        _dobController.text = profile?.dateOfBirth ?? '';
         _latitude = profile?.latitude;
         _longitude = profile?.longitude;
         _imagePath = profile?.profileImage;
@@ -254,6 +260,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         longitude: _longitude,
         profileImage: imageUrl,
         paymentNumbers: paymentNumbers,
+        gender: _genderController.text.trim(),
+        dateOfBirth: _dobController.text.trim(),
       );
 
       await _userService.saveProfile(profile);
@@ -478,6 +486,48 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           .toList(),
                     ),
                   ),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: _genderController.text.isEmpty ? null : _genderController.text,
+                  decoration: InputDecoration(
+                    labelText: context.tr('gender'),
+                    border: const OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.wc, color: Theme.of(context).colorScheme.primary),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'male', child: Text('Mwanaume (Male)')),
+                    DropdownMenuItem(value: 'female', child: Text('Mwanamke (Female)')),
+                    DropdownMenuItem(value: 'other', child: Text('Nyingine (Other)')),
+                  ],
+                  onChanged: (v) => _genderController.text = v ?? '',
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _dobController,
+                  decoration: InputDecoration(
+                    labelText: context.tr('date_of_birth'),
+                    hintText: 'YYYY-MM-DD',
+                    border: const OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.calendar_today, color: Theme.of(context).colorScheme.primary),
+                    suffixIcon: IconButton(
+                      icon: Icon(Icons.date_range, color: Theme.of(context).colorScheme.primary),
+                      onPressed: () async {
+                        final date = await showDatePicker(
+                          context: context,
+                          initialDate: _dobController.text.isNotEmpty
+                              ? DateTime.tryParse(_dobController.text) ?? DateTime(2000)
+                              : DateTime(2000),
+                          firstDate: DateTime(1940),
+                          lastDate: DateTime.now().subtract(const Duration(days: 365 * 5)),
+                        );
+                        if (date != null) {
+                          _dobController.text = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+                        }
+                      },
+                    ),
+                  ),
+                  readOnly: true,
                 ),
                 const SizedBox(height: 24),
                 Row(

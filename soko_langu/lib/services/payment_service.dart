@@ -1,6 +1,9 @@
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
 import '../models/transaction_model.dart';
+import 'api_config.dart';
 import 'fraud_prevention_service.dart';
 
 class PaymentService {
@@ -11,7 +14,7 @@ class PaymentService {
     return TransactionFeeBreakdown(productPrice: productPrice);
   }
 
-  Future<void> processTransaction({
+  Future<String> processTransaction({
     required String buyerId,
     required String buyerName,
     required String buyerPhone,
@@ -22,8 +25,6 @@ class PaymentService {
     required double productPrice,
     String? transactionReference,
   }) async {
-    final breakdown = TransactionFeeBreakdown(productPrice: productPrice);
-
     await FraudPreventionService().checkSuspiciousTransaction(
       buyerId: buyerId,
       sellerId: sellerId,
@@ -31,45 +32,32 @@ class PaymentService {
       amount: productPrice,
     );
 
-    final docRef = await _db.collection('transactions').add({
-      'buyerId': buyerId,
-      'buyerName': buyerName,
-      'buyerPhone': buyerPhone,
-      'sellerId': sellerId,
-      'sellerName': sellerName,
-      'productId': productId,
-      'productName': productName,
-      'productPrice': productPrice,
-      'processingFee': breakdown.processingFee,
-      'platformFee': breakdown.platformFee,
-      'sokovibeCommission': breakdown.platformFee,
-      'totalAmount': breakdown.totalAmount,
-      'sellerReceives': breakdown.sellerReceives,
-      'status': 'completed',
-      'paymentMethod': 'ClickPesa',
-      'transactionReference': transactionReference ?? '',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-
-    await _db.collection('users').doc(sellerId).set({
-      'sellerBalance': FieldValue.increment(breakdown.sellerReceives),
-      'totalSales': FieldValue.increment(1),
-      'grossSalesVolume': FieldValue.increment(productPrice),
-      'lastSaleAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-
-    await _db.collection('revenue_transactions').add({
-      'userId': sellerId,
-      'amount': breakdown.sellerReceives,
-      'type': 'sale',
-      'description': 'Sale of $productName',
-      'transactionId': docRef.id,
-      'productName': productName,
-      'productPrice': productPrice,
-      'sokovibeCommission': breakdown.platformFee,
-      'buyerName': buyerName,
-      'timestamp': FieldValue.serverTimestamp(),
-    });
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('User not logged in');
+    final token = await user.getIdToken(true);
+    final resp = await http.post(
+      Uri.parse('${ApiConfig.baseUrl}/api/transactions/create'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'buyerId': buyerId,
+        'buyerName': buyerName,
+        'buyerPhone': buyerPhone,
+        'sellerId': sellerId,
+        'sellerName': sellerName,
+        'productId': productId,
+        'productName': productName,
+        'productPrice': productPrice,
+        'transactionReference': transactionReference ?? '',
+      }),
+    );
+    final result = jsonDecode(resp.body);
+    if (result['success'] != true) {
+      throw Exception(result['error'] ?? 'Failed to process transaction');
+    }
+    return result['transactionId'] as String;
   }
 
   Stream<List<MarketplaceTransaction>> getSellerTransactions() {

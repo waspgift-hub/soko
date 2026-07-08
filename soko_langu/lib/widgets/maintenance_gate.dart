@@ -21,6 +21,8 @@ class _MaintenanceGateState extends State<MaintenanceGate> {
     _check();
   }
 
+  String _maintenanceMessage = '';
+
   Future<void> _check() async {
     try {
       final doc = await FirebaseFirestore.instance
@@ -37,6 +39,8 @@ class _MaintenanceGateState extends State<MaintenanceGate> {
         return;
       }
 
+      _maintenanceMessage = (doc.data()?['message'] as String?) ??
+          'App iko kwenye matengenezo. Tafadhali rudi baadaye.';
       if (mounted) setState(() => _showChild = false);
     } catch (_) {}
   }
@@ -55,7 +59,7 @@ class _MaintenanceGateState extends State<MaintenanceGate> {
                 Icon(Icons.build_circle_outlined, size: 72, color: cs.primary),
                 const SizedBox(height: 24),
                 Text(
-                  'App iko kwenye matengenezo. Tafadhali rudi baadaye.',
+                  _maintenanceMessage,
                   textAlign: TextAlign.center,
                   style: TextStyle(color: cs.onSurfaceVariant),
                 ),

@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/product_model.dart';
 import '../screens/auth/auth_gate.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/register_screen.dart';
 import '../screens/auth/forgot_password_screen.dart';
-import '../screens/auth/verify_email_screen.dart';
+
 import '../screens/home/product_detail.dart';
 import '../screens/home/search_screen.dart';
 import '../screens/home/checkout_screen.dart';
@@ -32,29 +33,28 @@ import '../screens/notification/notification_screen.dart';
 import '../screens/audio/player_screen.dart';
 import '../screens/audio/music_library_screen.dart';
 import '../screens/audio/music_queue_screen.dart';
+import '../screens/audio/audio_home_screen.dart';
 import '../screens/onboarding/account_selection_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
 import '../screens/auth/magic_link_screen.dart';
 
 import '../screens/admin/admin_dashboard_screen.dart';
-import '../screens/admin/admin_ad_revenue_screen.dart';
 import '../screens/admin/admin_wallet_screen.dart';
 import '../screens/seller/seller_earnings_screen.dart';
 import '../screens/orders/my_purchases_screen.dart';
 import '../screens/orders/seller_dispatch_screen.dart';
+import '../screens/orders/seller_quote_screen.dart';
+import '../screens/orders/receipt_screen.dart';
 import '../screens/kyc/kyc_screen.dart';
 import '../screens/home/flash_sale_screen.dart';
 import '../screens/profile/create_flash_sale_screen.dart';
 import '../screens/report/report_screen.dart';
 import '../screens/report/admin_reports_screen.dart';
 import '../screens/ai/ai_assistant_screen.dart';
+import '../screens/seller/seller_analytics_screen.dart';
 
 import '../screens/legal/privacy_policy_screen.dart';
 import '../screens/legal/terms_of_service_screen.dart';
-import '../models/status_model.dart';
-import '../screens/status/status_list_screen.dart';
-import '../screens/status/status_viewer_screen.dart';
-import '../screens/status/add_status_screen.dart';
 import 'routes.dart';
 import 'app_state.dart' as app_state;
 
@@ -73,6 +73,7 @@ final List<String> _authRequiredRoutes = [
   AppRoutes.sellerDashboard,
   AppRoutes.sellerEarnings,
   AppRoutes.sellerDispatch,
+  AppRoutes.sellerQuote,
   AppRoutes.myPurchases,
   AppRoutes.productBoost,
   AppRoutes.notifications,
@@ -80,15 +81,13 @@ final List<String> _authRequiredRoutes = [
   AppRoutes.chat,
   AppRoutes.createGroup,
   AppRoutes.groupChat,
-  AppRoutes.status,
-  AppRoutes.addStatus,
   AppRoutes.createFlashSale,
+  AppRoutes.receipt,
   AppRoutes.report,
 ];
 
 final List<String> _adminOnlyRoutes = [
   AppRoutes.admin,
-  AppRoutes.adminAdRevenue,
   AppRoutes.adminWallet,
   AppRoutes.adminReports,
 ];
@@ -108,7 +107,12 @@ GoRouter buildRouter() {
       // Admin-only routes
       if (_adminOnlyRoutes.any((r) => location == r || location.startsWith('$r/'))) {
         if (!isAuth) return AppRoutes.login;
-        if (!isAdmin) return AppRoutes.home;
+        if (!isAdmin) {
+          final user = FirebaseAuth.instance.currentUser;
+          if (user?.email?.toLowerCase() != 'admin@soko-langu.com') {
+            return AppRoutes.home;
+          }
+        }
       }
 
       // Auth-required routes
@@ -134,10 +138,6 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.forgotPassword,
         builder: (context, state) => const ForgotPasswordScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.verifyEmail,
-        builder: (context, state) => const VerifyEmailScreen(),
       ),
       GoRoute(
         path: AppRoutes.magicLink,
@@ -239,6 +239,24 @@ GoRouter buildRouter() {
         },
       ),
       GoRoute(
+        path: AppRoutes.audioHome,
+        builder: (context, state) => const AudioHomeScreen(),
+        routes: [
+          GoRoute(
+            path: 'player',
+            builder: (context, state) => const PlayerScreen(),
+          ),
+          GoRoute(
+            path: 'library',
+            builder: (context, state) => const MusicLibraryScreen(),
+          ),
+          GoRoute(
+            path: 'queue',
+            builder: (context, state) => const MusicQueueScreen(),
+          ),
+        ],
+      ),
+      GoRoute(
         path: AppRoutes.audioList,
         builder: (context, state) => const MusicLibraryScreen(),
       ),
@@ -253,10 +271,6 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.admin,
         builder: (context, state) => const AdminDashboardScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.adminAdRevenue,
-        builder: (context, state) => const AdminAdRevenueScreen(),
       ),
       GoRoute(
         path: AppRoutes.adminWallet,
@@ -279,30 +293,16 @@ GoRouter buildRouter() {
       ),
 
       GoRoute(
-        path: AppRoutes.status,
-        builder: (context, state) => const StatusListScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.statusViewer,
-        builder: (context, state) {
-          final data = state.extra as Map<String, dynamic>;
-          return StatusViewerScreen(
-            updates: (data['updates'] as List).cast<StatusUpdate>(),
-            initialIndex: data['initialIndex'] as int? ?? 0,
-          );
-        },
-      ),
-      GoRoute(
-        path: AppRoutes.addStatus,
-        builder: (context, state) => const AddStatusScreen(),
-      ),
-      GoRoute(
         path: AppRoutes.aiAssistant,
         builder: (context, state) => const AiAssistantScreen(),
       ),
       GoRoute(
         path: AppRoutes.sellerEarnings,
         builder: (context, state) => const SellerEarningsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.sellerAnalytics,
+        builder: (context, state) => SellerAnalyticsScreen(sellerId: state.extra as String),
       ),
       GoRoute(
         path: AppRoutes.checkout,
@@ -321,8 +321,19 @@ GoRouter buildRouter() {
         builder: (context, state) => const MyPurchasesScreen(),
       ),
       GoRoute(
+        path: '${AppRoutes.receipt}/:orderId',
+        builder: (context, state) {
+          final orderId = state.pathParameters['orderId']!;
+          return ReceiptScreen(orderId: orderId);
+        },
+      ),
+      GoRoute(
         path: AppRoutes.sellerDispatch,
         builder: (context, state) => const SellerDispatchScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.sellerQuote,
+        builder: (context, state) => const SellerQuoteScreen(),
       ),
       GoRoute(
         path: AppRoutes.kyc,

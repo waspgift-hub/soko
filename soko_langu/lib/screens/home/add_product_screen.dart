@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/product_service.dart';
-import '../../services/price_drop_service.dart';
 import '../../models/category_model.dart';
 import '../../models/product_model.dart';
 import '../../services/category_service.dart';
@@ -183,7 +182,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
     try {
       final variantData = _buildVariantData();
       if (_isEditing) {
-        final oldPrice = widget.product!.price;
         final newPrice = double.parse(_priceController.text);
         await _productService.updateProduct(
           productId: widget.product!.id,
@@ -205,26 +203,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
           existingImages: _existingImages.isNotEmpty ? _existingImages : null,
           newImages: _newImages.isNotEmpty ? _newImages : null,
         );
-        if (newPrice < oldPrice) {
-          try {
-            final discount = ((oldPrice - newPrice) / oldPrice) * 100;
-            final ps = PriceDropService();
-            await ps.createPriceDrop(
-              product: widget.product!,
-              newPrice: newPrice,
-              aiReason: '',
-            );
-            await ps.broadcastToAllUsers(
-              productName: _nameController.text,
-              originalPrice: oldPrice,
-              newPrice: newPrice,
-              discountPercent: discount.toStringAsFixed(0),
-              sellerPhone: widget.product!.sellerPhone ?? '',
-              productId: widget.product!.id,
-              productImage: widget.product!.images.isNotEmpty ? widget.product!.images.first : '',
-            );
-          } catch (_) {}
-        }
       } else {
         await _productService.addProduct(
           name: _nameController.text,

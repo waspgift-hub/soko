@@ -1,9 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/flash_sale_model.dart';
-import '../services/price_drop_service.dart';
 import 'flash_sale_banner.dart';
-import 'price_drop_banner.dart';
 import 'dynamic_banner.dart';
 
 class BannerRotator extends StatefulWidget {
@@ -17,17 +15,10 @@ class BannerRotator extends StatefulWidget {
 class _BannerRotatorState extends State<BannerRotator> {
   int _current = 0;
   Timer? _timer;
-  bool _hasPriceDrops = false;
-  StreamSubscription? _priceSub;
 
   @override
   void initState() {
     super.initState();
-    _priceSub = PriceDropService()
-        .getActivePriceDrops()
-        .listen((drops) {
-      if (mounted) setState(() => _hasPriceDrops = drops.isNotEmpty);
-    });
   }
 
   @override
@@ -57,7 +48,6 @@ class _BannerRotatorState extends State<BannerRotator> {
   @override
   void dispose() {
     _timer?.cancel();
-    _priceSub?.cancel();
     super.dispose();
   }
 
@@ -65,9 +55,6 @@ class _BannerRotatorState extends State<BannerRotator> {
     final list = <Widget>[];
     if (widget.flashSales.isNotEmpty) {
       list.add(FlashSaleBanner(key: const ValueKey('flash_banner'), sales: widget.flashSales));
-    }
-    if (_hasPriceDrops) {
-      list.add(const PriceDropBanner(key: ValueKey('price_drop_banner')));
     }
     list.add(const DynamicBanner(key: ValueKey('dynamic_banner')));
     return list;

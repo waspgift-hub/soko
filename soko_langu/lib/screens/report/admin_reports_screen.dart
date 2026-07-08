@@ -8,8 +8,10 @@ import '../../widgets/google_loading.dart';
 
 class AdminReportsScreen extends StatefulWidget {
   final bool embedded;
+  final String? productId;
+  final String? productName;
 
-  const AdminReportsScreen({super.key, this.embedded = false});
+  const AdminReportsScreen({super.key, this.embedded = false, this.productId, this.productName});
 
   @override
   State<AdminReportsScreen> createState() => _AdminReportsScreenState();
@@ -97,7 +99,9 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
     final body = _buildBody();
     if (widget.embedded) return body;
     return Scaffold(
-      appBar: AppBar(title: Text(context.tr('reports'))),
+      appBar: AppBar(
+        title: Text(widget.productName ?? context.tr('reports')),
+      ),
       body: body,
     );
   }
@@ -119,7 +123,10 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
         ),
         Expanded(
           child: StreamBuilder<List<Report>>(
-            stream: _reportService.getReports(status: _selectedFilter.isEmpty ? null : _selectedFilter),
+            stream: _reportService.getReports(
+              status: _selectedFilter.isEmpty ? null : _selectedFilter,
+              productId: widget.productId,
+            ),
             builder: (context, snap) {
               if (snap.connectionState == ConnectionState.waiting) {
                 return const GoogleLoadingPage();

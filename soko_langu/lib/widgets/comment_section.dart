@@ -172,12 +172,6 @@ class _CommentSectionState extends State<CommentSection> {
         StreamBuilder<List<ProductComment>>(
           stream: _commentsStream,
           builder: (context, snap) {
-            if (snap.connectionState == ConnectionState.waiting) {
-              return const Padding(
-                padding: EdgeInsets.all(16),
-                child: Center(child: GoogleLoading(size: 24, strokeWidth: 2)),
-              );
-            }
             final comments = snap.data ?? [];
             if (comments.isEmpty) {
               return Padding(
@@ -381,11 +375,6 @@ class _CommentTile extends StatelessWidget {
                       ),
                       builder: (ctx, snap) {
                         final replies = snap.data ?? [];
-                        if (snap.connectionState == ConnectionState.waiting) {
-                          return const Center(
-                            child: GoogleLoading(size: 24, strokeWidth: 2),
-                          );
-                        }
                         if (replies.isEmpty) {
                           return Center(
                             child: Text(

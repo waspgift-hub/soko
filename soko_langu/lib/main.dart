@@ -5,6 +5,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -29,22 +30,23 @@ import 'services/ai/ai_service.dart';
 import 'services/app_lock_service.dart';
 import 'services/audio_cache_service.dart';
 import 'services/audio_handler.dart';
-import 'widgets/mini_player.dart';
 import 'services/auth_service.dart';
+import 'services/music_permission_service.dart';
 import 'services/exchange_rate_service.dart';
 import 'services/onboarding_service.dart';
 import 'services/magic_link_service.dart';
 import 'services/groq_service.dart';
-import 'services/interstitial_ad_service.dart';
 import 'services/localization_service.dart';
 import 'services/local_cache_service.dart';
 import 'services/notification_service.dart';
+import 'services/interstitial_ad_service.dart';
 import 'services/security_service.dart';
 import 'theme/theme_manager.dart';
 import 'utils/responsive.dart';
 import 'widgets/app_lock_overlay.dart';
 import 'widgets/maintenance_gate.dart';
 import 'widgets/connectivity_wrapper.dart';
+import 'widgets/transaction_status_watcher.dart';
 
 // ---------------------------------------------------------------------------
 // Global singletons — scoped to app lifetime, lazily resolved where possible.
@@ -98,9 +100,29 @@ void main() async {
   // --- Global error handlers (must be set before runApp to catch startup crashes) ---
   _setupGlobalErrorHandlers();
 
+  // --- Google Sign-In: initialize before any sign in calls ---
+  if (!kIsWeb) {
+    try {
+      await GoogleSignIn.instance.initialize();
+    } catch (e) {
+      debugPrint('GoogleSignIn: init failed — $e');
+    }
+  }
+
   // --- FCM background handler registration ---
   // SAFE: only stores a callback reference; the handler itself calls Firebase.initializeApp.
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
+  // --- Android 13+ POST_NOTIFICATIONS: must be granted before the media
+  // notification can appear (AudioService.init creates the notification
+  // channel). Request early — before AudioService and before runApp.
+  if (!kIsWeb) {
+    try {
+      await MusicPermissionService.instance.requestNotification();
+    } catch (e) {
+      debugPrint('Notification permission request: $e');
+    }
+  }
 
   // --- AudioService: init before runApp on non-web, so the handler
   // Completer resolves before the first widget tree is built. This
@@ -142,7 +164,7 @@ Future<void> _initAudioService() async {
         androidNotificationChannelName: 'Soko Vibe Music',
         androidNotificationChannelDescription:
             'Audio playback controls for Soko Vibe',
-        androidNotificationIcon: 'ic_notification',
+        androidNotificationIcon: 'drawable/ic_notification',
         notificationColor: Color(0xFF40916C),
         androidStopForegroundOnPause: false,
         androidNotificationOngoing: true,
@@ -153,7 +175,8 @@ Future<void> _initAudioService() async {
       ),
     );
   } catch (e) {
-    debugPrint('AudioService init failed: $e');
+    debugPrint('[AUDIO] AudioService init failed — foreground playback only: $e');
+    bindMusicHandler(MusicHandler());
   }
 }
 
@@ -240,6 +263,7 @@ class _SokoVibeAppState extends State<SokoVibeApp>
     WidgetsBinding.instance.removeObserver(this);
     themeManager.removeListener(_onThemeChange);
     _productFeedProvider.dispose();
+    _musicState.dispose();
     super.dispose();
   }
 
@@ -404,6 +428,13 @@ class _SokoVibeAppState extends State<SokoVibeApp>
       } catch (e) {
         debugPrint('AwesomeNotifications init: $e');
       }
+
+      // Android 13+ POST_NOTIFICATIONS permission via native dialog
+      try {
+        await MusicPermissionService.instance.requestNotification();
+      } catch (e) {
+        debugPrint('Notification permission request: $e');
+      }
     }
 
     // FCM push + in-app notification service
@@ -508,6 +539,7 @@ class _SokoVibeAppState extends State<SokoVibeApp>
     content = ConnectivityWrapper(child: content);
     content = MaintenanceGate(child: content);
     content = AppLockOverlay(child: content);
+    content = TransactionStatusWatcher(child: content);
 
     return AppConfig(
       langCode: _langCode,
@@ -519,7 +551,6 @@ class _SokoVibeAppState extends State<SokoVibeApp>
           Column(
             children: [
               Expanded(child: content),
-              const MiniPlayer(),
             ],
           ),
         ],

@@ -5,6 +5,7 @@ import '../../widgets/google_loading.dart';
 import '../../widgets/bottom_nav_bar.dart';
 import '../onboarding/onboarding_screen.dart' as onboarding;
 import 'login_screen.dart';
+import 'profile_setup_screen.dart';
 
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
@@ -21,6 +22,9 @@ class AuthGate extends StatelessWidget {
           case AuthStatus.unauthenticated:
             return const LoginScreen();
           case AuthStatus.authenticated:
+            if (notifier.needsProfileSetup) {
+              return const ProfileSetupScreen();
+            }
             return const MainScreen();
         }
       },
