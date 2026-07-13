@@ -3876,6 +3876,44 @@ async function deleteProductImages(imageUrls = []) {
   }
 }
 
+// ============================================================
+// ☁️ CLOUDINARY — Generate signed upload signature
+// ============================================================
+app.post('/api/cloudinary/sign', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Missing or invalid token' });
+    }
+    const token = authHeader.split(' ')[1];
+    try {
+      await admin.auth().verifyIdToken(token);
+    } catch {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    const apiKey = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+    if (!apiKey || !apiSecret) {
+      return res.status(500).json({ error: 'Cloudinary not configured on server' });
+    }
+
+    const cloudName = 'dgbsohnl4';
+    const folder = req.body.folder || 'soko_langu';
+    const timestamp = Math.floor(Date.now() / 1000);
+
+    const params = { folder, timestamp };
+    const sortedKeys = Object.keys(params).sort();
+    const signatureStr = sortedKeys.map(k => `${k}=${params[k]}`).join('&') + apiSecret;
+    const signature = crypto.createHash('sha256').update(signatureStr).digest('hex');
+
+    res.json({ signature, timestamp, apiKey, cloudName });
+  } catch (e) {
+    console.error('Cloudinary sign error:', e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 /**
  * Shared logic for deleting a product document + related data + images.
  */
