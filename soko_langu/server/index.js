@@ -73,15 +73,24 @@ function buildFcmDataPayload(title, body, data = {}) {
 }
 
 /**
- * Builds a data-only FCM message. The client background handler always
- * processes via Awesome Notifications (no system auto-display), so we
- * avoid the `notification` payload to prevent duplicate notifications.
- * The `data` payload carries title, body, and extras for the client.
+ * Builds an FCM message with both data + notification payload.
+ * The `notification` payload ensures delivery even when app is killed
+ * (Android auto-displays it). The background handler skips when
+ * notification payload is present to avoid duplicates.
  */
 function buildFcmMessage({ token, tokens, title, body, data = {} }) {
+  const notifType = (data && data.type) || 'general';
+  const channelId = notifType === 'chat' ? 'chat_messages_v3'
+    : notifType === 'payment' || notifType === 'order' || notifType === 'withdrawal' ? 'payments_notifications'
+    : 'general_notifications_v3';
   const msg = {
     data: buildFcmDataPayload(title, body, data),
-    android: { priority: 'high' },
+    notification: { title: title || '', body: body || '' },
+    android: {
+      priority: 'high',
+      notification: { channel_id: channelId, sound: 'soko_notification', icon: 'ic_notification' },
+    },
+    apns: { payload: { aps: { sound: 'default' } } },
   };
   if (token) msg.token = token;
   if (tokens && tokens.length) msg.tokens = tokens;
@@ -5365,6 +5374,7 @@ app.post('/api/test-fcm', async (req, res) => {
 });
 
 startChatListener();
+startProductListener();
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
 // ─── Chat message listener: notify recipient on new message ─────
@@ -5428,5 +5438,88 @@ function startChatListener() {
         });
       },
       (error) => console.error('[CHAT] Listener error:', error)
+    );
+}
+
+// ─── Product listener: notify previous chat partners on new product ─────
+function startProductListener() {
+  if (!db) return;
+  console.log('[PRODUCT] Starting product listener...');
+  let knownProductIds = new Set();
+  const listenerStartedAt = admin.firestore.Timestamp.now();
+
+  db.collection('products')
+    .orderBy('createdAt', 'desc')
+    .limit(200)
+    .get()
+    .then((snap) => {
+      snap.docs.forEach((doc) => knownProductIds.add(doc.id));
+      console.log(`[PRODUCT] Loaded ${snap.docs.length} recent products`);
+    })
+    .catch((err) => console.error('[PRODUCT] Failed to load recent products:', err.message));
+
+  db.collection('products')
+    .onSnapshot(
+      (snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type !== 'added') return;
+          const productId = change.doc.id;
+          if (knownProductIds.has(productId)) return;
+          const product = change.doc.data();
+          const productTime = product.createdAt;
+          if (productTime && productTime < listenerStartedAt) return;
+          knownProductIds.add(productId);
+
+          const sellerId = product.sellerId;
+          if (!sellerId) return;
+          const sellerName = product.sellerName || 'Mfanyabiashara';
+          const productName = product.name || 'bidhaa mpya';
+
+          db.collection('chat_rooms')
+            .where('participants', 'array-contains', sellerId)
+            .get()
+            .then((roomsSnap) => {
+              const notified = new Set();
+              for (const roomDoc of roomsSnap.docs) {
+                const room = roomDoc.data();
+                const other = (room.participants || []).find((p) => p !== sellerId);
+                if (!other || notified.has(other)) continue;
+                notified.add(other);
+                const title = sellerName;
+                const body = `${sellerName} ameweka bidhaa mpya: ${productName}.`;
+                db.collection('notifications').add({
+                  userId: other,
+                  title,
+                  body,
+                  data: { type: 'product', productId, sellerId },
+                  isRead: false,
+                  createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                }).catch(() => {});
+                db.collection('users').doc(other).get()
+                  .then((userSnap) => {
+                    const fcmToken = userSnap.data()?.fcmToken;
+                    if (fcmToken) {
+                      sendFcmToToken(buildFcmMessage({
+                        token: fcmToken,
+                        title,
+                        body,
+                        data: { type: 'product', productId, sellerId, productName },
+                      }), other).catch((err) => {
+                        if (err.code?.startsWith('messaging/')) {
+                          db.collection('users').doc(other).update({ fcmToken: null });
+                        }
+                      });
+                    }
+                  })
+                  .catch(() => {});
+              }
+              if (notified.size > 0) {
+                console.log(`[PRODUCT] Notified ${notified.size} users about new product from ${sellerId}`);
+              }
+            })
+            .catch((err) => console.error('[PRODUCT] Room lookup error:', err.message));
+        });
+      },
+      (error) => console.error('[PRODUCT] Listener error:', error)
     );
 }
