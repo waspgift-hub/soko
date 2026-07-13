@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -8,6 +9,16 @@ import 'cloudinary_service.dart';
 import 'fraud_prevention_service.dart';
 import 'api_config.dart';
 import '../utils/network_error.dart';
+
+List<String> _generateSearchKeywords(String name, String description, String category, String? brand) {
+  final words = <String>{};
+  final text = '$name $description $category ${brand ?? ''}';
+  for (final part in text.split(RegExp(r'[\s,.-]+'))) {
+    final w = part.trim().toLowerCase();
+    if (w.length >= 2) words.add(w);
+  }
+  return words.toList();
+}
 
 String getThumbnailUrl(String imageUrl, {int width = 300}) {
   try {
@@ -126,6 +137,8 @@ class ProductService {
     String condition,
     String location,
   ) async {
+    final searchKeywords = _generateSearchKeywords(name, description, category, brand);
+
     final docRef = await _db.collection("products").add({
       "name": name,
       "description": description,
@@ -152,6 +165,7 @@ class ProductService {
       "isFeatured": false,
       "featuredUntil": null,
       "sellerKycApproved": sellerKycApproved,
+      "searchKeywords": searchKeywords,
       "createdAt": FieldValue.serverTimestamp(),
     });
 
@@ -294,21 +308,69 @@ class ProductService {
   }
 
   Stream<List<Product>> searchProducts(String query) {
-    return _db.collection("products")
-        .where('isActive', isEqualTo: true)
-        .limit(100)
-        .snapshots().map((snapshot) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return Stream.value([]);
+    final words = q.split(RegExp(r'\s+')).where((w) => w.length >= 2).toList();
+    if (words.isEmpty) return Stream.value([]);
+
+    Query queryRef;
+    if (words.length == 1) {
+      queryRef = _db.collection("products")
+          .where('isActive', isEqualTo: true)
+          .where('searchKeywords', arrayContains: words[0])
+          .limit(100);
+    } else {
+      queryRef = _db.collection("products")
+          .where('isActive', isEqualTo: true)
+          .where('searchKeywords', arrayContainsAny: words.take(10).toList())
+          .limit(100);
+    }
+
+    return queryRef.snapshots().map((snapshot) {
       final products = snapshot.docs
           .map((doc) => Product.fromFirestore(doc))
-          .where(
-            (p) =>
-                query.isEmpty ||
-                p.name.toLowerCase().contains(query.toLowerCase()),
-          )
+          .where((p) => words.every((w) =>
+            p.name.toLowerCase().contains(w) ||
+            p.description.toLowerCase().contains(w)))
           .toList();
       _sortByBoost(products);
       return products;
     });
+  }
+
+  Future<List<Product>> searchProductsOnce(String query) async {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return [];
+    final words = q.split(RegExp(r'\s+')).where((w) => w.length >= 2).toList();
+    if (words.isEmpty) return [];
+
+    try {
+      Query queryRef;
+      if (words.length == 1) {
+        queryRef = _db.collection("products")
+            .where('isActive', isEqualTo: true)
+            .where('searchKeywords', arrayContains: words[0])
+            .limit(100);
+      } else {
+        queryRef = _db.collection("products")
+            .where('isActive', isEqualTo: true)
+            .where('searchKeywords', arrayContainsAny: words.take(10).toList())
+            .limit(100);
+      }
+
+      final snapshot = await queryRef.get();
+      var products = snapshot.docs
+          .map((doc) => Product.fromFirestore(doc))
+          .where((p) => words.every((w) =>
+            p.name.toLowerCase().contains(w) ||
+            p.description.toLowerCase().contains(w)))
+          .toList();
+      _sortByBoost(products);
+      return products;
+    } catch (e) {
+      debugPrint('searchProductsOnce error: $e');
+      return [];
+    }
   }
 
   Stream<List<Product>> getProductsByBrand(String brand) {
@@ -378,17 +440,18 @@ class ProductService {
   }) async {
     try {
       Map<String, dynamic> data = {};
+      bool needsKeywordUpdate = false;
 
-      if (name != null) data["name"] = name;
-      if (description != null) data["description"] = description;
+      if (name != null) { data["name"] = name; needsKeywordUpdate = true; }
+      if (description != null) { data["description"] = description; needsKeywordUpdate = true; }
+      if (category != null) { data["category"] = category; needsKeywordUpdate = true; }
+      if (brand != null) { data["brand"] = brand; needsKeywordUpdate = true; }
       if (price != null) data["price"] = price;
-      if (category != null) data["category"] = category;
       if (subcategory != null) data["subcategory"] = subcategory;
       if (stock != null) data["stock"] = stock;
       if (isWholesale != null) data["isWholesale"] = isWholesale;
       if (wholesaleTiers != null) data["wholesaleTiers"] = wholesaleTiers;
       if (variants != null) data["variants"] = variants;
-      if (brand != null) data["brand"] = brand;
       if (condition != null) data["condition"] = condition;
       if (location != null) data["location"] = location;
 
@@ -401,6 +464,17 @@ class ProductService {
           }
         }
         data["images"] = allImages;
+      }
+
+      if (needsKeywordUpdate) {
+        final current = await _db.collection("products").doc(productId).get();
+        final cur = current.data() ?? {};
+        data["searchKeywords"] = _generateSearchKeywords(
+          name ?? cur["name"] as String? ?? '',
+          description ?? cur["description"] as String? ?? '',
+          category ?? cur["category"] as String? ?? '',
+          brand ?? cur["brand"] as String?,
+        );
       }
 
       await _db.collection("products").doc(productId).update(data);
