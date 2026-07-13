@@ -4708,6 +4708,7 @@ async function notifyBoostBroadcast(productId, tier, sellerId) {
 }
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
+app.get('/ping', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
 // ─── Deactivate expired flash sales so sellers can create new ones ───
 async function deactivateExpiredFlashSales() {
@@ -5375,7 +5376,29 @@ app.post('/api/test-fcm', async (req, res) => {
 
 startChatListener();
 startProductListener();
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  // Self-ping every 10 minutes to prevent Render free-tier spin-down
+  const publicUrl = process.env.RENDER_EXTERNAL_URL || '';
+  if (publicUrl) {
+    console.log(`[SELF-PING] Auto-ping enabled for ${publicUrl}/ping every 10 minutes`);
+    setInterval(async () => {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        const resp = await fetch(`${publicUrl}/ping`, { signal: controller.signal });
+        clearTimeout(timeout);
+        if (resp.ok) {
+          console.log(`[SELF-PING] OK at ${new Date().toISOString()}`);
+        }
+      } catch (e) {
+        // Silently ignore — server may be waking up or URL not yet set
+      }
+    }, 10 * 60 * 1000);
+  } else {
+    console.log('[SELF-PING] Disabled — RENDER_EXTERNAL_URL not set');
+  }
+});
 
 // ─── Chat message listener: notify recipient on new message ─────
 function startChatListener() {
