@@ -30,10 +30,20 @@ function stringifyFcmData(data = {}) {
 }
 
 function buildFcmMessage({ token, title, body, data = {} }) {
-  return {
+  const notifType = (data && data.type) || 'general';
+  const channelId = notifType === 'chat' ? 'chat_messages_v3'
+    : notifType === 'payment' || notifType === 'order' || notifType === 'withdrawal' ? 'payments_notifications'
+    : 'general_notifications_v3';
+  const msg = {
     data: stringifyFcmData({ title: title || '', body: body || '', ...data }),
-    android: { priority: 'high' },
+    notification: { title: title || '', body: body || '' },
+    android: {
+      priority: 'high',
+      notification: { channel_id: channelId, sound: 'soko_notification', icon: 'ic_notification' },
+    },
   };
+  if (token) msg.token = token;
+  return msg;
 }
 
 async function sendFcm(message, userIdForCleanup = null) {
@@ -353,6 +363,81 @@ function startChatListener() {
     );
 }
 
+// ─── Product listener: notify previous chat partners on new product ─────
+function startProductListener() {
+  console.log('[LISTENER] Starting product listener...');
+  let knownProductIds = new Set();
+  const listenerStartedAt = admin.firestore.Timestamp.now();
+
+  db.collection('products')
+    .orderBy('createdAt', 'desc')
+    .limit(200)
+    .get()
+    .then((snap) => {
+      snap.docs.forEach((doc) => knownProductIds.add(doc.id));
+      console.log(`[LISTENER] Loaded ${snap.docs.length} recent products`);
+    })
+    .catch((err) => console.error('[LISTENER] Failed to load recent products:', err.message));
+
+  db.collection('products').onSnapshot(
+    (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type !== 'added') return;
+        const productId = change.doc.id;
+        if (knownProductIds.has(productId)) return;
+        const product = change.doc.data();
+        const productTime = product.createdAt;
+        if (productTime && productTime < listenerStartedAt) return;
+        knownProductIds.add(productId);
+
+        const sellerId = product.sellerId;
+        if (!sellerId) return;
+        const sellerName = product.sellerName || 'Mfanyabiashara';
+        const productName = product.name || 'bidhaa mpya';
+
+        db.collection('chat_rooms')
+          .where('participants', 'array-contains', sellerId)
+          .get()
+          .then((roomsSnap) => {
+            const notified = new Set();
+            for (const roomDoc of roomsSnap.docs) {
+              const room = roomDoc.data();
+              const other = (room.participants || []).find((p) => p !== sellerId);
+              if (!other || notified.has(other)) continue;
+              notified.add(other);
+              const title = sellerName;
+              const body = `${sellerName} ameweka bidhaa mpya: ${productName}.`;
+              db.collection('notifications').add({
+                userId: other, title, body,
+                data: { type: 'product', productId, sellerId },
+                isRead: false,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              }).catch(() => {});
+              db.collection('users').doc(other).get()
+                .then((userSnap) => {
+                  const fcmToken = userSnap.data()?.fcmToken;
+                  if (fcmToken) {
+                    sendFcm(buildFcmMessage({
+                      token: fcmToken, title, body,
+                      data: { type: 'product', productId, sellerId, productName },
+                    }), other).catch((err) => {
+                      if (err.code?.startsWith('messaging/')) {
+                        db.collection('users').doc(other).update({ fcmToken: null });
+                      }
+                    });
+                  }
+                }).catch(() => {});
+            }
+            if (notified.size > 0) {
+              console.log(`[LISTENER] Notified ${notified.size} users about new product from ${sellerId}`);
+            }
+          }).catch((err) => console.error('[LISTENER] Product room lookup error:', err.message));
+      });
+    },
+    (error) => console.error('[LISTENER] Product listener error:', error)
+  );
+}
+
 // Seed and start both listeners
 db.collection('transactions')
   .where('status', '==', 'pending')
@@ -367,4 +452,5 @@ db.collection('transactions')
   .finally(() => {
     startListener();
     startChatListener();
+    startProductListener();
   });
