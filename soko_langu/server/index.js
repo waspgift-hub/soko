@@ -1270,58 +1270,6 @@ app.post('/api/escrow/release', async (req, res) => {
       metadata: { buyerId: userId, productName, pendingBefore, pendingAfter: pendingBefore - sellerReceives },
     });
 
-    // Auto-payout to seller's phone (only if autoPayout is enabled)
-    if (sellerReceives > 0) {
-      try {
-        const sellerUserDoc = await db.collection('users').doc(sellerId).get();
-        if (!sellerUserDoc.exists) return;
-        const sellerData = sellerUserDoc.data();
-        const autoPayout = sellerData.autoPayout !== false; // default true
-
-        if (!autoPayout) {
-          console.log(`Auto-payout skipped for seller ${sellerId}: manual mode`);
-          return;
-        }
-
-        const sellerPhone = sellerData.phone;
-        if (!sellerPhone) return;
-
-        const netPayout = sellerReceives - PAYOUT_FEE;
-        if (netPayout <= 0) return;
-
-        try {
-          const payout = await processPayout({
-            userId: sellerId, phone: sellerPhone,
-            amount: sellerReceives, fee: PAYOUT_FEE, netAmount: netPayout,
-            source: `escrow_${orderId}`,
-            type: 'escrow_release',
-            metadata: { orderId, sellerId, productName },
-          });
-
-          await db.collection('users').doc(sellerId).update({
-            sellerBalance: admin.firestore.FieldValue.increment(-sellerReceives),
-          });
-        } catch (payoutErr) {
-          console.error('Mongike escrow auto-payout failed:', payoutErr);
-          await ref.update({
-            payoutStatus: 'failed_retry',
-            payoutError: payoutErr.message || 'Mongike API error',
-            payoutFailedAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-          await db.collection('notifications').add({
-            userId: 'admin',
-            title: 'Auto-payout Imeshindwa',
-            body: `Escrow ${orderId} — TZS ${sellerReceives.toLocaleString()} kwa ${sellerId}. Mongike error. Pesa zipo kwenye sellerBalance.`,
-            isRead: false,
-            data: { type: 'failed_retry', transactionId: orderId },
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-        }
-      } catch (payoutErr) {
-        console.error('Escrow auto-payout error:', payoutErr);
-      }
-    }
-
     // Notify seller
     await db.collection('notifications').add({
       userId: sellerId,
@@ -4768,42 +4716,6 @@ async function releaseExpiredEscrows() {
           sellerBalance: admin.firestore.FieldValue.increment(sellerReceives),
           pendingEscrow: admin.firestore.FieldValue.increment(-actualPending),
         });
-
-        // Auto-payout seller with failed_retry protection
-        try {
-          const sellerData = autoSellerDoc.data();
-          const autoPayout = sellerData.autoPayout !== false;
-          if (autoPayout && sellerData.phone) {
-            const netPayout = sellerReceives - PAYOUT_FEE;
-            if (netPayout > 0) {
-              await processPayout({
-                userId: sellerId, phone: sellerData.phone,
-                amount: sellerReceives, fee: PAYOUT_FEE, netAmount: netPayout,
-                source: `auto_escrow_${doc.id}`,
-                type: 'escrow_auto_release',
-                metadata: { orderId: doc.id, sellerId, productName: tx.productName },
-              });
-              await db.collection('users').doc(sellerId).update({
-                sellerBalance: admin.firestore.FieldValue.increment(-sellerReceives),
-              });
-            }
-          }
-        } catch (payoutErr) {
-          console.error(`Auto-payout failed for escrow ${doc.id}:`, payoutErr.message);
-          await doc.ref.update({
-            payoutStatus: 'failed_retry',
-            payoutError: payoutErr.message || 'Mongike API error',
-            payoutFailedAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-          await db.collection('notifications').add({
-            userId: 'admin',
-            title: '⚠️ Auto-payout Imeshindwa',
-            body: `Escrow ${doc.id} — TZS ${sellerReceives.toLocaleString()} kwa ${sellerId}. Pesa zipo kwenye sellerBalance.`,
-            isRead: false,
-            data: { type: 'failed_retry', transactionId: doc.id },
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-        }
 
         await db.collection('notifications').add({
           userId: sellerId,
