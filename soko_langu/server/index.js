@@ -5374,7 +5374,95 @@ app.post('/api/test-fcm', async (req, res) => {
   }
 });
 
-startChatListener();
+// ============================================================
+// 💬 CHAT — Send message via REST (replaces onSnapshot listener)
+// ============================================================
+app.post('/api/chat/send', async (req, res) => {
+  try {
+    const { senderId, receiverId, roomId, text, productId, productName, replyTo, replyToContent, replyToSender } = req.body;
+    if (!senderId || !receiverId || !roomId || !text) {
+      return res.status(400).json({ error: 'Missing required fields (senderId, receiverId, roomId, text)' });
+    }
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    // Verify Firebase Auth token
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    let decoded;
+    try {
+      decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
+    } catch {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    if (decoded.uid !== senderId) {
+      return res.status(403).json({ error: 'Sender ID mismatch' });
+    }
+
+    // Check sender is not suspended
+    const senderDoc = await db.collection('users').doc(senderId).get();
+    if (senderDoc.exists && senderDoc.data().isSuspended === true) {
+      return res.status(403).json({ error: 'Account suspended' });
+    }
+
+    // Verify room exists and sender is a participant
+    const roomDoc = await db.collection('chat_rooms').doc(roomId).get();
+    if (!roomDoc.exists) {
+      return res.status(404).json({ error: 'Chat room not found' });
+    }
+    const room = roomDoc.data();
+    if (!room.participants.includes(senderId)) {
+      return res.status(403).json({ error: 'You are not a participant in this room' });
+    }
+
+    // Write message to Firestore
+    const msgRef = await db.collection('chat_rooms').doc(roomId).collection('messages').add({
+      sender_id: senderId,
+      text,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      is_read: false,
+      ...(productId ? { product_id: productId } : {}),
+      ...(productName ? { product_name: productName } : {}),
+      ...(replyTo ? { reply_to: replyTo } : {}),
+      ...(replyToContent ? { reply_to_content: replyToContent } : {}),
+      ...(replyToSender ? { reply_to_sender: replyToSender } : {}),
+    });
+
+    // Update room metadata
+    await db.collection('chat_rooms').doc(roomId).update({
+      last_message: text,
+      last_timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // Send FCM push to receiver
+    const senderName = senderDoc.exists
+      ? (senderDoc.data().displayName || senderDoc.data().name || 'Mtumiaji')
+      : 'Mtumiaji';
+    const receiverDoc = await db.collection('users').doc(receiverId).get();
+    if (receiverDoc.exists) {
+      const fcmToken = receiverDoc.data().fcmToken;
+      if (fcmToken) {
+        sendFcmToToken(buildFcmMessage({
+          token: fcmToken,
+          title: senderName,
+          body: text,
+          data: { type: 'chat', senderId, senderName, roomId },
+        }), receiverId).catch((err) => {
+          if (err.code?.startsWith('messaging/')) {
+            db.collection('users').doc(receiverId).update({ fcmToken: null });
+          }
+        });
+      }
+    }
+
+    res.json({ success: true, messageId: msgRef.id });
+  } catch (e) {
+    console.error('/api/chat/send error:', e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 startProductListener();
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
@@ -5399,70 +5487,6 @@ app.listen(PORT, () => {
     console.log('[SELF-PING] Disabled — RENDER_EXTERNAL_URL not set');
   }
 });
-
-// ─── Chat message listener: notify recipient on new message ─────
-function startChatListener() {
-  if (!db) return;
-  console.log('[CHAT] Starting chat message listener...');
-  let knownMessageIds = new Set();
-  const listenerStartedAt = admin.firestore.Timestamp.now();
-  db.collectionGroup('messages')
-    .orderBy('timestamp', 'desc')
-    .limit(200)
-    .get()
-    .then((snap) => {
-      snap.docs.forEach((doc) => knownMessageIds.add(doc.id));
-      console.log(`[CHAT] Loaded ${snap.docs.length} recent messages`);
-    })
-    .catch((err) => console.error('[CHAT] Failed to load recent messages:', err.message));
-  db.collectionGroup('messages')
-    .onSnapshot(
-      (snapshot) => {
-        snapshot.docChanges().forEach((change) => {
-          if (change.type !== 'added') return;
-          const msgId = change.doc.id;
-          if (knownMessageIds.has(msgId)) return;
-          const msg = change.doc.data();
-          // Skip messages older than listener start (in-memory filter, no index needed)
-          const msgTime = msg.timestamp;
-          if (msgTime && msgTime < listenerStartedAt) return;
-          knownMessageIds.add(msgId);
-          const senderId = msg.sender_id || '';
-          const text = msg.text || '';
-          if (!senderId || !text) return;
-          const roomId = change.doc.ref.parent.parent?.id;
-          if (!roomId) return;
-          if (senderId === 'ai_dalali') return;
-          db.collection('chat_rooms').doc(roomId).get()
-            .then((roomSnap) => {
-              if (!roomSnap.exists) return;
-              const room = roomSnap.data();
-              const receiverId = (room.participants || []).find(p => p !== senderId);
-              if (!receiverId) return;
-              return db.collection('users').doc(senderId).get()
-                .then((sSnap) => db.collection('users').doc(receiverId).get()
-                  .then((rSnap) => {
-                    const senderName = (sSnap.data()?.displayName || sSnap.data()?.name || 'Mtumiaji');
-                    const fcmToken = rSnap.data()?.fcmToken;
-                    if (!fcmToken) return;
-                    return sendFcmToToken(buildFcmMessage({
-                      token: fcmToken,
-                      title: senderName,
-                      body: text,
-                      data: { type: 'chat', senderId, senderName, roomId },
-                    }), receiverId).catch((err) => {
-                      if (err.code?.startsWith('messaging/')) {
-                        return db.collection('users').doc(receiverId).update({ fcmToken: null });
-                      }
-                    });
-                  }));
-            })
-            .catch((err) => console.error('[CHAT] Notification error:', err.message));
-        });
-      },
-      (error) => console.error('[CHAT] Listener error:', error)
-    );
-}
 
 // ─── Product listener: notify previous chat partners on new product ─────
 function startProductListener() {

@@ -1,12 +1,13 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/chat_room.dart';
-import '../models/chat_message.dart';
 import '../models/message_model.dart';
 import 'api_config.dart';
+import 'local_cache_service.dart';
 
 class ChatService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -59,29 +60,89 @@ class ChatService {
     return roomId;
   }
 
-  Stream<List<ChatRoom>> getRooms() {
+Stream<List<ChatRoom>> getRooms() {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return Stream.value([]);
-    return _db
-        .collection('chat_rooms')
-        .where('participants', arrayContains: user.uid)
-        .orderBy('last_timestamp', descending: true)
-        .snapshots()
-        .map((snap) => snap.docs
-            .map((doc) => ChatRoom.fromMap(doc.id, doc.data()))
-            .toList());
+
+    // Emit cached rooms immediately, then switch to live stream
+    final cachedStream = _getCachedRooms(user.uid).asStream();
+
+    // Return a stream that first emits cached, then merges with live
+    return cachedStream
+        .asyncExpand((cached) => _getLiveRooms(user.uid).map((live) {
+              final liveIds = live.map((r) => r.id).toSet();
+              final extraCached = cached.where((r) => !liveIds.contains(r.id));
+              return [...live, ...extraCached];
+            }))
+        .handleError((_) => []);
   }
 
-  Stream<List<Message>> getMessages(String roomId) {
+  /// Get cached rooms from Hive for instant UI
+  Future<List<ChatRoom>> _getCachedRooms(String userId) async {
+    try {
+      await LocalCacheService.init();
+      final cached = LocalCacheService.getCachedRoomsForUser(userId);
+      // Sort by lastTimestamp descending (newest first), handle nulls
+      cached.sort((a, b) => (b.lastTimestamp?.millisecondsSinceEpoch ?? 0)
+          .compareTo(a.lastTimestamp?.millisecondsSinceEpoch ?? 0));
+      return cached;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Live rooms stream from Firestore
+  Stream<List<ChatRoom>> _getLiveRooms(String userId) {
+    return _db
+        .collection('chat_rooms')
+        .where('participants', arrayContains: userId)
+        .orderBy('last_timestamp', descending: true)
+        .snapshots()
+        .map((snap) {
+      final rooms = snap.docs
+          .map((doc) => ChatRoom.fromMap(doc.id, doc.data()))
+          .toList();
+      unawaited(LocalCacheService.cacheRooms(rooms));
+      return rooms;
+    });
+  }
+
+  Stream<List<Message>> getMessages(String roomId, {int limit = 100}) {
     return _db
         .collection('chat_rooms')
         .doc(roomId)
         .collection('messages')
         .orderBy('timestamp', descending: true)
+        .limit(limit)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((doc) => Message.fromMap(doc.id, doc.data()))
-            .toList());
+        .map((snap) {
+      final msgs = snap.docs
+          .map((doc) => Message.fromMap(doc.id, doc.data()))
+          .toList();
+      unawaited(LocalCacheService.cacheMessages(roomId, msgs));
+      return msgs;
+    });
+  }
+
+  Future<List<Message>> loadOlderMessages(String roomId,
+      {required Timestamp before, int limit = 50}) async {
+    final snap = await _db
+        .collection('chat_rooms')
+        .doc(roomId)
+        .collection('messages')
+        .orderBy('timestamp', descending: true)
+        .where('timestamp', isLessThan: before)
+        .limit(limit)
+        .get();
+    final msgs = snap.docs
+        .map((doc) => Message.fromMap(doc.id, doc.data()))
+        .toList();
+    unawaited(LocalCacheService.cacheMessages(roomId, msgs));
+    return msgs;
+  }
+
+  List<Message> getCachedMessages(String roomId) {
+    return LocalCacheService.getCachedMessages(roomId);
   }
 
   Future<void> sendMessage({
@@ -97,26 +158,53 @@ class ChatService {
     if (user == null) return;
     final roomId = _roomIdFor(user.uid, receiverId);
 
-    final data = <String, dynamic>{
-      'sender_id': user.uid,
+    final idToken = await user.getIdToken();
+    final body = <String, dynamic>{
+      'senderId': user.uid,
+      'receiverId': receiverId,
+      'roomId': roomId,
       'text': content,
-      'timestamp': FieldValue.serverTimestamp(),
-      'is_read': false,
+      if (productId != null) 'productId': productId,
+      if (productName != null) 'productName': productName,
+      if (replyTo != null) 'replyTo': replyTo,
+      if (replyToContent != null) 'replyToContent': replyToContent,
+      if (replyToSender != null) 'replyToSender': replyToSender,
     };
-    await _db.collection('chat_rooms').doc(roomId).collection('messages').add(data);
 
-    final update = <String, dynamic>{
-      'last_message': content,
-      'last_timestamp': FieldValue.serverTimestamp(),
-    };
-    await _db.collection('chat_rooms').doc(roomId).update(update);
+    try {
+      final response = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/chat/send'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $idToken',
+        },
+        body: jsonEncode(body),
+      );
 
-    _sendPushNotification(
-      otherId: receiverId,
-      senderName: user.displayName ?? user.email ?? 'Mtumiaji',
-      message: content,
-      roomId: roomId,
-    );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final messageId = data['messageId'] as String? ?? '';
+
+        unawaited(LocalCacheService.cacheSingleMessage(roomId, Message(
+          id: messageId,
+          senderId: user.uid,
+          receiverId: receiverId,
+          content: content,
+          timestamp: DateTime.now(),
+          isRead: false,
+          isDelivered: true,
+          productId: productId,
+          productName: productName,
+          replyTo: replyTo,
+          replyToContent: replyToContent,
+          replyToSender: replyToSender,
+        )));
+      } else {
+        if (kDebugMode) debugPrint('ChatService: send failed: ${response.statusCode} ${response.body}');
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('ChatService: send error: $e');
+    }
   }
 
   Future<void> markAsRead(String roomId) async {
@@ -149,32 +237,5 @@ class ChatService {
 
   Future<void> deleteConversation(String userId) async {
     // stub
-  }
-
-  Future<void> _sendPushNotification({
-    required String otherId,
-    required String senderName,
-    required String message,
-    required String roomId,
-  }) async {
-    try {
-      await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/send-notification'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'userId': otherId,
-          'title': senderName,
-          'body': message,
-          'data': {
-            'type': 'chat',
-            'senderId': FirebaseAuth.instance.currentUser?.uid ?? '',
-            'senderName': senderName,
-            'roomId': roomId,
-          },
-        }),
-      );
-    } catch (e) {
-      if (kDebugMode) debugPrint('ChatService: push notification failed: $e');
-    }
   }
 }
