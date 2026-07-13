@@ -1,22 +1,54 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'api_config.dart';
 import '../utils/network_error.dart';
 
 class CloudinaryService {
   static const String _cloudName = 'dgbsohnl4';
-  static const String _uploadPreset = 'ecommerce';
+
+  static Future<Map<String, dynamic>> _getSignature({String folder = 'soko_langu'}) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw NetworkError(
+      message: 'Not authenticated',
+      userMessage: 'Tafadhali ingia tena',
+    );
+
+    final idToken = await user.getIdToken();
+    final response = await http.post(
+      Uri.parse('${ApiConfig.baseUrl}/api/cloudinary/sign'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $idToken',
+      },
+      body: jsonEncode({'folder': folder}),
+    );
+
+    if (response.statusCode != 200) {
+      throw NetworkError(
+        message: 'Failed to get upload signature',
+        userMessage: 'Tafadhali jaribu tena',
+      );
+    }
+
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
 
   static Future<String> uploadImage(
     XFile xfile, {
     String folder = 'soko_langu',
   }) async {
+    final sig = await _getSignature(folder: folder);
+
     final uri = Uri.parse(
       'https://api.cloudinary.com/v1_1/$_cloudName/image/upload',
     );
 
     final request = http.MultipartRequest('POST', uri)
-      ..fields['upload_preset'] = _uploadPreset
+      ..fields['api_key'] = sig['apiKey'] as String
+      ..fields['timestamp'] = sig['timestamp'].toString()
+      ..fields['signature'] = sig['signature'] as String
       ..fields['folder'] = folder
       ..files.add(
         http.MultipartFile.fromBytes(
@@ -62,12 +94,16 @@ class CloudinaryService {
     XFile xfile, {
     String folder = 'soko_langu',
   }) async {
+    final sig = await _getSignature(folder: folder);
+
     final uri = Uri.parse(
       'https://api.cloudinary.com/v1_1/$_cloudName/video/upload',
     );
 
     final request = http.MultipartRequest('POST', uri)
-      ..fields['upload_preset'] = _uploadPreset
+      ..fields['api_key'] = sig['apiKey'] as String
+      ..fields['timestamp'] = sig['timestamp'].toString()
+      ..fields['signature'] = sig['signature'] as String
       ..fields['folder'] = folder
       ..files.add(
         http.MultipartFile.fromBytes(
