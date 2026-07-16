@@ -11,6 +11,7 @@ import 'local_cache_service.dart';
 
 class ChatService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
   String _roomIdFor(String uid1, String uid2) {
     final ids = [uid1, uid2]..sort();
@@ -141,7 +142,7 @@ Stream<List<ChatRoom>> getRooms() {
     return msgs;
   }
 
-  List<Message> getCachedMessages(String roomId) {
+  Future<List<Message>> getCachedMessages(String roomId) async {
     return LocalCacheService.getCachedMessages(roomId);
   }
 
@@ -232,10 +233,25 @@ Stream<List<ChatRoom>> getRooms() {
   }
 
   Future<void> blockUser(String userId) async {
-    // stub
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    await _db.collection('users').doc(uid).update({
+      'blockedUsers': FieldValue.arrayUnion([userId])
+    });
   }
 
   Future<void> deleteConversation(String userId) async {
-    // stub
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    final roomsSnap = await _db
+        .collection('conversations')
+        .where('participants', arrayContains: uid)
+        .get();
+    for (final room in roomsSnap.docs) {
+      final participants = List<String>.from(room['participants'] ?? []);
+      if (participants.contains(userId)) {
+        await room.reference.delete();
+      }
+    }
   }
 }

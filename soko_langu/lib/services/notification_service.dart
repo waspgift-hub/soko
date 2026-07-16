@@ -26,17 +26,18 @@ class NotificationService {
       GlobalKey<ScaffoldMessengerState>();
   static void Function(Map<String, dynamic> data)? onNotificationTap;
   static void Function(Map<String, dynamic> data)? onPaymentNotificationTap;
+  static void Function(String title, String body, String type, Map<String, dynamic>? data)? onForegroundMessage;
 
   static List<NotificationChannel> get channels => _channels;
 
   static List<NotificationChannel> get _channels => [
         NotificationChannel(
-          channelKey: 'chat_messages_v3',
+          channelKey: 'chat_messages_v4',
           channelName: 'Chat Messages',
           channelDescription: 'New message notifications from chats',
           defaultColor: const Color(0xFF40916C),
           ledColor: const Color(0xFF40916C),
-          importance: NotificationImportance.High,
+          importance: NotificationImportance.Max,
           channelShowBadge: true,
           playSound: true,
           soundSource: customSound,
@@ -46,12 +47,12 @@ class NotificationService {
           defaultPrivacy: NotificationPrivacy.Public,
         ),
         NotificationChannel(
-          channelKey: 'general_notifications_v3',
+          channelKey: 'general_notifications_v4',
           channelName: 'Soko Vibe',
           channelDescription: 'Flash sale & other notifications',
           defaultColor: const Color(0xFF40916C),
           ledColor: const Color(0xFF40916C),
-          importance: NotificationImportance.High,
+          importance: NotificationImportance.Max,
           channelShowBadge: true,
           playSound: true,
           soundSource: customSound,
@@ -60,12 +61,12 @@ class NotificationService {
           enableLights: true,
         ),
         NotificationChannel(
-          channelKey: 'payments_notifications',
+          channelKey: 'payments_notifications_v4',
           channelName: 'Payments',
           channelDescription: 'Notifications for payment transactions',
           defaultColor: const Color(0xFF2D6A4F),
           ledColor: const Color(0xFF2D6A4F),
-          importance: NotificationImportance.High,
+          importance: NotificationImportance.Max,
           channelShowBadge: true,
           playSound: true,
           soundSource: customSound,
@@ -193,6 +194,13 @@ class NotificationService {
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
     if (!await isEnabled()) return;
     await FcmNotificationDisplay.show(message);
+    final data = message.data;
+    final title = message.notification?.title ?? data['title'] as String? ?? '';
+    final body = message.notification?.body ?? data['body'] as String? ?? '';
+    final type = data['type'] as String? ?? 'general';
+    if (title.isNotEmpty && onForegroundMessage != null) {
+      onForegroundMessage!(title, body, type, data);
+    }
   }
 
   void _handleNotificationTap(RemoteMessage message) {

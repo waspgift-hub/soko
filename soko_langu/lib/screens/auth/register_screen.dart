@@ -425,7 +425,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
           ),
         ),
-        AuthLoadingOverlay(visible: _isLoading),
       ],
     );
   }

@@ -177,10 +177,7 @@ class UserService {
         results[doc.id] = UserProfile.fromMap(doc.id, doc.data());
       }
     } catch (_) {
-      final snap = await _db.collection('users').limit(50).get();
-      for (final doc in snap.docs) {
-        results[doc.id] = UserProfile.fromMap(doc.id, doc.data());
-      }
+      return [];
     }
     return results.values.toList();
   }

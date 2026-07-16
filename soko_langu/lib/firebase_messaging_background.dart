@@ -12,7 +12,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   await AwesomeNotifications().initialize(
-    null,
+    'resource://drawable/ic_notification',
     NotificationService.channels,
   );
 

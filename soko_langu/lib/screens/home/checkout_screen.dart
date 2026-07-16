@@ -1,13 +1,17 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
 import '../../models/product_model.dart';
 import '../../services/flash_sale_service.dart';
-import '../../services/notification_service.dart';
+import '../../services/payment_service.dart';
+import '../../services/api_config.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../widgets/google_loading.dart';
+import '../../widgets/payment_banner.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final Product product;
@@ -174,18 +178,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       final activeFs = await FlashSaleService().streamFlashSaleByProductId(p.id).first;
       if (activeFs != null && activeFs.isExpired) { _showError(context.tr('flash_sale_expired')); setState(() => _processing = false); return; }
 
-      final orderId = 'q${DateTime.now().millisecondsSinceEpoch.toRadixString(36)}${user.uid.substring(0, 4)}';
+      final orderId = await PaymentService().processTransaction(
+        buyerId: user.uid,
+        buyerName: user.displayName ?? '',
+        buyerPhone: normalizedPhone,
+        sellerId: p.sellerId,
+        sellerName: p.sellerName,
+        productId: p.id,
+        productName: p.name,
+        productPrice: _totalPrice,
+      );
 
-      await FirebaseFirestore.instance.collection('transactions').doc(orderId).set({
-        'type': 'purchase',
-        'productId': p.id,
-        'productName': p.name,
-        'sellerId': p.sellerId,
-        'sellerName': p.sellerName,
-        'buyerPhone': normalizedPhone,
-        'buyerId': user.uid,
-        'buyerName': user.displayName ?? '',
-        'productPrice': _totalPrice,
+      // Save delivery address separately since processTransaction doesn't include it
+      await FirebaseFirestore.instance.collection('transactions').doc(orderId).update({
         'deliveryAddress': {
           'region': region,
           'district': district,
@@ -194,28 +199,58 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         },
         'status': 'awaiting_shipping_quote',
         'paymentMethod': 'Mongike',
-        'createdAt': FieldValue.serverTimestamp(),
       });
 
       // Notify seller about new order
       try {
-        NotificationService().sendNotification(
-          userId: p.sellerId,
-          title: 'Order Mpya Imewasilishwa!',
-          body: '${user.displayName ?? 'Mnunuzi'} anataka kununua ${p.name}. '
-              'Ingiza gharama ya usafirishaji.',
-          data: {'type': 'order', 'transactionId': orderId},
+        final resp = await http.post(
+          Uri.parse('${ApiConfig.baseUrl}/api/send-notification'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'userId': p.sellerId,
+            'title': 'Order Mpya Imewasilishwa!',
+            'body': '${user.displayName ?? 'Mnunuzi'} anataka kununua ${p.name}. '
+                'Ingiza gharama ya usafirishaji.',
+            'data': {'type': 'order', 'transactionId': orderId},
+          }),
         );
-      } catch (_) {}
+        if (resp.statusCode != 200) {
+          debugPrint('sendNotification failed: ${_tryParseServerError(resp)}');
+        }
+      } catch (e) {
+        debugPrint('sendNotification error: $e');
+      }
 
       if (mounted) {
         setState(() => _processing = false);
-        _showSuccess('Ombi lako limetumwa. Muuzaji atakupa gharama ya usafirishaji.');
-        context.go(AppRoutes.myPurchases);
+        RealtimePaymentBanner.show(
+          context: context,
+          orderId: orderId,
+          successStatuses: ['awaiting_shipping_quote'],
+          processingTitle: 'Inachakata ombi lako...',
+          successTitle: 'Ombi Limetumwa!',
+          successSubtitle: 'Muuzaji atakupa gharama ya usafirishaji.',
+          failedTitle: 'Ombi Limeshindikana',
+          onSuccess: () => context.go(AppRoutes.myPurchases),
+        );
       }
     } catch (e) {
-      _showError('Hitilafu: $e');
       setState(() => _processing = false);
+      _showError('Hitilafu: $e');
+    }
+  }
+
+  /// Detects Express/Render HTML error pages and returns a user-friendly message.
+  String _tryParseServerError(http.Response resp) {
+    final body = resp.body;
+    if (body.startsWith('<html') || body.contains('<!DOCTYPE')) {
+      return 'Server error (${resp.statusCode}). Tafadhali jaribu tena baadaye.';
+    }
+    try {
+      final decoded = jsonDecode(body);
+      return decoded['error'] ?? decoded['message'] ?? 'Unknown error';
+    } on FormatException {
+      return 'Server error (${resp.statusCode}). Tafadhali jaribu tena.';
     }
   }
 
@@ -224,8 +259,5 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.error));
   }
 
-  void _showSuccess(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.primary));
-  }
+
 }

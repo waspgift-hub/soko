@@ -1,20 +1,19 @@
-import 'dart:convert';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:http/http.dart' as http;
 import '../../models/product_model.dart';
 import '../../models/boost_tier.dart';
 import '../../services/boost_service.dart';
-import '../../services/api_config.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/sms_notification_service.dart';
 import '../../models/boost_receipt.dart';
 import '../../models/payment_model.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/boost_receipt_card.dart';
+import '../../widgets/payment_banner.dart';
+import '../../widgets/glass_container.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 
@@ -380,41 +379,13 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
     if (tier == null) return;
 
     final phoneController = TextEditingController();
-    final phone = await showDialog<String>(
+    final phone = await _GlassPaymentDialog.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(context.tr('phone_number')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '${context.tr('boost_product')} "${widget.product.name}"\n${tier.displayName} — TZS ${_nf.format(tier.priceTzs)} / ${tier.durationDays} ${context.tr('days')}',
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: phoneController,
-              keyboardType: TextInputType.phone,
-              decoration: InputDecoration(
-                labelText: context.tr('phone_number'),
-                hintText: context.tr('phone_hint'),
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.phone_android),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(context.tr('cancel')),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, phoneController.text.trim()),
-            child: Text(context.tr('pay_now')),
-          ),
-        ],
-      ),
+      productName: widget.product.name,
+      tierName: tier.displayName,
+      price: 'TZS ${_nf.format(tier.priceTzs)}',
+      duration: '${tier.durationDays} ${context.tr('days')}',
+      phoneController: phoneController,
     );
 
     if (phone == null || phone.isEmpty) return;
@@ -442,58 +413,34 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
 
       final orderId = result['order_id'] as String?;
 
-      if (mounted) {
-        _showProcessingDialog(orderId);
+      if (mounted && orderId != null) {
+        RealtimePaymentBanner.show(
+          context: context,
+          orderId: orderId,
+          successStatuses: ['completed'],
+          processingTitle: context.tr('processing_payment'),
+          successTitle: context.tr('payment_successful'),
+          failedTitle: context.tr('payment_failed'),
+          onSuccess: () {
+            if (mounted) _onPaymentSuccess();
+          },
+          onError: (msg) {
+            if (mounted) {
+              _showError(msg);
+              PaymentBanner.show(
+                context: context,
+                type: PaymentBannerType.failed,
+                title: context.tr('payment_failed'),
+                subtitle: msg,
+              );
+            }
+          },
+        );
       }
     } catch (e) {
       if (mounted) _showError('Error: $e');
     } finally {
       if (mounted) setState(() => _processing = false);
-    }
-  }
-
-  void _showProcessingDialog(String? orderId) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        return _PaymentDialog(
-          orderId: orderId!,
-          onSuccess: () {
-            Navigator.pop(ctx);
-            if (mounted) _onPaymentSuccess();
-          },
-          onError: (msg) {
-            Navigator.pop(ctx);
-            if (mounted) _showError(msg);
-          },
-        );
-      },
-    );
-  }
-
-  // ignore: unused_element
-  Future<void> _retryPayment(String orderId) async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
-      final token = await user.getIdToken();
-      final resp = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/retry-payment'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({'order_id': orderId}),
-      );
-      final body = jsonDecode(resp.body) as Map<String, dynamic>;
-      if (resp.statusCode == 200 && body['status'] == 'completed') {
-        // Success — the transaction is now completed
-      } else {
-        if (mounted) _showError(body['error'] as String? ?? context.tr('payment_not_confirmed'));
-      }
-    } catch (e) {
-      debugPrint('retryPayment error: $e');
     }
   }
 
@@ -570,141 +517,119 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
   }
 }
 
-class _PaymentDialog extends StatefulWidget {
-  final String orderId;
-  final VoidCallback onSuccess;
-  final void Function(String msg) onError;
-  const _PaymentDialog({required this.orderId, required this.onSuccess, required this.onError});
-  @override
-  State<_PaymentDialog> createState() => _PaymentDialogState();
-}
-
-class _PaymentDialogState extends State<_PaymentDialog> {
-  bool _timedOut = false;
-  bool _checking = false;
-
-  @override
-  void initState() {
-    super.initState();
-    Future.delayed(const Duration(seconds: 120), () {
-      if (mounted) setState(() => _timedOut = true);
-    });
-  }
-
-  Future<void> _retry() async {
-    setState(() => _checking = true);
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
-      final token = await user.getIdToken();
-      final resp = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/retry-payment'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({'order_id': widget.orderId}),
-      );
-      final body = jsonDecode(resp.body) as Map<String, dynamic>;
-      if (!mounted) return;
-      if (resp.statusCode == 200 && body['status'] == 'completed') {
-        widget.onSuccess();
-      } else {
-        widget.onError(body['error'] as String? ?? 'Payment not confirmed yet');
-      }
-    } catch (e) {
-      if (mounted) widget.onError(context.tr('network_error').replaceAll('{error}', '$e'));
-    } finally {
-      if (mounted) setState(() => _checking = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
+/// Glassmorphic payment phone-input dialog with frosted glass effect.
+class _GlassPaymentDialog {
+  static Future<String?> show({
+    required BuildContext context,
+    required String productName,
+    required String tierName,
+    required String price,
+    required String duration,
+    required TextEditingController phoneController,
+  }) {
     final cs = Theme.of(context).colorScheme;
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('transactions')
-          .doc(widget.orderId)
-          .snapshots(),
-      builder: (context, snap) {
-        final data = snap.data?.data() as Map<String, dynamic>?;
-        final status = data?['status'] as String? ?? 'pending';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-        if (status == 'completed') {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            widget.onSuccess();
-          });
-          return AlertDialog(
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.check_circle, color: cs.primary, size: 64),
-                const SizedBox(height: 16),
-                Text(context.tr('payment_successful'),
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Text(context.tr('product_now_boosted'),
-                    style: const TextStyle(color: Colors.black54)),
-              ],
-            ),
-          );
-        }
-
-        if (status == 'failed') {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            widget.onError(context.tr('payment_failed_try_again'));
-          });
-          return AlertDialog(
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.cancel, color: Colors.red, size: 64),
-                const SizedBox(height: 16),
-                Text(context.tr('payment_failed'),
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          );
-        }
-
-        return AlertDialog(
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (!_timedOut) ...[
-                const GoogleLoading(size: 24, strokeWidth: 2),
-                const SizedBox(height: 20),
-              ],
-              Text(
-                _timedOut ? context.tr('payment_not_confirmed') : context.tr('processing_payment'),
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _timedOut
-                    ? '${context.tr('check_phone_complete_payment')}\nOrder: ${widget.orderId}'
-                    : context.tr('complete_payment_on_phone'),
-                textAlign: TextAlign.center,
-                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-              ),
-              if (_timedOut) ...[
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _checking ? null : _retry,
-                    icon: _checking
-                        ? const SizedBox(width: 20, height: 20, child: GoogleLoading(size: 20, strokeWidth: 2))
-                        : const Icon(Icons.refresh, size: 18),
-                    label: Text(_checking ? context.tr('checking') : context.tr('check_payment_status')),
-                  ),
+    return showDialog<String>(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: BackdropFilter(
+            filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(24, 28, 24, 16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: isDark
+                      ? [cs.surface.withValues(alpha: 0.85), cs.surfaceContainerLow.withValues(alpha: 0.7)]
+                      : [Colors.white.withValues(alpha: 0.92), Colors.white.withValues(alpha: 0.8)],
                 ),
-              ],
-            ],
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: isDark ? 0.1 : 0.25),
+                  width: 0.5,
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    context.tr('phone_number'),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                      color: isDark ? Colors.white : cs.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  GlassContainer(
+                    borderRadius: 12,
+                    opacity: isDark ? 0.12 : 0.08,
+                    padding: const EdgeInsets.all(12),
+                    child: Text(
+                      '"$productName"\n$tierName — $price / $duration',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: isDark ? Colors.white.withValues(alpha: 0.85) : cs.onSurface.withValues(alpha: 0.8),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  GlassContainer(
+                    borderRadius: 12,
+                    opacity: isDark ? 0.08 : 0.05,
+                    child: TextField(
+                      controller: phoneController,
+                      keyboardType: TextInputType.phone,
+                      decoration: InputDecoration(
+                        labelText: context.tr('phone_number'),
+                        hintText: context.tr('phone_hint'),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        prefixIcon: Icon(Icons.phone_android, color: cs.primary),
+                        filled: false,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: Text(context.tr('cancel')),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.pop(ctx, phoneController.text.trim()),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: cs.primary,
+                            foregroundColor: cs.surface,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          child: Text(context.tr('pay_now')),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }
+
+

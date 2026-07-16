@@ -5,6 +5,7 @@ class AnalyticsData {
   final int totalProducts;
   final int activeProducts;
   final int inactiveProducts;
+  final int totalOrders;
   final double totalRevenue;
   final double revenueToday;
   final double revenueThisMonth;
@@ -19,6 +20,7 @@ class AnalyticsData {
     this.totalProducts = 0,
     this.activeProducts = 0,
     this.inactiveProducts = 0,
+    this.totalOrders = 0,
     this.totalRevenue = 0,
     this.revenueToday = 0,
     this.revenueThisMonth = 0,

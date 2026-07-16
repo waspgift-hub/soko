@@ -134,7 +134,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
     try {
       final results = await Future.wait([
-        _productService.searchProducts(query).first,
+        _productService.searchProductsOnce(query),
         _userService.searchUsers(query),
       ]);
       if (mounted) {
