@@ -75,7 +75,7 @@ class AboutAppScreen extends StatelessWidget {
 
               const SizedBox(height: 12),
 
-              // Soko Langu Team
+              // Soko Vibe Team
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
@@ -174,7 +174,7 @@ class AboutAppScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      "Tunashukuru kwa kutumia Soko Langu!\nMaoni yako yanatusaidia kuboresha.",
+                      "Tunashukuru kwa kutumia Soko Vibe!\nMaoni yako yanatusaidia kuboresha.",
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 14,

@@ -109,11 +109,11 @@ Stream<List<ChatRoom>> getRooms() {
   }
 
   Stream<List<Message>> getMessages(String roomId, {int limit = 100}) {
-    return _db
+    final live = _db
         .collection('chat_rooms')
         .doc(roomId)
         .collection('messages')
-        .orderBy('timestamp', descending: true)
+        .orderBy('timestamp', descending: false)
         .limit(limit)
         .snapshots()
         .map((snap) {
@@ -123,6 +123,12 @@ Stream<List<ChatRoom>> getRooms() {
       unawaited(LocalCacheService.cacheMessages(roomId, msgs));
       return msgs;
     });
+
+    return LocalCacheService.getCachedMessages(roomId).asStream()
+        .asyncExpand((cached) => live.map((liveMsgs) {
+          if (liveMsgs.isNotEmpty) return liveMsgs;
+          return cached;
+        }));
   }
 
   Future<List<Message>> loadOlderMessages(String roomId,
@@ -229,7 +235,34 @@ Stream<List<ChatRoom>> getRooms() {
     required String messageId,
     required String emoji,
   }) async {
-    // stub
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    final roomId = _roomIdFor(uid, otherUserId);
+    final msgRef = _db
+        .collection('chat_rooms')
+        .doc(roomId)
+        .collection('messages')
+        .doc(messageId);
+
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(msgRef);
+      if (!snap.exists) return;
+      final data = snap.data() as Map<String, dynamic>;
+      final reactions = Map<String, List<dynamic>>.from(
+          data['reactions'] as Map? ?? {});
+      final reactors = List<String>.from(reactions[emoji] ?? []);
+      if (reactors.contains(uid)) {
+        reactors.remove(uid);
+      } else {
+        reactors.add(uid);
+      }
+      if (reactors.isEmpty) {
+        reactions.remove(emoji);
+      } else {
+        reactions[emoji] = reactors;
+      }
+      tx.update(msgRef, {'reactions': reactions});
+    });
   }
 
   Future<void> blockUser(String userId) async {

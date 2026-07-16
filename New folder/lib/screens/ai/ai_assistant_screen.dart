@@ -27,7 +27,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     _messages.add(
       _ChatMessage(
         text:
-            'Karibu sana bosi! 🛍️ Mimi ni SOKO LANGU AI — dalali wako wa Soko Langu. Ninaweza:\n\n🔥 Kuwaongoza kwenye Flash Sales\n📦 Kupendekeza bidhaa kulingana na mahitaji yako\n💰 Kuunda Flash Sale kwa bidhaa zako zilizokaa\n📍 Kupata wauzaji karibu nawe\n\nNi nini unachohitaji leo?',
+            'Karibu sana bosi! 🛍️ Mimi ni Soko Vibe AI — dalali wako wa Soko Vibe. Ninaweza:\n\n🔥 Kuwaongoza kwenye Flash Sales\n📦 Kupendekeza bidhaa kulingana na mahitaji yako\n💰 Kuunda Flash Sale kwa bidhaa zako zilizokaa\n📍 Kupata wauzaji karibu nawe\n\nNi nini unachohitaji leo?',
         isUser: false,
         type: 'text',
       ),
@@ -83,7 +83,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
           children: [
             Icon(Icons.smart_toy, color: Theme.of(context).colorScheme.primary),
             const SizedBox(width: 8),
-            const Text('Soko Langu AI Assistant'),
+            const Text('Soko Vibe AI Assistant'),
           ],
         ),
         actions: [

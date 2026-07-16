@@ -201,7 +201,7 @@ class CallService {
     final params = CallKitParams(
       id: callId,
       nameCaller: callerName,
-      appName: 'Soko Langu',
+      appName: 'Soko Vibe',
       avatar: callerImage.isNotEmpty ? callerImage : null,
       handle: callType == 'video' ? 'Video Call' : 'Voice Call',
       type: callType == 'video' ? 1 : 0,

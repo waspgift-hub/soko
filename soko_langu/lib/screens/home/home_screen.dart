@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +13,7 @@ import '../../widgets/product_card.dart';
 import '../../widgets/ad_banner.dart';
 import '../../widgets/banner_rotator.dart';
 import '../../widgets/premium_widgets.dart';
+import '../../widgets/animated_gradient_line.dart';
 
 import '../../extensions/context_tr.dart';
 import '../../utils/responsive.dart';
@@ -245,60 +247,9 @@ class _HomeScreenState extends State<HomeScreen>
           padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 80),
           child: Column(
             children: [
-              // Music section
-              Padding(
-                padding: const EdgeInsets.fromLTRB(AppInsets.lg, 0, AppInsets.lg, AppInsets.md),
-                child: GestureDetector(
-                  onTap: () => context.push(AppRoutes.audioHome),
-                  child: Container(
-                    padding: const EdgeInsets.all(AppInsets.lg),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      gradient: LinearGradient(
-                        colors: [
-                          cs.primary.withValues(alpha: 0.12),
-                          cs.tertiary.withValues(alpha: 0.08),
-                        ],
-                      ),
-                      border: Border.all(color: cs.primary.withValues(alpha: 0.15)),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 48, height: 48,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [cs.primary, cs.tertiary],
-                            ),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Icon(Icons.music_note_rounded, color: cs.onPrimary, size: 24),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Music Player',
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: cs.onSurface)),
-                              Text('Listen to local & online music',
-                                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: cs.primary.withValues(alpha: 0.12),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(Icons.play_arrow_rounded, color: cs.primary, size: 20),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+              // Animated gradient line at top
+              const AnimatedGradientLine(height: 3),
+              const SizedBox(height: AppInsets.md),
               // Premium search bar
               Padding(
                 padding: const EdgeInsets.fromLTRB(AppInsets.lg, 0, AppInsets.lg, AppInsets.md),
@@ -354,16 +305,19 @@ class _HomeScreenState extends State<HomeScreen>
                   ],
                 ),
               ),
+              const SizedBox(height: AppInsets.sm),
               // Banners
               BannerRotator(flashSales: _flashSales.values.toList()),
+              const SizedBox(height: AppInsets.sm),
               // Categories
               SectionHeader(
                 title: context.tr('categories'),
                 actionLabel: context.tr('see_all'),
                 onAction: () => context.push(AppRoutes.category),
               ),
+              const SizedBox(height: AppInsets.xs),
               SizedBox(
-                height: 100,
+                height: 110,
                 child: StreamBuilder<List<Category>>(
                   stream: _categoryService.getCategories(),
                   builder: (context, snapshot) {
@@ -385,26 +339,26 @@ class _HomeScreenState extends State<HomeScreen>
                         return GestureDetector(
                           onTap: () => context.push('${AppRoutes.categoryProducts}/${cat.name}', extra: cat),
                           child: Container(
-                            width: 76,
-                            margin: const EdgeInsets.only(right: 12),
+                            width: 80,
+                            margin: const EdgeInsets.only(right: 14),
                             child: Column(
                               children: [
                                 Container(
-                                  width: 60, height: 60,
+                                  width: 64, height: 64,
                                   decoration: BoxDecoration(
                                     color: cs.surface,
-                                    borderRadius: BorderRadius.circular(16),
+                                    borderRadius: BorderRadius.circular(18),
                                     border: Border.all(color: cs.outlineVariant),
                                     boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))],
                                   ),
                                   child: Center(child: Text(cat.icon, style: const TextStyle(fontSize: 28))),
                                 ),
-                                const SizedBox(height: 6),
+                                const SizedBox(height: 8),
                                 Text(
                                   config.langCode == 'en' ? cat.name : cat.nameSw,
-                                  style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant, fontWeight: FontWeight.w500),
+                                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w500),
                                   textAlign: TextAlign.center,
-                                  maxLines: 1,
+                                  maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ],
@@ -416,6 +370,7 @@ class _HomeScreenState extends State<HomeScreen>
                   },
                 ),
               ),
+              const SizedBox(height: AppInsets.sm),
               // Products
               _buildProductsArea(),
               const SizedBox(height: AppInsets.lg),
@@ -425,20 +380,23 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         ),
       ),
-      floatingActionButton: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(colors: [cs.primary, cs.primary.withValues(alpha: 0.85)]),
-          boxShadow: [BoxShadow(color: cs.primary.withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6))],
-        ),
-        child: FloatingActionButton.extended(
-          onPressed: () => context.push(AppRoutes.addProduct),
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          label: Text(context.tr('sell_product'),
-            style: TextStyle(color: cs.onPrimary, fontWeight: FontWeight.w600),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: LinearGradient(colors: [cs.primary, cs.primary.withValues(alpha: 0.85)]),
+            boxShadow: [BoxShadow(color: cs.primary.withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6))],
           ),
-          icon: Icon(Icons.add_rounded, color: cs.onPrimary),
+          child: FloatingActionButton.extended(
+            onPressed: () => context.push(AppRoutes.addProduct),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            label: Text(context.tr('sell_product'),
+              style: TextStyle(color: cs.onPrimary, fontWeight: FontWeight.w600),
+            ),
+            icon: Icon(Icons.add_rounded, color: cs.onPrimary),
+          ),
         ),
       ),
     );
@@ -449,7 +407,11 @@ class _HomeScreenState extends State<HomeScreen>
     final provider = context.watch<ProductFeedProvider>();
     return Column(
       children: [
-        SectionHeader(title: context.tr('latest_products')),
+        SectionHeader(
+          title: context.tr('latest_products'),
+          actionLabel: context.tr('see_all'),
+          onAction: () => context.push(AppRoutes.search),
+        ),
         const SizedBox(height: AppInsets.sm),
         Builder(builder: (context) {
           if (provider.error != null && provider.products.isEmpty) {

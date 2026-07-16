@@ -592,11 +592,8 @@ class AnalyticsService {
         productsByCategory[cat] = (productsByCategory[cat] ?? 0) + 1;
       }
 
-      // Orders
-      final txSnap = await _firestore.collection('transactions').get();
-      totalOrders = txSnap.docs.length;
-
       // Revenue (last 7 days)
+      final txSnap = await _firestore.collection('transactions').get();
       for (final doc in txSnap.docs) {
         final data = doc.data();
         final status = data['status'] as String? ?? '';
@@ -655,7 +652,6 @@ class AnalyticsService {
       totalProducts: totalProducts,
       activeProducts: activeProducts,
       inactiveProducts: inactiveProducts,
-      totalOrders: totalOrders,
       totalRevenue: totalRevenue,
       revenueToday: revenueToday,
       revenueThisMonth: revenueThisMonth,

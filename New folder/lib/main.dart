@@ -288,7 +288,7 @@ class _SokoLanguAppState extends State<SokoLanguApp> {
     return MaterialApp.router(
       routerConfig: appRouter,
       debugShowCheckedModeBanner: false,
-      title: 'Soko Langu',
+      title: 'Soko Vibe',
       theme: themeManager.lightTheme,
       darkTheme: themeManager.darkTheme,
       themeMode: isDark ? ThemeMode.dark : ThemeMode.light,

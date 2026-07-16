@@ -118,7 +118,7 @@ class PlaybackService : MediaSessionService() {
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             "media_session",
-            "Soko Langu Player",
+            "Soko Vibe Player",
             NotificationManager.IMPORTANCE_LOW
         ).apply {
             description = "Media playback controls"

@@ -21,7 +21,6 @@ class AppRoutes {
   static const String myAds = '/my-ads';
   static const String wishlist = '/wishlist';
   static const String shopCustomization = '/shop-customize';
-  static const String audioPlayer = '/audio';
   static const String editProfile = '/edit-profile';
   static const String addProduct = '/add-product';
   static const String help = '/help';
@@ -49,10 +48,5 @@ class AppRoutes {
   static const String receipt = '/receipt';
   static const String privacyPolicy = '/privacy-policy';
   static const String termsOfService = '/terms-of-service';
-  static const String audioHome = '/audio-home';
-  static const String audioList = '/audio-list';
-  static const String audioQueue = '/audio-queue';
-  static const String youtubeSearch = '/youtube-search';
-  static const String youtubePlayer = '/youtube-player';
   static const String sellerAnalytics = '/seller-analytics';
 }

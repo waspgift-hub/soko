@@ -660,77 +660,35 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    Material(
-                      color: cs.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(12),
-                      clipBehavior: Clip.antiAlias,
-                      child: InkWell(
-                          onTap: () {
-                            if (currentUser == null) {
-                              context.push(AppRoutes.login);
-                            } else if (sellerId.isEmpty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Hitilafu: muuzaji hajulikani.')),
-                              );
-                            } else {
-                              context.push(
-                                '${AppRoutes.publicProfile}/$sellerId',
-                                extra: product.sellerName,
-                              );
-                            }
-                          },
-                        child: Column(
-                          children: [
-                            if (_sellerProfile != null &&
-                                (_sellerProfile!.shopBanner.isNotEmpty ||
-                                    _sellerProfile!.shopBannerColor.isNotEmpty))
-                              Container(
-                                height: 100,
-                                width: double.infinity,
-                                decoration: BoxDecoration(
-                                  color:
-                                      _hexToColor(
-                                        _sellerProfile!.shopBannerColor,
-                                      ) ??
-                                      cs.primaryContainer,
-                                  image: _sellerProfile!.shopBanner.isNotEmpty
-                                      ? DecorationImage(
-                                          image: CachedNetworkImageProvider(
-                                            _sellerProfile!.shopBanner,
-                                          ),
-                                          fit: BoxFit.cover,
-                                        )
-                                      : null,
-                                ),
-                              ),
-                            Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Row(
-                                children: [
-                                  CircleAvatar(
-                                    radius: 24,
-                                    backgroundColor:
-                                        _hexToColor(
-                                          _sellerProfile?.shopAccentColor,
-                                        ) ??
-                                        cs.primaryContainer,
-                                    backgroundImage:
-                                        _sellerProfile
-                                                ?.profileImage
-                                                .isNotEmpty ==
-                                            true
-                                        ? NetworkImage(
-                                            _sellerProfile!.profileImage,
-                                          )
-                                        : null,
-                                    child:
-                                        _sellerProfile
-                                                ?.profileImage
-                                                .isNotEmpty ==
-                                            true
-                                        ? null
-                                        : Icon(Icons.person, color: cs.surface),
-                                  ),
+                    GlassCard(
+                      onTap: () {
+                        if (currentUser == null) {
+                          context.push(AppRoutes.login);
+                        } else if (sellerId.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Hitilafu: muuzaji hajulikani.')),
+                          );
+                        } else {
+                          context.push(
+                            '${AppRoutes.publicProfile}/$sellerId',
+                            extra: product.sellerName,
+                          );
+                        }
+                      },
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 24,
+                            backgroundColor: cs.primaryContainer,
+                            backgroundImage:
+                                _sellerProfile?.profileImage.isNotEmpty == true
+                                    ? NetworkImage(_sellerProfile!.profileImage)
+                                    : null,
+                            child: _sellerProfile?.profileImage.isNotEmpty == true
+                                ? null
+                                : Icon(Icons.person, color: cs.surface),
+                          ),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
@@ -828,16 +786,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                               ),
                                             ],
                                           ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
                     const SizedBox(height: 20),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),

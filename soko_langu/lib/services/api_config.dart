@@ -1,5 +1,5 @@
 class ApiConfig {
-  static const String baseUrl = 'https://soko-langu-server-production.up.railway.app';
+  static const String baseUrl = 'https://soko-langu-server.onrender.com';
 
   /// Master test mode — false = production for all features (fraud, etc.)
   static const bool kIsTestMode = false;

@@ -1,17 +1,14 @@
-import 'dart:convert';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
-import 'package:http/http.dart' as http;
 import '../../models/product_model.dart';
 import '../../services/flash_sale_service.dart';
-import '../../services/payment_service.dart';
-import '../../services/api_config.dart';
+import '../../services/notification_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
-import '../../widgets/google_loading.dart';
-import '../../widgets/payment_banner.dart';
+import '../../widgets/glass_container.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final Product product;
@@ -31,7 +28,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   bool _processing = false;
   double? _salePrice;
 
+  static const double _mongikeFee = 180;
+
   double get _totalPrice => _salePrice ?? widget.product.price;
+  double get _totalWithFee => _totalPrice + _mongikeFee;
+  double get _sellerFeePercent => 3.5;
+  double get _sellerReceives => _totalPrice * (1 - _sellerFeePercent / 100);
 
   @override
   void initState() {
@@ -62,68 +64,151 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final p = widget.product;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      appBar: AppBar(title: Text(context.tr('checkout')), centerTitle: true),
+      appBar: AppBar(
+        title: Text(context.tr('checkout')),
+        centerTitle: true,
+        backgroundColor: Colors.transparent,
+      ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      width: 56, height: 56,
-                      color: cs.surfaceContainerHighest,
-                      child: p.images.isNotEmpty
-                          ? Image.network(p.images.first, fit: BoxFit.cover)
-                          : Icon(Icons.image, size: 28, color: cs.onSurfaceVariant),
-                    ),
+          // Product glass card
+          GlassContainer(
+            blur: 20,
+            opacity: isDark ? 0.12 : 0.08,
+            borderRadius: 20,
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    width: 64, height: 64,
+                    color: cs.surfaceContainerHighest,
+                    child: p.images.isNotEmpty
+                        ? Image.network(p.images.first, fit: BoxFit.cover)
+                        : Icon(Icons.image, size: 28, color: cs.onSurfaceVariant),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
-                        Text('x1  ${_salePrice != null ? context.formatPrice(_salePrice!) : context.formatPrice(p.price)}',
-                            style: TextStyle(color: cs.onSurface.withValues(alpha: 0.59), fontSize: 13)),
-                      ],
-                    ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(p.name, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: cs.onSurface), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 4),
+                      Text('x1  ${_salePrice != null ? context.formatPrice(_salePrice!) : context.formatPrice(p.price)}',
+                          style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600, fontSize: 15)),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 20),
+
+          // Fee breakdown glass card
+          Text('Maelezo ya Malipo', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: cs.onSurface)),
+          const SizedBox(height: 12),
+          GlassContainer(
+            blur: 24,
+            opacity: isDark ? 0.1 : 0.06,
+            borderRadius: 20,
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                _feeRow(cs, 'Bei ya Bidhaa', context.formatPrice(_totalPrice), cs.onSurface),
+                const SizedBox(height: 10),
+                Container(height: 1, color: cs.primary.withValues(alpha: 0.1)),
+                const SizedBox(height: 10),
+                _feeRow(cs, 'Ada ya Mongike (180 TZS)', context.formatPrice(_mongikeFee), cs.secondary),
+                const SizedBox(height: 4),
+                Text('Gharama ya usindikaji wa malipo',
+                    style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
+                const SizedBox(height: 10),
+                Container(height: 1, color: cs.primary.withValues(alpha: 0.15)),
+                const SizedBox(height: 10),
+                _feeRow(cs, 'Jumla ya Malipo', context.formatPrice(_totalWithFee), cs.primary, bold: true),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: cs.tertiary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, size: 16, color: cs.tertiary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Gharama ya usafirishaji itaongezwa baada ya muuzaji kutoa quote. Muuzaji atalipwa ${_sellerFeePercent}% (${context.formatPrice(_sellerReceives)}) baada ya mgongano kukamilika.',
+                          style: TextStyle(fontSize: 11, color: cs.tertiary),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Delivery address
           Text('Anwani ya Usafirishaji', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: cs.onSurface)),
           const SizedBox(height: 12),
-          TextField(controller: _regionCtrl, decoration: const InputDecoration(labelText: 'Mkoa / Region', border: OutlineInputBorder(), isDense: true), textCapitalization: TextCapitalization.words),
-          const SizedBox(height: 10),
-          TextField(controller: _districtCtrl, decoration: const InputDecoration(labelText: 'Wilaya / District', border: OutlineInputBorder(), isDense: true), textCapitalization: TextCapitalization.words),
-          const SizedBox(height: 10),
-          TextField(controller: _streetCtrl, decoration: const InputDecoration(labelText: 'Mtaa / Street', border: OutlineInputBorder(), isDense: true), textCapitalization: TextCapitalization.words),
-          const SizedBox(height: 10),
-          TextField(controller: _landmarksCtrl, decoration: const InputDecoration(labelText: 'Alama za Jirani / Landmarks', border: OutlineInputBorder(), isDense: true), textCapitalization: TextCapitalization.words),
+          GlassContainer(
+            blur: 16,
+            opacity: isDark ? 0.08 : 0.05,
+            borderRadius: 16,
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                TextField(controller: _regionCtrl, decoration: InputDecoration(labelText: 'Mkoa / Region', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), filled: true, fillColor: cs.surface.withValues(alpha: 0.5), isDense: true), textCapitalization: TextCapitalization.words),
+                const SizedBox(height: 10),
+                TextField(controller: _districtCtrl, decoration: InputDecoration(labelText: 'Wilaya / District', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), filled: true, fillColor: cs.surface.withValues(alpha: 0.5), isDense: true), textCapitalization: TextCapitalization.words),
+                const SizedBox(height: 10),
+                TextField(controller: _streetCtrl, decoration: InputDecoration(labelText: 'Mtaa / Street', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), filled: true, fillColor: cs.surface.withValues(alpha: 0.5), isDense: true), textCapitalization: TextCapitalization.words),
+                const SizedBox(height: 10),
+                TextField(controller: _landmarksCtrl, decoration: InputDecoration(labelText: 'Alama za Jirani / Landmarks', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), filled: true, fillColor: cs.surface.withValues(alpha: 0.5), isDense: true), textCapitalization: TextCapitalization.words),
+              ],
+            ),
+          ),
           const SizedBox(height: 20),
+
+          // Phone
           Text('Namba ya Simu', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14, color: cs.onSurface)),
           const SizedBox(height: 8),
-          TextField(
-            controller: _phoneController,
-            keyboardType: TextInputType.phone,
-            decoration: InputDecoration(hintText: context.tr('phone_hint'), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), prefixIcon: const Icon(Icons.phone_android)),
+          GlassContainer(
+            blur: 16,
+            opacity: isDark ? 0.08 : 0.05,
+            borderRadius: 14,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: TextField(
+              controller: _phoneController,
+              keyboardType: TextInputType.phone,
+              decoration: InputDecoration(
+                hintText: context.tr('phone_hint'),
+                border: InputBorder.none,
+                prefixIcon: Icon(Icons.phone_android, color: cs.primary, size: 20),
+              ),
+            ),
           ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: cs.secondary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: cs.secondary.withValues(alpha: 0.3))),
+          const SizedBox(height: 16),
+
+          // Info card
+          GlassContainer(
+            blur: 18,
+            opacity: isDark ? 0.1 : 0.06,
+            borderRadius: 16,
+            padding: const EdgeInsets.all(14),
             child: Row(
               children: [
                 Icon(Icons.info_outline, color: cs.secondary, size: 20),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     'Muuzaji atatoa gharama ya usafirishaji. Utalipa jumla ya bidhaa + usafirishaji baada ya kukubaliana.',
@@ -134,13 +219,24 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ),
           ),
           const SizedBox(height: 24),
+
+          // Submit button
           SizedBox(
             width: double.infinity,
+            height: 52,
             child: ElevatedButton.icon(
               onPressed: _processing ? null : _submitOrder,
-              icon: _processing ? const GoogleLoading(size: 20, strokeWidth: 2) : const Icon(Icons.send),
-              label: Text(_processing ? 'Inatuma...' : 'Tuma Ombi la Usafirishaji'),
-              style: ElevatedButton.styleFrom(backgroundColor: cs.primary, foregroundColor: cs.surface, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+              icon: _processing
+                  ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: cs.surface))
+                  : const Icon(Icons.send_rounded, size: 20),
+              label: Text(_processing ? 'Inatuma...' : 'Tuma Ombi la Usafirishaji',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: cs.primary,
+                foregroundColor: cs.surface,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 0,
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -151,6 +247,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _feeRow(ColorScheme cs, String label, String value, Color valueColor, {bool bold = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant, fontWeight: bold ? FontWeight.w600 : FontWeight.w400)),
+        Text(value, style: TextStyle(fontSize: 15, fontWeight: bold ? FontWeight.w800 : FontWeight.w600, color: valueColor)),
+      ],
     );
   }
 
@@ -178,19 +284,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       final activeFs = await FlashSaleService().streamFlashSaleByProductId(p.id).first;
       if (activeFs != null && activeFs.isExpired) { _showError(context.tr('flash_sale_expired')); setState(() => _processing = false); return; }
 
-      final orderId = await PaymentService().processTransaction(
-        buyerId: user.uid,
-        buyerName: user.displayName ?? '',
-        buyerPhone: normalizedPhone,
-        sellerId: p.sellerId,
-        sellerName: p.sellerName,
-        productId: p.id,
-        productName: p.name,
-        productPrice: _totalPrice,
-      );
+      final orderId = 'q${DateTime.now().millisecondsSinceEpoch.toRadixString(36)}${user.uid.substring(0, 4)}';
 
-      // Save delivery address separately since processTransaction doesn't include it
-      await FirebaseFirestore.instance.collection('transactions').doc(orderId).update({
+      await FirebaseFirestore.instance.collection('transactions').doc(orderId).set({
+        'type': 'purchase',
+        'productId': p.id,
+        'productName': p.name,
+        'sellerId': p.sellerId,
+        'sellerName': p.sellerName,
+        'buyerPhone': normalizedPhone,
+        'buyerId': user.uid,
+        'buyerName': user.displayName ?? '',
+        'productPrice': _totalPrice,
+        'mongikeFee': _mongikeFee,
+        'sellerFeePercent': _sellerFeePercent,
         'deliveryAddress': {
           'region': region,
           'district': district,
@@ -199,58 +306,27 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         },
         'status': 'awaiting_shipping_quote',
         'paymentMethod': 'Mongike',
+        'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // Notify seller about new order
       try {
-        final resp = await http.post(
-          Uri.parse('${ApiConfig.baseUrl}/api/send-notification'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'userId': p.sellerId,
-            'title': 'Order Mpya Imewasilishwa!',
-            'body': '${user.displayName ?? 'Mnunuzi'} anataka kununua ${p.name}. '
-                'Ingiza gharama ya usafirishaji.',
-            'data': {'type': 'order', 'transactionId': orderId},
-          }),
+        NotificationService().sendNotification(
+          userId: p.sellerId,
+          title: 'Order Mpya Imewasilishwa!',
+          body: '${user.displayName ?? 'Mnunuzi'} anataka kununua ${p.name}. '
+              'Ingiza gharama ya usafirishaji.',
+          data: {'type': 'order', 'transactionId': orderId},
         );
-        if (resp.statusCode != 200) {
-          debugPrint('sendNotification failed: ${_tryParseServerError(resp)}');
-        }
-      } catch (e) {
-        debugPrint('sendNotification error: $e');
-      }
+      } catch (_) {}
 
       if (mounted) {
         setState(() => _processing = false);
-        RealtimePaymentBanner.show(
-          context: context,
-          orderId: orderId,
-          successStatuses: ['awaiting_shipping_quote'],
-          processingTitle: 'Inachakata ombi lako...',
-          successTitle: 'Ombi Limetumwa!',
-          successSubtitle: 'Muuzaji atakupa gharama ya usafirishaji.',
-          failedTitle: 'Ombi Limeshindikana',
-          onSuccess: () => context.go(AppRoutes.myPurchases),
-        );
+        _showSuccess('Ombi lako limetumwa. Muuzaji atakupa gharama ya usafirishaji.');
+        context.go(AppRoutes.myPurchases);
       }
     } catch (e) {
-      setState(() => _processing = false);
       _showError('Hitilafu: $e');
-    }
-  }
-
-  /// Detects Express/Render HTML error pages and returns a user-friendly message.
-  String _tryParseServerError(http.Response resp) {
-    final body = resp.body;
-    if (body.startsWith('<html') || body.contains('<!DOCTYPE')) {
-      return 'Server error (${resp.statusCode}). Tafadhali jaribu tena baadaye.';
-    }
-    try {
-      final decoded = jsonDecode(body);
-      return decoded['error'] ?? decoded['message'] ?? 'Unknown error';
-    } on FormatException {
-      return 'Server error (${resp.statusCode}). Tafadhali jaribu tena.';
+      setState(() => _processing = false);
     }
   }
 
@@ -259,5 +335,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.error));
   }
 
-
+  void _showSuccess(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.primary));
+  }
 }

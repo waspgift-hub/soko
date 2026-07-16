@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: soko-langu-server
+    env: node
+    region: frankfurt
+    plan: free
+    buildCommand: cd soko_langu/server && npm ci --omit=dev
+    startCommand: cd soko_langu/server && node index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: PORT
+        value: 3000

@@ -5,7 +5,6 @@ const crypto = require('crypto');
 const admin = require('firebase-admin');
 const helmet = require('helmet');
 const { mongikeCollect, mongikePayout, mongikeBalance, COLLECTION_FEE, PAYOUT_FEE } = require('./mongike');
-const t = require('./text');
 
 const ADMIN_EMAILS = ["admin@soko-langu.com", "admin@soko-vibe.com"];
 
@@ -18,7 +17,7 @@ app.use(helmet());
 
 // Tight CORS — only allow the Flutter app origins
 const ALLOWED_ORIGINS = [
-  'https://soko-langu-server-production.up.railway.app',
+  'https://soko-langu-server.onrender.com',
   'https://soko-langu-server-production.up.railway.app',
   'capacitor://localhost',
   'http://localhost',
@@ -126,40 +125,6 @@ async function sendFcmToToken(message, userIdForCleanup = null) {
       await db.collection('users').doc(userIdForCleanup).update({ fcmToken: null });
     }
     throw e;
-  }
-}
-
-async function notifyUser(uid, titleKey, bodyKey, params = {}, extraData = {}) {
-  if (!uid || !db) return;
-  try {
-    const title = await t.forUser(uid, titleKey, params);
-    const body = await t.forUser(uid, bodyKey, params);
-    const data = { ...extraData };
-    await db.collection('notifications').add({
-      userId: uid, title, body, isRead: false,
-      data,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-    const userSnap = await db.collection('users').doc(uid).get();
-    const token = userSnap.data()?.fcmToken;
-    if (token) {
-      await sendFcmToToken(buildFcmMessage({ token, title, body, data }), uid);
-    }
-  } catch (e) {
-    console.error(`notifyUser(${uid}): ${e.message}`);
-  }
-}
-
-async function smsUser(uid, key, params = {}) {
-  if (!uid || !db) return;
-  try {
-    const userSnap = await db.collection('users').doc(uid).get();
-    const phone = userSnap.data()?.phone;
-    if (!phone) return;
-    const message = await t.forUser(uid, key, params);
-    await sendSms(phone, message);
-  } catch (e) {
-    console.error(`smsUser(${uid}): ${e.message}`);
   }
 }
 
@@ -1122,85 +1087,6 @@ app.post('/api/send-bulk-notification', async (req, res) => {
 });
 
 // ============================================================
-// 📦 ORDER — Buyer creates a shipping request
-// ============================================================
-app.post('/api/orders/create', async (req, res) => {
-  try {
-    const { productId, productName, sellerId, sellerName, buyerId, buyerName, buyerPhone, productPrice, region, district, street, landmarks } = req.body;
-    if (!productId || !sellerId || !buyerId || !buyerPhone || !region || !district || !street) {
-      return res.status(400).json({ error: 'Missing required fields (productId, sellerId, buyerId, buyerPhone, region, district, street)' });
-    }
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
-
-    const suspended = await checkSuspended(buyerId);
-    if (suspended) return res.status(403).json({ error: 'Account suspended' });
-
-    const orderId = `q${Date.now().toString(36)}${buyerId.substring(0, 4)}`;
-    await db.collection('transactions').doc(orderId).set({
-      type: 'purchase',
-      productId, productName: sanitize(productName || ''), sellerId, sellerName: sanitize(sellerName || ''),
-      buyerId, buyerName: sanitize(buyerName || ''), buyerPhone,
-      productPrice: Math.round(productPrice || 0),
-      deliveryAddress: { region, district, street, landmarks: landmarks || '' },
-      status: 'awaiting_shipping_quote',
-      paymentMethod: 'Mongike',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    // Notify seller about new order
-    const sellerTitle = await t.forUser(sellerId, 'dispatch_title', {});
-    const sellerBody = await t.forUser(sellerId, 'dispatch_notify_buyer', { productName: productName || 'Bidhaa' });
-    await db.collection('notifications').add({
-      userId: sellerId, title: sellerTitle, body: sellerBody, isRead: false,
-      data: { type: 'order', transactionId: orderId },
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    res.json({ success: true, orderId });
-  } catch (e) {
-    console.error('/api/orders/create error:', e);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ============================================================
-// 🚚 SHIPPING QUOTE — Seller provides shipping cost
-// ============================================================
-app.post('/api/seller/shipping-quote', async (req, res) => {
-  try {
-    const { orderId, sellerId, shippingCost } = req.body;
-    if (!orderId || !sellerId || shippingCost === undefined) {
-      return res.status(400).json({ error: 'Missing orderId, sellerId, or shippingCost' });
-    }
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
-
-    const txDoc = await db.collection('transactions').doc(orderId).get();
-    if (!txDoc.exists) return res.status(404).json({ error: 'Transaction not found' });
-    const tx = txDoc.data();
-    if (tx.sellerId !== sellerId) return res.status(403).json({ error: 'Only the seller can provide shipping quote' });
-    if (tx.status !== 'awaiting_shipping_quote') return res.status(400).json({ error: `Cannot update from status: ${tx.status}` });
-
-    const cost = Math.round(Math.max(0, shippingCost));
-    await txDoc.ref.update({
-      shippingCost: cost,
-      totalAmount: (tx.productPrice || 0) + cost,
-      status: 'awaiting_payment',
-    });
-
-    // Notify buyer
-    await notifyUser(tx.buyerId, 'payment_success_buyer_title', 'payment_success_buyer',
-      { productName: tx.productName || 'Bidhaa', amount: ((tx.productPrice || 0) + cost).toLocaleString() },
-      { type: 'order', transactionId: orderId }
-    );
-
-    res.json({ success: true, message: `Shipping quote of TZS ${cost.toLocaleString()} provided. Buyer notified.` });
-  } catch (e) {
-    console.error('/api/seller/shipping-quote error:', e);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ============================================================
 // 🔒 ESCROW — Seller marks order as dispatched with proof
 // ============================================================
 app.post('/api/escrow/dispatch', async (req, res) => {
@@ -1220,7 +1106,7 @@ app.post('/api/escrow/dispatch', async (req, res) => {
     if (tx.sellerId !== userId) {
       return res.status(403).json({ error: 'Only the seller can dispatch' });
     }
-    if (!['escrow_hold', 'paid_escrow_held'].includes(tx.status)) {
+    if (tx.status !== 'escrow_hold') {
       return res.status(400).json({ error: `Cannot dispatch from status: ${tx.status}` });
     }
     if (tx.escrowReleased === true) {
@@ -1243,20 +1129,39 @@ app.post('/api/escrow/dispatch', async (req, res) => {
       dispatchedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    // Notify buyer (notification + FCM)
-    await notifyUser(tx.buyerId, 'dispatch_title', 'dispatch_notify_buyer',
-      { productName: tx.productName || 'Bidhaa' },
-      { type: 'dispatched', transactionId: orderId }
-    );
+    // Notify buyer
+    await db.collection('notifications').add({
+      userId: tx.buyerId,
+      title: '📦 Bidhaa Imesafirishwa!',
+      body: `${tx.productName || 'Bidhaa'} imesafirishwa. Angalia proof of delivery na thibitisha upokeaji.`,
+      isRead: false,
+      data: { type: 'dispatched', transactionId: orderId },
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
 
     // SMS buyer about dispatch
-    const busName = req.body.busName || 'basi';
-    const plateNumber = req.body.plateNumber || '';
-    if (tx.buyerId) {
-      await smsUser(tx.buyerId, 'dispatch_sms_buyer', { orderId, busName, plateNumber });
-    }
+    try {
+      const busName = req.body.busName || 'basi';
+      const plateNumber = req.body.plateNumber || '';
+      const msg = `Soko Vibe: Mzigo wa Oda #${orderId} umesafirishwa kupitia basi la ${busName} (${plateNumber}). Fungua app kuona risiti yako ya kidijitali.`;
+      if (tx.buyerPhone) sendSms(tx.buyerPhone, msg);
+    } catch (_) {}
 
-    res.json({ success: true, message: t.default('dispatch_success') });
+    // FCM push to buyer
+    try {
+      const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
+      const buyerToken = buyerSnap.data()?.fcmToken;
+      if (buyerToken) {
+        await sendFcmToToken(buildFcmMessage({
+          token: buyerToken,
+          title: 'Bidhaa Imesafirishwa!',
+          body: `${tx.productName || 'Bidhaa'} imesafirishwa. Thibitisha upokeaji ukishapata mzigo.`,
+          data: { type: 'dispatched', transactionId: orderId },
+        }), tx.buyerId);
+      }
+    } catch (_) {}
+
+    res.json({ success: true, message: 'Bidhaa imesafirishwa. Mnunuzi ataarifiwa.' });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -1365,22 +1270,59 @@ app.post('/api/escrow/release', async (req, res) => {
       metadata: { buyerId: userId, productName, pendingBefore, pendingAfter: pendingBefore - sellerReceives },
     });
 
-    // Notify seller (notification + FCM)
-    await notifyUser(sellerId, 'escrow_release_seller_title', 'escrow_release_seller',
-      { productName, amount: sellerReceives.toLocaleString() },
-      { type: 'escrow_release', transactionId: orderId }
-    );
+    // Notify seller
+    await db.collection('notifications').add({
+      userId: sellerId,
+      title: 'Escrow Imefunguliwa!',
+      body: `Mnunuzi amethibitisha upokeaji wa ${productName}. TZS ${sellerReceives.toLocaleString()} zimewekwa kwenye salio lako.`,
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    // Send FCM to seller
+    try {
+      const sellerUser = await db.collection('users').doc(sellerId).get();
+      const sellerToken = sellerUser.data()?.fcmToken;
+      if (sellerToken) {
+        await sendFcmToToken(buildFcmMessage({
+          token: sellerToken,
+          title: 'Escrow Imefunguliwa!',
+          body: `${productName} — TZS ${sellerReceives.toLocaleString()} zimewekwa salio lako.`,
+          data: { type: 'escrow_release', transactionId: orderId },
+        }), sellerId);
+      }
+    } catch (_) {}
 
-    // Notify buyer (notification + FCM)
-    await notifyUser(userId, 'escrow_release_buyer_title', 'escrow_release_buyer',
-      { productName },
-      { type: 'delivery_confirmed', transactionId: orderId }
-    );
+    // Notify buyer
+    await db.collection('notifications').add({
+      userId: userId,
+      title: 'Umethibitisha Upokeaji',
+      body: `Umethibitisha kuwa umepokea ${productName}. Pesa zimefunguliwa kwa muuzaji.`,
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    // Send FCM to buyer
+    try {
+      const buyerSnap = await db.collection('users').doc(userId).get();
+      const buyerToken = buyerSnap.data()?.fcmToken;
+      if (buyerToken) {
+        await sendFcmToToken(buildFcmMessage({
+          token: buyerToken,
+          title: 'Umethibitisha Upokeaji',
+          body: `${productName} — asante kwa kununua ndani ya SokoVibe!`,
+          data: { type: 'delivery_confirmed', transactionId: orderId },
+        }), userId);
+      }
+    } catch (_) {}
 
     // SMS seller about escrow release
-    await smsUser(sellerId, 'escrow_release_seller_sms', { orderId, amount: sellerReceives.toLocaleString() });
+    try {
+      const sellerMsg = `Soko Vibe: Mteja amethibitisha kupokea mzigo #${orderId}. TZS ${sellerReceives.toLocaleString()} zimetolewa Escrow na kuwekwa kwenye pochi yako.`;
+      const sellerUser = await db.collection('users').doc(sellerId).get();
+      const sellerPhone = sellerUser.data()?.phone;
+      if (sellerPhone) sendSms(sellerPhone, sellerMsg);
+    } catch (_) {}
 
-    res.json({ success: true, message: t.default('escrow_released_api') });
+    res.json({ success: true, message: 'Escrow released. Seller balance credited.' });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -1423,7 +1365,7 @@ app.post('/api/mongike/webhook', verifyWebhook, async (req, res) => {
     const tx = txDoc.data();
 
     // Prevent double-processing — skip if already finalized
-    if (tx.status === 'completed' || tx.status === 'escrow_hold' || tx.status === 'paid_escrow_held' || tx.status === 'failed') {
+    if (tx.status === 'completed' || tx.status === 'escrow_hold' || tx.status === 'failed') {
       return res.status(200).json({ received: true });
     }
 
@@ -1460,10 +1402,26 @@ app.post('/api/mongike/webhook', verifyWebhook, async (req, res) => {
 
         // Notify the boost purchaser
         if (tx.userId) {
-          await notifyUser(tx.userId, 'boost_title', 'boost_activated',
-            { tier, days: tierConfig.days },
-            { type: 'boost', productId: tx.productId || '' }
-          );
+          await db.collection('notifications').add({
+            userId: tx.userId,
+            title: '✅ Boost imewashwa!',
+            body: `Bidhaa yako imepandishwa kwa daraja la ${tier} kwa siku ${tierConfig.days}.`,
+            data: { type: 'boost', productId: tx.productId },
+            isRead: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          try {
+            const userSnap = await db.collection('users').doc(tx.userId).get();
+            const token = userSnap.data()?.fcmToken;
+            if (token) {
+              await sendFcmToToken(buildFcmMessage({
+                token,
+                title: '✅ Boost imewashwa!',
+                body: `Bidhaa yako imepandishwa kwa daraja la ${tier} kwa siku ${tierConfig.days}.`,
+                data: { type: 'boost', productId: tx.productId || '' },
+              }), tx.userId);
+            }
+          } catch (_) {}
         }
 
         notifyBoostBroadcast(tx.productId, tier, tx.userId).catch(() => {});
@@ -1484,11 +1442,15 @@ app.post('/api/mongike/webhook', verifyWebhook, async (req, res) => {
         });
 
         // SMS seller about boost payment
-        if (tx.userId) {
-          const expiryDate = new Date(Date.now() + tierConfig.days * 24 * 60 * 60 * 1000);
-          const expiryStr = expiryDate.toLocaleDateString('sw-TZ');
-          await smsUser(tx.userId, 'boost_sms', { amount: boostAmount.toLocaleString(), expiryStr });
-        }
+        try {
+          const sellerSnap = await db.collection('users').doc(tx.userId).get();
+          const sellerPhone = sellerSnap.data()?.phone;
+          if (sellerPhone) {
+            const expiryStr = new Date(Date.now() + tierConfig.days * 24 * 60 * 60 * 1000).toLocaleDateString('sw-TZ');
+            const msg = `Soko Vibe: Malipo ya Boost ya TZS ${boostAmount.toLocaleString()} yamefanikiwa! Bidhaa yako sasa inaonyeshwa kipaumbele hadi ${expiryStr}.`;
+            sendSms(sellerPhone, msg);
+          }
+        } catch (_) {}
 
       } else if (tx.type === 'purchase') {
         // ── Move to escrow hold ──
@@ -1560,28 +1522,77 @@ app.post('/api/mongike/webhook', verifyWebhook, async (req, res) => {
             lastSaleAt: admin.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
 
-          // Notify seller (notification + FCM)
-          await notifyUser(tx.sellerId, 'payment_success_seller_title', 'payment_success_seller',
-            { productName: tx.productName || 'Bidhaa', amount: sellerReceives.toLocaleString() },
-            { type: 'order', productId: tx.productId || '', transactionId: orderId, buyerPhone: tx.buyerPhone || '' }
-          );
+          // Notify seller
+          await db.collection('notifications').add({
+            userId: tx.sellerId,
+            title: 'Umepata Mauzo!',
+            body: `${tx.productName || 'Bidhaa'} imeuzwa. TZS ${sellerReceives.toLocaleString()} zimewekwa escrow. Mnunuzi atathibitisha upokeaji ili pesa zifunguliwe.`,
+            isRead: false,
+            type: 'sale',
+            transactionId: orderId,
+            buyerPhone: tx.buyerPhone || '',
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          // FCM push to seller
+          try {
+            const sellerSnap = await db.collection('users').doc(tx.sellerId).get();
+            const sellerToken = sellerSnap.data()?.fcmToken;
+            if (sellerToken) {
+              await sendFcmToToken(buildFcmMessage({
+                token: sellerToken,
+                title: 'Umepata Mauzo!',
+                body: `${tx.productName || 'Bidhaa'} imeuzwa. TZS ${sellerReceives.toLocaleString()} zimewekwa escrow.`,
+                data: {
+                  type: 'order',
+                  productId: tx.productId || '',
+                  transactionId: orderId,
+                  buyerPhone: tx.buyerPhone || '',
+                },
+              }), tx.sellerId);
+            }
+          } catch (_) {}
         }
 
-        // Notify buyer (notification + FCM)
+        // Notify buyer
         if (tx.buyerId) {
-          await notifyUser(tx.buyerId, 'payment_success_buyer_title', 'payment_success_buyer',
-            { productName: tx.productName || 'Bidhaa', amount: productPrice.toLocaleString() },
-            { type: 'order', productId: tx.productId || '', transactionId: orderId }
-          );
+          await db.collection('notifications').add({
+            userId: tx.buyerId,
+            title: 'Malipo Yamekamilika!',
+            body: `Malipo ya ${tx.productName || 'Bidhaa'} yamepokelewa. Thibitisha upokeaji ili muuzaji apate hela zake.`,
+            isRead: false,
+            type: 'escrow_confirm',
+            transactionId: orderId,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          try {
+            const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
+            const buyerToken = buyerSnap.data()?.fcmToken;
+            if (buyerToken) {
+              await sendFcmToToken(buildFcmMessage({
+                token: buyerToken,
+                title: 'Malipo Yamekamilika!',
+                body: `Malipo ya ${tx.productName || 'Bidhaa'} yamepokelewa.`,
+                data: { type: 'order', productId: tx.productId || '', transactionId: orderId },
+              }), tx.buyerId);
+            }
+          } catch (_) {}
         }
 
         // SMS notifications for escrow_hold
-        if (tx.buyerId) {
-          await smsUser(tx.buyerId, 'payment_success_buyer_sms', { productName: tx.productName || 'Bidhaa', orderId, amount: productPrice.toLocaleString() });
-        }
-        if (tx.sellerId) {
-          await smsUser(tx.sellerId, 'payment_success_seller_sms', { orderId });
-        }
+        try {
+          const buyerMsg = `Soko Vibe: Malipo ya TZS ${productPrice.toLocaleString()} kwa Oda #${orderId} yamepokelewa na kuwekwa salama Escrow. Muuzaji anajiandaa kutuma mzigo wako.`;
+          if (tx.buyerPhone) sendSms(tx.buyerPhone, buyerMsg);
+        } catch (_) {}
+        try {
+          if (tx.sellerId) {
+            const sellerSnap = await db.collection('users').doc(tx.sellerId).get();
+            const sellerPhone = sellerSnap.data()?.phone;
+            if (sellerPhone) {
+              const sellerMsg = `Soko Vibe: Oda #${orderId} imelipiwa! Fedha ipo salama Escrow. Tafadhali kamilisha usafirishaji stendi na ujaze risiti ya basi kwenye app.`;
+              sendSms(sellerPhone, sellerMsg);
+            }
+          }
+        } catch (_) {}
       }
     } else if (paymentStatus === 'failed') {
       await txDoc.ref.update({
@@ -1593,11 +1604,34 @@ app.post('/api/mongike/webhook', verifyWebhook, async (req, res) => {
 
       // Notify buyer of failed payment
       if (tx.buyerId) {
-        await notifyUser(tx.buyerId, 'payment_failed_buyer_title', 'payment_failed_buyer',
-          { productName: tx.productName || 'Bidhaa', reason: payload.message || payload.error || '' },
-          { type: 'payment_failed', productId: tx.productId || '', transactionId: orderId }
-        );
-        await smsUser(tx.buyerId, 'payment_failed_buyer_sms', { productName: tx.productName || 'Bidhaa' });
+        await db.collection('notifications').add({
+          userId: tx.buyerId,
+          title: 'Malipo Yameshindikana',
+          body: `Malipo ya ${tx.productName || 'Bidhaa'} hayakukamilika. Jaribu tena au wasiliana nasi. Sababu: ${payload.message || payload.error || 'Mongike payment failed'}`,
+          isRead: false,
+          type: 'payment_failed',
+          transactionId: orderId,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        try {
+          const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
+          const buyerToken = buyerSnap.data()?.fcmToken;
+          if (buyerToken) {
+            await sendFcmToToken(buildFcmMessage({
+              token: buyerToken,
+              title: 'Malipo Yameshindikana',
+              body: `Malipo ya ${tx.productName || 'Bidhaa'} hayakukamilika. Jaribu tena kwenye app.`,
+              data: { type: 'payment_failed', productId: tx.productId || '', transactionId: orderId },
+            }), tx.buyerId);
+          }
+        } catch (_) {}
+        try {
+          const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
+          const buyerPhone = buyerSnap.data()?.phone;
+          if (buyerPhone) {
+            sendSms(buyerPhone, `Soko Vibe: Malipo ya ${tx.productName || 'Bidhaa'} hayakukamilika. Tafadhali jaribu tena kwenye app.`).catch(() => {});
+          }
+        } catch (_) {}
       }
     }
 
@@ -1766,14 +1800,53 @@ app.post('/api/escrow/cancel', async (req, res) => {
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    await notifyUser(tx.buyerId, 'refund_title', 'refund_buyer', { productName, amount: productPrice }, { type: 'refund', orderId });
+    // Notify buyer
+    await db.collection('notifications').add({
+      userId: tx.buyerId,
+      title: '💰 Pesa Zimerudishwa Kamili',
+      body: `Refund kamili ya TZS ${productPrice.toLocaleString()} kwa ${productName} imetumwa kwa namba yako.`,
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      data: { type: 'refund', orderId },
+    });
+    try {
+      const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
+      const buyerToken = buyerSnap.data()?.fcmToken;
+      if (buyerToken) {
+        await sendFcmToToken(buildFcmMessage({
+          token: buyerToken,
+          title: '💰 Pesa Zimerudishwa Kamili',
+          body: `Refund kamili ya TZS ${productPrice.toLocaleString()} kwa ${productName} imetumwa kwa namba yako.`,
+          data: { type: 'refund', orderId },
+        }), tx.buyerId);
+      }
+    } catch (_) {}
 
+    // Notify seller
     if (sellerId) {
-      await notifyUser(sellerId, 'cancel_seller_title', 'cancel_seller', { productName }, { type: 'cancelled', orderId });
+      await db.collection('notifications').add({
+        userId: sellerId,
+        title: '❌ Oda Imeghairiwa',
+        body: `${productName} imeghairiwa na mnunuzi. Pesa zimetolewa kwenye pendingEscrow yako.`,
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        data: { type: 'cancelled', orderId },
+      });
+      try {
+        const sellerSnap = await db.collection('users').doc(sellerId).get();
+        const sellerToken = sellerSnap.data()?.fcmToken;
+        if (sellerToken) {
+          await sendFcmToToken(buildFcmMessage({
+            token: sellerToken,
+            title: '❌ Oda Imeghairiwa',
+            body: `${productName} imeghairiwa na mnunuzi. Pesa zimetolewa kwenye pendingEscrow yako.`,
+            data: { type: 'cancelled', orderId },
+          }), sellerId);
+        }
+      } catch (_) {}
     }
 
-    const cancelMsg = await t.forUser(tx.buyerId, 'cancel_response');
-    res.json({ success: true, refundAmount: productPrice, message: cancelMsg });
+    res.json({ success: true, refundAmount: productPrice, message: 'Oda imeghairiwa. Hela yako imerudishwa.' });
   } catch (e) {
     console.error('Escrow cancel error:', e);
     res.status(500).json({ error: 'Internal server error' });
@@ -1820,16 +1893,58 @@ app.post('/api/escrow/dispute', async (req, res) => {
 
     const productName = tx.productName || 'Bidhaa';
 
-    await notifyUser(tx.sellerId, 'dispute_title', 'dispute_opened_seller', { productName }, { type: 'disputed', transactionId: orderId });
-    await notifyUser(userId, 'dispute_title', 'dispute_opened_buyer', { productName }, { type: 'disputed', transactionId: orderId });
+    // Notify seller
+    await db.collection('notifications').add({
+      userId: tx.sellerId,
+      title: '\u2696\uFE0F Mgogoro Umefunguliwa',
+      body: `Mnunuzi amefungua mgogoro kwa ${productName}. Tafadhali wasilisha ushahidi wako.`,
+      isRead: false,
+      data: { type: 'disputed', transactionId: orderId },
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    try {
+      const sellerSnap = await db.collection('users').doc(tx.sellerId).get();
+      const sellerToken = sellerSnap.data()?.fcmToken;
+      if (sellerToken) {
+        await sendFcmToToken(buildFcmMessage({
+          token: sellerToken,
+          title: '\u2696\uFE0F Mgogoro Umefunguliwa',
+          body: `Mnunuzi amefungua mgogoro kwa ${productName}. Tafadhali wasilisha ushahidi wako.`,
+          data: { type: 'disputed', transactionId: orderId },
+        }), tx.sellerId);
+      }
+    } catch (_) {}
+
+    // Notify buyer
+    await db.collection('notifications').add({
+      userId,
+      title: '\u2696\uFE0F Mgogoro Umefunguliwa',
+      body: `Tumepokea mgogoro wako kwa ${productName}. Admin atakagua na kutoa uamuzi.`,
+      isRead: false,
+      data: { type: 'disputed', transactionId: orderId },
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    try {
+      const buyerSnap = await db.collection('users').doc(userId).get();
+      const buyerToken = buyerSnap.data()?.fcmToken;
+      if (buyerToken) {
+        await sendFcmToToken(buildFcmMessage({
+          token: buyerToken,
+          title: '\u2696\uFE0F Mgogoro Umefunguliwa',
+          body: `Tumepokea mgogoro wako kwa ${productName}. Admin atakagua na kutoa uamuzi.`,
+          data: { type: 'disputed', transactionId: orderId },
+        }), userId);
+      }
+    } catch (_) {}
 
     // Alert admin
-    const adminTitle = await t.default('dispute_opened_admin_title');
-    const adminBody = await t.default('dispute_opened_admin', { productName, orderId });
-    notifyAdmins(adminTitle, adminBody, { type: 'disputed', transactionId: orderId });
+    notifyAdmins(
+      '\u2696\uFE0F Mgogoro Mpya Unahitaji Uamuzi',
+      `Mgogoro kwa ${productName} \u2014 ${orderId}. Pitia ushahidi na toa uamuzi.`,
+      { type: 'disputed', transactionId: orderId },
+    );
 
-    const disputeMsg = await t.forUser(userId, 'dispute_response');
-    res.json({ success: true, message: disputeMsg });
+    res.json({ success: true, message: 'Dispute imefunguliwa. Admin atakagua na kutoa uamuzi.' });
   } catch (e) {
     console.error('Escrow dispute error:', e);
     res.status(500).json({ error: 'Internal server error' });
@@ -1889,8 +2004,46 @@ app.post('/api/escrow/admin-resolve-dispute', async (req, res) => {
         });
       }
 
-      await notifyUser(tx.buyerId, 'dispute_resolved_title', 'dispute_resolved_buyer_lose', { note }, { type: 'dispute_resolved', transactionId: orderId });
-      await notifyUser(sellerId, 'dispute_resolved_title', 'dispute_resolved_seller_win', { note }, { type: 'dispute_resolved', transactionId: orderId });
+      await db.collection('notifications').add({
+        userId: tx.buyerId,
+        title: '\u2696\uFE0F Uamuzi wa Mgogoro',
+        body: `Admin ameamua pesa zitolewe kwa muuzaji. ${note || ''}`,
+        isRead: false,
+        data: { type: 'dispute_resolved', transactionId: orderId },
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      try {
+        const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
+        const buyerToken = buyerSnap.data()?.fcmToken;
+        if (buyerToken) {
+          await sendFcmToToken(buildFcmMessage({
+            token: buyerToken,
+            title: '\u2696\uFE0F Uamuzi wa Mgogoro',
+            body: `Admin ameamua pesa zitolewe kwa muuzaji. ${note || ''}`,
+            data: { type: 'dispute_resolved', transactionId: orderId },
+          }), tx.buyerId);
+        }
+      } catch (_) {}
+      await db.collection('notifications').add({
+        userId: sellerId,
+        title: '\u2696\uFE0F Uamuzi wa Mgogoro',
+        body: `Admin ameamua pesa zikutolee. ${note || ''}`,
+        isRead: false,
+        data: { type: 'dispute_resolved', transactionId: orderId },
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      try {
+        const sellerSnap = await db.collection('users').doc(sellerId).get();
+        const sellerToken = sellerSnap.data()?.fcmToken;
+        if (sellerToken) {
+          await sendFcmToToken(buildFcmMessage({
+            token: sellerToken,
+            title: '\u2696\uFE0F Uamuzi wa Mgogoro',
+            body: `Admin ameamua pesa zikutolee. ${note || ''}`,
+            data: { type: 'dispute_resolved', transactionId: orderId },
+          }), sellerId);
+        }
+      } catch (_) {}
 
       return res.json({ success: true, message: 'Dispute resolved: funds released to seller' });
     }
@@ -1945,10 +2098,50 @@ app.post('/api/escrow/admin-resolve-dispute', async (req, res) => {
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      await notifyUser(tx.buyerId, 'refund_title', 'dispute_refund_buyer', { productName, amount: refundAmount }, { type: 'refund', orderId });
+      // Notify buyer
+      await db.collection('notifications').add({
+        userId: tx.buyerId,
+        title: '\uD83D\uDCB0 Pesa Zimerudishwa Kamili',
+        body: `Refund kamili ya TZS ${refundAmount.toLocaleString()} kwa ${productName} imetumwa kwa namba yako.`,
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        data: { type: 'refund', orderId },
+      });
+      try {
+        const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
+        const buyerToken = buyerSnap.data()?.fcmToken;
+        if (buyerToken) {
+          await sendFcmToToken(buildFcmMessage({
+            token: buyerToken,
+            title: '\uD83D\uDCB0 Pesa Zimerudishwa Kamili',
+            body: `Refund kamili ya TZS ${refundAmount.toLocaleString()} kwa ${productName} imetumwa kwa namba yako.`,
+            data: { type: 'refund', orderId },
+          }), tx.buyerId);
+        }
+      } catch (_) {}
 
+      // Notify seller
       if (sellerId) {
-        await notifyUser(sellerId, 'dispute_refund_seller_title', 'dispute_refund_seller', { productName }, { type: 'refund', orderId });
+        await db.collection('notifications').add({
+          userId: sellerId,
+          title: '\u274C Mgogoro Umekamilika',
+          body: `${productName} imerefundiwa mnunuzi. Pesa zimetolewa kwenye pendingEscrow yako.${gatewayFee > 0 ? ' Ada ya gateway imetozwa kwenye akaunti yako.' : ''}`,
+          isRead: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          data: { type: 'refund', orderId },
+        });
+        try {
+          const sellerSnap = await db.collection('users').doc(sellerId).get();
+          const sellerToken = sellerSnap.data()?.fcmToken;
+          if (sellerToken) {
+            await sendFcmToToken(buildFcmMessage({
+              token: sellerToken,
+              title: '\u274C Mgogoro Umekamilika',
+              body: `${productName} imerefundiwa mnunuzi. Pesa zimetolewa kwenye pendingEscrow yako.${gatewayFee > 0 ? ' Ada ya gateway imetozwa kwenye akaunti yako.' : ''}`,
+              data: { type: 'refund', orderId },
+            }), sellerId);
+          }
+        } catch (_) {}
       }
 
       // Audit log
@@ -1959,8 +2152,7 @@ app.post('/api/escrow/admin-resolve-dispute', async (req, res) => {
         metadata: { productName, productPrice, buyerPhone, sellerId, gatewayFee },
       });
 
-      const refundMsg = await t.forUser(tx.buyerId, 'dispute_refund_response', { amount: refundAmount });
-      return res.json({ success: true, refundAmount, message: refundMsg });
+      return res.json({ success: true, refundAmount, message: `Refund kamili ya TZS ${refundAmount.toLocaleString()} imetumwa kwa namba ya mnunuzi.` });
     }
   } catch (e) {
     console.error('Admin resolve dispute error:', e);
@@ -2142,18 +2334,38 @@ app.post('/api/kyc/submit', async (req, res) => {
       reason: `KYC ${status}: ${idType} ${cleanId}${reason ? ' — ' + reason : ''}`,
     });
 
-    if (autoApproved) {
-      await notifyUser(userId, 'kyc_approved_title', 'kyc_approved', {}, { type: 'kyc', status: 'approved' });
-    } else {
-      await notifyUser(userId, 'kyc_pending_title', 'kyc_pending', { reason }, { type: 'kyc', status: 'pending' });
-    }
+    // Notify user
+    await db.collection('notifications').add({
+      userId,
+      title: autoApproved ? 'KYC Imekubaliwa!' : 'KYC Inahitaji Ukaguzi',
+      body: autoApproved
+        ? 'Umekubaliwa kuuza bidhaa. Sasa unaweza kuongeza bidhaa zako.'
+        : `KYC yako inahitaji marekebisho: ${reason}. Tuma tena baada ya kusahihisha.`,
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    try {
+      const userSnap = await db.collection('users').doc(userId).get();
+      const fcmToken = userSnap.data()?.fcmToken;
+      if (fcmToken) {
+        const kycTitle = autoApproved ? 'KYC Imekubaliwa!' : 'KYC Inahitaji Ukaguzi';
+        const kycBody = autoApproved
+          ? 'Umekubaliwa kuuza bidhaa. Sasa unaweza kuongeza bidhaa zako.'
+          : `KYC yako inahitaji marekebisho: ${reason}. Tuma tena baada ya kusahihisha.`;
+        await sendFcmToToken(buildFcmMessage({
+          token: fcmToken,
+          title: kycTitle,
+          body: kycBody,
+          data: { type: 'kyc', status: autoApproved ? 'approved' : 'pending' },
+        }), userId);
+      }
+    } catch (_) {}
 
-    const kycMsg = autoApproved ? 'KYC imekubaliwa moja kwa moja' : `KYC imetumwa lakini: ${reason}`;
     res.json({
       success: true,
       approved: autoApproved,
       reason,
-      message: kycMsg,
+      message: autoApproved ? 'KYC imekubaliwa moja kwa moja' : `KYC imetumwa lakini: ${reason}`,
     });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
@@ -2194,11 +2406,31 @@ app.post('/api/admin/kyc/review', async (req, res) => {
       'kyc.approved': approve === true,
     });
 
-    if (approve) {
-      await notifyUser(userId, 'kyc_approved_title', 'kyc_approved', {}, { type: 'kyc', status: 'approved' });
-    } else {
-      await notifyUser(userId, 'kyc_rejected_title', 'kyc_rejected', { reason: notes }, { type: 'kyc', status: 'rejected' });
-    }
+    await db.collection('notifications').add({
+      userId,
+      title: approve ? 'KYC Imekubaliwa!' : 'KYC Imekataliwa',
+      body: approve
+        ? 'Umekubaliwa kuuza bidhaa. Sasa unaweza kuongeza bidhaa mpya.'
+        : `KYC yako imekataliwa. Sababu: ${notes || 'Tafadhali wasiliana na msaada'}. Wasilisha tena baada ya kurekebisha.`,
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    try {
+      const userSnap = await db.collection('users').doc(userId).get();
+      const fcmToken = userSnap.data()?.fcmToken;
+      if (fcmToken) {
+        const kycTitle = approve ? 'KYC Imekubaliwa!' : 'KYC Imekataliwa';
+        const kycBody = approve
+          ? 'Umekubaliwa kuuza bidhaa. Sasa unaweza kuongeza bidhaa mpya.'
+          : `KYC yako imekataliwa. Sababu: ${notes || 'Tafadhali wasiliana na msaada'}. Wasilisha tena baada ya kurekebisha.`;
+        await sendFcmToToken(buildFcmMessage({
+          token: fcmToken,
+          title: kycTitle,
+          body: kycBody,
+          data: { type: 'kyc', status: approve ? 'approved' : 'rejected' },
+        }), userId);
+      }
+    } catch (_) {}
 
     // Update sellerKycApproved on all products if approved
     if (approve && userId) {
@@ -2274,14 +2506,6 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
       if (!withinLimit) return res.status(400).json({ error: `Daily purchase limit of TZS ${MAX_DAILY_SALE_AMOUNT.toLocaleString()} exceeded` });
     }
 
-    // If existing transaction, validate it is in awaiting_payment status
-    if (existingTransactionId && db) {
-      const existingDoc = await db.collection('transactions').doc(existingTransactionId).get();
-      if (!existingDoc.exists) return res.status(404).json({ error: 'Transaction not found' });
-      const existingTx = existingDoc.data();
-      if (existingTx.status !== 'awaiting_payment') return res.status(400).json({ error: `Transaction is in ${existingTx.status} status, not awaiting_payment` });
-    }
-
     // Use existing transaction ID if provided, otherwise generate new one
     const order_id = existingTransactionId || `p${Date.now().toString(36)}${buyerId ? buyerId.substring(0, 4) : 'x'}`;
 
@@ -2321,11 +2545,10 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
       }, { merge: true });
     }
 
-    const promptMsg = buyerId ? await t.forUser(buyerId, 'payment_prompt') : t.default('payment_prompt');
     res.json({
       order_id,
       mongikeReference: ref,
-      message: promptMsg,
+      message: 'Tuma PIN yako kwenye simu ili kukamilisha malipo.',
     });
   } catch (e) {
     console.error('create-marketplace-payment-link error:', e.message);
@@ -2380,8 +2603,29 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
         // Product updated successfully — now mark transaction completed
         await txDoc.ref.update({ status: 'completed' });
 
+        // Send notification + FCM push
         if (tx.userId) {
-          await notifyUser(tx.userId, 'boost_title', 'boost_activated', { tier, days: tierConfig.days }, { type: 'boost', productId: tx.productId });
+          await db.collection('notifications').add({
+            userId: tx.userId,
+            title: '✅ Boost imewashwa!',
+            body: `Bidhaa yako imepandishwa kwa daraja la ${tier} kwa siku ${tierConfig.days}.`,
+            data: { type: 'boost', productId: tx.productId },
+            isRead: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          // Send FCM push
+          try {
+            const userSnap = await db.collection('users').doc(tx.userId).get();
+            const token = userSnap.data()?.fcmToken;
+            if (token) {
+              await sendFcmToToken(buildFcmMessage({
+                token,
+                title: '✅ Boost imewashwa!',
+                body: `Bidhaa yako imepandishwa kwa daraja la ${tier} kwa siku ${tierConfig.days}.`,
+                data: { type: 'boost', productId: tx.productId || '' },
+              }), tx.userId);
+            }
+          } catch (_) {}
         }
 
         // Notify all users about this boost
@@ -2487,11 +2731,61 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
             lastSaleAt: admin.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
 
-          await notifyUser(tx.sellerId, 'payment_success_seller_title', 'payment_success_seller', { productName: tx.productName, amount: sellerReceives }, { type: 'order', productId: tx.productId, transactionId: order_id, buyerPhone: tx.buyerPhone });
+          // Notify seller — payment received, held in escrow
+          await db.collection('notifications').add({
+            userId: tx.sellerId,
+            title: 'Umepata Mauzo!',
+            body: `${tx.productName || 'Bidhaa'} imeuzwa. TZS ${sellerReceives.toLocaleString()} imewekwa escrow. Mnunuzi atathibitisha upokeaji ili pesa zifunguliwe.`,
+            isRead: false,
+            type: 'sale',
+            transactionId: order_id,
+            buyerPhone: tx.buyerPhone || '',
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          // Send FCM push to seller
+          try {
+            const sellerSnap = await db.collection('users').doc(tx.sellerId).get();
+            const sellerToken = sellerSnap.data()?.fcmToken;
+            if (sellerToken) {
+              await sendFcmToToken(buildFcmMessage({
+                token: sellerToken,
+                title: 'Umepata Mauzo!',
+                body: `${tx.productName || 'Bidhaa'} imeuzwa. TZS ${sellerReceives.toLocaleString()} imewekwa escrow.`,
+                data: {
+                  type: 'order',
+                  productId: tx.productId || '',
+                  transactionId: order_id,
+                  buyerPhone: tx.buyerPhone || '',
+                },
+              }), tx.sellerId);
+            }
+          } catch (_) {}
         }
 
-    if (tx.buyerId) {
-          await notifyUser(tx.buyerId, 'payment_success_buyer_title', 'payment_success_buyer', { productName: tx.productName, amount: grandTotal }, { type: 'order', productId: tx.productId, transactionId: order_id });
+        // Notify buyer to confirm delivery
+        if (tx.buyerId) {
+          await db.collection('notifications').add({
+            userId: tx.buyerId,
+            title: 'Malipo Yamekamilika!',
+            body: `Malipo ya ${tx.productName || 'Bidhaa'} yamepokelewa. Thibitisha upokeaji ili muuzaji apate hela zake.`,
+            isRead: false,
+            type: 'escrow_confirm',
+            transactionId: order_id,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          // Send FCM push to buyer
+          try {
+            const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
+            const buyerToken = buyerSnap.data()?.fcmToken;
+            if (buyerToken) {
+              await sendFcmToToken(buildFcmMessage({
+                token: buyerToken,
+                title: 'Malipo Yamekamilika!',
+                body: `Malipo ya ${tx.productName || 'Bidhaa'} yamepokelewa.`,
+                data: { type: 'order', productId: tx.productId || '', transactionId: order_id },
+              }), tx.buyerId);
+            }
+          } catch (_) {}
         }
       }
     } else if (paymentStatus === 'failed' || paymentStatus === 'cancelled') {
@@ -2873,15 +3167,34 @@ app.post('/api/seller/withdraw', async (req, res) => {
       metadata: { phone, netAmount, fee: PAYOUT_FEE, payoutId: payoutResult.payoutId },
     });
 
-    await notifyUser(userId, 'withdrawal_initiated_title', 'withdrawal_initiated', { amount: netAmount, phone }, { type: 'withdrawal', payoutId: payoutResult.payoutId });
+    // Notify seller about withdrawal initiation
+    try {
+      const userSnap = await db.collection('users').doc(userId).get();
+      const fcmToken = userSnap.data()?.fcmToken;
+      await db.collection('notifications').add({
+        userId,
+        title: '💰 Utoaji wa Pesa Umeanzishwa',
+        body: `TZS ${netAmount.toLocaleString()} zinaandaliwa kutuma kwa ${phone}.`,
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        data: { type: 'withdrawal', payoutId: payoutResult.payoutId },
+      });
+      if (fcmToken) {
+        await sendFcmToToken(buildFcmMessage({
+          token: fcmToken,
+          title: '💰 Utoaji wa Pesa Umeanzishwa',
+          body: `TZS ${netAmount.toLocaleString()} zinaandaliwa kutuma kwa ${phone}.`,
+          data: { type: 'withdrawal', payoutId: payoutResult.payoutId },
+        }), userId);
+      }
+    } catch (_) {}
 
-    const withdrawalMsg = await t.forUser(userId, 'withdrawal_response', { amount: netAmount, phone });
     res.json({
       success: true,
       netAmount,
       fee: PAYOUT_FEE,
       payoutId: payoutResult.payoutId,
-      message: withdrawalMsg,
+      message: `TZS ${netAmount.toLocaleString()} zimetumwa kwa ${phone}`,
     });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
@@ -3439,7 +3752,24 @@ app.delete('/api/admin/users/:uid', async (req, res) => {
       reason: 'User suspended by admin',
     });
     try {
-      await notifyUser(uid, 'account_suspended_title', 'account_suspended', {}, { type: 'account', status: 'suspended' });
+      await db.collection('notifications').add({
+        userId: uid,
+        title: 'Akaunti Yako Imesitishwa',
+        body: 'Akaunti yako imesitishwa. Wasiliana na msaada kwa maelezo zaidi.',
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        data: { type: 'account', status: 'suspended' },
+      });
+      const userSnap = await db.collection('users').doc(uid).get();
+      const fcmToken = userSnap.data()?.fcmToken;
+      if (fcmToken) {
+        await sendFcmToToken(buildFcmMessage({
+          token: fcmToken,
+          title: 'Akaunti Yako Imesitishwa',
+          body: 'Akaunti yako imesitishwa. Wasiliana na msaada kwa maelezo zaidi.',
+          data: { type: 'account', status: 'suspended' },
+        }), uid);
+      }
     } catch (_) {}
 
     res.json({ success: true, message: 'User suspended' });
@@ -3481,7 +3811,24 @@ app.post('/api/admin/users/:uid/unsuspend', async (req, res) => {
       suspendedBy: admin.firestore.FieldValue.delete(),
     });
     try {
-      await notifyUser(uid, 'account_unsuspended_title', 'account_unsuspended', {}, { type: 'account', status: 'unsuspended' });
+      await db.collection('notifications').add({
+        userId: uid,
+        title: 'Akaunti Yako Imerejeshwa',
+        body: 'Akaunti yako imerejeshwa. Sasa unaweza kuendelea kutumia Soko Vibe.',
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        data: { type: 'account', status: 'unsuspended' },
+      });
+      const userSnap = await db.collection('users').doc(uid).get();
+      const fcmToken = userSnap.data()?.fcmToken;
+      if (fcmToken) {
+        await sendFcmToToken(buildFcmMessage({
+          token: fcmToken,
+          title: 'Akaunti Yako Imerejeshwa',
+          body: 'Akaunti yako imerejeshwa. Sasa unaweza kuendelea kutumia Soko Vibe.',
+          data: { type: 'account', status: 'unsuspended' },
+        }), uid);
+      }
     } catch (_) {}
 
     res.json({ success: true, message: 'User unsuspended' });
@@ -4381,7 +4728,7 @@ async function releaseExpiredEscrows() {
     const now = admin.firestore.Timestamp.now();
     // Check both escrow_hold (before dispatch) and dispatched statuses
     const expired = await db.collection('transactions')
-      .where('status', 'in', ['escrow_hold', 'paid_escrow_held', 'dispatched'])
+      .where('status', 'in', ['escrow_hold', 'dispatched'])
       .where('escrowExpiresAt', '<=', now)
       .where('escrowReleased', '!=', true)
       .limit(20)
@@ -4408,17 +4755,47 @@ async function releaseExpiredEscrows() {
           pendingEscrow: admin.firestore.FieldValue.increment(-actualPending),
         });
 
-        await notifyUser(sellerId, 'escrow_auto_release_title', 'escrow_auto_release_seller',
-          { productName: tx.productName || 'Bidhaa', amount: sellerReceives.toLocaleString() },
-          { type: 'escrow_auto_release', transactionId: doc.id }
-        );
+        await db.collection('notifications').add({
+          userId: sellerId,
+          title: 'Escrow Imefunguliwa Kiotomatiki',
+          body: `${tx.productName || 'Bidhaa'} escrow imefunguliwa baada ya muda wake. TZS ${sellerReceives.toLocaleString()} zimewekwa kwenye salio lako.`,
+          isRead: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        try {
+          const sellerSnap = await db.collection('users').doc(sellerId).get();
+          const sellerToken = sellerSnap.data()?.fcmToken;
+          if (sellerToken) {
+            await sendFcmToToken(buildFcmMessage({
+              token: sellerToken,
+              title: 'Escrow Imefunguliwa Kiotomatiki',
+              body: `${tx.productName || 'Bidhaa'} — TZS ${sellerReceives.toLocaleString()} zimewekwa salio lako.`,
+              data: { type: 'escrow_auto_release', transactionId: doc.id },
+            }), sellerId);
+          }
+        } catch (_) {}
       }
 
       if (tx.buyerId) {
-        await notifyUser(tx.buyerId, 'escrow_auto_release_title', 'escrow_auto_release_buyer',
-          { productName: tx.productName || 'Bidhaa' },
-          { type: 'escrow_auto_release', transactionId: doc.id }
-        );
+        await db.collection('notifications').add({
+          userId: tx.buyerId,
+          title: 'Escrow Imefunguliwa Kiotomatiki',
+          body: `Muda wa escrow ya ${tx.productName || 'Bidhaa'} umeisha. Pesa zimefunguliwa kwa muuzaji kwa sababu haukuthibitisha upokeaji kwa muda.`,
+          isRead: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        try {
+          const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
+          const buyerToken = buyerSnap.data()?.fcmToken;
+          if (buyerToken) {
+            await sendFcmToToken(buildFcmMessage({
+              token: buyerToken,
+              title: 'Escrow Imefunguliwa Kiotomatiki',
+              body: `${tx.productName || 'Bidhaa'} — muda wa escrow umeisha, pesa zimefunguliwa kwa muuzaji.`,
+              data: { type: 'escrow_auto_release', transactionId: doc.id },
+            }), tx.buyerId);
+          }
+        } catch (_) {}
       }
     }
   } catch (e) {
@@ -4516,10 +4893,25 @@ app.post('/api/mongike/payout-webhook', verifyWebhook, async (req, res) => {
 
       if (payout.metadata?.sellerId) {
         const sellerId = payout.metadata.sellerId;
-        await notifyUser(sellerId, 'withdrawal_initiated_title', 'payout_success',
-          { amount: (payout.netAmount || payout.amount).toLocaleString() },
-          { type: 'withdrawal', status: 'completed' }
-        );
+        await db.collection('notifications').add({
+          userId: sellerId,
+          title: 'Payout imefanikiwa!',
+          body: `TZS ${(payout.netAmount || payout.amount).toLocaleString()} zimetumwa kwenye mobile money yako.`,
+          isRead: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        try {
+          const sellerSnap = await db.collection('users').doc(sellerId).get();
+          const fcmToken = sellerSnap.data()?.fcmToken;
+          if (fcmToken) {
+            await sendFcmToToken(buildFcmMessage({
+              token: fcmToken,
+              title: 'Payout imefanikiwa!',
+              body: `TZS ${(payout.netAmount || payout.amount).toLocaleString()} zimetumwa kwenye mobile money yako.`,
+              data: { type: 'withdrawal', status: 'completed' },
+            }), sellerId);
+          }
+        } catch (_) {}
       }
     } else if (eventStatus === 'FAILED') {
       await updatePayoutStatus(payoutRef, PAYOUT_STATUSES.FAILED, {
@@ -4556,10 +4948,26 @@ app.post('/api/mongike/payout-webhook', verifyWebhook, async (req, res) => {
 
       // Notify user about failed payout
       if (payout.userId) {
-        await notifyUser(payout.userId, 'payment_failed_buyer_title', 'payout_failed',
-          { amount: (payout.netAmount || payout.amount).toLocaleString() },
-          { type: 'withdrawal', status: 'failed', payoutId: payoutRef }
-        );
+        try {
+          await db.collection('notifications').add({
+            userId: payout.userId,
+            title: '❌ Utoaji wa Pesa Umeshindwa',
+            body: `TZS ${(payout.netAmount || payout.amount).toLocaleString()} hazikutumwa. Pesa zimerudishwa kwenye pochi yako. Jaribu tena.`,
+            isRead: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            data: { type: 'withdrawal', status: 'failed', payoutId: payoutRef },
+          });
+          const userSnap = await db.collection('users').doc(payout.userId).get();
+          const fcmToken = userSnap.data()?.fcmToken;
+          if (fcmToken) {
+            await sendFcmToToken(buildFcmMessage({
+              token: fcmToken,
+              title: '❌ Utoaji wa Pesa Umeshindwa',
+              body: `TZS ${(payout.netAmount || payout.amount).toLocaleString()} hazikutumwa. Pesa zimerudishwa kwenye pochi yako. Jaribu tena.`,
+              data: { type: 'withdrawal', status: 'failed', payoutId: payoutRef },
+            }), payout.userId);
+          }
+        } catch (_) {}
       }
 
       // Attempt auto-retry if under max retries
@@ -5075,20 +5483,32 @@ function startProductListener() {
                 if (!other || notified.has(other)) continue;
                 notified.add(other);
                 const title = sellerName;
-                t.forUser(other, 'new_product_from_partner', { sellerName, productName }).then(body => {
-                  db.collection('notifications').add({
-                    userId: other, title, body,
-                    data: { type: 'product', productId, sellerId },
-                    isRead: false,
-                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                  }).catch(() => {});
-                  db.collection('users').doc(other).get().then(userSnap => {
+                const body = `${sellerName} ameweka bidhaa mpya: ${productName}.`;
+                db.collection('notifications').add({
+                  userId: other,
+                  title,
+                  body,
+                  data: { type: 'product', productId, sellerId },
+                  isRead: false,
+                  createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                }).catch(() => {});
+                db.collection('users').doc(other).get()
+                  .then((userSnap) => {
                     const fcmToken = userSnap.data()?.fcmToken;
                     if (fcmToken) {
-                      sendFcmToToken(buildFcmMessage({ token: fcmToken, title, body, data: { type: 'product', productId, sellerId, productName } }), other).catch(() => {});
+                      sendFcmToToken(buildFcmMessage({
+                        token: fcmToken,
+                        title,
+                        body,
+                        data: { type: 'product', productId, sellerId, productName },
+                      }), other).catch((err) => {
+                        if (err.code?.startsWith('messaging/')) {
+                          db.collection('users').doc(other).update({ fcmToken: null });
+                        }
+                      });
                     }
-                  }).catch(() => {});
-                }).catch(() => {});
+                  })
+                  .catch(() => {});
               }
               if (notified.size > 0) {
                 console.log(`[PRODUCT] Notified ${notified.size} users about new product from ${sellerId}`);

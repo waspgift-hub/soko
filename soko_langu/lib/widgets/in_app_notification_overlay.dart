@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 class InAppNotificationOverlay {
@@ -157,21 +158,40 @@ class _InAppNotificationBannerState extends State<_InAppNotificationBanner>
                   widget.onDismiss();
                 }
               },
-              child: Material(
-                elevation: 8,
+              child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
-                shadowColor: Colors.black26,
-                child: Container(
-                  constraints: const BoxConstraints(maxHeight: 100),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: _iconColor().withValues(alpha: 0.3),
-                      width: 1,
+                child: BackdropFilter(
+                  filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                  child: Container(
+                    constraints: const BoxConstraints(maxHeight: 100),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: Theme.of(context).brightness == Brightness.dark
+                            ? [
+                                Theme.of(context).colorScheme.surface.withValues(alpha: 0.85),
+                                Theme.of(context).colorScheme.surfaceContainerLow.withValues(alpha: 0.7),
+                              ]
+                            : [
+                                Colors.white.withValues(alpha: 0.92),
+                                Colors.white.withValues(alpha: 0.8),
+                              ],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: _iconColor().withValues(alpha: 0.25),
+                        width: 0.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _iconColor().withValues(alpha: 0.15),
+                          blurRadius: 24,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
                     ),
-                  ),
-                  child: Row(
+                    child: Row(
                     children: [
                       Container(
                         width: 48,

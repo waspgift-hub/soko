@@ -169,7 +169,7 @@ class GroqService {
   final FlashSaleService _flashSaleService = FlashSaleService();
   final List<Map<String, String>> _chatHistory = [];
 
-  final String _systemPrompt = '''Wewe ni "Soko Langu AI Assistant" — dalali mahiri wa Soko Langu (soko la kidijitali la Tanzania).
+  final String _systemPrompt = '''Wewe ni "Soko Vibe AI Assistant" — dalali mahiri wa Soko Vibe (soko la kidijitali la Tanzania).
 
 LUGHA: Kiswahili cha Kitanzania (cha kileo, cha mtaani lakini chenye heshima).
 TONE: Professional lakini friendly. Tumia maneno ya biashara: "Karibu sana bosi", "Mchongo wa haraka", "Ofa ya kushtukiza", "Wahi mchongo!".
@@ -203,7 +203,7 @@ SAMPLE RESPONSES:
 USIRAHISISHE:
 - Usitoa passwords za watumiaji au backend logs.
 - Toa tu nambari za simu za biashara za umma.
-- Ikiwa swali halihusiani na Soko Langu, jibu kwa ufupi na uelekeze kwenye biashara ya app.''';
+- Ikiwa swali halihusiani na Soko Vibe, jibu kwa ufupi na uelekeze kwenye biashara ya app.''';
 
   Future<String> sendMessage(
     String message, {

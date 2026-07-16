@@ -1,7 +1,7 @@
 {
   "name": "soko-langu-server",
   "version": "1.0.0",
-  "description": "Soko Langu backend server (Mongike + Agora)",
+  "description": "Soko Vibe backend server (Mongike + Agora)",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",

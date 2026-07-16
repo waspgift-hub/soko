@@ -6,6 +6,7 @@ import '../screens/home/home_screen.dart';
 import '../screens/home/discovery_screen.dart';
 import '../screens/ai/ai_assistant_screen.dart';
 import '../screens/chat/chats_list_screen.dart';
+import '../screens/home/add_product_screen.dart';
 import '../extensions/context_tr.dart';
 import '../main.dart';
 import '../utils/responsive.dart';
@@ -79,8 +80,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final navItems = [
       _NavItem(Icons.storefront_outlined, Icons.storefront_rounded, context.tr('home'), 0, isChat: false),
       _NavItem(Icons.diamond_outlined, Icons.diamond_rounded, context.tr('discovery'), 1, isChat: false),
+      _NavItem(Icons.add_rounded, Icons.add_rounded, '', 2, isChat: false, isSell: true),
       _NavItem(Icons.chat_outlined, Icons.chat_rounded, 'Chat', 0, isChat: true),
-      _NavItem(Icons.rocket_launch_outlined, Icons.rocket_launch_rounded, 'AI', 3, isChat: false),
       _NavItem(Icons.person_outline, Icons.person_rounded, context.tr('profile'), 4, isChat: false),
     ];
 
@@ -89,24 +90,51 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(30),
         child: BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          filter: ui.ImageFilter.blur(sigmaX: 48, sigmaY: 48),
           child: Container(
-            height: 64,
+            height: 72,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: isDark
-                    ? [cs.surfaceContainerHigh.withValues(alpha: 0.85), cs.surfaceContainerLow.withValues(alpha: 0.9)]
-                    : [cs.surface.withValues(alpha: 0.8), cs.surfaceContainerLow.withValues(alpha: 0.85)],
-              ),
+              color: cs.surface.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(30),
-              border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.2)),
+              border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
               boxShadow: [
-                BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 16, offset: const Offset(0, 4)),
+                BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 24, offset: const Offset(0, 8)),
               ],
             ),
-            child: Row(
+              child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: navItems.map((item) {
+                if (item.isSell) {
+                  return Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const AddProductScreen()),
+                        );
+                      },
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 52,
+                            height: 52,
+                            margin: const EdgeInsets.only(top: 2),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [cs.primary, cs.primary.withValues(alpha: 0.8)],
+                              ),
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(color: cs.primary.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4)),
+                              ],
+                            ),
+                            child: Icon(Icons.add_rounded, color: cs.onPrimary, size: 28),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
                 final isSelected = !item.isChat && _currentIndex == item.index;
                 return Expanded(
                   child: GestureDetector(
@@ -260,5 +288,6 @@ class _NavItem {
   final String label;
   final int index;
   final bool isChat;
-  const _NavItem(this.icon, this.activeIcon, this.label, this.index, {this.isChat = false});
+  final bool isSell;
+  const _NavItem(this.icon, this.activeIcon, this.label, this.index, {this.isChat = false, this.isSell = false});
 }
