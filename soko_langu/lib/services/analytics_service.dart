@@ -554,6 +554,7 @@ class AnalyticsService {
     int newUsersThisMonth = 0;
     int totalProducts = 0;
     int activeProducts = 0;
+    int totalOrders = 0;
     int inactiveProducts = 0;
     double totalRevenue = 0;
     double revenueToday = 0;
@@ -593,7 +594,7 @@ class AnalyticsService {
 
       // Orders
       final txSnap = await _firestore.collection('transactions').get();
-      final totalOrders = txSnap.docs.length;
+      totalOrders = txSnap.docs.length;
 
       // Revenue (last 7 days)
       for (final doc in txSnap.docs) {
