@@ -517,7 +517,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
   }
 }
 
-/// Glassmorphic payment phone-input dialog with frosted glass effect.
+/// 3D Glassmorphic payment phone-input dialog with floating effect.
 class _GlassPaymentDialog {
   static Future<String?> show({
     required BuildContext context,
@@ -536,93 +536,126 @@ class _GlassPaymentDialog {
       builder: (ctx) => Dialog(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(24),
-          child: BackdropFilter(
-            filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(24, 28, 24, 16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: isDark
-                      ? [cs.surface.withValues(alpha: 0.85), cs.surfaceContainerLow.withValues(alpha: 0.7)]
-                      : [Colors.white.withValues(alpha: 0.92), Colors.white.withValues(alpha: 0.8)],
-                ),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: isDark ? 0.1 : 0.25),
-                  width: 0.5,
-                ),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    context.tr('phone_number'),
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                      color: isDark ? Colors.white : cs.onSurface,
-                    ),
+        child: Transform(
+          transform: Matrix4.identity()
+            ..setEntry(3, 0, 0.001)
+            ..rotateX(0.03),
+          alignment: Alignment.center,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: BackdropFilter(
+              filter: ui.ImageFilter.blur(sigmaX: 32, sigmaY: 32),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(24, 28, 24, 16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: isDark
+                        ? [cs.surface.withValues(alpha: 0.8), cs.surfaceContainerLow.withValues(alpha: 0.6)]
+                        : [Colors.white.withValues(alpha: 0.95), Colors.white.withValues(alpha: 0.85)],
                   ),
-                  const SizedBox(height: 12),
-                  GlassContainer(
-                    borderRadius: 12,
-                    opacity: isDark ? 0.12 : 0.08,
-                    padding: const EdgeInsets.all(12),
-                    child: Text(
-                      '"$productName"\n$tierName — $price / $duration',
-                      textAlign: TextAlign.center,
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(
+                    color: cs.primary.withValues(alpha: isDark ? 0.15 : 0.2),
+                    width: 0.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: cs.primary.withValues(alpha: 0.15),
+                      blurRadius: 40,
+                      offset: const Offset(0, 20),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [cs.primary.withValues(alpha: 0.15), cs.primary.withValues(alpha: 0.05)],
+                        ),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.payment_rounded, color: cs.primary, size: 32),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      context.tr('phone_number'),
                       style: TextStyle(
-                        fontSize: 13,
-                        color: isDark ? Colors.white.withValues(alpha: 0.85) : cs.onSurface.withValues(alpha: 0.8),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                        color: isDark ? Colors.white : cs.onSurface,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  GlassContainer(
-                    borderRadius: 12,
-                    opacity: isDark ? 0.08 : 0.05,
-                    child: TextField(
-                      controller: phoneController,
-                      keyboardType: TextInputType.phone,
-                      decoration: InputDecoration(
-                        labelText: context.tr('phone_number'),
-                        hintText: context.tr('phone_hint'),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                        prefixIcon: Icon(Icons.phone_android, color: cs.primary),
-                        filled: false,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextButton(
-                          onPressed: () => Navigator.pop(ctx),
-                          child: Text(context.tr('cancel')),
+                    const SizedBox(height: 12),
+                    GlassContainer(
+                      borderRadius: 16,
+                      opacity: isDark ? 0.15 : 0.1,
+                      padding: const EdgeInsets.all(14),
+                      child: Text(
+                        '"$productName"\n$tierName — $price / $duration',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isDark ? Colors.white.withValues(alpha: 0.85) : cs.onSurface.withValues(alpha: 0.8),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        flex: 2,
-                        child: ElevatedButton(
-                          onPressed: () => Navigator.pop(ctx, phoneController.text.trim()),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: cs.primary,
-                            foregroundColor: cs.surface,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    const SizedBox(height: 18),
+                    GlassContainer(
+                      borderRadius: 14,
+                      opacity: isDark ? 0.1 : 0.06,
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: TextField(
+                        controller: phoneController,
+                        keyboardType: TextInputType.phone,
+                        decoration: InputDecoration(
+                          labelText: context.tr('phone_number'),
+                          hintText: context.tr('phone_hint'),
+                          border: InputBorder.none,
+                          prefixIcon: Icon(Icons.phone_android, color: cs.primary, size: 22),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            child: Text(context.tr('cancel')),
                           ),
-                          child: Text(context.tr('pay_now')),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              boxShadow: [
+                                BoxShadow(color: cs.primary.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4)),
+                              ],
+                            ),
+                            child: ElevatedButton(
+                              onPressed: () => Navigator.pop(ctx, phoneController.text.trim()),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: cs.primary,
+                                foregroundColor: cs.surface,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                elevation: 0,
+                              ),
+                              child: Text(context.tr('pay_now'), style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

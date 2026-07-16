@@ -360,7 +360,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
               ),
               const SizedBox(height: 12),
               Text(
-                "To play your music, Soko Langu needs permission to access audio files on your device.",
+                "To play your music, Soko Vibe needs permission to access audio files on your device.",
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,

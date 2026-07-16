@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../theme/app_dimens.dart';
 
@@ -46,20 +47,30 @@ class GlassCard extends StatelessWidget {
   final EdgeInsetsGeometry? margin;
   final double? width;
   final BorderRadius? borderRadius;
-  const GlassCard({super.key, required this.child, this.onTap, this.padding, this.margin, this.width, this.borderRadius});
+  final Color? borderColor;
+  const GlassCard({super.key, required this.child, this.onTap, this.padding, this.margin, this.width, this.borderRadius, this.borderColor});
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final card = Container(
-      width: width,
-      margin: margin,
-      padding: padding ?? const EdgeInsets.all(AppInsets.lg),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLow.withValues(alpha: 0.5),
-        borderRadius: borderRadius ?? BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.15)),
+    final card = ClipRRect(
+      borderRadius: borderRadius ?? BorderRadius.circular(AppRadius.lg),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: Container(
+          width: width,
+          margin: margin,
+          padding: padding ?? const EdgeInsets.all(AppInsets.lg),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerLow.withValues(alpha: 0.3),
+            borderRadius: borderRadius ?? BorderRadius.circular(AppRadius.lg),
+            border: Border.all(color: borderColor?.withValues(alpha: 0.4) ?? cs.primary.withValues(alpha: 0.2)),
+            boxShadow: [
+              BoxShadow(color: cs.primary.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 4)),
+            ],
+          ),
+          child: child,
+        ),
       ),
-      child: child,
     );
     if (onTap != null) {
       return GestureDetector(onTap: onTap, child: card);
@@ -77,17 +88,38 @@ class SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Row(
-      children: [
-        Text(title, style: TextStyle(fontSize: AppFontSize.lg, fontWeight: FontWeight.w600, color: cs.onSurface)),
-        const Spacer(),
-        if (actionLabel != null)
-          GestureDetector(
-            onTap: onAction,
-            child: Text(actionLabel!, style: TextStyle(fontSize: AppFontSize.sm, color: cs.primary)),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(width: 4, height: 20, decoration: BoxDecoration(
+                color: cs.primary,
+                borderRadius: BorderRadius.circular(2),
+              )),
+              const SizedBox(width: 10),
+              Text(title, style: TextStyle(fontSize: AppFontSize.lg, fontWeight: FontWeight.w600, color: cs.onSurface)),
+              const Spacer(),
+              if (actionLabel != null)
+                GestureDetector(
+                  onTap: onAction,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: cs.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(actionLabel!, style: TextStyle(fontSize: AppFontSize.sm, color: cs.primary, fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              if (trailing != null) trailing!,
+            ],
           ),
-        if (trailing != null) trailing!,
-      ],
+          const SizedBox(height: 12),
+        ],
+      ),
     );
   }
 }

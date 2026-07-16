@@ -75,13 +75,13 @@ class WhatsAppService {
     required String productName,
     required double productPrice,
   }) {
-    return 'Habari $sellerName, nimeona bidhaa yako "$productName" yenye thamani ya TSh ${productPrice.toStringAsFixed(0)} kwenye app ya Soko Langu. Naomba kujua zaidi.';
+    return 'Habari $sellerName, nimeona bidhaa yako "$productName" yenye thamani ya TSh ${productPrice.toStringAsFixed(0)} kwenye app ya Soko Vibe. Naomba kujua zaidi.';
   }
 
   static String generateProfileInquiryMessage({
     required String sellerName,
   }) {
-    return 'Habari $sellerName, nimekuona kwenye app ya Soko Langu na ningependa kufanya biashara na wewe.';
+    return 'Habari $sellerName, nimekuona kwenye app ya Soko Vibe na ningependa kufanya biashara na wewe.';
   }
 
   static String generateOrderInquiryMessage({
@@ -90,6 +90,6 @@ class WhatsAppService {
     required double productPrice,
     required int quantity,
   }) {
-    return 'Habari $sellerName, nataka kununua "$productName" (idadi: $quantity) yenye thamani ya TSh ${(productPrice * quantity).toStringAsFixed(0)} kwenye Soko Langu. Je ipo inapatikana?';
+    return 'Habari $sellerName, nataka kununua "$productName" (idadi: $quantity) yenye thamani ya TSh ${(productPrice * quantity).toStringAsFixed(0)} kwenye Soko Vibe. Je ipo inapatikana?';
   }
 }

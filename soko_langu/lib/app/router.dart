@@ -30,10 +30,6 @@ import '../screens/profile/product_boost_screen.dart';
 import '../screens/profile/help_center_screen.dart';
 import '../screens/profile/about_app_screen.dart';
 import '../screens/notification/notification_screen.dart';
-import '../screens/audio/player_screen.dart';
-import '../screens/audio/music_library_screen.dart';
-import '../screens/audio/music_queue_screen.dart';
-import '../screens/audio/audio_home_screen.dart';
 import '../screens/onboarding/account_selection_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
 import '../screens/auth/magic_link_screen.dart';
@@ -237,36 +233,6 @@ GoRouter buildRouter() {
         builder: (context, state) {
           return AddProductScreen(product: state.extra as dynamic);
         },
-      ),
-      GoRoute(
-        path: AppRoutes.audioHome,
-        builder: (context, state) => const AudioHomeScreen(),
-        routes: [
-          GoRoute(
-            path: 'player',
-            builder: (context, state) => const PlayerScreen(),
-          ),
-          GoRoute(
-            path: 'library',
-            builder: (context, state) => const MusicLibraryScreen(),
-          ),
-          GoRoute(
-            path: 'queue',
-            builder: (context, state) => const MusicQueueScreen(),
-          ),
-        ],
-      ),
-      GoRoute(
-        path: AppRoutes.audioList,
-        builder: (context, state) => const MusicLibraryScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.audioQueue,
-        builder: (context, state) => const MusicQueueScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.audioPlayer,
-        builder: (context, state) => const PlayerScreen(),
       ),
       GoRoute(
         path: AppRoutes.admin,

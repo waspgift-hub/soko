@@ -4,7 +4,7 @@ import 'package:soko_langu/utils/constants.dart';
 void main() {
   group('AppConstants', () {
     test('app name', () {
-      expect(AppConstants.appName, 'Soko Langu');
+      expect(AppConstants.appName, 'Soko Vibe');
     });
     test('currency', () {
       expect(AppConstants.currency, 'TZS');

@@ -24,7 +24,7 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" android:minSdkVersion="31" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <application
-        android:label="Soko Langu"
+        android:label="Soko Vibe"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

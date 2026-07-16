@@ -1,17 +1,20 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:go_router/go_router.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import '../../models/product_model.dart';
-import '../../models/flash_sale_model.dart';
-import '../../services/product_service.dart';
+import 'package:flutter_rating_bar/flutter_rating_bar.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../services/user_service.dart';
-import '../../services/flash_sale_service.dart';
-import '../../extensions/context_tr.dart';
-import '../../widgets/product_card.dart';
-import '../../widgets/google_loading.dart';
+import '../../services/product_service.dart';
+import '../../services/rating_service.dart';
+import '../../models/product_model.dart';
 import '../../widgets/verified_badge.dart';
+import '../../widgets/product_card.dart';
+import '../../widgets/glass_container.dart';
+import '../../widgets/google_loading.dart';
+import '../../extensions/context_tr.dart';
+import '../../utils/responsive.dart';
+import '../../utils/phone_utils.dart';
+import '../../models/flash_sale_model.dart';
+import '../../services/flash_sale_service.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/phone_utils.dart';
@@ -102,6 +105,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
             return CustomScrollView(
               slivers: [
                 SliverToBoxAdapter(child: _buildHeader(context, profile)),
+                SliverToBoxAdapter(child: _buildRatingSection(context)),
                 SliverToBoxAdapter(child: _buildActionButtons(context)),
                 SliverToBoxAdapter(
                   child: Padding(
@@ -195,35 +199,15 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   Widget _buildHeader(BuildContext context, UserProfile? profile) {
     final cs = Theme.of(context).colorScheme;
     final accentColor = _hexToColor(profile?.shopAccentColor);
-    return Column(
-      children: [
-        if (profile != null &&
-            (profile.shopBanner.isNotEmpty ||
-                profile.shopBannerColor.isNotEmpty))
-          Container(
-            height: 140,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color:
-                  _hexToColor(profile.shopBannerColor) ?? cs.primaryContainer,
-              image: profile.shopBanner.isNotEmpty
-                  ? DecorationImage(
-                      image: CachedNetworkImageProvider(profile.shopBanner),
-                      fit: BoxFit.cover,
-                    )
-                  : null,
-            ),
-          ),
-        Container(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-          child: Column(
+    return Container(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+      child: Column(
             children: [
               Stack(
                 children: [
                   CircleAvatar(
                     radius: 50,
-                    backgroundColor:
-                        accentColor ?? Theme.of(context).colorScheme.primary,
+                    backgroundColor: cs.primaryContainer,
                     backgroundImage: profile?.profileImage.isNotEmpty == true
                         ? NetworkImage(profile!.profileImage)
                         : null,
@@ -235,7 +219,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                                 .toUpperCase(),
                             style: TextStyle(
                               fontSize: 40,
-                              color: Theme.of(context).colorScheme.surface,
+                              color: cs.onPrimaryContainer,
                             ),
                           )
                         : null,
@@ -352,9 +336,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
               _buildStats(context, profile),
             ],
           ),
-        ),
-      ],
-    );
+      );
   }
 
   Widget _buildStats(BuildContext context, UserProfile? profile) {
@@ -409,6 +391,124 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildRatingSection(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+      child: StreamBuilder<SellerRating>(
+        stream: RatingService().streamSellerRating(widget.userId),
+        builder: (context, snap) {
+          final rating = snap.data;
+          if (rating == null || rating.totalReviews == 0) {
+            return Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerLow.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: cs.primary.withValues(alpha: 0.1)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.star_outline, size: 18, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+                  const SizedBox(width: 6),
+                  Text(
+                    context.tr('no_ratings_yet'),
+                    style: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 13),
+                  ),
+                ],
+              ),
+            );
+          }
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerLow.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: cs.primary.withValues(alpha: 0.15)),
+            ),
+            child: Row(
+              children: [
+                Column(
+                  children: [
+                    Text(
+                      rating.averageRating.toStringAsFixed(1),
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: cs.primary,
+                      ),
+                    ),
+                    RatingBar.builder(
+                      initialRating: rating.averageRating,
+                      minRating: 0,
+                      direction: Axis.horizontal,
+                      allowHalfRating: true,
+                      ignoreGestures: true,
+                      itemCount: 5,
+                      itemSize: 16,
+                      itemBuilder: (_, _) => Icon(Icons.star, color: Colors.amber, size: 16),
+                      onRatingUpdate: (_) {},
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '(${rating.totalReviews})',
+                      style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Column(
+                    children: [
+                      _ratingRow(cs, 5, rating.fiveStar, rating.totalReviews),
+                      _ratingRow(cs, 4, rating.fourStar, rating.totalReviews),
+                      _ratingRow(cs, 3, rating.threeStar, rating.totalReviews),
+                      _ratingRow(cs, 2, rating.twoStar, rating.totalReviews),
+                      _ratingRow(cs, 1, rating.oneStar, rating.totalReviews),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _ratingRow(ColorScheme cs, int star, int count, int total) {
+    final pct = total > 0 ? count / total : 0.0;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1.5),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 28,
+            child: Text('$star', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: pct,
+                minHeight: 4,
+                backgroundColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                color: Colors.amber,
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          SizedBox(
+            width: 24,
+            child: Text('$count', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+          ),
+        ],
+      ),
     );
   }
 

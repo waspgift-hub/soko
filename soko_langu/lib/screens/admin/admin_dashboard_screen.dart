@@ -1421,7 +1421,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   // ─── ANALYTICS TAB ───────────────────────────────────────
   Widget _buildAnalyticsTab() {
     final a = _analytics ?? AnalyticsData();
-    final nf = NumberFormat('#,###', 'en');
     return RefreshIndicator(
       onRefresh: _loadAnalytics,
       child: ListView(
@@ -1453,19 +1452,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             '${a.totalProducts}',
             '${context.tr('active_label')} ${a.activeProducts}',
             '${context.tr('inactive_label')} ${a.inactiveProducts}',
-          ),
-          const SizedBox(height: 16),
-          Text(
-            context.tr('orders'),
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          _statRow(
-            context.tr('total_orders'),
-            nf.format(a.totalOrders),
-            '', '',
           ),
           const SizedBox(height: 16),
           Text(

@@ -101,11 +101,19 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
 
     return Scaffold(
       body: PremiumScaffold(
-        child: SafeArea(
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [cs.primary.withValues(alpha: 0.03), cs.surface],
+            ),
+          ),
+          child: SafeArea(
           top: false,
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 20),
+            padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 80),
             child: Column(
               children: [
                 // Premium header
@@ -194,12 +202,19 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
                       // Stats
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: AppInsets.xl),
-                        child: Row(
-                          children: [
-                            Expanded(child: _statCard(Icons.favorite_rounded, context.tr('wishlist'), '$_wishlistCount', cs)),
-                            const SizedBox(width: AppInsets.md),
-                            Expanded(child: _statCard(Icons.star_rounded, 'Rating', _avgRating.toStringAsFixed(1), cs)),
-                          ],
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(child: _statCard(Icons.favorite_rounded, context.tr('wishlist'), '$_wishlistCount', cs)),
+                              Container(width: 1, height: 40, color: cs.primary.withValues(alpha: 0.1)),
+                              Expanded(child: _statCard(Icons.star_rounded, 'Rating', _avgRating.toStringAsFixed(1), cs)),
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -262,15 +277,22 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
           ),
         ),
       ),
+      ),
     );
   }
 
   Widget _statCard(IconData icon, String label, String value, ColorScheme cs) {
-    return GlassCard(
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        border: Border.all(color: cs.primary.withValues(alpha: 0.15)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      margin: const EdgeInsets.all(2),
       child: Column(
         children: [
           Icon(icon, color: cs.primary, size: 22),
-          const SizedBox(height: AppInsets.xs),
+          const SizedBox(height: 4),
           Text(value, style: TextStyle(fontWeight: FontWeight.w700, fontSize: AppFontSize.lg, color: cs.onSurface)),
           Text(label, style: TextStyle(fontSize: AppFontSize.xs, color: cs.onSurfaceVariant)),
         ],
@@ -291,7 +313,6 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
       _ActionItem(Icons.dashboard_rounded, context.tr('dashboard'), () => context.push(AppRoutes.sellerDashboard)),
       _ActionItem(Icons.analytics_rounded, 'Takwimu', () => context.push(AppRoutes.sellerAnalytics)),
       _ActionItem(Icons.explore_rounded, context.tr('discovery'), () => context.push(AppRoutes.discovery)),
-      _ActionItem(Icons.library_music_rounded, context.tr('music_player'), () => context.push(AppRoutes.audioList)),
       _ActionItem(Icons.receipt_long_rounded, 'Manunuzi Yangu', () => context.push(AppRoutes.myPurchases)),
       _ActionItem(Icons.verified_rounded, 'KYC', () => context.push(AppRoutes.kyc)),
     ];

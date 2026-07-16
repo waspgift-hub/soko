@@ -1,5 +1,5 @@
 name: soko_langu
-description: "Soko Langu - Your East African marketplace for buying and selling products with chat, calls, and secure payments."
+description: "Soko Vibe - Your East African marketplace for buying and selling products with chat, calls, and secure payments."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev

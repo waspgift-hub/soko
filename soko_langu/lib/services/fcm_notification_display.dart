@@ -32,10 +32,10 @@ class FcmNotificationDisplay {
     final imageUrl = data['image'] as String?;
     final payload = data.map((k, v) => MapEntry(k, v?.toString()));
     final channelKey = isChat
-        ? 'chat_messages_v3'
+        ? 'chat_messages_v4'
         : isPayment
-            ? 'payments_notifications'
-            : 'general_notifications_v3';
+            ? 'payments_notifications_v4'
+            : 'general_notifications_v4';
 
     // Group key for notification groups (Android 7.0+)
     final groupKey = isChat ? 'group_chat' : 'group_general';

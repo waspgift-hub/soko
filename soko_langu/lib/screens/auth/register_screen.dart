@@ -343,13 +343,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         activeColor: cs.primary,
                         onChanged: _isLoading
                             ? null
-                            : (v) =>
-                                  setState(() => _acceptedTerms = v ?? false),
+                            : (v) => setState(() => _acceptedTerms = v ?? false),
                       ),
                       Expanded(
-                        child: Text(
-                          context.tr('accept_terms'),
-                          style: Theme.of(context).textTheme.bodySmall,
+                        child: GestureDetector(
+                          onTap: () => context.push(AppRoutes.privacyPolicy),
+                          child: RichText(
+                            text: TextSpan(
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                              children: [
+                                TextSpan(text: context.tr('accept_terms_part1')),
+                                TextSpan(
+                                  text: context.tr('terms_of_service'),
+                                  style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600),
+                                ),
+                                TextSpan(text: ' ${context.tr('accept_terms_and')} '),
+                                TextSpan(
+                                  text: context.tr('privacy_policy'),
+                                  style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     ],

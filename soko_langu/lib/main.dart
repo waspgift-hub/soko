@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:ui' as ui;
 
-import 'package:audio_service/audio_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -23,15 +22,11 @@ import 'app/router.dart' as router_lib;
 import 'firebase_messaging_background.dart';
 import 'firebase_options.dart';
 import 'notifiers/auth_notifier.dart';
-import 'providers/music_state_notifier.dart';
 import 'providers/product_feed_provider.dart';
 import 'repositories/auth_repository.dart';
 import 'services/ai/ai_service.dart';
 import 'services/app_lock_service.dart';
-import 'services/audio_cache_service.dart';
-import 'services/audio_handler.dart';
 import 'services/auth_service.dart';
-import 'services/music_permission_service.dart';
 import 'services/exchange_rate_service.dart';
 import 'services/onboarding_service.dart';
 import 'services/magic_link_service.dart';
@@ -92,11 +87,6 @@ void main() async {
     } catch (e) {
       debugPrint('LocalCacheService: init failed — $e');
     }
-    try {
-      await AudioCacheService().init();
-    } catch (e) {
-      debugPrint('AudioCacheService: init failed — $e');
-    }
   }
 
   // --- Global error handlers (must be set before runApp to catch startup crashes) ---
@@ -115,24 +105,6 @@ void main() async {
   // SAFE: only stores a callback reference; the handler itself calls Firebase.initializeApp.
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
-  // --- Android 13+ POST_NOTIFICATIONS: must be granted before the media
-  // notification can appear (AudioService.init creates the notification
-  // channel). Request early — before AudioService and before runApp.
-  if (!kIsWeb) {
-    try {
-      await MusicPermissionService.instance.requestNotification();
-    } catch (e) {
-      debugPrint('Notification permission request: $e');
-    }
-  }
-
-  // --- AudioService: init before runApp on non-web, so the handler
-  // Completer resolves before the first widget tree is built. This
-  // eliminates the retry loop that MusicStateNotifier previously needed.
-  if (!kIsWeb) {
-    await _initAudioService();
-  }
-
   runApp(const SokoVibeApp());
 }
 
@@ -149,38 +121,7 @@ void _setupGlobalErrorHandlers() {
   };
 }
 
-/// Initialize AudioService before the first frame.
-///
-/// Must run before [runApp] so [musicHandlerFuture] resolves before any
-/// widget (e.g. [MiniPlayer], [PlayerScreen]) tries to read playback state.
-Future<void> _initAudioService() async {
-  try {
-    await AudioService.init(
-      builder: () {
-        final handler = MusicHandler();
-        bindMusicHandler(handler);
-        return handler;
-      },
-      config: AudioServiceConfig(
-        androidNotificationChannelId: 'com.soko_vibe.music',
-        androidNotificationChannelName: 'Soko Vibe Music',
-        androidNotificationChannelDescription:
-            'Audio playback controls for Soko Vibe',
-        androidNotificationIcon: 'drawable/ic_notification',
-        notificationColor: Color(0xFF40916C),
-        androidStopForegroundOnPause: false,
-        androidNotificationOngoing: true,
-        androidNotificationClickStartsActivity: true,
-        androidResumeOnClick: true,
-        androidShowNotificationBadge: true,
-        preloadArtwork: true,
-      ),
-    );
-  } catch (e) {
-    debugPrint('[AUDIO] AudioService init failed — foreground playback only: $e');
-    bindMusicHandler(MusicHandler());
-  }
-}
+
 
 // ---------------------------------------------------------------------------
 // AppConfig — InheritedWidget for language / currency propagation
@@ -233,7 +174,6 @@ class _SokoVibeAppState extends State<SokoVibeApp>
   String _langCode = 'en';
   String _currencyCode = 'TZS';
   late final ProductFeedProvider _productFeedProvider;
-  late final MusicStateNotifier _musicState;
   late final AuthRepository _authRepository;
   late final OnboardingService _onboardingService;
   late final AuthNotifier _authNotifier;
@@ -247,7 +187,6 @@ class _SokoVibeAppState extends State<SokoVibeApp>
   void initState() {
     super.initState();
     _productFeedProvider = ProductFeedProvider();
-    _musicState = MusicStateNotifier();
     _authRepository = AuthRepository();
     _onboardingService = OnboardingService();
     _authNotifier = AuthNotifier(
@@ -265,7 +204,6 @@ class _SokoVibeAppState extends State<SokoVibeApp>
     WidgetsBinding.instance.removeObserver(this);
     themeManager.removeListener(_onThemeChange);
     _productFeedProvider.dispose();
-    _musicState.dispose();
     super.dispose();
   }
 
@@ -330,10 +268,6 @@ class _SokoVibeAppState extends State<SokoVibeApp>
 
       // Background services (fire-and-forget)
       _initBackgroundServices(prefs);
-
-      // Start MusicStateNotifier streams (handler already ready since
-      // AudioService.init completed before runApp).
-      _musicState.init();
     } catch (e) {
       debugPrint('_initApp: error — $e');
     }
@@ -457,12 +391,6 @@ class _SokoVibeAppState extends State<SokoVibeApp>
         debugPrint('AwesomeNotifications init: $e');
       }
 
-      // Android 13+ POST_NOTIFICATIONS permission via native dialog
-      try {
-        await MusicPermissionService.instance.requestNotification();
-      } catch (e) {
-        debugPrint('Notification permission request: $e');
-      }
     }
 
     // FCM push + in-app notification service
@@ -505,7 +433,6 @@ class _SokoVibeAppState extends State<SokoVibeApp>
     return MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: _productFeedProvider),
-        ChangeNotifierProvider.value(value: _musicState),
         ChangeNotifierProvider.value(value: themeManager),
         Provider.value(value: _authRepository),
         Provider.value(value: _onboardingService),

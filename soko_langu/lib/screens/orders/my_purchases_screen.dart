@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -377,9 +378,23 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                     )
                   : null;
 
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: Padding(
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: BackdropFilter(
+                  filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: GestureDetector(
+                    onTap: () => context.push('/receipt/${docs[i].id}'),
+                    child: Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerLow.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: cs.primary.withValues(alpha: 0.15)),
+                      boxShadow: [
+                        BoxShadow(color: cs.primary.withValues(alpha: 0.06), blurRadius: 16, offset: const Offset(0, 4)),
+                      ],
+                    ),
+                    child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -557,14 +572,13 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                     ],
                   ),
                 ),
+                    ),
+                  ),
+                    ),
+                  ),
+                );
               );
-            },
-          );
-        },
-      ),
-      bottomNavigationBar: const AdBanner(),
-    );
-  }
+
 
   void _showError(String msg) {
     if (!mounted) return;

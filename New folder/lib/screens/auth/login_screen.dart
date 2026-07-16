@@ -100,7 +100,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       width: 90, height: 90, fit: BoxFit.cover),
                   ),
                   const SizedBox(height: 16),
-                  Text("Soko Langu",
+                  Text("Soko Vibe",
                     style: TextStyle(color: cs.primary, fontSize: 30,
                       fontWeight: FontWeight.w900, fontStyle: FontStyle.italic, letterSpacing: -0.5)),
                   const SizedBox(height: 4),

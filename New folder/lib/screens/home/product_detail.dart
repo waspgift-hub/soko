@@ -483,7 +483,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                     ),
                                   ),
                                   TextSpan(
-                                    text: 'Soko Langu',
+                                    text: 'Soko Vibe',
                                     style: TextStyle(
                                       fontSize: 13,
                                       fontWeight: FontWeight.bold,

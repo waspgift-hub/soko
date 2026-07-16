@@ -60,7 +60,7 @@ const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
 const SMTP_PORT = process.env.SMTP_PORT || '587';
 const SMTP_USER = process.env.SMTP_USER || 'waspgift@gmail.com';
 const SMTP_PASS = process.env.SMTP_PASS || 'fgnd ylot wwmc grou';
-const SMTP_FROM = process.env.SMTP_FROM || 'Soko Langu <waspgift@gmail.com>';
+const SMTP_FROM = process.env.SMTP_FROM || 'Soko Vibe <waspgift@gmail.com>';
 const SMTP_SECURE = process.env.SMTP_SECURE || 'false';
 
 let transporter;
@@ -1071,10 +1071,10 @@ app.post('/api/send-otp', async (req, res) => {
       await transporter.sendMail({
         from: SMTP_FROM,
         to: email,
-        subject: 'Soko Langu — Password Reset OTP',
+        subject: 'Soko Vibe — Password Reset OTP',
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
-            <h2 style="color: #2D6A4F;">Soko Langu</h2>
+            <h2 style="color: #2D6A4F;">Soko Vibe</h2>
             <p>Use the OTP below to reset your password:</p>
             <div style="font-size: 32px; font-weight: bold; color: #2D6A4F; text-align: center; 
                         padding: 20px; background: #F0F9F1; border-radius: 12px; letter-spacing: 8px;">

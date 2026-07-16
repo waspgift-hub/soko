@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -14,6 +15,7 @@ import '../../utils/phone_utils.dart';
 import '../../models/flash_sale_model.dart';
 import '../../services/flash_sale_service.dart';
 import '../../widgets/google_loading.dart';
+import '../../widgets/glass_container.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 class SellerDashboardScreen extends StatefulWidget {
@@ -48,114 +50,166 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      appBar: AppBar(title: Text(context.tr('dashboard'))),
-      body: SafeArea(
-        child: StreamBuilder<List<MarketplaceTransaction>>(
-          stream: _paymentService.getSellerTransactions(),
-          builder: (context, txSnap) {
-            if (txSnap.hasError) {
-              debugPrint('SellerDashboard tx error: ${txSnap.error}');
-            }
-            final transactions = txSnap.data ?? [];
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        title: Text(context.tr('dashboard')),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [cs.primary.withValues(alpha: 0.04), cs.surface],
+          ),
+        ),
+        child: SafeArea(
+          child: StreamBuilder<List<MarketplaceTransaction>>(
+            stream: _paymentService.getSellerTransactions(),
+            builder: (context, txSnap) {
+              if (txSnap.hasError) {
+                debugPrint('SellerDashboard tx error: ${txSnap.error}');
+              }
+              final transactions = txSnap.data ?? [];
 
-            return StreamBuilder<List<Product>>(
-              stream: _productService.getMyProducts(),
-              builder: (context, productSnap) {
-                if (productSnap.hasError) {
-                  debugPrint('SellerDashboard products error: ${productSnap.error}');
-                }
-                if (txSnap.connectionState == ConnectionState.waiting ||
-                    productSnap.connectionState == ConnectionState.waiting) {
-                  return const GoogleLoadingPage();
-                }
-                final productCount = productSnap.data?.length ?? 0;
-                final completedTx = transactions.where(
-                  (t) => t.status == TransactionStatus.completed,
-                );
-                final txCount = completedTx.length;
-                return RefreshIndicator(
-                  onRefresh: () async => setState(() {}),
-                  child: ListView(
-                    padding: EdgeInsets.fromLTRB(
-                      16,
-                      16,
-                      16,
-                      16 + MediaQuery.of(context).padding.bottom,
-                    ),
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _statCard(
-                              context,
-                              Icons.inventory_2,
-                              productCount.toString(),
-                              context.tr('total_products'),
-                              Theme.of(context).colorScheme.secondary,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _statCard(
-                              context,
-                              Icons.receipt_long,
-                              '$txCount ${context.tr('sold')}',
-                              context.tr('total_sales'),
-                              Theme.of(context).colorScheme.tertiary,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      _buildEarningsCard(),
-                      const SizedBox(height: 16),
-                      _buildKycCard(),
-                      const SizedBox(height: 16),
-                      _buildPayoutPrefsCard(),
-                      const SizedBox(height: 16),
-                      _buildQuoteButton(),
-                      const SizedBox(height: 16),
-                      _buildDispatchButton(),
-                      const SizedBox(height: 16),
-                      _buildCustomizeShopButton(),
-                      const SizedBox(height: 16),
-                      _buildFlashSaleCard(productSnap.data ?? []),
-                      const SizedBox(height: 16),
-                      _buildBoostButton(productSnap.data ?? []),
-                      if (user?.email == 'admin@soko-langu.com' || _isAdmin) ...[
-                        const SizedBox(height: 16),
-                        _buildAdminSection(),
-                      ],
-                      if (completedTx.isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                          Text(
-                            context.tr('tx_history'),
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                        const SizedBox(height: 8),
-                        ...completedTx
-                            .take(10)
-                            .map((tx) => _buildTransactionTile(tx)),
-                      ] else ...[
-                        const SizedBox(height: 16),
-                        Center(
-                          child: Text(
-                            context.tr('no_transactions'),
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
+              return StreamBuilder<List<Product>>(
+                stream: _productService.getMyProducts(),
+                builder: (context, productSnap) {
+                  if (productSnap.hasError) {
+                    debugPrint('SellerDashboard products error: ${productSnap.error}');
+                  }
+                  if (txSnap.connectionState == ConnectionState.waiting ||
+                      productSnap.connectionState == ConnectionState.waiting) {
+                    return const GoogleLoadingPage();
+                  }
+                  final productCount = productSnap.data?.length ?? 0;
+                  final completedTx = transactions.where(
+                    (t) => t.status == TransactionStatus.completed,
+                  );
+                  final txCount = completedTx.length;
+                  return RefreshIndicator(
+                    onRefresh: () async => setState(() {}),
+                    child: ListView(
+                      padding: EdgeInsets.fromLTRB(16, 8, 16, 16 + MediaQuery.of(context).padding.bottom),
+                      children: [
+                        // Stats row with glass cards
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Row(
+                            children: [
+                              Expanded(child: _glassStatCard(cs, Icons.inventory_2, productCount.toString(), context.tr('total_products'), cs.secondary)),
+                              const SizedBox(width: 12),
+                              Expanded(child: _glassStatCard(cs, Icons.receipt_long, '$txCount ${context.tr('sold')}', context.tr('total_sales'), cs.tertiary)),
+                            ],
                           ),
                         ),
+                        _buildEarningsCard(),
+                        const SizedBox(height: 14),
+                        _buildQuickActions(cs, isDark, productSnap.data ?? []),
+                        if (user?.email == 'admin@soko-langu.com' || _isAdmin) ...[
+                          const SizedBox(height: 14),
+                          _buildAdminSection(),
+                        ],
+                        if (completedTx.isNotEmpty) ...[
+                          const SizedBox(height: 20),
+                          Text(context.tr('tx_history'),
+                            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: cs.onSurface)),
+                          const SizedBox(height: 10),
+                          ...completedTx.take(10).map((tx) => _buildTransactionTile(tx)),
+                        ] else ...[
+                          const SizedBox(height: 20),
+                          Center(
+                            child: Text(context.tr('no_transactions'),
+                              style: TextStyle(color: cs.onSurfaceVariant)),
+                          ),
+                        ],
                       ],
-                    ],
-                  ),
-                );
-              },
-            );
-          },
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _glassStatCard(ColorScheme cs, IconData icon, String value, String label, Color color) {
+    return GlassContainer(
+      blur: 20,
+      opacity: 0.1,
+      borderRadius: 18,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: color, size: 24),
+          ),
+          const SizedBox(height: 12),
+          Text(value, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: cs.onSurface)),
+          const SizedBox(height: 2),
+          Text(label, style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActions(ColorScheme cs, bool isDark, List<Product> products) {
+    return GlassContainer(
+      blur: 24,
+      opacity: isDark ? 0.08 : 0.05,
+      borderRadius: 24,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Vitendo', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: cs.onSurface)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: _actionButton(cs, Icons.price_check, 'Toa\nNafasi', () => context.push(AppRoutes.sellerQuote), cs.primary)),
+              const SizedBox(width: 8),
+              Expanded(child: _actionButton(cs, Icons.local_shipping, 'Tuma\nBidhaa', () => context.push(AppRoutes.sellerDispatch), Colors.orange)),
+              const SizedBox(width: 8),
+              Expanded(child: _actionButton(cs, Icons.store, 'Customize\nShop', () => context.push(AppRoutes.shopCustomization), cs.primary)),
+              const SizedBox(width: 8),
+              Expanded(child: _actionButton(cs, Icons.verified, 'Boost\nListing', () => _showBoostDialog(products), cs.trendingOrange)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _actionButton(ColorScheme cs, IconData icon, String label, VoidCallback onTap, Color color) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withValues(alpha: 0.15)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(height: 6),
+            Text(label, textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 10, color: cs.onSurface, fontWeight: FontWeight.w500)),
+          ],
         ),
       ),
     );
@@ -168,36 +222,34 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     String label,
     Color color,
   ) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
-            width: 1.5,
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 28),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
           ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: color, size: 28),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-            Text(
-              label,
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13),
-            ),
-          ],
-        ),
+          Text(
+            label,
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13),
+          ),
+        ],
       ),
     );
   }
@@ -317,6 +369,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
 
   Widget _buildEarningsCard() {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final cs = Theme.of(context).colorScheme;
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
       builder: (context, snap) {
@@ -326,12 +379,17 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
         return GestureDetector(
           onTap: () => context.push(AppRoutes.sellerEarnings),
           child: Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Theme.of(context).colorScheme.successGreen, Theme.of(context).colorScheme.successGreen.withValues(alpha: 0.8)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [cs.primary, cs.primary.withValues(alpha: 0.75)],
               ),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(22),
+              boxShadow: [
+                BoxShadow(color: cs.primary.withValues(alpha: 0.3), blurRadius: 24, offset: const Offset(0, 10)),
+              ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -339,44 +397,27 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(10),
+                        color: cs.surface.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      child:  Icon(Icons.account_balance_wallet, color: Theme.of(context).colorScheme.surface, size: 22),
+                      child: Icon(Icons.account_balance_wallet, color: cs.surface, size: 24),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 12),
                     Expanded(
-                      child: Text(
-                        context.tr('seller_earnings'),
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.surface,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      child: Text(context.tr('seller_earnings'),
+                        style: TextStyle(color: cs.surface, fontSize: 17, fontWeight: FontWeight.bold)),
                     ),
-                    Icon(Icons.arrow_forward_ios, color: Theme.of(context).colorScheme.surface, size: 16),
+                    Icon(Icons.arrow_forward_ios, color: cs.surface.withValues(alpha: 0.7), size: 16),
                   ],
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  'TZS ${nf.format(balance)}',
-                  style:  TextStyle(
-                    color: Theme.of(context).colorScheme.surface,
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  context.tr('seller_earnings_subtitle').replaceFirst('{0}', '$totalSales'),
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.8),
-                    fontSize: 12,
-                  ),
-                ),
+                const SizedBox(height: 16),
+                Text('TZS ${nf.format(balance)}',
+                  style: TextStyle(color: cs.surface, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: -1)),
+                const SizedBox(height: 4),
+                Text(context.tr('seller_earnings_subtitle').replaceFirst('{0}', '$totalSales'),
+                  style: TextStyle(color: cs.surface.withValues(alpha: 0.8), fontSize: 13)),
               ],
             ),
           ),
@@ -387,6 +428,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
 
   Widget _buildKycCard() {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final cs = Theme.of(context).colorScheme;
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
       builder: (context, snap) {
@@ -403,46 +445,42 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           case 'approved':
             title = context.tr('kyc_approved');
             subtitle = context.tr('can_sell_products');
-            color = Theme.of(context).colorScheme.primary;
+            color = cs.primary;
             icon = Icons.verified;
             break;
           case 'pending':
             title = context.tr('kyc_pending');
             subtitle = context.tr('kyc_pending_subtitle');
-            color = Theme.of(context).colorScheme.tertiary;
+            color = cs.tertiary;
             icon = Icons.hourglass_top;
             break;
           case 'rejected':
             title = context.tr('kyc_rejected');
             subtitle = context.tr('kyc_rejected_subtitle');
-            color = Theme.of(context).colorScheme.error;
+            color = cs.error;
             icon = Icons.cancel;
             break;
           default:
             title = context.tr('kyc_not_submitted');
             subtitle = context.tr('verify_id_to_sell');
-            color = Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6);
+            color = cs.onSurface.withValues(alpha: 0.6);
             icon = Icons.verified_outlined;
         }
 
         return GestureDetector(
           onTap: () => context.push(AppRoutes.kyc),
-          child: Container(
+          child: GlassContainer(
+            blur: 20,
+            opacity: 0.08,
+            borderRadius: 18,
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [color.withValues(alpha: 0.12), color.withValues(alpha: 0.04)],
-              ),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: color.withValues(alpha: 0.24)),
-            ),
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(10),
+                    color: color.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(icon, color: color, size: 28),
                 ),
@@ -451,22 +489,9 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          color: color,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      Text(title, style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        style: TextStyle(
-                          color: color.withValues(alpha: 0.8),
-                          fontSize: 13,
-                        ),
-                      ),
+                      Text(subtitle, style: TextStyle(color: color.withValues(alpha: 0.8), fontSize: 13)),
                     ],
                   ),
                 ),
@@ -702,6 +727,8 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   }
 
   Widget _buildFlashSaleCard(List<Product> products) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cs = Theme.of(context).colorScheme;
     return StreamBuilder<List<FlashSale>>(
       stream: FlashSaleService().getMyFlashSales(),
       builder: (context, snap) {
@@ -716,44 +743,37 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
             }
             context.push(AppRoutes.createFlashSale);
           },
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.primary.withValues(alpha: 0.85)],
-              ),
-              borderRadius: BorderRadius.circular(14),
-            ),
+          child: GlassContainer(
+            blur: 24,
+            opacity: isDark ? 0.12 : 0.06,
+            borderRadius: 22,
+            padding: const EdgeInsets.all(18),
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.4),
-                    borderRadius: BorderRadius.circular(10),
+                    color: cs.error.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child:  Icon(Icons.local_fire_department, color: Theme.of(context).colorScheme.surface, size: 28),
+                  child: Icon(Icons.local_fire_department, color: cs.error, size: 28),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        context.tr('unda_flash_sale'),
-                        style: TextStyle(color: Theme.of(context).colorScheme.surface, fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
+                      Text(context.tr('unda_flash_sale'),
+                        style: TextStyle(color: cs.onSurface, fontSize: 17, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
-                      Text(
-                        activeCount > 0
-                            ? context.tr('flash_sales_active').replaceFirst('{0}', '$activeCount')
-                            : context.tr('create_flash_sale_prompt'),
-                        style: TextStyle(color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.8), fontSize: 12),
-                      ),
+                      Text(activeCount > 0
+                          ? context.tr('flash_sales_active').replaceFirst('{0}', '$activeCount')
+                          : context.tr('create_flash_sale_prompt'),
+                        style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
                     ],
                   ),
                 ),
-                Icon(Icons.arrow_forward_ios, color: Theme.of(context).colorScheme.surface, size: 18),
+                Icon(Icons.arrow_forward_ios, color: cs.onSurfaceVariant, size: 16),
               ],
             ),
           ),
@@ -763,53 +783,39 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   }
 
   Widget _buildBoostButton(List<Product> products) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cs = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: products.isEmpty ? null : () => _showBoostDialog(products),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Theme.of(context).colorScheme.trendingOrange, Theme.of(context).colorScheme.trendingOrange.withValues(alpha: 0.7)],
-          ),
-          borderRadius: BorderRadius.circular(14),
-        ),
+      child: GlassContainer(
+        blur: 24,
+        opacity: isDark ? 0.12 : 0.06,
+        borderRadius: 22,
+        padding: const EdgeInsets.all(18),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(10),
+                color: cs.trendingOrange.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
               ),
-              child:  Icon(Icons.verified, color: Theme.of(context).colorScheme.surface, size: 28),
+              child: Icon(Icons.verified, color: cs.trendingOrange, size: 28),
             ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    context.tr('boost_listing'),
-                    style:  TextStyle(
-                      color: Theme.of(context).colorScheme.surface,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  Text(context.tr('boost_listing'),
+                    style: TextStyle(color: cs.onSurface, fontSize: 17, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
-                  Text(
-                    products.isEmpty
-                        ? context.tr('add_product_first')
-                        : context.tr('boost_plans'),
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.8),
-                      fontSize: 12,
-                    ),
-                  ),
+                  Text(products.isEmpty ? context.tr('add_product_first') : context.tr('boost_plans'),
+                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
                 ],
               ),
             ),
-            Icon(Icons.arrow_forward_ios, color: Theme.of(context).colorScheme.surface, size: 18),
+            Icon(Icons.arrow_forward_ios, color: cs.onSurfaceVariant, size: 16),
           ],
         ),
       ),
