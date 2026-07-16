@@ -62,7 +62,7 @@
             android:value="ca-app-pub-3796499857968162~1098626149"/>
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="general_notifications_v3" />
+            android:value="general_notifications_v4" />
         <meta-data
             android:name="flutter_notification_icon"
             android:resource="@drawable/ic_notification" />

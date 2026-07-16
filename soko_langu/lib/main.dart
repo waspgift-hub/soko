@@ -47,6 +47,8 @@ import 'widgets/app_lock_overlay.dart';
 import 'widgets/maintenance_gate.dart';
 import 'widgets/connectivity_wrapper.dart';
 import 'widgets/transaction_status_watcher.dart';
+import 'widgets/age_gate_dialog.dart';
+import 'widgets/in_app_notification_overlay.dart';
 
 // ---------------------------------------------------------------------------
 // Global singletons — scoped to app lifetime, lazily resolved where possible.
@@ -342,21 +344,24 @@ class _SokoVibeAppState extends State<SokoVibeApp>
   // -----------------------------------------------------------------------
 
   void _setupNotificationCallbacks() {
+    NotificationService.onForegroundMessage = (title, body, type, data) {
+      final ctx = router_lib.rootNavigatorKey.currentContext;
+      if (ctx != null && ctx.mounted) {
+        InAppNotificationOverlay.show(
+          context: ctx,
+          title: title,
+          body: body,
+          type: type,
+          data: data,
+          onTap: () => _onNotificationTap(type, data, ctx),
+        );
+      }
+    };
+
     NotificationService.onNotificationTap = (Map<String, dynamic> data) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final type = data['type'] as String?;
-        switch (type) {
-          case 'order':
-          case 'boost':
-            appRouter.push('/notifications');
-          case 'flash_sale':
-            appRouter.push('/flash-sale');
-          case 'product':
-            final productId = data['productId'] as String?;
-            if (productId != null) {
-              appRouter.push('/product/$productId');
-            }
-        }
+        _onNotificationTap(type, data, context);
       });
     };
 
@@ -365,10 +370,33 @@ class _SokoVibeAppState extends State<SokoVibeApp>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final orderId = (data['orderId'] ?? data['transactionId']) as String?;
         if (orderId != null) {
-          appRouter.push('/receipt/$orderId');
+          _pushIfNotCurrent('/receipt/$orderId', context);
         }
       });
     };
+  }
+
+  void _onNotificationTap(String? type, Map<String, dynamic>? data, BuildContext ctx) {
+    switch (type) {
+      case 'order':
+      case 'boost':
+        _pushIfNotCurrent('/notifications', ctx);
+      case 'flash_sale':
+        _pushIfNotCurrent('/flash-sale', ctx);
+      case 'product':
+        final productId = data?['productId'] as String?;
+        if (productId != null) {
+          _pushIfNotCurrent('/product/$productId', ctx);
+        }
+    }
+  }
+
+  void _pushIfNotCurrent(String location, [BuildContext? context]) {
+    if (context != null && mounted) {
+      final current = GoRouterState.of(context).matchedLocation;
+      if (current == location) return;
+    }
+    appRouter.push(location);
   }
 
   // -----------------------------------------------------------------------
@@ -540,6 +568,7 @@ class _SokoVibeAppState extends State<SokoVibeApp>
     content = MaintenanceGate(child: content);
     content = AppLockOverlay(child: content);
     content = TransactionStatusWatcher(child: content);
+    content = _AgeGateOverlay(child: content);
 
     return AppConfig(
       langCode: _langCode,
@@ -557,4 +586,35 @@ class _SokoVibeAppState extends State<SokoVibeApp>
       ),
     );
   }
+}
+
+/// Shows age gate dialog once on first launch. Does NOT block the app.
+class _AgeGateOverlay extends StatefulWidget {
+  final Widget child;
+  const _AgeGateOverlay({required this.child});
+
+  @override
+  State<_AgeGateOverlay> createState() => _AgeGateOverlayState();
+}
+
+class _AgeGateOverlayState extends State<_AgeGateOverlay> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _check());
+  }
+
+  Future<void> _check() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool('age_gate_confirmed') == true) return;
+      await AgeGateDialog.show(context);
+      await prefs.setBool('age_gate_confirmed', true);
+    } catch (_) {
+      // fail-safe — never block the app
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

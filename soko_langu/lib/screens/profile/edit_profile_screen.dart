@@ -9,6 +9,7 @@ import '../../services/user_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../utils/helpers.dart';
 import '../../widgets/google_loading.dart';
+import '../../widgets/location_disclosure_dialog.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -143,6 +144,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       }
       return;
     }
+
+    final agreed = await LocationDisclosureDialog.show(context);
+    if (agreed != true) return;
 
     LocationPermission perm = await Geolocator.checkPermission();
     if (perm == LocationPermission.denied) {

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../screens/profile/profile_screen.dart';
 import '../screens/home/home_screen.dart';
@@ -58,6 +59,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
+      extendBody: true,
       body: Row(
         children: [
           if (isDesktop) _buildSidebar(cs),
@@ -68,58 +70,88 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       ),
       bottomNavigationBar: isDesktop
           ? null
-          : Container(
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(
-                    color: cs.outlineVariant.withValues(alpha: 0.3),
-                  ),
-                ),
+          : _buildGlassNavBar(cs),
+    );
+  }
+
+  Widget _buildGlassNavBar(ColorScheme cs) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final navItems = [
+      _NavItem(Icons.storefront_outlined, Icons.storefront_rounded, context.tr('home'), 0, isChat: false),
+      _NavItem(Icons.diamond_outlined, Icons.diamond_rounded, context.tr('discovery'), 1, isChat: false),
+      _NavItem(Icons.chat_outlined, Icons.chat_rounded, 'Chat', 0, isChat: true),
+      _NavItem(Icons.rocket_launch_outlined, Icons.rocket_launch_rounded, 'AI', 3, isChat: false),
+      _NavItem(Icons.person_outline, Icons.person_rounded, context.tr('profile'), 4, isChat: false),
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(30),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          child: Container(
+            height: 64,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: isDark
+                    ? [cs.surfaceContainerHigh.withValues(alpha: 0.85), cs.surfaceContainerLow.withValues(alpha: 0.9)]
+                    : [cs.surface.withValues(alpha: 0.8), cs.surfaceContainerLow.withValues(alpha: 0.85)],
               ),
-              child: NavigationBar(
-                selectedIndex: _currentIndex,
-                onDestinationSelected: (index) {
-                  if (index == 2) {
-                    _openChats();
-                  } else {
-                    setState(() => _currentIndex = index);
-                  }
-                },
-                backgroundColor: cs.surface.withValues(alpha: 0.92),
-                indicatorColor: cs.primary.withValues(alpha: 0.12),
-                height: 64,
-                labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
-                shadowColor: Colors.transparent,
-                elevation: 0,
-                destinations: [
-                  NavigationDestination(
-                    icon: Icon(Icons.storefront_outlined, color: cs.onSurface.withValues(alpha: 0.45)),
-                    selectedIcon: Icon(Icons.storefront_rounded, color: cs.primary),
-                    label: context.tr('home'),
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.diamond_outlined, color: cs.onSurface.withValues(alpha: 0.45)),
-                    selectedIcon: Icon(Icons.diamond_rounded, color: cs.primary),
-                    label: context.tr('discovery'),
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.chat_outlined, color: cs.onSurface.withValues(alpha: 0.45)),
-                    selectedIcon: Icon(Icons.chat_rounded, color: cs.primary),
-                    label: 'Chat',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.rocket_launch_outlined, color: cs.onSurface.withValues(alpha: 0.45)),
-                    selectedIcon: Icon(Icons.rocket_launch_rounded, color: cs.primary),
-                    label: 'AI',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.person_outline, color: cs.onSurface.withValues(alpha: 0.45)),
-                    selectedIcon: Icon(Icons.person_rounded, color: cs.primary),
-                    label: context.tr('profile'),
-                  ),
-                ],
-              ),
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.2)),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 16, offset: const Offset(0, 4)),
+              ],
             ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: navItems.map((item) {
+                final isSelected = !item.isChat && _currentIndex == item.index;
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      if (item.isChat) {
+                        _openChats();
+                      } else {
+                        setState(() => _currentIndex = item.index);
+                      }
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                      decoration: BoxDecoration(
+                        color: isSelected ? cs.primary.withValues(alpha: 0.15) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            isSelected ? item.activeIcon : item.icon,
+                            color: isSelected ? cs.primary : cs.onSurface.withValues(alpha: 0.45),
+                            size: 24,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            item.label,
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: isSelected ? cs.primary : cs.onSurface.withValues(alpha: 0.45),
+                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -131,11 +163,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   Widget _buildSidebar(ColorScheme cs) {
     final navItems = [
-      _SidebarItem(Icons.storefront_outlined, Icons.storefront_rounded, context.tr('home'), 0, isChat: false),
-      _SidebarItem(Icons.diamond_outlined, Icons.diamond_rounded, context.tr('discovery'), 1, isChat: false),
-      _SidebarItem(Icons.chat_outlined, Icons.chat_rounded, 'Chat', 0, isChat: true),
-      _SidebarItem(Icons.rocket_launch_outlined, Icons.rocket_launch_rounded, 'AI', 3, isChat: false),
-      _SidebarItem(Icons.person_outline, Icons.person_rounded, context.tr('profile'), 4, isChat: false),
+      _NavItem(Icons.storefront_outlined, Icons.storefront_rounded, context.tr('home'), 0, isChat: false),
+      _NavItem(Icons.diamond_outlined, Icons.diamond_rounded, context.tr('discovery'), 1, isChat: false),
+      _NavItem(Icons.chat_outlined, Icons.chat_rounded, 'Chat', 0, isChat: true),
+      _NavItem(Icons.rocket_launch_outlined, Icons.rocket_launch_rounded, 'AI', 3, isChat: false),
+      _NavItem(Icons.person_outline, Icons.person_rounded, context.tr('profile'), 4, isChat: false),
     ];
 
     return Container(
@@ -222,11 +254,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 }
 
-class _SidebarItem {
+class _NavItem {
   final IconData icon;
   final IconData activeIcon;
   final String label;
   final int index;
   final bool isChat;
-  const _SidebarItem(this.icon, this.activeIcon, this.label, this.index, {this.isChat = false});
+  const _NavItem(this.icon, this.activeIcon, this.label, this.index, {this.isChat = false});
 }

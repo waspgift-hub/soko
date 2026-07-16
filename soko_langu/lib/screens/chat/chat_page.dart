@@ -45,6 +45,7 @@ class _ChatPageState extends State<ChatPage> {
   Timer? _typingTimer;
   bool _autoScrolling = false;
   String? _receiverPhone;
+  String? _receiverPhoto;
 
   String get _uid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
@@ -64,7 +65,10 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _fetchReceiverPhone() async {
     final profile = await _userService.getProfile(widget.receiverId);
     if (mounted && profile != null) {
-      setState(() => _receiverPhone = profile.phone);
+      setState(() {
+        _receiverPhone = profile.phone;
+        _receiverPhoto = profile.profileImage;
+      });
     }
   }
 
@@ -146,10 +150,13 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF0B141A) : const Color(0xFFE5DDD5),
       appBar: AppBar(
+        backgroundColor: isDark ? const Color(0xFF1F2C33) : const Color(0xFFF0F2F5),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
@@ -290,17 +297,29 @@ class _ChatPageState extends State<ChatPage> {
           // Input bar
           Container(
             decoration: BoxDecoration(
-              color: cs.surface,
-              border: Border(top: BorderSide(color: cs.outlineVariant, width: 0.5)),
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFF1F2C33)
+                  : const Color(0xFFF0F2F5),
             ),
             padding: EdgeInsets.only(
-              left: 12,
+              left: 8,
               right: 8,
               bottom: MediaQuery.of(context).viewInsets.bottom + 8,
               top: 8,
             ),
             child: Row(
               children: [
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: cs.surfaceContainerHighest,
+                  backgroundImage: _receiverPhoto != null && _receiverPhoto!.isNotEmpty
+                      ? NetworkImage(_receiverPhoto!)
+                      : null,
+                  child: _receiverPhoto == null || _receiverPhoto!.isEmpty
+                      ? Icon(Icons.person, size: 18, color: cs.onSurfaceVariant)
+                      : null,
+                ),
+                const SizedBox(width: 8),
                 Expanded(
                   child: TextField(
                     controller: _inputCtrl,
@@ -310,20 +329,44 @@ class _ChatPageState extends State<ChatPage> {
                     decoration: InputDecoration(
                       hintText: context.tr('type_message'),
                       filled: true,
-                      fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.6),
+                      fillColor: Theme.of(context).brightness == Brightness.dark
+                          ? const Color(0xFF2A3942)
+                          : Colors.white,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
                         borderSide: BorderSide.none,
                       ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      prefixIcon: Padding(
+                        padding: const EdgeInsets.only(left: 8, right: 4),
+                        child: Icon(Icons.emoji_emotions_outlined, size: 22, color: const Color(0xFF8696A0)),
+                      ),
+                      prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 0),
+                      suffixIcon: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.attach_file, size: 22, color: const Color(0xFF8696A0)),
+                          const SizedBox(width: 4),
+                          Icon(Icons.camera_alt_outlined, size: 22, color: const Color(0xFF8696A0)),
+                          const SizedBox(width: 4),
+                        ],
+                      ),
+                      suffixIconConstraints: const BoxConstraints(minWidth: 60, minHeight: 0),
                     ),
                     onSubmitted: (_) => _sendMessage(),
                   ),
                 ),
-                const SizedBox(width: 8),
-                CircleAvatar(
-                  backgroundColor: cs.primary,
+                const SizedBox(width: 6),
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [cs.primary, cs.primary.withValues(alpha: 0.8)],
+                    ),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(color: cs.primary.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 2)),
+                    ],
+                  ),
                   child: IconButton(
                     icon: const Icon(Icons.send, color: Colors.white, size: 20),
                     onPressed: _sendMessage,
@@ -474,13 +517,17 @@ class _MessageBubble extends StatelessWidget {
               color: isDeleted
                   ? cs.surfaceContainerHighest
                   : isMe
-                      ? cs.primary
-                      : cs.surfaceContainerHighest,
+                      ? (Theme.of(context).brightness == Brightness.dark
+                          ? const Color(0xFF005C4B)
+                          : const Color(0xFFDCF8C6))
+                      : (Theme.of(context).brightness == Brightness.dark
+                          ? const Color(0xFF202C33)
+                          : Colors.white),
               borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(18),
-                topRight: const Radius.circular(18),
-                bottomLeft: isMe ? const Radius.circular(18) : Radius.zero,
-                bottomRight: isMe ? Radius.zero : const Radius.circular(18),
+                topLeft: const Radius.circular(8),
+                topRight: const Radius.circular(8),
+                bottomLeft: isMe ? const Radius.circular(8) : const Radius.circular(2),
+                bottomRight: isMe ? const Radius.circular(2) : const Radius.circular(8),
               ),
             ),
             child: Column(
@@ -518,7 +565,9 @@ class _MessageBubble extends StatelessWidget {
                   Text(message.content,
                       style: TextStyle(
                         fontSize: 15,
-                        color: isMe ? cs.onPrimary : cs.onSurface,
+                        color: isMe
+                            ? (Theme.of(context).brightness == Brightness.dark ? Colors.white : const Color(0xFF111B21))
+                            : cs.onSurface,
                       )),
                 const SizedBox(height: 4),
                 Row(

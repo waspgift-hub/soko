@@ -1,5 +1,6 @@
 require('dotenv').config();
 const admin = require('firebase-admin');
+const t = require('./text');
 
 // ─── Firebase Admin Init ─────────────────────────────────────────────
 const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
@@ -115,6 +116,42 @@ async function getUserPhone(userId) {
   } catch { return null; }
 }
 
+// ─── Localized notification + FCM helper ───────────────────────────────
+async function notifyUser(uid, titleKey, bodyKey, params = {}, extraData = {}) {
+  if (!uid || !db) return;
+  try {
+    const title = await t.forUser(uid, titleKey, params);
+    const body = await t.forUser(uid, bodyKey, params);
+    const data = { ...extraData };
+    await db.collection('notifications').add({
+      userId: uid, title, body, isRead: false,
+      data,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    const userSnap = await db.collection('users').doc(uid).get();
+    const token = userSnap.data()?.fcmToken;
+    if (token) {
+      await sendFcm(buildFcmMessage({ token, title, body, data }), uid);
+    }
+  } catch (e) {
+    console.error(`[LISTENER] notifyUser(${uid}): ${e.message}`);
+  }
+}
+
+// ─── Localized SMS helper ─────────────────────────────────────────────
+async function smsUser(uid, key, params = {}) {
+  if (!uid || !db) return;
+  try {
+    const userSnap = await db.collection('users').doc(uid).get();
+    const phone = userSnap.data()?.phone;
+    if (!phone) return;
+    const message = await t.forUser(uid, key, params);
+    await sendSms(phone, message);
+  } catch (e) {
+    console.error(`[LISTENER] smsUser(${uid}): ${e.message}`);
+  }
+}
+
 // ─── Track known statuses to avoid re-sending on every field update ───
 const knownStatus = new Map();
 
@@ -147,27 +184,17 @@ function startListener() {
         if (beforeStatus === 'pending' && (newStatus === 'escrow_hold' || newStatus === 'paid_escrow_held' || newStatus === 'completed')) {
           console.log(`[LISTENER] ${orderId}: ${beforeStatus} → ${newStatus}`);
 
-          // Notify buyer via FCM
-          if (buyerId) {
-            db.collection('users').doc(buyerId).get()
-              .then((userSnap) => {
-                const fcmToken = userSnap.data()?.fcmToken;
-                if (fcmToken) {
-                  const title = 'Payment Received – Escrow Held';
-                  const body = `Your payment for ${productName} is held in escrow.`;
-                  return sendFcm(buildFcmMessage({ token: fcmToken, title, body, data: { type: 'payment', orderId, status: newStatus } }), buyerId);
-                }
-              })
-              .then(() => console.log(`[LISTENER] ${orderId}: FCM sent to buyer ${buyerId}`))
-              .catch((err) => console.error(`[LISTENER] ${orderId}: FCM failed for buyer:`, err.message));
-          }
-
-          // SMS buyer + seller
           const grandTotal = (after.productPrice || 0) + (after.shippingCost || 0);
-          Promise.all([
-            getUserPhone(buyerId).then(phone => phone && sendSms(phone, `Soko Vibe: Malipo ya TZS ${grandTotal.toLocaleString()} kwa Oda #${orderId} yamepokelewa na kuwekwa salama Escrow. Muuzaji anajiandaa kutuma mzigo wako.`)),
-            getUserPhone(sellerId).then(phone => phone && sendSms(phone, `Soko Vibe: Oda #${orderId} imelipiwa! Fedha ipo salama Escrow. Tafadhali kamilisha usafirishaji stendi na ujaze risiti ya basi kwenye app.`)),
-          ]);
+
+          if (buyerId) {
+            notifyUser(buyerId, 'payment_success_buyer_title', 'payment_success_buyer', { productName, amount: grandTotal }, { type: 'payment', orderId, status: newStatus });
+          }
+          if (buyerId) {
+            smsUser(buyerId, 'escrow_pending_sms_buyer', { orderId, amount: grandTotal });
+          }
+          if (sellerId) {
+            smsUser(sellerId, 'escrow_pending_sms_seller', { orderId });
+          }
         }
 
         // ── escrow_hold / paid_escrow_held → dispatched ──
@@ -177,10 +204,9 @@ function startListener() {
           const busName = after.busName || 'basi';
           const plateNumber = after.plateNumber || '';
 
-          // SMS buyer
-          getUserPhone(buyerId).then(phone => {
-            if (phone) sendSms(phone, `Soko Vibe: Mzigo wa Oda #${orderId} umesafirishwa kupitia basi la ${busName} (${plateNumber}). Fungua app kuona risiti yako ya kidijitali.`);
-          });
+          if (buyerId) {
+            smsUser(buyerId, 'dispatch_sms_buyer', { orderId, busName, plateNumber });
+          }
         }
 
         // ── dispatched → delivered ──
@@ -189,34 +215,19 @@ function startListener() {
 
           const sellerReceives = after.sellerReceives || after.totalAmount || 0;
 
-          // SMS seller
-          getUserPhone(sellerId).then(phone => {
-            if (phone) sendSms(phone, `Soko Vibe: Mteja amethibitisha kupokea mzigo #${orderId}. TZS ${sellerReceives.toLocaleString()} zimetolewa Escrow na kuwekwa kwenye pochi yako.`);
-          });
+          if (sellerId) {
+            smsUser(sellerId, 'escrow_delivered_sms', { orderId, amount: sellerReceives });
+          }
         }
 
         // ── any → failed (payment failure, cancellation, etc.) ──
         if (newStatus === 'failed' && beforeStatus !== 'failed') {
           console.log(`[LISTENER] ${orderId}: ${beforeStatus} → failed`);
 
-          // FCM to buyer
           if (buyerId) {
-            db.collection('users').doc(buyerId).get()
-              .then((userSnap) => {
-                const fcmToken = userSnap.data()?.fcmToken;
-                if (fcmToken) {
-                  const title = 'Malipo Yameshindikana';
-                  const body = `Malipo ya ${productName} hayakukamilika. Fungua app ili ujaribu tena.`;
-                  return sendFcm(buildFcmMessage({ token: fcmToken, title, body, data: { type: 'payment_failed', orderId, status: 'failed' } }), buyerId);
-                }
-              })
-              .catch((err) => console.error(`[LISTENER] ${orderId}: FCM failed for buyer:`, err.message));
+            notifyUser(buyerId, 'payment_failed_buyer_title', 'payment_failed_buyer', { productName }, { type: 'payment_failed', orderId, status: 'failed' });
+            smsUser(buyerId, 'payment_failed_listener_sms', { productName });
           }
-
-          // SMS buyer
-          getUserPhone(buyerId).then(phone => {
-            if (phone) sendSms(phone, `Soko Vibe: Malipo ya ${productName} hayakukamilika. Tafadhali fungua app na ujaribu tena.`);
-          });
         }
 
         // ── any → refunded ──
@@ -224,22 +235,9 @@ function startListener() {
           console.log(`[LISTENER] ${orderId}: ${beforeStatus} → refunded`);
 
           if (buyerId) {
-            db.collection('users').doc(buyerId).get()
-              .then((userSnap) => {
-                const fcmToken = userSnap.data()?.fcmToken;
-                if (fcmToken) {
-                  const title = 'Fedha Zimerudishwa';
-                  const body = `Fedha za ${productName} zimerudishwa kwenye akaunti yako.`;
-                  return sendFcm(buildFcmMessage({ token: fcmToken, title, body, data: { type: 'refund', orderId, status: 'refunded' } }), buyerId);
-                }
-              })
-              .catch((err) => console.error(`[LISTENER] ${orderId}: FCM failed for buyer:`, err.message));
+            notifyUser(buyerId, 'refund_title', 'refund_buyer', { productName, amount: 0 }, { type: 'refund', orderId, status: 'refunded' });
+            smsUser(buyerId, 'refund_listener_sms', { productName, orderId });
           }
-
-          // SMS buyer
-          getUserPhone(buyerId).then(phone => {
-            if (phone) sendSms(phone, `Soko Vibe: Fedha za ${productName} (Oda #${orderId}) zimerudishwa kwenye akaunti yako.`);
-          });
         }
       });
     },
@@ -406,27 +404,28 @@ function startProductListener() {
               if (!other || notified.has(other)) continue;
               notified.add(other);
               const title = sellerName;
-              const body = `${sellerName} ameweka bidhaa mpya: ${productName}.`;
-              db.collection('notifications').add({
-                userId: other, title, body,
-                data: { type: 'product', productId, sellerId },
-                isRead: false,
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-              }).catch(() => {});
-              db.collection('users').doc(other).get()
-                .then((userSnap) => {
-                  const fcmToken = userSnap.data()?.fcmToken;
-                  if (fcmToken) {
-                    sendFcm(buildFcmMessage({
-                      token: fcmToken, title, body,
-                      data: { type: 'product', productId, sellerId, productName },
-                    }), other).catch((err) => {
-                      if (err.code?.startsWith('messaging/')) {
-                        db.collection('users').doc(other).update({ fcmToken: null });
-                      }
-                    });
-                  }
+              t.forUser(other, 'new_product_from_partner', { sellerName, productName }).then(body => {
+                db.collection('notifications').add({
+                  userId: other, title, body,
+                  data: { type: 'product', productId, sellerId },
+                  isRead: false,
+                  createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 }).catch(() => {});
+                db.collection('users').doc(other).get()
+                  .then((userSnap) => {
+                    const fcmToken = userSnap.data()?.fcmToken;
+                    if (fcmToken) {
+                      sendFcm(buildFcmMessage({
+                        token: fcmToken, title, body,
+                        data: { type: 'product', productId, sellerId, productName },
+                      }), other).catch((err) => {
+                        if (err.code?.startsWith('messaging/')) {
+                          db.collection('users').doc(other).update({ fcmToken: null });
+                        }
+                      });
+                    }
+                  }).catch(() => {});
+              }).catch(() => {});
             }
             if (notified.size > 0) {
               console.log(`[LISTENER] Notified ${notified.size} users about new product from ${sellerId}`);
