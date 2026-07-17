@@ -43,6 +43,14 @@ ThemeData _buildTheme(ColorScheme scheme) {
       ? const Color(0x2AFFFFFF)
       : const Color(0x08000000);
 
+  final glassCard = isDark
+      ? const Color(0xFF1A2040).withValues(alpha: 0.65)
+      : const Color(0xFFFFFFFF).withValues(alpha: 0.82);
+
+  final glassSheet = isDark
+      ? const Color(0xFF121729).withValues(alpha: 0.75)
+      : const Color(0xFFFFFFFF).withValues(alpha: 0.88);
+
   final base = ThemeData(
     useMaterial3: true,
     brightness: scheme.brightness,
@@ -74,8 +82,8 @@ ThemeData _buildTheme(ColorScheme scheme) {
 
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: isDark
-          ? const Color(0xFF121729).withValues(alpha: 0.95)
-          : const Color(0xFFFFFFFF).withValues(alpha: 0.95),
+          ? const Color(0xFF121729).withValues(alpha: 0.75)
+          : const Color(0xFFFFFFFF).withValues(alpha: 0.82),
       indicatorColor: scheme.primary.withValues(alpha: 0.15),
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
@@ -107,8 +115,8 @@ ThemeData _buildTheme(ColorScheme scheme) {
 
     bottomNavigationBarTheme: BottomNavigationBarThemeData(
       backgroundColor: isDark
-          ? const Color(0xFF121729).withValues(alpha: 0.95)
-          : const Color(0xFFFFFFFF).withValues(alpha: 0.95),
+          ? const Color(0xFF121729).withValues(alpha: 0.75)
+          : const Color(0xFFFFFFFF).withValues(alpha: 0.82),
       selectedItemColor: scheme.primary,
       unselectedItemColor: scheme.onSurface.withValues(alpha: 0.45),
       type: BottomNavigationBarType.fixed,
@@ -185,8 +193,8 @@ ThemeData _buildTheme(ColorScheme scheme) {
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: isDark
-          ? const Color(0xFF1A2040)
-          : const Color(0xFFF0F1F8),
+          ? const Color(0xFF1A2040).withValues(alpha: 0.55)
+          : const Color(0xFFF0F1F8).withValues(alpha: 0.7),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide.none,
@@ -224,8 +232,8 @@ ThemeData _buildTheme(ColorScheme scheme) {
 
     chipTheme: ChipThemeData(
       backgroundColor: isDark
-          ? const Color(0xFF1A2040)
-          : const Color(0xFFF0F1F8),
+          ? const Color(0xFF1A2040).withValues(alpha: 0.55)
+          : const Color(0xFFF0F1F8).withValues(alpha: 0.7),
       selectedColor: scheme.primary.withValues(alpha: 0.12),
       labelStyle: TextStyle(color: scheme.onSurface),
       secondaryLabelStyle: const TextStyle(
@@ -250,8 +258,8 @@ ThemeData _buildTheme(ColorScheme scheme) {
 
     snackBarTheme: SnackBarThemeData(
       backgroundColor: isDark
-          ? const Color(0xFF222952)
-          : const Color(0xFFFFFFFF),
+          ? const Color(0xFF222952).withValues(alpha: 0.75)
+          : const Color(0xFFFFFFFF).withValues(alpha: 0.88),
       contentTextStyle: TextStyle(color: scheme.onSurface),
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(
@@ -263,9 +271,7 @@ ThemeData _buildTheme(ColorScheme scheme) {
     ),
 
     dialogTheme: DialogThemeData(
-      backgroundColor: isDark
-          ? const Color(0xFF1A2040)
-          : const Color(0xFFFFFFFF),
+      backgroundColor: glassCard,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
       ),
@@ -273,9 +279,7 @@ ThemeData _buildTheme(ColorScheme scheme) {
     ),
 
     cardTheme: CardThemeData(
-      color: isDark
-          ? const Color(0xFF1A2040)
-          : const Color(0xFFFFFFFF),
+      color: glassCard,
       elevation: 0,
       shadowColor: Colors.transparent,
       shape: RoundedRectangleBorder(
@@ -345,11 +349,7 @@ ThemeData _buildTheme(ColorScheme scheme) {
 
     menuTheme: MenuThemeData(
       style: MenuStyle(
-        backgroundColor: WidgetStatePropertyAll(
-          isDark
-              ? const Color(0xFF1A2040)
-              : const Color(0xFFFFFFFF),
-        ),
+        backgroundColor: WidgetStatePropertyAll(glassCard),
         shape: WidgetStatePropertyAll(
           RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -383,9 +383,7 @@ ThemeData _buildTheme(ColorScheme scheme) {
     ),
 
     bottomSheetTheme: BottomSheetThemeData(
-      backgroundColor: isDark
-          ? const Color(0xFF1A2040)
-          : const Color(0xFFFFFFFF),
+      backgroundColor: glassSheet,
       surfaceTintColor: Colors.transparent,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -394,9 +392,7 @@ ThemeData _buildTheme(ColorScheme scheme) {
     ),
 
     popupMenuTheme: PopupMenuThemeData(
-      color: isDark
-          ? const Color(0xFF1A2040)
-          : const Color(0xFFFFFFFF),
+      color: glassCard,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(color: glassBorder),
@@ -405,9 +401,7 @@ ThemeData _buildTheme(ColorScheme scheme) {
     ),
 
     drawerTheme: DrawerThemeData(
-      backgroundColor: isDark
-          ? const Color(0xFF121729)
-          : const Color(0xFFFFFFFF),
+      backgroundColor: glassSheet,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.only(
           topRight: Radius.circular(20),
@@ -424,18 +418,14 @@ ThemeData _buildTheme(ColorScheme scheme) {
     ),
 
     timePickerTheme: TimePickerThemeData(
-      backgroundColor: isDark
-          ? const Color(0xFF1A2040)
-          : const Color(0xFFFFFFFF),
+      backgroundColor: glassCard,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
       ),
     ),
 
     datePickerTheme: DatePickerThemeData(
-      backgroundColor: isDark
-          ? const Color(0xFF1A2040)
-          : const Color(0xFFFFFFFF),
+      backgroundColor: glassCard,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
       ),
@@ -446,8 +436,8 @@ ThemeData _buildTheme(ColorScheme scheme) {
     tooltipTheme: TooltipThemeData(
       decoration: BoxDecoration(
         color: isDark
-            ? const Color(0xFF222952)
-            : const Color(0xFF1A1A2E),
+            ? const Color(0xFF222952).withValues(alpha: 0.85)
+            : const Color(0xFF1A1A2E).withValues(alpha: 0.85),
         borderRadius: BorderRadius.circular(8),
       ),
       textStyle: TextStyle(

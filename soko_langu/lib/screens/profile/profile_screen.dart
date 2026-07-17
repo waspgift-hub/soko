@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -10,6 +11,7 @@ import 'package:provider/provider.dart';
 import '../../services/wishlist_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/permission_service.dart';
+import '../../services/ai/ai_service.dart';
 import '../../widgets/account_switcher_sheet.dart';
 import '../../widgets/ad_banner.dart';
 import '../../widgets/verified_badge.dart';
@@ -227,6 +229,12 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
                   child: _buildActionGrid(cs),
                 ),
                 const SizedBox(height: AppInsets.lg),
+                // AI Assistant mini chat
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+                  child: _AiChatBox(cs: cs),
+                ),
+                const SizedBox(height: AppInsets.lg),
                 // Settings
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
@@ -285,7 +293,7 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
-        border: Border.all(color: cs.primary.withValues(alpha: 0.15)),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.3), width: 1.2),
         borderRadius: BorderRadius.circular(12),
       ),
       margin: const EdgeInsets.all(2),
@@ -312,6 +320,7 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
       _ActionItem(Icons.store_rounded, context.tr('customize_shop'), () => context.push(AppRoutes.shopCustomization)),
       _ActionItem(Icons.dashboard_rounded, context.tr('dashboard'), () => context.push(AppRoutes.sellerDashboard)),
       _ActionItem(Icons.analytics_rounded, 'Takwimu', () => context.push(AppRoutes.sellerAnalytics)),
+      _ActionItem(Icons.auto_awesome_rounded, 'AI Msaidizi', () => context.push(AppRoutes.aiAssistant)),
       _ActionItem(Icons.explore_rounded, context.tr('discovery'), () => context.push(AppRoutes.discovery)),
       _ActionItem(Icons.receipt_long_rounded, 'Manunuzi Yangu', () => context.push(AppRoutes.myPurchases)),
       _ActionItem(Icons.verified_rounded, 'KYC', () => context.push(AppRoutes.kyc)),
@@ -331,6 +340,7 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
         return GlassCard(
           onTap: item.onTap,
           padding: const EdgeInsets.symmetric(vertical: AppInsets.lg, horizontal: AppInsets.sm),
+          borderColor: cs.primary.withValues(alpha: 0.35),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -358,4 +368,264 @@ class _ActionItem {
   final String label;
   final VoidCallback onTap;
   _ActionItem(this.icon, this.label, this.onTap);
+}
+
+class _AiChatBox extends StatefulWidget {
+  final ColorScheme cs;
+  const _AiChatBox({required this.cs});
+
+  @override
+  State<_AiChatBox> createState() => _AiChatBoxState();
+}
+
+class _AiChatBoxState extends State<_AiChatBox> with TickerProviderStateMixin {
+  final AiService _ai = AiService.instance;
+  final TextEditingController _ctrl = TextEditingController();
+  final List<String> _msgs = [];
+  bool _loading = false;
+  late AnimationController _pulseCtrl;
+  late Animation<double> _pulseAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _msgs.add('Habari! Mimi ni msaidizi wako. Uliza chochote kuhusu bidhaa, maagizo, au soko.');
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat(reverse: true);
+    _pulseAnim = Tween<double>(begin: 0.6, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    _pulseCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final text = _ctrl.text.trim();
+    if (text.isEmpty) return;
+    setState(() {
+      _msgs.add(text);
+      _loading = true;
+    });
+    _ctrl.clear();
+    try {
+      final reply = await _ai.sendMessage(text);
+      if (mounted) setState(() => _msgs.add(reply));
+    } catch (_) {
+      if (mounted) setState(() => _msgs.add('Samahani, kuna tatizo. Tafadhali jaribu tena.'));
+    }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = widget.cs;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 32, sigmaY: 32),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: isDark
+                  ? [cs.surface.withValues(alpha: 0.2), cs.surfaceContainerLow.withValues(alpha: 0.12)]
+                  : [Colors.white.withValues(alpha: 0.88), Colors.white.withValues(alpha: 0.72)],
+            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: cs.primary.withValues(alpha: isDark ? 0.12 : 0.15),
+              width: 0.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: cs.primary.withValues(alpha: 0.06),
+                blurRadius: 32,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  AnimatedBuilder(
+                    animation: _pulseAnim,
+                    builder: (_, child) => Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(colors: [cs.primary, cs.primary.withValues(alpha: 0.7)]),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: cs.primary.withValues(alpha: 0.3 * _pulseAnim.value),
+                            blurRadius: 12 * _pulseAnim.value,
+                            spreadRadius: 1 * _pulseAnim.value,
+                          ),
+                        ],
+                      ),
+                      child: Icon(Icons.auto_awesome_rounded, color: cs.surface, size: 22),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Text('AI Msaidizi', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17, color: cs.onSurface, letterSpacing: -0.3)),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: () => context.push(AppRoutes.aiAssistant),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: cs.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: cs.primary.withValues(alpha: 0.15)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('Fungua', style: TextStyle(fontSize: 12, color: cs.primary, fontWeight: FontWeight.w600)),
+                          const SizedBox(width: 4),
+                          Icon(Icons.arrow_forward_ios, size: 10, color: cs.primary),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Container(
+                constraints: const BoxConstraints(maxHeight: 200),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _msgs.length,
+                  itemBuilder: (_, i) {
+                    final msg = _msgs[i];
+                    final isUser = i.isOdd;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          if (!isUser)
+                            Container(
+                              width: 24, height: 24,
+                              margin: const EdgeInsets.only(right: 6),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(colors: [cs.primary, cs.primary.withValues(alpha: 0.7)]),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Icon(Icons.auto_awesome, size: 12, color: cs.surface),
+                            ),
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: isUser
+                                    ? cs.primary.withValues(alpha: 0.12)
+                                    : cs.surfaceContainerHighest.withValues(alpha: isDark ? 0.15 : 0.2),
+                                borderRadius: BorderRadius.circular(18).copyWith(
+                                  bottomRight: isUser ? const Radius.circular(6) : null,
+                                  bottomLeft: isUser ? null : const Radius.circular(6),
+                                ),
+                                border: Border.all(
+                                  color: cs.primary.withValues(alpha: isUser ? 0.08 : 0.03),
+                                  width: 0.5,
+                                ),
+                              ),
+                              child: Text(
+                                msg,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: isUser ? cs.primary : cs.onSurface,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+              if (_loading)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 18, height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
+                      ),
+                      const SizedBox(width: 8),
+                      Text('Inaandika...', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: BackdropFilter(
+                        filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: cs.surface.withValues(alpha: isDark ? 0.08 : 0.04),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.15)),
+                          ),
+                          child: TextField(
+                            controller: _ctrl,
+                            textInputAction: TextInputAction.send,
+                            onSubmitted: (_) => _send(),
+                            decoration: InputDecoration(
+                              hintText: 'Uliza swali...',
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              isDense: true,
+                            ),
+                            style: TextStyle(fontSize: 14, color: cs.onSurface),
+                            cursorColor: cs.primary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  GestureDetector(
+                    onTap: _loading ? null : _send,
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(colors: [cs.primary, cs.primary.withValues(alpha: 0.7)]),
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(color: cs.primary.withValues(alpha: 0.25), blurRadius: 12, offset: const Offset(0, 4)),
+                        ],
+                      ),
+                      child: Icon(Icons.send_rounded, color: cs.surface, size: 22),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

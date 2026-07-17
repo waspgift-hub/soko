@@ -161,7 +161,7 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
                       if (addr != null)
                         _detailRow(cs, 'Anwani', '${addr['region'] ?? ''}, ${addr['district'] ?? ''}, ${addr['street'] ?? ''}'),
                       if (addr?['landmarks'] != null)
-                        _detailRow(cs, 'Alama', addr['landmarks']),
+                        _detailRow(cs, 'Alama', addr!['landmarks'] as String? ?? ''),
 
                       const SizedBox(height: 16),
                       Container(height: 1, color: cs.primary.withValues(alpha: 0.1)),

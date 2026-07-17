@@ -16,6 +16,7 @@ import '../../widgets/google_loading.dart';
 import '../../widgets/review_section.dart';
 import '../../widgets/comment_section.dart';
 import '../../widgets/verified_badge.dart';
+import '../../widgets/premium_widgets.dart';
 import '../../services/product_service.dart';
 import '../../services/user_service.dart';
 import '../../services/analytics_service.dart';

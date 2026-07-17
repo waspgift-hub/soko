@@ -252,6 +252,7 @@ class _InAppNotificationBannerState extends State<_InAppNotificationBanner>
           ),
         ),
       ),
+    ),
     );
   }
 }

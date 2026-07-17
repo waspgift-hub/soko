@@ -1,4 +1,3 @@
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -126,27 +125,66 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 const SizedBox(height: 10),
                 _feeRow(cs, 'Ada ya Mongike (180 TZS)', context.formatPrice(_mongikeFee), cs.secondary),
                 const SizedBox(height: 4),
-                Text('Gharama ya usindikaji wa malipo',
-                    style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: cs.tertiary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    'Mongike huchargia TZS 180 kwa kila malipo ya mobile money',
+                    style: TextStyle(fontSize: 10, color: cs.tertiary),
+                  ),
+                ),
                 const SizedBox(height: 10),
-                Container(height: 1, color: cs.primary.withValues(alpha: 0.15)),
+                Container(height: 1, color: cs.primary.withValues(alpha: 0.1)),
                 const SizedBox(height: 10),
                 _feeRow(cs, 'Jumla ya Malipo', context.formatPrice(_totalWithFee), cs.primary, bold: true),
                 const SizedBox(height: 12),
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: cs.tertiary.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(10),
+                    gradient: LinearGradient(
+                      colors: [cs.primary.withValues(alpha: 0.06), cs.secondary.withValues(alpha: 0.04)],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: cs.primary.withValues(alpha: 0.1)),
                   ),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.info_outline, size: 16, color: cs.tertiary),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Gharama ya usafirishaji itaongezwa baada ya muuzaji kutoa quote. Muuzaji atalipwa ${_sellerFeePercent}% (${context.formatPrice(_sellerReceives)}) baada ya mgongano kukamilika.',
-                          style: TextStyle(fontSize: 11, color: cs.tertiary),
+                      Row(
+                        children: [
+                          Icon(Icons.info_outline, size: 14, color: cs.primary),
+                          const SizedBox(width: 6),
+                          Text('Mgawanyo wa Malipo',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.onSurface)),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      _feeRow(cs, 'Muuzaji anapokea (${_sellerFeePercent}% toka kwake)', context.formatPrice(_sellerReceives), cs.primary),
+                      const SizedBox(height: 4),
+                      _feeRow(cs, 'Soko Vibe Commission (${_sellerFeePercent}%)', context.formatPrice(_totalPrice * _sellerFeePercent / 100), cs.onSurfaceVariant),
+                      const SizedBox(height: 4),
+                      _feeRow(cs, 'Mongike Processing Fee', context.formatPrice(_mongikeFee), cs.secondary),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: cs.primary.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.local_shipping_outlined, size: 12, color: cs.primary),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'Gharama ya usafirishaji itaongezwa baada ya muuzaji kutoa quote',
+                                style: TextStyle(fontSize: 10, color: cs.primary.withValues(alpha: 0.7)),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -167,13 +205,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
-                TextField(controller: _regionCtrl, decoration: InputDecoration(labelText: 'Mkoa / Region', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), filled: true, fillColor: cs.surface.withValues(alpha: 0.5), isDense: true), textCapitalization: TextCapitalization.words),
+                TextField(controller: _regionCtrl, decoration: InputDecoration(hintText: 'Mkoa / Region', border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: true, fillColor: cs.surface.withValues(alpha: 0.5), isDense: true), textCapitalization: TextCapitalization.words, cursorColor: cs.primary),
                 const SizedBox(height: 10),
-                TextField(controller: _districtCtrl, decoration: InputDecoration(labelText: 'Wilaya / District', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), filled: true, fillColor: cs.surface.withValues(alpha: 0.5), isDense: true), textCapitalization: TextCapitalization.words),
+                TextField(controller: _districtCtrl, decoration: InputDecoration(hintText: 'Wilaya / District', border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: true, fillColor: cs.surface.withValues(alpha: 0.5), isDense: true), textCapitalization: TextCapitalization.words, cursorColor: cs.primary),
                 const SizedBox(height: 10),
-                TextField(controller: _streetCtrl, decoration: InputDecoration(labelText: 'Mtaa / Street', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), filled: true, fillColor: cs.surface.withValues(alpha: 0.5), isDense: true), textCapitalization: TextCapitalization.words),
+                TextField(controller: _streetCtrl, decoration: InputDecoration(hintText: 'Mtaa / Street', border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: true, fillColor: cs.surface.withValues(alpha: 0.5), isDense: true), textCapitalization: TextCapitalization.words, cursorColor: cs.primary),
                 const SizedBox(height: 10),
-                TextField(controller: _landmarksCtrl, decoration: InputDecoration(labelText: 'Alama za Jirani / Landmarks', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), filled: true, fillColor: cs.surface.withValues(alpha: 0.5), isDense: true), textCapitalization: TextCapitalization.words),
+                TextField(controller: _landmarksCtrl, decoration: InputDecoration(hintText: 'Alama za Jirani / Landmarks', border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: true, fillColor: cs.surface.withValues(alpha: 0.5), isDense: true), textCapitalization: TextCapitalization.words, cursorColor: cs.primary),
               ],
             ),
           ),
@@ -193,8 +231,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               decoration: InputDecoration(
                 hintText: context.tr('phone_hint'),
                 border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
                 prefixIcon: Icon(Icons.phone_android, color: cs.primary, size: 20),
               ),
+              style: TextStyle(color: cs.onSurface),
+              cursorColor: cs.primary,
             ),
           ),
           const SizedBox(height: 16),

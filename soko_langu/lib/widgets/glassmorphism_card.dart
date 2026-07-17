@@ -51,23 +51,47 @@ class GlassmorphismCard extends StatelessWidget {
 
     Widget card = ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
-      child: Container(
-        width: width,
-        height: height,
-        padding: padding,
-        margin: margin,
-        decoration: BoxDecoration(
-          gradient: effectiveGradient,
-          borderRadius: BorderRadius.circular(borderRadius),
-          border: Border.all(
-            color: isDark
-                ? Colors.white.withValues(alpha: borderOpacity * 0.5)
-                : Colors.white.withValues(alpha: borderOpacity),
-            width: 0.5,
+      child: Stack(
+        children: [
+          Container(
+            width: width,
+            height: height,
+            padding: padding,
+            margin: margin,
+            decoration: BoxDecoration(
+              gradient: effectiveGradient,
+              borderRadius: BorderRadius.circular(borderRadius),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: borderOpacity * 0.5)
+                    : Colors.white.withValues(alpha: borderOpacity),
+                width: 0.5,
+              ),
+              boxShadow: effectiveShadow,
+            ),
+            child: child,
           ),
-          boxShadow: effectiveShadow,
-        ),
-        child: child,
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(borderRadius),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.white.withValues(alpha: isDark ? 0.04 : 0.08),
+                      Colors.transparent,
+                      Colors.transparent,
+                      Colors.white.withValues(alpha: isDark ? 0.02 : 0.04),
+                    ],
+                    stops: const [0.0, 0.3, 0.7, 1.0],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
 
