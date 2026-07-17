@@ -49,8 +49,8 @@ class _PremiumBackgroundState extends State<PremiumBackground>
       _glowSpots.add(_GlowSpot(
         alignX: rng.nextDouble(),
         alignY: rng.nextDouble(),
-        radius: 200 + rng.nextDouble() * 200,
-        opacity: 0.08 + rng.nextDouble() * 0.1,
+        radius: 250 + rng.nextDouble() * 200,
+        opacity: 0.15 + rng.nextDouble() * 0.12,
         pulseSpeed: 0.5 + rng.nextDouble() * 0.5,
         pulseDelay: rng.nextDouble(),
       ));
@@ -70,29 +70,23 @@ class _PremiumBackgroundState extends State<PremiumBackground>
 
     return Stack(
       children: [
-        // Base gradient
+        // Base gradient — adapts to light/dark theme
         Positioned.fill(
           child: Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: isDark
-                    ? [
-                        cs.surface,
-                        cs.surfaceContainerLow,
-                        cs.surface,
-                      ]
-                    : [
-                        cs.surface,
-                        cs.surfaceContainerLow,
-                        cs.surface,
-                      ],
+                colors: [
+                  cs.surface,
+                  cs.surfaceContainerLow,
+                  cs.surface,
+                ],
               ),
             ),
           ),
         ),
-        // Glow spots — luminous light sources for glass reflection
+        // Glow spots — use primary color from theme
         ...List.generate(_glowSpots.length, (i) {
           final spot = _glowSpots[i];
           return Positioned.fill(

@@ -11,7 +11,6 @@ class GlassContainer extends StatelessWidget {
   final double? height;
   final double? width;
   final Color? tintColor;
-  final bool showReflection;
 
   const GlassContainer({
     super.key,
@@ -24,7 +23,6 @@ class GlassContainer extends StatelessWidget {
     this.height,
     this.width,
     this.tintColor,
-    this.showReflection = true,
   });
 
   @override
@@ -41,43 +39,17 @@ class GlassContainer extends StatelessWidget {
         borderRadius: BorderRadius.circular(radius),
         child: BackdropFilter(
           filter: ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-          child: Stack(
-            children: [
-              Container(
-                padding: padding,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: opacity),
-                  borderRadius: BorderRadius.circular(radius),
-                  border: Border.all(
-                    color: cs.surface.withValues(alpha: 0.24),
-                    width: 0.5,
-                  ),
-                ),
-                child: child,
+          child: Container(
+            padding: padding,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: opacity),
+              borderRadius: BorderRadius.circular(radius),
+              border: Border.all(
+                color: cs.surface.withValues(alpha: 0.24),
+                width: 0.5,
               ),
-              // Light reflection overlay
-              if (showReflection)
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(radius),
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Colors.white.withValues(alpha: 0.06),
-                            Colors.transparent,
-                            Colors.transparent,
-                            Colors.white.withValues(alpha: 0.03),
-                          ],
-                          stops: const [0.0, 0.3, 0.7, 1.0],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
+            ),
+            child: child,
           ),
         ),
       ),

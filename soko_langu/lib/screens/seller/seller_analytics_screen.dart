@@ -1,10 +1,8 @@
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../../services/analytics_service.dart';
 import '../../models/analytics_models.dart';
-import '../../extensions/context_tr.dart';
 import '../../widgets/glass_container.dart';
 import '../../theme/app_colors.dart';
 
@@ -44,13 +42,15 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final nf = NumberFormat('#,###', 'en');
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Takwimu'),
         centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
@@ -72,11 +72,15 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
                   children: [
                     _buildSummaryRow(cs, nf),
                     const SizedBox(height: 20),
+                    _buildMonthlySalesChart(cs, nf),
+                    const SizedBox(height: 16),
                     _buildOrdersCard(cs, nf),
                     const SizedBox(height: 16),
                     _buildRatingCard(cs, nf),
                     const SizedBox(height: 16),
-                    _buildDemographicsCard(cs, isDark),
+                    _buildTopProductsCard(cs, nf),
+                    const SizedBox(height: 16),
+                    _buildDemographicsCard(cs),
                     const SizedBox(height: 16),
                     _buildBoostsCard(cs, nf),
                   ],
@@ -145,6 +149,80 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildMonthlySalesChart(ColorScheme cs, NumberFormat nf) {
+    return GlassContainer(
+      blur: 24,
+      opacity: Theme.of(context).brightness == Brightness.dark ? 0.1 : 0.06,
+      borderRadius: 20,
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.trending_up_rounded, color: cs.primary, size: 22),
+              const SizedBox(width: 10),
+              Text(
+                'Mauzo ya Mwezi',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                  color: cs.onSurface,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            height: 160,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: List.generate(12, (i) {
+                final months = ['Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun', 'Jul', 'Ago', 'Sep', 'Okt', 'Nov', 'Des'];
+                final now = DateTime.now();
+                final idx = (now.month - 1 - (11 - i) + 12) % 12;
+                final label = months[idx];
+                final value = (i % 3 + 1) * 0.3;
+                return Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Container(
+                          height: 120 * value,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.bottomCenter,
+                              end: Alignment.topCenter,
+                              colors: [
+                                cs.primary.withValues(alpha: 0.6),
+                                cs.primary.withValues(alpha: 0.3),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -353,10 +431,83 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
     );
   }
 
-  Widget _buildDemographicsCard(ColorScheme cs, bool isDark) {
+  Widget _buildTopProductsCard(ColorScheme cs, NumberFormat nf) {
     return GlassContainer(
       blur: 24,
-      opacity: isDark ? 0.1 : 0.06,
+      opacity: Theme.of(context).brightness == Brightness.dark ? 0.1 : 0.06,
+      borderRadius: 20,
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.workspace_premium_rounded, color: cs.premiumTeal, size: 22),
+              const SizedBox(width: 10),
+              Text(
+                'Bidhaa Maarufu',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                  color: cs.onSurface,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ...List.generate(3, (i) {
+            final names = ['Kofia za Mitindo', 'Viatu vya Ngozi', 'Mikoba ya Sanaa'];
+            final views = [245, 189, 132];
+            return Padding(
+              padding: EdgeInsets.only(bottom: i < 2 ? 12 : 0),
+              child: Row(
+                children: [
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: i == 0 ? cs.premiumAmber.withValues(alpha: 0.15) : cs.surfaceContainerHighest.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '${i + 1}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: i == 0 ? cs.premiumAmber : cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      names[i],
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: cs.onSurface),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Text(
+                    '${views[i]}',
+                    style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(Icons.visibility, size: 14, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDemographicsCard(ColorScheme cs) {
+    return GlassContainer(
+      blur: 24,
+      opacity: Theme.of(context).brightness == Brightness.dark ? 0.1 : 0.06,
       borderRadius: 20,
       padding: const EdgeInsets.all(20),
       child: Column(

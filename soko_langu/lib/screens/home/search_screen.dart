@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/product_service.dart';
-import '../../services/product_search_service.dart';
-import '../../models/product_search_result.dart';
 import '../../services/user_service.dart';
 import '../../services/flash_sale_service.dart';
 import '../../services/search_history_service.dart';
@@ -13,7 +11,6 @@ import '../../models/flash_sale_model.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/ad_banner.dart';
 import '../../app/routes.dart';
-import '../../widgets/google_loading.dart';
 import '../../utils/responsive.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -30,7 +27,6 @@ class _SearchScreenState extends State<SearchScreen> {
   final UserService _userService = UserService();
   final FlashSaleService _flashSaleService = FlashSaleService();
   final SearchHistoryService _historyService = SearchHistoryService();
-  final ProductSearchService _suggestionService = ProductSearchService();
   bool _loading = false;
   bool _hasSearched = false;
   bool _error = false;
@@ -40,8 +36,9 @@ class _SearchScreenState extends State<SearchScreen> {
   StreamSubscription? _flashSub;
   List<String> _searchHistory = [];
 
-  List<ProductSearchResult> _suggestions = [];
-  Timer? _suggestionDebounce;
+  StreamSubscription<List<Product>>? _liveSearchSub;
+  List<Product> _liveResults = [];
+  Timer? _debounce;
 
   @override
   void initState() {
@@ -61,7 +58,8 @@ class _SearchScreenState extends State<SearchScreen> {
     _focusNode.removeListener(_onFocusChanged);
     _focusNode.dispose();
     _flashSub?.cancel();
-    _suggestionDebounce?.cancel();
+    _liveSearchSub?.cancel();
+    _debounce?.cancel();
     super.dispose();
   }
 
@@ -77,49 +75,36 @@ class _SearchScreenState extends State<SearchScreen> {
   void _onFocusChanged() {
     if (_focusNode.hasFocus && _searchController.text.isEmpty && mounted) {
       _loadHistory();
-      setState(() => _suggestions = []);
     }
   }
 
   void _onSearchChanged() {
-    if (!_focusNode.hasFocus) return;
     final query = _searchController.text.trim();
+    _debounce?.cancel();
     if (query.isEmpty) {
-      _loadHistory();
-      setState(() {
-        _hasSearched = false;
-        _loading = false;
-        _error = false;
-        _suggestions = [];
-      });
+      _liveSearchSub?.cancel();
+      _liveSearchSub = null;
+      if (mounted) setState(() => _liveResults = []);
       return;
     }
-    _suggestionDebounce?.cancel();
-    _suggestionDebounce = Timer(const Duration(milliseconds: 300), () {
-      _fetchSuggestions(query);
+    _debounce = Timer(const Duration(milliseconds: 200), () {
+      _startLiveSearch(query);
     });
   }
 
-  Future<void> _fetchSuggestions(String query) async {
-    try {
-      final results = await _suggestionService.searchProducts(query);
-      if (mounted) {
-        setState(() => _suggestions = results.take(5).toList());
-      }
-    } catch (_) {}
-  }
-
-  void _selectQuery(String query) {
-    _searchController.text = query;
-    _searchController.selection = TextSelection.fromPosition(
-      TextPosition(offset: query.length),
-    );
-    _performSearch();
+  void _startLiveSearch(String query) {
+    _liveSearchSub?.cancel();
+    _liveSearchSub = _productService.searchByNameStream(query).listen((results) {
+      if (mounted) setState(() => _liveResults = results);
+    });
   }
 
   Future<void> _performSearch() async {
     final query = _searchController.text.trim();
     if (query.isEmpty) return;
+
+    _liveSearchSub?.cancel();
+    _liveSearchSub = null;
 
     await _historyService.addQuery(query);
     _searchHistory.remove(query);
@@ -130,6 +115,7 @@ class _SearchScreenState extends State<SearchScreen> {
       _loading = true;
       _error = false;
       _hasSearched = true;
+      _liveResults = [];
     });
 
     try {
@@ -156,6 +142,9 @@ class _SearchScreenState extends State<SearchScreen> {
 
   void _clearField() {
     _searchController.clear();
+    _liveSearchSub?.cancel();
+    _liveSearchSub = null;
+    _liveResults = [];
     _loadHistory();
     setState(() {
       _hasSearched = false;
@@ -233,23 +222,33 @@ class _SearchScreenState extends State<SearchScreen> {
   Widget _buildBody() {
     if (_loading) return _buildLoadingState();
     if (_error) return _buildErrorState();
-    if (!_hasSearched) {
-      if (_focusNode.hasFocus) {
-        if (_searchController.text.isNotEmpty && _suggestions.isNotEmpty) {
-          return _buildSuggestionsPanel();
-        }
-        if (_searchController.text.isEmpty) {
-          return _buildHistoryPanel();
-        }
-      }
-      return _buildInitialState();
+
+    final query = _searchController.text.trim();
+
+    // Show live results as user types
+    if (query.isNotEmpty && _liveResults.isNotEmpty) {
+      return _buildLiveResults();
     }
 
-    final products = _lastResults ?? [];
-    final users = _userResults ?? [];
-    if (products.isEmpty && users.isEmpty) return _buildEmptyState();
+    // Show "searching" indicator while debounce is pending
+    if (query.isNotEmpty && _liveResults.isEmpty && _liveSearchSub != null) {
+      return _buildSearchingState();
+    }
 
-    return _buildResults(users, products);
+    // Show full search results
+    if (_hasSearched) {
+      final products = _lastResults ?? [];
+      final users = _userResults ?? [];
+      if (products.isEmpty && users.isEmpty) return _buildEmptyState();
+      return _buildResults(users, products);
+    }
+
+    // Show history or initial state
+    if (_focusNode.hasFocus && _searchController.text.isEmpty) {
+      return _buildHistoryPanel();
+    }
+
+    return _buildInitialState();
   }
 
   Widget _buildHistoryPanel() {
@@ -305,27 +304,6 @@ class _SearchScreenState extends State<SearchScreen> {
               },
             ),
           ),
-        ] else if (_searchController.text.isNotEmpty) ...[
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 48),
-              child: Column(
-                children: [
-                  Icon(Icons.search, size: 48, color: Theme.of(context).colorScheme.primary),
-                  const SizedBox(height: 12),
-                  Text(
-                    '${context.tr('search_for')} "${_searchController.text}"',
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: _performSearch,
-                    child: Text(context.tr('search')),
-                  ),
-                ],
-              ),
-            ),
-          ),
         ] else ...[
           Expanded(child: _buildInitialState()),
         ],
@@ -333,47 +311,54 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  Widget _buildSuggestionsPanel() {
+  void _selectQuery(String query) {
+    _searchController.text = query;
+    _searchController.selection = TextSelection.fromPosition(
+      TextPosition(offset: query.length),
+    );
+    _performSearch();
+  }
+
+  Widget _buildSearchingState() {
+    return const Center(
+      child: SizedBox(
+        width: 32,
+        height: 32,
+        child: CircularProgressIndicator(strokeWidth: 2.5),
+      ),
+    );
+  }
+
+  Widget _buildLiveResults() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
           child: Text(
-            context.tr('suggestions'),
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            '${context.tr('products')} (${_liveResults.length})',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
         ),
         Expanded(
-          child: ListView.builder(
-            itemCount: _suggestions.length,
+          child: GridView.builder(
+            padding: const EdgeInsets.all(12),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: Responsive.gridColumns(context),
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: Responsive.cardAspectRatio(context),
+            ),
+            itemCount: _liveResults.length,
             itemBuilder: (context, index) {
-              final s = _suggestions[index];
-              return ListTile(
-                leading: Icon(
-                  Icons.search,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  size: 20,
+              final product = _liveResults[index];
+              return ProductCard(
+                product: product,
+                flashSale: _flashSales[product.id],
+                onTap: () => context.push(
+                  '${AppRoutes.productDetail}/${product.id}',
+                  extra: product,
                 ),
-                title: Text(s.productName),
-                subtitle: s.brand != null && s.brand!.isNotEmpty
-                    ? Text(s.brand!, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant))
-                    : null,
-                trailing: Text(
-                  context.formatPrice(s.price),
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-                onTap: () {
-                  _searchController.text = s.productName;
-                  _searchController.selection = TextSelection.fromPosition(
-                    TextPosition(offset: s.productName.length),
-                  );
-                  _performSearch();
-                },
               );
             },
           ),
@@ -391,7 +376,14 @@ class _SearchScreenState extends State<SearchScreen> {
           children: [
             Icon(Icons.search, size: 48, color: Theme.of(context).colorScheme.primary),
             const SizedBox(height: 16),
-            const GoogleLoading(size: 32, strokeWidth: 3),
+            SizedBox(
+              width: 32,
+              height: 32,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
             const SizedBox(height: 16),
             Text(
               context.tr('searching_soko'),

@@ -1,14 +1,10 @@
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/chat_service.dart';
 import '../../services/user_service.dart';
 import '../../services/local_cache_service.dart';
 import '../../models/chat_room.dart';
-import '../../theme/app_dimens.dart';
-import '../../app/routes.dart';
 
 class ChatInboxScreen extends StatefulWidget {
   const ChatInboxScreen({super.key});
@@ -29,10 +25,10 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
     _loadCached();
   }
 
-  Future<void> _loadCached() async {
+  void _loadCached() {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
-    final cached = await LocalCacheService.getCachedRoomsForUser(uid);
+    final cached = LocalCacheService.getCachedRoomsForUser(uid);
     for (final room in cached) {
       final otherId = room.participants.where((p) => p != uid).firstOrNull;
       if (otherId != null) _fetchUser(otherId);
@@ -45,7 +41,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
     if (profile != null && mounted) {
       setState(() {
         _userNames[uid] = profile.displayName;
-        _userPhotos[uid] = profile.profileImage ?? '';
+        _userPhotos[uid] = profile.profileImage;
       });
     }
   }
@@ -54,9 +50,9 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Chat'),
         backgroundColor: Colors.transparent,
@@ -79,7 +75,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
             );
           }
           return ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 16),
             itemCount: rooms.length,
             itemBuilder: (_, i) {
               final room = rooms[i];
@@ -102,7 +98,6 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                   });
                 },
                 cs: cs,
-                isDark: isDark,
               );
             },
           );
@@ -120,7 +115,6 @@ class _ChatListTile extends StatelessWidget {
   final int unreadCount;
   final VoidCallback onTap;
   final ColorScheme cs;
-  final bool isDark;
 
   const _ChatListTile({
     required this.name,
@@ -130,7 +124,6 @@ class _ChatListTile extends StatelessWidget {
     this.unreadCount = 0,
     required this.onTap,
     required this.cs,
-    required this.isDark,
   });
 
   @override

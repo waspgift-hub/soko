@@ -141,6 +141,7 @@ class ProductService {
 
     final docRef = await _db.collection("products").add({
       "name": name,
+      "searchName": name.toLowerCase(),
       "description": description,
       "price": price,
       "currency": currency,
@@ -338,6 +339,26 @@ class ProductService {
     });
   }
 
+  Stream<List<Product>> searchByNameStream(String query) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return Stream.value([]);
+    return _db
+        .collection("products")
+        .where('isActive', isEqualTo: true)
+        .where('searchName', isGreaterThanOrEqualTo: q)
+        .where('searchName', isLessThanOrEqualTo: '$q\uf8ff')
+        .orderBy('searchName')
+        .limit(30)
+        .snapshots()
+        .map((snapshot) {
+      final products = snapshot.docs
+          .map((doc) => Product.fromFirestore(doc))
+          .toList();
+      _sortByBoost(products);
+      return products;
+    });
+  }
+
   Future<List<Product>> searchProductsOnce(String query) async {
     final q = query.trim().toLowerCase();
     if (q.isEmpty) return [];
@@ -442,7 +463,7 @@ class ProductService {
       Map<String, dynamic> data = {};
       bool needsKeywordUpdate = false;
 
-      if (name != null) { data["name"] = name; needsKeywordUpdate = true; }
+      if (name != null) { data["name"] = name; data["searchName"] = name.toLowerCase(); needsKeywordUpdate = true; }
       if (description != null) { data["description"] = description; needsKeywordUpdate = true; }
       if (category != null) { data["category"] = category; needsKeywordUpdate = true; }
       if (brand != null) { data["brand"] = brand; needsKeywordUpdate = true; }
