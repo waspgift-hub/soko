@@ -10,7 +10,6 @@ import '../../extensions/context_tr.dart';
 import '../../services/sms_notification_service.dart';
 import '../../models/boost_receipt.dart';
 import '../../models/payment_model.dart';
-import '../../widgets/google_loading.dart';
 import '../../widgets/boost_receipt_card.dart';
 import '../../widgets/payment_banner.dart';
 import '../../widgets/glass_container.dart';
@@ -34,33 +33,46 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final brightness = Theme.of(context).brightness;
-    final bgColor = Theme.of(context).colorScheme.surface;
     final cardBg = brightness == Brightness.dark
-        ? Theme.of(context).colorScheme.surfaceContainerHigh
-        : Theme.of(context).colorScheme.surface;
+        ? cs.surface.withValues(alpha: 0.08)
+        : Colors.white.withValues(alpha: 0.88);
 
     return Scaffold(
-      backgroundColor: bgColor,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: Text(context.tr('boost_product')),
         centerTitle: true,
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-        children: [
-          _buildProductHeader(cardBg),
-          const SizedBox(height: 24),
-          _buildSectionTitle(context.tr('choose_boost_package')),
-          const SizedBox(height: 16),
-          _buildTierCard(BoostTier.bronze, cardBg, brightness),
-          const SizedBox(height: 12),
-          _buildTierCard(BoostTier.silver, cardBg, brightness),
-          const SizedBox(height: 12),
-          _buildTierCard(BoostTier.gold, cardBg, brightness),
-          const SizedBox(height: 32),
-          _buildPaymentButton(),
-        ],
+      body: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [cs.primary.withValues(alpha: 0.03), cs.surface],
+          ),
+        ),
+        child: SafeArea(
+          top: false,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+            children: [
+              _buildProductHeader(cardBg),
+              const SizedBox(height: 24),
+              _buildSectionTitle(context.tr('choose_boost_package')),
+              const SizedBox(height: 16),
+              _buildTierCard(BoostTier.bronze, cardBg, brightness),
+              const SizedBox(height: 12),
+              _buildTierCard(BoostTier.silver, cardBg, brightness),
+              const SizedBox(height: 12),
+              _buildTierCard(BoostTier.gold, cardBg, brightness),
+              const SizedBox(height: 32),
+              _buildPaymentButton(),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -333,12 +345,34 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
               ),
             ),
           ),
-        SizedBox(
+        if (_processing)
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                RealtimePaymentBanner.dismiss();
+                setState(() => _processing = false);
+              },
+              icon: const Icon(Icons.close, size: 20),
+              label: Text(context.tr('cancel')),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+                foregroundColor: Theme.of(context).colorScheme.surface,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                elevation: 0,
+              ),
+            ),
+          ),
+        if (!_processing)
+          SizedBox(
           width: double.infinity,
           height: 52,
           child: ElevatedButton(
             onPressed:
-                _selectedTier == null || _processing ? null : _processPayment,
+                _selectedTier == null ? null : _processPayment,
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.successGreen,
               foregroundColor: Theme.of(context).colorScheme.surface,
@@ -347,9 +381,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
               ),
               elevation: 0,
             ),
-            child: _processing
-                ? const GoogleLoading(size: 20, strokeWidth: 2)
-                : Text(
+            child: Text(
                     _selectedTier == null
                         ? context.tr('select_package')
                         : '${context.tr("proceed_to_checkout")} — TZS ${_nf.format(_selectedTier!.priceTzs)}',

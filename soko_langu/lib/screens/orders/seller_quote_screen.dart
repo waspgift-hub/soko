@@ -6,6 +6,7 @@ import '../../services/notification_service.dart';
 import '../../widgets/glass_container.dart';
 import '../../extensions/context_tr.dart';
 import '../../theme/app_dimens.dart';
+import '../../widgets/google_loading.dart';
 
 class SellerQuoteScreen extends StatefulWidget {
   const SellerQuoteScreen({super.key});
@@ -87,7 +88,7 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
             return Center(child: Text('Error: ${snap.error}'));
           }
           if (!snap.hasData) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: GoogleLoading());
           }
 
           final docs = snap.data!.docs;
@@ -199,7 +200,7 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
                               ? null
                               : () => _submitQuote(txId, buyerId, productName),
                           icon: _quotingTxId == txId
-                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                              ? const GoogleLoading(size: 20, strokeWidth: 2)
                               : const Icon(Icons.send_rounded, size: 20),
                           label: Text(_quotingTxId == txId ? 'Inatuma...' : 'Tuma Gharama kwa Mnunuzi',
                               style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),

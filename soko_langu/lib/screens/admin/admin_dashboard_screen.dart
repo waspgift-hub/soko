@@ -84,7 +84,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         .doc(user.uid)
         .get();
     final data = doc.data();
-    final isAdminEmail = user.email?.toLowerCase() == 'admin@soko-langu.com' ||
+    final isAdminEmail =
+        user.email?.toLowerCase() == 'admin@soko-langu.com' ||
         user.email?.toLowerCase() == 'admin@soko-vibe.com';
     if (data?['isAdmin'] != true && !isAdminEmail) {
       if (mounted) {
@@ -97,10 +98,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     }
     // Auto-fix Firestore isAdmin field for admin emails
     if (isAdminEmail && data?['isAdmin'] != true) {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
-        {'isAdmin': true},
-        SetOptions(merge: true),
-      );
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'isAdmin': true,
+      }, SetOptions(merge: true));
     }
     setState(() => _isAdmin = true);
     try {
@@ -390,7 +390,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               if (_loadingKyc)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Center(child: CircularProgressIndicator()),
+                  child: Center(child: GoogleLoading()),
                 )
               else
                 ..._pendingKycUsers.map((u) => _buildKycCard(u, cs)),
@@ -995,7 +995,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   Future<void> _toggleMaintenance() async {
     final currentlyEnabled = await _analyticsService.getMaintenanceMode();
     final messageCtrl = TextEditingController(
-      text: currentlyEnabled ? '' : 'App iko kwenye matengenezo. Tafadhali rudi baadaye.',
+      text: currentlyEnabled
+          ? ''
+          : 'App iko kwenye matengenezo. Tafadhali rudi baadaye.',
     );
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -1007,10 +1009,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           children: [
             Row(
               children: [
-                Text('Hali ya sasa: ',
-                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                Text(
+                  'Hali ya sasa: ',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: currentlyEnabled
                         ? Colors.red.withValues(alpha: 0.12)
@@ -1054,8 +1063,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             child: Text(context.tr('cancel')),
           ),
           ElevatedButton.icon(
-            icon: Icon(currentlyEnabled ? Icons.power_settings_new : Icons.warning_amber),
-            label: Text(currentlyEnabled ? 'Zima Maintenance' : 'Washa Maintenance'),
+            icon: Icon(
+              currentlyEnabled ? Icons.power_settings_new : Icons.warning_amber,
+            ),
+            label: Text(
+              currentlyEnabled ? 'Zima Maintenance' : 'Washa Maintenance',
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: currentlyEnabled ? Colors.green : Colors.red,
               foregroundColor: Colors.white,
@@ -1506,6 +1519,90 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             Theme.of(context).colorScheme.secondary,
             (v) => '$v',
           ),
+          const SizedBox(height: 24),
+
+          // ── Active Users (Real-Time) ──
+          Text(
+            'Watumiaji Mahiri (Moja kwa Moja)',
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  _timeStatRow(
+                    cs,
+                    'Kwa Sekunde',
+                    '${a.activeUserCounts.perSecond}',
+                  ),
+                  const Divider(height: 20),
+                  _timeStatRow(
+                    cs,
+                    'Kwa Dakika',
+                    '${a.activeUserCounts.perMinute}',
+                  ),
+                  const Divider(height: 20),
+                  _timeStatRow(cs, 'Kwa Saa', '${a.activeUserCounts.perHour}'),
+                  const Divider(height: 20),
+                  _timeStatRow(cs, 'Leo', '${a.activeUserCounts.perDay}'),
+                  const Divider(height: 20),
+                  _timeStatRow(
+                    cs,
+                    'Mwezi Huu',
+                    '${a.activeUserCounts.perMonth}',
+                  ),
+                  const Divider(height: 20),
+                  _timeStatRow(
+                    cs,
+                    'Mwaka Huu',
+                    '${a.activeUserCounts.perYear}',
+                  ),
+                  const Divider(height: 20),
+                  _timeStatRow(
+                    cs,
+                    'Tangu Mwanzo',
+                    '${a.activeUserCounts.allTime}',
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // ── Location Distribution ──
+          Text(
+            'Maeneo Wateja Wanakotumia App',
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          _buildDistributionList(
+            a.locationDistribution,
+            a.totalUsers,
+            Icons.location_on,
+            cs.primary,
+          ),
+          const SizedBox(height: 24),
+
+          // ── Age Distribution ──
+          Text(
+            'Umri wa Watumiaji',
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          _buildDistributionList(
+            a.ageDistribution,
+            a.ageDistribution.values.fold(0, (a, b) => a + b),
+            Icons.people,
+            cs.secondary,
+          ),
           const SizedBox(height: 20),
         ],
       ),
@@ -1599,6 +1696,97 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     width: 40,
                     child: Text(
                       '$pct%',
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _timeStatRow(ColorScheme cs, String label, String value) {
+    return Row(
+      children: [
+        Icon(Icons.circle, size: 8, color: cs.primary),
+        const SizedBox(width: 8),
+        Text(label, style: TextStyle(fontSize: 14, color: cs.onSurface)),
+        const Spacer(),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: cs.primary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDistributionList(
+    Map<String, int> data,
+    int total,
+    IconData icon,
+    Color color,
+  ) {
+    if (data.isEmpty) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            'Hakuna data',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      );
+    }
+    final sorted = data.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: sorted.map((e) {
+            final pct = total > 0 ? (e.value / total * 100) : 0.0;
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Icon(icon, size: 16, color: color.withValues(alpha: 0.7)),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 100,
+                    child: Text(
+                      e.key,
+                      style: const TextStyle(fontSize: 13),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: total > 0 ? e.value / total : 0,
+                        backgroundColor: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.12),
+                        color: color,
+                        minHeight: 8,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 40,
+                    child: Text(
+                      '${pct.toStringAsFixed(1)}%',
                       textAlign: TextAlign.right,
                       style: const TextStyle(fontSize: 12),
                     ),

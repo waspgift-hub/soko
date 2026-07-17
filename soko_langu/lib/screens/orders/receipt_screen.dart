@@ -8,6 +8,7 @@ import '../../widgets/glass_container.dart';
 import '../../models/transaction_model.dart';
 import '../../extensions/context_tr.dart';
 import 'package:go_router/go_router.dart';
+import '../../widgets/google_loading.dart';
 
 class ReceiptScreen extends StatelessWidget {
   final String orderId;
@@ -59,7 +60,7 @@ class ReceiptScreen extends StatelessWidget {
           stream: FirebaseFirestore.instance.collection('transactions').doc(orderId).snapshots(),
           builder: (context, snap) {
             if (!snap.hasData) {
-              return Center(child: CircularProgressIndicator(color: cs.primary));
+              return const Center(child: GoogleLoading());
             }
 
             final d = snap.data!.data() as Map<String, dynamic>?;

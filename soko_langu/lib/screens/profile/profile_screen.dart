@@ -16,6 +16,7 @@ import '../../widgets/account_switcher_sheet.dart';
 import '../../widgets/ad_banner.dart';
 import '../../widgets/verified_badge.dart';
 import '../../widgets/premium_widgets.dart';
+import '../../widgets/google_loading.dart';
 import '../../app/routes.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -25,7 +26,7 @@ class ProfilePage extends StatefulWidget {
   State<ProfilePage> createState() => _ProfilePageState();
 }
 
-class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClientMixin {
+class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
   @override
   bool get wantKeepAlive => true;
   final ImagePicker _picker = ImagePicker();
@@ -39,7 +40,21 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadProfile();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshProfile();
+    }
   }
 
   Future<void> _loadStats(String uid) async {
@@ -319,7 +334,7 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
       _ActionItem(Icons.shopping_bag_rounded, context.tr('my_ads'), () => context.push(AppRoutes.myAds)),
       _ActionItem(Icons.store_rounded, context.tr('customize_shop'), () => context.push(AppRoutes.shopCustomization)),
       _ActionItem(Icons.dashboard_rounded, context.tr('dashboard'), () => context.push(AppRoutes.sellerDashboard)),
-      _ActionItem(Icons.analytics_rounded, 'Takwimu', () => context.push(AppRoutes.sellerAnalytics)),
+      _ActionItem(Icons.analytics_rounded, 'Takwimu', () => context.push(AppRoutes.sellerAnalytics, extra: FirebaseAuth.instance.currentUser?.uid)),
       _ActionItem(Icons.auto_awesome_rounded, 'AI Msaidizi', () => context.push(AppRoutes.aiAssistant)),
       _ActionItem(Icons.explore_rounded, context.tr('discovery'), () => context.push(AppRoutes.discovery)),
       _ActionItem(Icons.receipt_long_rounded, 'Manunuzi Yangu', () => context.push(AppRoutes.myPurchases)),
@@ -563,10 +578,7 @@ class _AiChatBoxState extends State<_AiChatBox> with TickerProviderStateMixin {
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Row(
                     children: [
-                      SizedBox(
-                        width: 18, height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
-                      ),
+                      const GoogleLoading(size: 18, strokeWidth: 2),
                       const SizedBox(width: 8),
                       Text('Inaandika...', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
                     ],

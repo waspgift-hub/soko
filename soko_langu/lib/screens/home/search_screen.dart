@@ -10,6 +10,7 @@ import '../../models/product_model.dart';
 import '../../models/flash_sale_model.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/ad_banner.dart';
+import '../../widgets/google_loading.dart';
 import '../../app/routes.dart';
 import '../../utils/responsive.dart';
 
@@ -94,9 +95,14 @@ class _SearchScreenState extends State<SearchScreen> {
 
   void _startLiveSearch(String query) {
     _liveSearchSub?.cancel();
-    _liveSearchSub = _productService.searchByNameStream(query).listen((results) {
-      if (mounted) setState(() => _liveResults = results);
-    });
+    _liveSearchSub = _productService.searchByNameStream(query).listen(
+      (results) {
+        if (mounted) setState(() => _liveResults = results);
+      },
+      onError: (_) {
+        if (mounted) setState(() {});
+      },
+    );
   }
 
   Future<void> _performSearch() async {
@@ -321,11 +327,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Widget _buildSearchingState() {
     return const Center(
-      child: SizedBox(
-        width: 32,
-        height: 32,
-        child: CircularProgressIndicator(strokeWidth: 2.5),
-      ),
+      child: GoogleLoading(size: 32, strokeWidth: 2.5),
     );
   }
 
@@ -376,14 +378,7 @@ class _SearchScreenState extends State<SearchScreen> {
           children: [
             Icon(Icons.search, size: 48, color: Theme.of(context).colorScheme.primary),
             const SizedBox(height: 16),
-            SizedBox(
-              width: 32,
-              height: 32,
-              child: CircularProgressIndicator(
-                strokeWidth: 3,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
+            const GoogleLoading(size: 32, strokeWidth: 3),
             const SizedBox(height: 16),
             Text(
               context.tr('searching_soko'),

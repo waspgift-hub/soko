@@ -314,28 +314,29 @@ class ProductService {
     final words = q.split(RegExp(r'\s+')).where((w) => w.length >= 2).toList();
     if (words.isEmpty) return Stream.value([]);
 
-    Query queryRef;
+    Stream<List<Product>> stream;
     if (words.length == 1) {
-      queryRef = _db.collection("products")
-          .where('isActive', isEqualTo: true)
+      stream = _db.collection("products")
           .where('searchKeywords', arrayContains: words[0])
-          .limit(100);
+          .limit(100)
+          .snapshots()
+          .map((snap) => snap.docs.map((doc) => Product.fromFirestore(doc)).toList());
     } else {
-      queryRef = _db.collection("products")
-          .where('isActive', isEqualTo: true)
+      stream = _db.collection("products")
           .where('searchKeywords', arrayContainsAny: words.take(10).toList())
-          .limit(100);
+          .limit(100)
+          .snapshots()
+          .map((snap) => snap.docs.map((doc) => Product.fromFirestore(doc)).toList());
     }
 
-    return queryRef.snapshots().map((snapshot) {
-      final products = snapshot.docs
-          .map((doc) => Product.fromFirestore(doc))
-          .where((p) => words.every((w) =>
+    return stream.map((products) {
+      final filtered = products
+          .where((p) => p.isActive && words.every((w) =>
             p.name.toLowerCase().contains(w) ||
             p.description.toLowerCase().contains(w)))
           .toList();
-      _sortByBoost(products);
-      return products;
+      _sortByBoost(filtered);
+      return filtered;
     });
   }
 
@@ -344,18 +345,16 @@ class ProductService {
     if (q.isEmpty) return Stream.value([]);
     return _db
         .collection("products")
-        .where('isActive', isEqualTo: true)
         .where('searchName', isGreaterThanOrEqualTo: q)
         .where('searchName', isLessThanOrEqualTo: '$q\uf8ff')
         .orderBy('searchName')
         .limit(30)
         .snapshots()
         .map((snapshot) {
-      final products = snapshot.docs
+      return snapshot.docs
           .map((doc) => Product.fromFirestore(doc))
+          .where((p) => p.isActive)
           .toList();
-      _sortByBoost(products);
-      return products;
     });
   }
 
@@ -365,33 +364,31 @@ class ProductService {
     final words = q.split(RegExp(r'\s+')).where((w) => w.length >= 2).toList();
     if (words.isEmpty) return [];
 
+    var products = <Product>[];
     try {
-      Query queryRef;
       if (words.length == 1) {
-        queryRef = _db.collection("products")
-            .where('isActive', isEqualTo: true)
+        final snap = await _db.collection("products")
             .where('searchKeywords', arrayContains: words[0])
-            .limit(100);
+            .limit(100)
+            .get();
+        products = snap.docs.map((doc) => Product.fromFirestore(doc)).toList();
       } else {
-        queryRef = _db.collection("products")
-            .where('isActive', isEqualTo: true)
+        final snap = await _db.collection("products")
             .where('searchKeywords', arrayContainsAny: words.take(10).toList())
-            .limit(100);
+            .limit(100)
+            .get();
+        products = snap.docs.map((doc) => Product.fromFirestore(doc)).toList();
       }
-
-      final snapshot = await queryRef.get();
-      var products = snapshot.docs
-          .map((doc) => Product.fromFirestore(doc))
-          .where((p) => words.every((w) =>
+      products = products
+          .where((p) => p.isActive && words.every((w) =>
             p.name.toLowerCase().contains(w) ||
             p.description.toLowerCase().contains(w)))
           .toList();
       _sortByBoost(products);
-      return products;
     } catch (e) {
       debugPrint('searchProductsOnce error: $e');
-      return [];
     }
+    return products;
   }
 
   Stream<List<Product>> getProductsByBrand(String brand) {
