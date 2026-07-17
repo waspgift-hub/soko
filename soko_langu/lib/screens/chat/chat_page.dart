@@ -246,6 +246,50 @@ class _ChatPageState extends State<ChatPage> {
                     });
                   }
                 }
+                if (msgs.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircleAvatar(
+                          radius: 40,
+                          backgroundColor: cs.primary.withValues(alpha: 0.08),
+                          child: Icon(Icons.chat_outlined, size: 40, color: cs.primary.withValues(alpha: 0.4)),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Hakuna ujumbe bado',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: cs.onSurfaceVariant),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Tuma ujumbe wa kwanza!',
+                          style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant.withValues(alpha: 0.7)),
+                        ),
+                        if (widget.productName.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: cs.primary.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.shopping_bag, size: 14, color: cs.primary),
+                                const SizedBox(width: 6),
+                                Text(widget.productName,
+                                  style: TextStyle(fontSize: 13, color: cs.primary),
+                                  maxLines: 1, overflow: TextOverflow.ellipsis),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  );
+                }
                 return GestureDetector(
                   onTap: () => _focusNode.unfocus(),
                   child: ListView.builder(
@@ -270,12 +314,15 @@ class _ChatPageState extends State<ChatPage> {
                             message: msg,
                             isMe: msg.senderId == _uid,
                             showTime: showTime,
-                            onReply: msg.senderId == _uid && msg.content != 'deleted'
+                            onReply: msg.content == 'deleted' || msg.isDeletedForEveryone
                                 ? null
                                 : () {
+                                    final isMe = msg.senderId == _uid;
                                     _replyTo = msg.id;
                                     _replyToContent = msg.content;
-                                    _replyToSender = widget.receiverName;
+                                    _replyToSender = isMe
+                                        ? (FirebaseAuth.instance.currentUser?.displayName ?? 'Wewe')
+                                        : widget.receiverName;
                                     _focusNode.requestFocus();
                                     setState(() {});
                                   },

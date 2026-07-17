@@ -48,8 +48,7 @@ class GlassCard extends StatelessWidget {
   final double? width;
   final BorderRadius? borderRadius;
   final Color? borderColor;
-  final bool showReflection;
-  const GlassCard({super.key, required this.child, this.onTap, this.padding, this.margin, this.width, this.borderRadius, this.borderColor, this.showReflection = true});
+  const GlassCard({super.key, required this.child, this.onTap, this.padding, this.margin, this.width, this.borderRadius, this.borderColor});
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -57,44 +56,19 @@ class GlassCard extends StatelessWidget {
       borderRadius: borderRadius ?? BorderRadius.circular(AppRadius.lg),
       child: BackdropFilter(
         filter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-        child: Stack(
-          children: [
-            Container(
-              width: width,
-              margin: margin,
-              padding: padding ?? const EdgeInsets.all(AppInsets.lg),
-              decoration: BoxDecoration(
-                color: cs.surfaceContainerLow.withValues(alpha: 0.3),
-                borderRadius: borderRadius ?? BorderRadius.circular(AppRadius.lg),
-                border: Border.all(color: borderColor?.withValues(alpha: 0.5) ?? cs.primary.withValues(alpha: 0.25), width: 1.2),
-                boxShadow: [
-                  BoxShadow(color: cs.primary.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 4)),
-                ],
-              ),
-              child: child,
-            ),
-            if (showReflection)
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: borderRadius ?? BorderRadius.circular(AppRadius.lg),
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Colors.white.withValues(alpha: 0.06),
-                          Colors.transparent,
-                          Colors.transparent,
-                          Colors.white.withValues(alpha: 0.03),
-                        ],
-                        stops: const [0.0, 0.3, 0.7, 1.0],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
+        child: Container(
+          width: width,
+          margin: margin,
+          padding: padding ?? const EdgeInsets.all(AppInsets.lg),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerLow.withValues(alpha: 0.3),
+            borderRadius: borderRadius ?? BorderRadius.circular(AppRadius.lg),
+            border: Border.all(color: borderColor?.withValues(alpha: 0.5) ?? cs.primary.withValues(alpha: 0.25), width: 1.2),
+            boxShadow: [
+              BoxShadow(color: cs.primary.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 4)),
+            ],
+          ),
+          child: child,
         ),
       ),
     );

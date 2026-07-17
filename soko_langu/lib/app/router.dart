@@ -165,7 +165,7 @@ GoRouter buildRouter() {
           return ChatPage(
             receiverId: receiverId,
             receiverName: extra?['name'] ?? '',
-            productName: extra?['product'] ?? '',
+            productName: extra?['productTitle'] ?? extra?['product'] ?? '',
             productId: extra?['productId'],
           );
         },
