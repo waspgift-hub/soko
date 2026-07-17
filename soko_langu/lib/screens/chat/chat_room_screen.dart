@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_dimens.dart';
 import '../../repositories/chat_repository.dart';
+import '../../widgets/google_loading.dart';
 
 class ChatRoomScreen extends StatefulWidget {
   final String roomId;
@@ -25,7 +26,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             child: StreamBuilder(
               stream: _repo.getMessages(widget.roomId),
               builder: (_, snap) {
-                if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+                if (!snap.hasData) return const Center(child: GoogleLoading());
                 final docs = snap.data!.docs;
                 return ListView.builder(
                   padding: const EdgeInsets.all(AppInsets.md),

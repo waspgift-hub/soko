@@ -117,39 +117,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                       children: [
                         _buildTab(0, Icons.storefront_outlined, Icons.storefront_rounded, context.tr('home'), cs),
                         _buildTab(1, Icons.diamond_outlined, Icons.diamond_rounded, context.tr('discovery'), cs),
-                        const Expanded(child: SizedBox.shrink()),
+                        _buildSellTab(cs),
                         _buildTab(3, Icons.chat_outlined, Icons.chat_rounded, 'Chat', cs),
                         _buildProfileTab(cs),
                       ],
                     ),
-                  ),
-                ),
-              ),
-            ),
-            // FAB — floats above nav bar, centered
-            Positioned(
-              left: 0, right: 0, top: 0,
-              child: Center(
-                child: GestureDetector(
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const AddProductScreen()),
-                    );
-                  },
-                  child: Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [cs.primary, cs.primary.withValues(alpha: 0.7)],
-                      ),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(color: cs.primary.withValues(alpha: 0.5), blurRadius: 24, offset: const Offset(0, 8)),
-                        BoxShadow(color: cs.primary.withValues(alpha: 0.2), blurRadius: 48, offset: const Offset(0, 0)),
-                      ],
-                    ),
-                    child: Icon(Icons.add_rounded, color: cs.onPrimary, size: 32),
                   ),
                 ),
               ),
@@ -241,6 +213,54 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     );
   }
 
+  Widget _buildSellTab(ColorScheme cs) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const AddProductScreen()),
+          );
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 48, height: 48,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [cs.primary, cs.primary.withValues(alpha: 0.7)],
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(color: cs.primary.withValues(alpha: 0.4), blurRadius: 12, offset: const Offset(0, 4)),
+                  ],
+                ),
+                child: Icon(Icons.add_rounded, color: cs.onPrimary, size: 28),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Sell',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: cs.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSidebar(ColorScheme cs) {
     final navItems = [
       _NavItem(Icons.storefront_outlined, Icons.storefront_rounded, context.tr('home'), 0),
@@ -278,46 +298,87 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             child: Column(
-              children: navItems.map((item) {
-                final isSelected = _currentIndex == item.index;
-                return Container(
+              children: [
+                ...navItems.map((item) {
+                  final isSelected = _currentIndex == item.index;
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 2),
+                    decoration: BoxDecoration(
+                      color: isSelected ? cs.primary.withValues(alpha: 0.08) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () => setState(() => _currentIndex = item.index),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          child: Row(
+                            children: [
+                              Icon(
+                                isSelected ? item.activeIcon : item.icon,
+                                color: isSelected ? cs.primary : cs.onSurface.withValues(alpha: 0.5),
+                                size: 20,
+                              ),
+                              const SizedBox(width: 12),
+                              Text(item.label, style: TextStyle(
+                                color: isSelected ? cs.onSurface : cs.onSurface.withValues(alpha: 0.6),
+                                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                                fontSize: 14,
+                              )),
+                              const Spacer(),
+                              if (isSelected)
+                                Container(width: 6, height: 6,
+                                  decoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+                const Divider(height: 16),
+                // Sell button in sidebar
+                Container(
                   margin: const EdgeInsets.only(bottom: 2),
-                  decoration: BoxDecoration(
-                    color: isSelected ? cs.primary.withValues(alpha: 0.08) : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
                   child: Material(
                     color: Colors.transparent,
                     child: InkWell(
                       borderRadius: BorderRadius.circular(12),
-                      onTap: () => setState(() => _currentIndex = item.index),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const AddProductScreen()),
+                        );
+                      },
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         child: Row(
                           children: [
-                            Icon(
-                              isSelected ? item.activeIcon : item.icon,
-                              color: isSelected ? cs.primary : cs.onSurface.withValues(alpha: 0.5),
-                              size: 20,
+                            Container(
+                              width: 36, height: 36,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [cs.primary, cs.primary.withValues(alpha: 0.7)],
+                                ),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(Icons.add_rounded, color: cs.onPrimary, size: 20),
                             ),
                             const SizedBox(width: 12),
-                            Text(item.label, style: TextStyle(
-                              color: isSelected ? cs.onSurface : cs.onSurface.withValues(alpha: 0.6),
-                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                            Text('Sell', style: TextStyle(
+                              color: cs.onSurface,
+                              fontWeight: FontWeight.w600,
                               fontSize: 14,
                             )),
-                            const Spacer(),
-                            if (isSelected)
-                              Container(width: 6, height: 6,
-                                decoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle),
-                              ),
                           ],
                         ),
                       ),
                     ),
                   ),
-                );
-              }).toList(),
+                ),
+              ],
             ),
           ),
           const Spacer(),

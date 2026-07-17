@@ -11,6 +11,9 @@ class AnalyticsData {
   final Map<String, int> productsByCategory;
   final List<DailyMetric> revenueOverTime;
   final List<DailyMetric> userGrowth;
+  final Map<String, int> locationDistribution;
+  final Map<String, int> ageDistribution;
+  final AppUsageStats activeUserCounts;
 
   AnalyticsData({
     this.totalUsers = 0,
@@ -25,6 +28,29 @@ class AnalyticsData {
     this.productsByCategory = const {},
     this.revenueOverTime = const [],
     this.userGrowth = const [],
+    this.locationDistribution = const {},
+    this.ageDistribution = const {},
+    this.activeUserCounts = const AppUsageStats(),
+  });
+}
+
+class AppUsageStats {
+  final int perSecond;
+  final int perMinute;
+  final int perHour;
+  final int perDay;
+  final int perMonth;
+  final int perYear;
+  final int allTime;
+
+  const AppUsageStats({
+    this.perSecond = 0,
+    this.perMinute = 0,
+    this.perHour = 0,
+    this.perDay = 0,
+    this.perMonth = 0,
+    this.perYear = 0,
+    this.allTime = 0,
   });
 }
 
@@ -55,6 +81,8 @@ class SellerAnalytics {
   final int positiveReviews;
   final int negativeReviews;
   final DateTime lastUpdated;
+  final List<TopProduct> topProducts;
+  final List<DailyMetric> monthlySales;
 
   SellerAnalytics({
     this.sellerId = '',
@@ -76,6 +104,8 @@ class SellerAnalytics {
     this.totalReviews = 0,
     this.positiveReviews = 0,
     this.negativeReviews = 0,
+    this.topProducts = const [],
+    this.monthlySales = const [],
     required this.lastUpdated,
   });
 
@@ -88,9 +118,7 @@ class SellerAnalytics {
 
   String get topAgeGroup {
     if (ageBreakdown.isEmpty) return 'Hakuna';
-    return ageBreakdown.entries
-        .reduce((a, b) => a.value > b.value ? a : b)
-        .key;
+    return ageBreakdown.entries.reduce((a, b) => a.value > b.value ? a : b).key;
   }
 
   double get orderSuccessRate {
@@ -119,14 +147,14 @@ class ProductViewRecord {
   }) : timestamp = timestamp ?? DateTime.now();
 
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'productId': productId,
-        'userId': userId,
-        'gender': gender,
-        'location': location,
-        'age': age,
-        'timestamp': timestamp,
-      };
+    'id': id,
+    'productId': productId,
+    'userId': userId,
+    'gender': gender,
+    'location': location,
+    'age': age,
+    'timestamp': timestamp,
+  };
 }
 
 class BoostImpressionRecord {
@@ -143,9 +171,25 @@ class BoostImpressionRecord {
   }) : timestamp = timestamp ?? DateTime.now();
 
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'productId': productId,
-        'location': location,
-        'timestamp': timestamp,
-      };
+    'id': id,
+    'productId': productId,
+    'location': location,
+    'timestamp': timestamp,
+  };
+}
+
+class TopProduct {
+  final String productId;
+  final String productName;
+  final String? productImage;
+  final int viewCount;
+  final Map<String, int> locationBreakdown;
+
+  TopProduct({
+    required this.productId,
+    required this.productName,
+    this.productImage,
+    this.viewCount = 0,
+    this.locationBreakdown = const {},
+  });
 }

@@ -35,6 +35,7 @@ import 'services/localization_service.dart';
 import 'services/local_cache_service.dart';
 import 'services/notification_service.dart';
 import 'services/interstitial_ad_service.dart';
+import 'services/analytics_service.dart';
 import 'services/security_service.dart';
 import 'theme/theme_manager.dart';
 import 'utils/responsive.dart';
@@ -122,8 +123,6 @@ void _setupGlobalErrorHandlers() {
   };
 }
 
-
-
 // ---------------------------------------------------------------------------
 // AppConfig — InheritedWidget for language / currency propagation
 // ---------------------------------------------------------------------------
@@ -170,8 +169,7 @@ class SokoVibeApp extends StatefulWidget {
   State<SokoVibeApp> createState() => _SokoVibeAppState();
 }
 
-class _SokoVibeAppState extends State<SokoVibeApp>
-    with WidgetsBindingObserver {
+class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
   String _langCode = 'en';
   String _currencyCode = 'TZS';
   late final ProductFeedProvider _productFeedProvider;
@@ -212,12 +210,29 @@ class _SokoVibeAppState extends State<SokoVibeApp>
   // App lifecycle observer
   // -----------------------------------------------------------------------
 
+  Timer? _sessionTimer;
+  final _analyticsService = AnalyticsService();
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
       AppLockService.instance.onBackground();
+      _sessionTimer?.cancel();
     } else if (state == AppLifecycleState.resumed) {
       AppLockService.instance.onResume();
+      _trackSession();
+    }
+  }
+
+  void _trackSession() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      _analyticsService.trackUserSession(uid);
+      _sessionTimer?.cancel();
+      _sessionTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+        _analyticsService.trackUserSession(uid);
+      });
     }
   }
 
@@ -248,6 +263,7 @@ class _SokoVibeAppState extends State<SokoVibeApp>
 
       await _authNotifier.initialize();
       app_state.appStateNotifier.setAppInitialized();
+      _trackSession();
 
       _magicLinkService = MagicLinkService(_authNotifier);
       unawaited(_magicLinkService!.initialize());
@@ -300,8 +316,7 @@ class _SokoVibeAppState extends State<SokoVibeApp>
       });
     };
 
-    NotificationService.onPaymentNotificationTap =
-        (Map<String, dynamic> data) {
+    NotificationService.onPaymentNotificationTap = (Map<String, dynamic> data) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final orderId = (data['orderId'] ?? data['transactionId']) as String?;
         if (orderId != null) {
@@ -311,7 +326,11 @@ class _SokoVibeAppState extends State<SokoVibeApp>
     };
   }
 
-  void _onNotificationTap(String? type, Map<String, dynamic>? data, BuildContext ctx) {
+  void _onNotificationTap(
+    String? type,
+    Map<String, dynamic>? data,
+    BuildContext ctx,
+  ) {
     switch (type) {
       case 'order':
       case 'boost':
@@ -391,7 +410,6 @@ class _SokoVibeAppState extends State<SokoVibeApp>
       } catch (e) {
         debugPrint('AwesomeNotifications init: $e');
       }
-
     }
 
     // FCM push + in-app notification service
@@ -410,7 +428,6 @@ class _SokoVibeAppState extends State<SokoVibeApp>
 
     // AI assistant
     AiService.initialize(GroqService());
-
   }
 
   // -----------------------------------------------------------------------
@@ -484,11 +501,7 @@ class _SokoVibeAppState extends State<SokoVibeApp>
       onSetCurrency: _setCurrency,
       child: Stack(
         children: [
-          Column(
-            children: [
-              Expanded(child: content),
-            ],
-          ),
+          Column(children: [Expanded(child: content)]),
         ],
       ),
     );

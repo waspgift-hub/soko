@@ -12,6 +12,7 @@ import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../chat/chat_navigation.dart';
+import '../../widgets/google_loading.dart';
 import 'package:go_router/go_router.dart';
 
 class MyPurchasesScreen extends StatefulWidget {
@@ -357,6 +358,7 @@ class _OrderGlassCard extends StatelessWidget {
 
   Widget _buildHeader(BuildContext context, ColorScheme cs, String productName, String sellerName, String date, String orderId) {
     final sellerId = data['sellerId'] as String? ?? '';
+    final buyerName = data['buyerName'] as String? ?? '';
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -385,27 +387,38 @@ class _OrderGlassCard extends StatelessWidget {
                 maxLines: 1, overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 2),
-              GestureDetector(
-                onTap: sellerId.isNotEmpty
-                    ? () => ChatNavigation.openSellerChat(context, sellerId, sellerName)
-                    : null,
-                child: Row(
-                  children: [
-                    Text(sellerName, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-                    if (sellerId.isNotEmpty) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
-                          color: cs.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Icon(Icons.chat_outlined, size: 10, color: cs.primary),
-                      ),
-                    ],
-                  ],
-                ),
+              Row(
+                children: [
+                  Icon(Icons.store_rounded, size: 11, color: cs.primary),
+                  const SizedBox(width: 4),
+                  GestureDetector(
+                    onTap: sellerId.isNotEmpty
+                        ? () => ChatNavigation.openSellerChat(context, sellerId, sellerName)
+                        : null,
+                    child: Row(
+                      children: [
+                        Text(sellerName, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                        if (sellerId.isNotEmpty) ...[
+                          const SizedBox(width: 4),
+                          Icon(Icons.chat_outlined, size: 10, color: cs.primary),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
               ),
+              if (buyerName.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Row(
+                    children: [
+                      Icon(Icons.person_outline, size: 11, color: cs.secondary),
+                      const SizedBox(width: 4),
+                      Text(buyerName,
+                          style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                    ],
+                  ),
+                ),
               const SizedBox(height: 2),
               Text('#$orderId', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
               if (date.isNotEmpty)
@@ -418,15 +431,63 @@ class _OrderGlassCard extends StatelessWidget {
   }
 
   Widget _buildInfoChips(ColorScheme cs, double price, double? shipping, double total, String method) {
+    final platformFee = (data['platformFee'] as num?)?.toDouble() ?? (data['sokoLanguCommission'] as num?)?.toDouble() ?? 0;
+    final processingFee = (data['processingFee'] as num?)?.toDouble() ?? 0;
+    final sellerReceives = (data['sellerReceives'] as num?)?.toDouble() ?? 0;
+
     final chips = <Widget>[
-      _chip(cs, '${_nf(price)} TZS', Icons.sell_outlined, cs.primary),
-      if (shipping != null) _chip(cs, '${_nf(shipping)} TZS', Icons.local_shipping_outlined, cs.secondary),
-      _chip(cs, '${_nf(total)} TZS', Icons.receipt_outlined, cs.tertiary),
+      _chip(cs, '${_nf(price.toInt())} TZS', Icons.sell_outlined, cs.primary),
+      if (shipping != null) _chip(cs, '${_nf(shipping.toInt())} TZS', Icons.local_shipping_outlined, cs.secondary),
+      _chip(cs, '${_nf(total.toInt())} TZS', Icons.receipt_outlined, cs.tertiary),
       _chip(cs, method, Icons.payment_outlined, cs.whatsappGreen),
     ];
-    return Wrap(
-      spacing: 6, runSpacing: 6,
-      children: chips,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(spacing: 6, runSpacing: 6, children: chips),
+        if (platformFee > 0 || processingFee > 0 || sellerReceives > 0) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHighest.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.12)),
+            ),
+            child: Column(
+              children: [
+                if (processingFee > 0)
+                  _feeRow(cs, Icons.monetization_on_outlined, 'Ada ya usindikaji',
+                      '${_nf(processingFee.toInt())} TZS', cs.onSurfaceVariant),
+                if (platformFee > 0)
+                  _feeRow(cs, Icons.percent_outlined, 'Soko Vibe commission',
+                      '-${_nf(platformFee.toInt())} TZS', cs.tertiary),
+                if (sellerReceives > 0) ...[
+                  const Divider(height: 16),
+                  _feeRow(cs, Icons.account_balance_wallet_outlined, 'Muuzaji anapokea',
+                      '${_nf(sellerReceives.toInt())} TZS', cs.successGreen),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _feeRow(ColorScheme cs, IconData icon, String label, String value, Color valueColor) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: valueColor),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(label, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+          ),
+          Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: valueColor)),
+        ],
+      ),
     );
   }
 
@@ -463,7 +524,7 @@ class _OrderGlassCard extends StatelessWidget {
             child: ElevatedButton.icon(
               onPressed: payingTxId == docId ? null : () => onPay(docId, data),
               icon: payingTxId == docId
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  ? const GoogleLoading(size: 20, strokeWidth: 2)
                   : const Icon(Icons.payment, size: 18),
               label: Text(payingTxId == docId ? 'Inalipa...' : 'Lipa ${_nf(total)} TZS'),
               style: ElevatedButton.styleFrom(
@@ -480,7 +541,7 @@ class _OrderGlassCard extends StatelessWidget {
             child: ElevatedButton.icon(
               onPressed: releasingTxId == docId ? null : () => onConfirm(docId),
               icon: releasingTxId == docId
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  ? const GoogleLoading(size: 20, strokeWidth: 2)
                   : const Icon(Icons.verified, size: 18),
               label: Text(releasingTxId == docId ? 'Inathibitisha...' : context.tr('confirm_receipt')),
               style: ElevatedButton.styleFrom(
@@ -516,8 +577,8 @@ class _OrderGlassCard extends StatelessWidget {
                     child: OutlinedButton.icon(
                       onPressed: disputingTxId == docId ? null : () => onDispute(docId),
                       icon: disputingTxId == docId
-                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Icon(Icons.gavel, size: 16),
+                      ? const GoogleLoading(size: 16, strokeWidth: 2)
+                      : const Icon(Icons.gavel, size: 16),
                       label: Text('Mgogoro'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: cs.error,
@@ -532,8 +593,8 @@ class _OrderGlassCard extends StatelessWidget {
                     child: OutlinedButton.icon(
                       onPressed: cancellingTxId == docId ? null : () => onCancel(docId),
                       icon: cancellingTxId == docId
-                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Icon(Icons.money_off, size: 16),
+                      ? const GoogleLoading(size: 16, strokeWidth: 2)
+                      : const Icon(Icons.money_off, size: 16),
                       label: const Text('Ghairi'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: cs.error,

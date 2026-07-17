@@ -84,6 +84,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
               final name = _userNames[otherId] ?? otherId.substring(0, 8);
               final photo = _userPhotos[otherId] ?? '';
 
+              if (otherId.isEmpty) return const SizedBox.shrink();
               return _ChatListTile(
                 name: name,
                 photo: photo,

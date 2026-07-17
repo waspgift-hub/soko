@@ -5,6 +5,7 @@ import '../../services/analytics_service.dart';
 import '../../models/analytics_models.dart';
 import '../../widgets/glass_container.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/google_loading.dart';
 
 class SellerAnalyticsScreen extends StatefulWidget {
   final String sellerId;
@@ -33,7 +34,11 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
           : FirebaseAuth.instance.currentUser?.uid ?? '';
       if (uid.isEmpty) return;
       final data = await _analytics.getSellerAnalytics(uid);
-      if (mounted) setState(() { _data = data; _loading = false; });
+      if (mounted)
+        setState(() {
+          _data = data;
+          _loading = false;
+        });
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
@@ -52,39 +57,36 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: _load,
-          ),
+          IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load),
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: GoogleLoading())
           : _data == null
-              ? Center(
-                  child: Text(
-                    'Hakuna data',
-                    style: TextStyle(color: cs.onSurfaceVariant),
-                  ),
-                )
-              : ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-                  children: [
-                    _buildSummaryRow(cs, nf),
-                    const SizedBox(height: 20),
-                    _buildMonthlySalesChart(cs, nf),
-                    const SizedBox(height: 16),
-                    _buildOrdersCard(cs, nf),
-                    const SizedBox(height: 16),
-                    _buildRatingCard(cs, nf),
-                    const SizedBox(height: 16),
-                    _buildTopProductsCard(cs, nf),
-                    const SizedBox(height: 16),
-                    _buildDemographicsCard(cs),
-                    const SizedBox(height: 16),
-                    _buildBoostsCard(cs, nf),
-                  ],
-                ),
+          ? Center(
+              child: Text(
+                'Hakuna data',
+                style: TextStyle(color: cs.onSurfaceVariant),
+              ),
+            )
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+              children: [
+                _buildSummaryRow(cs, nf),
+                const SizedBox(height: 20),
+                _buildMonthlySalesChart(cs, nf),
+                const SizedBox(height: 16),
+                _buildOrdersCard(cs, nf),
+                const SizedBox(height: 16),
+                _buildRatingCard(cs, nf),
+                const SizedBox(height: 16),
+                _buildTopProductsCard(cs, nf),
+                const SizedBox(height: 16),
+                _buildDemographicsCard(cs),
+                const SizedBox(height: 16),
+                _buildBoostsCard(cs, nf),
+              ],
+            ),
     );
   }
 
@@ -92,8 +94,18 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
     final items = [
       ('Bidhaa', '${_data!.totalProducts}', Icons.inventory_2, cs.primary),
       ('Maoni', '${_data!.totalProductViews}', Icons.visibility, cs.secondary),
-      ('Mauzo', '${_data!.successfulOrders}', Icons.shopping_bag, cs.successGreen),
-      ('Mapato', 'TSh ${_formatAmount(_data!.monthlyEarnings)}', Icons.monetization_on, cs.whatsappGreen),
+      (
+        'Mauzo',
+        '${_data!.successfulOrders}',
+        Icons.shopping_bag,
+        cs.successGreen,
+      ),
+      (
+        'Mapato',
+        'TSh ${_formatAmount(_data!.monthlyEarnings)}',
+        Icons.monetization_on,
+        cs.whatsappGreen,
+      ),
     ];
     return GridView.builder(
       shrinkWrap: true,
@@ -140,10 +152,7 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
               ),
               Text(
                 item.$1,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: cs.onSurfaceVariant,
-                ),
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
               ),
             ],
           ),
@@ -181,19 +190,45 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: List.generate(12, (i) {
-                final months = ['Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun', 'Jul', 'Ago', 'Sep', 'Okt', 'Nov', 'Des'];
-                final now = DateTime.now();
-                final idx = (now.month - 1 - (11 - i) + 12) % 12;
+                final months = [
+                  'Jan',
+                  'Feb',
+                  'Mac',
+                  'Apr',
+                  'Mei',
+                  'Jun',
+                  'Jul',
+                  'Ago',
+                  'Sep',
+                  'Okt',
+                  'Nov',
+                  'Des',
+                ];
+                final idx = i;
                 final label = months[idx];
-                final value = (i % 3 + 1) * 0.3;
+                final sales = _data!.monthlySales.length > i
+                    ? _data!.monthlySales[i].count.toDouble()
+                    : 0.0;
+                final maxSales = _data!.monthlySales
+                    .map((m) => m.count.toDouble())
+                    .reduce((a, b) => a > b ? a : b);
+                final value = maxSales > 0 ? sales / maxSales : 0.0;
                 return Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 2),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
+                        Text(
+                          '${sales.toInt()}',
+                          style: TextStyle(
+                            fontSize: 8,
+                            color: cs.onSurfaceVariant.withValues(alpha: 0.7),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
                         Container(
-                          height: 120 * value,
+                          height: 120 * value.clamp(0.03, 1.0),
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               begin: Alignment.bottomCenter,
@@ -255,7 +290,12 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
             children: [
               _statPill(cs, '${_data!.totalOrders}', 'Jumla', cs.onSurface),
               const SizedBox(width: 8),
-              _statPill(cs, '${_data!.successfulOrders}', 'Imefaulu', cs.successGreen),
+              _statPill(
+                cs,
+                '${_data!.successfulOrders}',
+                'Imefaulu',
+                cs.successGreen,
+              ),
               const SizedBox(width: 8),
               _statPill(cs, '${_data!.failedOrders}', 'Imeshindwa', cs.error),
             ],
@@ -284,7 +324,9 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
             child: LinearProgressIndicator(
               value: rate / 100,
               minHeight: 6,
-              backgroundColor: cs.surfaceContainerHighest.withValues(alpha: 0.3),
+              backgroundColor: cs.surfaceContainerHighest.withValues(
+                alpha: 0.3,
+              ),
               color: rate > 70 ? cs.successGreen : cs.error,
             ),
           ),
@@ -313,10 +355,7 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
             ),
             Text(
               label,
-              style: TextStyle(
-                fontSize: 10,
-                color: cs.onSurfaceVariant,
-              ),
+              style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
             ),
           ],
         ),
@@ -442,7 +481,11 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.workspace_premium_rounded, color: cs.premiumTeal, size: 22),
+              Icon(
+                Icons.workspace_premium_rounded,
+                color: cs.premiumTeal,
+                size: 22,
+              ),
               const SizedBox(width: 10),
               Text(
                 'Bidhaa Maarufu',
@@ -455,46 +498,84 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          ...List.generate(3, (i) {
-            final names = ['Kofia za Mitindo', 'Viatu vya Ngozi', 'Mikoba ya Sanaa'];
-            final views = [245, 189, 132];
+          ..._data!.topProducts.take(5).toList().asMap().entries.map((entry) {
+            final i = entry.key;
+            final tp = entry.value;
+            final topLoc = tp.locationBreakdown.entries.isEmpty
+                ? ''
+                : tp.locationBreakdown.entries
+                      .reduce((a, b) => a.value > b.value ? a : b)
+                      .key;
             return Padding(
-              padding: EdgeInsets.only(bottom: i < 2 ? 12 : 0),
-              child: Row(
+              padding: EdgeInsets.only(bottom: i < 4 ? 12 : 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: i == 0 ? cs.premiumAmber.withValues(alpha: 0.15) : cs.surfaceContainerHighest.withValues(alpha: 0.3),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Center(
-                      child: Text(
-                        '${i + 1}',
+                  Row(
+                    children: [
+                      Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: i == 0
+                              ? cs.premiumAmber.withValues(alpha: 0.15)
+                              : cs.surfaceContainerHighest.withValues(
+                                  alpha: 0.3,
+                                ),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Center(
+                          child: Text(
+                            '${i + 1}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: i == 0
+                                  ? cs.premiumAmber
+                                  : cs.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          tp.productName,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: cs.onSurface,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        '${tp.viewCount}',
                         style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: i == 0 ? cs.premiumAmber : cs.onSurfaceVariant,
+                          fontSize: 13,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.visibility,
+                        size: 14,
+                        color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                      ),
+                    ],
+                  ),
+                  if (topLoc.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 38, top: 2),
+                      child: Text(
+                        'Eneo: $topLoc',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: cs.onSurfaceVariant.withValues(alpha: 0.7),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      names[i],
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: cs.onSurface),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Text(
-                    '${views[i]}',
-                    style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(Icons.visibility, size: 14, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
                 ],
               ),
             );
@@ -528,21 +609,39 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          _demographicBar(cs, 'Wanaume', _data!.genderBreakdown['male'] ?? 0, cs.primary),
+          _demographicBar(
+            cs,
+            'Wanaume',
+            _data!.genderBreakdown['male'] ?? 0,
+            cs.primary,
+          ),
           const SizedBox(height: 8),
-          _demographicBar(cs, 'Wanawake', _data!.genderBreakdown['female'] ?? 0, Colors.pink),
+          _demographicBar(
+            cs,
+            'Wanawake',
+            _data!.genderBreakdown['female'] ?? 0,
+            Colors.pink,
+          ),
           const SizedBox(height: 12),
           if (_data!.locationBreakdown.isNotEmpty) ...[
             Text(
               'Eneo: ${_data!.topLocation}',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cs.onSurface),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: cs.onSurface,
+              ),
             ),
             const SizedBox(height: 4),
           ],
           if (_data!.ageBreakdown.isNotEmpty) ...[
             Text(
               'Umri: ${_data!.topAgeGroup}',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cs.onSurface),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: cs.onSurface,
+              ),
             ),
           ],
         ],
@@ -551,7 +650,9 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
   }
 
   Widget _demographicBar(ColorScheme cs, String label, int count, Color color) {
-    final total = (_data!.genderBreakdown['male'] ?? 0) + (_data!.genderBreakdown['female'] ?? 0);
+    final total =
+        (_data!.genderBreakdown['male'] ?? 0) +
+        (_data!.genderBreakdown['female'] ?? 0);
     final pct = total > 0 ? count / total : 0.0;
     if (total == 0) return const SizedBox.shrink();
     return Row(
@@ -569,7 +670,9 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
             child: LinearProgressIndicator(
               value: pct,
               minHeight: 8,
-              backgroundColor: cs.surfaceContainerHighest.withValues(alpha: 0.3),
+              backgroundColor: cs.surfaceContainerHighest.withValues(
+                alpha: 0.3,
+              ),
               color: color,
             ),
           ),
@@ -601,7 +704,11 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
               color: cs.boostGold.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(Icons.rocket_launch_rounded, color: cs.boostGold, size: 24),
+            child: Icon(
+              Icons.rocket_launch_rounded,
+              color: cs.boostGold,
+              size: 24,
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -619,10 +726,7 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
                 const SizedBox(height: 2),
                 Text(
                   '${_data!.boostImpressions} impressions',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: cs.onSurfaceVariant,
-                  ),
+                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                 ),
               ],
             ),

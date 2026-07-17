@@ -1,6 +1,7 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../theme/app_dimens.dart';
+import 'google_loading.dart';
 
 export '../theme/app_dimens.dart';
 
@@ -33,7 +34,7 @@ class PremiumButton extends StatelessWidget {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
         ),
         child: isLoading
-            ? SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: cs.onPrimary))
+            ? const GoogleLoading(size: 20, strokeWidth: 2)
             : Text(label, style: const TextStyle(fontSize: AppFontSize.lg, fontWeight: FontWeight.w600)),
       ),
     );

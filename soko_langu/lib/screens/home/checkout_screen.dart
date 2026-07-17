@@ -8,6 +8,7 @@ import '../../services/notification_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../widgets/glass_container.dart';
+import '../../widgets/google_loading.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final Product product;
@@ -269,7 +270,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             child: ElevatedButton.icon(
               onPressed: _processing ? null : _submitOrder,
               icon: _processing
-                  ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: cs.surface))
+                  ? const GoogleLoading(size: 20, strokeWidth: 2)
                   : const Icon(Icons.send_rounded, size: 20),
               label: Text(_processing ? 'Inatuma...' : 'Tuma Ombi la Usafirishaji',
                   style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),

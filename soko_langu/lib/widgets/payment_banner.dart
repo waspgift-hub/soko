@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'google_loading.dart';
 
 enum PaymentBannerType { success, failed }
 
@@ -251,7 +252,6 @@ class RealtimePaymentBanner {
     required String failedTitle,
     VoidCallback? onSuccess,
     void Function(String msg)? onError,
-    Duration timeout = const Duration(seconds: 120),
   }) {
     dismiss();
     _entry = OverlayEntry(
@@ -264,7 +264,6 @@ class RealtimePaymentBanner {
         failedTitle: failedTitle,
         onSuccess: onSuccess,
         onError: onError,
-        timeout: timeout,
       ),
     );
     Overlay.of(context).insert(_entry!);
@@ -285,7 +284,6 @@ class _RealtimePaymentBannerWidget extends StatefulWidget {
   final String failedTitle;
   final VoidCallback? onSuccess;
   final void Function(String msg)? onError;
-  final Duration timeout;
 
   const _RealtimePaymentBannerWidget({
     required this.orderId,
@@ -296,7 +294,6 @@ class _RealtimePaymentBannerWidget extends StatefulWidget {
     required this.failedTitle,
     this.onSuccess,
     this.onError,
-    this.timeout = const Duration(seconds: 120),
   });
 
   @override
@@ -309,7 +306,6 @@ class _RealtimePaymentBannerWidgetState
     with SingleTickerProviderStateMixin {
   late final AnimationController _animCtrl;
   late final Animation<double> _fadeAnim;
-  bool _timedOut = false;
   bool _handled = false;
   String _statusText = '';
 
@@ -322,10 +318,6 @@ class _RealtimePaymentBannerWidgetState
     );
     _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeIn);
     _animCtrl.forward();
-
-    Future.delayed(widget.timeout, () {
-      if (mounted) setState(() => _timedOut = true);
-    });
   }
 
   @override
@@ -394,19 +386,25 @@ class _RealtimePaymentBannerWidgetState
         } else {
           accent = cs.primary;
           icon = Icons.payment_rounded;
-          title = _timedOut
-              ? 'Payment not confirmed'
-              : widget.processingTitle;
-          trailing = _timedOut
-              ? null
-              : const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    color: Colors.white,
+          title = widget.processingTitle;
+          trailing = Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const GoogleLoading(size: 22, strokeWidth: 2.5),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: RealtimePaymentBanner.dismiss,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
                   ),
-                );
+                  child: Icon(Icons.close, size: 14, color: Colors.white.withValues(alpha: 0.7)),
+                ),
+              ),
+            ],
+          );
         }
 
         return FadeTransition(
@@ -503,25 +501,23 @@ class _RealtimePaymentBannerWidgetState
                                           : cs.onSurface,
                                     ),
                                   ),
-                                  if (_timedOut && isProcessing)
-                                    Text(
-                                      'Check your phone to complete payment\nOrder: ${widget.orderId}',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: isDark
-                                            ? Colors.white.withValues(
-                                                alpha: 0.6,
-                                              )
-                                            : cs.onSurface.withValues(
-                                                alpha: 0.6,
-                                              ),
+                                  if (isProcessing)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Text(
+                                        'Angalia simu yako — weka PIN kukamilisha malipo',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: isDark
+                                              ? Colors.white.withValues(alpha: 0.6)
+                                              : cs.onSurface.withValues(alpha: 0.6),
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                  if (!isProcessing && !_timedOut &&
-                                      widget.successSubtitle != null &&
-                                      isSuccess)
+                                  if (isSuccess &&
+                                      widget.successSubtitle != null)
                                     Padding(
                                       padding:
                                           const EdgeInsets.only(top: 2),

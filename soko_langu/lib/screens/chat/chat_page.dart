@@ -8,6 +8,7 @@ import '../../services/user_service.dart';
 import '../../services/whatsapp_service.dart';
 import '../../models/message_model.dart';
 import '../../extensions/context_tr.dart';
+import '../../widgets/google_loading.dart';
 import '../../app/routes.dart';
 
 class ChatPage extends StatefulWidget {
@@ -233,7 +234,7 @@ class _ChatPageState extends State<ChatPage> {
               stream: _chatService.getMessages(_roomId),
               builder: (context, snap) {
                 if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const Center(child: GoogleLoading());
                 }
                 final msgs = snap.data ?? [];
                 if (msgs != _messages) {

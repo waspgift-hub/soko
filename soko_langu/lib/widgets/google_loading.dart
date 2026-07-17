@@ -157,15 +157,11 @@ class GoogleLoadingPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return Center(
       child: SizedBox(
         width: size + 32,
         height: size + 32,
-        child: CircularProgressIndicator(
-          strokeWidth: 3,
-          color: cs.primary.withValues(alpha: 0.4),
-        ),
+        child: GoogleLoading(size: size, strokeWidth: 3),
       ),
     );
   }

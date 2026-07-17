@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'google_loading.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../extensions/context_tr.dart';
 
@@ -95,14 +96,7 @@ class _OfflineOverlay extends StatelessWidget {
                 style: TextStyle(fontSize: 15, color: cs.surface.withValues(alpha: 0.7)),
               ),
               const SizedBox(height: 40),
-              SizedBox(
-                width: 48,
-                height: 48,
-                child: CircularProgressIndicator(
-                  strokeWidth: 3,
-                  color: cs.surface.withValues(alpha: 0.5),
-                ),
-              ),
+              const GoogleLoading(size: 48, strokeWidth: 3),
             ],
           ),
         ),
