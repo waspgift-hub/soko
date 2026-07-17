@@ -13,7 +13,7 @@ class ChatService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  String _roomIdFor(String uid1, String uid2) {
+  String roomIdFor(String uid1, String uid2) {
     final ids = [uid1, uid2]..sort();
     return ids.join('_');
   }
@@ -42,7 +42,7 @@ class ChatService {
   }) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('Not logged in');
-    final roomId = _roomIdFor(user.uid, otherUserId);
+    final roomId = roomIdFor(user.uid, otherUserId);
 
     final existing = await _db.collection('chat_rooms').doc(roomId).get();
     if (existing.exists) return roomId;
@@ -163,7 +163,7 @@ Stream<List<ChatRoom>> getRooms() {
   }) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    final roomId = _roomIdFor(user.uid, receiverId);
+    final roomId = roomIdFor(user.uid, receiverId);
 
     final idToken = await user.getIdToken();
     final body = <String, dynamic>{
@@ -237,7 +237,7 @@ Stream<List<ChatRoom>> getRooms() {
   }) async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return;
-    final roomId = _roomIdFor(uid, otherUserId);
+    final roomId = roomIdFor(uid, otherUserId);
     final msgRef = _db
         .collection('chat_rooms')
         .doc(roomId)

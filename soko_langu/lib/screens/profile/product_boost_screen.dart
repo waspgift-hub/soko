@@ -517,7 +517,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
   }
 }
 
-/// 3D Glassmorphic payment phone-input dialog with floating effect.
+/// Glassmorphic payment phone-input dialog.
 class _GlassPaymentDialog {
   static Future<String?> show({
     required BuildContext context,
@@ -536,61 +536,60 @@ class _GlassPaymentDialog {
       builder: (ctx) => Dialog(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        child: Transform(
-          transform: Matrix4.identity()
-            ..setEntry(3, 0, 0.001)
-            ..rotateX(0.03),
-          alignment: Alignment.center,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(28),
-            child: BackdropFilter(
-              filter: ui.ImageFilter.blur(sigmaX: 32, sigmaY: 32),
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(24, 28, 24, 16),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: isDark
-                        ? [cs.surface.withValues(alpha: 0.8), cs.surfaceContainerLow.withValues(alpha: 0.6)]
-                        : [Colors.white.withValues(alpha: 0.95), Colors.white.withValues(alpha: 0.85)],
-                  ),
-                  borderRadius: BorderRadius.circular(28),
-                  border: Border.all(
-                    color: cs.primary.withValues(alpha: isDark ? 0.15 : 0.2),
-                    width: 0.5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: cs.primary.withValues(alpha: 0.15),
-                      blurRadius: 40,
-                      offset: const Offset(0, 20),
-                    ),
-                  ],
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(32),
+          child: BackdropFilter(
+            filter: ui.ImageFilter.blur(sigmaX: 56, sigmaY: 56),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(24, 32, 24, 20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: isDark
+                      ? [cs.surface.withValues(alpha: 0.75), cs.surfaceContainerLow.withValues(alpha: 0.55)]
+                      : [Colors.white.withValues(alpha: 0.95), Colors.white.withValues(alpha: 0.82)],
                 ),
-                child: Column(
+                borderRadius: BorderRadius.circular(32),
+                border: Border.all(
+                  color: cs.primary.withValues(alpha: isDark ? 0.12 : 0.15),
+                  width: 0.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: cs.primary.withValues(alpha: 0.15),
+                    blurRadius: 56,
+                    offset: const Offset(0, 28),
+                  ),
+                ],
+              ),
+              child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [cs.primary.withValues(alpha: 0.15), cs.primary.withValues(alpha: 0.05)],
+                    Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [cs.primary.withValues(alpha: 0.15), cs.primary.withValues(alpha: 0.05)],
+                          ),
+                          shape: BoxShape.circle,
                         ),
-                        shape: BoxShape.circle,
+                        child: Icon(Icons.payment_rounded, color: cs.primary, size: 34),
                       ),
-                      child: Icon(Icons.payment_rounded, color: cs.primary, size: 32),
                     ),
                     const SizedBox(height: 16),
                     Text(
                       context.tr('phone_number'),
+                      textAlign: TextAlign.center,
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 20,
                         color: isDark ? Colors.white : cs.onSurface,
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
                     GlassContainer(
                       borderRadius: 16,
                       opacity: isDark ? 0.15 : 0.1,
@@ -604,19 +603,41 @@ class _GlassPaymentDialog {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 18),
-                    GlassContainer(
-                      borderRadius: 14,
-                      opacity: isDark ? 0.1 : 0.06,
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: TextField(
-                        controller: phoneController,
-                        keyboardType: TextInputType.phone,
-                        decoration: InputDecoration(
-                          labelText: context.tr('phone_number'),
-                          hintText: context.tr('phone_hint'),
-                          border: InputBorder.none,
-                          prefixIcon: Icon(Icons.phone_android, color: cs.primary, size: 22),
+                    const SizedBox(height: 20),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: BackdropFilter(
+                        filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: cs.surface.withValues(alpha: isDark ? 0.08 : 0.04),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: cs.primary.withValues(alpha: 0.08),
+                              width: 0.5,
+                            ),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                          child: TextField(
+                            controller: phoneController,
+                            keyboardType: TextInputType.phone,
+                            decoration: InputDecoration(
+                              hintText: context.tr('phone_hint'),
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              prefixIcon: Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: Icon(Icons.phone_android_rounded, color: cs.primary, size: 22),
+                              ),
+                              prefixIconConstraints: const BoxConstraints(minWidth: 44, minHeight: 0),
+                              contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                            ),
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: isDark ? Colors.white : cs.onSurface,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -660,8 +681,7 @@ class _GlassPaymentDialog {
             ),
           ),
         ),
-      ),
-    );
+      );
   }
 }
 

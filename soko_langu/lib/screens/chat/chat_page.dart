@@ -46,15 +46,18 @@ class _ChatPageState extends State<ChatPage> {
   bool _autoScrolling = false;
   String? _receiverPhone;
   String? _receiverPhoto;
+  StreamSubscription<UserProfile?>? _profileSub;
 
   String get _uid => FirebaseAuth.instance.currentUser?.uid ?? '';
+
+  String get _roomId => _chatService.roomIdFor(_uid, widget.receiverId);
 
   StreamSubscription<bool>? _typingSub;
 
   @override
   void initState() {
     super.initState();
-    _chatService.markAsRead(widget.receiverId);
+    _chatService.markAsRead(_roomId);
     _inputCtrl.addListener(_onInputChanged);
     _fetchReceiverPhone();
     _typingSub = _chatTyping.observeTyping(widget.receiverId).listen((t) {
@@ -70,6 +73,15 @@ class _ChatPageState extends State<ChatPage> {
         _receiverPhoto = profile.profileImage;
       });
     }
+    _profileSub = _userService.streamProfile(widget.receiverId).listen((p) {
+      if (!mounted) return;
+      setState(() {
+        if (p != null) {
+          _receiverPhone = p.phone;
+          _receiverPhoto = p.profileImage;
+        }
+      });
+    });
   }
 
   void _openWhatsApp() {
@@ -89,6 +101,7 @@ class _ChatPageState extends State<ChatPage> {
   @override
   void dispose() {
     _typingSub?.cancel();
+    _profileSub?.cancel();
     _inputCtrl.dispose();
     _scrollCtrl.dispose();
     _focusNode.dispose();
@@ -164,14 +177,39 @@ class _ChatPageState extends State<ChatPage> {
         title: GestureDetector(
           onTap: () => context.push('${AppRoutes.publicProfile}/${widget.receiverId}',
               extra: widget.receiverName),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              Text(widget.receiverName,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-              if (_otherTyping)
-                Text(context.tr('typing'),
-                    style: TextStyle(fontSize: 12, color: cs.primary)),
+              Stack(
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: cs.primary.withValues(alpha: 0.12),
+                    backgroundImage: _receiverPhoto != null && _receiverPhoto!.isNotEmpty
+                        ? NetworkImage(_receiverPhoto!)
+                        : null,
+                    child: _receiverPhoto == null || _receiverPhoto!.isEmpty
+                        ? Text(widget.receiverName.isNotEmpty
+                            ? widget.receiverName[0].toUpperCase()
+                            : '?',
+                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cs.primary))
+                        : null,
+                  ),
+                ],
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(widget.receiverName,
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis),
+                    if (_otherTyping)
+                      Text(context.tr('typing'),
+                          style: TextStyle(fontSize: 12, color: cs.primary)),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -192,7 +230,7 @@ class _ChatPageState extends State<ChatPage> {
           // Messages
           Expanded(
             child: StreamBuilder<List<Message>>(
-              stream: _chatService.getMessages(widget.receiverId),
+              stream: _chatService.getMessages(_roomId),
               builder: (context, snap) {
                 if (snap.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -261,26 +299,31 @@ class _ChatPageState extends State<ChatPage> {
           // Reply preview
           if (_replyTo != null)
             Container(
-              color: cs.surfaceContainerHighest,
-              padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
+              color: isDark ? const Color(0xFF1F2C33) : const Color(0xFFF0F2F5),
+              padding: const EdgeInsets.fromLTRB(0, 0, 8, 0),
               child: Row(
                 children: [
+                  Container(width: 4, color: cs.primary),
+                  const SizedBox(width: 12),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(_replyToSender ?? '',
-                            style: TextStyle(
-                                fontSize: 12,
-                                color: cs.primary,
-                                fontWeight: FontWeight.w600)),
-                        Text(_replyToContent ?? '',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                fontSize: 13, color: cs.onSurfaceVariant)),
-                      ],
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(_replyToSender ?? '',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: cs.primary,
+                                  fontWeight: FontWeight.w600)),
+                          Text(_replyToContent ?? '',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontSize: 13, color: cs.onSurfaceVariant)),
+                        ],
+                      ),
                     ),
                   ),
                   IconButton(
@@ -309,17 +352,7 @@ class _ChatPageState extends State<ChatPage> {
             ),
             child: Row(
               children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: cs.surfaceContainerHighest,
-                  backgroundImage: _receiverPhoto != null && _receiverPhoto!.isNotEmpty
-                      ? NetworkImage(_receiverPhoto!)
-                      : null,
-                  child: _receiverPhoto == null || _receiverPhoto!.isEmpty
-                      ? Icon(Icons.person, size: 18, color: cs.onSurfaceVariant)
-                      : null,
-                ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 4),
                 Expanded(
                   child: TextField(
                     controller: _inputCtrl,
@@ -478,13 +511,13 @@ class _MessageBubble extends StatelessWidget {
           if (message.replyToContent != null && message.replyToContent!.isNotEmpty && !isDeleted)
             Container(
               margin: EdgeInsets.only(
-                bottom: 2,
+                bottom: 4,
                 left: isMe ? 48 : 0,
                 right: isMe ? 0 : 48,
               ),
-              padding: const EdgeInsets.fromLTRB(8, 4, 8, 2),
+              padding: const EdgeInsets.fromLTRB(0, 0, 0, 0),
               decoration: BoxDecoration(
-                color: cs.surfaceContainerHighest,
+                color: cs.surfaceContainerHighest.withValues(alpha: 0.7),
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(8),
                   topRight: const Radius.circular(8),
@@ -492,18 +525,29 @@ class _MessageBubble extends StatelessWidget {
                   bottomRight: isMe ? Radius.zero : const Radius.circular(8),
                 ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              clipBehavior: Clip.antiAlias,
+              child: Row(
                 children: [
-                  Text(message.replyToSender ?? '',
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: cs.primary,
-                          fontWeight: FontWeight.w600)),
-                  Text(message.replyToContent ?? '',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+                  Container(width: 3, color: cs.primary),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 4, 8, 2),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(message.replyToSender ?? '',
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color: cs.primary,
+                                  fontWeight: FontWeight.w600)),
+                          Text(message.replyToContent ?? '',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),

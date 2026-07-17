@@ -76,29 +76,28 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildGlassNavBar(ColorScheme cs) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final navItems = [
       _NavItem(Icons.storefront_outlined, Icons.storefront_rounded, context.tr('home'), 0, isChat: false),
       _NavItem(Icons.diamond_outlined, Icons.diamond_rounded, context.tr('discovery'), 1, isChat: false),
       _NavItem(Icons.add_rounded, Icons.add_rounded, '', 2, isChat: false, isSell: true),
-      _NavItem(Icons.chat_outlined, Icons.chat_rounded, 'Chat', 0, isChat: true),
+      _NavItem(Icons.chat_outlined, Icons.chat_rounded, 'Chat', 3, isChat: true),
       _NavItem(Icons.person_outline, Icons.person_rounded, context.tr('profile'), 4, isChat: false),
     ];
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(40),
         child: BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: 48, sigmaY: 48),
+          filter: ui.ImageFilter.blur(sigmaX: 64, sigmaY: 64),
           child: Container(
             height: 72,
             decoration: BoxDecoration(
-              color: cs.surface.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(30),
-              border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
+              color: cs.surface.withValues(alpha: 0.02),
+              borderRadius: BorderRadius.circular(40),
+              border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.06)),
               boxShadow: [
-                BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 24, offset: const Offset(0, 8)),
+                BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 32, offset: const Offset(0, 8)),
               ],
             ),
               child: Row(
@@ -112,25 +111,23 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                           MaterialPageRoute(builder: (_) => const AddProductScreen()),
                         );
                       },
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 52,
-                            height: 52,
-                            margin: const EdgeInsets.only(top: 2),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [cs.primary, cs.primary.withValues(alpha: 0.8)],
-                              ),
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(color: cs.primary.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4)),
-                              ],
+                      child: Transform.translate(
+                        offset: const Offset(0, -28),
+                        child: Container(
+                          width: 60,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [cs.primary, cs.primary.withValues(alpha: 0.7)],
                             ),
-                            child: Icon(Icons.add_rounded, color: cs.onPrimary, size: 28),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(color: cs.primary.withValues(alpha: 0.5), blurRadius: 24, offset: const Offset(0, 8)),
+                              BoxShadow(color: cs.primary.withValues(alpha: 0.2), blurRadius: 48, offset: const Offset(0, 0)),
+                            ],
                           ),
-                        ],
+                          child: Icon(Icons.add_rounded, color: cs.onPrimary, size: 32),
+                        ),
                       ),
                     ),
                   );

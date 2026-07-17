@@ -21,6 +21,18 @@ extension AppColorScheme on ColorScheme {
       ? const Color(0x1AFFFFFF)
       : const Color(0xCCFFFFFF);
 
+  Color get glassSurface => brightness == Brightness.dark
+      ? const Color(0x0DFFFFFF)
+      : const Color(0x08FFFFFF);
+
+  Color get glassHighlight => brightness == Brightness.dark
+      ? const Color(0x15FFFFFF)
+      : const Color(0x1A000000);
+
+  Color get glassReflection => brightness == Brightness.dark
+      ? const Color(0x08FFFFFF)
+      : const Color(0x0DFFFFFF);
+
   Color get glassBorder => brightness == Brightness.dark
       ? const Color(0x2AFFFFFF)
       : const Color(0x08000000);

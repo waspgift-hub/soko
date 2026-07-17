@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_rating_bar/flutter_rating_bar.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/user_service.dart';
 import '../../services/product_service.dart';
@@ -17,8 +18,6 @@ import '../../models/flash_sale_model.dart';
 import '../../services/flash_sale_service.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
-import '../../utils/phone_utils.dart';
-import '../../utils/responsive.dart';
 import '../chat/chat_navigation.dart';
 
 class PublicProfileScreen extends StatefulWidget {
@@ -442,16 +441,16 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                         color: cs.primary,
                       ),
                     ),
-                    RatingBar.builder(
-                      initialRating: rating.averageRating,
-                      minRating: 0,
-                      direction: Axis.horizontal,
-                      allowHalfRating: true,
-                      ignoreGestures: true,
-                      itemCount: 5,
-                      itemSize: 16,
-                      itemBuilder: (_, _) => Icon(Icons.star, color: Colors.amber, size: 16),
-                      onRatingUpdate: (_) {},
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: List.generate(5, (i) {
+                        final filled = i < rating.averageRating.round();
+                        return Icon(
+                          filled ? Icons.star : Icons.star_border,
+                          color: Colors.amber,
+                          size: 16,
+                        );
+                      }),
                     ),
                     const SizedBox(height: 2),
                     Text(

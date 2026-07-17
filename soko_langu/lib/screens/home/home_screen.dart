@@ -317,7 +317,7 @@ class _HomeScreenState extends State<HomeScreen>
               ),
               const SizedBox(height: AppInsets.xs),
               SizedBox(
-                height: 110,
+                height: 130,
                 child: StreamBuilder<List<Category>>(
                   stream: _categoryService.getCategories(),
                   builder: (context, snapshot) {
@@ -377,25 +377,6 @@ class _HomeScreenState extends State<HomeScreen>
               const AdBanner(),
               const SizedBox(height: AppInsets.xl),
             ],
-          ),
-        ),
-      ),
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 16),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            gradient: LinearGradient(colors: [cs.primary, cs.primary.withValues(alpha: 0.85)]),
-            boxShadow: [BoxShadow(color: cs.primary.withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6))],
-          ),
-          child: FloatingActionButton.extended(
-            onPressed: () => context.push(AppRoutes.addProduct),
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            label: Text(context.tr('sell_product'),
-              style: TextStyle(color: cs.onPrimary, fontWeight: FontWeight.w600),
-            ),
-            icon: Icon(Icons.add_rounded, color: cs.onPrimary),
           ),
         ),
       ),

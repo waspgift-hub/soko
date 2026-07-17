@@ -43,6 +43,7 @@ import 'widgets/maintenance_gate.dart';
 import 'widgets/connectivity_wrapper.dart';
 import 'widgets/transaction_status_watcher.dart';
 import 'widgets/age_gate_dialog.dart';
+import 'widgets/premium_background.dart';
 import 'widgets/in_app_notification_overlay.dart';
 
 // ---------------------------------------------------------------------------
@@ -455,7 +456,6 @@ class _SokoVibeAppState extends State<SokoVibeApp>
   Widget _appBuilder(BuildContext context, Widget? child) {
     Responsive.init(context);
     Widget content = child!;
-    final cs = Theme.of(context).colorScheme;
 
     // Web desktop constraint
     if (kIsWeb && Responsive.isDesktop) {
@@ -467,28 +467,8 @@ class _SokoVibeAppState extends State<SokoVibeApp>
       );
     }
 
-    // Cosmic Slate gradient background
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    content = Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: isDark
-              ? [
-                  cs.surface.withValues(alpha: 0.97),
-                  cs.surfaceContainerLow,
-                  cs.surface.withValues(alpha: 0.97),
-                ]
-              : [
-                  cs.surface.withValues(alpha: 0.95),
-                  cs.surfaceContainerLow,
-                  cs.surface.withValues(alpha: 0.95),
-                ],
-        ),
-      ),
-      child: content,
-    );
+    // Premium animated background with floating particles
+    content = PremiumBackground(child: content);
 
     // Cross-cutting overlays
     content = ConnectivityWrapper(child: content);

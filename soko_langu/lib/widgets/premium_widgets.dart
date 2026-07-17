@@ -48,7 +48,8 @@ class GlassCard extends StatelessWidget {
   final double? width;
   final BorderRadius? borderRadius;
   final Color? borderColor;
-  const GlassCard({super.key, required this.child, this.onTap, this.padding, this.margin, this.width, this.borderRadius, this.borderColor});
+  final bool showReflection;
+  const GlassCard({super.key, required this.child, this.onTap, this.padding, this.margin, this.width, this.borderRadius, this.borderColor, this.showReflection = true});
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -56,19 +57,44 @@ class GlassCard extends StatelessWidget {
       borderRadius: borderRadius ?? BorderRadius.circular(AppRadius.lg),
       child: BackdropFilter(
         filter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-        child: Container(
-          width: width,
-          margin: margin,
-          padding: padding ?? const EdgeInsets.all(AppInsets.lg),
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerLow.withValues(alpha: 0.3),
-            borderRadius: borderRadius ?? BorderRadius.circular(AppRadius.lg),
-            border: Border.all(color: borderColor?.withValues(alpha: 0.4) ?? cs.primary.withValues(alpha: 0.2)),
-            boxShadow: [
-              BoxShadow(color: cs.primary.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 4)),
-            ],
-          ),
-          child: child,
+        child: Stack(
+          children: [
+            Container(
+              width: width,
+              margin: margin,
+              padding: padding ?? const EdgeInsets.all(AppInsets.lg),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerLow.withValues(alpha: 0.3),
+                borderRadius: borderRadius ?? BorderRadius.circular(AppRadius.lg),
+                border: Border.all(color: borderColor?.withValues(alpha: 0.5) ?? cs.primary.withValues(alpha: 0.25), width: 1.2),
+                boxShadow: [
+                  BoxShadow(color: cs.primary.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 4)),
+                ],
+              ),
+              child: child,
+            ),
+            if (showReflection)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: borderRadius ?? BorderRadius.circular(AppRadius.lg),
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Colors.white.withValues(alpha: 0.06),
+                          Colors.transparent,
+                          Colors.transparent,
+                          Colors.white.withValues(alpha: 0.03),
+                        ],
+                        stops: const [0.0, 0.3, 0.7, 1.0],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -95,9 +121,13 @@ class SectionHeader extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(width: 4, height: 20, decoration: BoxDecoration(
-                color: cs.primary,
-                borderRadius: BorderRadius.circular(2),
+              Container(width: 5, height: 24, decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [cs.primary, cs.primary.withValues(alpha: 0.4)],
+                ),
+                borderRadius: BorderRadius.circular(3),
               )),
               const SizedBox(width: 10),
               Text(title, style: TextStyle(fontSize: AppFontSize.lg, fontWeight: FontWeight.w600, color: cs.onSurface)),
@@ -106,12 +136,22 @@ class SectionHeader extends StatelessWidget {
                 GestureDetector(
                   onTap: onAction,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                     decoration: BoxDecoration(
-                      color: cs.primary.withValues(alpha: 0.1),
+                      gradient: LinearGradient(
+                        colors: [cs.primary.withValues(alpha: 0.15), cs.primary.withValues(alpha: 0.08)],
+                      ),
                       borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: cs.primary.withValues(alpha: 0.15)),
                     ),
-                    child: Text(actionLabel!, style: TextStyle(fontSize: AppFontSize.sm, color: cs.primary, fontWeight: FontWeight.w600)),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(actionLabel!, style: TextStyle(fontSize: AppFontSize.sm, color: cs.primary, fontWeight: FontWeight.w600)),
+                        const SizedBox(width: 4),
+                        Icon(Icons.arrow_forward_ios, size: 10, color: cs.primary),
+                      ],
+                    ),
                   ),
                 ),
               if (trailing != null) trailing!,
