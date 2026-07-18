@@ -15,6 +15,7 @@ import '../../widgets/payment_banner.dart';
 import '../../widgets/glass_container.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/premium_background.dart';
 
 class ProductBoostScreen extends StatefulWidget {
   final Product product;
@@ -45,32 +46,27 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
         title: Text(context.tr('boost_product')),
         centerTitle: true,
       ),
-      body: Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [cs.primary.withValues(alpha: 0.03), cs.surface],
-          ),
-        ),
-        child: SafeArea(
-          top: false,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-            children: [
-              _buildProductHeader(cardBg),
-              const SizedBox(height: 24),
-              _buildSectionTitle(context.tr('choose_boost_package')),
-              const SizedBox(height: 16),
-              _buildTierCard(BoostTier.bronze, cardBg, brightness),
-              const SizedBox(height: 12),
-              _buildTierCard(BoostTier.silver, cardBg, brightness),
-              const SizedBox(height: 12),
-              _buildTierCard(BoostTier.gold, cardBg, brightness),
-              const SizedBox(height: 32),
-              _buildPaymentButton(),
-            ],
+      body: PremiumBackground(
+        child: Container(
+          width: double.infinity,
+          child: SafeArea(
+            top: false,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+              children: [
+                _buildProductHeader(cardBg),
+                const SizedBox(height: 24),
+                _buildSectionTitle(context.tr('choose_boost_package')),
+                const SizedBox(height: 16),
+                _buildTierCard(BoostTier.bronze, cardBg, brightness),
+                const SizedBox(height: 12),
+                _buildTierCard(BoostTier.silver, cardBg, brightness),
+                const SizedBox(height: 12),
+                _buildTierCard(BoostTier.gold, cardBg, brightness),
+                const SizedBox(height: 32),
+                _buildPaymentButton(),
+              ],
+            ),
           ),
         ),
       ),
@@ -83,7 +79,9 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.08)),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.08),
+        ),
       ),
       child: Row(
         children: [
@@ -97,10 +95,15 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
                   ? Image.network(
                       widget.product.images.first,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => Icon(Icons.image,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      errorBuilder: (_, _, _) => Icon(
+                        Icons.image,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     )
-                  : Icon(Icons.image, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  : Icon(
+                      Icons.image,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
             ),
           ),
           const SizedBox(width: 16),
@@ -133,14 +136,22 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.31)),
+                border: Border.all(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: 0.31),
+                ),
               ),
               child: Text(
                 context.tr('active'),
                 style: TextStyle(
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: 0.7),
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
@@ -154,10 +165,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
   Widget _buildSectionTitle(String title) {
     return Text(
       title,
-      style: const TextStyle(
-        fontWeight: FontWeight.bold,
-        fontSize: 17,
-      ),
+      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
     );
   }
 
@@ -185,12 +193,12 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: isSelected
-              ? accentColor.withValues(alpha: 0.07)
-              : cardBg,
+          color: isSelected ? accentColor.withValues(alpha: 0.07) : cardBg,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? accentColor : Theme.of(context).colorScheme.surface.withValues(alpha: 0.06),
+            color: isSelected
+                ? accentColor
+                : Theme.of(context).colorScheme.surface.withValues(alpha: 0.06),
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -216,19 +224,25 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 17,
-                          color: isDark ? Theme.of(context).colorScheme.surface : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.87),
+                          color: isDark
+                              ? Theme.of(context).colorScheme.surface
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: 0.87),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: accentColor.withValues(alpha: 0.16),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          '${tier.durationDays} days',
+                          '${tier.durationDays} ${context.tr('days')}',
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
@@ -254,7 +268,9 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
                         '~TZS ${_nf.format(tier.pricePerDay.toInt())}/day',
                         style: TextStyle(
                           fontSize: 12,
-                          color: isDark ? Theme.of(context).colorScheme.onSurfaceVariant : Theme.of(context).colorScheme.onSurfaceVariant,
+                          color: isDark
+                              ? Theme.of(context).colorScheme.onSurfaceVariant
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -269,12 +285,20 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
                 shape: BoxShape.circle,
                 color: isSelected ? accentColor : Colors.transparent,
                 border: Border.all(
-                  color: isSelected ? accentColor : Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                  color: isSelected
+                      ? accentColor
+                      : Theme.of(
+                          context,
+                        ).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                   width: 2,
                 ),
               ),
               child: isSelected
-                  ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.surface)
+                  ? Icon(
+                      Icons.check,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.surface,
+                    )
                   : null,
             ),
           ],
@@ -284,6 +308,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
   }
 
   Widget _buildPaymentButton() {
+    final cs2 = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Column(
@@ -295,17 +320,29 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: _selectedTier == BoostTier.gold
-                    ? Theme.of(context).colorScheme.boostGold.withValues(alpha: 0.06)
+                    ? Theme.of(
+                        context,
+                      ).colorScheme.boostGold.withValues(alpha: 0.06)
                     : _selectedTier == BoostTier.silver
-                        ? Theme.of(context).colorScheme.boostSilver.withValues(alpha: 0.06)
-                        : Theme.of(context).colorScheme.boostBronze.withValues(alpha: 0.06),
+                    ? Theme.of(
+                        context,
+                      ).colorScheme.boostSilver.withValues(alpha: 0.06)
+                    : Theme.of(
+                        context,
+                      ).colorScheme.boostBronze.withValues(alpha: 0.06),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: _selectedTier == BoostTier.gold
-                      ? Theme.of(context).colorScheme.boostGold.withValues(alpha: 0.3)
+                      ? Theme.of(
+                          context,
+                        ).colorScheme.boostGold.withValues(alpha: 0.3)
                       : _selectedTier == BoostTier.silver
-                          ? Theme.of(context).colorScheme.boostSilver.withValues(alpha: 0.3)
-                          : Theme.of(context).colorScheme.boostBronze.withValues(alpha: 0.3),
+                      ? Theme.of(
+                          context,
+                        ).colorScheme.boostSilver.withValues(alpha: 0.3)
+                      : Theme.of(
+                          context,
+                        ).colorScheme.boostBronze.withValues(alpha: 0.3),
                 ),
               ),
               child: Column(
@@ -320,22 +357,42 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  _summaryRow(context.tr('plan'), _selectedTier!.displayName, Theme.of(context).colorScheme.onSurfaceVariant),
+                  _summaryRow(
+                    context.tr('plan'),
+                    _selectedTier!.displayName,
+                    Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                   const SizedBox(height: 4),
-                  _summaryRow(context.tr('duration'), '${_selectedTier!.durationDays} ${context.tr('days')}', Theme.of(context).colorScheme.onSurfaceVariant),
+                  _summaryRow(
+                    context.tr('duration'),
+                    '${_selectedTier!.durationDays} ${context.tr('days')}',
+                    Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                   const SizedBox(height: 4),
-                  _summaryRow(context.tr('total'), 'TZS ${_nf.format(_selectedTier!.priceTzs)}', Theme.of(context).colorScheme.primary),
+                  _summaryRow(
+                    context.tr('total'),
+                    'TZS ${_nf.format(_selectedTier!.priceTzs)}',
+                    Theme.of(context).colorScheme.primary,
+                  ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Icon(Icons.info_outline, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      Icon(
+                        Icons.info_outline,
+                        size: 14,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
                           context.tr('payment_after_continue'),
                           style: TextStyle(
                             fontSize: 11,
-                            color: isDark ? Theme.of(context).colorScheme.onSurfaceVariant : Theme.of(context).colorScheme.onSurfaceVariant,
+                            color: isDark
+                                ? Theme.of(context).colorScheme.onSurfaceVariant
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ),
@@ -368,28 +425,44 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
           ),
         if (!_processing)
           SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: ElevatedButton(
+              onPressed: _selectedTier == null ? null : _processPayment,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.successGreen,
+                foregroundColor: Theme.of(context).colorScheme.surface,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                elevation: 0,
+              ),
+              child: Text(
+                _selectedTier == null
+                    ? context.tr('select_package')
+                    : '${context.tr("proceed_to_checkout")} — TZS ${_nf.format(_selectedTier!.priceTzs)}',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        const SizedBox(height: 12),
+        SizedBox(
           width: double.infinity,
-          height: 52,
-          child: ElevatedButton(
-            onPressed:
-                _selectedTier == null ? null : _processPayment,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.successGreen,
-              foregroundColor: Theme.of(context).colorScheme.surface,
+          height: 48,
+          child: OutlinedButton.icon(
+            onPressed: () => context.pop(),
+            icon: const Icon(Icons.close, size: 18),
+            label: Text(context.tr('cancel')),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: cs2.onSurfaceVariant,
+              side: BorderSide(color: cs2.outlineVariant),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
-              elevation: 0,
             ),
-            child: Text(
-                    _selectedTier == null
-                        ? context.tr('select_package')
-                        : '${context.tr("proceed_to_checkout")} — TZS ${_nf.format(_selectedTier!.priceTzs)}',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
           ),
         ),
       ],
@@ -400,8 +473,21 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-        Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: valueColor)),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: valueColor,
+          ),
+        ),
       ],
     );
   }
@@ -439,7 +525,8 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
       );
 
       if (result == null || result['order_id'] == null) {
-        if (mounted) _showError(context.tr('payment_initiation_failed'));
+        final errMsg = result?['error'] as String? ?? context.tr('payment_initiation_failed');
+        if (mounted) _showError(errMsg);
         return;
       }
 
@@ -498,7 +585,9 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
 
     // SMS seller about boost payment (server also sends via callback)
     final sellerPhone = widget.product.sellerPhone ?? '';
-    final expiry = DateTime.now().add(Duration(days: _selectedTier!.durationDays));
+    final expiry = DateTime.now().add(
+      Duration(days: _selectedTier!.durationDays),
+    );
     if (sellerPhone.isNotEmpty) {
       SmsNotificationService.notifyBoostPaid(
         sellerPhone: sellerPhone,
@@ -512,7 +601,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        title: const Text('Boost Imekamilika'),
+        title: Text(context.tr('boost_complete')),
         content: SingleChildScrollView(
           child: BoostReceiptCard(
             receipt: BoostReceipt(
@@ -544,7 +633,10 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
   void _showError(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.error),
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ),
     );
   }
 }
@@ -579,8 +671,14 @@ class _GlassPaymentDialog {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: isDark
-                      ? [cs.surface.withValues(alpha: 0.75), cs.surfaceContainerLow.withValues(alpha: 0.55)]
-                      : [Colors.white.withValues(alpha: 0.95), Colors.white.withValues(alpha: 0.82)],
+                      ? [
+                          cs.surface.withValues(alpha: 0.75),
+                          cs.surfaceContainerLow.withValues(alpha: 0.55),
+                        ]
+                      : [
+                          Colors.white.withValues(alpha: 0.95),
+                          Colors.white.withValues(alpha: 0.82),
+                        ],
                 ),
                 borderRadius: BorderRadius.circular(32),
                 border: Border.all(
@@ -596,125 +694,159 @@ class _GlassPaymentDialog {
                 ],
               ),
               child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Center(
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [cs.primary.withValues(alpha: 0.15), cs.primary.withValues(alpha: 0.05)],
-                          ),
-                          shape: BoxShape.circle,
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            cs.primary.withValues(alpha: 0.15),
+                            cs.primary.withValues(alpha: 0.05),
+                          ],
                         ),
-                        child: Icon(Icons.payment_rounded, color: cs.primary, size: 34),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.payment_rounded,
+                        color: cs.primary,
+                        size: 34,
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      context.tr('phone_number'),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    context.tr('phone_number'),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 20,
+                      color: isDark ? Colors.white : cs.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  GlassContainer(
+                    borderRadius: 16,
+                    opacity: isDark ? 0.15 : 0.1,
+                    padding: const EdgeInsets.all(14),
+                    child: Text(
+                      '"$productName"\n$tierName — $price / $duration',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 20,
-                        color: isDark ? Colors.white : cs.onSurface,
+                        fontSize: 13,
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.85)
+                            : cs.onSurface.withValues(alpha: 0.8),
                       ),
                     ),
-                    const SizedBox(height: 14),
-                    GlassContainer(
-                      borderRadius: 16,
-                      opacity: isDark ? 0.15 : 0.1,
-                      padding: const EdgeInsets.all(14),
-                      child: Text(
-                        '"$productName"\n$tierName — $price / $duration',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: isDark ? Colors.white.withValues(alpha: 0.85) : cs.onSurface.withValues(alpha: 0.8),
+                  ),
+                  const SizedBox(height: 20),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: BackdropFilter(
+                      filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: cs.surface.withValues(
+                            alpha: isDark ? 0.08 : 0.04,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: cs.primary.withValues(alpha: 0.08),
+                            width: 0.5,
+                          ),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 2,
+                        ),
+                        child: TextField(
+                          controller: phoneController,
+                          keyboardType: TextInputType.phone,
+                          decoration: InputDecoration(
+                            hintText: context.tr('phone_hint'),
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            prefixIcon: Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: Icon(
+                                Icons.phone_android_rounded,
+                                color: cs.primary,
+                                size: 22,
+                              ),
+                            ),
+                            prefixIconConstraints: const BoxConstraints(
+                              minWidth: 44,
+                              minHeight: 0,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 16,
+                            ),
+                          ),
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: isDark ? Colors.white : cs.onSurface,
+                          ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: BackdropFilter(
-                        filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: Text(context.tr('cancel')),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
                         child: Container(
                           decoration: BoxDecoration(
-                            color: cs.surface.withValues(alpha: isDark ? 0.08 : 0.04),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: cs.primary.withValues(alpha: 0.08),
-                              width: 0.5,
-                            ),
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                          child: TextField(
-                            controller: phoneController,
-                            keyboardType: TextInputType.phone,
-                            decoration: InputDecoration(
-                              hintText: context.tr('phone_hint'),
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              prefixIcon: Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: Icon(Icons.phone_android_rounded, color: cs.primary, size: 22),
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [
+                              BoxShadow(
+                                color: cs.primary.withValues(alpha: 0.3),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
                               ),
-                              prefixIconConstraints: const BoxConstraints(minWidth: 44, minHeight: 0),
-                              contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                            ],
+                          ),
+                          child: ElevatedButton(
+                            onPressed: () =>
+                                Navigator.pop(ctx, phoneController.text.trim()),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: cs.primary,
+                              foregroundColor: cs.surface,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              elevation: 0,
                             ),
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: isDark ? Colors.white : cs.onSurface,
+                            child: Text(
+                              context.tr('pay_now'),
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            child: Text(context.tr('cancel')),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          flex: 2,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(14),
-                              boxShadow: [
-                                BoxShadow(color: cs.primary.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4)),
-                              ],
-                            ),
-                            child: ElevatedButton(
-                              onPressed: () => Navigator.pop(ctx, phoneController.text.trim()),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: cs.primary,
-                                foregroundColor: cs.surface,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                elevation: 0,
-                              ),
-                              child: Text(context.tr('pay_now'), style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ),
         ),
-      );
+      ),
+    );
   }
 }
-
-

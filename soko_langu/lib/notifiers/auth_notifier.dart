@@ -22,6 +22,7 @@ enum AuthStatus {
 
 enum MagicLinkState { idle, sending, sent, error }
 enum PhoneOtpState { idle, sending, sent, verifying, verified, error }
+enum EmailOtpState { idle, sending, sent, verifying, verified, error }
 
 class AuthNotifier extends ChangeNotifier {
   final AuthRepository _authRepo;
@@ -350,6 +351,75 @@ class AuthNotifier extends ChangeNotifier {
 
   void resetPhoneOtp() {
     _phoneOtpState = PhoneOtpState.idle;
+    _error = null;
+    notifyListeners();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Email OTP
+  // ---------------------------------------------------------------------------
+
+  EmailOtpState _emailOtpState = EmailOtpState.idle;
+  EmailOtpState get emailOtpState => _emailOtpState;
+
+  Future<void> sendEmailOtp(String email) async {
+    _emailOtpState = EmailOtpState.sending;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final res = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/auth/send-email-otp'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email}),
+      );
+      if (res.statusCode == 200) {
+        _emailOtpState = EmailOtpState.sent;
+      } else {
+        final body = jsonDecode(res.body);
+        _error = body['error'] ?? 'Imeshindwa kutuma OTP kwa barua pepe.';
+        _emailOtpState = EmailOtpState.error;
+      }
+      notifyListeners();
+    } catch (e) {
+      _error = 'Mtandao dhaifu. Angalia muunganisho wako.';
+      _emailOtpState = EmailOtpState.error;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> verifyEmailOtp(String email, String otp) async {
+    _emailOtpState = EmailOtpState.verifying;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final res = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/auth/verify-email-otp'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email, 'otp': otp}),
+      );
+      final body = jsonDecode(res.body);
+      if (res.statusCode == 200 && body['valid'] == true) {
+        _emailOtpState = EmailOtpState.verified;
+        notifyListeners();
+        return true;
+      } else {
+        _error = body['error'] ?? 'OTP si sahihi.';
+        _emailOtpState = EmailOtpState.error;
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      _error = 'Mtandao dhaifu. Angalia muunganisho wako.';
+      _emailOtpState = EmailOtpState.error;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  void resetEmailOtp() {
+    _emailOtpState = EmailOtpState.idle;
     _error = null;
     notifyListeners();
   }

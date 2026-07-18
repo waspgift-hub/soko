@@ -286,7 +286,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               icon: const Icon(Icons.receipt_long),
               text: context.tr('transactions'),
             ),
-            const Tab(icon: Icon(Icons.chat_bubble_outline), text: 'Chats'),
+            Tab(icon: const Icon(Icons.chat_bubble_outline), text: context.tr('chats')),
           ],
         ),
       ),
@@ -478,12 +478,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           ),
           const SizedBox(height: 12),
           Text(
-            'Hakuna matatizo yanayohitaji umakini',
+            context.tr('no_issues_attention'),
             style: TextStyle(fontSize: 15, color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: 4),
           Text(
-            'Kila kitu kiko sawa!',
+            context.tr('everything_ok'),
             style: TextStyle(
               fontSize: 12,
               color: cs.onSurfaceVariant.withValues(alpha: 0.6),
@@ -497,11 +497,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   Widget _buildDisputeCard(Map<String, dynamic> tx, ColorScheme cs) {
     final nf = NumberFormat('#,###', 'en');
     final dateStr = _formatTimestamp(tx['createdAt']);
-    final productName = tx['productName'] ?? 'Bidhaa';
+    final productName = tx['productName'] ?? context.tr('product');
     final price = (tx['productPrice'] ?? 0).toDouble();
-    final buyerName = tx['buyerName'] ?? tx['buyerId'] ?? '---';
-    final sellerName = tx['sellerName'] ?? tx['sellerId'] ?? '---';
-    final reason = tx['disputeInfo']?['reason'] ?? '---';
+    final buyerName = tx['buyerName'] ?? tx['buyerId'] ?? context.tr('unknown');
+    final sellerName = tx['sellerName'] ?? tx['sellerId'] ?? context.tr('unknown');
+    final reason = tx['disputeInfo']?['reason'] ?? context.tr('unknown');
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: Padding(
@@ -533,11 +533,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             ),
             const SizedBox(height: 6),
             Text(
-              'Mnunuzi: $buyerName  |  Muuzaji: $sellerName',
+              '${context.tr('buyer')}$buyerName  |  ${context.tr('seller_label')}$sellerName',
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
             Text(
-              'Sababu: $reason',
+              '${context.tr('reason')}: $reason',
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
             Text(
@@ -574,10 +574,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   Widget _buildFailedPayoutCard(Map<String, dynamic> tx, ColorScheme cs) {
     final nf = NumberFormat('#,###', 'en');
     final dateStr = _formatTimestamp(tx['payoutFailedAt'] ?? tx['createdAt']);
-    final productName = tx['productName'] ?? 'Bidhaa';
+    final productName = tx['productName'] ?? context.tr('product');
     final price = (tx['productPrice'] ?? 0).toDouble();
-    final sellerName = tx['sellerName'] ?? tx['sellerId'] ?? '---';
-    final error = tx['payoutError'] ?? 'Unknown error';
+    final sellerName = tx['sellerName'] ?? tx['sellerId'] ?? context.tr('unknown');
+    final error = tx['payoutError'] ?? context.tr('unknown_error');
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: Padding(
@@ -609,11 +609,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             ),
             const SizedBox(height: 6),
             Text(
-              'Muuzaji: $sellerName',
+              '${context.tr('seller_label')}$sellerName',
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
             Text(
-              'Hitilafu: $error',
+              '${context.tr('error')}: $error',
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
             Text(
@@ -650,10 +650,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   Widget _buildKycCard(Map<String, dynamic> user, ColorScheme cs) {
     final kyc = user['kyc'] as Map<String, dynamic>? ?? {};
     final dateStr = _formatTimestamp(kyc['submittedAt']);
-    final fullName = kyc['fullName'] ?? user['displayName'] ?? '---';
-    final email = user['email'] ?? '---';
-    final phone = user['phone'] ?? '---';
-    final idType = kyc['idType'] ?? '---';
+    final fullName = kyc['fullName'] ?? user['displayName'] ?? context.tr('unknown');
+    final email = user['email'] ?? context.tr('unknown');
+    final phone = user['phone'] ?? context.tr('unknown');
+    final idType = kyc['idType'] ?? context.tr('unknown');
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: Padding(
@@ -721,14 +721,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   String _formatTimestamp(dynamic ts) {
-    if (ts == null) return '---';
+    if (ts == null) return context.tr('unknown');
     try {
       if (ts is Timestamp) {
         return DateFormat('MMM dd, HH:mm').format(ts.toDate());
       }
       return ts.toString();
     } catch (_) {
-      return '---';
+      return context.tr('unknown');
     }
   }
 
@@ -860,7 +860,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         ),
         _actionTile(
           Icons.analytics,
-          'Analytics za App',
+          context.tr('app_analytics'),
           Theme.of(context).colorScheme.primary,
           () => context.push(AppRoutes.sellerAnalytics, extra: '__all__'),
         ),
@@ -984,9 +984,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     });
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Users CSV saved to admin_exports collection'),
-        ),
+        SnackBar(content: Text(context.tr('users_csv_saved'))),
       );
     }
   }
@@ -995,9 +993,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   Future<void> _toggleMaintenance() async {
     final currentlyEnabled = await _analyticsService.getMaintenanceMode();
     final messageCtrl = TextEditingController(
-      text: currentlyEnabled
-          ? ''
-          : 'App iko kwenye matengenezo. Tafadhali rudi baadaye.',
+      text: currentlyEnabled ? '' : context.tr('maintenance_message'),
     );
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -1010,7 +1006,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             Row(
               children: [
                 Text(
-                  'Hali ya sasa: ',
+                  context.tr('current_status'),
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -1027,7 +1023,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    currentlyEnabled ? 'IMEWASHWA' : 'IMEZIMWA',
+                    context.tr(currentlyEnabled ? 'maintenance_on' : 'maintenance_off'),
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
@@ -1041,15 +1037,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             TextField(
               controller: messageCtrl,
               maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Ujumbe kwa watumiaji',
-                hintText: 'App iko kwenye matengenezo...',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: context.tr('maintenance_message_label'),
+                hintText: context.tr('maintenance_message_hint'),
+                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 12),
             Text(
-              'Hutaweza kufikia app wakati maintenance ikiwa washwa. Watumiaji wote (isipokuwa admin) watazuiwa.',
+              context.tr('maintenance_warning'),
               style: TextStyle(
                 fontSize: 12,
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -1067,7 +1063,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               currentlyEnabled ? Icons.power_settings_new : Icons.warning_amber,
             ),
             label: Text(
-              currentlyEnabled ? 'Zima Maintenance' : 'Washa Maintenance',
+              context.tr(currentlyEnabled ? 'disable_maintenance' : 'enable_maintenance'),
             ),
             style: ElevatedButton.styleFrom(
               backgroundColor: currentlyEnabled ? Colors.green : Colors.red,
@@ -1090,9 +1086,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            result['enable'] as bool
-                ? 'Maintenance imewashwa'
-                : 'Maintenance imezimwa',
+            context.tr(result['enable'] as bool ? 'maintenance_enabled' : 'maintenance_disabled'),
           ),
         ),
       );
@@ -1102,7 +1096,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   // ─── ACTION: Resolve Dispute ───────────────────────────────
   void _showResolveDisputeDialog(Map<String, dynamic> tx) {
     final orderId = tx['id'] as String;
-    final productName = tx['productName'] ?? 'Bidhaa';
+    final productName = tx['productName'] ?? context.tr('product');
     final nf = NumberFormat('#,###', 'en');
     final price = (tx['productPrice'] ?? 0).toDouble();
     final noteCtrl = TextEditingController();
@@ -1122,7 +1116,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               ),
               const SizedBox(height: 8),
               Text(
-                '${context.tr('reason')}: ${tx['disputeInfo']?['reason'] ?? '---'}',
+                '${context.tr('reason')}: ${tx['disputeInfo']?['reason'] ?? context.tr('unknown')}',
               ),
               const SizedBox(height: 12),
               TextField(
@@ -1216,7 +1210,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Failed: $e')));
+        ).showSnackBar(SnackBar(content: Text(context.tr('imeshindwa').replaceAll('{0}', '$e'))));
       }
     }
   }
@@ -1224,7 +1218,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   // ─── ACTION: Retry Failed Payout ───────────────────────────
   Future<void> _retryPayout(Map<String, dynamic> tx) async {
     final orderId = tx['id'] as String;
-    final productName = tx['productName'] ?? 'Bidhaa';
+    final productName = tx['productName'] ?? context.tr('product');
     final nf = NumberFormat('#,###', 'en');
     final price = (tx['productPrice'] ?? 0).toDouble();
     final confirm = await showDialog<bool>(
@@ -1284,7 +1278,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Failed: $e')));
+        ).showSnackBar(SnackBar(content: Text(context.tr('imeshindwa').replaceAll('{0}', '$e'))));
       }
     }
   }
@@ -1293,9 +1287,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   void _showKycReviewDialog(Map<String, dynamic> user) {
     final uid = user['uid'] as String;
     final kyc = user['kyc'] as Map<String, dynamic>? ?? {};
-    final fullName = kyc['fullName'] ?? user['displayName'] ?? '---';
-    final idType = kyc['idType'] ?? '---';
-    final idNumber = kyc['idNumber'] ?? '---';
+    final fullName = kyc['fullName'] ?? user['displayName'] ?? context.tr('unknown');
+    final idType = kyc['idType'] ?? context.tr('unknown');
+    final idNumber = kyc['idNumber'] ?? context.tr('unknown');
     final idImageUrl = kyc['idImageUrl'] as String?;
     final selfieUrl = kyc['selfieUrl'] as String?;
     final notesCtrl = TextEditingController();
@@ -1310,15 +1304,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Jina: $fullName',
+                '${context.tr('full_name')}: $fullName',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 4),
-              Text('Aina ya Kitambulisho: $idType'),
-              Text('Namba: $idNumber'),
+              Text('${context.tr('id_type')}: $idType'),
+              Text('${context.tr('number')}: $idNumber'),
               if (idImageUrl != null) ...[
                 const SizedBox(height: 8),
-                Text('Kitambulisho:'),
+                Text(context.tr('identification_label')),
                 const SizedBox(height: 4),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
@@ -1332,7 +1326,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               ],
               if (selfieUrl != null) ...[
                 const SizedBox(height: 8),
-                Text('Selfie:'),
+                Text(context.tr('selfie_label')),
                 const SizedBox(height: 4),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
@@ -1348,9 +1342,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               TextField(
                 controller: notesCtrl,
                 maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Maelezo (sababu ya kukataa)',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: context.tr('rejection_reason_label'),
+                  border: const OutlineInputBorder(),
                 ),
               ),
             ],
@@ -1426,7 +1420,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Failed: $e')));
+        ).showSnackBar(SnackBar(content: Text(context.tr('imeshindwa').replaceAll('{0}', '$e'))));
       }
     }
   }
@@ -1434,6 +1428,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   // ─── ANALYTICS TAB ───────────────────────────────────────
   Widget _buildAnalyticsTab() {
     final a = _analytics ?? AnalyticsData();
+    final cs = Theme.of(context).colorScheme;
     return RefreshIndicator(
       onRefresh: _loadAnalytics,
       child: ListView(
@@ -1477,8 +1472,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           _statRow(
             context.tr('total_revenue'),
             'TZS ${a.totalRevenue.toStringAsFixed(0)}',
-            'Today: TZS ${a.revenueToday.toStringAsFixed(0)}',
-            'Month: TZS ${a.revenueThisMonth.toStringAsFixed(0)}',
+            '${context.tr('today')}: TZS ${a.revenueToday.toStringAsFixed(0)}',
+            '${context.tr('this_month')}: TZS ${a.revenueThisMonth.toStringAsFixed(0)}',
           ),
           const SizedBox(height: 20),
           Text(
@@ -1523,7 +1518,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
           // ── Active Users (Real-Time) ──
           Text(
-            'Watumiaji Mahiri (Moja kwa Moja)',
+            context.tr('active_users_realtime'),
             style: Theme.of(
               context,
             ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
@@ -1536,35 +1531,35 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 children: [
                   _timeStatRow(
                     cs,
-                    'Kwa Sekunde',
+                    context.tr('per_second'),
                     '${a.activeUserCounts.perSecond}',
                   ),
                   const Divider(height: 20),
                   _timeStatRow(
                     cs,
-                    'Kwa Dakika',
+                    context.tr('per_minute'),
                     '${a.activeUserCounts.perMinute}',
                   ),
                   const Divider(height: 20),
-                  _timeStatRow(cs, 'Kwa Saa', '${a.activeUserCounts.perHour}'),
+                  _timeStatRow(cs, context.tr('per_hour'), '${a.activeUserCounts.perHour}'),
                   const Divider(height: 20),
-                  _timeStatRow(cs, 'Leo', '${a.activeUserCounts.perDay}'),
+                  _timeStatRow(cs, context.tr('today'), '${a.activeUserCounts.perDay}'),
                   const Divider(height: 20),
                   _timeStatRow(
                     cs,
-                    'Mwezi Huu',
+                    context.tr('this_month'),
                     '${a.activeUserCounts.perMonth}',
                   ),
                   const Divider(height: 20),
                   _timeStatRow(
                     cs,
-                    'Mwaka Huu',
+                    context.tr('this_year'),
                     '${a.activeUserCounts.perYear}',
                   ),
                   const Divider(height: 20),
                   _timeStatRow(
                     cs,
-                    'Tangu Mwanzo',
+                    context.tr('all_time'),
                     '${a.activeUserCounts.allTime}',
                   ),
                 ],
@@ -1575,7 +1570,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
           // ── Location Distribution ──
           Text(
-            'Maeneo Wateja Wanakotumia App',
+            context.tr('user_locations'),
             style: Theme.of(
               context,
             ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
@@ -1591,7 +1586,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
           // ── Age Distribution ──
           Text(
-            'Umri wa Watumiaji',
+            context.tr('age_breakdown'),
             style: Theme.of(
               context,
             ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
@@ -1739,7 +1734,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Text(
-            'Hakuna data',
+            context.tr('no_data'),
             style: TextStyle(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
@@ -1863,7 +1858,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                         ),
                       ),
                     ),
-                    title: Text('$name${suspended ? ' (Suspended)' : ''}'),
+                    title: Text('$name${suspended ? context.tr('suspended_badge') : ''}'),
                     subtitle: Text(phone),
                     trailing: PopupMenuButton<String>(
                       onSelected: (v) => _updateUser(u['uid'] as String, v),
@@ -1961,7 +1956,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         body: jsonEncode({'updates': body}),
       );
       if (resp.statusCode != 200) {
-        throw Exception(jsonDecode(resp.body)['error'] ?? 'Update failed');
+        throw Exception(jsonDecode(resp.body)['error'] ?? context.tr('update_failed'));
       }
       _loadUsers();
       if (mounted) {
@@ -1977,7 +1972,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Failed: $e')));
+        ).showSnackBar(SnackBar(content: Text(context.tr('imeshindwa').replaceAll('{0}', '$e'))));
       }
     }
   }
@@ -2138,7 +2133,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Failed: $e')));
+        ).showSnackBar(SnackBar(content: Text(context.tr('imeshindwa').replaceAll('{0}', '$e'))));
       }
     }
   }
@@ -2174,13 +2169,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           return const GoogleLoadingPage();
         }
         if (snap.hasError) {
-          return Center(child: Text('Failed: ${snap.error}'));
+          return Center(child: Text(context.tr('imeshindwa').replaceAll('{0}', '${snap.error}')));
         }
         final docs = snap.data?.docs ?? [];
         if (docs.isEmpty) {
           return Center(
             child: Text(
-              'Hakuna chat rooms bado',
+              context.tr('no_chat_rooms_yet'),
               style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -2215,12 +2210,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   child: Icon(isAi ? Icons.smart_toy : Icons.chat),
                 ),
                 title: Text(
-                  isAi ? 'Soko Vibe AI Dalali' : doc.id,
+                  isAi ? context.tr('ai_dalali_name') : doc.id,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 subtitle: Text(
-                  lastMessage.isEmpty ? 'No messages' : lastMessage,
+                  lastMessage.isEmpty ? context.tr('no_messages') : lastMessage,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -2231,19 +2226,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     Text(date, style: const TextStyle(fontSize: 11)),
                     const SizedBox(height: 4),
                     Text(
-                      'B:$unreadBuyer S:$unreadSeller',
+                      context.tr('buyer_seller_unread_counts').replaceAll('{buyer}', '$unreadBuyer').replaceAll('{seller}', '$unreadSeller'),
                       style: const TextStyle(fontSize: 11),
                     ),
                   ],
                 ),
                 childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                 children: [
-                  _adminDetailRow('Buyer', buyerId.toString()),
-                  _adminDetailRow('Seller/AI', sellerId.toString()),
-                  _adminDetailRow('Participants', participants.join(', ')),
+                  _adminDetailRow(context.tr('customer'), buyerId.toString()),
+                  _adminDetailRow(context.tr('seller_ai_label'), sellerId.toString()),
+                  _adminDetailRow(context.tr('participants_label'), participants.join(', ')),
                   if (productTitle?.isNotEmpty == true)
-                    _adminDetailRow('Product', productTitle!),
-                  _adminDetailRow('Room ID', doc.id),
+                    _adminDetailRow(context.tr('product'), productTitle!),
+                  _adminDetailRow(context.tr('room_id_label'), doc.id),
                 ],
               ),
             );

@@ -57,11 +57,11 @@ class _ReviewSectionState extends State<ReviewSection> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text("Cancel"),
+              child: Text(context.tr('cancel')),
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text("Submit"),
+              child: Text(context.tr('submit')),
             ),
           ],
         ),

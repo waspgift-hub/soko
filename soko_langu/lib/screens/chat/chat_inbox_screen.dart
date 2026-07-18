@@ -5,6 +5,7 @@ import '../../services/chat_service.dart';
 import '../../services/user_service.dart';
 import '../../services/local_cache_service.dart';
 import '../../models/chat_room.dart';
+import '../../extensions/context_tr.dart';
 
 class ChatInboxScreen extends StatefulWidget {
   const ChatInboxScreen({super.key});
@@ -54,7 +55,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('Chat'),
+        title: Text(context.tr('chats')),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
@@ -69,7 +70,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                 children: [
                   Icon(Icons.chat_bubble_outline, size: 64, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
                   const SizedBox(height: 16),
-                  Text('Hakuna mazungumzo', style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant)),
+                  Text(context.tr('no_conversations'), style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant)),
                 ],
               ),
             );
@@ -80,23 +81,26 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
             itemBuilder: (_, i) {
               final room = rooms[i];
               final otherId = room.participants.where((p) => p != uid).firstOrNull ?? '';
+              if (otherId.isEmpty) return const SizedBox.shrink();
               _fetchUser(otherId);
               final name = _userNames[otherId] ?? otherId.substring(0, 8);
               final photo = _userPhotos[otherId] ?? '';
 
-              if (otherId.isEmpty) return const SizedBox.shrink();
               return _ChatListTile(
                 name: name,
                 photo: photo,
                 lastMessage: room.lastMessage,
                 lastTimestamp: room.lastTimestamp,
                 unreadCount: room.lastTimestamp != null ? 1 : 0,
-                onTap: () {
-                  context.push('/chat/$otherId', extra: {
-                    'name': name,
-                    'productId': room.productId,
-                    'productTitle': room.productTitle,
-                  });
+                onTap: () async {
+                  await _chatService.getOrCreateRoom(otherUserId: otherId);
+                  if (context.mounted) {
+                    context.push('/chat/$otherId', extra: {
+                      'name': name,
+                      'productId': room.productId ?? '',
+                      'productTitle': room.productTitle ?? '',
+                    });
+                  }
                 },
                 cs: cs,
               );
@@ -161,7 +165,7 @@ class _ChatListTile extends StatelessWidget {
                           ),
                           if (lastTimestamp != null)
                             Text(
-                              _formatTime(lastTimestamp!),
+                              _formatTime(context, lastTimestamp!),
                               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                             ),
                         ],
@@ -171,7 +175,7 @@ class _ChatListTile extends StatelessWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              lastMessage ?? 'Hakuna ujumbe',
+                              lastMessage ?? context.tr('no_messages'),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant),
@@ -199,11 +203,11 @@ class _ChatListTile extends StatelessWidget {
     );
   }
 
-  String _formatTime(DateTime dt) {
+  String _formatTime(BuildContext context, DateTime dt) {
     final now = DateTime.now();
     final diff = now.difference(dt);
     if (diff.inDays == 0) return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-    if (diff.inDays == 1) return 'Yesterday';
+    if (diff.inDays == 1) return context.tr('yesterday');
     return '${dt.day}/${dt.month}';
   }
 }

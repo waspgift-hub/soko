@@ -100,7 +100,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     children: [
                       Text(p.name, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: cs.onSurface), maxLines: 1, overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 4),
-                      Text('x1  ${_salePrice != null ? context.formatPrice(_salePrice!) : context.formatPrice(p.price)}',
+                      Text('${context.tr('quantity_prefix').replaceAll('{0}', '1')}${_salePrice != null ? context.formatPrice(_salePrice!) : context.formatPrice(p.price)}',
                           style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600, fontSize: 15)),
                     ],
                   ),
@@ -111,7 +111,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           const SizedBox(height: 20),
 
           // Fee breakdown glass card
-          Text('Maelezo ya Malipo', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: cs.onSurface)),
+          Text(context.tr('payment_details'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: cs.onSurface)),
           const SizedBox(height: 12),
           GlassContainer(
             blur: 24,
@@ -120,11 +120,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             padding: const EdgeInsets.all(20),
             child: Column(
               children: [
-                _feeRow(cs, 'Bei ya Bidhaa', context.formatPrice(_totalPrice), cs.onSurface),
+                _feeRow(cs, context.tr('product_price'), context.formatPrice(_totalPrice), cs.onSurface),
                 const SizedBox(height: 10),
                 Container(height: 1, color: cs.primary.withValues(alpha: 0.1)),
                 const SizedBox(height: 10),
-                _feeRow(cs, 'Ada ya Mongike (180 TZS)', context.formatPrice(_mongikeFee), cs.secondary),
+                _feeRow(cs, '${context.tr('mongike_fee')} (${_mongikeFee.toInt()} TZS)', context.formatPrice(_mongikeFee), cs.secondary),
                 const SizedBox(height: 4),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -133,14 +133,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    'Mongike huchargia TZS 180 kwa kila malipo ya mobile money',
+                    context.tr('mongike_fee_info').replaceAll('{0}', '${_mongikeFee.toInt()}'),
                     style: TextStyle(fontSize: 10, color: cs.tertiary),
                   ),
                 ),
                 const SizedBox(height: 10),
                 Container(height: 1, color: cs.primary.withValues(alpha: 0.1)),
                 const SizedBox(height: 10),
-                _feeRow(cs, 'Jumla ya Malipo', context.formatPrice(_totalWithFee), cs.primary, bold: true),
+                _feeRow(cs, context.tr('total_payment'), context.formatPrice(_totalWithFee), cs.primary, bold: true),
                 const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -158,16 +158,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         children: [
                           Icon(Icons.info_outline, size: 14, color: cs.primary),
                           const SizedBox(width: 6),
-                          Text('Mgawanyo wa Malipo',
+                          Text(context.tr('payment_breakdown'),
                               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.onSurface)),
                         ],
                       ),
                       const SizedBox(height: 8),
-                      _feeRow(cs, 'Muuzaji anapokea (${_sellerFeePercent}% toka kwake)', context.formatPrice(_sellerReceives), cs.primary),
+                      _feeRow(cs, context.tr('seller_receives_percent').replaceAll('{0}', '$_sellerFeePercent'), context.formatPrice(_sellerReceives), cs.primary),
                       const SizedBox(height: 4),
-                      _feeRow(cs, 'Soko Vibe Commission (${_sellerFeePercent}%)', context.formatPrice(_totalPrice * _sellerFeePercent / 100), cs.onSurfaceVariant),
+                      _feeRow(cs, context.tr('soko_commission_percent').replaceAll('{0}', '$_sellerFeePercent'), context.formatPrice(_totalPrice * _sellerFeePercent / 100), cs.onSurfaceVariant),
                       const SizedBox(height: 4),
-                      _feeRow(cs, 'Mongike Processing Fee', context.formatPrice(_mongikeFee), cs.secondary),
+                      _feeRow(cs, context.tr('mongike_fee'), context.formatPrice(_mongikeFee), cs.secondary),
                       const SizedBox(height: 6),
                       Container(
                         padding: const EdgeInsets.all(8),
@@ -181,7 +181,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
-                                'Gharama ya usafirishaji itaongezwa baada ya muuzaji kutoa quote',
+                                context.tr('shipping_quote_info'),
                                 style: TextStyle(fontSize: 10, color: cs.primary.withValues(alpha: 0.7)),
                               ),
                             ),
@@ -197,7 +197,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           const SizedBox(height: 20),
 
           // Delivery address
-          Text('Anwani ya Usafirishaji', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: cs.onSurface)),
+          Text(context.tr('shipping_address'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: cs.onSurface)),
           const SizedBox(height: 12),
           GlassContainer(
             blur: 16,
@@ -206,20 +206,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
-                TextField(controller: _regionCtrl, decoration: InputDecoration(hintText: 'Mkoa / Region', border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: true, fillColor: cs.surface.withValues(alpha: 0.5), isDense: true), textCapitalization: TextCapitalization.words, cursorColor: cs.primary),
+                TextField(controller: _regionCtrl, decoration: InputDecoration(hintText: context.tr('region_hint'), border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: true, fillColor: cs.surface.withValues(alpha: 0.5), isDense: true), textCapitalization: TextCapitalization.words, cursorColor: cs.primary),
                 const SizedBox(height: 10),
-                TextField(controller: _districtCtrl, decoration: InputDecoration(hintText: 'Wilaya / District', border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: true, fillColor: cs.surface.withValues(alpha: 0.5), isDense: true), textCapitalization: TextCapitalization.words, cursorColor: cs.primary),
+                TextField(controller: _districtCtrl, decoration: InputDecoration(hintText: context.tr('district_hint'), border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: true, fillColor: cs.surface.withValues(alpha: 0.5), isDense: true), textCapitalization: TextCapitalization.words, cursorColor: cs.primary),
                 const SizedBox(height: 10),
-                TextField(controller: _streetCtrl, decoration: InputDecoration(hintText: 'Mtaa / Street', border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: true, fillColor: cs.surface.withValues(alpha: 0.5), isDense: true), textCapitalization: TextCapitalization.words, cursorColor: cs.primary),
+                TextField(controller: _streetCtrl, decoration: InputDecoration(hintText: context.tr('street_hint'), border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: true, fillColor: cs.surface.withValues(alpha: 0.5), isDense: true), textCapitalization: TextCapitalization.words, cursorColor: cs.primary),
                 const SizedBox(height: 10),
-                TextField(controller: _landmarksCtrl, decoration: InputDecoration(hintText: 'Alama za Jirani / Landmarks', border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: true, fillColor: cs.surface.withValues(alpha: 0.5), isDense: true), textCapitalization: TextCapitalization.words, cursorColor: cs.primary),
+                TextField(controller: _landmarksCtrl, decoration: InputDecoration(hintText: context.tr('landmarks_hint'), border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: true, fillColor: cs.surface.withValues(alpha: 0.5), isDense: true), textCapitalization: TextCapitalization.words, cursorColor: cs.primary),
               ],
             ),
           ),
           const SizedBox(height: 20),
 
           // Phone
-          Text('Namba ya Simu', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14, color: cs.onSurface)),
+          Text(context.tr('phone'), style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14, color: cs.onSurface)),
           const SizedBox(height: 8),
           GlassContainer(
             blur: 16,
@@ -254,7 +254,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Muuzaji atatoa gharama ya usafirishaji. Utalipa jumla ya bidhaa + usafirishaji baada ya kukubaliana.',
+                    context.tr('shipping_info_message'),
                     style: TextStyle(color: cs.secondary, fontSize: 13),
                   ),
                 ),
@@ -272,7 +272,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               icon: _processing
                   ? const GoogleLoading(size: 20, strokeWidth: 2)
                   : const Icon(Icons.send_rounded, size: 20),
-              label: Text(_processing ? 'Inatuma...' : 'Tuma Ombi la Usafirishaji',
+              label: Text(_processing ? context.tr('sending') : context.tr('submit_shipping_request'),
                   style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: cs.primary,
@@ -309,14 +309,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final district = _districtCtrl.text.trim();
     final street = _streetCtrl.text.trim();
 
-    if (phone.isEmpty) { _showError('Tafadhali ingiza namba ya simu'); return; }
+    if (phone.isEmpty) { _showError(context.tr('enter_phone_error')); return; }
     final phoneDigits = phone.replaceAll(RegExp(r'\D'), '');
     final normalizedPhone = phoneDigits.startsWith('0')
         ? '255${phoneDigits.substring(1)}'
         : phoneDigits.startsWith('255')
             ? phoneDigits
             : '255$phoneDigits';
-    if (region.isEmpty || district.isEmpty || street.isEmpty) { _showError('Tafadhali jaza anwani kamili (Mkoa, Wilaya, Mtaa)'); return; }
+    if (region.isEmpty || district.isEmpty || street.isEmpty) { _showError(context.tr('fill_full_address_error')); return; }
 
     setState(() => _processing = true);
     final user = FirebaseAuth.instance.currentUser;
@@ -355,20 +355,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       try {
         NotificationService().sendNotification(
           userId: p.sellerId,
-          title: 'Order Mpya Imewasilishwa!',
-          body: '${user.displayName ?? 'Mnunuzi'} anataka kununua ${p.name}. '
-              'Ingiza gharama ya usafirishaji.',
+          title: context.tr('new_order_title'),
+          body: context.tr('new_order_body')
+              .replaceAll('{0}', user.displayName ?? context.tr('customer'))
+              .replaceAll('{1}', p.name),
           data: {'type': 'order', 'transactionId': orderId},
         );
       } catch (_) {}
 
       if (mounted) {
         setState(() => _processing = false);
-        _showSuccess('Ombi lako limetumwa. Muuzaji atakupa gharama ya usafirishaji.');
+        _showSuccess(context.tr('order_submitted_success'));
         context.go(AppRoutes.myPurchases);
       }
     } catch (e) {
-      _showError('Hitilafu: $e');
+      _showError(context.tr('error_format').replaceAll('{0}', '$e'));
       setState(() => _processing = false);
     }
   }

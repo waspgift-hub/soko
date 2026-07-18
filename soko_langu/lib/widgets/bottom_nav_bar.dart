@@ -82,9 +82,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           ),
         ],
       ),
-      bottomNavigationBar: isDesktop
-          ? null
-          : _buildGlassNavBar(cs),
+      bottomNavigationBar: isDesktop ? null : _buildGlassNavBar(cs),
     );
   }
 
@@ -98,7 +96,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           children: [
             // Glass nav bar background
             Positioned(
-              left: 0, right: 0, bottom: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(40),
                 child: BackdropFilter(
@@ -108,17 +108,41 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                     decoration: BoxDecoration(
                       color: cs.surface.withValues(alpha: 0.02),
                       borderRadius: BorderRadius.circular(40),
-                      border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.06)),
+                      border: Border.all(
+                        color: cs.outlineVariant.withValues(alpha: 0.06),
+                      ),
                       boxShadow: [
-                        BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 32, offset: const Offset(0, 8)),
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.02),
+                          blurRadius: 32,
+                          offset: const Offset(0, 8),
+                        ),
                       ],
                     ),
                     child: Row(
                       children: [
-                        _buildTab(0, Icons.storefront_outlined, Icons.storefront_rounded, context.tr('home'), cs),
-                        _buildTab(1, Icons.diamond_outlined, Icons.diamond_rounded, context.tr('discovery'), cs),
+                        _buildTab(
+                          0,
+                          Icons.storefront_outlined,
+                          Icons.storefront_rounded,
+                          context.tr('home'),
+                          cs,
+                        ),
+                        _buildTab(
+                          1,
+                          Icons.diamond_outlined,
+                          Icons.diamond_rounded,
+                          context.tr('discovery'),
+                          cs,
+                        ),
                         _buildSellTab(cs),
-                        _buildTab(3, Icons.chat_outlined, Icons.chat_rounded, 'Chat', cs),
+                        _buildTab(
+                          3,
+                          Icons.chat_outlined,
+                          Icons.chat_rounded,
+                          'Chat',
+                          cs,
+                        ),
                         _buildProfileTab(cs),
                       ],
                     ),
@@ -132,7 +156,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildTab(int index, IconData icon, IconData activeIcon, String label, ColorScheme cs) {
+  Widget _buildTab(
+    int index,
+    IconData icon,
+    IconData activeIcon,
+    String label,
+    ColorScheme cs,
+  ) {
     final isSelected = _currentIndex == index;
     return Expanded(
       child: GestureDetector(
@@ -141,7 +171,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           duration: const Duration(milliseconds: 200),
           margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
           decoration: BoxDecoration(
-            color: isSelected ? cs.primary.withValues(alpha: 0.15) : Colors.transparent,
+            color: isSelected
+                ? cs.primary.withValues(alpha: 0.15)
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(24),
           ),
           child: Column(
@@ -150,7 +182,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             children: [
               Icon(
                 isSelected ? activeIcon : icon,
-                color: isSelected ? cs.primary : cs.onSurface.withValues(alpha: 0.45),
+                color: isSelected
+                    ? cs.primary
+                    : cs.onSurface.withValues(alpha: 0.45),
                 size: 24,
               ),
               const SizedBox(height: 2),
@@ -158,7 +192,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 label,
                 style: TextStyle(
                   fontSize: 10,
-                  color: isSelected ? cs.primary : cs.onSurface.withValues(alpha: 0.45),
+                  color: isSelected
+                      ? cs.primary
+                      : cs.onSurface.withValues(alpha: 0.45),
                   fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
                 ),
               ),
@@ -178,7 +214,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           duration: const Duration(milliseconds: 200),
           margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
           decoration: BoxDecoration(
-            color: isSelected ? cs.primary.withValues(alpha: 0.15) : Colors.transparent,
+            color: isSelected
+                ? cs.primary.withValues(alpha: 0.15)
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(24),
           ),
           child: Column(
@@ -192,9 +230,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                     ? NetworkImage(_profilePhotoUrl!)
                     : null,
                 child: _profilePhotoUrl == null
-                    ? Icon(Icons.person_outline,
-                        color: isSelected ? cs.primary : cs.onSurface.withValues(alpha: 0.45),
-                        size: 16)
+                    ? Icon(
+                        Icons.person_outline,
+                        color: isSelected
+                            ? cs.primary
+                            : cs.onSurface.withValues(alpha: 0.45),
+                        size: 16,
+                      )
                     : null,
               ),
               const SizedBox(height: 2),
@@ -202,7 +244,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 context.tr('profile'),
                 style: TextStyle(
                   fontSize: 10,
-                  color: isSelected ? cs.primary : cs.onSurface.withValues(alpha: 0.45),
+                  color: isSelected
+                      ? cs.primary
+                      : cs.onSurface.withValues(alpha: 0.45),
                   fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
                 ),
               ),
@@ -217,9 +261,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     return Expanded(
       child: GestureDetector(
         onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const AddProductScreen()),
-          );
+          Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const AddProductScreen()));
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
@@ -232,19 +276,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                width: 48, height: 48,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [cs.primary, cs.primary.withValues(alpha: 0.7)],
-                  ),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(color: cs.primary.withValues(alpha: 0.4), blurRadius: 12, offset: const Offset(0, 4)),
-                  ],
-                ),
-                child: Icon(Icons.add_rounded, color: cs.onPrimary, size: 28),
-              ),
+              Icon(Icons.add_circle_outline, color: cs.primary, size: 24),
               const SizedBox(height: 2),
               Text(
                 'Sell',
@@ -263,17 +295,34 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   Widget _buildSidebar(ColorScheme cs) {
     final navItems = [
-      _NavItem(Icons.storefront_outlined, Icons.storefront_rounded, context.tr('home'), 0),
-      _NavItem(Icons.diamond_outlined, Icons.diamond_rounded, context.tr('discovery'), 1),
+      _NavItem(
+        Icons.storefront_outlined,
+        Icons.storefront_rounded,
+        context.tr('home'),
+        0,
+      ),
+      _NavItem(
+        Icons.diamond_outlined,
+        Icons.diamond_rounded,
+        context.tr('discovery'),
+        1,
+      ),
       _NavItem(Icons.chat_outlined, Icons.chat_rounded, 'Chat', 3),
-      _NavItem(Icons.person_outline, Icons.person_rounded, context.tr('profile'), 4),
+      _NavItem(
+        Icons.person_outline,
+        Icons.person_rounded,
+        context.tr('profile'),
+        4,
+      ),
     ];
 
     return Container(
       width: 240,
       decoration: BoxDecoration(
         color: cs.surface,
-        border: Border(right: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.3))),
+        border: Border(
+          right: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.3)),
+        ),
       ),
       child: Column(
         children: [
@@ -282,15 +331,30 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             child: Row(
               children: [
                 Container(
-                  width: 36, height: 36,
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: [cs.primary, cs.primary.withValues(alpha: 0.7)]),
+                    gradient: LinearGradient(
+                      colors: [cs.primary, cs.primary.withValues(alpha: 0.7)],
+                    ),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(Icons.store_rounded, color: cs.onPrimary, size: 20),
+                  child: Icon(
+                    Icons.store_rounded,
+                    color: cs.onPrimary,
+                    size: 20,
+                  ),
                 ),
                 const SizedBox(width: 12),
-                Text('Soko Vibe', style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w700, fontSize: 18, letterSpacing: -0.3)),
+                Text(
+                  'Soko Vibe',
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18,
+                    letterSpacing: -0.3,
+                  ),
+                ),
               ],
             ),
           ),
@@ -304,7 +368,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                   return Container(
                     margin: const EdgeInsets.only(bottom: 2),
                     decoration: BoxDecoration(
-                      color: isSelected ? cs.primary.withValues(alpha: 0.08) : Colors.transparent,
+                      color: isSelected
+                          ? cs.primary.withValues(alpha: 0.08)
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Material(
@@ -313,24 +379,41 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                         borderRadius: BorderRadius.circular(12),
                         onTap: () => setState(() => _currentIndex = item.index),
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
                           child: Row(
                             children: [
                               Icon(
                                 isSelected ? item.activeIcon : item.icon,
-                                color: isSelected ? cs.primary : cs.onSurface.withValues(alpha: 0.5),
+                                color: isSelected
+                                    ? cs.primary
+                                    : cs.onSurface.withValues(alpha: 0.5),
                                 size: 20,
                               ),
                               const SizedBox(width: 12),
-                              Text(item.label, style: TextStyle(
-                                color: isSelected ? cs.onSurface : cs.onSurface.withValues(alpha: 0.6),
-                                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                                fontSize: 14,
-                              )),
+                              Text(
+                                item.label,
+                                style: TextStyle(
+                                  color: isSelected
+                                      ? cs.onSurface
+                                      : cs.onSurface.withValues(alpha: 0.6),
+                                  fontWeight: isSelected
+                                      ? FontWeight.w600
+                                      : FontWeight.w400,
+                                  fontSize: 14,
+                                ),
+                              ),
                               const Spacer(),
                               if (isSelected)
-                                Container(width: 6, height: 6,
-                                  decoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle),
+                                Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: BoxDecoration(
+                                    color: cs.primary,
+                                    shape: BoxShape.circle,
+                                  ),
                                 ),
                             ],
                           ),
@@ -349,29 +432,45 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                       borderRadius: BorderRadius.circular(12),
                       onTap: () {
                         Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const AddProductScreen()),
+                          MaterialPageRoute(
+                            builder: (_) => const AddProductScreen(),
+                          ),
                         );
                       },
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
                         child: Row(
                           children: [
                             Container(
-                              width: 36, height: 36,
+                              width: 36,
+                              height: 36,
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
-                                  colors: [cs.primary, cs.primary.withValues(alpha: 0.7)],
+                                  colors: [
+                                    cs.primary,
+                                    cs.primary.withValues(alpha: 0.7),
+                                  ],
                                 ),
                                 shape: BoxShape.circle,
                               ),
-                              child: Icon(Icons.add_rounded, color: cs.onPrimary, size: 20),
+                              child: Icon(
+                                Icons.add_rounded,
+                                color: cs.onPrimary,
+                                size: 20,
+                              ),
                             ),
                             const SizedBox(width: 12),
-                            Text('Sell', style: TextStyle(
-                              color: cs.onSurface,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            )),
+                            Text(
+                              'Sell',
+                              style: TextStyle(
+                                color: cs.onSurface,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                            ),
                           ],
                         ),
                       ),

@@ -82,7 +82,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                           const SizedBox(height: 24),
                           Text(
                             sent
-                                ? 'Ingiza OTP'
+                                ? context.tr('enter_otp')
                                 : context.tr('verify_email_title'),
                             style: TextStyle(
                               fontSize: 24,
@@ -93,8 +93,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                           const SizedBox(height: 12),
                           Text(
                             sent
-                                ? 'Tuma OTP uliopokea kwenye barua pepe yako'
-                                : 'OTP itatumwa kwenye barua pepe yako',
+                                ? context.tr('enter_otp_email_sent')
+                                : context.tr('otp_will_be_sent_to_email'),
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: cs.onSurface.withValues(alpha: 0.6),
@@ -188,7 +188,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                                       strokeWidth: 2,
                                     )
                                   : Text(
-                                      'Tuma OTP tena',
+                                      context.tr('resend_otp'),
                                       style: TextStyle(color: cs.primary),
                                     ),
                             ),
@@ -212,7 +212,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                                         strokeWidth: 2,
                                       )
                                     : Text(
-                                        'Tuma OTP',
+                                        context.tr('send_otp'),
                                         style: TextStyle(
                                           color: cs.onPrimary,
                                           fontSize: 16,

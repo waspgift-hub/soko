@@ -85,7 +85,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (_currentPage == 4) {
       final phone = _phoneCtrl.text.trim();
       if (phone.length < 10) {
-        setState(() => _phoneError = 'Ingiza namba sahihi (angalau tarakimu 10)');
+        setState(() => _phoneError = context.tr('enter_valid_phone'));
         return;
       }
     }
@@ -346,7 +346,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
-            'Chagua Lugha / Choose Language',
+            context.tr('onboarding_language_title'),
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
@@ -355,7 +355,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            'Chagua lugha unayotaka kutumia',
+            context.tr('onboarding_language_desc'),
             style: TextStyle(
               fontSize: 14,
               color: cs.onSurface.withValues(alpha: 0.6),
@@ -363,16 +363,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           const SizedBox(height: 40),
           _LangButton(
-            label: 'Kiswahili',
-            sub: 'Swahili',
+            label: context.tr('swahili'),
+            sub: context.tr('swahili'),
             flag: '🇹🇿',
             selected: _selectedLang == 'sw',
             onTap: () => setState(() => _selectedLang = 'sw'),
           ),
           const SizedBox(height: 16),
           _LangButton(
-            label: 'English',
-            sub: 'English',
+            label: context.tr('english'),
+            sub: context.tr('english'),
             flag: '🇬🇧',
             selected: _selectedLang == 'en',
             onTap: () => setState(() => _selectedLang = 'en'),
@@ -399,7 +399,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           const SizedBox(height: 32),
           Text(
-            'Weka namba yako ya simu',
+            context.tr('enter_your_phone'),
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
@@ -408,7 +408,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Itatumika kwa miamala na arifa',
+            context.tr('phone_used_for_txns'),
             style: TextStyle(
               fontSize: 14,
               color: cs.onSurface.withValues(alpha: 0.6),
@@ -420,8 +420,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             keyboardType: TextInputType.phone,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             decoration: InputDecoration(
-              hintText: '255xxxxxxxxx',
-              labelText: 'Namba ya simu',
+              hintText: context.tr('phone_format_hint'),
+              labelText: context.tr('phone'),
               prefixIcon: const Icon(Icons.phone),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
@@ -434,7 +434,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            'Bonyeza "Next" kuendelea au "Skip" kuruka hatua hii',
+            context.tr('onboarding_phone_footer_hint'),
             style: TextStyle(
               fontSize: 12,
               color: cs.onSurface.withValues(alpha: 0.4),

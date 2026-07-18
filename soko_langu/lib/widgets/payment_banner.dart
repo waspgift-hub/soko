@@ -225,19 +225,17 @@ class _PaymentBannerState extends State<_PaymentBanner>
                       : cs.onSurface.withValues(alpha: 0.4),
                 ),
               ],
+              ),
             ),
           ),
         ),
       ),
-            ),
-          ),
-        ),
-      ),
-    );
+    ),
+    ),
+  ),
+);
   }
 }
-
-// ─── Real-time processing banner (listens to Firestore) ────────
 
 class RealtimePaymentBanner {
   static OverlayEntry? _entry;
@@ -308,6 +306,8 @@ class _RealtimePaymentBannerWidgetState
   late final Animation<double> _fadeAnim;
   bool _handled = false;
   String _statusText = '';
+  Timer? _pollTimer;
+  Timer? _timeoutTimer;
 
   @override
   void initState() {
@@ -318,19 +318,47 @@ class _RealtimePaymentBannerWidgetState
     );
     _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeIn);
     _animCtrl.forward();
+
+    _startPollTimer();
+    _startTimeoutTimer();
   }
 
   @override
   void dispose() {
     _animCtrl.dispose();
+    _pollTimer?.cancel();
+    _timeoutTimer?.cancel();
     super.dispose();
+  }
+
+  void _startPollTimer() {
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (_handled) {
+        _pollTimer?.cancel();
+        return;
+      }
+    });
+  }
+
+  void _startTimeoutTimer() {
+    _timeoutTimer = Timer(const Duration(seconds: 120), () {
+      if (!_handled && mounted) {
+        setState(() {
+          _statusText = 'Muda umeisha — malipo hayajathibitishwa. Tafadhali jaribu tena.';
+        });
+        widget.onError?.call('Payment timeout - no confirmation from Mongike');
+        _handleDone();
+      }
+    });
   }
 
   void _handleDone() {
     if (_handled) return;
     _handled = true;
+    _pollTimer?.cancel();
+    _timeoutTimer?.cancel();
     Future.delayed(const Duration(milliseconds: 1500), () {
-      RealtimePaymentBanner.dismiss();
+      if (mounted) RealtimePaymentBanner.dismiss();
     });
   }
 
@@ -350,7 +378,7 @@ class _RealtimePaymentBannerWidgetState
         final status = data?['status'] as String? ?? 'pending';
 
         final isSuccess = widget.successStatuses.contains(status);
-        final isFailed = status == 'failed';
+        final isFailed = status == 'failed' || status == 'cancelled';
         final isProcessing = !isSuccess && !isFailed;
 
         if (isSuccess && !_handled) {
@@ -362,7 +390,9 @@ class _RealtimePaymentBannerWidgetState
 
         if (isFailed && !_handled) {
           final reason =
-              data?['failureReason'] as String? ?? 'Payment failed';
+              data?['failureReason'] as String? ??
+              data?['errorMessage'] as String? ??
+              'Malipo hayajakamilika. Tafadhali jaribu tena.';
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _statusText = reason;
             widget.onError?.call(reason);
@@ -549,7 +579,7 @@ class _RealtimePaymentBannerWidgetState
                                               )
                                             : accent,
                                       ),
-                                      maxLines: 1,
+                                      maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                 ],

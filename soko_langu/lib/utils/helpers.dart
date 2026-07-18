@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:file_picker/file_picker.dart';
+import '../extensions/context_tr.dart';
 import '../services/cloudinary_service.dart';
 import '../widgets/google_loading.dart';
 
@@ -19,18 +20,16 @@ Future<bool> requestPermissionWithDialog(
       final open = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Permission Required'),
-          content: Text(
-            'This permission was permanently denied. Please enable it in app settings.',
-          ),
+          title: Text(ctx.tr('permission_required')),
+          content: Text(ctx.tr('permission_permanently_denied')),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
+              child: Text(ctx.tr('cancel')),
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Open Settings'),
+              child: Text(ctx.tr('open_settings')),
             ),
           ],
         ),
@@ -133,7 +132,7 @@ Future<String?> pickAndUploadImage(BuildContext context) async {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to upload image. Check your connection.'),
+          content: Text(context.tr('failed_to_upload_image')),
           backgroundColor: Colors.red,
         ),
       );

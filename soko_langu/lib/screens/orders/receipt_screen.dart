@@ -14,23 +14,23 @@ class ReceiptScreen extends StatelessWidget {
   final String orderId;
   const ReceiptScreen({super.key, required this.orderId});
 
-  String _escrowLabel(String status) {
+  String _escrowLabel(String status, BuildContext context) {
     switch (status) {
       case 'paid_escrow_held':
       case 'escrow_hold':
-        return 'Secured in Escrow';
+        return context.tr('secured_in_escrow');
       case 'dispatched':
-        return 'Dispatched';
+        return context.tr('dispatched_label');
       case 'delivered':
       case 'delivery_confirmed':
       case 'completed':
-        return 'Delivered & Completed';
+        return context.tr('delivered_and_completed');
       case 'failed':
-        return 'Failed';
+        return context.tr('failed');
       case 'refunded':
-        return 'Refunded';
+        return context.tr('refunded');
       default:
-        return 'Pending';
+        return context.tr('pending');
     }
   }
 
@@ -40,7 +40,7 @@ class ReceiptScreen extends StatelessWidget {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('Risiti'),
+        title: Text(context.tr('receipt')),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
@@ -65,11 +65,11 @@ class ReceiptScreen extends StatelessWidget {
 
             final d = snap.data!.data() as Map<String, dynamic>?;
             if (d == null) {
-              return Center(child: Text('Order not found', style: TextStyle(color: cs.error)));
+              return Center(child: Text(context.tr('order_not_found'), style: TextStyle(color: cs.error)));
             }
 
             final status = d['status'] as String? ?? 'pending';
-            final productName = d['productName'] as String? ?? 'Product';
+            final productName = d['productName'] as String? ?? context.tr('product');
             final price = (d['productPrice'] ?? 0).toDouble();
             final shippingCost = (d['shippingCost'] as num?)?.toDouble() ?? 0;
             final mongikeFee = (d['mongikeFee'] as num?)?.toDouble() ?? 180;
@@ -164,11 +164,11 @@ class ReceiptScreen extends StatelessWidget {
                           child: Icon(Icons.receipt_long, color: cs.primary, size: 36),
                         ),
                         const SizedBox(height: 14),
-                        Text('RISITI YA MALIPO', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: cs.onSurface, letterSpacing: 1)),
+                        Text(context.tr('receipt_title'), style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: cs.onSurface, letterSpacing: 1)),
                         const SizedBox(height: 6),
                         Text('#$orderId', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
                         const SizedBox(height: 2),
-                        Text('Imewekwa: ${createdAt.day}/${createdAt.month}/${createdAt.year} ${createdAt.hour}:${createdAt.minute.toString().padLeft(2, '0')}',
+                        Text('${context.tr('placed_label')}${createdAt.day}/${createdAt.month}/${createdAt.year} ${createdAt.hour}:${createdAt.minute.toString().padLeft(2, '0')}',
                           style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
                       ],
                     ),
@@ -188,7 +188,7 @@ class ReceiptScreen extends StatelessWidget {
                         children: [
                           Icon(_statusIcon(status), size: 16, color: _statusColor(status, cs)),
                           const SizedBox(width: 8),
-                          Text(_statusLabel(status), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _statusColor(status, cs))),
+                          Text(_statusLabel(status, context), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _statusColor(status, cs))),
                         ],
                       ),
                     ),
@@ -200,29 +200,29 @@ class ReceiptScreen extends StatelessWidget {
                   )),
                   const SizedBox(height: 20),
                   // Info sections
-                  _infoSection(cs, 'Maelezo ya Oda', [
-                    _infoRow(cs, 'Bidhaa', productName),
-                    _infoRow(cs, 'Mnunuzi', buyerName),
-                    _infoRow(cs, 'Muuzaji', sellerName),
-                    if (buyerPhone.isNotEmpty) _infoRow(cs, 'Simu ya Mnunuzi', buyerPhone),
-                    if (sellerPhone.isNotEmpty) _infoRow(cs, 'Simu ya Muuzaji', sellerPhone),
+                  _infoSection(cs, context.tr('order_details'), [
+                    _infoRow(cs, context.tr('product'), productName),
+                    _infoRow(cs, context.tr('buyer_label'), buyerName),
+                    _infoRow(cs, context.tr('seller'), sellerName),
+                    if (buyerPhone.isNotEmpty) _infoRow(cs, context.tr('buyer_phone'), buyerPhone),
+                    if (sellerPhone.isNotEmpty) _infoRow(cs, context.tr('seller_phone'), sellerPhone),
                   ]),
                   const SizedBox(height: 16),
                   if (deliveryAddress != null) ...[
-                    _infoSection(cs, 'Anwani ya Usafirishaji', [
-                      _infoRow(cs, 'Mkoa', deliveryAddress['region'] as String? ?? ''),
-                      _infoRow(cs, 'Wilaya', deliveryAddress['district'] as String? ?? ''),
-                      _infoRow(cs, 'Mtaa', deliveryAddress['street'] as String? ?? ''),
+                    _infoSection(cs, context.tr('shipping_address'), [
+                      _infoRow(cs, context.tr('region'), deliveryAddress['region'] as String? ?? ''),
+                      _infoRow(cs, context.tr('district'), deliveryAddress['district'] as String? ?? ''),
+                      _infoRow(cs, context.tr('street'), deliveryAddress['street'] as String? ?? ''),
                       if (deliveryAddress['landmarks'] != null)
-                        _infoRow(cs, 'Alama', deliveryAddress['landmarks'] as String),
+                        _infoRow(cs, context.tr('landmarks'), deliveryAddress['landmarks'] as String),
                     ]),
                     const SizedBox(height: 16),
                   ],
                   // Payment breakdown
-                  _infoSection(cs, 'Mgawanyo wa Malipo', [
-                    _infoRow(cs, 'Bei ya Bidhaa', context.formatPrice(price)),
-                    if (shippingCost > 0) _infoRow(cs, 'Gharama ya Usafirishaji', context.formatPrice(shippingCost), valueColor: cs.secondary),
-                    _infoRow(cs, 'Ada ya Mongike (180 TZS)', context.formatPrice(mongikeFee), valueColor: cs.tertiary),
+                  _infoSection(cs, context.tr('payment_breakdown'), [
+                    _infoRow(cs, context.tr('product_price'), context.formatPrice(price)),
+                    if (shippingCost > 0) _infoRow(cs, context.tr('shipping_cost'), context.formatPrice(shippingCost), valueColor: cs.secondary),
+                    _infoRow(cs, context.tr('mongike_fee_label'), context.formatPrice(mongikeFee), valueColor: cs.tertiary),
                   ]),
                   const SizedBox(height: 8),
                   Container(height: 1, decoration: BoxDecoration(
@@ -231,7 +231,7 @@ class ReceiptScreen extends StatelessWidget {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Text('Jumla', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: cs.onSurface)),
+                      Text(context.tr('total'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: cs.onSurface)),
                       const Spacer(),
                       Text(context.formatPrice(totalAmount),
                           style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900,
@@ -242,7 +242,7 @@ class ReceiptScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 24),
                   // Timeline
-                  Text('Hali ya Oda', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: cs.onSurface)),
+                  Text(context.tr('order_status'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: cs.onSurface)),
                   const SizedBox(height: 12),
                   OrderTimeline(
                     status: txStatus,
@@ -278,7 +278,7 @@ class ReceiptScreen extends StatelessWidget {
                           borderRadius: BorderRadius.circular(30),
                           border: Border.all(color: cs.primary.withValues(alpha: 0.25)),
                         ),
-                        child: Text('Funga', style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600, fontSize: 15)),
+                        child: Text(context.tr('close'), style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600, fontSize: 15)),
                       ),
                     ),
                   ),
@@ -354,30 +354,30 @@ class ReceiptScreen extends StatelessWidget {
     }
   }
 
-  String _statusLabel(String status) {
+  String _statusLabel(String status, BuildContext context) {
     switch (status) {
       case 'awaiting_shipping_quote':
-        return 'Inasuburi Gharama ya Usafirishaji';
+        return context.tr('awaiting_shipping_quote_label');
       case 'awaiting_payment':
-        return 'Inasuburi Malipo';
+        return context.tr('awaiting_payment_label');
       case 'paid_escrow_held':
       case 'escrow_hold':
-        return 'Imelipwa - Escrow';
+        return context.tr('paid_escrow_label');
       case 'dispatched':
-        return 'Imesafirishwa';
+        return context.tr('shipped');
       case 'delivery_confirmed':
-        return 'Imethibitishwa';
+        return context.tr('confirmed');
       case 'delivered':
       case 'completed':
-        return 'Imekamilika';
+        return context.tr('completed');
       case 'disputed':
-        return 'Mgogoro';
+        return context.tr('disputed_label');
       case 'refunded':
-        return 'Imerudishwa';
+        return context.tr('refunded');
       case 'failed':
-        return 'Imeshindwa';
+        return context.tr('failed');
       default:
-        return 'Inasubiri';
+        return context.tr('pending');
     }
   }
 }

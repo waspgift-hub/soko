@@ -5,6 +5,7 @@ import '../../services/analytics_service.dart';
 import '../../models/analytics_models.dart';
 import '../../widgets/glass_container.dart';
 import '../../theme/app_colors.dart';
+import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
 
 class SellerAnalyticsScreen extends StatefulWidget {
@@ -65,7 +66,7 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
           : _data == null
           ? Center(
               child: Text(
-                'Hakuna data',
+                context.tr('no_data'),
                 style: TextStyle(color: cs.onSurfaceVariant),
               ),
             )
@@ -92,10 +93,10 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
 
   Widget _buildSummaryRow(ColorScheme cs, NumberFormat nf) {
     final items = [
-      ('Bidhaa', '${_data!.totalProducts}', Icons.inventory_2, cs.primary),
-      ('Maoni', '${_data!.totalProductViews}', Icons.visibility, cs.secondary),
+      (context.tr('products'), '${_data!.totalProducts}', Icons.inventory_2, cs.primary),
+      (context.tr('reviews'), '${_data!.totalProductViews}', Icons.visibility, cs.secondary),
       (
-        'Mauzo',
+        context.tr('sales'),
         '${_data!.successfulOrders}',
         Icons.shopping_bag,
         cs.successGreen,
@@ -175,7 +176,7 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
               Icon(Icons.trending_up_rounded, color: cs.primary, size: 22),
               const SizedBox(width: 10),
               Text(
-                'Mauzo ya Mwezi',
+                context.tr('monthly_sales'),
                 style: TextStyle(
                   fontWeight: FontWeight.w700,
                   fontSize: 16,
@@ -288,7 +289,7 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
           const SizedBox(height: 16),
           Row(
             children: [
-              _statPill(cs, '${_data!.totalOrders}', 'Jumla', cs.onSurface),
+              _statPill(cs, '${_data!.totalOrders}', context.tr('total'), cs.onSurface),
               const SizedBox(width: 8),
               _statPill(
                 cs,
@@ -441,7 +442,7 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
                     ),
                   ),
                   Text(
-                    'Maoni',
+                    context.tr('reviews'),
                     style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                   ),
                   const SizedBox(height: 8),
@@ -488,7 +489,7 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
               ),
               const SizedBox(width: 10),
               Text(
-                'Bidhaa Maarufu',
+                context.tr('popular_products'),
                 style: TextStyle(
                   fontWeight: FontWeight.w700,
                   fontSize: 16,

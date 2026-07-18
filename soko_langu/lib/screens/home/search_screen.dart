@@ -199,7 +199,7 @@ class _SearchScreenState extends State<SearchScreen> {
             autofocus: true,
             style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
             decoration: InputDecoration(
-              hintText: context.tr('search_products'),
+              hintText: context.tr('search_products_users'),
               hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.54)),
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -405,7 +405,7 @@ class _SearchScreenState extends State<SearchScreen> {
             Icon(Icons.search, size: 72, color: Theme.of(context).colorScheme.outline),
             const SizedBox(height: 16),
             Text(
-              context.tr('search_products'),
+              context.tr('search_products_users'),
               style: TextStyle(
                 fontSize: 18,
                 color: Theme.of(context).colorScheme.onSurfaceVariant,

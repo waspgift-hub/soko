@@ -36,6 +36,7 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
   String? _localImagePath;
   int _wishlistCount = 0;
   double _avgRating = 0;
+  int _refreshKey = 0;
 
   @override
   void initState() {
@@ -53,6 +54,7 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      if (mounted) setState(() => _refreshKey++);
       _refreshProfile();
     }
   }
@@ -116,7 +118,9 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
     final user = FirebaseAuth.instance.currentUser;
     final imageUrl = _localImagePath ?? _profile?.profileImage;
 
-    return Scaffold(
+    return KeyedSubtree(
+      key: ValueKey('profile_$_refreshKey'),
+      child: Scaffold(
       body: PremiumScaffold(
         child: Container(
           decoration: BoxDecoration(
@@ -229,7 +233,7 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
                             children: [
                               Expanded(child: _statCard(Icons.favorite_rounded, context.tr('wishlist'), '$_wishlistCount', cs)),
                               Container(width: 1, height: 40, color: cs.primary.withValues(alpha: 0.1)),
-                              Expanded(child: _statCard(Icons.star_rounded, 'Rating', _avgRating.toStringAsFixed(1), cs)),
+                              Expanded(child: _statCard(Icons.star_rounded, context.tr('rating'), _avgRating.toStringAsFixed(1), cs)),
                             ],
                           ),
                         ),
@@ -300,8 +304,9 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
           ),
         ),
       ),
-      ),
-    );
+    ),
+  ),
+);
   }
 
   Widget _statCard(IconData icon, String label, String value, ColorScheme cs) {
@@ -328,17 +333,20 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
     final isAdmin = _profile?.email == 'admin@soko-langu.com' ||
         user?.email?.toLowerCase() == 'admin@soko-langu.com';
     final actions = [
-      _ActionItem(Icons.swap_horiz_rounded, 'Accounts', () => AccountSwitcherSheet.show(context)),
+      _ActionItem(Icons.swap_horiz_rounded, context.tr('accounts'), () => AccountSwitcherSheet.show(context)),
       _ActionItem(Icons.edit_rounded, context.tr('edit_profile'), () async { await context.push(AppRoutes.editProfile); _refreshProfile(); }),
       _ActionItem(Icons.favorite_rounded, context.tr('wishlist'), () => context.push(AppRoutes.wishlist)),
       _ActionItem(Icons.shopping_bag_rounded, context.tr('my_ads'), () => context.push(AppRoutes.myAds)),
       _ActionItem(Icons.store_rounded, context.tr('customize_shop'), () => context.push(AppRoutes.shopCustomization)),
       _ActionItem(Icons.dashboard_rounded, context.tr('dashboard'), () => context.push(AppRoutes.sellerDashboard)),
-      _ActionItem(Icons.analytics_rounded, 'Takwimu', () => context.push(AppRoutes.sellerAnalytics, extra: FirebaseAuth.instance.currentUser?.uid)),
-      _ActionItem(Icons.auto_awesome_rounded, 'AI Msaidizi', () => context.push(AppRoutes.aiAssistant)),
+      _ActionItem(Icons.analytics_rounded, context.tr('analytics'), () {
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        if (uid != null) context.push(AppRoutes.sellerAnalytics, extra: uid);
+      }),
+      _ActionItem(Icons.auto_awesome_rounded, context.tr('ai_assistant'), () => context.push(AppRoutes.aiAssistant)),
       _ActionItem(Icons.explore_rounded, context.tr('discovery'), () => context.push(AppRoutes.discovery)),
-      _ActionItem(Icons.receipt_long_rounded, 'Manunuzi Yangu', () => context.push(AppRoutes.myPurchases)),
-      _ActionItem(Icons.verified_rounded, 'KYC', () => context.push(AppRoutes.kyc)),
+      _ActionItem(Icons.receipt_long_rounded, context.tr('my_purchases'), () => context.push(AppRoutes.myPurchases)),
+      _ActionItem(Icons.verified_rounded, context.tr('kyc'), () => context.push(AppRoutes.kyc)),
     ];
     if (isAdmin) {
       actions.add(_ActionItem(Icons.admin_panel_settings_rounded, context.tr('admin_dashboard'), () => context.push(AppRoutes.admin)));
@@ -404,7 +412,9 @@ class _AiChatBoxState extends State<_AiChatBox> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _msgs.add('Habari! Mimi ni msaidizi wako. Uliza chochote kuhusu bidhaa, maagizo, au soko.');
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _msgs.add(context.tr('ai_chat_greeting'));
+    });
     _pulseCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2000),
@@ -433,7 +443,7 @@ class _AiChatBoxState extends State<_AiChatBox> with TickerProviderStateMixin {
       final reply = await _ai.sendMessage(text);
       if (mounted) setState(() => _msgs.add(reply));
     } catch (_) {
-      if (mounted) setState(() => _msgs.add('Samahani, kuna tatizo. Tafadhali jaribu tena.'));
+      if (mounted) setState(() => _msgs.add(context.tr('ai_generic_error')));
     }
     if (mounted) setState(() => _loading = false);
   }
@@ -493,7 +503,7 @@ class _AiChatBoxState extends State<_AiChatBox> with TickerProviderStateMixin {
                     ),
                   ),
                   const SizedBox(width: 14),
-                  Text('AI Msaidizi', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17, color: cs.onSurface, letterSpacing: -0.3)),
+                  Text(context.tr('ai_assistant'), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17, color: cs.onSurface, letterSpacing: -0.3)),
                   const Spacer(),
                   GestureDetector(
                     onTap: () => context.push(AppRoutes.aiAssistant),
@@ -507,7 +517,7 @@ class _AiChatBoxState extends State<_AiChatBox> with TickerProviderStateMixin {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text('Fungua', style: TextStyle(fontSize: 12, color: cs.primary, fontWeight: FontWeight.w600)),
+                          Text(context.tr('open'), style: TextStyle(fontSize: 12, color: cs.primary, fontWeight: FontWeight.w600)),
                           const SizedBox(width: 4),
                           Icon(Icons.arrow_forward_ios, size: 10, color: cs.primary),
                         ],
@@ -580,7 +590,7 @@ class _AiChatBoxState extends State<_AiChatBox> with TickerProviderStateMixin {
                     children: [
                       const GoogleLoading(size: 18, strokeWidth: 2),
                       const SizedBox(width: 8),
-                      Text('Inaandika...', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                      Text(context.tr('typing'), style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
                     ],
                   ),
                 ),
@@ -603,7 +613,7 @@ class _AiChatBoxState extends State<_AiChatBox> with TickerProviderStateMixin {
                             textInputAction: TextInputAction.send,
                             onSubmitted: (_) => _send(),
                             decoration: InputDecoration(
-                              hintText: 'Uliza swali...',
+                              hintText: context.tr('type_question'),
                               border: InputBorder.none,
                               enabledBorder: InputBorder.none,
                               focusedBorder: InputBorder.none,
@@ -641,3 +651,4 @@ class _AiChatBoxState extends State<_AiChatBox> with TickerProviderStateMixin {
     );
   }
 }
+

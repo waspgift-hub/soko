@@ -32,13 +32,30 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     setState(() => _payingTxId = txId);
+
     try {
+      final existingStatus = d['status'] as String? ?? '';
+      if (existingStatus == 'completed' || existingStatus == 'delivered' || existingStatus == 'delivery_confirmed') {
+        _showSuccess(context.tr('order_already_paid'));
+        setState(() => _payingTxId = null);
+        return;
+      }
+
       final productPrice = (d['productPrice'] as num?)?.toDouble() ?? 0;
       final shippingCost = (d['shippingCost'] as num?)?.toDouble() ?? 0;
-      final productName = d['productName'] as String? ?? 'Product';
+      final productName = d['productName'] as String? ?? context.tr('product');
       final productId = d['productId'] as String? ?? '';
       final sellerId = d['sellerId'] as String? ?? '';
       final sellerName = d['sellerName'] as String? ?? '';
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.tr('preparing_payment_wait')),
+          backgroundColor: Theme.of(context).colorScheme.primary,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+
       final result = await MongikeService.initiateMarketplacePayment(
         productPrice: productPrice, productName: productName,
         productId: productId, sellerId: sellerId, sellerName: sellerName,
@@ -46,15 +63,17 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
         buyerId: user.uid, deliveryType: 'local',
         shippingCost: shippingCost, existingTransactionId: txId,
       );
+
       if (result['order_id'] == null) {
-        final errMsg = result['error'] as String? ?? 'Failed to initiate payment';
+        final errMsg = result['error'] as String? ?? context.tr('payment_initiation_failed');
         _showError(errMsg);
         setState(() => _payingTxId = null);
         return;
       }
-      if (mounted) _showSuccess('Angalia simu yako — weka PIN kukamilisha malipo.');
+
+      if (mounted) _showSuccess(context.tr('check_phone_enter_pin'));
     } catch (e) {
-      _showError('Payment error: $e');
+      _showError('${context.tr('payment_error')}: $e');
     }
     setState(() => _payingTxId = null);
   }
@@ -98,11 +117,11 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Fungua Mgogoro?'),
-        content: const Text('Hii itaarifu admin kukagua muamala huu.'),
+        title: Text(context.tr('dispute_title')),
+        content: Text(context.tr('dispute_notify_admin')),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Fungua')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.tr('open'))),
         ],
       ),
     );
@@ -118,12 +137,12 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
       );
       final result = jsonDecode(resp.body);
       if (resp.statusCode == 200 && result['success'] == true) {
-        _showSuccess('Mgogoro umefunguliwa. Admin atakagua.');
+        _showSuccess(context.tr('dispute_opened_msg'));
       } else {
-        _showError(result['error'] ?? 'Failed to raise dispute');
+        _showError(result['error'] ?? context.tr('dispute_failed'));
       }
     } catch (e) {
-      _showError('Error: $e');
+      _showError('${context.tr('error')}: $e');
     }
     setState(() => _disputingTxId = null);
   }
@@ -132,11 +151,11 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Ghairi Oda?'),
-        content: const Text('Hii itarudisha hela yako yote kupitia Mongike. Hakikisha hujapokea mzigo.'),
+        title: Text(context.tr('cancel_order_title')),
+        content: Text(context.tr('cancel_order_refund_message')),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white), child: const Text('Ndiyo, Ghairi')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white), child: Text(context.tr('yes_cancel'))),
         ],
       ),
     );
@@ -152,12 +171,12 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
       );
       final result = jsonDecode(resp.body);
       if (resp.statusCode == 200 && result['success'] == true) {
-        _showSuccess('Oda imeghairiwa. Hela yako imerudishwa.');
+        _showSuccess(context.tr('order_cancelled_refunded'));
       } else {
-        _showError(result['error'] ?? 'Failed to cancel order');
+        _showError(result['error'] ?? context.tr('cancel_order_failed'));
       }
     } catch (e) {
-      _showError('Error: $e');
+      _showError('${context.tr('error')}: $e');
     }
     setState(() => _cancellingTxId = null);
   }
@@ -174,12 +193,12 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
 
   String _escrowLabel(String status) {
     switch (status) {
-      case 'paid_escrow_held': case 'escrow_hold': return 'Secured in Escrow';
-      case 'dispatched': return 'Dispatched';
-      case 'delivered': case 'delivery_confirmed': case 'completed': return 'Delivered & Completed';
-      case 'failed': return 'Failed';
-      case 'refunded': return 'Refunded';
-      default: return 'Pending';
+      case 'paid_escrow_held': case 'escrow_hold': return context.tr('secured_in_escrow');
+      case 'dispatched': return context.tr('dispatched_label');
+      case 'delivered': case 'delivery_confirmed': case 'completed': return context.tr('delivered_and_completed');
+      case 'failed': return context.tr('failed');
+      case 'refunded': return context.tr('refunded');
+      default: return context.tr('pending');
     }
   }
 
@@ -294,13 +313,13 @@ class _OrderGlassCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final status = data['status'] as String? ?? 'pending';
-    final productName = data['productName'] as String? ?? 'Product';
+    final productName = data['productName'] as String? ?? context.tr('product');
     final price = (data['productPrice'] ?? 0).toDouble();
     final shippingCost = (data['shippingCost'] as num?)?.toDouble();
     final totalAmount = (data['totalAmount'] as num?)?.toDouble() ?? price;
     final createdAt = data['createdAt'];
     final dateStr = createdAt is Timestamp
-        ? DateFormat('dd MMM yyyy').format(createdAt.toDate())
+        ? DateFormat('dd MMM yyyy HH:mm').format(createdAt.toDate())
         : '';
     final sellerName = data['sellerName'] as String? ?? '';
     final paymentMethod = data['paymentMethod'] as String? ?? 'Mongike';
@@ -342,11 +361,11 @@ class _OrderGlassCard extends StatelessWidget {
                   const SizedBox(height: 16),
                   _OrderStatusTimeline(status: status, cs: cs),
                   const SizedBox(height: 16),
-                  _buildInfoChips(cs, price, shippingCost, totalAmount, paymentMethod),
+                  _buildInfoChips(context, cs, price, shippingCost, totalAmount, paymentMethod),
                   const SizedBox(height: 16),
                   _buildActions(context, cs, status, price, shippingCost, totalAmount),
                   if (status == 'delivered' || status == 'delivery_confirmed' || status == 'completed')
-                    _buildReceiptCard(cs, isDark),
+                    _buildReceiptCard(context, cs, isDark),
                 ],
               ),
             ),
@@ -359,6 +378,7 @@ class _OrderGlassCard extends StatelessWidget {
   Widget _buildHeader(BuildContext context, ColorScheme cs, String productName, String sellerName, String date, String orderId) {
     final sellerId = data['sellerId'] as String? ?? '';
     final buyerName = data['buyerName'] as String? ?? '';
+    final productImage = data['productImage'] as String? ?? '';
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -370,10 +390,16 @@ class _OrderGlassCard extends StatelessWidget {
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(15),
-            child: Container(
-              color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
-              child: Icon(Icons.image_rounded, color: cs.onSurfaceVariant.withValues(alpha: 0.3)),
-            ),
+            child: productImage.isNotEmpty
+                ? Image.network(productImage, fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => Container(
+                      color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
+                      child: Icon(Icons.image_rounded, color: cs.onSurfaceVariant.withValues(alpha: 0.3)),
+                    ))
+                : Container(
+                    color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
+                    child: Icon(Icons.image_rounded, color: cs.onSurfaceVariant.withValues(alpha: 0.3)),
+                  ),
           ),
         ),
         const SizedBox(width: 14),
@@ -384,20 +410,21 @@ class _OrderGlassCard extends StatelessWidget {
               Text(
                 productName,
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: cs.onSurface),
-                maxLines: 1, overflow: TextOverflow.ellipsis,
+                maxLines: 2, overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 6),
               Row(
                 children: [
-                  Icon(Icons.store_rounded, size: 11, color: cs.primary),
+                  Icon(Icons.person_outline, size: 12, color: cs.secondary),
                   const SizedBox(width: 4),
+                  Text(context.tr('seller') + ': ', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
                   GestureDetector(
                     onTap: sellerId.isNotEmpty
                         ? () => ChatNavigation.openSellerChat(context, sellerId, sellerName)
                         : null,
                     child: Row(
                       children: [
-                        Text(sellerName, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                        Text(sellerName, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.primary)),
                         if (sellerId.isNotEmpty) ...[
                           const SizedBox(width: 4),
                           Icon(Icons.chat_outlined, size: 10, color: cs.primary),
@@ -409,20 +436,30 @@ class _OrderGlassCard extends StatelessWidget {
               ),
               if (buyerName.isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.only(top: 2),
+                  padding: const EdgeInsets.only(top: 3),
                   child: Row(
                     children: [
-                      Icon(Icons.person_outline, size: 11, color: cs.secondary),
+                      Icon(Icons.person, size: 12, color: cs.tertiary),
                       const SizedBox(width: 4),
-                      Text(buyerName,
-                          style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                      Text(context.tr('buyer') + ': ', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+                      Text(buyerName, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.onSurface)),
                     ],
                   ),
                 ),
-              const SizedBox(height: 2),
-              Text('#$orderId', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
-              if (date.isNotEmpty)
-                Text(date, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
+              const SizedBox(height: 3),
+              Row(
+                children: [
+                  Icon(Icons.tag, size: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+                  const SizedBox(width: 4),
+                  Text('#$orderId', style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
+                  if (date.isNotEmpty) ...[
+                    const SizedBox(width: 12),
+                    Icon(Icons.access_time, size: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+                    const SizedBox(width: 4),
+                    Text(date, style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
+                  ],
+                ],
+              ),
             ],
           ),
         ),
@@ -430,16 +467,16 @@ class _OrderGlassCard extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoChips(ColorScheme cs, double price, double? shipping, double total, String method) {
+  Widget _buildInfoChips(BuildContext context, ColorScheme cs, double price, double? shipping, double total, String method) {
     final platformFee = (data['platformFee'] as num?)?.toDouble() ?? (data['sokoLanguCommission'] as num?)?.toDouble() ?? 0;
     final processingFee = (data['processingFee'] as num?)?.toDouble() ?? 0;
     final sellerReceives = (data['sellerReceives'] as num?)?.toDouble() ?? 0;
 
     final chips = <Widget>[
-      _chip(cs, '${_nf(price.toInt())} TZS', Icons.sell_outlined, cs.primary),
-      if (shipping != null) _chip(cs, '${_nf(shipping.toInt())} TZS', Icons.local_shipping_outlined, cs.secondary),
-      _chip(cs, '${_nf(total.toInt())} TZS', Icons.receipt_outlined, cs.tertiary),
-      _chip(cs, method, Icons.payment_outlined, cs.whatsappGreen),
+      _chip(cs, '${_nf(price.toInt())} TZS', Icons.sell_outlined, cs.primary, context.tr('product_price')),
+      if (shipping != null) _chip(cs, '${_nf(shipping.toInt())} TZS', Icons.local_shipping_outlined, cs.secondary, context.tr('shipping_label')),
+      _chip(cs, '${_nf(total.toInt())} TZS', Icons.receipt_outlined, cs.tertiary, context.tr('total')),
+      _chip(cs, method, Icons.payment_outlined, cs.whatsappGreen, context.tr('payment_method')),
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -457,14 +494,14 @@ class _OrderGlassCard extends StatelessWidget {
             child: Column(
               children: [
                 if (processingFee > 0)
-                  _feeRow(cs, Icons.monetization_on_outlined, 'Ada ya usindikaji',
+                  _feeRow(cs, Icons.monetization_on_outlined, context.tr('processing_fee'),
                       '${_nf(processingFee.toInt())} TZS', cs.onSurfaceVariant),
                 if (platformFee > 0)
-                  _feeRow(cs, Icons.percent_outlined, 'Soko Vibe commission',
+                  _feeRow(cs, Icons.percent_outlined, context.tr('soko_commission'),
                       '-${_nf(platformFee.toInt())} TZS', cs.tertiary),
                 if (sellerReceives > 0) ...[
                   const Divider(height: 16),
-                  _feeRow(cs, Icons.account_balance_wallet_outlined, 'Muuzaji anapokea',
+                  _feeRow(cs, Icons.account_balance_wallet_outlined, context.tr('seller_receives'),
                       '${_nf(sellerReceives.toInt())} TZS', cs.successGreen),
                 ],
               ],
@@ -472,6 +509,28 @@ class _OrderGlassCard extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+
+  Widget _chip(ColorScheme cs, String label, IconData icon, Color color, String tooltip) {
+    return Tooltip(
+      message: tooltip,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withValues(alpha: 0.15), width: 0.5),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 12, color: color),
+            const SizedBox(width: 4),
+            Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
+          ],
+        ),
+      ),
     );
   }
 
@@ -486,25 +545,6 @@ class _OrderGlassCard extends StatelessWidget {
             child: Text(label, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
           ),
           Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: valueColor)),
-        ],
-      ),
-    );
-  }
-
-  Widget _chip(ColorScheme cs, String label, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.15), width: 0.5),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: color),
-          const SizedBox(width: 4),
-          Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
         ],
       ),
     );
@@ -526,7 +566,7 @@ class _OrderGlassCard extends StatelessWidget {
               icon: payingTxId == docId
                   ? const GoogleLoading(size: 20, strokeWidth: 2)
                   : const Icon(Icons.payment, size: 18),
-              label: Text(payingTxId == docId ? 'Inalipa...' : 'Lipa ${_nf(total)} TZS'),
+              label: Text(payingTxId == docId ? context.tr('paying_label') : context.tr('pay_amount_tzs').replaceAll('{0}', _nf(total))),
               style: ElevatedButton.styleFrom(
                 backgroundColor: cs.primary,
                 foregroundColor: cs.surface,
@@ -543,7 +583,7 @@ class _OrderGlassCard extends StatelessWidget {
               icon: releasingTxId == docId
                   ? const GoogleLoading(size: 20, strokeWidth: 2)
                   : const Icon(Icons.verified, size: 18),
-              label: Text(releasingTxId == docId ? 'Inathibitisha...' : context.tr('confirm_receipt')),
+              label: Text(releasingTxId == docId ? context.tr('confirming_label') : context.tr('confirm_receipt')),
               style: ElevatedButton.styleFrom(
                 backgroundColor: cs.successGreen,
                 foregroundColor: cs.surface,
@@ -558,7 +598,7 @@ class _OrderGlassCard extends StatelessWidget {
             child: ElevatedButton.icon(
               onPressed: null,
               icon: const Icon(Icons.hourglass_empty, size: 18),
-              label: const Text('Inasuburi Muuzaji'),
+              label: Text(context.tr('waiting_for_seller_label')),
               style: ElevatedButton.styleFrom(
                 backgroundColor: cs.surfaceContainerHighest.withValues(alpha: 0.3),
                 foregroundColor: cs.onSurfaceVariant,
@@ -579,7 +619,7 @@ class _OrderGlassCard extends StatelessWidget {
                       icon: disputingTxId == docId
                       ? const GoogleLoading(size: 16, strokeWidth: 2)
                       : const Icon(Icons.gavel, size: 16),
-                      label: Text('Mgogoro'),
+                      label: Text(context.tr('dispute_button')),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: cs.error,
                         side: BorderSide(color: cs.error.withValues(alpha: 0.3)),
@@ -595,7 +635,7 @@ class _OrderGlassCard extends StatelessWidget {
                       icon: cancellingTxId == docId
                       ? const GoogleLoading(size: 16, strokeWidth: 2)
                       : const Icon(Icons.money_off, size: 16),
-                      label: const Text('Ghairi'),
+                      label: Text(context.tr('cancel')),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: cs.error,
                         side: BorderSide(color: cs.error.withValues(alpha: 0.3)),
@@ -610,7 +650,10 @@ class _OrderGlassCard extends StatelessWidget {
     );
   }
 
-  Widget _buildReceiptCard(ColorScheme cs, bool isDark) {
+  Widget _buildReceiptCard(BuildContext context, ColorScheme cs, bool isDark) {
+    final status = data['status'] as String? ?? 'pending';
+    final paymentMethod = data['paymentMethod'] as String? ?? 'Mongike';
+    final totalAmount = (data['totalAmount'] as num?)?.toDouble() ?? (data['productPrice'] as num?)?.toDouble() ?? 0;
     return Padding(
       padding: const EdgeInsets.only(top: 16),
       child: Container(
@@ -632,7 +675,7 @@ class _OrderGlassCard extends StatelessWidget {
               children: [
                 Icon(Icons.receipt_long_rounded, color: cs.primary, size: 20),
                 const SizedBox(width: 8),
-                Text('Stakabadhi', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: cs.onSurface)),
+                Text(context.tr('receipt'), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: cs.onSurface)),
                 const Spacer(),
                 Icon(Icons.download_rounded, color: cs.primary, size: 18),
                 const SizedBox(width: 12),
@@ -640,12 +683,12 @@ class _OrderGlassCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            _receiptRow(cs, 'Order ID', docId, cs.onSurfaceVariant),
-            _receiptRow(cs, 'Jumla', '${_nf(totalAmount.toInt())} TZS', cs.primary),
+            _receiptRow(cs, context.tr('order_id'), docId, cs.onSurfaceVariant),
+            _receiptRow(cs, context.tr('total'), '${_nf(totalAmount.toInt())} TZS', cs.primary),
             if (data['shippingCost'] != null)
-              _receiptRow(cs, 'Usafirishaji', '${_nf((data['shippingCost'] as num).toInt())} TZS', cs.onSurfaceVariant),
-            _receiptRow(cs, 'Malipo', paymentMethod, cs.onSurfaceVariant),
-            _receiptRow(cs, 'Hali', escrowLabel(status), cs.successGreen),
+              _receiptRow(cs, context.tr('shipping_label'), '${_nf((data['shippingCost'] as num).toInt())} TZS', cs.onSurfaceVariant),
+            _receiptRow(cs, context.tr('payment_method'), paymentMethod, cs.onSurfaceVariant),
+            _receiptRow(cs, context.tr('status'), escrowLabel(status), cs.successGreen),
           ],
         ),
       ),
@@ -682,7 +725,7 @@ class _OrderStatusTimeline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final steps = _buildSteps();
+    final steps = _buildSteps(context);
     final current = _currentIndex();
 
     return Column(
@@ -719,7 +762,7 @@ class _OrderStatusTimeline extends StatelessWidget {
                         color: active ? cs.onSurface : cs.onSurfaceVariant.withValues(alpha: 0.5),
                       ),
                     ),
-                    if (glowing && current < _totalSteps() - 1)
+                    if (glowing && current < _totalSteps(context) - 1)
                       AnimatedContainer(
                         duration: const Duration(milliseconds: 600),
                         margin: const EdgeInsets.only(top: 2),
@@ -741,7 +784,7 @@ class _OrderStatusTimeline extends StatelessWidget {
     );
   }
 
-  int _totalSteps() => _buildSteps().length;
+  int _totalSteps(BuildContext context) => _buildSteps(context).length;
 
   int _currentIndex() {
     switch (status) {
@@ -758,15 +801,15 @@ class _OrderStatusTimeline extends StatelessWidget {
     }
   }
 
-  List<_TimelineStep> _buildSteps() {
+  List<_TimelineStep> _buildSteps(BuildContext context) {
     return [
-      _TimelineStep('Imepokelewa', Icons.access_time_rounded, cs.onSurfaceVariant),
-      _TimelineStep('Gharama ya Usafirishaji', Icons.local_shipping_outlined, Colors.orange),
-      _TimelineStep('Inasuburi Malipo', Icons.account_balance_wallet_outlined, Colors.blue),
-      _TimelineStep('Kwenye Escrow', Icons.verified_user_outlined, Colors.purple),
-      _TimelineStep('Imesafirishwa', Icons.inventory_2_outlined, cs.successGreen),
-      _TimelineStep('Imethibitishwa', Icons.check_circle_outline, cs.successGreen),
-      _TimelineStep('Imekamilika', Icons.check_circle_rounded, cs.successGreen),
+      _TimelineStep(context.tr('step_received'), Icons.access_time_rounded, cs.onSurfaceVariant),
+      _TimelineStep(context.tr('step_shipping_quote'), Icons.local_shipping_outlined, Colors.orange),
+      _TimelineStep(context.tr('waiting_payment'), Icons.account_balance_wallet_outlined, Colors.blue),
+      _TimelineStep(context.tr('step_in_escrow'), Icons.verified_user_outlined, Colors.purple),
+      _TimelineStep(context.tr('shipped'), Icons.inventory_2_outlined, cs.successGreen),
+      _TimelineStep(context.tr('confirmed'), Icons.check_circle_outline, cs.successGreen),
+      _TimelineStep(context.tr('completed'), Icons.check_circle_rounded, cs.successGreen),
     ];
   }
 }
