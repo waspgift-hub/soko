@@ -471,6 +471,11 @@ class _OrderGlassCard extends StatelessWidget {
     final platformFee = (data['platformFee'] as num?)?.toDouble() ?? (data['sokoLanguCommission'] as num?)?.toDouble() ?? 0;
     final processingFee = (data['processingFee'] as num?)?.toDouble() ?? 0;
     final sellerReceives = (data['sellerReceives'] as num?)?.toDouble() ?? 0;
+    final buyerPhone = data['buyerPhone'] as String? ?? '';
+    final sellerPhone = data['sellerPhone'] as String? ?? '';
+    final deliveryAddress = data['deliveryAddress'] as Map<String, dynamic>?;
+    final dispatchProof = data['dispatchProof'] as Map<String, dynamic>?;
+    final buyerName = data['buyerName'] as String? ?? '';
 
     final chips = <Widget>[
       _chip(cs, '${_nf(price.toInt())} TZS', Icons.sell_outlined, cs.primary, context.tr('product_price')),
@@ -482,33 +487,95 @@ class _OrderGlassCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Wrap(spacing: 6, runSpacing: 6, children: chips),
+        const SizedBox(height: 14),
+        // Order details section
+        _detailSection(cs, context.tr('order_details'), [
+          _detailRow(cs, context.tr('buyer_label'), buyerName, Icons.person_outline),
+          if (buyerPhone.isNotEmpty) _detailRow(cs, context.tr('phone'), buyerPhone, Icons.phone_outlined),
+          if (sellerPhone.isNotEmpty) _detailRow(cs, context.tr('seller_phone'), sellerPhone, Icons.phone_outlined),
+        ]),
+        // Delivery address
+        if (deliveryAddress != null) ...[
+          const SizedBox(height: 10),
+          _detailSection(cs, context.tr('shipping_address'), [
+            if (deliveryAddress['region'] != null)
+              _detailRow(cs, context.tr('region'), deliveryAddress['region'] as String, Icons.location_on_outlined),
+            if (deliveryAddress['district'] != null)
+              _detailRow(cs, context.tr('district'), deliveryAddress['district'] as String, Icons.map_outlined),
+            if (deliveryAddress['street'] != null)
+              _detailRow(cs, context.tr('street'), deliveryAddress['street'] as String, Icons.signpost_outlined),
+            if (deliveryAddress['landmarks'] != null)
+              _detailRow(cs, context.tr('landmarks'), deliveryAddress['landmarks'] as String, Icons.landscape_outlined),
+          ]),
+        ],
+        // Dispatch details
+        if (dispatchProof != null) ...[
+          const SizedBox(height: 10),
+          _detailSection(cs, context.tr('shipping_details'), [
+            if (dispatchProof['courierName'] != null)
+              _detailRow(cs, context.tr('courier_company_name'), dispatchProof['courierName'] as String, Icons.local_shipping_outlined),
+            if (dispatchProof['trackingNumber'] != null)
+              _detailRow(cs, context.tr('tracking_number'), dispatchProof['trackingNumber'] as String, Icons.qr_code_outlined),
+            if (dispatchProof['driverPhone'] != null)
+              _detailRow(cs, context.tr('driver_phone'), dispatchProof['driverPhone'] as String, Icons.phone_outlined),
+            if (dispatchProof['notes'] != null)
+              _detailRow(cs, context.tr('additional_notes'), dispatchProof['notes'] as String, Icons.notes_outlined),
+          ]),
+        ],
+        // Fee breakdown
         if (platformFee > 0 || processingFee > 0 || sellerReceives > 0) ...[
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerHighest.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.12)),
-            ),
-            child: Column(
-              children: [
-                if (processingFee > 0)
-                  _feeRow(cs, Icons.monetization_on_outlined, context.tr('processing_fee'),
-                      '${_nf(processingFee.toInt())} TZS', cs.onSurfaceVariant),
-                if (platformFee > 0)
-                  _feeRow(cs, Icons.percent_outlined, context.tr('soko_commission'),
-                      '-${_nf(platformFee.toInt())} TZS', cs.tertiary),
-                if (sellerReceives > 0) ...[
-                  const Divider(height: 16),
-                  _feeRow(cs, Icons.account_balance_wallet_outlined, context.tr('seller_receives'),
-                      '${_nf(sellerReceives.toInt())} TZS', cs.successGreen),
-                ],
-              ],
-            ),
-          ),
+          const SizedBox(height: 10),
+          _detailSection(cs, context.tr('payment_breakdown'), [
+            if (platformFee > 0)
+              _detailRow(cs, context.tr('soko_commission'), '-${_nf(platformFee.toInt())} TZS', Icons.percent_outlined, valueColor: cs.tertiary),
+            if (processingFee > 0)
+              _detailRow(cs, context.tr('processing_fee'), '${_nf(processingFee.toInt())} TZS', Icons.monetization_on_outlined, valueColor: cs.onSurfaceVariant),
+            if (sellerReceives > 0) ...[
+              const SizedBox(height: 4),
+              Container(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)),
+              const SizedBox(height: 4),
+              _detailRow(cs, context.tr('seller_receives'), '${_nf(sellerReceives.toInt())} TZS', Icons.account_balance_wallet_outlined, valueColor: cs.successGreen),
+            ],
+          ]),
         ],
       ],
+    );
+  }
+
+  Widget _detailSection(ColorScheme cs, String title, List<Widget> rows) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: cs.primary, letterSpacing: 0.5)),
+          const SizedBox(height: 10),
+          ...rows,
+        ],
+      ),
+    );
+  }
+
+  Widget _detailRow(ColorScheme cs, String label, String value, IconData icon, {Color? valueColor}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 14, color: cs.onSurfaceVariant.withValues(alpha: 0.6)),
+          const SizedBox(width: 8),
+          SizedBox(width: 80, child: Text(label, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant))),
+          Expanded(
+            child: Text(value, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: valueColor ?? cs.onSurface)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -530,22 +597,6 @@ class _OrderGlassCard extends StatelessWidget {
             Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _feeRow(ColorScheme cs, IconData icon, String label, String value, Color valueColor) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        children: [
-          Icon(icon, size: 14, color: valueColor),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(label, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-          ),
-          Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: valueColor)),
-        ],
       ),
     );
   }
@@ -653,11 +704,21 @@ class _OrderGlassCard extends StatelessWidget {
   Widget _buildReceiptCard(BuildContext context, ColorScheme cs, bool isDark) {
     final status = data['status'] as String? ?? 'pending';
     final paymentMethod = data['paymentMethod'] as String? ?? 'Mongike';
-    final totalAmount = (data['totalAmount'] as num?)?.toDouble() ?? (data['productPrice'] as num?)?.toDouble() ?? 0;
+    final productPrice = (data['productPrice'] as num?)?.toDouble() ?? 0;
+    final shippingCost = (data['shippingCost'] as num?)?.toDouble() ?? 0;
+    final mongikeFee = (data['processingFee'] as num?)?.toDouble() ?? 0;
+    final totalAmount = (data['totalAmount'] as num?)?.toDouble() ?? productPrice;
+    final buyerName = data['buyerName'] as String? ?? '';
+    final buyerPhone = data['buyerPhone'] as String? ?? '';
+    final createdAt = data['createdAt'];
+    final dateStr = createdAt is Timestamp
+        ? DateFormat('dd/MM/yyyy HH:mm').format(createdAt.toDate())
+        : '';
+
     return Padding(
       padding: const EdgeInsets.only(top: 16),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
@@ -666,33 +727,68 @@ class _OrderGlassCard extends StatelessWidget {
                 ? [cs.surface.withValues(alpha: 0.2), cs.surfaceContainerLow.withValues(alpha: 0.12)]
                 : [cs.primary.withValues(alpha: 0.04), cs.secondary.withValues(alpha: 0.04)],
           ),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(24),
           border: Border.all(color: cs.primary.withValues(alpha: 0.1), width: 0.5),
         ),
         child: Column(
           children: [
             Row(
               children: [
-                Icon(Icons.receipt_long_rounded, color: cs.primary, size: 20),
-                const SizedBox(width: 8),
-                Text(context.tr('receipt'), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: cs.onSurface)),
-                const Spacer(),
-                Icon(Icons.download_rounded, color: cs.primary, size: 18),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: cs.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.receipt_long_rounded, color: cs.primary, size: 22),
+                ),
                 const SizedBox(width: 12),
-                Icon(Icons.share_rounded, color: cs.primary, size: 18),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(context.tr('purchase_receipt'), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: cs.onSurface)),
+                    const SizedBox(height: 2),
+                    Text('#$docId', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+                  ],
+                ),
+                const Spacer(),
+                Icon(Icons.download_rounded, color: cs.primary, size: 20),
+                const SizedBox(width: 14),
+                Icon(Icons.share_rounded, color: cs.primary, size: 20),
               ],
             ),
+            const SizedBox(height: 16),
+            Container(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)),
+            const SizedBox(height: 16),
+            _receiptRow(cs, context.tr('receipt_date'), dateStr, cs.onSurfaceVariant),
+            _receiptRow(cs, context.tr('product_price'), '${_nf(productPrice.toInt())} TZS', cs.onSurfaceVariant),
+            if (shippingCost > 0)
+              _receiptRow(cs, context.tr('shipping_cost'), '${_nf(shippingCost.toInt())} TZS', cs.secondary),
+            if (mongikeFee > 0)
+              _receiptRow(cs, context.tr('mongike_fee_label'), '${_nf(mongikeFee.toInt())} TZS', cs.tertiary),
+            Container(height: 1, color: cs.outlineVariant.withValues(alpha: 0.15), margin: const EdgeInsets.symmetric(vertical: 6)),
+            _receiptRow(cs, context.tr('receipt_total'), '${_nf(totalAmount.toInt())} TZS', cs.primary),
             const SizedBox(height: 12),
-            _receiptRow(cs, context.tr('order_id'), docId, cs.onSurfaceVariant),
-            _receiptRow(cs, context.tr('total'), '${_nf(totalAmount.toInt())} TZS', cs.primary),
-            if (data['shippingCost'] != null)
-              _receiptRow(cs, context.tr('shipping_label'), '${_nf((data['shippingCost'] as num).toInt())} TZS', cs.onSurfaceVariant),
+            if (buyerName.isNotEmpty)
+              _receiptRow(cs, context.tr('buyer_label'), buyerName, cs.onSurfaceVariant),
+            if (buyerPhone.isNotEmpty)
+              _receiptRow(cs, context.tr('phone'), buyerPhone, cs.onSurfaceVariant),
             _receiptRow(cs, context.tr('payment_method'), paymentMethod, cs.onSurfaceVariant),
-            _receiptRow(cs, context.tr('status'), escrowLabel(status), cs.successGreen),
+            _receiptRow(cs, context.tr('order_status'), escrowLabel(status), _statusColor(status, cs)),
           ],
         ),
       ),
     );
+  }
+
+  Color _statusColor(String status, ColorScheme cs) {
+    switch (status) {
+      case 'completed': case 'delivered': case 'delivery_confirmed': return cs.successGreen;
+      case 'paid_escrow_held': case 'escrow_hold': return Colors.purple;
+      case 'dispatched': return Colors.orange;
+      case 'failed': case 'cancelled': case 'refunded': return cs.error;
+      default: return cs.onSurfaceVariant;
+    }
   }
 
   Widget _receiptRow(ColorScheme cs, String label, String value, Color valueColor) {
