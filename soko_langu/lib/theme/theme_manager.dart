@@ -7,7 +7,7 @@ class ThemeManager extends ChangeNotifier {
   static const String _seedKey = 'theme_seed_color';
   static const int _defaultSeed = 0xFF0F172A;
 
-  bool _isDark = true;
+  bool _isDark = false;
   Color _seedColor = const Color(_defaultSeed);
 
   bool get isDark => _isDark;

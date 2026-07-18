@@ -170,32 +170,32 @@ class _ChatPageState extends State<ChatPage> {
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0B141A) : const Color(0xFFE5DDD5),
       appBar: AppBar(
-        backgroundColor: isDark ? const Color(0xFF1F2C33) : const Color(0xFFF0F2F5),
+        backgroundColor: isDark ? const Color(0xFF1F2C33) : Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.black12,
+        elevation: 0.5,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: Icon(Icons.arrow_back, color: isDark ? Colors.white : const Color(0xFF3B4A54)),
           onPressed: () => context.pop(),
         ),
+        titleSpacing: 0,
         title: GestureDetector(
           onTap: () => context.push('${AppRoutes.publicProfile}/${widget.receiverId}',
               extra: widget.receiverName),
           child: Row(
             children: [
-              Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundColor: cs.primary.withValues(alpha: 0.12),
-                    backgroundImage: _receiverPhoto != null && _receiverPhoto!.isNotEmpty
-                        ? NetworkImage(_receiverPhoto!)
-                        : null,
-                    child: _receiverPhoto == null || _receiverPhoto!.isEmpty
-                        ? Text(widget.receiverName.isNotEmpty
-                            ? widget.receiverName[0].toUpperCase()
-                            : '?',
-                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cs.primary))
-                        : null,
-                  ),
-                ],
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: cs.primary.withValues(alpha: 0.12),
+                backgroundImage: _receiverPhoto != null && _receiverPhoto!.isNotEmpty
+                    ? NetworkImage(_receiverPhoto!)
+                    : null,
+                child: _receiverPhoto == null || _receiverPhoto!.isEmpty
+                    ? Text(widget.receiverName.isNotEmpty
+                        ? widget.receiverName[0].toUpperCase()
+                        : '?',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cs.primary))
+                    : null,
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -203,7 +203,11 @@ class _ChatPageState extends State<ChatPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(widget.receiverName,
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white : const Color(0xFF111B21),
+                        ),
                         overflow: TextOverflow.ellipsis),
                     if (_otherTyping)
                       Text(context.tr('typing'),
@@ -221,7 +225,7 @@ class _ChatPageState extends State<ChatPage> {
             onPressed: _openWhatsApp,
           ),
           IconButton(
-            icon: const Icon(Icons.more_vert),
+            icon: Icon(Icons.more_vert, color: isDark ? Colors.white : const Color(0xFF3B4A54)),
             onPressed: () => _showOptions(cs),
           ),
         ],
@@ -295,22 +299,21 @@ class _ChatPageState extends State<ChatPage> {
                   onTap: () => _focusNode.unfocus(),
                   child: ListView.builder(
                     controller: _scrollCtrl,
+                    reverse: true,
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     itemCount: msgs.length,
                     itemBuilder: (_, i) {
                       final msg = msgs[i];
-                      final prevMsg = i > 0 ? msgs[i - 1] : null;
-                      final nextMsg = i < msgs.length - 1 ? msgs[i + 1] : null;
-                      final showDate =
-                          prevMsg == null || !_isSameDay(msg.timestamp, prevMsg.timestamp);
-                      final showTime = nextMsg == null ||
-                          nextMsg.senderId != msg.senderId ||
-                          nextMsg.timestamp.difference(msg.timestamp) >
+                      final isFirstOfDay = i == msgs.length - 1 ||
+                          !_isSameDay(msg.timestamp, msgs[i + 1].timestamp);
+                      final showTime = i == 0 ||
+                          msgs[i - 1].senderId != msg.senderId ||
+                          msgs[i - 1].timestamp.difference(msg.timestamp).abs() >
                               const Duration(minutes: 5);
 
                       return Column(
                         children: [
-                          if (showDate) _dateSeparator(msg.timestamp, cs),
+                          if (isFirstOfDay) _dateSeparator(msg.timestamp, cs),
                           _MessageBubble(
                             message: msg,
                             isMe: msg.senderId == _uid,
@@ -347,7 +350,7 @@ class _ChatPageState extends State<ChatPage> {
           // Reply preview
           if (_replyTo != null)
             Container(
-              color: isDark ? const Color(0xFF1F2C33) : const Color(0xFFF0F2F5),
+              color: isDark ? const Color(0xFF1F2C33) : Colors.white,
               padding: const EdgeInsets.fromLTRB(0, 0, 8, 0),
               child: Row(
                 children: [
@@ -388,9 +391,14 @@ class _ChatPageState extends State<ChatPage> {
           // Input bar
           Container(
             decoration: BoxDecoration(
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? const Color(0xFF1F2C33)
-                  : const Color(0xFFF0F2F5),
+              color: isDark ? const Color(0xFF1F2C33) : Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 2,
+                  offset: const Offset(0, -1),
+                ),
+              ],
             ),
             padding: EdgeInsets.only(
               left: 8,
@@ -409,10 +417,9 @@ class _ChatPageState extends State<ChatPage> {
                     minLines: 1,
                     decoration: InputDecoration(
                       hintText: context.tr('type_message'),
+                      hintStyle: TextStyle(color: const Color(0xFF8696A0), fontSize: 15),
                       filled: true,
-                      fillColor: Theme.of(context).brightness == Brightness.dark
-                          ? const Color(0xFF2A3942)
-                          : Colors.white,
+                      fillColor: isDark ? const Color(0xFF2A3942) : const Color(0xFFF0F2F5),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
                         borderSide: BorderSide.none,
@@ -434,19 +441,18 @@ class _ChatPageState extends State<ChatPage> {
                       ),
                       suffixIconConstraints: const BoxConstraints(minWidth: 60, minHeight: 0),
                     ),
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: isDark ? Colors.white : const Color(0xFF111B21),
+                    ),
                     onSubmitted: (_) => _sendMessage(),
                   ),
                 ),
                 const SizedBox(width: 6),
                 Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [cs.primary, cs.primary.withValues(alpha: 0.8)],
-                    ),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF075E54),
                     shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(color: cs.primary.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 2)),
-                    ],
                   ),
                   child: IconButton(
                     icon: const Icon(Icons.send, color: Colors.white, size: 20),
@@ -555,56 +561,16 @@ class _MessageBubble extends StatelessWidget {
         crossAxisAlignment:
             isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
-          // Reply preview
-          if (message.replyToContent != null && message.replyToContent!.isNotEmpty && !isDeleted)
-            Container(
-              margin: EdgeInsets.only(
-                bottom: 4,
-                left: isMe ? 48 : 0,
-                right: isMe ? 0 : 48,
-              ),
-              padding: const EdgeInsets.fromLTRB(0, 0, 0, 0),
-              decoration: BoxDecoration(
-                color: cs.surfaceContainerHighest.withValues(alpha: 0.7),
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(8),
-                  topRight: const Radius.circular(8),
-                  bottomLeft: isMe ? const Radius.circular(8) : Radius.zero,
-                  bottomRight: isMe ? Radius.zero : const Radius.circular(8),
-                ),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Row(
-                children: [
-                  Container(width: 3, color: cs.primary),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 4, 8, 2),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(message.replyToSender ?? '',
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  color: cs.primary,
-                                  fontWeight: FontWeight.w600)),
-                          Text(message.replyToContent ?? '',
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
           // Message bubble
           Container(
             constraints: BoxConstraints(
               maxWidth: MediaQuery.of(context).size.width * 0.75,
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: EdgeInsets.only(
+              left: 14, right: 14,
+              top: message.replyToContent != null && message.replyToContent!.isNotEmpty && !isDeleted ? 4 : 10,
+              bottom: 6,
+            ),
             decoration: BoxDecoration(
               color: isDeleted
                   ? cs.surfaceContainerHighest
@@ -625,6 +591,60 @@ class _MessageBubble extends StatelessWidget {
             child: Column(
               crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
+                // Reply inner container
+                if (message.replyToContent != null && message.replyToContent!.isNotEmpty && !isDeleted)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.fromLTRB(0, 4, 0, 4),
+                    decoration: BoxDecoration(
+                      color: isMe
+                          ? const Color(0xFFB1D9A8)
+                          : (Theme.of(context).brightness == Brightness.dark
+                              ? const Color(0xFF2A3942)
+                              : const Color(0xFFF5F6F8)),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 3,
+                          decoration: BoxDecoration(
+                            color: isMe
+                                ? const Color(0xFF075E54)
+                                : cs.primary,
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(2),
+                              bottomLeft: Radius.circular(2),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(message.replyToSender ?? '',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: isMe
+                                          ? const Color(0xFF075E54)
+                                          : cs.primary,
+                                      fontWeight: FontWeight.w600)),
+                              Text(message.replyToContent ?? '',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: isMe
+                                          ? const Color(0xFF1B3A2C)
+                                          : cs.onSurfaceVariant)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                      ],
+                    ),
+                  ),
                 // Product link
                 if (message.productName != null && message.productName!.isNotEmpty && !isDeleted)
                   Container(

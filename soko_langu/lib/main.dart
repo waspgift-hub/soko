@@ -250,8 +250,8 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
 
   /// Loads theme and preferences, then fires background services.
   Future<void> _initApp() async {
-    // Load theme asynchronously (UI already has valid defaults)
-    themeManager.load();
+    // Load theme (reads saved preference from SharedPreferences)
+    await themeManager.load();
 
     try {
       final prefs = await SharedPreferences.getInstance();
