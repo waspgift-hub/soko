@@ -397,7 +397,7 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                         ),
                       ),
                       Text(
-                        'Tuma pesa kwa mobile money yako',
+                        context.tr('payout_subtitle'),
                         style: TextStyle(
                           fontSize: 12,
                           color: cs.primary,
@@ -412,7 +412,7 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
                 decoration: InputDecoration(
-                  labelText: 'Namba ya Simu',
+                  labelText: context.tr('phone_number_label'),
                   hintText: context.tr('phone_example'),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -434,8 +434,8 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                       : const Icon(Icons.send),
                   label: Text(
                     _withdrawing
-                        ? 'Inachakata...'
-                        : 'Toa Pesa Sasa',
+                        ? context.tr('processing_label')
+                        : context.tr('withdraw_now_label'),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: canWithdraw ? cs.primary : cs.onSurfaceVariant.withValues(alpha: 0.6),
@@ -451,7 +451,7 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
-                    'Salio la chini TZS 5,000 linahitajika',
+                    context.tr('minimum_balance_required'),
                     style: TextStyle(color: cs.error, fontSize: 12),
                   ),
                 ),

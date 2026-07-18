@@ -29,7 +29,7 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
     final costText = _shippingCostCtrl.text.trim();
     final cost = double.tryParse(costText);
     if (cost == null || cost <= 0) {
-      _showError('Tafadhali ingiza gharama sahihi ya usafirishaji');
+      _showError(context.tr('enter_valid_shipping_cost'));
       return;
     }
 
@@ -44,15 +44,15 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
 
       NotificationService().sendNotification(
         userId: buyerId,
-        title: 'Gharama ya Usafirishaji Imewekwa!',
-        body: 'Muuzaji ameweka gharama ya usafirishaji TZS ${cost.toStringAsFixed(0)}. Lipa sasa.',
+        title: context.tr('shipping_cost_set'),
+        body: context.tr('shipping_cost_set_body').replaceAll('{0}', cost.toStringAsFixed(0)),
         data: {'type': 'shipping_quote', 'transactionId': txId},
       );
 
       _shippingCostCtrl.clear();
-      if (mounted) _showSuccess('Gharama ya usafirishaji imetumwa kwa mnunuzi');
+      if (mounted) _showSuccess(context.tr('shipping_cost_submitted'));
     } catch (e) {
-      if (mounted) _showError('Hitilafu: $e');
+      if (mounted) _showError('${context.tr('error')}: $e');
     }
 
     setState(() => _quotingTxId = null);
@@ -66,14 +66,14 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
 
     if (user == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Gharama ya Usafirishaji')),
+        appBar: AppBar(title: Text(context.tr('shipping_quote'))),
         body: Center(child: Text(context.tr('login_required'))),
       );
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Gharama ya Usafirishaji'),
+        title: Text(context.tr('shipping_quote')),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
@@ -85,7 +85,7 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
             .snapshots(),
         builder: (context, snap) {
           if (snap.hasError) {
-            return Center(child: Text('Error: ${snap.error}'));
+            return Center(child: Text('${context.tr('error')}: ${snap.error}'));
           }
           if (!snap.hasData) {
             return const Center(child: GoogleLoading());
@@ -106,7 +106,7 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
                 children: [
                   Icon(Icons.inbox_outlined, size: 72, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
                   const SizedBox(height: 16),
-                  Text('Hakuna ombi la gharama ya usafirishaji',
+                  Text(context.tr('no_shipping_requests'),
                       style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant)),
                 ],
               ),
@@ -119,7 +119,7 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
             itemBuilder: (_, i) {
               final d = docs[i].data() as Map<String, dynamic>;
               final txId = docs[i].id;
-              final productName = d['productName'] ?? 'Product';
+              final productName = d['productName'] ?? context.tr('product');
               final productPrice = (d['productPrice'] as num?)?.toDouble() ?? 0;
               final buyerName = d['buyerName'] ?? '';
               final buyerId = d['buyerId'] ?? '';
@@ -148,7 +148,7 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
                               children: [
                                 Icon(Icons.receipt_long, size: 14, color: cs.tertiary),
                                 const SizedBox(width: 6),
-                                Text('Ombi Mpya', style: TextStyle(fontSize: 12, color: cs.tertiary, fontWeight: FontWeight.w600)),
+                                Text(context.tr('new_request'), style: TextStyle(fontSize: 12, color: cs.tertiary, fontWeight: FontWeight.w600)),
                               ],
                             ),
                           ),
@@ -157,18 +157,18 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
                       const SizedBox(height: 14),
                       Text(productName, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: cs.onSurface)),
                       const SizedBox(height: 6),
-                      _detailRow(cs, 'Mnunuzi', buyerName),
-                      _detailRow(cs, 'Bei ya Bidhaa', context.formatPrice(productPrice)),
+                      _detailRow(cs, context.tr('buyer_label'), buyerName),
+                      _detailRow(cs, context.tr('product_price'), context.formatPrice(productPrice)),
                       if (addr != null)
-                        _detailRow(cs, 'Anwani', '${addr['region'] ?? ''}, ${addr['district'] ?? ''}, ${addr['street'] ?? ''}'),
+                        _detailRow(cs, context.tr('address'), '${addr['region'] ?? ''}, ${addr['district'] ?? ''}, ${addr['street'] ?? ''}'),
                       if (addr?['landmarks'] != null)
-                        _detailRow(cs, 'Alama', addr!['landmarks'] as String? ?? ''),
+                        _detailRow(cs, context.tr('landmarks'), addr!['landmarks'] as String? ?? ''),
 
                       const SizedBox(height: 16),
                       Container(height: 1, color: cs.primary.withValues(alpha: 0.1)),
                       const SizedBox(height: 16),
 
-                      Text('Weka Gharama ya Usafirishaji',
+                      Text(context.tr('enter_shipping_cost'),
                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: cs.onSurface)),
                       const SizedBox(height: 12),
 
@@ -202,7 +202,7 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
                           icon: _quotingTxId == txId
                               ? const GoogleLoading(size: 20, strokeWidth: 2)
                               : const Icon(Icons.send_rounded, size: 20),
-                          label: Text(_quotingTxId == txId ? 'Inatuma...' : 'Tuma Gharama kwa Mnunuzi',
+                          label: Text(_quotingTxId == txId ? context.tr('sending_label') : context.tr('send_shipping_to_buyer'),
                               style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: cs.primary,

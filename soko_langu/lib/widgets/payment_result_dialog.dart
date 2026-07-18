@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../extensions/context_tr.dart';
 
 class PaymentResult {
   static Future<void> show({
@@ -137,7 +138,7 @@ class _PaymentResultDialogState extends State<_PaymentResultDialog>
             ),
             const SizedBox(height: 16),
             Text(
-              'Malipo Yamekamilika!',
+              context.tr('payment_successful'),
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -173,7 +174,7 @@ class _PaymentResultDialogState extends State<_PaymentResultDialog>
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  'Ref: ${widget.transactionId!.length > 14 ? widget.transactionId!.substring(0, 14) : widget.transactionId}',
+                  '${context.tr('ref_label')}${widget.transactionId!.length > 14 ? widget.transactionId!.substring(0, 14) : widget.transactionId}',
                   style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
                 ),
               ),
@@ -191,7 +192,7 @@ class _PaymentResultDialogState extends State<_PaymentResultDialog>
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ),
-                child: const Text('Sawa', style: TextStyle(fontSize: 16)),
+                child: Text(context.tr('ok'), style: TextStyle(fontSize: 16)),
               ),
             ),
           ],
@@ -231,7 +232,7 @@ class _PaymentResultDialogState extends State<_PaymentResultDialog>
             ),
             const SizedBox(height: 16),
             Text(
-              'Malipo Yameshindwa',
+              context.tr('payment_failed_title'),
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -248,7 +249,7 @@ class _PaymentResultDialogState extends State<_PaymentResultDialog>
             ],
             const SizedBox(height: 8),
             Text(
-              'Salio lako halijatolewa.',
+              context.tr('balance_not_deducted'),
               style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
             ),
             const SizedBox(height: 20),
@@ -264,8 +265,8 @@ class _PaymentResultDialogState extends State<_PaymentResultDialog>
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ),
-                child: const Text(
-                  'Jaribu Tena',
+                child: Text(
+                  context.tr('try_again'),
                   style: TextStyle(fontSize: 16),
                 ),
               ),

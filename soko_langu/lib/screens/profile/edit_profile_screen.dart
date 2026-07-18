@@ -499,10 +499,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     border: const OutlineInputBorder(),
                     prefixIcon: Icon(Icons.wc, color: Theme.of(context).colorScheme.primary),
                   ),
-                  items: const [
-                    DropdownMenuItem(value: 'male', child: Text('Mwanaume (Male)')),
-                    DropdownMenuItem(value: 'female', child: Text('Mwanamke (Female)')),
-                    DropdownMenuItem(value: 'other', child: Text('Nyingine (Other)')),
+                  items: [
+                    DropdownMenuItem(value: 'male', child: Text(context.tr('male'))),
+                    DropdownMenuItem(value: 'female', child: Text(context.tr('female'))),
+                    DropdownMenuItem(value: 'other', child: Text(context.tr('other'))),
                   ],
                   onChanged: (v) => _genderController.text = v ?? '',
                 ),

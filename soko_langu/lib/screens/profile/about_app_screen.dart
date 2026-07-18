@@ -107,7 +107,7 @@ class AboutAppScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            "Gift Wapalila & Praygod Hassani",
+                            context.tr('developer_names'),
                             style: TextStyle(
                               fontSize: 14,
                               color: Theme.of(context).colorScheme.onSurface,
@@ -176,7 +176,7 @@ class AboutAppScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Mafunzo / Tutorials',
+                              context.tr('tutorials_title'),
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
@@ -236,7 +236,7 @@ class AboutAppScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      "Tunashukuru kwa kutumia Soko Vibe!\nMaoni yako yanatusaidia kuboresha.",
+                      context.tr('thank_you_message'),
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 14,

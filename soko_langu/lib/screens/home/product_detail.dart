@@ -156,10 +156,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       final currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser != null && currentUser.uid != widget.product.sellerId) {
         final userName =
-            currentUser.displayName ?? currentUser.email ?? 'Mtumiaji';
+            currentUser.displayName ?? currentUser.email ?? context.tr('unknown_user');
         await NotificationService().sendNotification(
           userId: widget.product.sellerId,
-          title: '$userName amependa bidhaa yako',
+          title: context.tr('like_notification_title').replaceAll('{user}', userName),
           body: widget.product.name,
           data: {
             'type': 'wishlist',
@@ -667,7 +667,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           context.push(AppRoutes.login);
                         } else if (sellerId.isEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Hitilafu: muuzaji hajulikani.')),
+                                                      SnackBar(content: Text(context.tr('seller_unknown_error'))),
                           );
                         } else {
                           context.push(
@@ -738,7 +738,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                                 ),
                                                 onPressed: _chatWithSeller,
                                                 label: Text(
-                                                  'Chat',
+                                                  context.tr('chat'),
                                                   style: TextStyle(
                                                     color: cs.onPrimary,
                                                   ),
@@ -753,7 +753,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                                 onPressed: () {
                                                   if (sellerId.isEmpty) {
                                                     ScaffoldMessenger.of(context).showSnackBar(
-                                                      const SnackBar(content: Text('Hitilafu: muuzaji hajulikani.')),
+                          SnackBar(content: Text(context.tr('seller_unknown_error'))),
                                                     );
                                                   } else {
                                                     context.push(

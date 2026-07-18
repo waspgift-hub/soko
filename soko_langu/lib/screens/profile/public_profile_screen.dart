@@ -523,7 +523,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                 Icons.chat,
                 color: Theme.of(context).colorScheme.surface,
               ),
-              label: Text('Chat'),
+              label: Text(context.tr('chat')),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Theme.of(context).colorScheme.whatsappGreen,
                 foregroundColor: Theme.of(context).colorScheme.surface,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../widgets/premium_widgets.dart';
+import '../../extensions/context_tr.dart';
 
 class ProfileSetupScreen extends StatelessWidget {
   const ProfileSetupScreen({super.key});
@@ -12,9 +13,9 @@ class ProfileSetupScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('Set Up Your Profile', style: TextStyle(fontSize: AppFontSize.xl, fontWeight: FontWeight.w700, color: cs.onSurface)),
+            Text(context.tr('setup_your_profile'), style: TextStyle(fontSize: AppFontSize.xl, fontWeight: FontWeight.w700, color: cs.onSurface)),
             const SizedBox(height: AppInsets.md),
-            Text('Complete your profile to continue', style: TextStyle(color: cs.onSurfaceVariant)),
+            Text(context.tr('complete_profile_to_continue'), style: TextStyle(color: cs.onSurfaceVariant)),
           ],
         ),
       ),

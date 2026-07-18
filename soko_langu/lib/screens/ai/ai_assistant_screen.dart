@@ -191,7 +191,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
 
       final comments = await _fetchCommentsForProduct(products[i].productId);
       if (comments.isNotEmpty) {
-        buffer.writeln('Maoni ya wanunuzi (ndani ya app):');
+        buffer.writeln('${context.tr('buyer_reviews')} (in-app):');
         for (int j = 0; j < comments.length; j++) {
           final c = comments[j];
           buffer.writeln('  ${j + 1}. ${c['userName'] ?? 'Mtu'}: "${c['text'] ?? ''}"');
@@ -615,7 +615,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
           if (product.sellerPhone.isNotEmpty) _infoRow(Icons.phone_outlined, PhoneUtils.formatForDisplay(product.sellerPhone), cs),
           _infoRow(Icons.location_on_outlined, product.location, cs),
           if (product.rating > 0) _infoRow(Icons.star_outline, '${product.rating.toStringAsFixed(1)} (${product.reviewCount})', cs),
-          if (product.condition != 'new') _infoRow(Icons.info_outline, 'Hali: ${product.condition}', cs),
+          if (product.condition != 'new') _infoRow(Icons.info_outline, '${context.tr('condition')}: ${product.condition}', cs),
           if (product.stock > 0) _infoRow(Icons.inventory_2_outlined, 'Stock: ${product.stock}', cs),
           if (product.soldCount > 0) _infoRow(Icons.trending_up, 'Imeuzwa: ${product.soldCount}', cs),
           const SizedBox(height: 10),

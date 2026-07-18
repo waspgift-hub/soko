@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../extensions/context_tr.dart';
 import '../../theme/app_dimens.dart';
 import '../../repositories/chat_repository.dart';
 import '../../widgets/google_loading.dart';
@@ -19,7 +20,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: Text(widget.otherUserName ?? 'Chat')),
+      appBar: AppBar(title: Text(widget.otherUserName ?? context.tr('chat'))),
       body: Column(
         children: [
           Expanded(
@@ -65,7 +66,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   child: TextField(
                     controller: _msgCtrl,
                     decoration: InputDecoration(
-                      hintText: 'Andika ujumbe...',
+                      hintText: context.tr('type_message'),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     ),

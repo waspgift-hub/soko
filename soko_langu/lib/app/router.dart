@@ -268,7 +268,10 @@ GoRouter buildRouter() {
       ),
       GoRoute(
         path: AppRoutes.sellerAnalytics,
-        builder: (context, state) => SellerAnalyticsScreen(sellerId: state.extra as String),
+        builder: (context, state) {
+          final sellerId = state.extra as String? ?? FirebaseAuth.instance.currentUser?.uid ?? '';
+          return SellerAnalyticsScreen(sellerId: sellerId);
+        },
       ),
       GoRoute(
         path: AppRoutes.checkout,

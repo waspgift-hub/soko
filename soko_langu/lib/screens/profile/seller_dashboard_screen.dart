@@ -175,17 +175,17 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Vitendo', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: cs.onSurface)),
+          Text(context.tr('actions_title'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: cs.onSurface)),
           const SizedBox(height: 12),
           Row(
             children: [
-              Expanded(child: _actionButton(cs, Icons.price_check, 'Toa\nNafasi', () => context.push(AppRoutes.sellerQuote), cs.primary)),
+              Expanded(child: _actionButton(cs, Icons.price_check, context.tr('give_quote'), () => context.push(AppRoutes.sellerQuote), cs.primary)),
               const SizedBox(width: 8),
-              Expanded(child: _actionButton(cs, Icons.local_shipping, 'Tuma\nBidhaa', () => context.push(AppRoutes.sellerDispatch), Colors.orange)),
+              Expanded(child: _actionButton(cs, Icons.local_shipping, context.tr('dispatch_product'), () => context.push(AppRoutes.sellerDispatch), Colors.orange)),
               const SizedBox(width: 8),
-              Expanded(child: _actionButton(cs, Icons.store, 'Customize\nShop', () => context.push(AppRoutes.shopCustomization), cs.primary)),
+              Expanded(child: _actionButton(cs, Icons.store, context.tr('customize_shop_action'), () => context.push(AppRoutes.shopCustomization), cs.primary)),
               const SizedBox(width: 8),
-              Expanded(child: _actionButton(cs, Icons.verified, 'Boost\nListing', () => _showBoostDialog(products), cs.trendingOrange)),
+              Expanded(child: _actionButton(cs, Icons.verified, context.tr('boost_listing_action'), () => _showBoostDialog(products), cs.trendingOrange)),
             ],
           ),
         ],
@@ -597,7 +597,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Toa Gharama ya Usafirishaji',
+                    context.tr('give_quote'),
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 18,
@@ -606,7 +606,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Weka gharama ya usafirishaji kwa ombi la mnunuzi',
+                    context.tr('seller_quote_subtitle'),
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.8),
                       fontSize: 12,
@@ -649,7 +649,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Tuma Bidhaa',
+                    context.tr('dispatch_title'),
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 18,
@@ -658,7 +658,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Weka proof of delivery na tracking number',
+                    context.tr('dispatch_subtitle'),
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.8),
                       fontSize: 12,

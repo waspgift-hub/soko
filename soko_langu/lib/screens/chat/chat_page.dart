@@ -217,7 +217,7 @@ class _ChatPageState extends State<ChatPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.chat, color: Color(0xFF25D366)),
-            tooltip: 'WhatsApp',
+            tooltip: context.tr('whatsapp'),
             onPressed: _openWhatsApp,
           ),
           IconButton(
@@ -259,12 +259,12 @@ class _ChatPageState extends State<ChatPage> {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'Hakuna ujumbe bado',
+                          context.tr('no_messages_yet'),
                           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: cs.onSurfaceVariant),
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Tuma ujumbe wa kwanza!',
+                          context.tr('send_first_message'),
                           style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant.withValues(alpha: 0.7)),
                         ),
                         if (widget.productName.isNotEmpty) ...[
@@ -322,7 +322,7 @@ class _ChatPageState extends State<ChatPage> {
                                     _replyTo = msg.id;
                                     _replyToContent = msg.content;
                                     _replyToSender = isMe
-                                        ? (FirebaseAuth.instance.currentUser?.displayName ?? 'Wewe')
+                                        ? (FirebaseAuth.instance.currentUser?.displayName ?? context.tr('you'))
                                         : widget.receiverName;
                                     _focusNode.requestFocus();
                                     setState(() {});
@@ -465,9 +465,9 @@ class _ChatPageState extends State<ChatPage> {
     final now = DateTime.now();
     String label;
     if (_isSameDay(dt, now)) {
-      label = 'Today';
+      label = context.tr('today');
     } else if (_isSameDay(dt, now.subtract(const Duration(days: 1)))) {
-      label = 'Yesterday';
+      label = context.tr('yesterday');
     } else {
       label = '${dt.day}/${dt.month}/${dt.year}';
     }
@@ -648,7 +648,7 @@ class _MessageBubble extends StatelessWidget {
                   ),
                 // Message content
                 if (isDeleted)
-                  Text('Message deleted',
+                  Text(context.tr('message_deleted'),
                       style: TextStyle(
                           fontSize: 14,
                           fontStyle: FontStyle.italic,
@@ -668,7 +668,7 @@ class _MessageBubble extends StatelessWidget {
                     if (message.isEdited && !isDeleted)
                       Padding(
                         padding: const EdgeInsets.only(right: 4),
-                        child: Text('edited',
+                        child: Text(context.tr('edited'),
                             style: TextStyle(
                                 fontSize: 10, color: isMe ? cs.onPrimary.withValues(alpha: 0.7) : cs.onSurfaceVariant)),
                       ),

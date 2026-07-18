@@ -71,13 +71,13 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
             plateNumber: '',
           );
         }
-        if (mounted) _showSuccess('Bidhaa imesafirishwa! Mnunuzi ataarifiwa.');
+        if (mounted) _showSuccess(context.tr('product_dispatched_msg'));
       } else {
-        if (mounted) _showError(result['error'] ?? 'Failed to dispatch');
+        if (mounted) _showError(result['error'] ?? context.tr('dispatch_failed'));
       }
     } catch (e) {
       if (kDebugMode) debugPrint('SellerDispatch error: $e');
-      if (mounted) _showError('Error: $e');
+      if (mounted) _showError('${context.tr('error')}: $e');
     }
 
     setState(() => _dispatchingTxId = null);
@@ -90,14 +90,14 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Tuma Bidhaa')),
+        appBar: AppBar(title: Text(context.tr('dispatch_title'))),
         body: Center(child: Text(context.tr('login_required'))),
       );
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Tuma Bidhaa'),
+        title: Text(context.tr('dispatch_title')),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
@@ -109,7 +109,7 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
             .snapshots(),
         builder: (context, snap) {
           if (snap.hasError) {
-            return Center(child: Text('Error: ${snap.error}'));
+            return Center(child: Text('${context.tr('error')}: ${snap.error}'));
           }
           if (!snap.hasData) {
             return const Center(child: GoogleLoading());
@@ -132,10 +132,10 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
                 children: [
                   Icon(Icons.check_circle_outline, size: 72, color: cs.primary.withValues(alpha: 0.4)),
                   const SizedBox(height: 16),
-                  Text('Hakuna bidhaa zinazosubiri kusafirishwa',
+                  Text(context.tr('no_products_to_dispatch'),
                       style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant)),
                   const SizedBox(height: 8),
-                  Text('Bidhaa zilizolipwa ndizo zinazoonekana hapa',
+                  Text(context.tr('paid_products_only_hint'),
                       style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
                 ],
               ),
@@ -148,7 +148,7 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
             itemBuilder: (_, i) {
               final d = docs[i].data() as Map<String, dynamic>;
               final txId = docs[i].id;
-              final productName = d['productName'] ?? 'Product';
+              final productName = d['productName'] ?? context.tr('product');
               final totalAmount = d['totalAmount'] ?? d['productPrice'] ?? 0;
               final shippingCost = (d['shippingCost'] as num?)?.toDouble() ?? 0;
               final buyerPhone = d['buyerPhone'] ?? '';
@@ -181,7 +181,7 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
                                 children: [
                                   Icon(Icons.lock, size: 14, color: cs.primary),
                                   const SizedBox(width: 6),
-                                  Text('Imelipwa', style: TextStyle(fontSize: 12, color: cs.primary, fontWeight: FontWeight.w600)),
+                                  Text(context.tr('paid_label'), style: TextStyle(fontSize: 12, color: cs.primary, fontWeight: FontWeight.w600)),
                                 ],
                               ),
                             ),
@@ -194,29 +194,29 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
                         Text(productName, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: cs.onSurface)),
                         const SizedBox(height: 6),
                         if (buyerName.isNotEmpty)
-                          _detailRow(cs, 'Mnunuzi', buyerName),
+                          _detailRow(cs, context.tr('buyer_label'), buyerName),
                         if (buyerPhone.isNotEmpty)
-                          _detailRow(cs, 'Simu', buyerPhone.toString()),
+                          _detailRow(cs, context.tr('phone'), buyerPhone.toString()),
                         if (addr != null)
-                          _detailRow(cs, 'Anwani', '${addr['region'] ?? ''}, ${addr['district'] ?? ''}, ${addr['street'] ?? ''}'),
+                          _detailRow(cs, context.tr('address'), '${addr['region'] ?? ''}, ${addr['district'] ?? ''}, ${addr['street'] ?? ''}'),
                         if (shippingCost > 0)
-                          _detailRow(cs, 'Gharama ya Usafirishaji', context.formatPrice(shippingCost)),
+                          _detailRow(cs, context.tr('shipping_cost'), context.formatPrice(shippingCost)),
 
                         const SizedBox(height: 16),
                         Container(height: 1, color: cs.primary.withValues(alpha: 0.1)),
                         const SizedBox(height: 16),
 
-                        Text('Taarifa za Usafirishaji',
+                        Text(context.tr('shipping_details'),
                             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: cs.onSurface)),
                         const SizedBox(height: 12),
 
-                        _buildField(cs, _courierNameCtrl, 'Jina la Kampuni ya Usafirishaji', Icons.business, required: true),
+                        _buildField(cs, _courierNameCtrl, context.tr('courier_company_name'), Icons.business, required: true),
                         const SizedBox(height: 10),
-                        _buildField(cs, _trackingNumberCtrl, 'Namba ya Kufuatilia (Tracking)', Icons.qr_code, required: true),
+                        _buildField(cs, _trackingNumberCtrl, context.tr('tracking_number'), Icons.qr_code, required: true),
                         const SizedBox(height: 10),
-                        _buildField(cs, _driverPhoneCtrl, 'Namba ya Simu ya Dereva', Icons.phone, keyboardType: TextInputType.phone),
+                        _buildField(cs, _driverPhoneCtrl, context.tr('driver_phone'), Icons.phone, keyboardType: TextInputType.phone),
                         const SizedBox(height: 10),
-                        _buildField(cs, _notesCtrl, 'Maelezo ya Ziada (si lazima)', Icons.notes),
+                        _buildField(cs, _notesCtrl, context.tr('additional_notes'), Icons.notes),
 
                         const SizedBox(height: 16),
                         SizedBox(
@@ -227,7 +227,7 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
                             icon: _dispatchingTxId == txId
                                 ? const SizedBox(width: 20, height: 20, child: GoogleLoading(size: 16, strokeWidth: 2))
                                 : const Icon(Icons.local_shipping, size: 20),
-                            label: Text(_dispatchingTxId == txId ? 'Inasafirisha...' : 'Thibitisha Usafirishaji',
+                            label: Text(_dispatchingTxId == txId ? context.tr('dispatching') : context.tr('confirm_dispatch'),
                                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: cs.primary,
@@ -281,7 +281,7 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
           borderSide: BorderSide(color: cs.primary, width: 1.5),
         ),
       ),
-      validator: required ? (v) => (v == null || v.trim().isEmpty) ? 'Required' : null : null,
+      validator: required ? (v) => (v == null || v.trim().isEmpty) ? context.tr('required') : null : null,
     );
   }
 

@@ -74,12 +74,12 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Hakuna Flash Sale kwa sasa',
+                    context.tr('no_flash_sales'),
                     style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Subiri flash sale inayofuata!',
+                    context.tr('wait_next_flash_sale'),
                     style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
                   ),
                 ],
@@ -101,7 +101,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        '${sales.length} Flash Deals',
+                        '${sales.length} ${context.tr('flash_deals')}',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -110,7 +110,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                       ),
                       const Spacer(),
                       Text(
-                        'Inaisha muda wowote',
+                        context.tr('ends_anytime'),
                         style: TextStyle(
                           fontSize: 11,
                           color: cs.onSurfaceVariant.withValues(alpha: 0.6),
@@ -170,7 +170,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
-                        '$saleCount Deals',
+                        '$saleCount ${context.tr('deals')}',
                         style: TextStyle(
                           color: cs.surface,
                           fontSize: 10,
@@ -201,7 +201,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
-                                'SOKO LANGU',
+                                context.tr('soko_langu_badge'),
                                 style: TextStyle(
                                   color: cs.tertiary,
                                   fontSize: 9,
@@ -212,7 +212,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              'FLASH SALE',
+                              context.tr('flash_sale_label'),
                               style: TextStyle(
                                 color: cs.surface,
                                 fontSize: 26,
@@ -222,7 +222,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'BIG DISCOUNTS · LIMITED OFFERS',
+                              context.tr('banner_tagline'),
                               style: TextStyle(
                                 color: cs.surface.withValues(alpha: 0.7),
                                 fontSize: 10,
@@ -239,7 +239,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  '$saleCount deals live',
+                                  '$saleCount ${context.tr('deals_live')}',
                                   style: TextStyle(
                                     color: cs.surface.withValues(alpha: 0.8),
                                     fontSize: 10,
@@ -274,7 +274,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '$saleCount Active',
+                              '$saleCount ${context.tr('active')}',
                               style: TextStyle(
                                 color: cs.surface.withValues(alpha: 0.8),
                                 fontSize: 10,
@@ -336,7 +336,10 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                 Icon(Icons.timer, color: cs.surface, size: 16),
                 const SizedBox(width: 6),
                 Text(
-                  '${hours}h ${minutes}m ${secs}s',
+                  context.tr('duration_format')
+                      .replaceAll('{h}', '$hours')
+                      .replaceAll('{m}', '$minutes')
+                      .replaceAll('{s}', '$secs'),
                   style: TextStyle(
                     color: cs.surface,
                     fontWeight: FontWeight.bold,
@@ -478,7 +481,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                       }
                     },
                     icon: const Icon(Icons.visibility, size: 18),
-                    label: const Text('Angalia'),
+                    label: Text(context.tr('view')),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: cs.primary,
                       side: BorderSide(color: cs.primary),
@@ -500,7 +503,7 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
                       productPrice: sale.originalPrice,
                     ),
                     icon: const Icon(Icons.chat_outlined, size: 18),
-                    label: Text('Chat'),
+                    label: Text(context.tr('chat')),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: cs.whatsappGreen,
                       foregroundColor: cs.surface,

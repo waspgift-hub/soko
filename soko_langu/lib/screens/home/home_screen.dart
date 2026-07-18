@@ -218,8 +218,8 @@ class _HomeScreenState extends State<HomeScreen>
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Soko', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: cs.primary, letterSpacing: -0.5)),
-            Text('Vibe', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.onSurfaceVariant, letterSpacing: 2)),
+            Text(context.tr('soko'), style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: cs.primary, letterSpacing: -0.5)),
+            Text(context.tr('vibe'), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.onSurfaceVariant, letterSpacing: 2)),
           ],
         ),
         actions: [
@@ -265,7 +265,7 @@ class _HomeScreenState extends State<HomeScreen>
                     readOnly: true,
                     onTap: () => context.push(AppRoutes.search),
                     decoration: InputDecoration(
-                      hintText: context.tr('search_products'),
+                        hintText: context.tr('search_products_users_hint'),
                       hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 14),
                       prefixIcon: Icon(Icons.search_rounded, color: cs.primary, size: 22),
                       border: InputBorder.none,
@@ -284,7 +284,7 @@ class _HomeScreenState extends State<HomeScreen>
                             children: [
                               Icon(Icons.tune_rounded, color: cs.primary, size: 16),
                               const SizedBox(width: 4),
-                              Text('Filter', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.primary)),
+                              Text(context.tr('filter'), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.primary)),
                             ],
                           ),
                         ),
@@ -300,7 +300,7 @@ class _HomeScreenState extends State<HomeScreen>
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
                   children: [
-                    _brandChip('All', null),
+                    _brandChip(context.tr('all'), null),
                     ..._brands.map((b) => _brandChip(b, b)),
                   ],
                 ),
@@ -433,7 +433,7 @@ class _HomeScreenState extends State<HomeScreen>
                   children: [
                     Icon(Icons.filter_alt_off, size: 48, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
                     const SizedBox(height: 8),
-                    Text('Hakuna bidhaa zinazolingana na vigezo',
+                    Text(context.tr('no_products_matching_filters'),
                       style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                     ),
                   ],
@@ -545,7 +545,7 @@ class _FilterSheetState extends State<_FilterSheet> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Chuja', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: cs.onSurface)),
+                Text(context.tr('filter'), style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: cs.onSurface)),
                 TextButton(
                   onPressed: () {
                     setState(() {
@@ -556,7 +556,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                       _locCtrl.clear();
                     });
                   },
-                  child: Text('Weka upya', style: TextStyle(color: cs.primary)),
+                  child: Text(context.tr('reset'), style: TextStyle(color: cs.primary)),
                 ),
               ],
             ),
@@ -566,20 +566,20 @@ class _FilterSheetState extends State<_FilterSheet> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
               children: [
-                Text('Panga kwa', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: cs.onSurface)),
+                Text(context.tr('sort_by'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: cs.onSurface)),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _sortChip(cs, 'newest', 'Mpya'),
-                    _sortChip(cs, 'price_asc', 'Bei: Chini → Juu'),
-                    _sortChip(cs, 'price_desc', 'Bei: Juu → Chini'),
-                    _sortChip(cs, 'popular', 'Maarufu'),
+                    _sortChip(cs, 'newest', context.tr('new')),
+                    _sortChip(cs, 'price_asc', context.tr('price_low_to_high')),
+                    _sortChip(cs, 'price_desc', context.tr('price_high_to_low')),
+                    _sortChip(cs, 'popular', context.tr('popular')),
                   ],
                 ),
                 const SizedBox(height: 20),
-                Text('Bei', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: cs.onSurface)),
+                Text(context.tr('price'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: cs.onSurface)),
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -588,7 +588,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                         controller: _minCtrl,
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
-                          hintText: 'Kuanzia',
+                          hintText: context.tr('min_price'),
                           hintStyle: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.outlineVariant)),
@@ -606,7 +606,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                         controller: _maxCtrl,
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
-                          hintText: 'Hadi',
+                          hintText: context.tr('max_price'),
                           hintStyle: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.outlineVariant)),
@@ -618,23 +618,23 @@ class _FilterSheetState extends State<_FilterSheet> {
                   ],
                 ),
                 const SizedBox(height: 20),
-                Text('Hali', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: cs.onSurface)),
+                Text(context.tr('condition'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: cs.onSurface)),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
                   children: [
-                    _condChip(cs, 'all', 'Zote'),
-                    _condChip(cs, 'new', 'Mpya'),
-                    _condChip(cs, 'used', 'Iliyotumika'),
+                    _condChip(cs, 'all', context.tr('all')),
+                    _condChip(cs, 'new', context.tr('new')),
+                    _condChip(cs, 'used', context.tr('used')),
                   ],
                 ),
                 const SizedBox(height: 20),
-                Text('Eneo', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: cs.onSurface)),
+                Text(context.tr('area'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: cs.onSurface)),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _locCtrl,
                   decoration: InputDecoration(
-                    hintText: 'Mf. Dar es Salaam, Arusha...',
+                    hintText: context.tr('location_hint'),
                     hintStyle: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
                     prefixIcon: Icon(Icons.location_on_outlined, size: 18, color: cs.onSurfaceVariant),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -662,7 +662,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                   );
                   Navigator.pop(context);
                 },
-                child: Text('Tuma Kichujio', style: TextStyle(fontWeight: FontWeight.w600)),
+                child: Text(context.tr('apply_filter'), style: TextStyle(fontWeight: FontWeight.w600)),
               ),
             ),
           ),
