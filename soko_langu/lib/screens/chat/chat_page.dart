@@ -390,78 +390,62 @@ class _ChatPageState extends State<ChatPage> {
                 ],
               ),
             ),
-          // Input bar
+          // Input bar (AI style)
           Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1F2C33) : Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 2,
-                  offset: const Offset(0, -1),
-                ),
-              ],
+              border: Border(top: BorderSide(color: cs.onSurface.withValues(alpha: 0.05))),
             ),
-            padding: EdgeInsets.only(
-              left: 8,
-              right: 8,
-              bottom: MediaQuery.of(context).viewInsets.bottom + 8,
-              top: 8,
-            ),
-            child: Row(
-              children: [
-                const SizedBox(width: 4),
-                Expanded(
-                  child: TextField(
-                    controller: _inputCtrl,
-                    focusNode: _focusNode,
-                    maxLines: 5,
-                    minLines: 1,
-                    decoration: InputDecoration(
-                      hintText: context.tr('type_message'),
-                      hintStyle: TextStyle(color: const Color(0xFF8696A0), fontSize: 15),
-                      filled: true,
-                      fillColor: isDark ? const Color(0xFF2A3942) : const Color(0xFFF0F2F5),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide.none,
+            child: SafeArea(
+              top: false,
+              child: Row(
+                children: [
+                  _buildMicButton(cs),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _inputCtrl,
+                      focusNode: _focusNode,
+                      textInputAction: TextInputAction.send,
+                      maxLines: 5,
+                      minLines: 1,
+                      onSubmitted: (_) => _sendMessage(),
+                      style: TextStyle(color: cs.onSurface, fontSize: 14),
+                      decoration: InputDecoration(
+                        hintText: context.tr('type_message'),
+                        hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.4), fontSize: 14),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide(color: cs.onSurface.withValues(alpha: 0.05)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide(color: cs.onSurface.withValues(alpha: 0.05)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide(color: cs.primary.withValues(alpha: 0.3)),
+                        ),
+                        filled: true,
+                        fillColor: cs.onSurface.withValues(alpha: 0.04),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      prefixIcon: Padding(
-                        padding: const EdgeInsets.only(left: 8, right: 4),
-                        child: Icon(Icons.emoji_emotions_outlined, size: 22, color: const Color(0xFF8696A0)),
-                      ),
-                      prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 0),
-                      suffixIcon: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.attach_file, size: 22, color: const Color(0xFF8696A0)),
-                          const SizedBox(width: 4),
-                          Icon(Icons.camera_alt_outlined, size: 22, color: const Color(0xFF8696A0)),
-                          const SizedBox(width: 4),
-                        ],
-                      ),
-                      suffixIconConstraints: const BoxConstraints(minWidth: 60, minHeight: 0),
                     ),
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: isDark ? Colors.white : const Color(0xFF111B21),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: cs.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: cs.onSurface.withValues(alpha: 0.1)),
                     ),
-                    onSubmitted: (_) => _sendMessage(),
+                    child: IconButton(
+                      icon: Icon(Icons.send_rounded, color: cs.onPrimary, size: 18),
+                      onPressed: _sendMessage,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 6),
-                Container(
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF075E54),
-                    shape: BoxShape.circle,
-                  ),
-                  child: IconButton(
-                    icon: const Icon(Icons.send, color: Colors.white, size: 20),
-                    onPressed: _sendMessage,
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
@@ -491,6 +475,27 @@ class _ChatPageState extends State<ChatPage> {
           child: Text(label,
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
         ),
+      ),
+    );
+  }
+
+  Widget _buildMicButton(ColorScheme cs) {
+    return GestureDetector(
+      onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: const Text('Coming soon')),
+      ),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+        width: 44, height: 44,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: cs.onSurface.withValues(alpha: 0.06),
+          border: Border.all(
+            color: cs.onSurface.withValues(alpha: 0.05),
+          ),
+        ),
+        child: Icon(Icons.mic_none_rounded, color: cs.onSurface.withValues(alpha: 0.6), size: 20),
       ),
     );
   }
