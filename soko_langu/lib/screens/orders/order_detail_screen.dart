@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -9,13 +10,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import '../../extensions/context_tr.dart';
 import '../../services/api_config.dart';
-import '../../services/mongike_service.dart';
 import '../../services/sms_notification_service.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../chat/chat_navigation.dart';
 import '../../widgets/google_loading.dart';
-import 'receipt_screen.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final String docId;
@@ -30,24 +29,60 @@ class OrderDetailScreen extends StatefulWidget {
 class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProviderStateMixin {
   late AnimationController _pulseController;
   late Animation<double> _pulseAnim;
+  late AnimationController _slideController;
+  late Animation<Offset> _slideAnim;
+  late AnimationController _fadeController;
+  late Animation<double> _fadeAnim;
+  Timer? _countdownTimer;
+  Duration? _remaining;
+  bool _isLoading = true;
   String? _releasingTxId;
   String? _disputingTxId;
 
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat(reverse: true);
+    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))
+      ..repeat(reverse: true);
     _pulseAnim = Tween<double>(begin: 0.4, end: 1.0).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
+    _slideController = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
+    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero).animate(
+      CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
+    );
+    _fadeController = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
+    _fadeAnim = CurvedAnimation(parent: _fadeController, curve: Curves.easeOut);
+
+    _startCountdown();
+    Future.delayed(const Duration(milliseconds: 400), () {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _slideController.forward();
+        _fadeController.forward();
+      }
+    });
+  }
+
+  void _startCountdown() {
+    final est = d['estimatedDelivery'] as Timestamp?;
+    if (est != null) {
+      _updateRemaining(est);
+      _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) => _updateRemaining(est));
+    }
+  }
+
+  void _updateRemaining(Timestamp est) {
+    final diff = est.toDate().difference(DateTime.now());
+    if (mounted) setState(() => _remaining = diff.isNegative ? Duration.zero : diff);
   }
 
   @override
   void dispose() {
     _pulseController.dispose();
+    _slideController.dispose();
+    _fadeController.dispose();
+    _countdownTimer?.cancel();
     super.dispose();
   }
 
@@ -92,32 +127,96 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
     }
   }
 
+  String _formatCountdown(Duration d) {
+    if (d.isNegative || d == Duration.zero) return '—';
+    final days = d.inDays;
+    final hours = d.inHours.remainder(24);
+    final mins = d.inMinutes.remainder(60);
+    if (days > 0) return '${days}d ${hours}h ${mins}m';
+    if (hours > 0) return '${hours}h ${mins}m';
+    return '${mins}m';
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final productName = d['productName'] as String? ?? context.tr('product');
-    final productImage = d['productImage'] as String? ?? '';
-    final sellerName = d['sellerName'] as String? ?? '';
-    final sellerId = d['sellerId'] as String? ?? '';
-    final createdAt = d['createdAt'];
-    final dateStr = createdAt is Timestamp
-        ? DateFormat('dd MMM yyyy HH:mm').format(createdAt.toDate())
-        : '';
-    final price = (d['productPrice'] ?? 0).toDouble();
-    final shippingCost = (d['shippingCost'] as num?)?.toDouble();
-    final totalAmount = (d['totalAmount'] as num?)?.toDouble() ?? price;
-    final paymentMethod = d['paymentMethod'] as String? ?? 'Mongike';
-    final buyerName = d['buyerName'] as String? ?? '';
-    final buyerPhone = d['buyerPhone'] as String? ?? '';
-    final sellerPhone = d['sellerPhone'] as String? ?? '';
-    final deliveryAddress = d['deliveryAddress'] as Map<String, dynamic>?;
-    final dispatchProof = d['dispatchProof'] as Map<String, dynamic>?;
-    final platformFee = (d['platformFee'] as num?)?.toDouble() ?? (d['sokoLanguCommission'] as num?)?.toDouble() ?? 0;
-    final processingFee = (d['processingFee'] as num?)?.toDouble() ?? 0;
-    final sellerReceives = (d['sellerReceives'] as num?)?.toDouble() ?? 0;
-    final productId = d['productId'] as String? ?? '';
 
+    if (_isLoading) return _buildLoadingSkeleton(context, cs, isDark);
+
+    return FadeTransition(
+      opacity: _fadeAnim,
+      child: SlideTransition(
+        position: _slideAnim,
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text(context.tr('order_details')),
+            centerTitle: true,
+            backgroundColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+              onPressed: () => context.pop(),
+            ),
+          ),
+          extendBodyBehindAppBar: true,
+          body: Stack(
+            children: [
+              _buildBackgroundGradient(cs, isDark),
+              Column(
+                children: [
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                      children: [
+                        _buildProductCard(context, cs, isDark),
+                        const SizedBox(height: 20),
+                        _buildTimeline(context, cs),
+                        const SizedBox(height: 20),
+                        _buildPaymentSummary(context, cs),
+                        const SizedBox(height: 20),
+                        _buildOrderInfo(context, cs),
+                        if (d['deliveryAddress'] != null) ...[
+                          const SizedBox(height: 20),
+                          _buildAddressCard(context, cs, isDark),
+                        ],
+                        if (d['dispatchProof'] != null) ...[
+                          const SizedBox(height: 20),
+                          _buildDispatchInfo(context, cs),
+                        ],
+                        const SizedBox(height: 20),
+                        _buildFeeBreakdown(context, cs),
+                        const SizedBox(height: 20),
+                        _buildActions(context, cs),
+                        const SizedBox(height: 80),
+                      ],
+                    ),
+                  ),
+                  _buildBottomBar(context, cs),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBackgroundGradient(ColorScheme cs, bool isDark) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: isDark
+              ? [cs.surface, cs.surfaceContainerLow.withValues(alpha: 0.5)]
+              : [const Color(0xFFF8F9FE), Colors.white],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingSkeleton(BuildContext context, ColorScheme cs, bool isDark) {
     return Scaffold(
       appBar: AppBar(
         title: Text(context.tr('order_details')),
@@ -125,44 +224,93 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
       ),
-      body: Column(
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-              children: [
-                _buildProductCard(context, cs, isDark, productName, productImage, sellerName, sellerId, dateStr),
-                const SizedBox(height: 20),
-                _buildTimeline(context, cs),
-                const SizedBox(height: 20),
-                _buildPaymentSummary(context, cs, price, shippingCost, totalAmount, paymentMethod, platformFee, processingFee),
-                const SizedBox(height: 20),
-                _buildOrderInfo(context, cs, buyerName, buyerPhone, paymentMethod),
-                if (deliveryAddress != null) ...[
-                  const SizedBox(height: 20),
-                  _buildAddressCard(context, cs, isDark, deliveryAddress),
-                ],
-                if (dispatchProof != null) ...[
-                  const SizedBox(height: 20),
-                  _buildDispatchInfo(context, cs, dispatchProof),
-                ],
-                const SizedBox(height: 20),
-                if (platformFee > 0 || processingFee > 0 || sellerReceives > 0)
-                  _buildFeeBreakdown(context, cs, platformFee, processingFee, sellerReceives),
-                const SizedBox(height: 20),
-                _buildActions(context, cs),
-                const SizedBox(height: 80),
-              ],
-            ),
-          ),
-          _buildBottomBar(context, cs, sellerId, sellerName),
+          _skeletonCard(cs, 320),
+          const SizedBox(height: 20),
+          _skeletonCard(cs, 260),
+          const SizedBox(height: 20),
+          _skeletonCard(cs, 200),
+          const SizedBox(height: 20),
+          _skeletonCard(cs, 180),
         ],
       ),
     );
   }
 
+  Widget _skeletonCard(ColorScheme cs, double h) {
+    return Container(
+      height: h,
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: const Center(child: GoogleLoading(size: 32, strokeWidth: 3)),
+    );
+  }
+
+  Widget _glassContainer({
+    required Widget child,
+    required ColorScheme cs,
+    EdgeInsets padding = const EdgeInsets.all(20),
+  }) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 40, sigmaY: 40),
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                cs.surface.withValues(alpha: 0.15),
+                cs.surfaceContainerLow.withValues(alpha: 0.08),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionHeader(ColorScheme cs, IconData icon, String label, {Widget? trailing}) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: cs.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 16, color: cs.primary),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(label, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: cs.onSurface)),
+        ),
+        ?trailing,
+      ],
+    );
+  }
+
   // ── Product Card ──
-  Widget _buildProductCard(BuildContext context, ColorScheme cs, bool isDark, String name, String image, String sellerName, String sellerId, String date) {
+  Widget _buildProductCard(BuildContext context, ColorScheme cs, bool isDark) {
+    final productName = d['productName'] as String? ?? context.tr('product');
+    final productImage = d['productImage'] as String? ?? '';
+    final sellerName = d['sellerName'] as String? ?? '';
+    final sellerId = d['sellerId'] as String? ?? '';
+    final sellerAvatar = d['sellerAvatar'] as String? ?? '';
+    final createdAt = d['createdAt'];
+    final dateStr = createdAt is Timestamp
+        ? DateFormat('dd MMM yyyy HH:mm').format(createdAt.toDate())
+        : '';
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
       child: BackdropFilter(
@@ -184,14 +332,35 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
           ),
           child: Column(
             children: [
-              if (image.isNotEmpty)
-              ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                child: Image.network(image, width: double.infinity, height: 220, fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => Container(height: 220, color: cs.surfaceContainerHighest,
-                    child: Icon(Icons.image_rounded, size: 48, color: cs.onSurfaceVariant.withValues(alpha: 0.3))),
+              if (productImage.isNotEmpty)
+                Hero(
+                  tag: 'order_img_${widget.docId}',
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                    child: Stack(
+                      children: [
+                        Image.network(productImage,
+                          width: double.infinity, height: 220, fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => Container(height: 220, color: cs.surfaceContainerHighest,
+                            child: Icon(Icons.image_rounded, size: 48, color: cs.onSurfaceVariant.withValues(alpha: 0.3))),
+                        ),
+                        Positioned(
+                          bottom: 0, left: 0, right: 0,
+                          child: Container(
+                            height: 60,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.bottomCenter,
+                                end: Alignment.topCenter,
+                                colors: [Colors.black.withValues(alpha: 0.4), Colors.transparent],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
               Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
@@ -201,7 +370,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
-                          child: Text(name, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: cs.onSurface),
+                          child: Text(productName, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: cs.onSurface),
                             maxLines: 2, overflow: TextOverflow.ellipsis),
                         ),
                         const SizedBox(width: 12),
@@ -213,9 +382,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
                       children: [
                         CircleAvatar(
                           radius: 16,
+                          backgroundImage: sellerAvatar.isNotEmpty ? NetworkImage(sellerAvatar) : null,
                           backgroundColor: cs.primary.withValues(alpha: 0.12),
-                          child: Text(sellerName.isNotEmpty ? sellerName[0].toUpperCase() : '?',
-                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: cs.primary)),
+                          child: sellerAvatar.isEmpty && sellerName.isNotEmpty
+                              ? Text(sellerName[0].toUpperCase(),
+                                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: cs.primary))
+                              : null,
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -228,16 +400,24 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
                           ),
                         ),
                         if (sellerId.isNotEmpty)
-                          Container(
-                            decoration: BoxDecoration(color: cs.whatsappGreen.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
-                            child: Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(20),
-                                onTap: () => ChatNavigation.openSellerChat(context, sellerId, sellerName),
-                                child: const Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                  child: Icon(Icons.chat_outlined, size: 18, color: Color(0xFF25D366)),
+                          Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(20),
+                              onTap: () => ChatNavigation.openSellerChat(context, sellerId, sellerName),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: cs.whatsappGreen.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.chat_outlined, size: 14, color: cs.whatsappGreen),
+                                    const SizedBox(width: 4),
+                                    Text(context.tr('chat'), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.whatsappGreen)),
+                                  ],
                                 ),
                               ),
                             ),
@@ -249,13 +429,36 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
                       children: [
                         Icon(Icons.tag, size: 13, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
                         const SizedBox(width: 4),
-                        Text('#${widget.docId}', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
+                        Flexible(
+                          child: Text('#${widget.docId.length > 12 ? widget.docId.substring(0, 12) : widget.docId}',
+                            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
+                        ),
                         const SizedBox(width: 16),
                         Icon(Icons.access_time, size: 13, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
                         const SizedBox(width: 4),
-                        Text(date, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
+                        Text(dateStr, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
                       ],
                     ),
+                    if (_remaining != null && !_remaining!.isNegative && _remaining!.inSeconds > 0) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.orange.withValues(alpha: 0.15)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.timer_outlined, size: 13, color: Colors.orange),
+                            const SizedBox(width: 5),
+                            Text('${context.tr('delivery_countdown')}: ${_formatCountdown(_remaining!)}',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.orange)),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -267,7 +470,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
   }
 
   Widget _buildStatusBadge(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final color = _statusColor(context);
     return AnimatedBuilder(
       animation: _pulseAnim,
@@ -284,8 +486,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(width: 6, height: 6, decoration: BoxDecoration(color: color, shape: BoxShape.circle,
-              boxShadow: [BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 4)])),
+            Container(
+              width: 6, height: 6,
+              decoration: BoxDecoration(
+                color: color, shape: BoxShape.circle,
+                boxShadow: [BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 4)],
+              ),
+            ),
             const SizedBox(width: 6),
             Text(_statusLabel(context), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
           ],
@@ -307,193 +514,162 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
     ];
     final current = _currentStep();
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                cs.surface.withValues(alpha: 0.15), cs.surfaceContainerLow.withValues(alpha: 0.08),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+    return _glassContainer(
+      cs: cs,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionHeader(cs, Icons.timeline_rounded, context.tr('order_status')),
+          const SizedBox(height: 20),
+          ...List.generate(steps.length, (i) {
+            final step = steps[i];
+            final active = i <= current;
+            final isCurrent = i == current;
+            return IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(color: cs.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                    child: Icon(Icons.timeline_rounded, size: 16, color: cs.primary),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(context.tr('order_status'), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: cs.onSurface)),
-                ],
-              ),
-              const SizedBox(height: 20),
-              ...List.generate(steps.length, (i) {
-                final step = steps[i];
-                final active = i <= current;
-                final isCurrent = i == current;
-                return IntrinsicHeight(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        width: 32,
-                        child: Column(
-                          children: [
-                            AnimatedBuilder(
-                              animation: _pulseAnim,
-                              builder: (context, _) => Container(
-                                width: isCurrent ? 28 : 24,
-                                height: isCurrent ? 28 : 24,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: active ? step.color : cs.surfaceContainerHighest.withValues(alpha: 0.3),
-                                  boxShadow: isCurrent
-                                      ? [BoxShadow(color: step.color.withValues(alpha: _pulseAnim.value * 0.5), blurRadius: 12, spreadRadius: 2)]
-                                      : active
-                                          ? [BoxShadow(color: step.color.withValues(alpha: 0.2), blurRadius: 6)]
-                                          : [],
-                                ),
-                                child: Icon(
-                                  active ? Icons.check_rounded : Icons.circle_outlined,
-                                  size: isCurrent ? 14 : 12,
-                                  color: active ? cs.surface : cs.onSurfaceVariant.withValues(alpha: 0.4),
-                                ),
+                  SizedBox(
+                    width: 32,
+                    child: Column(
+                      children: [
+                        AnimatedBuilder(
+                          animation: _pulseAnim,
+                          builder: (context, _) {
+                            final size = isCurrent ? 28.0 : 24.0;
+                            return Container(
+                              width: size, height: size,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: active ? step.color : cs.surfaceContainerHighest.withValues(alpha: 0.3),
+                                border: isCurrent ? Border.all(color: step.color.withValues(alpha: 0.5), width: 2) : null,
+                                boxShadow: isCurrent
+                                    ? [BoxShadow(color: step.color.withValues(alpha: _pulseAnim.value * 0.5), blurRadius: 12, spreadRadius: 2)]
+                                    : active
+                                        ? [BoxShadow(color: step.color.withValues(alpha: 0.2), blurRadius: 6)]
+                                        : [],
                               ),
-                            ),
-                            if (i < steps.length - 1)
-                              Expanded(
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 400),
-                                  width: 2,
-                                  margin: const EdgeInsets.symmetric(vertical: 4),
-                                  decoration: BoxDecoration(
-                                    gradient: active
+                              child: Icon(
+                                active ? Icons.check_rounded : Icons.circle_outlined,
+                                size: isCurrent ? 14 : 12,
+                                color: active ? cs.surface : cs.onSurfaceVariant.withValues(alpha: 0.4),
+                              ),
+                            );
+                          },
+                        ),
+                        if (i < steps.length - 1)
+                          Expanded(
+                            child: Container(
+                              width: 2,
+                              margin: const EdgeInsets.symmetric(vertical: 4),
+                              decoration: BoxDecoration(
+                                gradient: active && i < current
+                                    ? LinearGradient(
+                                        colors: [step.color.withValues(alpha: 0.6), steps[i + 1].color.withValues(alpha: 0.6)],
+                                      )
+                                    : i == current
                                         ? LinearGradient(
-                                            colors: [step.color.withValues(alpha: 0.6), steps[i + 1].color.withValues(alpha: i + 1 <= current ? 0.6 : 0.1)],
+                                            colors: [step.color.withValues(alpha: 0.6), cs.outlineVariant.withValues(alpha: 0.15)],
                                           )
                                         : null,
-                                    color: !active ? cs.outlineVariant.withValues(alpha: 0.15) : null,
+                                color: !active || i >= current ? cs.outlineVariant.withValues(alpha: 0.15) : null,
+                                borderRadius: BorderRadius.circular(1),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.only(bottom: i < steps.length - 1 ? 20 : 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(top: 3),
+                            child: Text(step.label,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
+                                color: active ? cs.onSurface : cs.onSurfaceVariant.withValues(alpha: 0.4),
+                              ),
+                            ),
+                          ),
+                          if (isCurrent)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: AnimatedBuilder(
+                                animation: _pulseAnim,
+                                builder: (context, _) => Container(
+                                  height: 2,
+                                  width: 60 * _pulseAnim.value,
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [step.color.withValues(alpha: 0.6), step.color.withValues(alpha: 0.05)],
+                                    ),
                                     borderRadius: BorderRadius.circular(1),
                                   ),
                                 ),
                               ),
-                          ],
-                        ),
+                            ),
+                        ],
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Padding(
-                          padding: EdgeInsets.only(bottom: i < steps.length - 1 ? 20 : 0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.only(top: 3),
-                                child: Text(step.label,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
-                                    color: active ? cs.onSurface : cs.onSurfaceVariant.withValues(alpha: 0.4),
-                                  ),
-                                ),
-                              ),
-                              if (isCurrent)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 4),
-                                  child: AnimatedBuilder(
-                                    animation: _pulseAnim,
-                                    builder: (context, _) => Container(
-                                      height: 2,
-                                      width: 60 * _pulseAnim.value,
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          colors: [step.color.withValues(alpha: 0.6), step.color.withValues(alpha: 0.05)],
-                                        ),
-                                        borderRadius: BorderRadius.circular(1),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                );
-              }),
-            ],
-          ),
-        ),
+                ],
+              ),
+            );
+          }),
+        ],
       ),
     );
   }
 
   // ── Payment Summary ──
-  Widget _buildPaymentSummary(BuildContext context, ColorScheme cs, double price, double? shipping, double total, String method, double platformFee, double processingFee) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                cs.surface.withValues(alpha: 0.15), cs.surfaceContainerLow.withValues(alpha: 0.08),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
+  Widget _buildPaymentSummary(BuildContext context, ColorScheme cs) {
+    final price = (d['productPrice'] ?? 0).toDouble();
+    final shippingCost = (d['shippingCost'] as num?)?.toDouble();
+    final totalAmount = (d['totalAmount'] as num?)?.toDouble() ?? price;
+    final paymentMethod = d['paymentMethod'] as String? ?? 'Mongike';
+    final platformFee = (d['platformFee'] as num?)?.toDouble() ?? (d['sokoLanguCommission'] as num?)?.toDouble() ?? 0;
+    final processingFee = (d['processingFee'] as num?)?.toDouble() ?? 0;
+    final discount = (d['discount'] as num?)?.toDouble();
+    final txId = d['transactionId'] as String? ?? d['mpesaTransactionId'] as String? ?? '';
+
+    return _glassContainer(
+      cs: cs,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionHeader(cs, Icons.receipt_outlined, context.tr('payment_summary')),
+          const SizedBox(height: 16),
+          _summaryRow(cs, context.tr('product_price'), '${_nf(price.toInt())} TZS', cs.onSurface),
+          if (shippingCost != null && shippingCost > 0) ...[
+            const SizedBox(height: 10),
+            _summaryRow(cs, context.tr('shipping_cost'), '${_nf(shippingCost.toInt())} TZS', cs.secondary),
+          ],
+          if (discount != null && discount > 0) ...[
+            const SizedBox(height: 10),
+            _summaryRow(cs, context.tr('discount'), '-${_nf(discount.toInt())} TZS', cs.successGreen),
+          ],
+          if (platformFee > 0) ...[
+            const SizedBox(height: 10),
+            _summaryRow(cs, context.tr('soko_commission'), '-${_nf(platformFee.toInt())} TZS', cs.tertiary),
+          ],
+          if (processingFee > 0) ...[
+            const SizedBox(height: 10),
+            _summaryRow(cs, context.tr('processing_fee'), '${_nf(processingFee.toInt())} TZS', cs.onSurfaceVariant),
+          ],
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Divider(height: 1, thickness: 1),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          _summaryRow(cs, context.tr('total'), '${_nf(totalAmount.toInt())} TZS', cs.primary, bold: true),
+          const SizedBox(height: 14),
+          Row(
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(color: cs.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                    child: Icon(Icons.receipt_outlined, size: 16, color: cs.primary),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(context.tr('payment_summary'), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: cs.onSurface)),
-                ],
-              ),
-              const SizedBox(height: 16),
-              _summaryRow(cs, context.tr('product_price'), '${_nf(price.toInt())} TZS', cs.onSurface),
-              if (shipping != null && shipping > 0) ...[
-                const SizedBox(height: 10),
-                _summaryRow(cs, context.tr('shipping_cost'), '${_nf(shipping.toInt())} TZS', cs.secondary),
-              ],
-              if (platformFee > 0) ...[
-                const SizedBox(height: 10),
-                _summaryRow(cs, context.tr('soko_commission'), '-${_nf(platformFee.toInt())} TZS', cs.tertiary),
-              ],
-              if (processingFee > 0) ...[
-                const SizedBox(height: 10),
-                _summaryRow(cs, context.tr('processing_fee'), '${_nf(processingFee.toInt())} TZS', cs.onSurfaceVariant),
-              ],
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: Divider(height: 1, thickness: 1),
-              ),
-              _summaryRow(cs, context.tr('total'), '${_nf(total.toInt())} TZS', cs.primary, bold: true),
-              const SizedBox(height: 14),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
@@ -506,13 +682,59 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
                   children: [
                     Icon(Icons.payment, size: 14, color: cs.whatsappGreen),
                     const SizedBox(width: 6),
-                    Text(method, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.whatsappGreen)),
+                    Text(paymentMethod, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.whatsappGreen)),
                   ],
                 ),
               ),
+              const Spacer(),
+              if (txId.isNotEmpty)
+                _copyButton(cs, txId, context.tr('transaction_id_label')),
             ],
           ),
-        ),
+          if (txId.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.fingerprint, size: 12, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text('${context.tr('transaction_id_label')}: ${txId.length > 16 ? '...${txId.substring(txId.length - 12)}' : txId}',
+                    style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant.withValues(alpha: 0.5))),
+                ),
+              ],
+            ),
+          ],
+          if (status == 'paid_escrow_hold' || status == 'escrow_hold' || status == 'dispatched') ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                _miniBadge(cs, Icons.verified_user_rounded, context.tr('escrow_status'), Colors.purple),
+                const SizedBox(width: 8),
+                if (status == 'paid_escrow_hold' || status == 'escrow_hold')
+                  _miniBadge(cs, Icons.check_circle_rounded, context.tr('payment_verified'), cs.successGreen),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _miniBadge(ColorScheme cs, IconData icon, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.15)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 4),
+          Text(label, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: color)),
+        ],
       ),
     );
   }
@@ -528,167 +750,160 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
   }
 
   // ── Order Information ──
-  Widget _buildOrderInfo(BuildContext context, ColorScheme cs, String buyerName, String buyerPhone, String method) {
+  Widget _buildOrderInfo(BuildContext context, ColorScheme cs) {
+    final buyerName = d['buyerName'] as String? ?? '';
+    final buyerPhone = d['buyerPhone'] as String? ?? '';
+    final buyerEmail = d['buyerEmail'] as String? ?? '';
+    final paymentMethod = d['paymentMethod'] as String? ?? 'Mongike';
+    final txId = d['transactionId'] as String? ?? d['mpesaTransactionId'] as String? ?? '';
+
     final info = <_InfoRowData>[
       _InfoRowData(Icons.person_outline, context.tr('buyer_label'), buyerName, null),
       if (buyerPhone.isNotEmpty) _InfoRowData(Icons.phone_outlined, context.tr('phone'), buyerPhone, Icons.copy_rounded),
-      _InfoRowData(Icons.payment_outlined, context.tr('payment_method'), method, null),
+      if (buyerEmail.isNotEmpty) _InfoRowData(Icons.email_outlined, context.tr('email'), buyerEmail, Icons.copy_rounded),
+      _InfoRowData(Icons.payment_outlined, context.tr('payment_method'), paymentMethod, null),
       _InfoRowData(Icons.tag, context.tr('order_id'), '#${widget.docId}', Icons.copy_rounded),
+      if (txId.isNotEmpty)
+        _InfoRowData(Icons.fingerprint, context.tr('transaction_id_label'),
+            txId.length > 20 ? '...${txId.substring(txId.length - 16)}' : txId, Icons.copy_rounded),
     ];
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [cs.surface.withValues(alpha: 0.15), cs.surfaceContainerLow.withValues(alpha: 0.08)],
-            ),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(color: cs.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                    child: Icon(Icons.info_outline_rounded, size: 16, color: cs.primary),
+    return _glassContainer(
+      cs: cs,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionHeader(cs, Icons.info_outline_rounded, context.tr('order_information')),
+          const SizedBox(height: 16),
+          ...info.map((row) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(
+                    color: cs.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  const SizedBox(width: 10),
-                  Text(context.tr('order_information'), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: cs.onSurface)),
-                ],
-              ),
-              const SizedBox(height: 16),
-              ...info.map((row) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 36, height: 36,
-                      decoration: BoxDecoration(
-                        color: cs.primary.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(row.icon, size: 16, color: cs.primary),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(row.label, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-                          const SizedBox(height: 2),
-                          Text(row.value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cs.onSurface)),
-                        ],
-                      ),
-                    ),
-                    if (row.actionIcon != null)
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(8),
-                          onTap: () {
-                            final text = row == info.last ? widget.docId : buyerPhone;
-                            if (text.isNotEmpty) {
-                              // Copy to clipboard
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(context.tr('copied_to_clipboard')), duration: const Duration(seconds: 1)),
-                              );
-                            }
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.all(6),
-                            child: Icon(row.actionIcon, size: 16, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
-                          ),
-                        ),
-                      ),
-                  ],
+                  child: Icon(row.icon, size: 16, color: cs.primary),
                 ),
-              )),
-            ],
-          ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(row.label, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+                      const SizedBox(height: 2),
+                      Text(row.value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cs.onSurface)),
+                    ],
+                  ),
+                ),
+                if (row.actionIcon != null)
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        Clipboard.setData(ClipboardData(text: row.value.replaceFirst('#', '')));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(context.tr('copied_to_clipboard')),
+                            duration: const Duration(seconds: 1),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: Icon(row.actionIcon, size: 16, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          )),
+        ],
+      ),
+    );
+  }
+
+  Widget _copyButton(ColorScheme cs, String text, String label) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () {
+          HapticFeedback.lightImpact();
+          Clipboard.setData(ClipboardData(text: text));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(context.tr('copied_to_clipboard')),
+              duration: const Duration(seconds: 1),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: Icon(Icons.copy_rounded, size: 14, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
         ),
       ),
     );
   }
 
   // ── Shipping Address ──
-  Widget _buildAddressCard(BuildContext context, ColorScheme cs, bool isDark, Map<String, dynamic> address) {
+  Widget _buildAddressCard(BuildContext context, ColorScheme cs, bool isDark) {
+    final address = d['deliveryAddress'] as Map<String, dynamic>?;
+    if (address == null) return const SizedBox.shrink();
+
     final region = address['region'] as String?;
     final district = address['district'] as String?;
+    final ward = address['ward'] as String?;
     final street = address['street'] as String?;
+    final houseNumber = address['houseNumber'] as String? ?? address['house_number'] as String?;
     final landmarks = address['landmarks'] as String?;
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [cs.surface.withValues(alpha: 0.15), cs.surfaceContainerLow.withValues(alpha: 0.08)],
-            ),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(color: cs.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                    child: Icon(Icons.location_on_rounded, size: 16, color: cs.primary),
+    return _glassContainer(
+      cs: cs,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionHeader(
+            cs, Icons.location_on_rounded, context.tr('shipping_address'),
+            trailing: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(context.tr('feature_coming_soon')), behavior: SnackBarBehavior.floating),
+                ),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: cs.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(context.tr('shipping_address'), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: cs.onSurface)),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.map_outlined, size: 14, color: cs.primary),
+                      const SizedBox(width: 4),
+                      Text(context.tr('view_map'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.primary)),
+                    ],
                   ),
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(context.tr('feature_coming_soon'))),
-                      ),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: cs.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.map_outlined, size: 14, color: cs.primary),
-                            const SizedBox(width: 4),
-                            Text(context.tr('view_map'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.primary)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
-              const SizedBox(height: 16),
-              if (region != null) _addressRow(cs, Icons.location_city_outlined, context.tr('region'), region),
-              if (district != null) _addressRow(cs, Icons.map_outlined, context.tr('district'), district),
-              if (street != null) _addressRow(cs, Icons.signpost_outlined, context.tr('street'), street),
-              if (landmarks != null) _addressRow(cs, Icons.landscape_outlined, context.tr('landmarks'), landmarks),
-            ],
+            ),
           ),
-        ),
+          const SizedBox(height: 16),
+          if (region != null) _addressRow(cs, Icons.location_city_outlined, context.tr('region'), region),
+          if (district != null) _addressRow(cs, Icons.map_outlined, context.tr('district'), district),
+          if (ward != null) _addressRow(cs, Icons.layers_outlined, context.tr('ward'), ward),
+          if (street != null) _addressRow(cs, Icons.signpost_outlined, context.tr('street'), street),
+          if (houseNumber != null && houseNumber.isNotEmpty) _addressRow(cs, Icons.home_outlined, context.tr('house_number'), houseNumber),
+          if (landmarks != null) _addressRow(cs, Icons.landscape_outlined, context.tr('landmarks'), landmarks),
+        ],
       ),
     );
   }
@@ -715,96 +930,125 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
   }
 
   // ── Dispatch Info ──
-  Widget _buildDispatchInfo(BuildContext context, ColorScheme cs, Map<String, dynamic> dispatch) {
+  Widget _buildDispatchInfo(BuildContext context, ColorScheme cs) {
+    final dispatch = d['dispatchProof'] as Map<String, dynamic>?;
+    if (dispatch == null) return const SizedBox.shrink();
+
     final courier = dispatch['courierName'] as String?;
     final tracking = dispatch['trackingNumber'] as String?;
     final driverPhone = dispatch['driverPhone'] as String?;
     final notes = dispatch['notes'] as String?;
+    final courierLogo = dispatch['courierLogo'] as String?;
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [cs.surface.withValues(alpha: 0.15), cs.surfaceContainerLow.withValues(alpha: 0.08)],
-            ),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
+    return _glassContainer(
+      cs: cs,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionHeader(cs, Icons.local_shipping_outlined, context.tr('shipping_details'),
+            trailing: _buildLiveStatus(cs),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+          const SizedBox(height: 16),
+          if (courier != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                    child: const Icon(Icons.local_shipping_outlined, size: 16, color: Colors.orange),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(context.tr('shipping_details'), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: cs.onSurface)),
+                  if (courierLogo != null && courierLogo.isNotEmpty)
+                    Container(
+                      width: 28, height: 28,
+                      margin: const EdgeInsets.only(right: 10),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(5),
+                        child: Image.network(courierLogo, fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => Icon(Icons.local_shipping, size: 14, color: cs.primary)),
+                      ),
+                    )
+                  else
+                    Container(
+                      width: 28, height: 28,
+                      margin: const EdgeInsets.only(right: 10),
+                      decoration: BoxDecoration(
+                        color: cs.primary.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(Icons.local_shipping, size: 14, color: cs.primary.withValues(alpha: 0.7)),
+                    ),
+                  SizedBox(width: 80, child: Text(context.tr('courier_company_name'), style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant))),
+                  Expanded(child: Text(courier, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cs.onSurface))),
                 ],
               ),
-              const SizedBox(height: 16),
-              if (courier != null) _addressRow(cs, Icons.business_outlined, context.tr('courier_company_name'), courier),
-              if (tracking != null) _addressRow(cs, Icons.qr_code_outlined, context.tr('tracking_number'), tracking),
-              if (driverPhone != null) _addressRow(cs, Icons.phone_outlined, context.tr('driver_phone'), driverPhone),
-              if (notes != null) _addressRow(cs, Icons.notes_outlined, context.tr('additional_notes'), notes),
-            ],
-          ),
+            ),
+          if (tracking != null) _addressRow(cs, Icons.qr_code_outlined, context.tr('tracking_number'), tracking),
+          if (driverPhone != null) _addressRow(cs, Icons.phone_outlined, context.tr('driver_phone'), driverPhone),
+          if (notes != null) _addressRow(cs, Icons.notes_outlined, context.tr('additional_notes'), notes),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLiveStatus(ColorScheme cs) {
+    if (status != 'dispatched') return const SizedBox.shrink();
+    return AnimatedBuilder(
+      animation: _pulseAnim,
+      builder: (context, _) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.green.withValues(alpha: _pulseAnim.value * 0.2),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.green.withValues(alpha: _pulseAnim.value * 0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 5, height: 5,
+              decoration: BoxDecoration(
+                color: Colors.green, shape: BoxShape.circle,
+                boxShadow: [BoxShadow(color: Colors.green.withValues(alpha: _pulseAnim.value * 0.6), blurRadius: 4)],
+              ),
+            ),
+            const SizedBox(width: 4),
+            Text(context.tr('track_shipment'), style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: Colors.green)),
+          ],
         ),
       ),
     );
   }
 
   // ── Fee Breakdown ──
-  Widget _buildFeeBreakdown(BuildContext context, ColorScheme cs, double platformFee, double processingFee, double sellerReceives) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [cs.surface.withValues(alpha: 0.15), cs.surfaceContainerLow.withValues(alpha: 0.08)],
-            ),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
+  Widget _buildFeeBreakdown(BuildContext context, ColorScheme cs) {
+    final platformFee = (d['platformFee'] as num?)?.toDouble() ?? (d['sokoLanguCommission'] as num?)?.toDouble() ?? 0;
+    final processingFee = (d['processingFee'] as num?)?.toDouble() ?? 0;
+    final sellerReceives = (d['sellerReceives'] as num?)?.toDouble() ?? 0;
+
+    if (platformFee <= 0 && processingFee <= 0 && sellerReceives <= 0) return const SizedBox.shrink();
+
+    return _glassContainer(
+      cs: cs,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionHeader(cs, Icons.account_balance_wallet_outlined, context.tr('payment_breakdown')),
+          const SizedBox(height: 16),
+          if (platformFee > 0) ...[
+            _summaryRow(cs, context.tr('soko_commission'), '-${_nf(platformFee.toInt())} TZS', cs.tertiary),
+            const SizedBox(height: 10),
+          ],
+          if (processingFee > 0) ...[
+            _summaryRow(cs, context.tr('processing_fee'), '${_nf(processingFee.toInt())} TZS', cs.onSurfaceVariant),
+            const SizedBox(height: 10),
+          ],
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 10),
+            child: Divider(height: 1, thickness: 1),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(color: cs.tertiary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                    child: Icon(Icons.account_balance_wallet_outlined, size: 16, color: cs.tertiary),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(context.tr('payment_breakdown'), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: cs.onSurface)),
-                ],
-              ),
-              const SizedBox(height: 16),
-              _summaryRow(cs, context.tr('soko_commission'), '-${_nf(platformFee.toInt())} TZS', cs.tertiary),
-              const SizedBox(height: 10),
-              _summaryRow(cs, context.tr('processing_fee'), '${_nf(processingFee.toInt())} TZS', cs.onSurfaceVariant),
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 10),
-                child: Divider(height: 1, thickness: 1),
-              ),
-              _summaryRow(cs, context.tr('seller_receives'), '${_nf(sellerReceives.toInt())} TZS', cs.successGreen, bold: true),
-            ],
-          ),
-        ),
+          _summaryRow(cs, context.tr('seller_receives'), '${_nf(sellerReceives.toInt())} TZS', cs.successGreen, bold: true),
+        ],
       ),
     );
   }
@@ -814,7 +1058,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
     final canConfirm = status == 'delivered' || status == 'dispatched';
     final canDispute = status == 'paid_escrow_hold' || status == 'escrow_hold' || status == 'dispatched' || status == 'delivered';
     final canCancel = status == 'paid_escrow_hold' || status == 'escrow_hold';
-    final user = FirebaseAuth.instance.currentUser;
 
     if (!canConfirm && !canDispute && !canCancel) return const SizedBox.shrink();
 
@@ -828,7 +1071,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [cs.surface.withValues(alpha: 0.15), cs.surfaceContainerLow.withValues(alpha: 0.08)],
+              colors: [
+                cs.surface.withValues(alpha: 0.15), cs.surfaceContainerLow.withValues(alpha: 0.08),
+              ],
             ),
             borderRadius: BorderRadius.circular(24),
             border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
@@ -867,7 +1112,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
                           style: OutlinedButton.styleFrom(
                             foregroundColor: cs.error,
                             side: BorderSide(color: cs.error.withValues(alpha: 0.3)),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           ),
                         ),
                       ),
@@ -881,7 +1126,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
                           style: OutlinedButton.styleFrom(
                             foregroundColor: cs.error,
                             side: BorderSide(color: cs.error.withValues(alpha: 0.3)),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           ),
                         ),
                       ),
@@ -896,7 +1141,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
   }
 
   // ── Bottom Bar ──
-  Widget _buildBottomBar(BuildContext context, ColorScheme cs, String sellerId, String sellerName) {
+  Widget _buildBottomBar(BuildContext context, ColorScheme cs) {
+    final sellerId = d['sellerId'] as String? ?? '';
+    final sellerName = d['sellerName'] as String? ?? '';
+
     return Container(
       padding: EdgeInsets.only(
         left: 16, right: 16, top: 12,
@@ -907,10 +1155,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            cs.surface.withValues(alpha: 0.95),
-            cs.surface,
-          ],
+          colors: [cs.surface.withValues(alpha: 0.95), cs.surface],
         ),
       ),
       child: SafeArea(
@@ -948,7 +1193,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
                       elevation: 0,
                     ),
                     icon: const Icon(Icons.track_changes_outlined, size: 18),
-                    onPressed: () {},
+                    onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(context.tr('feature_coming_soon')), behavior: SnackBarBehavior.floating),
+                    ),
                     label: Text(context.tr('track_shipment'), style: const TextStyle(fontSize: 13)),
                   ),
                 ),
@@ -987,7 +1234,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
       );
       final result = jsonDecode(resp.body);
       if (resp.statusCode == 200 && result['success'] == true) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('delivery_confirmed_msg'))));
+        if (mounted) {
+          HapticFeedback.mediumImpact();
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(context.tr('delivery_confirmed_msg')),
+            behavior: SnackBarBehavior.floating,
+          ));
+        }
         final txDoc = await FirebaseFirestore.instance.collection('transactions').doc(txId).get();
         if (txDoc.exists) {
           final tx = txDoc.data()!;
@@ -1002,10 +1255,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
           }
         }
       } else {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result['error'] ?? context.tr('confirm_failed_msg'))));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(result['error'] ?? context.tr('confirm_failed_msg')),
+          behavior: SnackBarBehavior.floating,
+        ));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${context.tr('confirm_failed_msg')}: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('${context.tr('confirm_failed_msg')}: $e'),
+        behavior: SnackBarBehavior.floating,
+      ));
     }
     if (mounted) setState(() => _releasingTxId = null);
   }
@@ -1034,12 +1293,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
       );
       final result = jsonDecode(resp.body);
       if (resp.statusCode == 200 && result['success'] == true) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('dispute_opened_msg'))));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(context.tr('dispute_opened_msg')),
+          behavior: SnackBarBehavior.floating,
+        ));
       } else {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result['error'] ?? context.tr('dispute_failed'))));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(result['error'] ?? context.tr('dispute_failed')),
+          behavior: SnackBarBehavior.floating,
+        ));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${context.tr('error')}: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('${context.tr('error')}: $e'),
+        behavior: SnackBarBehavior.floating,
+      ));
     }
     if (mounted) setState(() => _disputingTxId = null);
   }
@@ -1052,7 +1320,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
         content: Text(context.tr('cancel_order_refund_message')),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white), child: Text(context.tr('yes_cancel'))),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            child: Text(context.tr('yes_cancel')),
+          ),
         ],
       ),
     );
@@ -1067,12 +1339,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
       );
       final result = jsonDecode(resp.body);
       if (resp.statusCode == 200 && result['success'] == true) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('order_cancelled_refunded'))));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(context.tr('order_cancelled_refunded')),
+          behavior: SnackBarBehavior.floating,
+        ));
       } else {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result['error'] ?? context.tr('cancel_order_failed'))));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(result['error'] ?? context.tr('cancel_order_failed')),
+          behavior: SnackBarBehavior.floating,
+        ));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${context.tr('error')}: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('${context.tr('error')}: $e'),
+        behavior: SnackBarBehavior.floating,
+      ));
     }
   }
 }
