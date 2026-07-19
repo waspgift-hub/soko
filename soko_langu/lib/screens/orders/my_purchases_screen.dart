@@ -395,18 +395,21 @@ class _OrderGlassCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: cs.primary.withValues(alpha: 0.15), width: 0.5),
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(15),
-            child: productImage.isNotEmpty
-                ? Image.network(productImage, fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Container(
+          child: Hero(
+            tag: 'order_img_$docId',
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(15),
+              child: productImage.isNotEmpty
+                  ? Image.network(productImage, fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => Container(
+                        color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
+                        child: Icon(Icons.image_rounded, color: cs.onSurfaceVariant.withValues(alpha: 0.3)),
+                      ))
+                  : Container(
                       color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
                       child: Icon(Icons.image_rounded, color: cs.onSurfaceVariant.withValues(alpha: 0.3)),
-                    ))
-                : Container(
-                    color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
-                    child: Icon(Icons.image_rounded, color: cs.onSurfaceVariant.withValues(alpha: 0.3)),
-                  ),
+                    ),
+            ),
           ),
         ),
         const SizedBox(width: 14),
