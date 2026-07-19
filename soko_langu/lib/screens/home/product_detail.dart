@@ -54,7 +54,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   String? _selectedVariantId;
   final PageController _imageController = PageController();
   int _currentImageIndex = 0;
-  final Map<int, double> _imageRatios = {};
+
   UserProfile? _sellerProfile;
   bool _processing = false;
   FlashSale? _flashSale;
@@ -120,20 +120,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   Future<void> _checkFav() async {
     final fav = await _wishlistService.isFavorite(widget.product.id);
     if (mounted) setState(() => _isFav = fav);
-  }
-
-  void _resolveImageSize(int index, ImageProvider provider) {
-    if (_imageRatios.containsKey(index)) return;
-    final stream = provider.resolve(ImageConfiguration.empty);
-    final listener = ImageStreamListener((info, _) {
-      if (!mounted) return;
-      final image = info.image;
-      final ratio = image.width / image.height;
-      if (ratio > 0 && _imageRatios[index] != ratio) {
-        setState(() => _imageRatios[index] = ratio);
-      }
-    });
-    stream.addListener(listener);
   }
 
   Future<void> _toggleFav() async {
@@ -228,144 +214,184 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Stack(
-                children: [
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final width = constraints.maxWidth;
-                      final ratio = _imageRatios[_currentImageIndex];
-                      final height = ratio != null
-                          ? (width / ratio).clamp(200.0, width * 1.2)
-                          : width * 0.6;
-
-                      return SizedBox(
-                        width: width,
-                        height: height,
-                        child: product.images.isNotEmpty
-                            ? PageView.builder(
-                                controller: _imageController,
-                                itemCount: product.images.length,
-                                onPageChanged: (index) {
-                                  setState(() => _currentImageIndex = index);
-                                },
-                                itemBuilder: (context, index) {
-                                  return GestureDetector(
-                                    onTap: () => _showFullScreenImage(
-                                      context,
-                                      product.images,
-                                      index,
-                                    ),
-                                    child: CachedNetworkImage(
-                                      imageUrl: product.images[index],
-                                      fit: BoxFit.contain,
-                                      imageBuilder: (context, imageProvider) {
-                                        _resolveImageSize(index, imageProvider);
-                                        return Image(
-                                          image: imageProvider,
-                                          fit: BoxFit.contain,
-                                        );
-                                      },
-                                      placeholder: (context, url) => Container(
-                                        color: cs.surfaceContainerLow,
-                                        child: const Center(
-                                          child: GoogleLoading(
-                                            size: 24,
-                                            strokeWidth: 2,
-                                          ),
+              // Pro-level image gallery with crop (cover)
+              if (product.images.isNotEmpty)
+                Container(
+                  width: double.infinity,
+                  height: MediaQuery.of(context).size.width * 0.75,
+                  child: Stack(
+                    children: [
+                      PageView.builder(
+                        controller: _imageController,
+                        itemCount: product.images.length,
+                        onPageChanged: (index) {
+                          setState(() => _currentImageIndex = index);
+                        },
+                        itemBuilder: (context, index) {
+                          return GestureDetector(
+                            onTap: () => _showFullScreenImage(
+                              context,
+                              product.images,
+                              index,
+                            ),
+                            child: CachedNetworkImage(
+                              imageUrl: product.images[index],
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(
+                                color: cs.surfaceContainerLow,
+                                child: const Center(
+                                  child: GoogleLoading(
+                                    size: 24,
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              ),
+                              errorWidget:
+                                  (context, error, stackTrace) =>
+                                      Container(
+                                        color:
+                                            cs.surfaceContainerHighest,
+                                        child: const Icon(
+                                          Icons.image,
+                                          size: 50,
                                         ),
                                       ),
-                                      errorWidget:
-                                          (context, error, stackTrace) =>
-                                              Container(
-                                                color:
-                                                    cs.surfaceContainerHighest,
-                                                child: const Icon(
-                                                  Icons.image,
-                                                  size: 50,
-                                                ),
-                                              ),
-                                    ),
-                                  );
-                                },
-                              )
-                            : const SizedBox(),
-                      );
-                    },
-                  ),
-                  if (product.images.length > 1)
-                    Positioned(
-                      bottom: 12,
-                      left: 0,
-                      right: 0,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(
-                          product.images.length,
-                          (index) => Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 3),
-                            width: _currentImageIndex == index ? 10 : 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: _currentImageIndex == index
-                                  ? cs.surface
-                                  : cs.surface.withValues(alpha: 0.5),
-                              border: Border.all(
-                                color: cs.onSurface.withValues(alpha: 0.2),
-                                width: 1,
+                            ),
+                          );
+                        },
+                      ),
+                      // Bottom gradient overlay
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        height: 80,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.bottomCenter,
+                              end: Alignment.topCenter,
+                              colors: [
+                                Colors.black.withValues(alpha: 0.5),
+                                Colors.transparent,
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Dot indicators
+                      if (product.images.length > 1)
+                        Positioned(
+                          bottom: 12,
+                          left: 0,
+                          right: 0,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: List.generate(
+                              product.images.length,
+                              (index) => AnimatedContainer(
+                                duration:
+                                    const Duration(milliseconds: 200),
+                                margin: const EdgeInsets.symmetric(
+                                    horizontal: 3),
+                                width: _currentImageIndex == index
+                                    ? 24
+                                    : 6,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  borderRadius:
+                                      BorderRadius.circular(3),
+                                  color: _currentImageIndex == index
+                                      ? Colors.white
+                                      : Colors.white
+                                          .withValues(alpha: 0.5),
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                  if (product.images.isNotEmpty)
-                    Positioned(
-                      top: 12,
-                      right: 12,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: cs.onSurface.withValues(alpha: 0.6),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          '${_currentImageIndex + 1}/${product.images.length}',
-                          style: TextStyle(
-                            color: cs.surface,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
+                      // Image counter badge
+                      Positioned(
+                        top: 12,
+                        right: 12,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color:
+                                  Colors.white.withValues(alpha: 0.2),
+                              width: 0.5,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.photo_library,
+                                size: 12,
+                                color: Colors.white
+                                    .withValues(alpha: 0.8),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${_currentImageIndex + 1}/${product.images.length}',
+                                style: TextStyle(
+                                  color: Colors.white
+                                      .withValues(alpha: 0.9),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
-                    ),
-                ],
-              ),
-              if (product.images.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.photo_library,
-                        size: 16,
-                        color: cs.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        context
-                            .tr('images_count')
-                            .replaceAll(
-                              '{0}',
-                              product.images.length.toString(),
-                            ),
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: cs.onSurface.withValues(alpha: 0.5),
+                      // Fullscreen hint icon
+                      Positioned(
+                        top: 12,
+                        left: 12,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.4),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            Icons.fullscreen,
+                            size: 14,
+                            color:
+                                Colors.white.withValues(alpha: 0.8),
+                          ),
                         ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Container(
+                  width: double.infinity,
+                  height: 200,
+                  color: cs.surfaceContainerLow,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.image,
+                          size: 48,
+                          color: cs.onSurfaceVariant
+                              .withValues(alpha: 0.3)),
+                      const SizedBox(height: 8),
+                      Text(
+                        context.tr('no_images'),
+                        style:
+                            TextStyle(color: cs.onSurfaceVariant),
                       ),
                     ],
                   ),
