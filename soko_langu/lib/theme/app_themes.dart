@@ -59,7 +59,7 @@ ThemeData _buildTheme(ColorScheme scheme) {
 
   return base.copyWith(
     colorScheme: scheme,
-    scaffoldBackgroundColor: Colors.transparent,
+    scaffoldBackgroundColor: scheme.surface,
     textTheme: AppTypography.apply(base.textTheme, scheme),
 
     iconTheme: IconThemeData(
@@ -441,7 +441,7 @@ ThemeData _buildTheme(ColorScheme scheme) {
         borderRadius: BorderRadius.circular(8),
       ),
       textStyle: TextStyle(
-        color: isDark ? Colors.white : Colors.white,
+        color: isDark ? Colors.white : scheme.onSurface,
         fontSize: 12,
       ),
     ),

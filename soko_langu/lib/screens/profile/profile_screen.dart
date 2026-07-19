@@ -132,6 +132,7 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
           ),
           child: SafeArea(
           top: false,
+          bottom: false,
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 80),

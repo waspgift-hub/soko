@@ -38,7 +38,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
     final brightness = Theme.of(context).brightness;
     final cardBg = brightness == Brightness.dark
         ? cs.surface.withValues(alpha: 0.08)
-        : Colors.white.withValues(alpha: 0.88);
+        : cs.surface.withValues(alpha: 0.88);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -676,8 +676,8 @@ class _GlassPaymentDialog {
                           cs.surfaceContainerLow.withValues(alpha: 0.55),
                         ]
                       : [
-                          Colors.white.withValues(alpha: 0.95),
-                          Colors.white.withValues(alpha: 0.82),
+                          cs.surface.withValues(alpha: 0.95),
+                          cs.surfaceContainerLow.withValues(alpha: 0.82),
                         ],
                 ),
                 borderRadius: BorderRadius.circular(32),

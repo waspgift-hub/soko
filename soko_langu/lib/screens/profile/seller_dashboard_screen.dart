@@ -181,7 +181,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
             children: [
               Expanded(child: _actionButton(cs, Icons.price_check, context.tr('give_quote'), () => context.push(AppRoutes.sellerQuote), cs.primary)),
               const SizedBox(width: 8),
-              Expanded(child: _actionButton(cs, Icons.local_shipping, context.tr('dispatch_product'), () => context.push(AppRoutes.sellerDispatch), Colors.orange)),
+              Expanded(child: _actionButton(cs, Icons.local_shipping, context.tr('dispatch_product'), () => context.push(AppRoutes.sellerDispatch), cs.trendingOrange)),
               const SizedBox(width: 8),
               Expanded(child: _actionButton(cs, Icons.store, context.tr('customize_shop_action'), () => context.push(AppRoutes.shopCustomization), cs.primary)),
               const SizedBox(width: 8),
@@ -623,13 +623,14 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   }
 
   Widget _buildDispatchButton() {
+    final cs = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: () => context.push(AppRoutes.sellerDispatch),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [Colors.orange.shade700, Colors.orange.shade500],
+            colors: [cs.trendingOrange, cs.trendingOrange.withValues(alpha: 0.75)],
           ),
           borderRadius: BorderRadius.circular(14),
         ),

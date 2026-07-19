@@ -87,6 +87,14 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildGlassNavBar(ColorScheme cs) {
+    final isDark = cs.brightness == Brightness.dark;
+    final navBg = isDark
+        ? const Color(0xFF121729).withValues(alpha: 0.75)
+        : const Color(0xFFFFFFFF).withValues(alpha: 0.82);
+    final navBorder = isDark
+        ? const Color(0x2AFFFFFF)
+        : const Color(0x08000000);
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       child: SizedBox(
@@ -102,18 +110,16 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(40),
                 child: BackdropFilter(
-                  filter: ui.ImageFilter.blur(sigmaX: 64, sigmaY: 64),
+                  filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
                   child: Container(
                     height: 72,
                     decoration: BoxDecoration(
-                      color: cs.surface.withValues(alpha: 0.02),
+                      color: navBg,
                       borderRadius: BorderRadius.circular(40),
-                      border: Border.all(
-                        color: cs.outlineVariant.withValues(alpha: 0.06),
-                      ),
+                      border: Border.all(color: navBorder),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.02),
+                          color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.06),
                           blurRadius: 32,
                           offset: const Offset(0, 8),
                         ),

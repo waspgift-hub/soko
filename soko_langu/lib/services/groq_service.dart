@@ -1,16 +1,17 @@
 import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import '../env_config.dart';
 import 'ai/ai_service.dart';
 import 'ai/ai_tool.dart';
+import 'api_config.dart';
 
 class GroqService implements AiService {
-  final String _apiKey = EnvConfig.groqApiKey;
-  final String _textBaseUrl = 'https://api.groq.com/openai/v1/chat/completions';
+  // API key is NEVER stored in the Flutter app — all calls go through server proxy.
   final String _visionModel = 'llama-3.2-90b-vision-preview';
   final String _textModel = 'llama-3.3-70b-versatile';
   final String _fallbackTextModel = 'mixtral-8x7b-32768';
+  final String _proxyUrl = '${ApiConfig.baseUrl}/api/ai/chat';
 
   static final GroqService _instance = GroqService._internal();
   factory GroqService() => _instance;
@@ -220,6 +221,28 @@ $richProductBlocks
   @override
   List<String> get userPreferences => List.unmodifiable(_userPreferences);
 
+  Future<String> _proxyCall({required String model, required List<Map<String, dynamic>> messages, double? temperature, int? maxTokens}) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception('Not authenticated');
+    final token = await user.getIdToken();
+    final resp = await http.post(
+      Uri.parse(_proxyUrl),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'model': model,
+        'messages': messages,
+        if (temperature != null) 'temperature': temperature,
+        if (maxTokens != null) 'max_tokens': maxTokens,
+      }),
+    );
+    debugPrint('Groq proxy [$model] ${resp.statusCode}: ${resp.body}');
+    if (resp.statusCode == 200) return resp.body;
+    throw Exception('Status ${resp.statusCode}');
+  }
+
   @override
   Future<String> sendMessage(
     String userMessage, {
@@ -243,34 +266,24 @@ $richProductBlocks
             : 0.7;
 
     Future<String> tryModel(String model) async {
-      final resp = await http.post(
-        Uri.parse(_textBaseUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $_apiKey',
-        },
-        body: jsonEncode({
-          'model': model,
-          'messages': [
-            {
-              'role': 'system',
-              'content': _buildSystemPrompt(
-                    productContext: productContext,
-                    catalogStatus: catalogStatus,
-                    userQuery: searchQuery ?? userMessage,
-                    locale: locale,
-                  ) +
-                  preferencesInfo,
-            },
-            ..._chatHistory,
-          ],
-          'temperature': temperature,
-          'max_tokens': 2000,
-        }),
+      return _proxyCall(
+        model: model,
+        messages: [
+          {
+            'role': 'system',
+            'content': _buildSystemPrompt(
+                  productContext: productContext,
+                  catalogStatus: catalogStatus,
+                  userQuery: searchQuery ?? userMessage,
+                  locale: locale,
+                ) +
+                preferencesInfo,
+          },
+          ..._chatHistory,
+        ],
+        temperature: temperature,
+        maxTokens: 2000,
       );
-      debugPrint('Groq API [$model] ${resp.statusCode}: ${resp.body}');
-      if (resp.statusCode == 200) return resp.body;
-      throw Exception('Status ${resp.statusCode}');
     }
 
     try {
@@ -300,42 +313,32 @@ $richProductBlocks
   @override
   Future<String> identifyImage(String base64Image) async {
     try {
-      final response = await http.post(
-        Uri.parse(_textBaseUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $_apiKey',
-        },
-        body: jsonEncode({
-          'model': _visionModel,
-          'messages': [
-            {
-              'role': 'user',
-              'content': [
-                {
-                  'type': 'text',
-                  'text':
-                      'Chambua picha hii ya bidhaa. Jibu kwa Kiswahili au Kiingereza:\n'
-                      '1) Jina la bidhaa (kifupi)\n'
-                      '2) Brand ikiwepo\n'
-                      '3) Rangi/aina ikionekana\n'
-                      'Muundo: "Jina | brand | maelezo mafupi" — maneno 15 tu, hakuna sentensi ndefu.',
-                },
-                {
-                  'type': 'image_url',
-                  'image_url': {'url': 'data:image/jpeg;base64,$base64Image'},
-                },
-              ],
-            },
-          ],
-          'max_tokens': 80,
-        }),
+      final body = await _proxyCall(
+        model: _visionModel,
+        messages: [
+          {
+            'role': 'user',
+            'content': [
+              {
+                'type': 'text',
+                'text':
+                    'Chambua picha hii ya bidhaa. Jibu kwa Kiswahili au Kiingereza:\n'
+                    '1) Jina la bidhaa (kifupi)\n'
+                    '2) Brand ikiwepo\n'
+                    '3) Rangi/aina ikionekana\n'
+                    'Muundo: "Jina | brand | maelezo mafupi" — maneno 15 tu, hakuna sentensi ndefu.',
+              },
+              {
+                'type': 'image_url',
+                'image_url': {'url': 'data:image/jpeg;base64,$base64Image'},
+              },
+            ],
+          },
+        ],
+        maxTokens: 80,
       );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['choices'][0]['message']['content'].toString().trim();
-      }
+      final data = jsonDecode(body);
+      return data['choices'][0]['message']['content'].toString().trim();
     } catch (_) {}
     return '';
   }

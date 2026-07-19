@@ -477,16 +477,10 @@ class _OrderGlassCard extends StatelessWidget {
     final dispatchProof = data['dispatchProof'] as Map<String, dynamic>?;
     final buyerName = data['buyerName'] as String? ?? '';
 
-    final chips = <Widget>[
-      _chip(cs, '${_nf(price.toInt())} TZS', Icons.sell_outlined, cs.primary, context.tr('product_price')),
-      if (shipping != null) _chip(cs, '${_nf(shipping.toInt())} TZS', Icons.local_shipping_outlined, cs.secondary, context.tr('shipping_label')),
-      _chip(cs, '${_nf(total.toInt())} TZS', Icons.receipt_outlined, cs.tertiary, context.tr('total')),
-      _chip(cs, method, Icons.payment_outlined, cs.whatsappGreen, context.tr('payment_method')),
-    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Wrap(spacing: 6, runSpacing: 6, children: chips),
+        _buildPaymentSummary(cs, price, shipping, total, method, context),
         const SizedBox(height: 14),
         // Order details section
         _detailSection(cs, context.tr('order_details'), [
@@ -579,25 +573,55 @@ class _OrderGlassCard extends StatelessWidget {
     );
   }
 
-  Widget _chip(ColorScheme cs, String label, IconData icon, Color color, String tooltip) {
-    return Tooltip(
-      message: tooltip,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withValues(alpha: 0.15), width: 0.5),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 12, color: color),
-            const SizedBox(width: 4),
-            Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
-          ],
-        ),
+  Widget _buildPaymentSummary(ColorScheme cs, double price, double? shipping, double total, String method, BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
       ),
+      child: Column(
+        children: [
+          _paymentSummaryRow(cs, context.tr('product_price'), '${_nf(price.toInt())} TZS', cs.onSurface),
+          if (shipping != null && shipping > 0) ...[
+            const SizedBox(height: 8),
+            _paymentSummaryRow(cs, context.tr('shipping_cost'), '${_nf(shipping.toInt())} TZS', cs.secondary),
+          ],
+          const SizedBox(height: 10),
+          Container(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)),
+          const SizedBox(height: 10),
+          _paymentSummaryRow(cs, context.tr('total'), '${_nf(total.toInt())} TZS', cs.primary, bold: true),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: cs.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: cs.primary.withValues(alpha: 0.15), width: 0.5),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.payment_outlined, size: 12, color: cs.primary),
+                const SizedBox(width: 4),
+                Text(method, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.primary)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _paymentSummaryRow(ColorScheme cs, String label, String value, Color valueColor, {bool bold = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant, fontWeight: bold ? FontWeight.w600 : FontWeight.w400)),
+        Text(value, style: TextStyle(fontSize: 15, fontWeight: bold ? FontWeight.w800 : FontWeight.w600, color: valueColor)),
+      ],
     );
   }
 
