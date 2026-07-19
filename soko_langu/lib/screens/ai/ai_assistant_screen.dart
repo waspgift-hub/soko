@@ -407,7 +407,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.05))),
+        border: Border(top: BorderSide(color: cs.onSurface.withValues(alpha: 0.05))),
       ),
       child: SafeArea(
         top: false,
@@ -426,18 +426,18 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
                   hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.4), fontSize: 14),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+                    borderSide: BorderSide(color: cs.onSurface.withValues(alpha: 0.05)),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+                    borderSide: BorderSide(color: cs.onSurface.withValues(alpha: 0.05)),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(24),
                     borderSide: BorderSide(color: cs.primary.withValues(alpha: 0.3)),
                   ),
                   filled: true,
-                  fillColor: Colors.white.withValues(alpha: 0.04),
+                  fillColor: cs.onSurface.withValues(alpha: 0.04),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                 ),
               ),
@@ -447,7 +447,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
               decoration: BoxDecoration(
                 color: cs.primary,
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                border: Border.all(color: cs.onSurface.withValues(alpha: 0.1)),
               ),
               child: IconButton(
                 icon: Icon(Icons.send_rounded, color: cs.onPrimary, size: 18),
@@ -469,9 +469,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
         width: 44, height: 44,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: _isRecording ? cs.error : Colors.white.withValues(alpha: 0.06),
+          color: _isRecording ? cs.error : cs.onSurface.withValues(alpha: 0.06),
           border: Border.all(
-            color: _isRecording ? cs.error : Colors.white.withValues(alpha: 0.05),
+            color: _isRecording ? cs.error : cs.onSurface.withValues(alpha: 0.05),
           ),
         ),
         child: AnimatedSwitcher(
@@ -547,9 +547,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color: cs.onSurface.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -633,7 +633,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
                 foregroundColor: cs.onPrimary,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+                  side: BorderSide(color: cs.onSurface.withValues(alpha: 0.08)),
                 ),
                 padding: const EdgeInsets.symmetric(vertical: 12),
               ),
@@ -679,9 +679,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
+        color: cs.onSurface.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        border: Border.all(color: cs.onSurface.withValues(alpha: 0.05)),
       ),
       child: Icon(icon, color: cs.onSurface.withValues(alpha: 0.5), size: 28),
     );
@@ -709,14 +709,14 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
 
   Widget _buildAiBubble(String text) {
     final cs = Theme.of(context).colorScheme;
-    final glassBorder = Colors.white.withValues(alpha: 0.05);
+    final glassBorder = cs.onSurface.withValues(alpha: 0.05);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.8),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color: cs.onSurface.withValues(alpha: 0.04),
         borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(20),
           topRight: Radius.circular(20),
@@ -871,14 +871,14 @@ class _TypingIndicatorState extends State<_TypingIndicator>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.04),
+              color: cs.onSurface.withValues(alpha: 0.04),
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(20),
                 topRight: Radius.circular(20),
                 bottomLeft: Radius.circular(4),
                 bottomRight: Radius.circular(20),
               ),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+              border: Border.all(color: cs.onSurface.withValues(alpha: 0.05)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,

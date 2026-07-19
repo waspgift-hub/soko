@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const admin = require('firebase-admin');
 const helmet = require('helmet');
 const { mongikeCollect, mongikePayout, mongikeBalance, COLLECTION_FEE, PAYOUT_FEE } = require('./mongike');
+const { groqChat, groqTranscribe } = require('./groq');
 
 const ADMIN_EMAILS = ["admin@soko-langu.com", "admin@soko-vibe.com"];
 
@@ -3911,6 +3912,72 @@ app.post('/api/cloudinary/sign', async (req, res) => {
   } catch (e) {
     console.error('Cloudinary sign error:', e);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================================
+// 🤖 GROQ AI — Secure proxy (API key stays server-side)
+// ============================================================
+// The Flutter app sends the full Groq-compatible payload + Firebase token.
+// Server verifies auth, injects GROQ_API_KEY, proxies to Groq.
+// ============================================================
+app.post('/api/ai/chat', async (req, res) => {
+  try {
+    // Verify Firebase auth
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Missing or invalid token' });
+    }
+    try {
+      await admin.auth().verifyIdToken(authHeader.slice(7));
+    } catch {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    const { model, messages, temperature, max_tokens } = req.body;
+    if (!model || !messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: 'model and messages[] required' });
+    }
+
+    const body = await groqChat({ model, messages, temperature, max_tokens });
+    res.set('Content-Type', 'application/json');
+    res.send(body);
+  } catch (e) {
+    if (e.message === 'GROQ_API_KEY_NOT_CONFIGURED') {
+      return res.status(503).json({ error: 'Groq API key not configured on server' });
+    }
+    console.error('Groq proxy error:', e.message);
+    res.status(e.status || 500).json({ error: 'AI service error' });
+  }
+});
+
+// Speech-to-text proxy (audio → text via Groq Whisper)
+app.post('/api/ai/transcribe', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Missing or invalid token' });
+    }
+    try {
+      await admin.auth().verifyIdToken(authHeader.slice(7));
+    } catch {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    const { audio, model, language } = req.body;
+    if (!audio) {
+      return res.status(400).json({ error: 'audio (base64) required' });
+    }
+
+    const body = await groqTranscribe(audio, model, language);
+    res.set('Content-Type', 'application/json');
+    res.send(body);
+  } catch (e) {
+    if (e.message === 'GROQ_API_KEY_NOT_CONFIGURED') {
+      return res.status(503).json({ error: 'Groq API key not configured on server' });
+    }
+    console.error('Groq transcribe proxy error:', e.message);
+    res.status(e.status || 500).json({ error: 'AI transcription error' });
   }
 });
 

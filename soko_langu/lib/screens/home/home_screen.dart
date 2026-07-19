@@ -242,6 +242,7 @@ class _HomeScreenState extends State<HomeScreen>
         ],
       ),
       body: SafeArea(
+        bottom: false,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 80),

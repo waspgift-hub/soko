@@ -1,9 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:record/record.dart';
 import 'package:permission_handler/permission_handler.dart';
-import '../env_config.dart';
+import 'api_config.dart';
 
 class VoiceSearchService {
   static final VoiceSearchService _instance = VoiceSearchService._internal();
@@ -51,17 +52,26 @@ class VoiceSearchService {
       final file = File(audioPath);
       if (!await file.exists()) return '';
 
-      final uri = Uri.parse('https://api.groq.com/openai/v1/audio/transcriptions');
-      final request = http.MultipartRequest('POST', uri)
-        ..headers['Authorization'] =
-            'Bearer ${EnvConfig.groqApiKey}'
-        ..files.add(await http.MultipartFile.fromPath('file', audioPath))
-        ..fields['model'] = 'whisper-large-v3-turbo'
-        ..fields['language'] = locale == 'en' ? 'en' : 'sw'
-        ..fields['response_format'] = 'json';
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return '';
+      final token = await user.getIdToken();
 
-      final streamed = await request.send();
-      final response = await http.Response.fromStream(streamed);
+      // Read audio file as base64 and send to server proxy
+      final bytes = await file.readAsBytes();
+      final audioBase64 = base64Encode(bytes);
+
+      final response = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/ai/transcribe'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'audio': audioBase64,
+          'model': 'whisper-large-v3-turbo',
+          'language': locale == 'en' ? 'en' : 'sw',
+        }),
+      );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

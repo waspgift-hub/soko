@@ -299,19 +299,21 @@ class _ChatPageState extends State<ChatPage> {
                   onTap: () => _focusNode.unfocus(),
                   child: ListView.builder(
                     controller: _scrollCtrl,
-                    reverse: true,
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     itemCount: msgs.length,
                     itemBuilder: (_, i) {
                       final msg = msgs[i];
-                      final isFirstOfDay = i == msgs.length - 1 ||
-                          !_isSameDay(msg.timestamp, msgs[i + 1].timestamp);
+                      // Data is ascending (oldest-first). Show date above the first
+                      // message of each day (oldest in that day = top-most visually).
+                      final isFirstOfDay = i == 0 ||
+                          !_isSameDay(msg.timestamp, msgs[i - 1].timestamp);
                       final showTime = i == 0 ||
                           msgs[i - 1].senderId != msg.senderId ||
                           msgs[i - 1].timestamp.difference(msg.timestamp).abs() >
                               const Duration(minutes: 5);
 
                       return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           if (isFirstOfDay) _dateSeparator(msg.timestamp, cs),
                           _MessageBubble(
@@ -557,38 +559,40 @@ class _MessageBubble extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Column(
-        crossAxisAlignment:
-            isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-        children: [
-          // Message bubble
-          Container(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.75,
-            ),
-            padding: EdgeInsets.only(
-              left: 14, right: 14,
-              top: message.replyToContent != null && message.replyToContent!.isNotEmpty && !isDeleted ? 4 : 10,
-              bottom: 6,
-            ),
-            decoration: BoxDecoration(
-              color: isDeleted
-                  ? cs.surfaceContainerHighest
-                  : isMe
-                      ? (Theme.of(context).brightness == Brightness.dark
-                          ? const Color(0xFF005C4B)
-                          : const Color(0xFFDCF8C6))
-                      : (Theme.of(context).brightness == Brightness.dark
-                          ? const Color(0xFF202C33)
-                          : Colors.white),
-              borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(8),
-                topRight: const Radius.circular(8),
-                bottomLeft: isMe ? const Radius.circular(8) : const Radius.circular(2),
-                bottomRight: isMe ? const Radius.circular(2) : const Radius.circular(8),
+      child: Align(
+        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+        child: Column(
+          crossAxisAlignment:
+              isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [
+            // Message bubble
+            Container(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.75,
               ),
-            ),
-            child: Column(
+              padding: EdgeInsets.only(
+                left: 14, right: 14,
+                top: message.replyToContent != null && message.replyToContent!.isNotEmpty && !isDeleted ? 4 : 10,
+                bottom: 6,
+              ),
+              decoration: BoxDecoration(
+                color: isDeleted
+                    ? cs.surfaceContainerHighest
+                    : isMe
+                        ? (Theme.of(context).brightness == Brightness.dark
+                            ? const Color(0xFF005C4B)
+                            : const Color(0xFFDCF8C6))
+                        : (Theme.of(context).brightness == Brightness.dark
+                            ? const Color(0xFF202C33)
+                            : Colors.white),
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(8),
+                  topRight: const Radius.circular(8),
+                  bottomLeft: isMe ? const Radius.circular(8) : const Radius.circular(2),
+                  bottomRight: isMe ? const Radius.circular(2) : const Radius.circular(8),
+                ),
+              ),
+              child: Column(
               crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
                 // Reply inner container
@@ -762,6 +766,7 @@ class _MessageBubble extends StatelessWidget {
             ),
         ],
       ),
+        ),
     );
   }
 
