@@ -326,47 +326,54 @@ class _OrderGlassCard extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 20),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(32),
-        child: BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: isDark
-                    ? [cs.surface.withValues(alpha: 0.15), cs.surfaceContainerLow.withValues(alpha: 0.1)]
-                    : [Colors.white.withValues(alpha: 0.85), Colors.white.withValues(alpha: 0.7)],
-              ),
-              borderRadius: BorderRadius.circular(32),
-              border: Border.all(
-                color: cs.outlineVariant.withValues(alpha: isDark ? 0.15 : 0.2),
-                width: 0.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: cs.primary.withValues(alpha: 0.06),
-                  blurRadius: 32,
-                  offset: const Offset(0, 12),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => context.push('${AppRoutes.orderDetail}/$docId', extra: data),
+          borderRadius: BorderRadius.circular(32),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(32),
+            child: BackdropFilter(
+              filter: ui.ImageFilter.blur(sigmaX: 40, sigmaY: 40),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: isDark
+                        ? [cs.surface.withValues(alpha: 0.15), cs.surfaceContainerLow.withValues(alpha: 0.1)]
+                        : [Colors.white.withValues(alpha: 0.85), Colors.white.withValues(alpha: 0.7)],
+                  ),
+                  borderRadius: BorderRadius.circular(32),
+                  border: Border.all(
+                    color: cs.outlineVariant.withValues(alpha: isDark ? 0.15 : 0.2),
+                    width: 0.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: cs.primary.withValues(alpha: 0.06),
+                      blurRadius: 32,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildHeader(context, cs, productName, sellerName, dateStr, docId),
-                  const SizedBox(height: 16),
-                  _OrderStatusTimeline(status: status, cs: cs),
-                  const SizedBox(height: 16),
-                  _buildInfoChips(context, cs, price, shippingCost, totalAmount, paymentMethod),
-                  const SizedBox(height: 16),
-                  _buildActions(context, cs, status, price, shippingCost, totalAmount),
-                  if (status == 'delivered' || status == 'delivery_confirmed' || status == 'completed')
-                    _buildReceiptCard(context, cs, isDark),
-                ],
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildHeader(context, cs, productName, sellerName, dateStr, docId),
+                      const SizedBox(height: 16),
+                      _OrderStatusTimeline(status: status, cs: cs),
+                      const SizedBox(height: 16),
+                      _buildInfoChips(context, cs, price, shippingCost, totalAmount, paymentMethod),
+                      const SizedBox(height: 16),
+                      _buildActions(context, cs, status, price, shippingCost, totalAmount),
+                      if (status == 'delivered' || status == 'delivery_confirmed' || status == 'completed')
+                        _buildReceiptCard(context, cs, isDark),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),

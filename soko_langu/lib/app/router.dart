@@ -41,6 +41,7 @@ import '../screens/orders/my_purchases_screen.dart';
 import '../screens/orders/seller_dispatch_screen.dart';
 import '../screens/orders/seller_quote_screen.dart';
 import '../screens/orders/receipt_screen.dart';
+import '../screens/orders/order_detail_screen.dart';
 import '../screens/kyc/kyc_screen.dart';
 import '../screens/home/flash_sale_screen.dart';
 import '../screens/profile/create_flash_sale_screen.dart';
@@ -79,6 +80,7 @@ final List<String> _authRequiredRoutes = [
   AppRoutes.groupChat,
   AppRoutes.createFlashSale,
   AppRoutes.receipt,
+  AppRoutes.orderDetail,
   AppRoutes.report,
 ];
 
@@ -294,6 +296,14 @@ GoRouter buildRouter() {
         builder: (context, state) {
           final orderId = state.pathParameters['orderId']!;
           return ReceiptScreen(orderId: orderId);
+        },
+      ),
+      GoRoute(
+        path: '${AppRoutes.orderDetail}/:docId',
+        builder: (context, state) {
+          final docId = state.pathParameters['docId']!;
+          final data = state.extra as Map<String, dynamic>;
+          return OrderDetailScreen(docId: docId, data: data);
         },
       ),
       GoRoute(
