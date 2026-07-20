@@ -61,33 +61,42 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
           IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load),
         ],
       ),
-      body: _loading
-          ? const Center(child: GoogleLoading())
-          : _data == null
-          ? Center(
-              child: Text(
-                context.tr('no_data'),
-                style: TextStyle(color: cs.onSurfaceVariant),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [cs.primary.withValues(alpha: 0.03), cs.surface],
+          ),
+        ),
+        child: _loading
+            ? const Center(child: GoogleLoading())
+            : _data == null
+            ? Center(
+                child: Text(
+                  context.tr('no_data'),
+                  style: TextStyle(color: cs.onSurfaceVariant),
+                ),
+              )
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                children: [
+                  _buildSummaryRow(cs, nf),
+                  const SizedBox(height: 20),
+                  _buildMonthlySalesChart(cs, nf),
+                  const SizedBox(height: 16),
+                  _buildOrdersCard(cs, nf),
+                  const SizedBox(height: 16),
+                  _buildRatingCard(cs, nf),
+                  const SizedBox(height: 16),
+                  _buildTopProductsCard(cs, nf),
+                  const SizedBox(height: 16),
+                  _buildDemographicsCard(cs),
+                  const SizedBox(height: 16),
+                  _buildBoostsCard(cs, nf),
+                ],
               ),
-            )
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-              children: [
-                _buildSummaryRow(cs, nf),
-                const SizedBox(height: 20),
-                _buildMonthlySalesChart(cs, nf),
-                const SizedBox(height: 16),
-                _buildOrdersCard(cs, nf),
-                const SizedBox(height: 16),
-                _buildRatingCard(cs, nf),
-                const SizedBox(height: 16),
-                _buildTopProductsCard(cs, nf),
-                const SizedBox(height: 16),
-                _buildDemographicsCard(cs),
-                const SizedBox(height: 16),
-                _buildBoostsCard(cs, nf),
-              ],
-            ),
+      ),
     );
   }
 

@@ -484,6 +484,19 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
       );
     }
 
+    // App-wide gradient background
+    final cs = Theme.of(context).colorScheme;
+    content = Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [cs.primary.withValues(alpha: 0.03), cs.surface],
+        ),
+      ),
+      child: content,
+    );
+
     // Premium animated background with floating particles
     content = PremiumBackground(child: content);
 

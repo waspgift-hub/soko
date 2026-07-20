@@ -54,6 +54,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: Text(context.tr('dashboard')),

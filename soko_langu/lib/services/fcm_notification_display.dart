@@ -62,7 +62,7 @@ class FcmNotificationDisplay {
       await AwesomeNotifications().createNotification(
         content: NotificationContent(
           id: id,
-          channelKey: 'general_notifications_v3',
+          channelKey: 'general_notifications_v4',
           title: title,
           body: body,
           bigPicture: imageUrl,

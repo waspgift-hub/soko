@@ -114,20 +114,15 @@ class ReceiptScreen extends StatelessWidget {
     DateTime createdAt,
     TransactionStatus txStatus,
   ) {
-    return Transform(
-      alignment: Alignment.center,
-      transform: Matrix4.identity()
-        ..setEntry(3, 0, 0.001)
-        ..rotateX(0.02),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: [
-            BoxShadow(color: cs.primary.withValues(alpha: 0.1), blurRadius: 40, offset: const Offset(0, 20)),
-            BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 60, offset: const Offset(0, 30)),
-          ],
-        ),
-        child: ClipRRect(
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(color: cs.primary.withValues(alpha: 0.1), blurRadius: 40, offset: const Offset(0, 20)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 60, offset: const Offset(0, 30)),
+        ],
+      ),
+      child: ClipRRect(
           borderRadius: BorderRadius.circular(28),
           child: BackdropFilter(
             filter: ui.ImageFilter.blur(sigmaX: 30, sigmaY: 30),
@@ -287,7 +282,6 @@ class ReceiptScreen extends StatelessWidget {
             ),
           ),
         ),
-      ),
     );
   }
 

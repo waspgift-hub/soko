@@ -42,16 +42,24 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: Text(context.tr('boost_product')),
         centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
       ),
-      body: PremiumBackground(
-        child: Container(
-          width: double.infinity,
-          child: SafeArea(
-            top: false,
-            child: ListView(
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [cs.primary.withValues(alpha: 0.03), cs.surface],
+          ),
+        ),
+        child: SafeArea(
+          top: false,
+          child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
               children: [
                 _buildProductHeader(cardBg),
@@ -69,7 +77,6 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
             ),
           ),
         ),
-      ),
     );
   }
 
