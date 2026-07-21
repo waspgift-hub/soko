@@ -486,12 +486,13 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
 
     // App-wide gradient background
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     content = Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [cs.primary.withValues(alpha: 0.03), cs.surface],
+          colors: [isDark ? Colors.black : Colors.white, cs.surface],
         ),
       ),
       child: content,
