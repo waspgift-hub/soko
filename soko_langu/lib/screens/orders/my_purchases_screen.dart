@@ -311,312 +311,93 @@ class _OrderGlassCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final status = data['status'] as String? ?? 'pending';
     final productName = data['productName'] as String? ?? context.tr('product');
+    final productImage = data['productImage'] as String? ?? '';
     final price = (data['productPrice'] ?? 0).toDouble();
     final shippingCost = (data['shippingCost'] as num?)?.toDouble();
     final totalAmount = (data['totalAmount'] as num?)?.toDouble() ?? price;
+    final paymentMethod = data['paymentMethod'] as String? ?? 'Mongike';
+    final sellerName = data['sellerName'] as String? ?? '';
+    final sellerId = data['sellerId'] as String? ?? '';
     final createdAt = data['createdAt'];
     final dateStr = createdAt is Timestamp
         ? DateFormat('dd MMM yyyy HH:mm').format(createdAt.toDate())
         : '';
-    final sellerName = data['sellerName'] as String? ?? '';
-    final paymentMethod = data['paymentMethod'] as String? ?? 'Mongike';
+    final productId = data['productId'] as String? ?? '';
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => context.push('${AppRoutes.orderDetail}/$docId', extra: data),
-          borderRadius: BorderRadius.circular(32),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(32),
-            child: BackdropFilter(
-              filter: ui.ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: isDark
-                        ? [cs.surface.withValues(alpha: 0.15), cs.surfaceContainerLow.withValues(alpha: 0.1)]
-                        : [Colors.white.withValues(alpha: 0.85), Colors.white.withValues(alpha: 0.7)],
-                  ),
-                  borderRadius: BorderRadius.circular(32),
-                  border: Border.all(
-                    color: cs.outlineVariant.withValues(alpha: isDark ? 0.15 : 0.2),
-                    width: 0.5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: cs.primary.withValues(alpha: 0.06),
-                      blurRadius: 32,
-                      offset: const Offset(0, 12),
-                    ),
-                  ],
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildHeader(context, cs, productName, sellerName, dateStr, docId),
-                      const SizedBox(height: 16),
-                      _OrderStatusTimeline(status: status, cs: cs),
-                      const SizedBox(height: 16),
-                      _buildInfoChips(context, cs, price, shippingCost, totalAmount, paymentMethod),
-                      const SizedBox(height: 16),
-                      _buildActions(context, cs, status, price, shippingCost, totalAmount),
-                      if (status == 'delivered' || status == 'delivery_confirmed' || status == 'completed')
-                        _buildReceiptCard(context, cs, isDark),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context, ColorScheme cs, String productName, String sellerName, String date, String orderId) {
-    final sellerId = data['sellerId'] as String? ?? '';
-    final buyerName = data['buyerName'] as String? ?? '';
-    final productImage = data['productImage'] as String? ?? '';
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 56, height: 56,
+      padding: const EdgeInsets.only(bottom: 16),
+      child: InkWell(
+        onTap: () => context.push('${AppRoutes.orderDetail}/$docId', extra: data),
+        borderRadius: BorderRadius.circular(24),
+        child: Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: cs.primary.withValues(alpha: 0.15), width: 0.5),
+            borderRadius: BorderRadius.circular(24),
+            color: cs.surface.withValues(alpha: 0.5),
+            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
           ),
-          child: Hero(
-            tag: 'order_img_$docId',
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(15),
-              child: productImage.isNotEmpty
-                  ? Image.network(productImage, fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => Container(
-                        color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
-                        child: Icon(Icons.image_rounded, color: cs.onSurfaceVariant.withValues(alpha: 0.3)),
-                      ))
-                  : Container(
-                      color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
-                      child: Icon(Icons.image_rounded, color: cs.onSurfaceVariant.withValues(alpha: 0.3)),
-                    ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: BackdropFilter(
+              filter: ui.ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+          _buildTopSection(context, cs, productImage, productName, price, status, docId),
+          Divider(height: 1, indent: 16, endIndent: 16, color: cs.outlineVariant.withValues(alpha: 0.1)),
+          _buildMidSection(context, cs, docId, dateStr, sellerName, sellerId, paymentMethod, status, productId),
+          Divider(height: 1, indent: 16, endIndent: 16, color: cs.outlineVariant.withValues(alpha: 0.1)),
+          _buildActions(context, cs, status, price, shippingCost, totalAmount),
+          if (status == 'delivered' || status == 'delivery_confirmed' || status == 'completed')
+            _buildReceiptCard(context, cs, Theme.of(context).brightness == Brightness.dark),
+                ],
+              ),
             ),
           ),
         ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                productName,
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: cs.onSurface),
-                maxLines: 2, overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Icon(Icons.person_outline, size: 12, color: cs.secondary),
-                  const SizedBox(width: 4),
-                  Text(context.tr('seller') + ': ', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-                  GestureDetector(
-                    onTap: sellerId.isNotEmpty
-                        ? () => ChatNavigation.openSellerChat(context, sellerId, sellerName)
-                        : null,
-                    child: Row(
-                      children: [
-                        Text(sellerName, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.primary)),
-                        if (sellerId.isNotEmpty) ...[
-                          const SizedBox(width: 4),
-                          Icon(Icons.chat_outlined, size: 10, color: cs.primary),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              if (buyerName.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 3),
-                  child: Row(
-                    children: [
-                      Icon(Icons.person, size: 12, color: cs.tertiary),
-                      const SizedBox(width: 4),
-                      Text(context.tr('buyer') + ': ', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-                      Text(buyerName, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.onSurface)),
-                    ],
-                  ),
-                ),
-              const SizedBox(height: 3),
-              Row(
-                children: [
-                  Icon(Icons.tag, size: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
-                  const SizedBox(width: 4),
-                  Text('#$orderId', style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
-                  if (date.isNotEmpty) ...[
-                    const SizedBox(width: 12),
-                    Icon(Icons.access_time, size: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
-                    const SizedBox(width: 4),
-                    Text(date, style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
-                  ],
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildInfoChips(BuildContext context, ColorScheme cs, double price, double? shipping, double total, String method) {
-    final platformFee = (data['platformFee'] as num?)?.toDouble() ?? (data['sokoLanguCommission'] as num?)?.toDouble() ?? 0;
-    final processingFee = (data['processingFee'] as num?)?.toDouble() ?? 0;
-    final sellerReceives = (data['sellerReceives'] as num?)?.toDouble() ?? 0;
-    final buyerPhone = data['buyerPhone'] as String? ?? '';
-    final sellerPhone = data['sellerPhone'] as String? ?? '';
-    final deliveryAddress = data['deliveryAddress'] as Map<String, dynamic>?;
-    final dispatchProof = data['dispatchProof'] as Map<String, dynamic>?;
-    final buyerName = data['buyerName'] as String? ?? '';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildPaymentSummary(cs, price, shipping, total, method, context),
-        const SizedBox(height: 14),
-        // Order details section
-        _detailSection(cs, context.tr('order_details'), [
-          _detailRow(cs, context.tr('buyer_label'), buyerName, Icons.person_outline),
-          if (buyerPhone.isNotEmpty) _detailRow(cs, context.tr('phone'), buyerPhone, Icons.phone_outlined),
-          if (sellerPhone.isNotEmpty) _detailRow(cs, context.tr('seller_phone'), sellerPhone, Icons.phone_outlined),
-        ]),
-        // Delivery address
-        if (deliveryAddress != null) ...[
-          const SizedBox(height: 10),
-          _detailSection(cs, context.tr('shipping_address'), [
-            if (deliveryAddress['region'] != null)
-              _detailRow(cs, context.tr('region'), deliveryAddress['region'] as String, Icons.location_on_outlined),
-            if (deliveryAddress['district'] != null)
-              _detailRow(cs, context.tr('district'), deliveryAddress['district'] as String, Icons.map_outlined),
-            if (deliveryAddress['street'] != null)
-              _detailRow(cs, context.tr('street'), deliveryAddress['street'] as String, Icons.signpost_outlined),
-            if (deliveryAddress['landmarks'] != null)
-              _detailRow(cs, context.tr('landmarks'), deliveryAddress['landmarks'] as String, Icons.landscape_outlined),
-          ]),
-        ],
-        // Dispatch details
-        if (dispatchProof != null) ...[
-          const SizedBox(height: 10),
-          _detailSection(cs, context.tr('shipping_details'), [
-            if (dispatchProof['courierName'] != null)
-              _detailRow(cs, context.tr('courier_company_name'), dispatchProof['courierName'] as String, Icons.local_shipping_outlined),
-            if (dispatchProof['trackingNumber'] != null)
-              _detailRow(cs, context.tr('tracking_number'), dispatchProof['trackingNumber'] as String, Icons.qr_code_outlined),
-            if (dispatchProof['driverPhone'] != null)
-              _detailRow(cs, context.tr('driver_phone'), dispatchProof['driverPhone'] as String, Icons.phone_outlined),
-            if (dispatchProof['notes'] != null)
-              _detailRow(cs, context.tr('additional_notes'), dispatchProof['notes'] as String, Icons.notes_outlined),
-          ]),
-        ],
-        // Fee breakdown
-        if (platformFee > 0 || processingFee > 0 || sellerReceives > 0) ...[
-          const SizedBox(height: 10),
-          _detailSection(cs, context.tr('payment_breakdown'), [
-            if (platformFee > 0)
-              _detailRow(cs, context.tr('soko_commission'), '-${_nf(platformFee.toInt())} TZS', Icons.percent_outlined, valueColor: cs.tertiary),
-            if (processingFee > 0)
-              _detailRow(cs, context.tr('processing_fee'), '${_nf(processingFee.toInt())} TZS', Icons.monetization_on_outlined, valueColor: cs.onSurfaceVariant),
-            if (sellerReceives > 0) ...[
-              const SizedBox(height: 4),
-              Container(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)),
-              const SizedBox(height: 4),
-              _detailRow(cs, context.tr('seller_receives'), '${_nf(sellerReceives.toInt())} TZS', Icons.account_balance_wallet_outlined, valueColor: cs.successGreen),
-            ],
-          ]),
-        ],
-      ],
-    );
-  }
-
-  Widget _detailSection(ColorScheme cs, String title, List<Widget> rows) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: cs.primary, letterSpacing: 0.5)),
-          const SizedBox(height: 10),
-          ...rows,
-        ],
       ),
     );
   }
 
-  Widget _detailRow(ColorScheme cs, String label, String value, IconData icon, {Color? valueColor}) {
+  Widget _buildTopSection(BuildContext context, ColorScheme cs, String image, String name, double price, String status, String orderId) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.all(14),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 14, color: cs.onSurfaceVariant.withValues(alpha: 0.6)),
-          const SizedBox(width: 8),
-          SizedBox(width: 80, child: Text(label, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant))),
-          Expanded(
-            child: Text(value, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: valueColor ?? cs.onSurface)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPaymentSummary(ColorScheme cs, double price, double? shipping, double total, String method, BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
-      ),
-      child: Column(
-        children: [
-          _paymentSummaryRow(cs, context.tr('product_price'), '${_nf(price.toInt())} TZS', cs.onSurface),
-          if (shipping != null && shipping > 0) ...[
-            const SizedBox(height: 8),
-            _paymentSummaryRow(cs, context.tr('shipping_cost'), '${_nf(shipping.toInt())} TZS', cs.secondary),
-          ],
-          const SizedBox(height: 10),
-          Container(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)),
-          const SizedBox(height: 10),
-          _paymentSummaryRow(cs, context.tr('total'), '${_nf(total.toInt())} TZS', cs.primary, bold: true),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: cs.primary.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: cs.primary.withValues(alpha: 0.15), width: 0.5),
+          Hero(
+            tag: 'order_img_$orderId',
+            child: Container(
+              width: 68, height: 68,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.15)),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(15),
+                child: image.isNotEmpty
+                    ? Image.network(image, fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => _imgPlaceholder(cs))
+                    : _imgPlaceholder(cs),
+              ),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.payment_outlined, size: 12, color: cs.primary),
-                const SizedBox(width: 4),
-                Text(method, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.primary)),
+                Text(name, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: cs.onSurface),
+                  maxLines: 2, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Text('TZS ${_nf(price.toInt())}',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: cs.primary)),
+                    const SizedBox(width: 10),
+                    _statusBadge(context, cs, status),
+                  ],
+                ),
               ],
             ),
           ),
@@ -625,13 +406,134 @@ class _OrderGlassCard extends StatelessWidget {
     );
   }
 
-  Widget _paymentSummaryRow(ColorScheme cs, String label, String value, Color valueColor, {bool bold = false}) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant, fontWeight: bold ? FontWeight.w600 : FontWeight.w400)),
-        Text(value, style: TextStyle(fontSize: 15, fontWeight: bold ? FontWeight.w800 : FontWeight.w600, color: valueColor)),
-      ],
+  Widget _imgPlaceholder(ColorScheme cs) {
+    return Container(
+      color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
+      child: Icon(Icons.image_rounded, color: cs.onSurfaceVariant.withValues(alpha: 0.3)),
+    );
+  }
+
+  Widget _statusBadge(BuildContext context, ColorScheme cs, String status) {
+    final Color color;
+    final IconData icon;
+    final String label;
+    switch (status) {
+      case 'completed': case 'delivered': case 'delivery_confirmed':
+        color = cs.successGreen; icon = Icons.check_circle_rounded; label = context.tr('completed');
+      case 'paid_escrow_held': case 'escrow_hold':
+        color = Colors.purple; icon = Icons.verified_user_rounded; label = context.tr('secured_in_escrow');
+      case 'dispatched':
+        color = Colors.orange; icon = Icons.local_shipping_rounded; label = context.tr('shipped');
+      case 'awaiting_payment':
+        color = Colors.blue; icon = Icons.account_balance_wallet_rounded; label = context.tr('awaiting_payment');
+      case 'awaiting_shipping_quote':
+        color = Colors.amber; icon = Icons.hourglass_bottom_rounded; label = context.tr('waiting_quote');
+      case 'failed': case 'cancelled': case 'refunded':
+        color = cs.error; icon = Icons.cancel_rounded; label = status;
+      default:
+        color = cs.onSurfaceVariant; icon = Icons.pending_rounded; label = status;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMidSection(BuildContext context, ColorScheme cs, String orderId, String date,
+      String sellerName, String sellerId, String method, String status, String productId) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _infoChip(cs, Icons.tag_rounded, '#$orderId', cs.onSurfaceVariant),
+              const SizedBox(width: 10),
+              _infoChip(cs, Icons.access_time_rounded, date, cs.onSurfaceVariant),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              if (sellerId.isNotEmpty)
+                GestureDetector(
+                  onTap: () => ChatNavigation.openSellerChat(context, sellerId, sellerName),
+                  child: _infoChip(cs, Icons.chat_outlined, sellerName, cs.primary),
+                ),
+              const SizedBox(width: 8),
+              _infoChip(cs, Icons.payment_outlined, method, cs.secondary),
+              const Spacer(),
+              _CompactTimeline(status: status, cs: cs),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoChip(ColorScheme cs, IconData icon, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 4),
+          Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentSummary(BuildContext context, ColorScheme cs, double price, double? shipping, double total, String method) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          _summaryRow(context, cs, context.tr('product_price'), _nf(price.toInt()), cs.onSurface),
+          if (shipping != null && shipping > 0)
+            _summaryRow(context, cs, context.tr('shipping_cost'), _nf(shipping.toInt()), cs.secondary),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)),
+          ),
+          _summaryRow(context, cs, context.tr('receipt_total'), _nf(total.toInt()), cs.primary, bold: true),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryRow(BuildContext context, ColorScheme cs, String label, String value, Color valueColor, {bool bold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant, fontWeight: bold ? FontWeight.w600 : FontWeight.w400)),
+          Text('TZS $value', style: TextStyle(fontSize: 14, fontWeight: bold ? FontWeight.w800 : FontWeight.w600, color: valueColor)),
+        ],
+      ),
     );
   }
 
@@ -641,102 +543,76 @@ class _OrderGlassCard extends StatelessWidget {
     final canDispute = status == 'paid_escrow_held' || status == 'escrow_hold' || status == 'dispatched' || status == 'delivered';
     final canCancel = status == 'paid_escrow_held' || status == 'escrow_hold';
 
-    return Column(
-      children: [
-        if (canPay)
-          SizedBox(
-            width: double.infinity, height: 48,
-            child: ElevatedButton.icon(
-              onPressed: payingTxId == docId ? null : () => onPay(docId, data),
-              icon: payingTxId == docId
-                  ? const GoogleLoading(size: 20, strokeWidth: 2)
-                  : const Icon(Icons.payment, size: 18),
-              label: Text(payingTxId == docId ? context.tr('paying_label') : context.tr('pay_amount_tzs').replaceAll('{0}', _nf(total))),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: cs.primary,
-                foregroundColor: cs.surface,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                elevation: 0,
-              ),
-            ),
+    final actions = <Widget>[];
+    if (canPay) actions.add(_buildActionBtn(context, cs, Icons.payment, context.tr('pay_amount_tzs').replaceAll('{0}', _nf(total)),
+        payingTxId == docId ? null : () => onPay(docId, data), cs.primary, payingTxId == docId));
+    if (canConfirm) actions.add(_buildActionBtn(context, cs, Icons.verified, context.tr('confirm_receipt'),
+        releasingTxId == docId ? null : () => onConfirm(docId), cs.successGreen, releasingTxId == docId));
+    if (status == 'awaiting_shipping_quote')
+      actions.add(_buildActionBtn(context, cs, Icons.hourglass_empty, context.tr('waiting_for_seller_label'), null, cs.onSurfaceVariant, false, disabled: true));
+    if (canDispute) actions.add(_buildActionBtn(context, cs, Icons.gavel, context.tr('dispute_button'),
+        disputingTxId == docId ? null : () => onDispute(docId), cs.error, disputingTxId == docId, outlined: true));
+    if (canCancel) actions.add(_buildActionBtn(context, cs, Icons.money_off, context.tr('cancel'),
+        cancellingTxId == docId ? null : () => onCancel(docId), cs.error, cancellingTxId == docId, outlined: true));
+
+    if (actions.isEmpty) return const SizedBox.shrink();
+
+    final showPaymentSummary = total > 0 || (shipping != null && shipping > 0);
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        children: [
+          if (showPaymentSummary) ...[
+            _buildPaymentSummary(context, cs, price, shipping, total, data['paymentMethod'] as String? ?? 'Mongike'),
+            const SizedBox(height: 12),
+          ],
+          ...actions.map((a) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: a,
+          )),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionBtn(BuildContext context, ColorScheme cs, IconData icon, String label, VoidCallback? onTap, Color color, bool isLoading, {bool outlined = false, bool disabled = false}) {
+    final effectiveOnTap = disabled ? null : onTap;
+    if (outlined) {
+      return SizedBox(
+        width: double.infinity, height: 44,
+        child: OutlinedButton.icon(
+          onPressed: effectiveOnTap,
+          icon: isLoading
+              ? const GoogleLoading(size: 18, strokeWidth: 2)
+              : Icon(icon, size: 16),
+          label: Text(isLoading ? context.tr('processing_label') : label),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: color,
+            side: BorderSide(color: color.withValues(alpha: 0.3)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           ),
-        if (canConfirm)
-          SizedBox(
-            width: double.infinity, height: 48,
-            child: ElevatedButton.icon(
-              onPressed: releasingTxId == docId ? null : () => onConfirm(docId),
-              icon: releasingTxId == docId
-                  ? const GoogleLoading(size: 20, strokeWidth: 2)
-                  : const Icon(Icons.verified, size: 18),
-              label: Text(releasingTxId == docId ? context.tr('confirming_label') : context.tr('confirm_receipt')),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: cs.successGreen,
-                foregroundColor: cs.surface,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                elevation: 0,
-              ),
-            ),
-          ),
-        if (status == 'awaiting_shipping_quote')
-          SizedBox(
-            width: double.infinity, height: 48,
-            child: ElevatedButton.icon(
-              onPressed: null,
-              icon: const Icon(Icons.hourglass_empty, size: 18),
-              label: Text(context.tr('waiting_for_seller_label')),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: cs.surfaceContainerHighest.withValues(alpha: 0.3),
-                foregroundColor: cs.onSurfaceVariant,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                elevation: 0,
-              ),
-            ),
-          ),
-        if (canDispute || canCancel)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Row(
-              children: [
-                if (canDispute)
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: disputingTxId == docId ? null : () => onDispute(docId),
-                      icon: disputingTxId == docId
-                      ? const GoogleLoading(size: 16, strokeWidth: 2)
-                      : const Icon(Icons.gavel, size: 16),
-                      label: Text(context.tr('dispute_button')),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: cs.error,
-                        side: BorderSide(color: cs.error.withValues(alpha: 0.3)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ),
-                if (canDispute && canCancel) const SizedBox(width: 8),
-                if (canCancel)
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: cancellingTxId == docId ? null : () => onCancel(docId),
-                      icon: cancellingTxId == docId
-                      ? const GoogleLoading(size: 16, strokeWidth: 2)
-                      : const Icon(Icons.money_off, size: 16),
-                      label: Text(context.tr('cancel')),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: cs.error,
-                        side: BorderSide(color: cs.error.withValues(alpha: 0.3)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-      ],
+        ),
+      );
+    }
+    return SizedBox(
+      width: double.infinity, height: 44,
+      child: ElevatedButton.icon(
+        onPressed: effectiveOnTap,
+        icon: isLoading
+            ? const GoogleLoading(size: 18, strokeWidth: 2)
+            : Icon(icon, size: 16),
+        label: Text(isLoading ? context.tr('processing_label') : label),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: cs.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          elevation: 0,
+        ),
+      ),
     );
   }
 
   Widget _buildReceiptCard(BuildContext context, ColorScheme cs, bool isDark) {
-    final status = data['status'] as String? ?? 'pending';
     final paymentMethod = data['paymentMethod'] as String? ?? 'Mongike';
     final productPrice = (data['productPrice'] as num?)?.toDouble() ?? 0;
     final shippingCost = (data['shippingCost'] as num?)?.toDouble() ?? 0;
@@ -750,65 +626,43 @@ class _OrderGlassCard extends StatelessWidget {
         : '';
 
     return Padding(
-      padding: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: isDark
-                ? [cs.surface.withValues(alpha: 0.2), cs.surfaceContainerLow.withValues(alpha: 0.12)]
-                : [cs.primary.withValues(alpha: 0.04), cs.secondary.withValues(alpha: 0.04)],
-          ),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: cs.primary.withValues(alpha: 0.1), width: 0.5),
+          color: cs.surfaceContainerHighest.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: cs.primary.withValues(alpha: 0.08)),
         ),
         child: Column(
           children: [
             Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: cs.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(Icons.receipt_long_rounded, color: cs.primary, size: 22),
-                ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(context.tr('purchase_receipt'), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: cs.onSurface)),
-                    const SizedBox(height: 2),
-                    Text('#$docId', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-                  ],
-                ),
+                Icon(Icons.receipt_long_rounded, size: 18, color: cs.primary),
+                const SizedBox(width: 8),
+                Text(context.tr('purchase_receipt'),
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: cs.onSurface)),
                 const Spacer(),
-                Icon(Icons.download_rounded, color: cs.primary, size: 20),
-                const SizedBox(width: 14),
-                Icon(Icons.share_rounded, color: cs.primary, size: 20),
+                Icon(Icons.download_rounded, size: 18, color: cs.primary),
               ],
             ),
-            const SizedBox(height: 16),
-            Container(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)),
-            const SizedBox(height: 16),
-            _receiptRow(cs, context.tr('receipt_date'), dateStr, cs.onSurfaceVariant),
-            _receiptRow(cs, context.tr('product_price'), '${_nf(productPrice.toInt())} TZS', cs.onSurfaceVariant),
-            if (shippingCost > 0)
-              _receiptRow(cs, context.tr('shipping_cost'), '${_nf(shippingCost.toInt())} TZS', cs.secondary),
-            if (mongikeFee > 0)
-              _receiptRow(cs, context.tr('mongike_fee_label'), '${_nf(mongikeFee.toInt())} TZS', cs.tertiary),
-            Container(height: 1, color: cs.outlineVariant.withValues(alpha: 0.15), margin: const EdgeInsets.symmetric(vertical: 6)),
-            _receiptRow(cs, context.tr('receipt_total'), '${_nf(totalAmount.toInt())} TZS', cs.primary),
             const SizedBox(height: 12),
-            if (buyerName.isNotEmpty)
-              _receiptRow(cs, context.tr('buyer_label'), buyerName, cs.onSurfaceVariant),
-            if (buyerPhone.isNotEmpty)
-              _receiptRow(cs, context.tr('phone'), buyerPhone, cs.onSurfaceVariant),
-            _receiptRow(cs, context.tr('payment_method'), paymentMethod, cs.onSurfaceVariant),
-            _receiptRow(cs, context.tr('order_status'), escrowLabel(status), _statusColor(status, cs)),
+            Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.15)),
+            const SizedBox(height: 10),
+            _receiptRow(cs, context.tr('receipt_date'), dateStr),
+            _receiptRow(cs, context.tr('product_price'), 'TZS ${_nf(productPrice.toInt())}'),
+            if (shippingCost > 0)
+              _receiptRow(cs, context.tr('shipping_cost'), 'TZS ${_nf(shippingCost.toInt())}', valueColor: cs.secondary),
+            if (mongikeFee > 0)
+              _receiptRow(cs, context.tr('mongike_fee_label'), 'TZS ${_nf(mongikeFee.toInt())}', valueColor: cs.tertiary),
+            Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.15)),
+            const SizedBox(height: 6),
+            _receiptRow(cs, context.tr('receipt_total'), 'TZS ${_nf(totalAmount.toInt())}', valueColor: cs.primary, bold: true),
+            if (buyerName.isNotEmpty || buyerPhone.isNotEmpty) const SizedBox(height: 8),
+            if (buyerName.isNotEmpty) _receiptRow(cs, context.tr('buyer_label'), buyerName),
+            if (buyerPhone.isNotEmpty) _receiptRow(cs, context.tr('phone'), buyerPhone),
+            _receiptRow(cs, context.tr('payment_method'), paymentMethod),
+            _receiptRow(cs, context.tr('order_status'), escrowLabel(status), valueColor: _statusColor(status, cs)),
           ],
         ),
       ),
@@ -825,26 +679,86 @@ class _OrderGlassCard extends StatelessWidget {
     }
   }
 
-  Widget _receiptRow(ColorScheme cs, String label, String value, Color valueColor) {
+  Widget _receiptRow(ColorScheme cs, String label, String value, {Color? valueColor, bool bold = false}) {
     return Padding(
-      padding: const EdgeInsets.only(top: 6),
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-          Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: valueColor)),
+          Text(value, style: TextStyle(fontSize: 12, fontWeight: bold ? FontWeight.w700 : FontWeight.w600, color: valueColor ?? cs.onSurface)),
         ],
       ),
     );
   }
 
-  String _nf(num n) {
-    return NumberFormat('#,###', 'en').format(n);
-  }
-
+  String _nf(num n) => NumberFormat('#,###', 'en').format(n);
   String get paymentMethod => data['paymentMethod'] as String? ?? 'Mongike';
   String get status => data['status'] as String? ?? 'pending';
   double get totalAmount => (data['totalAmount'] as num?)?.toDouble() ?? (data['productPrice'] as num?)?.toDouble() ?? 0;
+}
+
+class _CompactTimeline extends StatelessWidget {
+  final String status;
+  final ColorScheme cs;
+  const _CompactTimeline({required this.status, required this.cs});
+
+  @override
+  Widget build(BuildContext context) {
+    final steps = _buildSteps();
+    final current = _currentIndex();
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(steps.length, (i) {
+        final active = i <= current;
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8, height: 8,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: active ? steps[i].color : cs.surfaceContainerHighest.withValues(alpha: 0.4),
+                boxShadow: i == current
+                    ? [BoxShadow(color: steps[i].color.withValues(alpha: 0.5), blurRadius: 6)]
+                    : [],
+              ),
+            ),
+            if (i < steps.length - 1)
+              Container(
+                width: 10, height: 2,
+                color: i < current ? steps[i].color : cs.surfaceContainerHighest.withValues(alpha: 0.2),
+              ),
+          ],
+        );
+      }),
+    );
+  }
+
+  int _currentIndex() {
+    switch (status) {
+      case 'pending': return 0;
+      case 'awaiting_shipping_quote': return 1;
+      case 'awaiting_payment': return 2;
+      case 'paid_escrow_held': case 'escrow_hold': return 3;
+      case 'dispatched': return 4;
+      case 'delivered': case 'delivery_confirmed': return 5;
+      case 'completed': return 6;
+      default: return 0;
+    }
+  }
+
+  List<_TimelineStep> _buildSteps() {
+    return [
+      _TimelineStep('', Icons.access_time_rounded, cs.onSurfaceVariant),
+      _TimelineStep('', Icons.local_shipping_outlined, Colors.orange),
+      _TimelineStep('', Icons.account_balance_wallet_outlined, Colors.blue),
+      _TimelineStep('', Icons.verified_user_outlined, Colors.purple),
+      _TimelineStep('', Icons.inventory_2_outlined, cs.successGreen),
+      _TimelineStep('', Icons.check_circle_outline, cs.successGreen),
+      _TimelineStep('', Icons.check_circle_rounded, cs.successGreen),
+    ];
+  }
 }
 
 class _OrderStatusTimeline extends StatelessWidget {
