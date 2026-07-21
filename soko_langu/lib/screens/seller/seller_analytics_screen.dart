@@ -66,7 +66,7 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [cs.primary.withValues(alpha: 0.03), cs.surface],
+            colors: [Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white, cs.surface],
           ),
         ),
         child: _loading

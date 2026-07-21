@@ -196,7 +196,7 @@ class _AuroraPainter extends CustomPainter {
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
       colors: [
-        _cs.primary.withValues(alpha: 0.04),
+        _isDark ? Colors.black : Colors.white,
         _cs.surface,
       ],
     );

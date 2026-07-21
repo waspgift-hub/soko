@@ -127,7 +127,7 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [cs.primary.withValues(alpha: 0.03), cs.surface],
+              colors: [Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white, cs.surface],
             ),
           ),
           child: SafeArea(
@@ -145,7 +145,7 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      colors: [cs.primary.withValues(alpha: 0.08), cs.surface],
+                      colors: [Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white, cs.surface],
                     ),
                   ),
                   padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 24, bottom: 24),
@@ -158,7 +158,7 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               gradient: LinearGradient(
-                                colors: [cs.primary.withValues(alpha: 0.3), cs.surface],
+                                colors: [Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white, cs.surface],
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                               ),

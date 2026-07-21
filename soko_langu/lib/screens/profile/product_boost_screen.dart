@@ -54,7 +54,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [cs.primary.withValues(alpha: 0.03), cs.surface],
+            colors: [brightness == Brightness.dark ? Colors.black : Colors.white, cs.surface],
           ),
         ),
         child: SafeArea(
