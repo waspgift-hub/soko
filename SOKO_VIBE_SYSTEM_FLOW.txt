@@ -1,0 +1,664 @@
+╔══════════════════════════════════════════════════════════════╗
+║              SOKO VIBE — SYSTEM FLOW DOCUMENTATION           ║
+║         Marketplace + Chat + Boost + Ads + Escrow            ║
+╚══════════════════════════════════════════════════════════════╝
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+1.  APP ARCHITECTURE OVERVIEW
+2.  AUTHENTICATION SYSTEM
+3.  PRODUCT SYSTEM
+4.  CHAT SYSTEM (WhatsApp-Style)
+5.  PAYMENT & TRANSACTION SYSTEM
+6.  ORDER FLOW (Buyer → Seller → Escrow → Complete)
+7.  BOOST SYSTEM
+8.  ADMOB / ADVERTISING SYSTEM
+9.  NOTIFICATION SYSTEM
+10. ANALYTICS & FRAUD PREVENTION
+11. OFFLINE / CONNECTIVITY
+12. LOCALIZATION
+13. SERVER BACKEND (index.js — Express)
+14. SECURITY CONCERNS
+15. IMPROVEMENTS & RECOMMENDATIONS
+
+
+================================================================================
+1. APP ARCHITECTURE OVERVIEW
+================================================================================
+
+Tech Stack:
+-----------
+- Frontend: Flutter 3.29.0 (Dart) — Android + iOS
+- Backend: Node.js Express server (8000+ lines)
+- Database: Firebase Firestore (NoSQL)
+- Auth: Firebase Authentication
+- Storage: Firebase Storage + Cloudinary (images)
+- Payments: Mongike API (Tanzania mobile money)
+- AI: Groq API (AI assistant, transcriber)
+- Ads: Google AdMob (banner + rewarded)
+- Notifications: Firebase Cloud Messaging (FCM) + Awesome Notifications
+- SMS: Africa's Talking API
+- Maps: Mapbox + OpenStreetMap
+- State: StatefulWidget + StreamBuilder (Firestore snapshots)
+
+Directory Structure:
+-------------------
+soko_langu/
+  lib/
+    main.dart                    # App entry, providers, routers, wrappers
+    app/
+      routes.dart                # GoRouter route definitions
+    screens/
+      auth/                      # Login, Register, Forgot Password, Phone Auth
+      home/                      # Home, Discovery, Product Detail, Checkout, Flash Sale, Category
+      chat/                      # Chat Inbox, Chat Room, Chat Page
+      orders/                    # My Purchases, Order Detail, Receipt, Seller Quote/Dispatch
+      profile/                   # Profile, My Ads, Seller Dashboard, Wishlist, Settings, KYC, Boost
+      admin/                     # Admin Dashboard, Wallet, Ad Revenue, Reports
+      seller/                    # Seller Earnings, Seller Profile
+      ai/                        # AI Assistant (Groq chat)
+      notification/              # Notification screen
+      report/                    # Report/Flag screen
+    services/                    # All business logic services
+    models/                      # Data models
+    widgets/                     # Reusable UI components
+    extensions/                  # context.tr() for translations
+    utils/                       # Constants, network error handling
+    theme/                       # App colors, themes
+    notifiers/                   # AuthNotifier, etc.
+    repositories/                # Product Repository (offline-first)
+  server/
+    index.js                     # Express server (all routes)
+    mongike.js                   # Mongike payment gateway integration
+    groq.js                      # Groq AI integration
+    ecosystem.config.js          # PM2 clustering config
+  functions/
+    index.js                     # Firebase Cloud Functions
+
+
+================================================================================
+2. AUTHENTICATION SYSTEM
+================================================================================
+
+Files: lib/services/auth_service.dart, lib/notifiers/auth_notifier.dart,
+       lib/screens/auth/*.dart
+
+Methods:
+  - Email/Password: signInWithEmailAndPassword, createUserWithEmailAndPassword
+  - Google Sign-In: signInWithGoogle
+  - Phone Auth: sendOtp (SMS), verifyOtp
+  - Anonymous: signInAnonymously
+  - Magic Link: sendPasswordResetEmail (used as magic link)
+
+Flow:
+  1. User opens app → main.dart checks FirebaseAuth.currentUser
+  2. If not logged in → redirect to LoginScreen
+  3. Login/Register → AuthService.* → Firebase Auth → create/update Firestore users/{uid}
+  4. AuthNotifier listens to auth state changes → rebuilds MaterialApp
+  5. Token is stored and refreshed for API calls (getIdToken)
+
+Firestore Collection: users/{uid}
+  Fields: name, phone, email, fcmToken, isAdmin, isSuspended,
+          sellerBalance, totalSales, createdAt, lastActive, location, etc.
+
+Server Routes:
+  - None directly (Firebase Auth is client-side SDK)
+  - But many server routes use verifyIdToken() for authorization
+
+
+================================================================================
+3. PRODUCT SYSTEM
+================================================================================
+
+Files: lib/services/product_service.dart, lib/repositories/product_repository.dart,
+       lib/screens/home/*.dart, lib/widgets/product_card.dart
+
+Flow:
+  1. Seller creates product via AddProductScreen
+  2. Images uploaded to Cloudinary (unsigned upload)
+  3. Product saved to Firestore: products/{productId}
+  4. Products listed on HomeScreen with StreamBuilder
+  5. Sorting: boosted products first, then newest
+  6. Search: by keyword, category, AI/Groq assistant
+  7. Product detail: images, price, seller info, reviews, comments, related products
+
+Firestore Collection: products/{productId}
+  Fields: name, description, price, images[], category, sellerId, sellerName,
+          isActive, isBoosted, boostedUntil, boostTier, viewCount,
+          searchKeywords[], searchName, createdAt
+
+Data Flow for Product Cards:
+  - StreamBuilder<List<Product>> from ProductRepository
+  - ProductRepository queries Firestore with filters (isActive, category, etc.)
+  - CachedNetworkImage for product images
+  - Optimistic UI: products appear immediately from cache, updated from network
+
+
+================================================================================
+4. CHAT SYSTEM (WhatsApp-Style)
+================================================================================
+
+Files: lib/services/chat_service.dart, lib/services/user_service.dart,
+       lib/screens/chat/chat_page.dart, lib/screens/chat/chat_inbox_screen.dart,
+       lib/screens/chat/chat_room_screen.dart, lib/models/message_model.dart
+
+Features Implemented:
+  a. Optimistic Messaging
+     - Message appears instantly in chat bubble before server confirms
+     - _optimisticMsgs map stores temp messages with tempId
+     - HTTP POST to /api/chat/send sends the message
+     - Server writes to Firestore messages/{msgId}
+     - Optimistic messages are removed once Firestore confirms (matching by
+       content + senderId within 30s timeout)
+     - File: chat_page.dart lines 100-180
+
+  b. Blue Tick Icons
+     - Single grey tick: message sent but not delivered (isDelivered = false)
+     - Double grey ticks: delivered to Firestore (isDelivered = true)
+     - Blue double ticks: read by recipient (isRead = true)
+     - File: chat_page.dart _StatusIcon widget
+
+  c. Read Receipts
+     - chat_service.markMessagesAsRead() batch-updates all unread incoming
+       messages to isRead = true on chat init and when new messages arrive
+     - Filters messages where senderId != currentUserId && !isRead
+
+  d. Online Presence
+     - UserService.streamLastActive(uid) streams user.lastActive from Firestore
+     - isOnline = lastActive is within 2 minutes
+     - Green dot shown in AppBar + chat list
+     - Timer refreshes every 30 seconds
+     - When app closes, lastActive is updated to now (Firestore onDisconnect)
+
+  e. Slide-to-Reply
+     - GestureDetector.onHorizontalDragEnd on message bubbles
+     - Triggers reply callback when velocity > 300px/s rightward
+     - Shows quoted message above input field
+
+  f. Typing Indicator
+     - _TypingDots widget with 3 bouncing animated dots
+     - Uses AnimationController with staggered delays
+     - Replaces static "typing..." text
+
+  g. Failed Message Retry
+     - Red error_outline icon on failed sends (HTTP error)
+     - Tap icon calls _retryMessage() which re-sends with new temp ID
+     - Removes old failed optimistic message
+
+Firestore Collections:
+  conversations/{convId}
+    Fields: participants[], lastMessage, lastMessageTime, lastSenderId,
+            unreadCount_{uid}, isRead_{uid}
+  conversations/{convId}/messages/{msgId}
+    Fields: senderId, content, timestamp, type (text/image), isDelivered, isRead
+
+
+================================================================================
+5. PAYMENT & TRANSACTION SYSTEM
+================================================================================
+
+Files: lib/services/mongike_service.dart, lib/services/payment_service.dart,
+       server/mongike.js, server/index.js (webhooks),
+       lib/models/transaction_model.dart, lib/screens/home/checkout_screen.dart
+
+A. Fee Calculation (Current Model):
+   - PLATFORM_COMMISSION_PERCENT = 0.035 (3.5%)
+   - productPrice: listed price of product
+   - serviceFee = productPrice × 3.5%
+   - mongikeFee = 180 TZS flat (absorbed by platform, not charged to buyer)
+   - totalAmount = productPrice + serviceFee (what buyer pays)
+   - sellerReceives = productPrice (seller gets full listed price)
+   - Platform earns: serviceFee (3.5% of productPrice)
+
+B. Payment Flow:
+   1. Buyer taps "Buy" → CheckoutScreen
+   2. CheckoutScreen shows:
+      - Product price
+      - Service fee (+3.5%) as positive addition
+      - Mongike fee (180 TZS) — currently shown but NOT charged to buyer
+      - Total payment
+      - Seller receives: full product price
+   3. Buyer fills address + phone → submits order
+   4. Firestore transaction created with status: 'awaiting_shipping_quote'
+   5. Seller provides shipping quote → status: 'awaiting_payment'
+   6. Buyer taps "Pay" → MongikeService.initiateMarketplacePayment()
+   7. Server POST /api/create-marketplace-payment-link
+   8. Server calls mongikeCollect() → Mongike pushes USSD to buyer's phone
+   9. Buyer enters PIN on phone → payment processed
+   10. Mongike sends callback to /api/mongike/webhook (with callbackUrl)
+   11. Webhook updates transaction:
+       - status: 'escrow_hold'
+       - totalAmount = productPrice + platformFee
+       - sellerReceives = productPrice
+       - platformFee = productPrice × 3.5%
+       - Escrow expiry set (3 days local, 7 days regional)
+   12. RealtimePaymentBanner detects status change → shows success/failure
+   13. If success → product goes into escrow
+
+C. Webhook Handlers (3 total):
+   Handler A: /api/mongike/webhook (line 1341) — MAIN
+     - Handles both boost and purchase
+     - totalAmount = productPrice + platformFee ✓
+     - sellerReceives = productPrice ✓
+
+   Handler B: /api/webhook (line 2570) — LEGACY
+     - Same logic as Handler A
+     - Now fixed: totalAmount = productPrice + platformFee ✓
+
+   Handler C: /api/retry-payment (line 2815) — RETRY
+     - For pending transactions where webhook never arrived
+     - Now fixed: totalAmount = productPrice + platformFee ✓
+
+D. Mongike Integration (server/mongike.js):
+   - mongikeCollect(): Initiates mobile money collection
+     - POST to https://mongike.com/api/v1/payments/mobile-money/tanzania
+     - Payload: order_id, amount, buyer_phone, fee_payer, callback_url
+     - callback_url = https://server-url/api/mongike/webhook
+   - mongikePayout(): Sends payout to seller
+     - POST to https://mongike.com/api/v1/payouts/withdraw
+     - Fee: 2,000 TZS flat (PAYOUT_FEE)
+   - mongikeBalance(): Check wallet balance
+
+E. Transaction Statuses (Full Lifecycle):
+   pending → awaiting_shipping_quote → awaiting_payment →
+   escrow_hold / paid_escrow_hold → dispatched → delivered → completed
+   Any status can → failed / cancelled / refunded
+
+
+================================================================================
+6. ORDER FLOW (Full Lifecycle)
+================================================================================
+
+Step-by-step with all files involved:
+
+STEP 1: CHECKOUT
+  File: checkout_screen.dart
+  - User fills phone, region, district, street
+  - Taps "Submit" → _submitOrder()
+  - Firestore write: transactions/{orderId}
+    status: 'awaiting_shipping_quote'
+    Fields: productId, sellerId, buyerId, productPrice, mongikeFee,
+            serviceFeePercent, deliveryAddress, paymentMethod: 'Mongike'
+  - Navigates to MyPurchasesScreen
+
+STEP 2: SELLER PROVIDES SHIPPING QUOTE
+  File: seller_quote_screen.dart
+  - Seller sees order with 'awaiting_shipping_quote'
+  - Provides shipping cost + delivery details
+  - Updates transaction: status → 'awaiting_payment', shippingCost added
+
+STEP 3: BUYER PAYS
+  File: my_purchases_screen.dart, payment_service.dart
+  - Buyer sees "Pay" button (status == 'awaiting_payment')
+  - Tap → MongikeService.initiateMarketplacePayment()
+  - Server: /api/create-marketplace-payment-link → mongikeCollect()
+  - USSD push to buyer's phone → buyer enters PIN
+
+STEP 4: WEBHOOK CALLBACK
+  File: server/index.js (webhook handlers)
+  - Mongike sends callback
+  - Transaction updated to 'escrow_hold'
+  - totalAmount = productPrice + platformFee
+  - sellerReceives = productPrice
+  - platformFee = productPrice × 3.5% recorded as revenue_transactions
+
+STEP 5: ESCROW (Auto-Release)
+  File: server/index.js (escrow logic)
+  - 3 days for local delivery, 7 days for regional
+  - Buyer can confirm receipt early
+  - If expired: auto-release to seller
+
+STEP 6: DISPATCH
+  File: seller_dispatch_screen.dart
+  - Seller marks as dispatched
+  - status → 'dispatched'
+
+STEP 7: DELIVERY + COMPLETION
+  File: order_detail_screen.dart
+  - Buyer confirms receipt → status → 'completed'
+  - Funds released to seller via mongikePayout()
+  - sellerBalance incremented
+
+STEP 8: DISPUTE
+  - Buyer or seller can raise dispute
+  - Admin reviews → resolves in favor of buyer or seller
+  - If buyer wins: refund via Mongike
+  - If seller wins: release funds to seller
+
+
+================================================================================
+7. BOOST SYSTEM
+================================================================================
+
+Files: lib/services/boost_service.dart, lib/widgets/payment_banner.dart,
+       lib/screens/profile/product_boost_screen.dart, server/index.js
+
+Boost Tiers (defined in BoostTier model):
+  - Bronze: TSh 1,500 — 3 days — priority display
+  - Silver: TSh 3,000 — 7 days — featured + priority
+  - Gold: TSh 10,000 — 30 days — featured + priority + badge
+
+Payment Flow:
+  1. Seller opens ProductBoostScreen
+  2. Selects tier → taps "Proceed to Checkout"
+  3. _GlassPaymentDialog asks for phone number
+  4. _processPayment() called:
+     - BoostService.initiateBoostPayment() → POST /api/boost-product
+     - Server: creates transaction + calls mongikeCollect() with callbackUrl
+     - RealtimePaymentBanner.show() starts listening to Firestore
+  5. Mongike sends USSD → buyer enters PIN
+  6. Mongike callback → webhook → transaction status: 'completed'
+  7. RealtimePaymentBanner detects 'completed' → success UI
+  8. _onPaymentSuccess():
+     - BoostService.handleBoostPaymentSuccess() — client-side product boost
+     - BoostService.notifyBoost() — FCM broadcast to all users
+  9. Server webhook also boosts product (redundant, idempotent)
+
+Firestore Updates on Boost:
+  - products/{productId}: isBoosted=true, boostedUntil, boostTier, isFeatured
+  - transactions/{orderId}: status='completed'
+  - revenue_transactions: type='boost', amount=tier price, 100% to platform
+
+Boost Display Logic:
+  - Products sorted: boosted first (isBoosted=true, by boostedUntil desc)
+  - Featured section on home screen shows boosted products
+  - Gold tier gets special badge on product card
+
+
+================================================================================
+8. ADMOB / ADVERTISING SYSTEM
+================================================================================
+
+Files: lib/widgets/rewarded_ad_gate.dart, lib/utils/constants.dart,
+       lib/services/rewarded_ad_service.dart
+
+AdMob Configuration:
+  - Banner ads: shown on product detail pages
+  - Rewarded ads: shown for premium features (e.g., boosting)
+
+Revenue Split:
+  - sellerAdShare = 0.0 (seller gets 0%)
+  - platformAdShare = 1.0 (admin gets 100%)
+  - All ad revenue goes to platform
+
+Rewarded Ad Flow:
+  1. rewarded_ad_gate.dart shows rewarded ad to user
+  2. User watches full ad → onRewardedAdCompleted callback
+  3. _recordRewardedAdView() records view to Firestore
+     - Collection: ad_views
+     - For banner ads: includes sellerId, productId
+     - For rewarded ads: no sellerId (admin-only revenue)
+  4. Admin Ad Revenue screen reads ad_views collection
+
+Admin Revenue Sources:
+  - Service fee (3.5% of each sale)
+  - Boost payments (100%)
+  - AdMob ads (100%)
+  - Total = commissions + boost + ad revenue
+
+
+================================================================================
+9. NOTIFICATION SYSTEM
+================================================================================
+
+Files: lib/services/notification_service.dart,
+       lib/services/sms_notification_service.dart, server/index.js
+
+Three Channels:
+  a. FCM Push (Firebase Cloud Messaging)
+     - Server sends FCM via admin.messaging().send()
+     - Client handles via firebase_messaging + awesome_notifications
+     - 7 notification channels (orders, chat, boost, system, promo, security, social)
+
+  b. Awesome Notifications (In-App)
+     - Displays notifications natively in notification tray
+     - Handles notification tap → navigates to relevant screen
+
+  c. SMS (Africa's Talking)
+     - Server sends SMS via Africa's Talking API
+     - Used for: order confirmation, payment received, boost activated
+     - Language-aware via SmsLanguagePreference (EN/SW)
+
+Notification Flow:
+  1. Event occurs (new order, message, boost, etc.)
+  2. Server creates Firestore notification document
+     collection: notifications/{notifId}
+     Fields: userId, type, title, body, data, isRead, createdAt
+  3. Server sends FCM push to user's fcmToken
+  4. App receives FCM → Awesome Notifications displays it
+  5. NotificationScreen reads Firestore notifications for that user
+
+
+================================================================================
+10. ANALYTICS & FRAUD PREVENTION
+================================================================================
+
+Files: lib/services/analytics_service.dart, lib/services/fraud_prevention_service.dart
+
+AnalyticsService:
+  - Tracks: user sessions, product views, boost impressions
+  - Provides: active user counts, demographic breakdowns, top products
+  - Data stored in: analytics/user_sessions, analytics/product_views,
+    analytics/boost_impressions
+  - Admin dashboard displays charts and stats
+  - NOTE: Many analytics queries are unbounded (no .limit()) — loads ALL docs
+    for accurate stats
+
+FraudPreventionService:
+  - Rule-based checks:
+    1. Self-transaction: buyer == seller → block
+    2. High-value: amount > MAX_DAILY_SALE_AMOUNT (5,000,000 TZS) → block
+    3. Rapid transactions: > PAYMENT_RATE_MAX (5) in 1 minute → block
+    4. Duplicate payment: pending payment exists for same product → block
+    5. Suspicious content: keyword/pattern matching in product descriptions
+  - Server-side rate limiting on payment endpoints
+
+
+================================================================================
+11. OFFLINE / CONNECTIVITY
+================================================================================
+
+Files: lib/widgets/connectivity_wrapper.dart, lib/widgets/offline_banner.dart,
+       lib/repositories/product_repository.dart
+
+Current Implementation:
+  - ConnectivityWrapper wraps the entire app (main.dart line 505)
+  - On app start: HTTP GET to server /ping endpoint (timeout 5s)
+  - If server doesn't respond → full-screen blocker with "Hakuna Mtandao"
+  - Timer pings server every 3 seconds
+  - When server responds → blocker auto-dismisses
+  - Also: ProductRepository uses local SQLite cache for offline-first product browsing
+
+Note: There's also an old offline_banner.dart that's no longer used
+(ConnectivityWrapper replaced it)
+
+Server /ping endpoint (index.js line 4772):
+  app.get('/ping', (req, res) => res.json({ status: 'ok', timestamp: ... }))
+
+
+================================================================================
+12. LOCALIZATION
+================================================================================
+
+Files: lib/extensions/context_tr.dart, lib/services/localization_service.dart
+
+System:
+  - Uses custom localization (not easy_localization package)
+  - context.tr('key') extension on BuildContext
+  - LocalizationService has static Map<String, Map<String, String>> translations
+  - Two languages: English (EN) and Swahili (SW)
+  - ~200+ translation keys per language
+  - Currency support: 8 currencies with symbols (TZS, USD, KES, UGX, RWF, BIF, GHS, NGN)
+  - AppConfig provider holds current langCode and currencyCode
+
+How tr() works:
+  - context.tr('key') → looks up translations[langCode][key]
+  - If key not found → returns key as fallback (shows as text — no yellow
+    underline since it's not using easy_localization)
+  - NOTE: The old "yellow underline" issue was from hardcoded Swahili strings,
+    now all fixed with proper translation keys
+
+
+================================================================================
+13. SERVER BACKEND (index.js)
+================================================================================
+
+File: server/index.js (~5600 lines, Express.js)
+
+Architecture:
+  - Single Express server on PORT 3000
+  - PM2 Clustering: 8 workers (ecosystem.config.js)
+  - Middleware: helmet (security), compression (gzip), cors, rate limiting
+  - Firestore admin SDK for database access
+
+Key Routes:
+  GET  /ping                    — Health check
+  POST /api/boost-product       — Initiate boost payment
+  POST /api/create-marketplace-payment-link — Initiate purchase payment
+  POST /api/mongike/webhook     — MAIN Mongike webhook callback
+  POST /api/webhook             — Legacy webhook
+  POST /api/retry-payment       — Retry failed payment
+  POST /api/create-payout       — Send payout to seller/admin
+  POST /api/chat/send           — Send chat message
+  POST /api/boost/notify        — Notify all users about boost
+  POST /api/admin/retro-boost   — Admin: retroactively fix boosts
+  POST /api/kyc/upload          — KYC document upload
+  GET  /api/revenue-stats       — Admin revenue statistics
+
+Key Constants:
+  PLATFORM_COMMISSION_PERCENT = 0.035 (3.5%)
+  COLLECTION_FEE = 180 TZS (Mongike fee, absorbed by platform)
+  PAYOUT_FEE = 2,000 TZS (deducted from seller payout)
+  MAX_DAILY_SALE_AMOUNT = 5,000,000 TZS
+  ESCROW_LOCAL_DAYS = 3
+  ESCROW_REGIONAL_DAYS = 7
+
+Webhook Security:
+  - verifyWebhook middleware checks x-webhook-secret header
+  - If secret doesn't match → logs warning but still accepts (accepting anyway)
+  - NOTE: This is a security concern — should reject invalid secrets
+
+
+================================================================================
+14. SECURITY CONCERNS
+================================================================================
+
+CRITICAL:
+  1. Webhook secret validation logs warning but ACCEPTS anyway
+     (server/index.js line 200: "accepting anyway")
+     → Anyone can call the webhook endpoint
+     → Fix: return 403 if secret doesn't match
+
+  2. /api/create-payout route (line ~2738):
+     → No authentication check found for admin withdrawal
+     → Anyone could potentially call this if they know the URL
+
+HIGH:
+  3. /api/boost-product no auth verification
+     → No Firebase token check, just accepts any request
+
+  4. /api/create-marketplace-payment-link no auth
+     → Anyone could initiate payments with any phone number
+
+MEDIUM:
+  5. CORS config: "Accept all in dev" comment but code does cb(null, true)
+     → Effectively allows all origins in production too
+  6. Sensitive data in client-side code (API keys in ServiceAccount JSON)
+  7. No rate limiting on notification endpoints
+  8. Cloudinary unsigned uploads (no signature verification)
+
+
+================================================================================
+15. IMPROVEMENTS & RECOMMENDATIONS
+================================================================================
+
+A. CRITICAL FIXES NEEDED:
+--------------------------
+  1. Webhook secret validation — return 403 instead of "accepting anyway"
+     File: server/index.js lines 191-203
+     Fix: if (secret !== WEBHOOK_SECRET) return res.status(403).json({...})
+
+  2. Add auth middleware to payment routes
+     Files: /api/boost-product, /api/create-marketplace-payment-link,
+            /api/create-payout
+     Fix: admin.auth().verifyIdToken(token) before processing
+
+B. PERFORMANCE:
+--------------------------
+  3. Analytics queries are unbounded — load ALL users/transactions/products
+     File: lib/services/analytics_service.dart (lines 236, 496, 694, 720, 734)
+     Impact: Will slow down as data grows
+     Fix: Use Firebase Aggregation queries or scheduled Cloud Functions to
+          pre-compute stats periodically (every hour/day)
+
+  4. No pagination on admin screens
+     File: admin_dashboard_screen.dart (loading all products, users)
+     Fix: Already added .limit(100) but no proper pagination (no "load more")
+
+C. ARCHITECTURE:
+--------------------------
+  5. Server index.js is 5600+ lines — needs modularization
+     Fix: Split into routes/ directory:
+     - routes/auth.js, routes/payments.js, routes/chat.js, routes/boost.js
+     - routes/admin.js, routes/webhooks.js
+
+  6. Duplicate offline widget (offline_banner.dart) — no longer used
+     File: lib/widgets/offline_banner.dart
+     Fix: Delete file (ConnectivityWrapper replaced it)
+
+D. FEATURE GAPS:
+--------------------------
+  7. No auto-escrow-release cron job
+     → Escrow funds are not automatically released after expiry
+     → Need a Cloud Function or cron job to check expired escrows
+
+  8. No seller payout automation
+     → Payouts are manual (admin triggers via dashboard)
+     → Could auto-payout when order completes (status: 'completed')
+
+  9. No push notification when escrow expires
+     → Buyer not reminded to confirm receipt
+     → Could auto-notify 24h before auto-release
+
+  10. Mongike PAYOUT_FEE (2,000 TZS) is deducted from seller's payout
+      → Not currently shown to seller during checkout
+      → Seller might be surprised by lower payout
+
+E. UI/UX IMPROVEMENTS:
+--------------------------
+  11. No loading skeleton for chat messages on first load
+      → Currently shows empty container while Firestore loads
+
+  12. Checkout screen shows Mongike fee (180 TZS) but it's absorbed by platform
+      → Confusing to users — remove the line item or show "Free" badge
+
+  13. Error messages for network failures could be more user-friendly
+      → Some errors show raw exception messages
+
+F. CODE QUALITY:
+--------------------------
+  14. RealtimePaymentBanner._startPollTimer() has empty callback
+      File: payment_banner.dart line 335
+      → Timer runs every 3 seconds but does nothing
+      → Remove dead code
+
+  15. Many commented-out code blocks remain
+      → Clean up legacy commented code
+
+G. MONETIZATION IMPROVEMENTS:
+--------------------------
+  16. No subscription model
+      → Consider monthly seller subscription for premium features
+      → E.g., TSh 5,000/month = unlimited boosts, priority support
+
+  17. No commission on shipping costs
+      → Currently shippingCost is not charged the 3.5% fee
+      → Could add service fee on shipping too
+
+  18. No featured product upsell
+      → Consider "Featured Category" slot (paid placement in specific categories)
+
+================================================================================
+END OF DOCUMENT
+================================================================================

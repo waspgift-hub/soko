@@ -9,6 +9,7 @@ import '../../services/sms_notification_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/glass_container.dart';
+import '../../utils/network_error.dart';
 import 'package:flutter/foundation.dart';
 
 class SellerDispatchScreen extends StatefulWidget {
@@ -77,7 +78,7 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
       }
     } catch (e) {
       if (kDebugMode) debugPrint('SellerDispatch error: $e');
-      if (mounted) _showError('${context.tr('error')}: $e');
+      if (mounted) _showError(translateError(e));
     }
 
     setState(() => _dispatchingTxId = null);

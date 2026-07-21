@@ -16,6 +16,7 @@ import '../../widgets/glass_container.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/premium_background.dart';
+import '../../utils/network_error.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 class ProductBoostScreen extends StatefulWidget {
@@ -565,7 +566,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
         );
       }
     } catch (e) {
-      if (mounted) _showError('Error: $e');
+      if (mounted) _showError(translateError(e));
     } finally {
       if (mounted) setState(() => _processing = false);
     }

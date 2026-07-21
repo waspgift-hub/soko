@@ -193,11 +193,8 @@ function verifyWebhook(req, res, next) {
   if (!WEBHOOK_SECRET) return next();
   const secret = req.headers['x-webhook-secret'];
   if (secret !== WEBHOOK_SECRET) {
-    if (secret) {
-      console.warn(`Webhook secret mismatch from IP: ${req.ip}`);
-      return res.status(200).json({ received: false });
-    }
-    console.warn(`Webhook called without secret from IP: ${req.ip} — accepting anyway`);
+    console.warn(`Webhook secret mismatch from IP: ${req.ip}`);
+    return res.status(403).json({ error: 'Invalid webhook secret' });
   }
   next();
 }
@@ -474,6 +471,11 @@ async function updateSellerKycOnProducts(sellerId, kycApproved) {
 
 app.post('/api/boost-product', async (req, res) => {
   try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace('Bearer ', '');
+    if (!token) return res.status(401).json({ error: 'Unauthorized' });
+    try { await admin.auth().verifyIdToken(token); } catch (_) { return res.status(403).json({ error: 'Invalid token' }); }
+
     const { productId, tier, amount, durationDays, phone, userId } = req.body;
     if (!productId || !tier || !phone) {
       return res.status(400).json({ error: 'Missing required fields (productId, tier, phone)' });
@@ -2487,6 +2489,11 @@ app.get('/api/admin/kyc/pending', async (req, res) => {
 // ============================================================
 app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, res) => {
   try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace('Bearer ', '');
+    if (!token) return res.status(401).json({ error: 'Unauthorized' });
+    try { await admin.auth().verifyIdToken(token); } catch (_) { return res.status(403).json({ error: 'Invalid token' }); }
+
     const { productPrice, productName, productId, sellerId, sellerName, email, phone, buyerId, deliveryType, shippingCost, existingTransactionId } = req.body;
     if (!productPrice || !productId || !sellerId || !phone) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -3314,6 +3321,12 @@ app.post('/api/admin/withdraw', async (req, res) => {
 // ============================================================
 app.post('/api/create-payout', async (req, res) => {
   try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace('Bearer ', '');
+    if (!token) return res.status(401).json({ error: 'Unauthorized' });
+    const decoded = await admin.auth().verifyIdToken(token).catch(() => null);
+    if (!decoded) return res.status(403).json({ error: 'Invalid token' });
+
     const { userId, amount, phone, type, source } = req.body;
     if (!userId || !amount || !phone) {
       return res.status(400).json({ error: 'Missing userId, amount, or phone' });
@@ -5487,6 +5500,82 @@ app.post('/api/chat/send', async (req, res) => {
   } catch (e) {
     console.error('/api/chat/send error:', e);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================================
+// ⏰ AUTO-RELEASE ESCROW — Check and release expired escrows
+//     Can be called by a cron job (e.g., GitHub Actions, Render cron)
+// ============================================================
+app.post('/api/release-expired-escrows', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace('Bearer ', '');
+    if (!token) return res.status(401).json({ error: 'Unauthorized' });
+    const decoded = await admin.auth().verifyIdToken(token).catch(() => null);
+    if (!decoded) return res.status(403).json({ error: 'Invalid token' });
+    const userDoc = await db.collection('users').doc(decoded.uid).get();
+    if (!userDoc.exists || !userDoc.data().isAdmin) {
+      return res.status(403).json({ error: 'Admin only' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const expiredSnap = await db.collection('transactions')
+      .where('status', '==', 'escrow_hold')
+      .where('escrowExpiresAt', '<=', now)
+      .get();
+
+    let released = 0;
+    let notified = 0;
+
+    for (const doc of expiredSnap.docs) {
+      const tx = doc.data();
+      await doc.ref.update({ status: 'completed', completedAt: now });
+
+      // Release funds to seller
+      const sellerReceives = tx.sellerReceives || tx.productPrice || 0;
+      if (sellerReceives > 0 && tx.sellerId) {
+        await db.collection('users').doc(tx.sellerId).update({
+          sellerBalance: admin.firestore.FieldValue.increment(sellerReceives),
+          totalSales: admin.firestore.FieldValue.increment(1),
+          grossSalesVolume: admin.firestore.FieldValue.increment(tx.productPrice || 0),
+          lastSaleAt: now,
+        });
+      }
+
+      // Notify buyer that escrow auto-released
+      if (tx.buyerId) {
+        await db.collection('notifications').add({
+          userId: tx.buyerId,
+          title: 'Escrow Imetolewa Kiotomatiki',
+          body: `Malipo ya ${tx.productName || 'bidhaa'} yametolewa kwa muuzaji.`,
+          type: 'order',
+          transactionId: doc.id,
+          isRead: false,
+          createdAt: now,
+        });
+      }
+
+      // Notify seller
+      if (tx.sellerId) {
+        await db.collection('notifications').add({
+          userId: tx.sellerId,
+          title: 'Malipo Yamekamilika',
+          body: `Malipo ya ${tx.productName || 'bidhaa'} yamekutolewa. Angalia salio lako.`,
+          type: 'order',
+          transactionId: doc.id,
+          isRead: false,
+          createdAt: now,
+        });
+      }
+
+      released++;
+    }
+
+    res.json({ released, notified: released * 2 });
+  } catch (e) {
+    console.error('Auto-release escrow error:', e);
+    res.status(500).json({ error: e.message });
   }
 });
 

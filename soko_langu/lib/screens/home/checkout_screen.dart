@@ -8,8 +8,8 @@ import '../../services/notification_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../widgets/glass_container.dart';
-import '../../widgets/google_loading.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../utils/network_error.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final Product product;
@@ -29,13 +29,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   bool _processing = false;
   double? _salePrice;
 
-  static const double _mongikeFee = 180;
-
   double get _totalPrice => _salePrice ?? widget.product.price;
   double get _serviceFeePercent => 3.5;
   double get _serviceFee => _totalPrice * _serviceFeePercent / 100;
   double get _sellerReceives => _totalPrice;
-  double get _totalWithFee => _totalPrice + _serviceFee + _mongikeFee;
+  double get _totalWithFee => _totalPrice + _serviceFee;
 
   @override
   void initState() {
@@ -128,19 +126,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 const SizedBox(height: 8),
                 Container(height: 1, color: cs.primary.withValues(alpha: 0.1)),
                 const SizedBox(height: 10),
-                _feeRow(cs, '${context.tr('mongike_fee')} (${_mongikeFee.toInt()} TZS)', context.formatPrice(_mongikeFee), cs.secondary),
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: cs.tertiary.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    context.tr('mongike_fee_info').replaceAll('{0}', '${_mongikeFee.toInt()}'),
-                    style: TextStyle(fontSize: 10, color: cs.tertiary),
-                  ),
-                ),
+                _feeRow(cs, context.tr('mongike_fee'), 'Bure', Colors.green),
                 const SizedBox(height: 10),
                 Container(height: 1, color: cs.primary.withValues(alpha: 0.1)),
                 const SizedBox(height: 10),
@@ -171,7 +157,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       const SizedBox(height: 4),
                       _feeRow(cs, context.tr('service_fee_percent').replaceAll('{0}', '$_serviceFeePercent'), context.formatPrice(_serviceFee), cs.onSurfaceVariant),
                       const SizedBox(height: 4),
-                      _feeRow(cs, context.tr('mongike_fee'), context.formatPrice(_mongikeFee), cs.secondary),
+                      _feeRow(cs, context.tr('mongike_fee'), 'Bure', Colors.green),
                       const SizedBox(height: 6),
                       Container(
                         padding: const EdgeInsets.all(8),
@@ -274,7 +260,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             child: ElevatedButton.icon(
               onPressed: _processing ? null : _submitOrder,
               icon: _processing
-                  ? const GoogleLoading(size: 20, strokeWidth: 2)
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.send_rounded, size: 20),
               label: Text(_processing ? context.tr('sending') : context.tr('submit_shipping_request'),
                   style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
@@ -343,7 +329,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         'buyerId': user.uid,
         'buyerName': user.displayName ?? '',
         'productPrice': _totalPrice,
-        'mongikeFee': _mongikeFee,
+        'mongikeFee': 180,
         'serviceFeePercent': _serviceFeePercent,
         'deliveryAddress': {
           'region': region,
@@ -373,7 +359,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         context.go(AppRoutes.myPurchases);
       }
     } catch (e) {
-      _showError(context.tr('error_format').replaceAll('{0}', '$e'));
+      final friendly = translateError(e);
+      _showError(friendly);
       setState(() => _processing = false);
     }
   }

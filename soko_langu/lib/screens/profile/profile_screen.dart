@@ -17,6 +17,7 @@ import '../../widgets/ad_banner.dart';
 import '../../widgets/verified_badge.dart';
 import '../../widgets/premium_widgets.dart';
 import '../../widgets/google_loading.dart';
+import '../../utils/network_error.dart';
 import '../../app/routes.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -101,7 +102,7 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${context.tr('error')}: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(translateError(e))));
       }
     }
   }

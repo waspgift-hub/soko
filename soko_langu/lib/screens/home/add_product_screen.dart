@@ -7,6 +7,7 @@ import '../../models/product_model.dart';
 import '../../services/category_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
+import '../../utils/network_error.dart';
 
 class _VariantEntry {
   final TextEditingController nameCtrl = TextEditingController();
@@ -248,7 +249,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
         );
       } else {
         messenger.showSnackBar(
-          SnackBar(content: Text("${context.tr('error')}: $e")),
+          SnackBar(content: Text(translateError(e))),
         );
       }
     } finally {

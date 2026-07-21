@@ -7,6 +7,7 @@ import '../../widgets/glass_container.dart';
 import '../../extensions/context_tr.dart';
 import '../../theme/app_dimens.dart';
 import '../../widgets/google_loading.dart';
+import '../../utils/network_error.dart';
 
 class SellerQuoteScreen extends StatefulWidget {
   const SellerQuoteScreen({super.key});
@@ -52,7 +53,7 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
       _shippingCostCtrl.clear();
       if (mounted) _showSuccess(context.tr('shipping_cost_submitted'));
     } catch (e) {
-      if (mounted) _showError('${context.tr('error')}: $e');
+      if (mounted) _showError(translateError(e));
     }
 
     setState(() => _quotingTxId = null);

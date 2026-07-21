@@ -15,6 +15,7 @@ import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../chat/chat_navigation.dart';
 import '../../widgets/google_loading.dart';
+import '../../utils/network_error.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 class OrderDetailScreen extends StatefulWidget {
@@ -1306,7 +1307,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('${context.tr('error')}: $e'),
+        content: Text(translateError(e)),
         behavior: SnackBarBehavior.floating,
       ));
     }
@@ -1352,7 +1353,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('${context.tr('error')}: $e'),
+        content: Text(translateError(e)),
         behavior: SnackBarBehavior.floating,
       ));
     }
