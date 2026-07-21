@@ -58,7 +58,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
           ),
         ),
         child: SafeArea(
-          top: false,
+          top: true,
           child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
               children: [

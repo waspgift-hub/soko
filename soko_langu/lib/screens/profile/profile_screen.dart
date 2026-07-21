@@ -26,9 +26,7 @@ class ProfilePage extends StatefulWidget {
   State<ProfilePage> createState() => _ProfilePageState();
 }
 
-class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
-  @override
-  bool get wantKeepAlive => true;
+class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
   final ImagePicker _picker = ImagePicker();
   final UserService _userService = UserService();
   final WishlistService _wishlistService = WishlistService();
@@ -37,6 +35,7 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
   int _wishlistCount = 0;
   double _avgRating = 0;
   int _refreshKey = 0;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -75,10 +74,11 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
   }
 
   Future<void> _loadProfile() async {
+    setState(() => _isLoading = true);
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (user == null) { if (mounted) setState(() => _isLoading = false); return; }
     var profile = await _userService.getProfile(user.uid);
-    if (mounted) setState(() => _profile = profile);
+    if (mounted) setState(() { _profile = profile; _isLoading = false; });
     _loadStats(user.uid);
   }
 
@@ -113,10 +113,16 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
 
   @override
   Widget build(BuildContext context) {
-    super.build(context);
     final cs = Theme.of(context).colorScheme;
     final user = FirebaseAuth.instance.currentUser;
     final imageUrl = _localImagePath ?? _profile?.profileImage;
+
+    if (_isLoading && _profile == null) {
+      return Scaffold(
+        backgroundColor: Colors.transparent,
+        body: const Center(child: GoogleLoading()),
+      );
+    }
 
     return KeyedSubtree(
       key: ValueKey('profile_$_refreshKey'),
