@@ -16,6 +16,7 @@ import '../../widgets/glass_container.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/premium_background.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class ProductBoostScreen extends StatefulWidget {
   final Product product;
@@ -99,10 +100,10 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
               height: 64,
               color: Theme.of(context).colorScheme.onSurfaceVariant,
               child: widget.product.images.isNotEmpty
-                  ? Image.network(
-                      widget.product.images.first,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => Icon(
+                  ? CachedNetworkImage(
+                      imageUrl: widget.product.images.first,
+                      fit: BoxFit.cover, width: 64, height: 64,
+                      errorWidget: (_, _, _) => Icon(
                         Icons.image,
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),

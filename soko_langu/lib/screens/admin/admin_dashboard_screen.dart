@@ -123,7 +123,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   Future<void> _loadUsers() async {
     setState(() => _loadingUsers = true);
     try {
-      final snap = await FirebaseFirestore.instance.collection('users').get();
+      final snap = await FirebaseFirestore.instance.collection('users').limit(100).get();
       if (mounted) {
         setState(
           () => _users = snap.docs
@@ -151,10 +151,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         FirebaseFirestore.instance
             .collection('transactions')
             .where('status', isEqualTo: 'disputed')
+            .limit(50)
             .get(),
         FirebaseFirestore.instance
             .collection('transactions')
             .where('payoutStatus', isEqualTo: 'failed_retry')
+            .limit(50)
             .get(),
       ];
 
@@ -217,6 +219,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     try {
       final snap = await FirebaseFirestore.instance
           .collection('products')
+          .limit(100)
           .get();
       if (mounted) {
         setState(

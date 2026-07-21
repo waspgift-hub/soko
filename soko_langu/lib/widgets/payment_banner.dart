@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'google_loading.dart';
+import '../extensions/context_tr.dart';
 
 enum PaymentBannerType { success, failed }
 
@@ -535,7 +536,7 @@ class _RealtimePaymentBannerWidgetState
                                     Padding(
                                       padding: const EdgeInsets.only(top: 2),
                                       child: Text(
-                                        'Angalia simu yako — weka PIN kukamilisha malipo',
+                                        context.tr('check_phone_enter_pin'),
                                         style: TextStyle(
                                           fontSize: 11,
                                           color: isDark

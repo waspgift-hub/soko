@@ -21,6 +21,7 @@ class UserProfile {
   final bool kycApproved;
   final String gender;
   final String dateOfBirth;
+  final DateTime? lastActive;
 
   UserProfile({
     required this.uid,
@@ -41,6 +42,7 @@ class UserProfile {
     this.kycApproved = false,
     this.gender = '',
     this.dateOfBirth = '',
+    this.lastActive,
   });
 
   factory UserProfile.fromMap(String uid, Map<String, dynamic> data) {
@@ -63,6 +65,7 @@ class UserProfile {
       kycApproved: data['kyc']?['approved'] ?? false,
       gender: data['gender'] ?? '',
       dateOfBirth: data['dateOfBirth'] ?? '',
+      lastActive: (data['lastActive'] as dynamic)?.toDate(),
     );
   }
 
@@ -198,6 +201,30 @@ class UserService {
     await _db.collection('users').doc(user.uid).delete();
     await user.delete();
     await _auth.signOut();
+  }
+
+  /// Update the user's lastActive timestamp for presence.
+  Future<void> updateLastActive() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    await _db.collection('users').doc(uid).update({
+      'lastActive': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Stream the other user's lastActive for presence detection.
+  Stream<DateTime?> streamLastActive(String uid) {
+    return _db.collection('users').doc(uid).snapshots().map((doc) {
+      if (!doc.exists) return null;
+      final ts = doc.data()!['lastActive'];
+      return (ts as dynamic)?.toDate();
+    });
+  }
+
+  /// Whether the user is considered online (active within last 2 minutes).
+  static bool isOnline(DateTime? lastActive) {
+    if (lastActive == null) return false;
+    return DateTime.now().difference(lastActive).inMinutes < 2;
   }
 
   Future<void> reauthenticateAndDelete(String password) async {

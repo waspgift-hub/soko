@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const compression = require('compression');
 const crypto = require('crypto');
 const admin = require('firebase-admin');
 const helmet = require('helmet');
@@ -15,6 +16,9 @@ const REQUEST_TIMEOUT = 20000; // 20 seconds
 
 // Security headers
 app.use(helmet());
+
+// Gzip compression — smaller response bodies = faster downloads
+app.use(compression({ level: 6, threshold: 256 }));
 
 // Tight CORS — only allow the Flutter app origins
 const ALLOWED_ORIGINS = [
@@ -346,7 +350,7 @@ const BOOST_TIERS = {
   gold: { price: 10000, days: 30 },
 };
 
-const PLATFORM_COMMISSION_PERCENT = 0.04; // 4% platform commission
+const PLATFORM_COMMISSION_PERCENT = 0.035; // 3.5% platform commission
 const MIN_WITHDRAWAL = 5000;          // Minimum withdrawal TZS 5,000
 
 // PAYOUT_FEE (2000 TZS flat) imported from mongike.js
@@ -481,12 +485,14 @@ app.post('/api/boost-product', async (req, res) => {
     }
 
     const order_id = `boost_${Date.now()}`;
+    const callbackUrl = `${req.protocol}://${req.get('host')}/api/mongike/webhook`;
 
     const result = await mongikeCollect({
       amount: tierConfig.price,
       orderId: order_id,
       buyerPhone: phone,
       feePayer: 'MERCHANT',
+      callbackUrl,
     });
 
     const ref = result.id || result.orderReference || '';
@@ -1458,7 +1464,7 @@ app.post('/api/mongike/webhook', verifyWebhook, async (req, res) => {
         const productPrice = tx.productPrice || 0;
         const platformFee = Math.round(productPrice * PLATFORM_COMMISSION_PERCENT);
         const processingFee = 0; // Flat 180 TZS absorbed by platform
-        const sellerReceives = productPrice - platformFee - processingFee;
+        const sellerReceives = productPrice;
         const deliveryType = tx.deliveryType || 'local';
         const autoReleaseDays = tx.autoReleaseDays || (deliveryType === 'regional' ? ESCROW_REGIONAL_DAYS : ESCROW_LOCAL_DAYS);
         const escrowExpiry = new Date(Date.now() + autoReleaseDays * 24 * 60 * 60 * 1000);
@@ -1467,7 +1473,7 @@ app.post('/api/mongike/webhook', verifyWebhook, async (req, res) => {
           processingFee,
           platformFee,
           sokoLanguCommission: platformFee,
-          totalAmount: productPrice,
+          totalAmount: productPrice + platformFee,
           sellerReceives,
           status: 'escrow_hold',
           paymentMethod: 'Mongike',
@@ -2512,6 +2518,7 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
 
     // Include shipping in total sent to Mongike
     const totalAmount = Math.round(productPrice) + Math.round(shippingCost || 0);
+    const callbackUrl = `${req.protocol}://${req.get('host')}/api/mongike/webhook`;
 
     const result = await mongikeCollect({
       amount: totalAmount,
@@ -2520,6 +2527,7 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
       buyerName: buyerName || undefined,
       buyerEmail: email || undefined,
       feePayer: 'MERCHANT',
+      callbackUrl,
     });
 
     const ref = result.id || result.orderReference || '';
@@ -2661,7 +2669,7 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
         const platformFee = Math.round(productPrice * PLATFORM_COMMISSION_PERCENT);
         const payoutFee = PAYOUT_FEE;
         const processingFee = tx.mongikeFee || 0;
-        const sellerReceives = productPrice - platformFee - processingFee;
+        const sellerReceives = productPrice;
         const deliveryType = tx.deliveryType || 'local';
         const autoReleaseDays = tx.autoReleaseDays || (deliveryType === 'regional' ? ESCROW_REGIONAL_DAYS : ESCROW_LOCAL_DAYS);
         const escrowExpiry = new Date(Date.now() + autoReleaseDays * 24 * 60 * 60 * 1000);
@@ -2673,7 +2681,7 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
           mongikeFee: processingFee,
           payoutFee,
           sokoLanguCommission: platformFee,
-          totalAmount: productPrice,
+          totalAmount: productPrice + platformFee,
           sellerReceives,
           status: 'escrow_hold',
           paymentMethod: 'Mongike',
@@ -2891,7 +2899,7 @@ app.post('/api/retry-payment', async (req, res) => {
       const platformFee = Math.round(productPrice * PLATFORM_COMMISSION_PERCENT);
       const payoutFee = PAYOUT_FEE;
       const processingFee = tx.mongikeFee || 0;
-      const sellerReceives = productPrice - platformFee - processingFee;
+      const sellerReceives = productPrice;
       const deliveryType = tx.deliveryType || 'local';
       const autoReleaseDays = tx.autoReleaseDays || (deliveryType === 'regional' ? ESCROW_REGIONAL_DAYS : ESCROW_LOCAL_DAYS);
       const escrowExpiry = new Date(Date.now() + autoReleaseDays * 24 * 60 * 60 * 1000);
@@ -2902,7 +2910,7 @@ app.post('/api/retry-payment', async (req, res) => {
         mongikeFee: processingFee,
         payoutFee,
         sokoLanguCommission: platformFee,
-        totalAmount: productPrice,
+        totalAmount: productPrice + platformFee,
         sellerReceives,
         status: 'escrow_hold',
         paymentMethod: 'Mongike',
@@ -5436,9 +5444,11 @@ app.post('/api/chat/send', async (req, res) => {
     // Write message to Firestore
     const msgRef = await db.collection('chat_rooms').doc(roomId).collection('messages').add({
       sender_id: senderId,
+      receiver_id: receiverId,
       text,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
       is_read: false,
+      is_delivered: true,
       ...(productId ? { product_id: productId } : {}),
       ...(productName ? { product_name: productName } : {}),
       ...(replyTo ? { reply_to: replyTo } : {}),

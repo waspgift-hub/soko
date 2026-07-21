@@ -9,6 +9,7 @@ import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../widgets/glass_container.dart';
 import '../../widgets/google_loading.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final Product product;
@@ -31,9 +32,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   static const double _mongikeFee = 180;
 
   double get _totalPrice => _salePrice ?? widget.product.price;
-  double get _totalWithFee => _totalPrice + _mongikeFee;
-  double get _sellerFeePercent => 3.5;
-  double get _sellerReceives => _totalPrice * (1 - _sellerFeePercent / 100);
+  double get _serviceFeePercent => 3.5;
+  double get _serviceFee => _totalPrice * _serviceFeePercent / 100;
+  double get _sellerReceives => _totalPrice;
+  double get _totalWithFee => _totalPrice + _serviceFee + _mongikeFee;
 
   @override
   void initState() {
@@ -89,7 +91,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     width: 64, height: 64,
                     color: cs.surfaceContainerHighest,
                     child: p.images.isNotEmpty
-                        ? Image.network(p.images.first, fit: BoxFit.cover)
+                        ? CachedNetworkImage(imageUrl: p.images.first, fit: BoxFit.cover, width: 64, height: 64)
                         : Icon(Icons.image, size: 28, color: cs.onSurfaceVariant),
                   ),
                 ),
@@ -121,7 +123,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             child: Column(
               children: [
                 _feeRow(cs, context.tr('product_price'), context.formatPrice(_totalPrice), cs.onSurface),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
+                _feeRow(cs, context.tr('service_fee_percent').replaceAll('{0}', '$_serviceFeePercent'), context.formatPrice(_serviceFee), cs.tertiary),
+                const SizedBox(height: 8),
                 Container(height: 1, color: cs.primary.withValues(alpha: 0.1)),
                 const SizedBox(height: 10),
                 _feeRow(cs, '${context.tr('mongike_fee')} (${_mongikeFee.toInt()} TZS)', context.formatPrice(_mongikeFee), cs.secondary),
@@ -163,9 +167,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         ],
                       ),
                       const SizedBox(height: 8),
-                      _feeRow(cs, context.tr('seller_receives_percent').replaceAll('{0}', '$_sellerFeePercent'), context.formatPrice(_sellerReceives), cs.primary),
+                      _feeRow(cs, context.tr('seller_receives_full'), context.formatPrice(_sellerReceives), cs.primary),
                       const SizedBox(height: 4),
-                      _feeRow(cs, context.tr('soko_commission_percent').replaceAll('{0}', '$_sellerFeePercent'), context.formatPrice(_totalPrice * _sellerFeePercent / 100), cs.onSurfaceVariant),
+                      _feeRow(cs, context.tr('service_fee_percent').replaceAll('{0}', '$_serviceFeePercent'), context.formatPrice(_serviceFee), cs.onSurfaceVariant),
                       const SizedBox(height: 4),
                       _feeRow(cs, context.tr('mongike_fee'), context.formatPrice(_mongikeFee), cs.secondary),
                       const SizedBox(height: 6),
@@ -340,7 +344,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         'buyerName': user.displayName ?? '',
         'productPrice': _totalPrice,
         'mongikeFee': _mongikeFee,
-        'sellerFeePercent': _sellerFeePercent,
+        'serviceFeePercent': _serviceFeePercent,
         'deliveryAddress': {
           'region': region,
           'district': district,
