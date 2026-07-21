@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'api_config.dart';
+import '../utils/network_error.dart';
 
 class ClickPesaService {
   static const List<Map<String, int>> _ussdPushFeeTiers = [
@@ -79,7 +80,7 @@ class ClickPesaService {
       return jsonDecode(resp.body) as Map<String, dynamic>;
     } catch (e) {
       debugPrint('ClickPesaService initiateMarketplacePayment: $e');
-      return {'error': 'Network error: $e'};
+      return {'error': translateError(e)};
     }
   }
 

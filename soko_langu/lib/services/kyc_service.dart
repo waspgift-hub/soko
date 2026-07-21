@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'api_config.dart';
+import '../utils/network_error.dart';
 
 class KycService {
   static Future<Map<String, dynamic>?> submitKyc({
@@ -32,7 +33,7 @@ class KycService {
       return jsonDecode(resp.body) as Map<String, dynamic>;
     } catch (e) {
       debugPrint('KycService.submitKyc: $e');
-      return {'success': false, 'error': 'Network error: $e'};
+      return {'success': false, 'error': translateError(e)};
     }
   }
 

@@ -8,6 +8,7 @@ import 'package:geocoding/geocoding.dart';
 import '../../services/user_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../utils/helpers.dart';
+import '../../utils/network_error.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/location_disclosure_dialog.dart';
 
@@ -284,7 +285,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text("${context.tr('error')}: $e")));
+        ).showSnackBar(SnackBar(content: Text(translateError(e))));
       }
     } finally {
       if (mounted) setState(() => _saving = false);

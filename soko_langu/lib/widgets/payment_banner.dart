@@ -333,12 +333,7 @@ class _RealtimePaymentBannerWidgetState
   }
 
   void _startPollTimer() {
-    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      if (_handled) {
-        _pollTimer?.cancel();
-        return;
-      }
-    });
+    // Firestore snapshots handle real-time updates — no polling needed
   }
 
   void _startTimeoutTimer() {

@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../services/review_service.dart';
 import '../models/review_model.dart';
 import '../extensions/context_tr.dart';
+import '../utils/network_error.dart';
 
 class ReviewSection extends StatefulWidget {
   final String productId;
@@ -84,7 +85,7 @@ class _ReviewSectionState extends State<ReviewSection> {
         if (mounted) {
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(SnackBar(content: Text("${context.tr('error')}: $e")));
+          ).showSnackBar(SnackBar(content: Text(translateError(e))));
         }
       }
     }

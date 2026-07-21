@@ -9,6 +9,7 @@ import '../../services/kyc_service.dart';
 import '../../widgets/google_loading.dart';
 import '../../theme/app_colors.dart';
 import '../../extensions/context_tr.dart';
+import '../../utils/network_error.dart';
 
 class KycScreen extends StatefulWidget {
   const KycScreen({super.key});
@@ -175,7 +176,7 @@ class _KycScreenState extends State<KycScreen> {
         _showError(result?['error'] ?? context.tr('failed_to_submit_kyc'));
       }
     } catch (e) {
-      _showError('${context.tr('error')}: $e');
+      _showError(translateError(e));
     }
 
     setState(() => _submitting = false);

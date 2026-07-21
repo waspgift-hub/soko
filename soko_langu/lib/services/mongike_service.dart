@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import 'api_config.dart';
+import '../utils/network_error.dart';
 
 class MongikeService {
   MongikeService._();
@@ -48,7 +49,7 @@ class MongikeService {
       }
       return body as Map<String, dynamic>;
     } catch (e) {
-      return {'error': 'Network error: $e'};
+      return {'error': translateError(e)};
     }
   }
 
@@ -74,7 +75,7 @@ class MongikeService {
       }
       return body as Map<String, dynamic>;
     } catch (e) {
-      return {'error': 'Network error: $e'};
+      return {'error': translateError(e)};
     }
   }
 
@@ -100,7 +101,7 @@ class MongikeService {
       }
       return body as Map<String, dynamic>;
     } catch (e) {
-      return {'error': 'Network error: $e'};
+      return {'error': translateError(e)};
     }
   }
 
