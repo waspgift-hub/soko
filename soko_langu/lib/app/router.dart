@@ -29,6 +29,7 @@ import '../screens/profile/seller_dashboard_screen.dart';
 import '../screens/profile/product_boost_screen.dart';
 import '../screens/profile/help_center_screen.dart';
 import '../screens/profile/about_app_screen.dart';
+import '../screens/profile/order_flow_screen.dart';
 import '../screens/notification/notification_screen.dart';
 import '../screens/onboarding/account_selection_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
@@ -229,6 +230,10 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.about,
         builder: (context, state) => const AboutAppScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.orderFlow,
+        builder: (context, state) => const OrderFlowScreen(),
       ),
       GoRoute(
         path: AppRoutes.addProduct,
