@@ -345,7 +345,7 @@ class _RealtimePaymentBannerWidgetState
     _timeoutTimer = Timer(const Duration(seconds: 120), () {
       if (!_handled && mounted) {
         setState(() {
-          _statusText = 'Muda umeisha — malipo hayajathibitishwa. Tafadhali jaribu tena.';
+          _statusText = context.tr('payment_timeout');
         });
         widget.onError?.call('Payment timeout - no confirmation from Mongike');
         _handleDone();
@@ -393,7 +393,7 @@ class _RealtimePaymentBannerWidgetState
           final reason =
               data?['failureReason'] as String? ??
               data?['errorMessage'] as String? ??
-              'Malipo hayajakamilika. Tafadhali jaribu tena.';
+              context.tr('payment_failed_try_again');
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _statusText = reason;
             widget.onError?.call(reason);
