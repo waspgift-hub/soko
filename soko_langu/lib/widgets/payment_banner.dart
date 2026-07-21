@@ -307,7 +307,6 @@ class _RealtimePaymentBannerWidgetState
   late final Animation<double> _fadeAnim;
   bool _handled = false;
   String _statusText = '';
-  Timer? _pollTimer;
   Timer? _timeoutTimer;
 
   @override
@@ -320,20 +319,14 @@ class _RealtimePaymentBannerWidgetState
     _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeIn);
     _animCtrl.forward();
 
-    _startPollTimer();
     _startTimeoutTimer();
   }
 
   @override
   void dispose() {
     _animCtrl.dispose();
-    _pollTimer?.cancel();
     _timeoutTimer?.cancel();
     super.dispose();
-  }
-
-  void _startPollTimer() {
-    // Firestore snapshots handle real-time updates — no polling needed
   }
 
   void _startTimeoutTimer() {
@@ -351,7 +344,6 @@ class _RealtimePaymentBannerWidgetState
   void _handleDone() {
     if (_handled) return;
     _handled = true;
-    _pollTimer?.cancel();
     _timeoutTimer?.cancel();
     Future.delayed(const Duration(milliseconds: 1500), () {
       if (mounted) RealtimePaymentBanner.dismiss();
