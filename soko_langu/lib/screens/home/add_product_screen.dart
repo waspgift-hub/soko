@@ -301,27 +301,32 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 const SizedBox(height: 8),
                 SizedBox(
                   height: 100,
-                  child: ListView(
+                  child: ListView.builder(
                     scrollDirection: Axis.horizontal,
-                    children: [
-                      GestureDetector(
-                        onTap: _pickImages,
-                        child: Container(
-                          width: 100,
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Theme.of(context).colorScheme.outline),
-                            borderRadius: BorderRadius.circular(8),
+                    itemCount: 1 + _existingImages.length + _newImages.length,
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        return GestureDetector(
+                          onTap: _pickImages,
+                          child: Container(
+                            width: 100,
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Theme.of(context).colorScheme.outline),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              Icons.add_a_photo,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withValues(alpha: 0.6),
+                            ),
                           ),
-                          child: Icon(
-                            Icons.add_a_photo,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.6),
-                          ),
-                        ),
-                      ),
-                      ..._existingImages.map(
-                        (url) => Stack(
+                        );
+                      }
+                      final imageIndex = index - 1;
+                      if (imageIndex < _existingImages.length) {
+                        final url = _existingImages[imageIndex];
+                        return Stack(
                           children: [
                             Container(
                               margin: const EdgeInsets.only(left: 8),
@@ -338,9 +343,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                               top: 0,
                               right: 0,
                               child: GestureDetector(
-                                onTap: () => _removeExistingImage(
-                                  _existingImages.indexOf(url),
-                                ),
+                                onTap: () => _removeExistingImage(imageIndex),
                                 child: Container(
                                   decoration: BoxDecoration(
                                     color: Theme.of(context).colorScheme.error,
@@ -355,45 +358,43 @@ class _AddProductScreenState extends State<AddProductScreen> {
                               ),
                             ),
                           ],
-                        ),
-                      ),
-                      ..._newImages.map(
-                        (file) => Stack(
-                          children: [
-                            Container(
-                              margin: const EdgeInsets.only(left: 8),
-                              width: 100,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(8),
-                                image: DecorationImage(
-                                  image: FileImage(File(file.path)),
-                                  fit: BoxFit.cover,
+                        );
+                      }
+                      final file = _newImages[imageIndex - _existingImages.length];
+                      return Stack(
+                        children: [
+                          Container(
+                            margin: const EdgeInsets.only(left: 8),
+                            width: 100,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8),
+                              image: DecorationImage(
+                                image: FileImage(File(file.path)),
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            top: 0,
+                            right: 0,
+                            child: GestureDetector(
+                              onTap: () => _removeNewImage(_newImages.indexOf(file)),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.error,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.close,
+                                  size: 18,
+                                  color: Theme.of(context).colorScheme.surface,
                                 ),
                               ),
                             ),
-                            Positioned(
-                              top: 0,
-                              right: 0,
-                              child: GestureDetector(
-                                onTap: () =>
-                                    _removeNewImage(_newImages.indexOf(file)),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context).colorScheme.error,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    Icons.close,
-                                    size: 18,
-                                    color: Theme.of(context).colorScheme.surface,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(height: 20),

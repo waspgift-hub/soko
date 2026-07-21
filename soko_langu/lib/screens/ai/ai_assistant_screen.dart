@@ -169,6 +169,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
       final snap = await FirebaseFirestore.instance
           .collection('reviews')
           .where('productId', isEqualTo: productId)
+          .limit(3)
           .get();
       final docs = snap.docs.toList()
         ..sort((a, b) {
@@ -176,7 +177,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
           final tb = (b.data()['createdAt'] as Timestamp?) ?? Timestamp.now();
           return tb.compareTo(ta);
         });
-      return docs.take(3).map((d) => d.data()).toList();
+      return docs.map((d) => d.data()).toList();
     } catch (_) {
       return [];
     }

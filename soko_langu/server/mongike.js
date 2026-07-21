@@ -40,7 +40,7 @@ function normalizeResponse(raw) {
  * @param {Object} [params.metadata] - Arbitrary metadata to attach
  * @returns {Promise<{id: string, status: string, amount: number, orderReference: string, message: string, raw: Object}>}
  */
-async function mongikeCollect({ amount, orderId, buyerPhone, buyerName, buyerEmail, feePayer, metadata }) {
+async function mongikeCollect({ amount, orderId, buyerPhone, buyerName, buyerEmail, feePayer, metadata, callbackUrl }) {
   const payload = {
     order_id: orderId,
     amount: Math.round(amount),
@@ -50,6 +50,7 @@ async function mongikeCollect({ amount, orderId, buyerPhone, buyerName, buyerEma
   if (buyerName) payload.buyer_name = buyerName;
   if (buyerEmail) payload.buyer_email = buyerEmail;
   if (metadata) payload.metadata = metadata;
+  if (callbackUrl) payload.callback_url = callbackUrl;
 
   let resp;
   try {

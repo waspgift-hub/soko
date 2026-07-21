@@ -297,13 +297,14 @@ class _HomeScreenState extends State<HomeScreen>
               // Brand chips
               SizedBox(
                 height: 44,
-                child: ListView(
+                child: ListView.builder(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
-                  children: [
-                    _brandChip(context.tr('all'), null),
-                    ..._brands.map((b) => _brandChip(b, b)),
-                  ],
+                  itemCount: 1 + _brands.length,
+                  itemBuilder: (context, index) {
+                    if (index == 0) return _brandChip(context.tr('all'), null);
+                    return _brandChip(_brands[index - 1], _brands[index - 1]);
+                  },
                 ),
               ),
               const SizedBox(height: AppInsets.sm),

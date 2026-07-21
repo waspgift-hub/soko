@@ -152,7 +152,8 @@ Stream<List<ChatRoom>> getRooms() {
     return LocalCacheService.getCachedMessages(roomId);
   }
 
-  Future<void> sendMessage({
+  /// Returns the Firestore message ID if send succeeds, null otherwise.
+  Future<String?> sendMessage({
     required String receiverId,
     required String content,
     String? productId,
@@ -162,7 +163,7 @@ Stream<List<ChatRoom>> getRooms() {
     String? replyToSender,
   }) async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (user == null) return null;
     final roomId = roomIdFor(user.uid, receiverId);
 
     final idToken = await user.getIdToken();
@@ -206,12 +207,41 @@ Stream<List<ChatRoom>> getRooms() {
           replyToContent: replyToContent,
           replyToSender: replyToSender,
         )));
+        return messageId;
       } else {
         if (kDebugMode) debugPrint('ChatService: send failed: ${response.statusCode} ${response.body}');
+        return null;
       }
     } catch (e) {
       if (kDebugMode) debugPrint('ChatService: send error: $e');
+      return null;
     }
+  }
+
+  /// Mark all unread incoming messages as read in Firestore.
+  Future<void> markMessagesAsRead(String roomId) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final snap = await _db
+        .collection('chat_rooms')
+        .doc(roomId)
+        .collection('messages')
+        .where('is_read', isEqualTo: false)
+        .get();
+
+    if (snap.docs.isEmpty) return;
+
+    final batch = _db.batch();
+    for (final doc in snap.docs) {
+      final data = doc.data();
+      // Only mark messages sent by the other person
+      final senderId = data['sender_id'] ?? data['senderId'] ?? '';
+      if (senderId != user.uid) {
+        batch.update(doc.reference, {'is_read': true, 'isRead': true});
+      }
+    }
+    await batch.commit();
   }
 
   Future<void> markAsRead(String roomId) async {

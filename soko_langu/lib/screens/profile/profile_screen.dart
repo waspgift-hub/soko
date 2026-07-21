@@ -62,7 +62,7 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
     try {
       final wishlist = await _wishlistService.getWishlist();
       final reviewSnap = await FirebaseFirestore.instance
-          .collection('reviews').where('sellerId', isEqualTo: uid).get();
+          .collection('reviews').where('sellerId', isEqualTo: uid).limit(50).get();
       double total = 0;
       for (final doc in reviewSnap.docs) {
         total += (doc.data()['rating'] ?? 0).toDouble();

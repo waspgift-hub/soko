@@ -56,7 +56,7 @@ class PriceDropService {
     String productImage = '',
   }) async {
     try {
-      final users = await _db.collection('users').get();
+      final users = await _db.collection('users').limit(500).get();
       final batch = _db.batch();
       final List<String> fcmTokens = [];
 

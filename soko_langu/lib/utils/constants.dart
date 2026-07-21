@@ -10,8 +10,8 @@ class AppConstants {
   ];
 
   static const double adRevenuePerView = 10;
-  static const double sellerAdShare = 0.4;
-  static const double platformAdShare = 0.6;
+  static const double sellerAdShare = 0.0;
+  static const double platformAdShare = 1.0;
 
   static const double payoutFee = 4000;
   static const double payoutFeePlatform = 2000;

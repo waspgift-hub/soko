@@ -15,6 +15,7 @@ import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../chat/chat_navigation.dart';
 import '../../widgets/google_loading.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final String docId;
@@ -339,9 +340,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                     child: Stack(
                       children: [
-                        Image.network(productImage,
+                        CachedNetworkImage(imageUrl: productImage,
                           width: double.infinity, height: 220, fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => Container(height: 220, color: cs.surfaceContainerHighest,
+                          errorWidget: (_, _, _) => Container(height: 220, color: cs.surfaceContainerHighest,
                             child: Icon(Icons.image_rounded, size: 48, color: cs.onSurfaceVariant.withValues(alpha: 0.3))),
                         ),
                         Positioned(
@@ -656,7 +657,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
           ],
           if (platformFee > 0) ...[
             const SizedBox(height: 10),
-            _summaryRow(cs, context.tr('soko_commission'), '-${_nf(platformFee.toInt())} TZS', cs.tertiary),
+            _summaryRow(cs, context.tr('service_fee'), '+${_nf(platformFee.toInt())} TZS', cs.tertiary),
           ],
           if (processingFee > 0) ...[
             const SizedBox(height: 10),
@@ -1036,7 +1037,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
           _sectionHeader(cs, Icons.account_balance_wallet_outlined, context.tr('payment_breakdown')),
           const SizedBox(height: 16),
           if (platformFee > 0) ...[
-            _summaryRow(cs, context.tr('soko_commission'), '-${_nf(platformFee.toInt())} TZS', cs.tertiary),
+            _summaryRow(cs, context.tr('service_fee'), '+${_nf(platformFee.toInt())} TZS', cs.tertiary),
             const SizedBox(height: 10),
           ],
           if (processingFee > 0) ...[

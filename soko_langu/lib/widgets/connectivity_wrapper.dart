@@ -1,13 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:http/http.dart' as http;
 import '../extensions/context_tr.dart';
+import '../services/api_config.dart';
 
-/// Monitors network connectivity and shows an Instagram-style offline UI.
-///
-/// **Mid-session disconnect** → a thin animated banner slides down from the top.
-/// **App-launch disconnect** → a full-screen fallback with logo, message, and a
-/// "Try Again" button using the #4CAF50 green.
 class ConnectivityWrapper extends StatefulWidget {
   final Widget child;
   const ConnectivityWrapper({super.key, required this.child});
@@ -20,11 +17,8 @@ class _ConnectivityWrapperState extends State<ConnectivityWrapper>
     with SingleTickerProviderStateMixin {
   bool _offline = false;
   bool _initialized = false;
-  /// True when the app started while offline — prevents the banner from showing
-  /// until the user has at least seen the app once online.
-  bool _startedOffline = false;
+  Timer? _retryTimer;
 
-  StreamSubscription<List<ConnectivityResult>>? _sub;
   late AnimationController _bannerCtrl;
   late Animation<Offset> _bannerSlide;
 
@@ -44,90 +38,73 @@ class _ConnectivityWrapperState extends State<ConnectivityWrapper>
       curve: Curves.easeOutCubic,
     ));
 
-    _sub = Connectivity().onConnectivityChanged.listen(_onChange);
-    _checkInitialConnectivity();
+    _checkServer();
   }
 
-  Future<void> _checkInitialConnectivity() async {
-    try {
-      final results = await Connectivity().checkConnectivity();
-      if (!mounted) return;
-      final offline = results.every((r) => r == ConnectivityResult.none);
+  Future<void> _checkServer() async {
+    final offline = await _isServerReachable();
+    if (!mounted) return;
+    if (!offline) {
       setState(() {
-        _offline = offline;
-        _startedOffline = offline;
+        _offline = false;
         _initialized = true;
       });
-    } catch (_) {
-      if (mounted) setState(() => _initialized = true);
-    }
-  }
-
-  void _onChange(List<ConnectivityResult> results) {
-    final offline = results.every((r) => r == ConnectivityResult.none);
-    if (offline == _offline) return;
-    if (!mounted) return;
-    setState(() => _offline = offline);
-
-    if (_startedOffline && !offline) {
-      _startedOffline = false;
+      _retryTimer?.cancel();
       return;
     }
+    setState(() {
+      _offline = true;
+      _initialized = true;
+    });
+    _startRetryTimer();
+  }
 
-    if (!_startedOffline) {
-      if (offline) {
-        _bannerCtrl.forward();
-      } else {
-        _bannerCtrl.reverse();
+  void _startRetryTimer() {
+    _retryTimer?.cancel();
+    _retryTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
+      final offline = await _isServerReachable();
+      if (!mounted) return;
+      if (!offline) {
+        _retryTimer?.cancel();
+        setState(() => _offline = false);
       }
+    });
+  }
+
+  Future<bool> _isServerReachable() async {
+    try {
+      final resp = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/ping'),
+      ).timeout(const Duration(seconds: 5));
+      return resp.statusCode != 200;
+    } catch (_) {
+      return true;
     }
   }
 
   @override
   void dispose() {
-    _sub?.cancel();
+    _retryTimer?.cancel();
     _bannerCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _retry() async {
-    try {
-      final results = await Connectivity().checkConnectivity();
-      if (!mounted) return;
-      final offline = results.every((r) => r == ConnectivityResult.none);
-      if (!offline) {
-        setState(() {
-          _offline = false;
-          _startedOffline = false;
-        });
-      }
-    } catch (_) {}
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (!_initialized) return widget.child;
+    if (!_initialized) return const SizedBox();
 
-    if (_startedOffline && _offline) {
-      return _OfflineFallback(onRetry: _retry);
+    if (_offline) {
+      return _OfflineFallback(
+        onRetry: () {
+          _retryTimer?.cancel();
+          _checkServer();
+        },
+      );
     }
 
-    return Stack(
-      children: [
-        widget.child,
-        if (!_startedOffline)
-          SlideTransition(
-            position: _bannerSlide,
-            child: const _OfflineBanner(),
-          ),
-      ],
-    );
+    return widget.child;
   }
 }
-
-// ---------------------------------------------------------------------------
-// Full-screen fallback — shown when the app starts with no connectivity
-// ---------------------------------------------------------------------------
 
 class _OfflineFallback extends StatelessWidget {
   final VoidCallback onRetry;
@@ -200,45 +177,6 @@ class _OfflineFallback extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Top floating banner — slides down on mid-session disconnect
-// ---------------------------------------------------------------------------
-
-class _OfflineBanner extends StatelessWidget {
-  const _OfflineBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final topPadding = MediaQuery.of(context).padding.top;
-    return Container(
-      padding: EdgeInsets.only(top: topPadding + 4, bottom: 8),
-      decoration: BoxDecoration(
-        color: cs.primary,
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(12),
-          bottomRight: Radius.circular(12),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.wifi_off, size: 16, color: cs.onPrimary.withValues(alpha: 0.7)),
-          const SizedBox(width: 8),
-          Text(
-            context.tr('no_internet_connection_lower'),
-            style: TextStyle(
-              color: cs.onPrimary,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
       ),
     );
   }

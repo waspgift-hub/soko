@@ -372,6 +372,8 @@ class LocalizationService {
       'no_commission': 'Hakuna ada',
       'mongike': 'Mongike',
       'automated_payment': 'Malipo ya Kiotomatiki',
+      'service_fee_percent': 'Ada ya Huduma ({0}%)',
+      'seller_receives_full': 'Muuzaji anapata kamili',
       'service_fee_5': 'Ada ya huduma 5%',
       'send_payment_to': 'Tuma malipo kwa ',
       'payment_methods_label': 'Njia za Malipo:',
@@ -908,6 +910,7 @@ class LocalizationService {
       'you_save': 'Unaokoa',
       'ai_greeting':
           'Habari mkuu! Karibu Soko Vibe. Mimi ni AI Dalali — msaidizi wako wa kutafuta bidhaa, bei na wauzaji. Niko hapa kukusaidia!\n\n• Nina utafutaji wa bidhaa moja kwa moja kutoka Soko Vibe — bei, muuzaji, eneo na simu zote zipo hapa.\n• Ikiwa bidhaa haipo Soko Vibe, nitakuambia ukweli na kukupa mwongozo wa bei za soko la nje.\n• Tuma picha ya bidhaa, nitaichambua na kuitafuta kwenye Soko Vibe.\n\nUnaweza kuandika, kuongea, au kutuma picha — chochote kinachokufaa!',
+      'check_phone_enter_pin': 'Angalia simu yako — weka PIN kukamilisha malipo',
       'processing_payment': 'Inachakata Malipo...',
       'complete_payment_mongike':
           'Kamilisha malipo kwenye simu yako kupitia Mongike\nAgizo: {0}',
@@ -2231,6 +2234,8 @@ class LocalizationService {
       'mark_delivered': 'Mark Delivered',
       'product': 'Product',
       'service_fee': 'Service Fee (5%)',
+      'service_fee_percent': 'Service Fee ({0}%)',
+      'seller_receives_full': 'Seller receives full amount',
       'subtotal_label': 'Subtotal',
       'check_phone_ussd': 'Check your phone for USSD instructions',
       'valid_phone_required': 'Enter a valid phone number',
@@ -2526,6 +2531,7 @@ class LocalizationService {
 
       'ai_greeting':
           'Hello! Welcome to Soko Vibe. I\'m AI Dalali — your assistant for finding products, prices and sellers. I\'m here to help!\n\n• I search products directly from Soko Vibe — prices, seller, location and phone are all here.\n• If a product isn\'t in Soko Vibe, I\'ll tell you honestly and give you external market price estimates.\n• Send a product photo, I\'ll analyze it and search Soko Vibe.\n\nYou can type, speak, or send a photo — whatever works for you!',
+      'check_phone_enter_pin': 'Check your phone — enter PIN to complete payment',
       'processing_payment': 'Processing Payment...',
       'complete_payment_mongike':
           'Complete payment on your phone via Mongike\nOrder: {0}',

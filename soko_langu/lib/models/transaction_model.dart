@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class TransactionFeeBreakdown {
   final double productPrice;
-  static const double platformCommissionPercent = 0.04;
+  static const double platformCommissionPercent = 0.035;
   final double processingFee;
   final double platformFee;
   final double payoutFee;
@@ -15,8 +15,8 @@ class TransactionFeeBreakdown {
       platformFee = productPrice * platformCommissionPercent,
       payoutFee = 0,
       totalFees = productPrice * platformCommissionPercent,
-      totalAmount = productPrice,
-      sellerReceives = productPrice - (productPrice * platformCommissionPercent);
+      totalAmount = productPrice + (productPrice * platformCommissionPercent),
+      sellerReceives = productPrice;
 
   Map<String, dynamic> toMap() => {
     'productPrice': productPrice,

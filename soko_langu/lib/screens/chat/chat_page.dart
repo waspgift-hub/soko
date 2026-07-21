@@ -8,7 +8,7 @@ import '../../services/user_service.dart';
 import '../../services/whatsapp_service.dart';
 import '../../models/message_model.dart';
 import '../../extensions/context_tr.dart';
-import '../../widgets/google_loading.dart';
+
 import '../../app/routes.dart';
 
 class ChatPage extends StatefulWidget {
@@ -49,20 +49,41 @@ class _ChatPageState extends State<ChatPage> {
   String? _receiverPhoto;
   StreamSubscription<UserProfile?>? _profileSub;
 
+  // Optimistic messages: tempId → Message
+  final Map<String, Message> _optimisticMsgs = {};
+  // Temp IDs whose HTTP send has returned successfully
+  final Set<String> _confirmedSends = {};
+  // Temp IDs whose HTTP send failed
+  final Set<String> _failedSends = {};
+
+  // Presence
+  DateTime? _otherLastActive;
+  Timer? _presenceTimer;
+
   String get _uid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
   String get _roomId => _chatService.roomIdFor(_uid, widget.receiverId);
 
   StreamSubscription<bool>? _typingSub;
+  StreamSubscription<DateTime?>? _presenceSub;
 
   @override
   void initState() {
     super.initState();
     _chatService.markAsRead(_roomId);
+    _chatService.markMessagesAsRead(_roomId);
     _inputCtrl.addListener(_onInputChanged);
     _fetchReceiverPhone();
     _typingSub = _chatTyping.observeTyping(widget.receiverId).listen((t) {
       if (mounted) setState(() => _otherTyping = t);
+    });
+    _presenceSub = _userService.streamLastActive(widget.receiverId).listen((t) {
+      if (mounted) setState(() => _otherLastActive = t);
+    });
+    _userService.updateLastActive();
+    // Refresh presence every 30s while chat is open
+    _presenceTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _userService.updateLastActive();
     });
   }
 
@@ -103,6 +124,8 @@ class _ChatPageState extends State<ChatPage> {
   void dispose() {
     _typingSub?.cancel();
     _profileSub?.cancel();
+    _presenceSub?.cancel();
+    _presenceTimer?.cancel();
     _inputCtrl.dispose();
     _scrollCtrl.dispose();
     _focusNode.dispose();
@@ -128,21 +151,104 @@ class _ChatPageState extends State<ChatPage> {
   void _sendMessage() {
     final text = _inputCtrl.text.trim();
     if (text.isEmpty) return;
-    _chatService.sendMessage(
+
+    final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
+    final optimistic = Message(
+      id: tempId,
+      senderId: _uid,
       receiverId: widget.receiverId,
       content: text,
+      timestamp: DateTime.now(),
+      isRead: false,
+      isDelivered: false,
       productId: widget.productId,
       productName: widget.productName,
       replyTo: _replyTo,
       replyToContent: _replyToContent,
       replyToSender: _replyToSender,
     );
+    _optimisticMsgs[tempId] = optimistic;
+
     _inputCtrl.clear();
+    final replyToId = _replyTo;
+    final replyToContent = _replyToContent;
+    final replyToSender = _replyToSender;
     _replyTo = null;
     _replyToContent = null;
     _replyToSender = null;
     setState(() {});
     _scrollToBottom();
+
+    // Fire HTTP send in background
+    _chatService.sendMessage(
+      receiverId: widget.receiverId,
+      content: text,
+      productId: widget.productId,
+      productName: widget.productName,
+      replyTo: replyToId,
+      replyToContent: replyToContent,
+      replyToSender: replyToSender,
+    ).then((realId) {
+      if (!mounted) return;
+      if (realId != null) {
+        setState(() {
+          _confirmedSends.add(tempId);
+          // Update optimistic message with real ID
+          _optimisticMsgs[tempId] = optimistic.copyWith(
+            isDelivered: true,
+          );
+        });
+      } else {
+        setState(() => _failedSends.add(tempId));
+      }
+    });
+  }
+
+  void _retryMessage(Message failedMsg) {
+    final text = failedMsg.content;
+    if (text.isEmpty) return;
+
+    final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
+    final optimistic = Message(
+      id: tempId,
+      senderId: _uid,
+      receiverId: widget.receiverId,
+      content: text,
+      timestamp: DateTime.now(),
+      isRead: false,
+      isDelivered: false,
+      productId: failedMsg.productId,
+      productName: failedMsg.productName,
+      replyTo: failedMsg.replyTo,
+      replyToContent: failedMsg.replyToContent,
+      replyToSender: failedMsg.replyToSender,
+    );
+
+    setState(() {
+      _failedSends.remove(failedMsg.id);
+      _optimisticMsgs.remove(failedMsg.id);
+      _optimisticMsgs[tempId] = optimistic;
+    });
+
+    _chatService.sendMessage(
+      receiverId: widget.receiverId,
+      content: text,
+      productId: failedMsg.productId,
+      productName: failedMsg.productName,
+      replyTo: failedMsg.replyTo,
+      replyToContent: failedMsg.replyToContent,
+      replyToSender: failedMsg.replyToSender,
+    ).then((realId) {
+      if (!mounted) return;
+      if (realId != null) {
+        setState(() {
+          _confirmedSends.add(tempId);
+          _optimisticMsgs[tempId] = optimistic.copyWith(isDelivered: true);
+        });
+      } else {
+        setState(() => _failedSends.add(tempId));
+      }
+    });
   }
 
   void _scrollToBottom() {
@@ -157,6 +263,35 @@ class _ChatPageState extends State<ChatPage> {
       }
       _autoScrolling = false;
     });
+  }
+
+  /// Remove optimistic messages that are now confirmed by Firestore.
+  void _removeConfirmedOptimistics() {
+    _optimisticMsgs.removeWhere((tempId, msg) {
+      if (_confirmedSends.contains(tempId)) {
+        // Check if a Firestore message exists with matching content
+        final matched = _messages.any((m) =>
+            m.senderId == _uid &&
+            m.content == msg.content &&
+            (m.timestamp.difference(msg.timestamp).inSeconds.abs() < 30));
+        if (matched) return true;
+      }
+      return false;
+    });
+    // Also remove stale failed sends older than 30s
+    _failedSends.removeWhere((id) {
+      final msg = _optimisticMsgs[id];
+      return msg != null &&
+          DateTime.now().difference(msg.timestamp).inSeconds > 30;
+    });
+  }
+
+  /// Merge Firestore messages with optimistic messages, sorted by timestamp.
+  List<Message> _mergedMessages() {
+    if (_optimisticMsgs.isEmpty) return _messages;
+    final all = <Message>[..._messages, ..._optimisticMsgs.values];
+    all.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    return all;
   }
 
   bool _isSameDay(DateTime a, DateTime b) =>
@@ -209,9 +344,28 @@ class _ChatPageState extends State<ChatPage> {
                           color: isDark ? Colors.white : const Color(0xFF111B21),
                         ),
                         overflow: TextOverflow.ellipsis),
-                    if (_otherTyping)
-                      Text(context.tr('typing'),
-                          style: TextStyle(fontSize: 12, color: cs.primary)),
+                    Row(
+                      children: [
+                        if (_otherTyping)
+                          _TypingDots(color: cs.primary)
+                        else if (UserService.isOnline(_otherLastActive))
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 8, height: 8,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF25D366),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(context.tr('online'),
+                                  style: TextStyle(fontSize: 12, color: const Color(0xFF25D366))),
+                            ],
+                          ),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -237,12 +391,11 @@ class _ChatPageState extends State<ChatPage> {
             child: StreamBuilder<List<Message>>(
               stream: _chatService.getMessages(_roomId),
               builder: (context, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(child: GoogleLoading());
-                }
                 final msgs = snap.data ?? [];
                 if (msgs != _messages) {
                   _messages = msgs;
+                  // Remove optimistic messages that have been confirmed by Firestore
+                  _removeConfirmedOptimistics();
                   if (!_autoScrolling) {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       if (_scrollCtrl.hasClients) {
@@ -251,7 +404,12 @@ class _ChatPageState extends State<ChatPage> {
                     });
                   }
                 }
-                if (msgs.isEmpty) {
+                final merged = _mergedMessages();
+                // Mark incoming messages as read
+                if (msgs.any((m) => m.senderId != _uid && !m.isRead)) {
+                  _chatService.markMessagesAsRead(_roomId);
+                }
+                if (merged.isEmpty) {
                   return Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -300,16 +458,14 @@ class _ChatPageState extends State<ChatPage> {
                   child: ListView.builder(
                     controller: _scrollCtrl,
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    itemCount: msgs.length,
+                    itemCount: merged.length,
                     itemBuilder: (_, i) {
-                      final msg = msgs[i];
-                      // Data is ascending (oldest-first). Show date above the first
-                      // message of each day (oldest in that day = top-most visually).
+                      final msg = merged[i];
                       final isFirstOfDay = i == 0 ||
-                          !_isSameDay(msg.timestamp, msgs[i - 1].timestamp);
+                          !_isSameDay(msg.timestamp, merged[i - 1].timestamp);
                       final showTime = i == 0 ||
-                          msgs[i - 1].senderId != msg.senderId ||
-                          msgs[i - 1].timestamp.difference(msg.timestamp).abs() >
+                          merged[i - 1].senderId != msg.senderId ||
+                          merged[i - 1].timestamp.difference(msg.timestamp).abs() >
                               const Duration(minutes: 5);
 
                       return Column(
@@ -320,6 +476,7 @@ class _ChatPageState extends State<ChatPage> {
                             message: msg,
                             isMe: msg.senderId == _uid,
                             showTime: showTime,
+                            isFailed: _failedSends.contains(msg.id),
                             onReply: msg.content == 'deleted' || msg.isDeletedForEveryone
                                 ? null
                                 : () {
@@ -332,6 +489,9 @@ class _ChatPageState extends State<ChatPage> {
                                     _focusNode.requestFocus();
                                     setState(() {});
                                   },
+                            onRetry: _failedSends.contains(msg.id)
+                                ? () => _retryMessage(msg)
+                                : null,
                             onReact: (emoji) {
                               _chatService.addReaction(
                                 otherUserId: widget.receiverId,
@@ -545,7 +705,9 @@ class _MessageBubble extends StatelessWidget {
   final Message message;
   final bool isMe;
   final bool showTime;
+  final bool isFailed;
   final VoidCallback? onReply;
+  final VoidCallback? onRetry;
   final void Function(String emoji) onReact;
   final ColorScheme cs;
 
@@ -553,7 +715,9 @@ class _MessageBubble extends StatelessWidget {
     required this.message,
     required this.isMe,
     required this.showTime,
+    this.isFailed = false,
     this.onReply,
+    this.onRetry,
     required this.onReact,
     required this.cs,
   });
@@ -562,7 +726,14 @@ class _MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDeleted = message.content == 'deleted' || message.isDeletedForEveryone;
 
-    return Padding(
+    return GestureDetector(
+      onHorizontalDragEnd: (details) {
+        // Swipe right → reply (trigger onReply)
+        if (details.primaryVelocity != null && details.primaryVelocity! > 300) {
+          onReply?.call();
+        }
+      },
+      child: Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Align(
         alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -714,11 +885,17 @@ class _MessageBubble extends StatelessWidget {
                     if (isMe && !isDeleted)
                       Padding(
                         padding: const EdgeInsets.only(left: 4),
-                        child: _StatusIcon(
-                          isRead: message.isRead,
-                          isDelivered: message.isDelivered,
-                          color: cs.onPrimary.withValues(alpha: 0.7),
-                        ),
+                        child: isFailed
+                            ? GestureDetector(
+                                onTap: onRetry,
+                                child: Icon(Icons.error_outline,
+                                    size: 16, color: Colors.red.shade400),
+                              )
+                            : _StatusIcon(
+                                isRead: message.isRead,
+                                isDelivered: message.isDelivered,
+                                color: cs.onPrimary.withValues(alpha: 0.7),
+                              ),
                       ),
                   ],
                 ),
@@ -770,8 +947,9 @@ class _MessageBubble extends StatelessWidget {
               ),
             ),
         ],
-      ),
         ),
+        ),
+    ),
     );
   }
 
@@ -823,5 +1001,65 @@ class _StatusIcon extends StatelessWidget {
       return Icon(Icons.done_all, size: 14, color: color);
     }
     return Icon(Icons.done, size: 14, color: color);
+  }
+}
+
+class _TypingDots extends StatefulWidget {
+  final Color color;
+  const _TypingDots({required this.color});
+
+  @override
+  State<_TypingDots> createState() => _TypingDotsState();
+}
+
+class _TypingDotsState extends State<_TypingDots>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (_, _) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(3, (i) {
+            final delay = i * 0.2;
+            final t = (_controller.value - delay).clamp(0.0, 1.0);
+            final bounce = (t < 0.5)
+                ? 2 * t
+                : 2 * (1 - t);
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 1.5),
+              child: Transform.translate(
+                offset: Offset(0, -bounce * 3),
+                child: Container(
+                  width: 6, height: 6,
+                  decoration: BoxDecoration(
+                    color: widget.color.withValues(alpha: 0.4 + bounce * 0.6),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            );
+          }),
+        );
+      },
+    );
   }
 }

@@ -12,8 +12,8 @@ import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../chat/chat_navigation.dart';
-import '../../widgets/google_loading.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class MyPurchasesScreen extends StatefulWidget {
   const MyPurchasesScreen({super.key});
@@ -27,6 +27,23 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
   String? _disputingTxId;
   String? _payingTxId;
   String? _cancellingTxId;
+  String _selectedFilter = 'all';
+  bool _isInitialLoad = true;
+
+  static const _filters = ['all', 'pending', 'active', 'completed'];
+
+  List<QueryDocumentSnapshot> _filterDocs(List<QueryDocumentSnapshot> docs) {
+    if (_selectedFilter == 'all') return docs;
+    return docs.where((d) {
+      final s = (d.data() as Map)['status'] as String? ?? '';
+      switch (_selectedFilter) {
+        case 'pending': return s == 'pending' || s == 'awaiting_shipping_quote' || s == 'awaiting_payment';
+        case 'active': return s == 'paid_escrow_held' || s == 'escrow_hold' || s == 'dispatched' || s == 'delivered';
+        case 'completed': return s == 'completed' || s == 'delivery_confirmed' || s == 'refunded';
+        default: return true;
+      }
+    }).toList();
+  }
 
   Future<void> _payForOrder(String txId, Map<String, dynamic> d) async {
     final user = FirebaseAuth.instance.currentUser;
@@ -191,6 +208,109 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.primary));
   }
 
+  Widget _buildFilterChips(ColorScheme cs, List<QueryDocumentSnapshot> allDocs) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: Row(
+        children: _filters.map((f) {
+          final selected = _selectedFilter == f;
+          final count = f == 'all' ? allDocs.length : _filterCount(allDocs, f);
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: FilterChip(
+              selected: selected,
+              label: Text('${context.tr(f)} ($count)',
+                style: TextStyle(fontSize: 12, fontWeight: selected ? FontWeight.w700 : FontWeight.w500)),
+              onSelected: (_) => setState(() => _selectedFilter = f),
+              visualDensity: VisualDensity.compact,
+              selectedColor: cs.primary.withValues(alpha: 0.15),
+              checkmarkColor: cs.primary,
+              side: BorderSide(color: selected ? cs.primary : cs.outlineVariant.withValues(alpha: 0.3)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  int _filterCount(List<QueryDocumentSnapshot> docs, String filter) {
+    return docs.where((d) {
+      final s = (d.data() as Map)['status'] as String? ?? '';
+      switch (filter) {
+        case 'pending': return s == 'pending' || s == 'awaiting_shipping_quote' || s == 'awaiting_payment';
+        case 'active': return s == 'paid_escrow_held' || s == 'escrow_hold' || s == 'dispatched' || s == 'delivered';
+        case 'completed': return s == 'completed' || s == 'delivery_confirmed' || s == 'refunded';
+        default: return true;
+      }
+    }).length;
+  }
+
+  Widget _buildEmptyState(ColorScheme cs, List<QueryDocumentSnapshot> allDocs) {
+    final hasOrders = allDocs.isNotEmpty;
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            hasOrders ? Icons.filter_list_off_rounded : Icons.shopping_bag_outlined,
+            size: 64,
+            color: cs.onSurfaceVariant.withValues(alpha: 0.4),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            hasOrders ? context.tr('no_orders_this_filter') : context.tr('no_purchases_yet'),
+            style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant),
+          ),
+          if (!hasOrders) ...[
+            const SizedBox(height: 8),
+            Text(
+              context.tr('start_shopping_hint'),
+              style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant.withValues(alpha: 0.6)),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: () => context.go(AppRoutes.home),
+              icon: const Icon(Icons.storefront_outlined, size: 18),
+              label: Text(context.tr('browse_products')),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: cs.primary,
+                foregroundColor: cs.onPrimary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSkeleton(ColorScheme cs) {
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      itemCount: 4,
+      itemBuilder: (_, i) => Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Container(
+          height: 200,
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Center(
+            child: SizedBox(
+              width: 24, height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: cs.primary.withValues(alpha: 0.4),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   String _escrowLabel(String status) {
     switch (status) {
       case 'paid_escrow_held': case 'escrow_hold': return context.tr('secured_in_escrow');
@@ -231,47 +351,73 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
             .where('buyerId', isEqualTo: user.uid)
             .snapshots(),
         builder: (context, snap) {
-          if (snap.hasError || !snap.hasData) {
+          if (snap.connectionState == ConnectionState.waiting && _isInitialLoad) {
+            return _buildSkeleton(cs);
+          }
+          _isInitialLoad = false;
+
+          if (snap.hasError) {
             return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.shopping_bag_outlined, size: 64, color: cs.onSurfaceVariant),
-                  const SizedBox(height: 16),
-                  Text(context.tr('no_purchases_yet'), style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant)),
+                  Icon(Icons.error_outline, size: 48, color: cs.error),
+                  const SizedBox(height: 12),
+                  Text(context.tr('loading_error'), style: TextStyle(color: cs.onSurfaceVariant)),
+                  const SizedBox(height: 12),
+                  TextButton.icon(
+                    onPressed: () => setState(() => _isInitialLoad = true),
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: Text(context.tr('retry')),
+                  ),
                 ],
               ),
             );
           }
 
-          final docs = snap.data!.docs;
-          docs.sort((a, b) {
+          final allDocs = snap.data?.docs ?? [];
+          allDocs.sort((a, b) {
             final ta = (a.data() as Map)['createdAt'];
             final tb = (b.data() as Map)['createdAt'];
             if (ta is Timestamp && tb is Timestamp) return tb.compareTo(ta);
             return 0;
           });
 
-          if (docs.isEmpty) {
-            return Center(child: Text(context.tr('no_purchases_yet')));
-          }
+          final docs = _filterDocs(allDocs);
 
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-            itemCount: docs.length,
-            itemBuilder: (_, i) => _OrderGlassCard(
-              key: ValueKey(docs[i].id),
-              data: docs[i].data() as Map<String, dynamic>,
-              docId: docs[i].id,
-              releasingTxId: _releasingTxId,
-              disputingTxId: _disputingTxId,
-              payingTxId: _payingTxId,
-              cancellingTxId: _cancellingTxId,
-              onPay: _payForOrder,
-              onConfirm: _confirmDelivery,
-              onDispute: _raiseDispute,
-              onCancel: _cancelOrder,
-              escrowLabel: _escrowLabel,
+          return RefreshIndicator(
+            onRefresh: () async {
+              setState(() => _isInitialLoad = true);
+              await Future.delayed(const Duration(milliseconds: 300));
+              if (mounted) setState(() => _isInitialLoad = false);
+            },
+            child: CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(child: _buildFilterChips(cs, allDocs)),
+                if (docs.isEmpty)
+                  SliverFillRemaining(child: _buildEmptyState(cs, allDocs))
+                else
+                  SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (_, i) => _OrderGlassCard(
+                        key: ValueKey(docs[i].id),
+                        data: docs[i].data() as Map<String, dynamic>,
+                        docId: docs[i].id,
+                        releasingTxId: _releasingTxId,
+                        disputingTxId: _disputingTxId,
+                        payingTxId: _payingTxId,
+                        cancellingTxId: _cancellingTxId,
+                        onPay: _payForOrder,
+                        onConfirm: _confirmDelivery,
+                        onDispute: _raiseDispute,
+                        onCancel: _cancelOrder,
+                        escrowLabel: _escrowLabel,
+                      ),
+                      childCount: docs.length,
+                    ),
+                  ),
+                SliverToBoxAdapter(child: SizedBox(height: 32)),
+              ],
             ),
           );
         },
@@ -350,7 +496,7 @@ class _OrderGlassCard extends StatelessWidget {
           Divider(height: 1, indent: 16, endIndent: 16, color: cs.outlineVariant.withValues(alpha: 0.1)),
           _buildActions(context, cs, status, price, shippingCost, totalAmount),
           if (status == 'delivered' || status == 'delivery_confirmed' || status == 'completed')
-            _buildReceiptCard(context, cs, Theme.of(context).brightness == Brightness.dark),
+            _buildReceiptCard(context, cs, status, Theme.of(context).brightness == Brightness.dark),
                 ],
               ),
             ),
@@ -376,8 +522,8 @@ class _OrderGlassCard extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(15),
                 child: image.isNotEmpty
-                    ? Image.network(image, fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => _imgPlaceholder(cs))
+                    ? CachedNetworkImage(imageUrl: image, fit: BoxFit.cover, width: 68, height: 68,
+                        errorWidget: (_, _, _) => _imgPlaceholder(cs))
                     : _imgPlaceholder(cs),
               ),
             ),
@@ -583,7 +729,10 @@ class _OrderGlassCard extends StatelessWidget {
         child: OutlinedButton.icon(
           onPressed: effectiveOnTap,
           icon: isLoading
-              ? const GoogleLoading(size: 18, strokeWidth: 2)
+              ? SizedBox(
+                  width: 16, height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: color),
+                )
               : Icon(icon, size: 16),
           label: Text(isLoading ? context.tr('processing_label') : label),
           style: OutlinedButton.styleFrom(
@@ -599,7 +748,10 @@ class _OrderGlassCard extends StatelessWidget {
       child: ElevatedButton.icon(
         onPressed: effectiveOnTap,
         icon: isLoading
-            ? const GoogleLoading(size: 18, strokeWidth: 2)
+            ? SizedBox(
+                width: 16, height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              )
             : Icon(icon, size: 16),
         label: Text(isLoading ? context.tr('processing_label') : label),
         style: ElevatedButton.styleFrom(
@@ -612,7 +764,7 @@ class _OrderGlassCard extends StatelessWidget {
     );
   }
 
-  Widget _buildReceiptCard(BuildContext context, ColorScheme cs, bool isDark) {
+  Widget _buildReceiptCard(BuildContext context, ColorScheme cs, String status, bool isDark) {
     final paymentMethod = data['paymentMethod'] as String? ?? 'Mongike';
     final productPrice = (data['productPrice'] as num?)?.toDouble() ?? 0;
     final shippingCost = (data['shippingCost'] as num?)?.toDouble() ?? 0;
@@ -693,9 +845,6 @@ class _OrderGlassCard extends StatelessWidget {
   }
 
   String _nf(num n) => NumberFormat('#,###', 'en').format(n);
-  String get paymentMethod => data['paymentMethod'] as String? ?? 'Mongike';
-  String get status => data['status'] as String? ?? 'pending';
-  double get totalAmount => (data['totalAmount'] as num?)?.toDouble() ?? (data['productPrice'] as num?)?.toDouble() ?? 0;
 }
 
 class _CompactTimeline extends StatelessWidget {
@@ -757,103 +906,6 @@ class _CompactTimeline extends StatelessWidget {
       _TimelineStep('', Icons.inventory_2_outlined, cs.successGreen),
       _TimelineStep('', Icons.check_circle_outline, cs.successGreen),
       _TimelineStep('', Icons.check_circle_rounded, cs.successGreen),
-    ];
-  }
-}
-
-class _OrderStatusTimeline extends StatelessWidget {
-  final String status;
-  final ColorScheme cs;
-
-  const _OrderStatusTimeline({required this.status, required this.cs});
-
-  @override
-  Widget build(BuildContext context) {
-    final steps = _buildSteps(context);
-    final current = _currentIndex();
-
-    return Column(
-      children: List.generate(steps.length, (i) {
-        final s = steps[i];
-        final active = i <= current;
-        final glowing = i == current;
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 3),
-          child: Row(
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                width: 28, height: 28,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: active ? s.color : cs.surfaceContainerHighest.withValues(alpha: 0.3),
-                  boxShadow: glowing
-                      ? [BoxShadow(color: s.color.withValues(alpha: 0.4), blurRadius: 12, spreadRadius: 1)]
-                      : [],
-                ),
-                child: Icon(s.icon, size: 14, color: active ? cs.surface : cs.onSurfaceVariant.withValues(alpha: 0.4)),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      s.label,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: glowing ? FontWeight.w700 : FontWeight.w500,
-                        color: active ? cs.onSurface : cs.onSurfaceVariant.withValues(alpha: 0.5),
-                      ),
-                    ),
-                    if (glowing && current < _totalSteps(context) - 1)
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 600),
-                        margin: const EdgeInsets.only(top: 2),
-                        width: double.infinity, height: 2,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [s.color.withValues(alpha: 0.5), s.color.withValues(alpha: 0.1)],
-                          ),
-                          borderRadius: BorderRadius.circular(1),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      }),
-    );
-  }
-
-  int _totalSteps(BuildContext context) => _buildSteps(context).length;
-
-  int _currentIndex() {
-    switch (status) {
-      case 'pending': return 0;
-      case 'awaiting_shipping_quote': return 1;
-      case 'awaiting_payment': return 2;
-      case 'paid_escrow_held': case 'escrow_hold': return 3;
-      case 'dispatched': return 4;
-      case 'delivered': case 'delivery_confirmed': return 5;
-      case 'completed': return 6;
-      case 'refunded': return 6;
-      case 'failed': case 'cancelled': return -1;
-      default: return 0;
-    }
-  }
-
-  List<_TimelineStep> _buildSteps(BuildContext context) {
-    return [
-      _TimelineStep(context.tr('step_received'), Icons.access_time_rounded, cs.onSurfaceVariant),
-      _TimelineStep(context.tr('step_shipping_quote'), Icons.local_shipping_outlined, Colors.orange),
-      _TimelineStep(context.tr('waiting_payment'), Icons.account_balance_wallet_outlined, Colors.blue),
-      _TimelineStep(context.tr('step_in_escrow'), Icons.verified_user_outlined, Colors.purple),
-      _TimelineStep(context.tr('shipped'), Icons.inventory_2_outlined, cs.successGreen),
-      _TimelineStep(context.tr('confirmed'), Icons.check_circle_outline, cs.successGreen),
-      _TimelineStep(context.tr('completed'), Icons.check_circle_rounded, cs.successGreen),
     ];
   }
 }

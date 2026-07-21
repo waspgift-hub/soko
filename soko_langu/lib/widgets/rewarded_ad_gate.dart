@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/rewarded_ad_service.dart';
 import '../extensions/context_tr.dart';
 
@@ -67,7 +69,7 @@ class RewardedAdGate {
               Navigator.of(ctx).pop();
               await _rewardedAdService.preload();
               final earned = await _rewardedAdService.show(
-                onUserEarned: () {},
+                onUserEarned: () => _recordRewardedAdView(),
               );
               completer.complete(earned);
             },
@@ -83,6 +85,17 @@ class RewardedAdGate {
     );
 
     return completer.future;
+  }
+
+  /// Record this rewarded ad view as admin revenue (100% to platform).
+  static void _recordRewardedAdView() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    FirebaseFirestore.instance.collection('ad_views').add({
+      'buyerId': uid,
+      'timestamp': FieldValue.serverTimestamp(),
+      'processed': false,
+    });
   }
 }
 
