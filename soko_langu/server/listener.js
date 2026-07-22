@@ -31,9 +31,9 @@ function stringifyFcmData(data = {}) {
 
 function buildFcmMessage({ token, title, body, data = {} }) {
   const notifType = (data && data.type) || 'general';
-  const channelId = notifType === 'chat' ? 'chat_messages_v3'
-    : notifType === 'payment' || notifType === 'order' || notifType === 'withdrawal' ? 'payments_notifications'
-    : 'general_notifications_v3';
+  const channelId = notifType === 'chat' ? 'chat_messages_v4'
+    : notifType === 'payment' || notifType === 'order' || notifType === 'withdrawal' ? 'payments_notifications_v4'
+    : 'general_notifications_v4';
   const msg = {
     data: stringifyFcmData({ title: title || '', body: body || '', ...data }),
     notification: { title: title || '', body: body || '' },

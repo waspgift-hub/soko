@@ -66,7 +66,7 @@ service cloud.firestore {
     // ─── PRODUCTS ───────────────────────────────────────────
     match /products/{productId} {
       allow read: if true;
-      allow create: if isSignedIn() && request.resource.data.sellerId == request.auth.uid;
+      allow create: if isSignedIn() && notSuspended() && request.resource.data.sellerId == request.auth.uid;
       allow update: if (isSignedIn() && notSuspended() && resource.data.sellerId == request.auth.uid) || isAdmin();
       allow delete: if (isSignedIn() && notSuspended() && resource.data.sellerId == request.auth.uid) || isAdmin();
 
