@@ -1,0 +1,534 @@
+╔══════════════════════════════════════════════════════════════╗
+║       SOKO VIBE — NOTIFICATION FLOW COMPLETE               ║
+║       Kutoka Trigger hadi Delivery (FCM + In-App + SMS)    ║
+╚══════════════════════════════════════════════════════════════╝
+
+═══════════════════════════════════════════════════════════════
+FCM CHANNEL MAP (Android Awesome Notifications)
+═══════════════════════════════════════════════════════════════
+
+  data.type        →  FCM Channel ID
+  ─────────────────────────────────────────────────────
+  chat, group_chat →  chat_messages_v4
+  payment, order,
+  withdrawal       →  payments_notifications_v4
+  default (other)  →  general_notifications_v4
+
+═══════════════════════════════════════════════════════════════
+SEHEMU YA 1: NOTIFICATIONS KUTOKA SERVER (index.js)
+═══════════════════════════════════════════════════════════════
+
+1. OTP AUTH (SMS tu)
+   ─────────────────────────────────────────────
+   Trigger    : Mtumiaji anaomba OTP kwenye /api/auth/send-otp
+   Chaneli    : SMS (Meseji)
+   Mpokeaji   : Mtumiaji anayeomba OTP
+   SMS        : "Soko Vibe: OTP yako ni {otp}. Inaisha kwa dakika 10."
+
+
+2. SEND-NOTIFICATION (API generic)
+   ─────────────────────────────────────────────
+   Trigger    : Simu kutoka Flutter kwenye /api/send-notification
+                (like, order, comment, review, group chat, n.k.)
+   Chaneli    : In-app (Firestore notifications) + FCM
+   Mpokeaji   : userId yoyote (kutoka kwa mwita)
+   Title/Body : Inategemea mwita
+   Aina       : Inategemea data.type
+
+
+3. SEND-BULK-NOTIFICATION (Admin)
+   ─────────────────────────────────────────────
+   Trigger    : Admin anabonyeza "Send to All" kwenye dashboard
+   Chaneli    : FCM multicast (hadKYC tokens 500/group)
+   Mpokeaji   : Wateja wote wenye FCM token
+   Title/Body : Kuanzia admin input
+
+
+4. MONGIKE WEBHOOK — BOOST PAMENT SUCCESS
+   ─────────────────────────────────────────────
+   Trigger    : Mongike anaripoti malipo ya boost yamekamilika
+   Chaneli    : In-app + FCM + SMS + Broadcast kwa WOTE
+   Mpokeaji   : Muuzaji aliyenunua boost
+   Title      : "✅ Boost imewashwa!"
+   Body       : "Bidhaa yako imepandishwa kwa daraja la {tier} kwa siku {days}."
+   SMS        : "Soko Vibe: Malipo ya Boost ya TZS {amount} yamefanikiwa!"
+   Aina       : boost → FCM Channel: general_notifications_v4
+   Pia        : notifyBoostBroadcast() inatahadharisha WATEJA WOTE
+
+
+5. MONGIKE WEBHOOK — PURCHASE SUCCESS
+   ─────────────────────────────────────────────
+   Trigger    : Mongike anaripoti malipo ya bidhaa yamekamilika
+   Chaneli    : In-app + FCM + SMS
+   Mpokeaji   : Muuzaji (seller)
+   Title      : "Umepata Mauzo!"
+   Body       : "{productName} imeuzwa. TZS {amount} zimewekwa escrow."
+   SMS        : "Soko Vibe: Oda #{orderId} imelipiwa! Fedha ipo salama Escrow."
+   ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
+   Mpokeaji   : Mnunuzi (buyer)
+   Title      : "Malipo Yamekamilika!"
+   Body       : "Malipo ya {productName} yamepokelewa. Thibitisha upokeaji."
+   SMS        : "Soko Vibe: Malipo ya TZS {price} kwa Oda #{orderId} yamepokelewa."
+   Aina       : order / escrow_confirm → FCM Channel: payments_notifications_v4
+
+
+6. MONGIKE WEBHOOK — PAYMENT FAILED
+   ─────────────────────────────────────────────
+   Trigger    : Mongike anaripoti malipo yameshindikana
+   Chaneli    : In-app + FCM + SMS
+   Mpokeaji   : Mnunuzi (buyer)
+   Title      : "Malipo Yameshindikana"
+   Body       : "Malipo ya {productName} hayakukamilika. Jaribu tena."
+   SMS        : "Soko Vibe: Malipo ya {productName} hayakukamilika."
+   Aina       : payment_failed → FCM Channel: payments_notifications_v4
+
+
+7. DISPATCH — Muuzaji anasafirisha bidhaa
+   ─────────────────────────────────────────────
+   Trigger    : Muuzaji anabonyeza "Dispatch" kwenye /api/escrow/dispatch
+   Chaneli    : In-app + FCM + SMS
+   Mpokeaji   : Mnunuzi (buyer)
+   Title      : "📦 Bidhaa Imesafirishwa!"
+   Body       : "{productName} imesafirishwa. Angalia proof of delivery."
+   SMS        : "Soko Vibe: Mzigo wa Oda #{orderId} umesafirishwa kupitia basi la {busName} ({plateNumber})."
+   Aina       : dispatched → FCM Channel: payments_notifications_v4
+
+
+8. ESCROW RELEASE — Mnunuzi anathibitisha upokeaji
+   ─────────────────────────────────────────────
+   Trigger    : Mnunuzi anabonyeza "Confirm Delivery" /api/escrow/release
+   Chaneli    : In-app + FCM + SMS
+   Mpokeaji   : Muuzaji (seller)
+   Title      : "Escrow Imefunguliwa!"
+   Body       : "Mnunuzi amethibitisha upokeaji wa {productName}. TZS {amount} zimewekwa salio."
+   SMS        : "Soko Vibe: Mteja amethibitisha kupokea mzigo #{orderId}. TZS {amount} zimetolewa Escrow."
+   ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
+   Mpokeaji   : Mnunuzi (buyer)
+   Title      : "Umethibitisha Upokeaji"
+   Body       : "Umethibitisha kuwa umepokea {productName}. Pesa zimefunguliwa kwa muuzaji."
+   Aina       : escrow_release / delivery_confirmed → FCM: payments_notifications_v4
+
+
+9. CANCEL — Mnunuzi anaghairi order
+   ─────────────────────────────────────────────
+   Trigger    : Mnunuzi anaghairi order kabla ya dispatch
+   Chaneli    : In-app + FCM
+   Mpokeaji   : Mnunuzi (buyer)
+   Title      : "💰 Pesa Zimerudishwa Kamili"
+   Body       : "Refund kamili ya TZS {amount} kwa {productName} imetumwa."
+   Mpokeaji   : Muuzaji (seller)
+   Title      : "❌ Oda Imeghairiwa"
+   Body       : "{productName} imeghairiwa na mnunuzi."
+   Aina       : refund / cancelled → FCM: payments_notifications_v4
+
+
+10. DISPUTE — Mnunuzi anafungua mgogoro
+    ─────────────────────────────────────────────
+    Trigger    : Mnunuzi anafungua mgogoro
+    Chaneli    : In-app + FCM + Admin notification
+    Mpokeaji   : Muuzaji (seller)
+    Title      : "⚖️ Mgogoro Umefunguliwa"
+    Body       : "Mnunuzi amefungua mgogoro kwa {productName}."
+    Mpokeaji   : Mnunuzi (buyer)
+    Title      : "⚖️ Mgogoro Umefunguliwa"
+    Body       : "Tumepokea mgogoro wako. Admin atakagua."
+    Mpokeaji   : Admins WOTE (kupitia notifyAdmins)
+    Title      : "⚖️ Mgogoro Mpya Unahitaji Uamuzi"
+    Aina       : disputed → FCM: payments_notifications_v4
+
+
+11. ADMIN RESOLVE DISPUTE
+    ─────────────────────────────────────────────
+    Trigger    : Admin anatoa uamuzi (release au refund)
+    Chaneli    : In-app + FCM
+    a) Uamuzi = release
+       Seller   : "⚖️ Uamuzi wa Mgogoro" — "Admin ameamua pesa zikutolee."
+       Buyer    : "⚖️ Uamuzi wa Mgogoro" — "Admin ameamua pesa zitolewe kwa muuzaji."
+    b) Uamuzi = refund
+       Buyer    : "💰 Pesa Zimerudishwa Kamili"
+       Seller   : "❌ Mgogoro Umekamilika" — "{productName} imerefundiwa mnunuzi."
+    Aina       : dispute_resolved / refund → FCM: payments_notifications_v4
+
+
+12. KYC — Mtumiaji anawasilisha KYC
+    ─────────────────────────────────────────────
+    Trigger    : Mtumiaji anatuma KYC /api/kyc/submit
+    Chaneli    : In-app + FCM
+    a) Auto-approved
+       Title    : "KYC Imekubaliwa!"
+       Body     : "Umekubaliwa kuuza bidhaa. Sasa unaweza kuongeza bidhaa zako."
+    b) Inahitaji ukaguzi
+       Title    : "KYC Inahitaji Ukaguzi"
+       Body     : "KYC yako inahitaji marekebisho: {reason}."
+    Aina       : kyc → FCM Channel: general_notifications_v4
+
+
+13. ADMIN REVIEWS KYC
+    ─────────────────────────────────────────────
+    Trigger    : Admin anakubali/akataa KYC /api/admin/kyc/review
+    Chaneli    : In-app + FCM
+    a) Approved
+       Title    : "KYC Imekubaliwa!"
+       Body     : "Umekubaliwa kuuza bidhaa."
+    b) Rejected
+       Title    : "KYC Imekataliwa"
+       Body     : "KYC yako imekataliwa. Sababu: {notes}."
+    Aina       : kyc → FCM: general_notifications_v4
+
+
+14. WITHDRAWAL — Muuzaji anaomba kutoa pesa
+    ─────────────────────────────────────────────
+    Trigger    : Muuzaji anaomba withdrawal /api/seller/withdraw
+    Chaneli    : In-app + FCM
+    Mpokeaji   : Muuzaji
+    Title      : "💰 Utoaji wa Pesa Umeanzishwa"
+    Body       : "TZS {amount} zinaandaliwa kutuma kwa {phone}."
+    Aina       : withdrawal → FCM: payments_notifications_v4
+
+
+15. PAYOUT SUCCESS (Mongike webhook)
+    ─────────────────────────────────────────────
+    Trigger    : Mongike anathibitisha payout imekamilika
+    Chaneli    : In-app + FCM
+    Mpokeaji   : Muuzaji
+    Title      : "Payout imefanikiwa!"
+    Body       : "TZS {amount} zimetumwa kwenye mobile money yako."
+    Aina       : withdrawal → FCM: payments_notifications_v4
+
+
+16. PAYOUT FAILED (Mongike webhook)
+    ─────────────────────────────────────────────
+    Trigger    : Mongike anaripoti payout imeshindikana
+    Chaneli    : In-app + FCM
+    Mpokeaji   : Muuzaji
+    Title      : "❌ Utoaji wa Pesa Umeshindwa"
+    Body       : "TZS {amount} hazikutumwa. Pesa zimerudishwa kwenye pochi yako."
+    Aina       : withdrawal → FCM: payments_notifications_v4
+
+
+17. USER SUSPENDED / UNSUSPENDED
+    ─────────────────────────────────────────────
+    Trigger    : Admin anasimamisha/kuachia akaunti
+    Chaneli    : In-app + FCM
+    Suspended  : "Akaunti Yako Imesitishwa"
+    Unsuspended: "Akaunti Yako Imerejeshwa"
+    Aina       : account → FCM: general_notifications_v4
+
+
+18. REPORT — Mtumiaji anaripoti
+    ─────────────────────────────────────────────
+    Trigger    : Mtumiaji anawasilisha report /api/reports
+    Chaneli    : In-app + FCM + notifyAdmins()
+    Mpokeaji   : Admins WOTE
+    Title      : "🚩 Ripoti Mpya Imewasilishwa"
+    Body       : "{reporterName} ameripoti {reportedUserName}. Sababu: {reason}"
+    Aina       : report → FCM: general_notifications_v4
+
+
+19. AUTO-RELEASE EXPIRED ESCROW
+    ─────────────────────────────────────────────
+    Trigger    : Cron job /api/release-expired-escrows (kila saa)
+    Chaneli    : In-app + FCM
+    Mpokeaji   : Muuzaji (seller)
+    Title      : "Escrow Imefunguliwa Kiotomatiki"
+    Body       : "{productName} escrow imefunguliwa baada ya muda wake."
+    Mpokeaji   : Mnunuzi (buyer)
+    Title      : "Escrow Imefunguliwa Kiotomatiki"
+    Body       : "Muda wa escrow umeisha. Pesa zimefunguliwa kwa muuzaji."
+    Aina       : escrow_auto_release → FCM: payments_notifications_v4
+
+
+20. FLASH SALE NOTIFICATION (Admin/API)
+    ─────────────────────────────────────────────
+    Trigger    : Admin anawasha flash sale /api/flash-sale/notify
+    Chaneli    : In-app + FCM (WATEJA WOTE)
+    Mpokeaji   : Wateja wote (isipokuwa muuzaji)
+    Title      : "⚡ Flash Sale! -{discount}%"
+    Body       : "{productName} sasa TSh {price} pekee!"
+    Aina       : flash_sale → FCM: general_notifications_v4
+
+
+21. BOOST BROADCAST (kwa wateja wote)
+    ─────────────────────────────────────────────
+    Trigger    : notifyBoostBroadcast() baada ya boost payment
+    Chaneli    : In-app + FCM (WATEJA WOTE)
+    Mpokeaji   : Wateja wote (isipokuwa muuzaji)
+    Title      : "Bidhaa Mpya ya Moto! 🔥"
+    Body       : "{sellerName} ame-boost bidhaa mpya, angalia sasa!"
+    Aina       : boost → FCM: general_notifications_v4
+
+
+22. PRICE DROP BROADCAST
+    ─────────────────────────────────────────────
+    Trigger    : Muuzaji anafanya price drop (AI-recommended)
+    Chaneli    : In-app + FCM (wateja hadi 500)
+    Mpokeaji   : Wateja
+    Title      : "Punguzo Kubwa! {productName}"
+    Body       : "Ilishuka kutoka {originalPrice} hadi {newPrice}!"
+    Aina       : price_drop → FCM: general_notifications_v4
+
+
+═══════════════════════════════════════════════════════════════
+SEHEMU YA 2: NOTIFICATIONS KUTOKA LISTENER (listener.js)
+═══════════════════════════════════════════════════════════════
+
+23. TRANSACTION LISTENER: pending → escrow_hold
+    ─────────────────────────────────────────────
+    Trigger    : Firestore transaction.status = escrow_hold
+    Chaneli    : FCM + SMS
+    FCM Buyer  : "Payment Received – Escrow Held"
+                 "Your payment for {productName} is held in escrow."
+    SMS Buyer  : "Soko Vibe: Malipo ya TZS {total} kwa Oda #{orderId}
+                  yamepokelewa na kuwekwa salama Escrow."
+    SMS Seller : "Soko Vibe: Oda #{orderId} imelipiwa! Fedha ipo salama
+                  Escrow. Tafadhali kamilisha usafirishaji stendi."
+    Aina       : payment → FCM: payments_notifications_v4
+
+
+24. TRANSACTION LISTENER: escrow_hold → dispatched
+    ─────────────────────────────────────────────
+    Trigger    : Firestore transaction.status = dispatched
+    Chaneli    : SMS tu (FCM inafanywa na /api/escrow/dispatch endpoint)
+    SMS Buyer  : "Soko Vibe: Mzigo wa Oda #{orderId} umesafirishwa
+                  kupitia basi la {busName} ({plateNumber})."
+
+
+25. TRANSACTION LISTENER: dispatched → delivered
+    ─────────────────────────────────────────────
+    Trigger    : Firestore transaction.status = delivered
+    Chaneli    : SMS tu (FCM inafanywa na /api/escrow/release endpoint)
+    SMS Seller : "Soko Vibe: Mteja amethibitisha kupokea mzigo #{orderId}.
+                  TZS {amount} zimetolewa Escrow na kuwekwa kwenye pochi yako."
+
+
+26. TRANSACTION LISTENER: any → failed
+    ─────────────────────────────────────────────
+    Trigger    : Firestore transaction.status = failed
+    Chaneli    : FCM + SMS
+    FCM Buyer  : "Malipo Yameshindikana"
+                 "Malipo ya {productName} hayakukamilika. Fungua app ili ujaribu tena."
+    SMS Buyer  : "Soko Vibe: Malipo ya {productName} hayakukamilika."
+    Aina       : payment_failed → FCM: payments_notifications_v4
+
+
+27. TRANSACTION LISTENER: any → refunded
+    ─────────────────────────────────────────────
+    Trigger    : Firestore transaction.status = refunded
+    Chaneli    : FCM + SMS
+    FCM Buyer  : "Fedha Zimerudishwa"
+                 "Fedha za {productName} zimerudishwa kwenye akaunti yako."
+    SMS Buyer  : "Soko Vibe: Fedha za {productName} (Oda #{orderId})
+                  zimerudishwa kwenye akaunti yako."
+    Aina       : refund → FCM: payments_notifications_v4
+
+
+28. CHAT MESSAGE LISTENER
+    ─────────────────────────────────────────────
+    Trigger    : Ujumbe mpya kwenye messages subcollection
+    Chaneli    : FCM (data-only — Flutter background handler anajenga notification)
+    Mpokeaji   : Mhusika mwingine kwenye chat room
+    Title      : "{senderName}" (jina la mtumaji)
+    Body       : "{text}" (ujumbe wenyewe)
+    Aina       : chat → FCM: chat_messages_v4
+
+
+29. PRODUCT LISTENER — Bidhaa mpya
+    ─────────────────────────────────────────────
+    Trigger    : Bidhaa mpya imeongezwa Firestore
+    Chaneli    : In-app + FCM
+    Mpokeaji   : Wateja wote walio na chat room na muuzaji
+    Title      : "{sellerName}"
+    Body       : "{sellerName} ameweka bidhaa mpya: {productName}."
+    Aina       : product → FCM: general_notifications_v4
+
+
+═══════════════════════════════════════════════════════════════
+SEHEMU YA 3: NOTIFICATIONS KUTOKA FLUTTER (upande wa app)
+═══════════════════════════════════════════════════════════════
+
+30. PRODUCT LIKED (wishlist)
+    ─────────────────────────────────────────────
+    Trigger    : Mtumiaji anabonyeza "like" kwenye product_detail.dart
+    Chaneli    : In-app (kupitia POST /api/send-notification)
+    Mpokeaji   : Muuzaji wa bidhaa
+    Title      : "{user} amependa bidhaa yako" / "liked your product"
+    Body       : "{productName}"
+    Aina       : wishlist → FCM: general_notifications_v4
+
+
+31. ORDER PLACED (checkout)
+    ─────────────────────────────────────────────
+    Trigger    : Mnunuzi anawasilisha order / checkout_screen.dart
+    Chaneli    : In-app (POST /api/send-notification)
+    Mpokeaji   : Muuzaji
+    Title      : "Order Mpya Imewasilishwa!" / "New Order Received!"
+    Body       : "{buyerName} anataka kununua {productName}."
+    Aina       : order → FCM: payments_notifications_v4
+
+
+32. SHIPPING QUOTE
+    ─────────────────────────────────────────────
+    Trigger    : Muuzaji anaweka gharama ya usafirishaji
+    Chaneli    : In-app (POST /api/send-notification)
+    Mpokeaji   : Mnunuzi
+    Title      : "Gharama ya Usafirishaji Imewekwa!" / "Shipping Cost Set!"
+    Body       : "Muuzaji ameweka gharama ya usafirishaji TZS {cost}."
+    Aina       : shipping_quote → FCM: payments_notifications_v4
+
+
+33. NEW REVIEW
+    ─────────────────────────────────────────────
+    Trigger    : Mtumiaji anaandika review kwenye product
+    Chaneli    : In-app (POST /api/send-notification)
+    Mpokeaji   : Muuzaji
+    Title      : "New Review!"
+    Body       : "{reviewerName} rated your product {rating} stars"
+    Aina       : general → FCM: general_notifications_v4
+
+
+34. NEW COMMENT
+    ─────────────────────────────────────────────
+    Trigger    : Mtumiaji anatoa comment kwenye product
+    Chaneli    : In-app (POST /api/send-notification)
+    Mpokeaji   : Muuzaji
+    Title      : "New Comment on your listing!"
+    Body       : "{userName} commented on your product"
+    Aina       : comment → FCM: general_notifications_v4
+
+
+35. REPLY TO COMMENT
+    ─────────────────────────────────────────────
+    Trigger    : Mtumiaji anajibu comment
+    Chaneli    : In-app (POST /api/send-notification)
+    Mpokeaji   : Mwandishi wa comment asili
+    Title      : "New reply to your comment!"
+    Body       : "{userName} replied: \"{text}\""
+    Aina       : comment_reply → FCM: general_notifications_v4
+
+
+36. GROUP CHAT TEXT
+    ─────────────────────────────────────────────
+    Trigger    : Mtumiaji anatuma ujumbe kwenye group
+    Chaneli    : In-app (POST /api/send-notification)
+    Mpokeaji   : Wanachama wengine wa group
+    Title      : "{senderName}"
+    Body       : "{content}" (ujumbe)
+    Aina       : group_chat → FCM: chat_messages_v4
+
+
+37. GROUP CHAT PHOTO
+    ─────────────────────────────────────────────
+    Trigger    : Mtumiaji anatuma picha kwenye group
+    Chaneli    : In-app (POST /api/send-notification)
+    Mpokeaji   : Wanachama wengine wa group
+    Title      : "{senderName}"
+    Body       : "Sent a photo"
+    Aina       : group_chat → FCM: chat_messages_v4
+
+
+═══════════════════════════════════════════════════════════════
+SEHEMU YA 4: SMS NOTIFICATIONS KUTOKA FLUTTER (sms_notification_service.dart)
+═══════════════════════════════════════════════════════════════
+
+38. BOOST SMS
+    ─────────────────────────────────────────────
+    Trigger    : Muuzaji anakamilisha malipo ya boost
+    Chaneli    : SMS (POST /api/sms/send)
+    Mpokeaji   : Muuzaji
+    SW         : "Soko Vibe: Malipo ya boost yamethibitishwa. Kiasi: TZS {amount}."
+    EN         : "Soko Vibe: Boost payment confirmed. Amount: TZS {amount}."
+
+
+39. ESCROW RELEASE SMS
+    ─────────────────────────────────────────────
+    Trigger    : Escrow imefunguliwa
+    Chaneli    : SMS
+    Mpokeaji   : Muuzaji
+    SW         : "Soko Vibe: Malipo yametolewa kwa order #{orderId}. Kiasi: TZS {amount}."
+    EN         : "Soko Vibe: Payment released for order #{orderId}."
+
+
+40. DISPATCH SMS
+    ─────────────────────────────────────────────
+    Trigger    : Muuzaji anasafirisha bidhaa
+    Chaneli    : SMS
+    Mpokeaji   : Mnunuzi
+    SW         : "Soko Vibe: Mzigo wako wa order #{orderId} umesafirishwa."
+    EN         : "Soko Vibe: Your order #{orderId} has been dispatched."
+
+
+41. ORDER PLACED SMS
+    ─────────────────────────────────────────────
+    Trigger    : Oda imewekwa
+    Chaneli    : SMS
+    Mpokeaji   : Mnunuzi
+    SW         : "Soko Vibe: Oda yako #{orderId} imewekwa. Bidhaa: {productName}."
+    EN         : "Soko Vibe: Your order #{orderId} has been placed."
+
+
+42. SHIPPING QUOTE SMS
+    ─────────────────────────────────────────────
+    Trigger    : Muuzaji anaweka gharama ya usafirishaji
+    Chaneli    : SMS
+    Mpokeaji   : Mnunuzi
+    SW         : "Soko Vibe: Gharama ya usafirishaji kwa order #{orderId} ni TZS {cost}."
+    EN         : "Soko Vibe: The shipping cost for order #{orderId} is TZS {cost}."
+
+
+═══════════════════════════════════════════════════════════════
+MUHTASARI KWA KUNDI (GROUPED BY EVENT)
+═══════════════════════════════════════════════════════════════
+
+ EVENT                  │  INAPP  │  FCM   │  SMS   │  MPOKEAJI
+────────────────────────┼─────────┼────────┼────────┼──────────────────
+ OTP requested          │    ❌   │   ❌   │   ✅   │ User
+ Product liked          │    ✅   │   ✅   │   ❌   │ Seller
+ Order placed           │    ✅   │   ✅   │   ✅   │ Seller + Buyer
+ Shipping quote set     │    ✅   │   ✅   │   ✅   │ Buyer
+ Payment success        │    ✅   │   ✅   │   ✅   │ Seller + Buyer
+ Payment failed         │    ✅   │   ✅   │   ✅   │ Buyer
+ Seller dispatched      │    ✅   │   ✅   │   ✅   │ Buyer
+ Delivery confirmed     │    ✅   │   ✅   │   ✅   │ Seller + Buyer
+ Order cancelled        │    ✅   │   ✅   │   ❌   │ Seller + Buyer
+ Dispute raised         │    ✅   │   ✅   │   ❌   │ Seller + Buyer + Admin
+ Dispute resolved       │    ✅   │   ✅   │   ❌   │ Seller + Buyer
+ KYC submitted          │    ✅   │   ✅   │   ❌   │ User
+ KYC reviewed           │    ✅   │   ✅   │   ❌   │ User
+ Withdrawal initiated   │    ✅   │   ✅   │   ❌   │ Seller
+ Payout success         │    ✅   │   ✅   │   ❌   │ Seller
+ Payout failed          │    ✅   │   ✅   │   ❌   │ Seller
+ User suspended         │    ✅   │   ✅   │   ❌   │ User
+ Report submitted       │    ✅   │   ✅   │   ❌   │ Admin
+ Flash sale             │    ✅   │   ✅   │   ❌   │ All users
+ Boost broadcast        │    ✅   │   ✅   │   ❌   │ All users
+ Price drop             │    ✅   │   ✅   │   ❌   │ All users
+ New chat message       │    ❌   │   ✅   │   ❌   │ Recipient
+ Group chat message     │    ✅   │   ✅   │   ❌   │ Group members
+ New comment/review     │    ✅   │   ✅   │   ❌   │ Seller
+ New product (listener) │    ✅   │   ✅   │   ❌   │ Chat partners
+ Admin bulk broadcast   │    ❌   │   ✅   │   ❌   │ All users
+
+
+═══════════════════════════════════════════════════════════════
+FILES ZINAZOHUSIKA
+═══════════════════════════════════════════════════════════════
+
+  server/index.js           → API endpoints, webhooks, admin actions
+  server/listener.js        → Firestore real-time listeners
+  functions/index.js        → DEPRECATED (Cloud Functions, haitumiki tena)
+  lib/services/notification_service.dart → FCM init + sendNotification()
+  lib/services/sms_notification_service.dart → SMS helpers
+  lib/services/fcm_notification_display.dart → Awesome Notifications display
+  lib/services/price_drop_service.dart  → Price drop broadcast
+  lib/services/boost_service.dart       → Boost notification
+  lib/services/analytics_service.dart   → Admin "Send Push to All"
+  lib/services/review_service.dart      → Review notification
+  lib/services/comment_service.dart     → Comment/reply notification
+  lib/services/group_service.dart       → Group chat notification
+  lib/screens/home/product_detail.dart  → Like notification
+  lib/screens/home/checkout_screen.dart → Order placed notification
+  lib/screens/orders/seller_quote_screen.dart → Shipping quote
+
+═══════════════════════════════════════════════════════════════
+MWISHO
+═══════════════════════════════════════════════════════════════

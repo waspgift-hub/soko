@@ -11,6 +11,14 @@ import 'services/fcm_notification_display.dart';
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
+  // Skip duplicate: if the server sent a notification payload, the system
+  // already displayed it natively. Only show via Awesome Notifications for
+  // data-only payloads (e.g. chat) to avoid double notifications.
+  if (message.notification != null) {
+    debugPrint('[FCM BG] notification payload present — skipping Awesome duplicate (type=${message.data['type']})');
+    return;
+  }
+
   await AwesomeNotifications().initialize(
     'resource://drawable/ic_notification',
     NotificationService.channels,

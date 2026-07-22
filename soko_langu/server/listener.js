@@ -47,13 +47,20 @@ function buildFcmMessage({ token, title, body, data = {} }) {
 }
 
 async function sendFcm(message, userIdForCleanup = null) {
+  const notifType = (message.data && message.data.type) || 'unknown';
   try {
-    return await admin.messaging().send(message);
+    const result = await admin.messaging().send(message);
+    console.log(`[LISTENER][FCM] sent user=${userIdForCleanup || '?'} type=${notifType} success=${result}`);
+    return result;
   } catch (e) {
-    console.error(`[LISTENER][FCM] send failed for user ${userIdForCleanup || '?'}: ${e.code || e.message}`, e.errorInfo || '');
+    const errCode = e.code || '';
+    const errMsg = e.message || '';
+    console.error(`[LISTENER][FCM] FAILED user=${userIdForCleanup || '?'} type=${notifType} code=${errCode} msg=${errMsg}`, e.errorInfo || '');
+
+    // Stale / invalid token — try topic fallback, then clean up
     if (userIdForCleanup && db &&
-        (e.code === 'messaging/registration-token-not-registered' ||
-         e.code === 'messaging/invalid-registration-token')) {
+        (errCode === 'messaging/registration-token-not-registered' ||
+         errCode === 'messaging/invalid-registration-token')) {
       console.log(`[LISTENER][FCM] Token stale for ${userIdForCleanup}, trying topic fallback...`);
       try {
         const topicMsg = {
@@ -66,10 +73,14 @@ async function sendFcm(message, userIdForCleanup = null) {
         console.log(`[LISTENER][FCM] Topic fallback succeeded for ${userIdForCleanup}: ${topicResult}`);
         return topicResult;
       } catch (topicErr) {
-        console.error(`[LISTENER][FCM] Topic fallback failed for ${userIdForCleanup}: ${topicErr.code || topicErr.message}`);
+        console.error(`[LISTENER][FCM] Topic fallback ALSO failed for ${userIdForCleanup}: ${topicErr.code || topicErr.message}`);
       }
       await db.collection('users').doc(userIdForCleanup).update({ fcmToken: null });
+      console.log(`[LISTENER][FCM] Cleared stale token for ${userIdForCleanup}`);
+      return null; // Token handled — don't throw
     }
+
+    // Re-throw non-token errors so callers can choose how to handle
     throw e;
   }
 }
