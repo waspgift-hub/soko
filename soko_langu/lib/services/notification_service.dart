@@ -88,7 +88,7 @@ class NotificationService {
   static Future<void> requestNotificationPermission() async {
     final allowed = await AwesomeNotifications().requestPermissionToSendNotifications(
       permissions: [
-        NotificationPermission.Vibrate,
+        NotificationPermission.Vibration,
         NotificationPermission.Sound,
         NotificationPermission.Alert,
         NotificationPermission.Light,
