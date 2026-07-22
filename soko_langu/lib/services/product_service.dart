@@ -10,6 +10,10 @@ import 'fraud_prevention_service.dart';
 import 'api_config.dart';
 import '../utils/network_error.dart';
 
+const List<String> knownBrands = [
+  'Nike', 'Adidas', 'Samsung', 'Apple', 'Sony', 'LG', 'Toyota', 'Hp', 'Dell',
+];
+
 String _normalizeBrand(String? brand) {
   final trimmed = brand?.trim() ?? '';
   if (trimmed.isEmpty) return '';
@@ -218,6 +222,9 @@ class ProductService {
 
   /// Paginated query for a specific brand.
   Future<List<Product>> fetchProductsByBrand(String brand, {int limit = 30}) async {
+    if (brand == 'Others') {
+      return fetchProductsByBrandOthers(limit: limit);
+    }
     final snapshot = await _db
         .collection("products")
         .where('isActive', isEqualTo: true)
@@ -226,6 +233,22 @@ class ProductService {
         .get();
     final products = snapshot.docs
         .map((doc) => Product.fromFirestore(doc))
+        .toList();
+    _sortByBoost(products);
+    return products;
+  }
+
+  /// Catch-all for brands not in the known list.
+  Future<List<Product>> fetchProductsByBrandOthers({int limit = 30}) async {
+    final snapshot = await _db
+        .collection("products")
+        .where('isActive', isEqualTo: true)
+        .limit(limit * 3)
+        .get();
+    final products = snapshot.docs
+        .map((doc) => Product.fromFirestore(doc))
+        .where((p) => p.brand != null && p.brand!.isNotEmpty && !knownBrands.contains(p.brand))
+        .take(limit)
         .toList();
     _sortByBoost(products);
     return products;
@@ -401,6 +424,20 @@ class ProductService {
   }
 
   Stream<List<Product>> getProductsByBrand(String brand) {
+    if (brand == 'Others') {
+      return _db
+          .collection("products")
+          .where('isActive', isEqualTo: true)
+          .snapshots()
+          .map((snapshot) {
+            final products = snapshot.docs
+                .map((doc) => Product.fromFirestore(doc))
+                .where((p) => p.brand != null && p.brand!.isNotEmpty && !knownBrands.contains(p.brand))
+                .toList();
+            _sortByBoost(products);
+            return products;
+          });
+    }
     return _db
         .collection("products")
         .where("brand", isEqualTo: brand)
