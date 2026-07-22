@@ -2552,11 +2552,13 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
 
     const ref = result.id || result.orderReference || '';
 
+    const productImg = req.body.productImage || '';
     if (db) {
       await db.collection('transactions').doc(order_id).set({
         type: 'purchase',
         productId,
         productName: sanitize(productName),
+        productImage: productImg,
         sellerId,
         sellerName: sanitize(sellerName),
         buyerPhone: phone,

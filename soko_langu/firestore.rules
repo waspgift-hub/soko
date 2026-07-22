@@ -91,7 +91,7 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
 
-    // ─── ORDERS ─────────────────────────────────────────────
+    // ─── ORDERS / TRANSACTIONS ──────────────────────────────
     match /orders/{orderId} {
       allow read: if isSignedIn() && (
         resource.data.buyerId == request.auth.uid ||
@@ -101,6 +101,25 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.buyerId == request.auth.uid;
       allow update: if isSignedIn() && (
         resource.data.buyerId == request.auth.uid ||
+        resource.data.sellerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /transactions/{txId} {
+      allow read: if isSignedIn() && (
+        resource.data.buyerId == request.auth.uid ||
+        resource.data.sellerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && request.resource.data.buyerId == request.auth.uid;
+      allow update: if isSignedIn() && (
+        (resource.data.buyerId == request.auth.uid && (
+          resource.data.status == 'pending' ||
+          resource.data.status == 'awaiting_payment' ||
+          resource.data.status == 'failed'
+        )) ||
         resource.data.sellerId == request.auth.uid ||
         isAdmin()
       );

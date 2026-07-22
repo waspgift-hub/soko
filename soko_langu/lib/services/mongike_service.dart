@@ -31,6 +31,7 @@ class MongikeService {
     double? shippingCost,
     String? existingTransactionId,
     String? description,
+    String? productImage,
   }) async {
     try {
       final resp = await http.post(
@@ -48,6 +49,7 @@ class MongikeService {
           'deliveryType': deliveryType ?? 'local',
           'shippingCost': shippingCost ?? 0,
           'existingTransactionId': existingTransactionId,
+          'productImage': productImage,
         }),
       );
       final body = jsonDecode(resp.body);

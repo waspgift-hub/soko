@@ -252,6 +252,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     } catch (e) {
       if (!mounted) return;
       final msg = e.toString();
+      final internalMsg = e is NetworkError ? '${e.message} ${e.originalError}' : msg;
       if (msg.contains('permission') || msg.contains('PERMISSION_DENIED') ||
           msg.contains('caller does not have permission')) {
         messenger.showSnackBar(
@@ -261,7 +262,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
             ),
           ),
         );
-      } else if (msg.contains('KYC') || msg.contains('kyc') || msg.contains('KYC not approved')) {
+      } else if (internalMsg.contains('KYC') || internalMsg.contains('kyc')) {
         messenger.showSnackBar(
           SnackBar(
             content: Text(context.tr('kyc_required_selling')),
@@ -271,7 +272,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
         );
       } else {
         messenger.showSnackBar(
-          SnackBar(content: Text(translateError(e))),
+          SnackBar(
+            content: Text(translateError(e)),
+            duration: const Duration(seconds: 5),
+          ),
         );
       }
     } finally {
