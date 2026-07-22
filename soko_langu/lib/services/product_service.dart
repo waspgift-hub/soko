@@ -12,6 +12,7 @@ import '../utils/network_error.dart';
 
 const List<String> knownBrands = [
   'Nike', 'Adidas', 'Samsung', 'Apple', 'Sony', 'LG', 'Toyota', 'Hp', 'Dell',
+  'Other', 'Others',
 ];
 
 String _normalizeBrand(String? brand) {
@@ -96,7 +97,11 @@ class ProductService {
       final userData = userDoc.data();
       final kycApproved = userData?['kyc']?['approved'] == true;
       if (!kycApproved) {
-        throw Exception("KYC not approved. You must complete KYC verification before selling products.");
+        throw NetworkError(
+          message: "KYC not approved",
+          userMessage: "KYC: Tafadhali kamilisha KYC verification kabla ya kuuza bidhaa",
+          originalError: Exception("KYC not approved"),
+        );
       }
 
       List<String> imageUrls = [];
@@ -503,6 +508,14 @@ class ProductService {
     String? location,
   }) async {
     try {
+      final user = _auth.currentUser;
+      if (user == null) throw NetworkError(
+        message: 'Not authenticated',
+        userMessage: 'Please log in to continue.',
+      );
+      await user.reload();
+      await user.getIdToken(true);
+
       Map<String, dynamic> data = {};
       bool needsKeywordUpdate = false;
 

@@ -118,10 +118,30 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
     final user = FirebaseAuth.instance.currentUser;
     final imageUrl = _localImagePath ?? _profile?.profileImage;
 
-    if (_isLoading && _profile == null) {
+    if (_profile == null) {
       return Scaffold(
-        backgroundColor: Colors.transparent,
-        body: const Center(child: GoogleLoading()),
+        backgroundColor: cs.surface,
+        body: _isLoading
+            ? const Center(child: GoogleLoading())
+            : Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.person_outline_rounded, size: 64, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
+                      const SizedBox(height: 16),
+                      Text(context.tr('profile_not_found'), style: TextStyle(color: cs.onSurfaceVariant)),
+                      const SizedBox(height: 16),
+                      FilledButton.tonalIcon(
+                        onPressed: _loadProfile,
+                        icon: const Icon(Icons.refresh, size: 18),
+                        label: Text(context.tr('retry')),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
       );
     }
 

@@ -35,6 +35,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
   static const _filters = ['all', 'pending', 'active', 'completed'];
 
   List<QueryDocumentSnapshot> _filterDocs(List<QueryDocumentSnapshot> docs) {
+    docs = docs.where((d) => (d.data() as Map)['deletedForBuyer'] != true).toList();
     if (_selectedFilter == 'all') return docs;
     return docs.where((d) {
       final s = (d.data() as Map)['status'] as String? ?? '';
@@ -81,6 +82,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
         email: user.email ?? '', phone: d['buyerPhone'] as String? ?? '',
         buyerId: user.uid, deliveryType: 'local',
         shippingCost: shippingCost, existingTransactionId: txId,
+        productImage: d['productImage'] as String?,
       );
 
       if (result['order_id'] == null) {
@@ -223,6 +225,27 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
       _showError(translateError(e));
     }
     setState(() => _cancellingTxId = null);
+  }
+
+  Future<void> _deleteOrder(String txId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('delete_order_title')),
+        content: Text(context.tr('delete_order_confirm')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white), child: Text(context.tr('yes_delete'))),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await FirebaseFirestore.instance.collection('transactions').doc(txId).update({'deletedForBuyer': true});
+      if (mounted) _showSuccess(context.tr('order_deleted'));
+    } catch (e) {
+      if (mounted) _showError(translateError(e));
+    }
   }
 
   void _showError(String msg) {
@@ -438,6 +461,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                         onConfirm: _confirmDelivery,
                         onDispute: _raiseDispute,
                         onCancel: _cancelOrder,
+                        onDelete: _deleteOrder,
                         escrowLabel: _escrowLabel,
                       ),
                       childCount: docs.length,
@@ -464,6 +488,7 @@ class _OrderGlassCard extends StatelessWidget {
   final Function(String) onConfirm;
   final Function(String) onDispute;
   final Function(String) onCancel;
+  final Function(String) onDelete;
   final String Function(String) escrowLabel;
 
   const _OrderGlassCard({
@@ -478,6 +503,7 @@ class _OrderGlassCard extends StatelessWidget {
     required this.onConfirm,
     required this.onDispute,
     required this.onCancel,
+    required this.onDelete,
     required this.escrowLabel,
   });
 
@@ -715,6 +741,7 @@ class _OrderGlassCard extends StatelessWidget {
     final canConfirm = status == 'delivered' || status == 'dispatched';
     final canDispute = status == 'paid_escrow_held' || status == 'escrow_hold' || status == 'dispatched' || status == 'delivered';
     final canCancel = status == 'paid_escrow_held' || status == 'escrow_hold';
+    final canDelete = status == 'pending' || status == 'failed' || status == 'awaiting_payment' || status == 'awaiting_shipping_quote';
 
     final actions = <Widget>[];
     if (canPay) actions.add(_buildActionBtn(context, cs, Icons.payment, context.tr('pay_amount_tzs').replaceAll('{0}', _nf(total)),
@@ -727,6 +754,8 @@ class _OrderGlassCard extends StatelessWidget {
         disputingTxId == docId ? null : () => onDispute(docId), cs.error, disputingTxId == docId, outlined: true));
     if (canCancel) actions.add(_buildActionBtn(context, cs, Icons.money_off, context.tr('cancel'),
         cancellingTxId == docId ? null : () => onCancel(docId), cs.error, cancellingTxId == docId, outlined: true));
+    if (canDelete) actions.add(_buildActionBtn(context, cs, Icons.delete_outline, context.tr('delete_order'),
+        () => onDelete(docId), cs.error, false, outlined: true));
 
     if (actions.isEmpty) return const SizedBox.shrink();
 

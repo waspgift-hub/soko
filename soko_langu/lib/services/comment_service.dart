@@ -24,6 +24,8 @@ class CommentService {
         message: 'Not logged in',
         userMessage: 'Please log in to continue.',
       );
+    await user.reload();
+    await user.getIdToken(true);
     await _commentsRef(productId).add({
       'userId': user.uid,
       'userName': user.displayName ?? user.email ?? 'Unknown',
@@ -46,6 +48,8 @@ class CommentService {
         message: 'Not logged in',
         userMessage: 'Please log in to continue.',
       );
+    await user.reload();
+    await user.getIdToken(true);
     await _repliesRef(productId, commentId).add({
       'userId': user.uid,
       'userName': user.displayName ?? user.email ?? 'Unknown',

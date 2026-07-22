@@ -47,6 +47,8 @@ class ReviewService {
           message: "User not logged in",
           userMessage: 'Please log in to continue.',
         );
+      await user.reload();
+      await user.getIdToken(true);
 
       const isVerified = false;
 
