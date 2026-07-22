@@ -1478,7 +1478,7 @@ app.post('/api/mongike/webhook', verifyWebhook, async (req, res) => {
         const productPrice = tx.productPrice || 0;
         const platformFee = Math.round(productPrice * PLATFORM_COMMISSION_PERCENT);
         const processingFee = 0; // Flat 180 TZS absorbed by platform
-        const sellerReceives = productPrice;
+        const sellerReceives = Math.max(0, productPrice - platformFee);
         const deliveryType = tx.deliveryType || 'local';
         const autoReleaseDays = tx.autoReleaseDays || (deliveryType === 'regional' ? ESCROW_REGIONAL_DAYS : ESCROW_LOCAL_DAYS);
         const escrowExpiry = new Date(Date.now() + autoReleaseDays * 24 * 60 * 60 * 1000);
@@ -1487,7 +1487,7 @@ app.post('/api/mongike/webhook', verifyWebhook, async (req, res) => {
           processingFee,
           platformFee,
           sokoLanguCommission: platformFee,
-          totalAmount: productPrice + platformFee,
+          totalAmount: productPrice,
           sellerReceives,
           status: 'escrow_hold',
           paymentMethod: 'Mongike',
