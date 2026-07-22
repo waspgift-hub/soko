@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import 'api_config.dart';
@@ -7,6 +8,15 @@ import '../utils/network_error.dart';
 class MongikeService {
   MongikeService._();
   static final MongikeService instance = MongikeService._();
+
+  static Future<Map<String, String>> _authHeaders() async {
+    final user = FirebaseAuth.instance.currentUser;
+    final token = await user?.getIdToken();
+    return {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
+  }
 
   static Future<Map<String, dynamic>> initiateMarketplacePayment({
     required double productPrice,
@@ -25,7 +35,7 @@ class MongikeService {
     try {
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/create-marketplace-payment-link'),
-        headers: {'Content-Type': 'application/json'},
+        headers: await _authHeaders(),
         body: jsonEncode({
           'productPrice': productPrice,
           'productName': productName,
@@ -61,7 +71,7 @@ class MongikeService {
     try {
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/create-payout'),
-        headers: {'Content-Type': 'application/json'},
+        headers: await _authHeaders(),
         body: jsonEncode({
           'amount': amount,
           'phone': phone,
@@ -87,7 +97,7 @@ class MongikeService {
     try {
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/create-payout'),
-        headers: {'Content-Type': 'application/json'},
+        headers: await _authHeaders(),
         body: jsonEncode({
           'amount': amount,
           'phone': phone,

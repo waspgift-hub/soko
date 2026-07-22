@@ -29,11 +29,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   bool _processing = false;
   double? _salePrice;
 
+  static const double _mongikeFee = 180;
   double get _totalPrice => _salePrice ?? widget.product.price;
   double get _serviceFeePercent => 3.5;
   double get _serviceFee => _totalPrice * _serviceFeePercent / 100;
   double get _sellerReceives => _totalPrice;
-  double get _totalWithFee => _totalPrice + _serviceFee;
+  double get _totalWithFee => _totalPrice + _serviceFee + _mongikeFee;
 
   @override
   void initState() {
@@ -126,7 +127,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 const SizedBox(height: 8),
                 Container(height: 1, color: cs.primary.withValues(alpha: 0.1)),
                 const SizedBox(height: 10),
-                _feeRow(cs, context.tr('mongike_fee'), 'Bure', Colors.green),
+                _feeRow(cs, context.tr('mongike_fee'), '${_mongikeFee.toInt()} TZS', cs.secondary),
                 const SizedBox(height: 10),
                 Container(height: 1, color: cs.primary.withValues(alpha: 0.1)),
                 const SizedBox(height: 10),
@@ -157,7 +158,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       const SizedBox(height: 4),
                       _feeRow(cs, context.tr('service_fee_percent').replaceAll('{0}', '$_serviceFeePercent'), context.formatPrice(_serviceFee), cs.onSurfaceVariant),
                       const SizedBox(height: 4),
-                      _feeRow(cs, context.tr('mongike_fee'), 'Bure', Colors.green),
+                _feeRow(cs, context.tr('mongike_fee'), '${_mongikeFee.toInt()} TZS', cs.secondary),
                       const SizedBox(height: 6),
                       Container(
                         padding: const EdgeInsets.all(8),
@@ -319,18 +320,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
       final orderId = 'q${DateTime.now().millisecondsSinceEpoch.toRadixString(36)}${user.uid.substring(0, 4)}';
 
+      final totalAmt = _totalPrice + _serviceFee + _mongikeFee;
       await FirebaseFirestore.instance.collection('transactions').doc(orderId).set({
         'type': 'purchase',
         'productId': p.id,
         'productName': p.name,
+        'productImage': p.images.isNotEmpty ? p.images.first : '',
         'sellerId': p.sellerId,
         'sellerName': p.sellerName,
         'buyerPhone': normalizedPhone,
         'buyerId': user.uid,
         'buyerName': user.displayName ?? '',
         'productPrice': _totalPrice,
-        'mongikeFee': 180,
+        'mongikeFee': _mongikeFee,
         'serviceFeePercent': _serviceFeePercent,
+        'totalAmount': totalAmt,
         'deliveryAddress': {
           'region': region,
           'district': district,
