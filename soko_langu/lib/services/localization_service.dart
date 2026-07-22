@@ -1633,6 +1633,10 @@ class LocalizationService {
       'flow_confirm_desc': 'Thibitisha umepokea bidhaa yako',
       'flow_complete': 'Imekamilika',
       'flow_complete_desc': 'Muuzaji anapata malipo, wewe unapata bidhaa',
+      'generating_pdf': 'Inaunda PDF...',
+      'download_pdf_receipt': 'Pakua PDF Risiti',
+      'more_details': 'Maelezo Zaidi',
+      'scan_to_verify': 'Scan kuthibitisha agizo',
     },
     'en': {
 
@@ -3225,6 +3229,10 @@ class LocalizationService {
       'flow_confirm_desc': 'Confirm you received the product',
       'flow_complete': 'Completed',
       'flow_complete_desc': 'Seller gets paid, you get your product',
+      'generating_pdf': 'Generating PDF...',
+      'download_pdf_receipt': 'Download PDF Receipt',
+      'more_details': 'More Details',
+      'scan_to_verify': 'Scan to verify order',
     },
   };
 

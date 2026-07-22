@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -8,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/api_config.dart';
 import '../../services/sms_notification_service.dart';
@@ -16,7 +16,6 @@ import '../../theme/app_colors.dart';
 import '../chat/chat_navigation.dart';
 import '../../widgets/google_loading.dart';
 import '../../utils/network_error.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final String docId;
@@ -31,38 +30,24 @@ class OrderDetailScreen extends StatefulWidget {
 class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProviderStateMixin {
   late AnimationController _pulseController;
   late Animation<double> _pulseAnim;
-  late AnimationController _slideController;
-  late Animation<Offset> _slideAnim;
-  late AnimationController _fadeController;
-  late Animation<double> _fadeAnim;
   Timer? _countdownTimer;
   Duration? _remaining;
   bool _isLoading = true;
   String? _releasingTxId;
   String? _disputingTxId;
+  bool _showAllDetails = false;
 
   @override
   void initState() {
     super.initState();
     _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))
       ..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 0.4, end: 1.0).animate(
+    _pulseAnim = Tween<double>(begin: 0.3, end: 1.0).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
-    _slideController = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
-    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero).animate(
-      CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
-    );
-    _fadeController = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
-    _fadeAnim = CurvedAnimation(parent: _fadeController, curve: Curves.easeOut);
-
     _startCountdown();
-    Future.delayed(const Duration(milliseconds: 400), () {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        _slideController.forward();
-        _fadeController.forward();
-      }
+    Future.delayed(const Duration(milliseconds: 200), () {
+      if (mounted) setState(() => _isLoading = false);
     });
   }
 
@@ -82,8 +67,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
   @override
   void dispose() {
     _pulseController.dispose();
-    _slideController.dispose();
-    _fadeController.dispose();
     _countdownTimer?.cancel();
     super.dispose();
   }
@@ -130,7 +113,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
   }
 
   String _formatCountdown(Duration d) {
-    if (d.isNegative || d == Duration.zero) return '—';
+    if (d.isNegative || d == Duration.zero) return '\u2014';
     final days = d.inDays;
     final hours = d.inHours.remainder(24);
     final mins = d.inMinutes.remainder(60);
@@ -142,347 +125,203 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    if (_isLoading) return _buildLoadingSkeleton(context, cs, isDark);
+    if (_isLoading) return _buildSkeleton(context, cs);
 
-    return FadeTransition(
-      opacity: _fadeAnim,
-      child: SlideTransition(
-        position: _slideAnim,
-        child: Scaffold(
-          appBar: AppBar(
-            title: Text(context.tr('order_details')),
-            centerTitle: true,
-            backgroundColor: Colors.transparent,
-            surfaceTintColor: Colors.transparent,
-            leading: IconButton(
-              icon: Icon(Icons.arrow_back_ios_new_rounded, size: 18),
-              onPressed: () => context.pop(),
-            ),
-          ),
-          extendBodyBehindAppBar: true,
-          body: Stack(
+    return Scaffold(
+      body: Stack(
+        children: [
+          _buildBackground(cs),
+          Column(
             children: [
-              _buildBackgroundGradient(cs, isDark),
-              Column(
-                children: [
-                  Expanded(
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                      children: [
-                        _buildProductCard(context, cs, isDark),
-                        const SizedBox(height: 20),
-                        _buildTimeline(context, cs),
-                        const SizedBox(height: 20),
-                        _buildPaymentSummary(context, cs),
-                        const SizedBox(height: 20),
-                        _buildOrderInfo(context, cs),
-                        if (d['deliveryAddress'] != null) ...[
-                          const SizedBox(height: 20),
-                          _buildAddressCard(context, cs, isDark),
-                        ],
-                        if (d['dispatchProof'] != null) ...[
-                          const SizedBox(height: 20),
-                          _buildDispatchInfo(context, cs),
-                        ],
-                        const SizedBox(height: 20),
-                        _buildFeeBreakdown(context, cs),
-                        const SizedBox(height: 20),
-                        _buildActions(context, cs),
-                        const SizedBox(height: 80),
-                      ],
-                    ),
-                  ),
-                  _buildBottomBar(context, cs),
-                ],
+              _buildHeader(context, cs),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  children: [
+                    _buildHeroSection(context, cs),
+                    const SizedBox(height: 16),
+                    _buildQuickInfoRow(context, cs),
+                    const SizedBox(height: 16),
+                    _buildTimeline(context, cs),
+                    const SizedBox(height: 16),
+                    _buildPaymentCard(context, cs),
+                    const SizedBox(height: 12),
+                    _buildDetailsSection(context, cs),
+                    if (d['deliveryAddress'] != null || d['dispatchProof'] != null || _hasFees()) ...[
+                      const SizedBox(height: 12),
+                      _buildExpandableDetails(context, cs),
+                    ],
+                    const SizedBox(height: 12),
+                    _buildActions(context, cs),
+                    const SizedBox(height: 80),
+                  ],
+                ),
               ),
+              _buildBottomBar(context, cs),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBackgroundGradient(ColorScheme cs, bool isDark) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: isDark
-              ? [cs.surface, cs.surfaceContainerLow.withValues(alpha: 0.5)]
-              : [const Color(0xFFF8F9FE), Colors.white],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLoadingSkeleton(BuildContext context, ColorScheme cs, bool isDark) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(context.tr('order_details')),
-        centerTitle: true,
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        children: [
-          _skeletonCard(cs, 320),
-          const SizedBox(height: 20),
-          _skeletonCard(cs, 260),
-          const SizedBox(height: 20),
-          _skeletonCard(cs, 200),
-          const SizedBox(height: 20),
-          _skeletonCard(cs, 180),
         ],
       ),
     );
   }
 
-  Widget _skeletonCard(ColorScheme cs, double h) {
-    return Container(
-      height: h,
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: const Center(child: GoogleLoading(size: 32, strokeWidth: 3)),
-    );
-  }
-
-  Widget _glassContainer({
-    required Widget child,
-    required ColorScheme cs,
-    EdgeInsets padding = const EdgeInsets.all(20),
-  }) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-        child: Container(
-          padding: padding,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                cs.surface.withValues(alpha: 0.15),
-                cs.surfaceContainerLow.withValues(alpha: 0.08),
-              ],
+  Widget _buildSkeleton(BuildContext context, ColorScheme cs) {
+    return Scaffold(
+      body: Column(
+        children: [
+          Container(height: 300, color: cs.surfaceContainerHighest.withValues(alpha: 0.3)),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              children: List.generate(4, (_) => Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Container(
+                  height: 120, 
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHighest.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Center(child: GoogleLoading(size: 24, strokeWidth: 2.5)),
+                ),
+              )),
             ),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
           ),
-          child: child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBackground(ColorScheme cs) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [cs.surface, cs.surfaceContainerLow.withValues(alpha: 0.3)],
         ),
       ),
     );
   }
 
-  Widget _sectionHeader(ColorScheme cs, IconData icon, String label, {Widget? trailing}) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: cs.primary.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
+  Widget _buildHeader(BuildContext context, ColorScheme cs) {
+    return Container(
+      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 8),
+      child: Row(
+        children: [
+          IconButton(
+            icon: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: cs.surface.withValues(alpha: 0.8),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: cs.onSurface),
+            ),
+            onPressed: () => context.pop(),
           ),
-          child: Icon(icon, size: 16, color: cs.primary),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(label, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: cs.onSurface)),
-        ),
-        ?trailing,
-      ],
+          const Spacer(),
+          Text(context.tr('order_details'),
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17, color: cs.onSurface)),
+          const Spacer(),
+          const SizedBox(width: 48),
+        ],
+      ),
     );
   }
 
-  // ── Product Card ──
-  Widget _buildProductCard(BuildContext context, ColorScheme cs, bool isDark) {
+  Widget _buildHeroSection(BuildContext context, ColorScheme cs) {
     final productName = d['productName'] as String? ?? context.tr('product');
     final productImage = d['productImage'] as String? ?? '';
-    final sellerName = d['sellerName'] as String? ?? '';
-    final sellerId = d['sellerId'] as String? ?? '';
-    final sellerAvatar = d['sellerAvatar'] as String? ?? '';
-    final createdAt = d['createdAt'];
-    final dateStr = createdAt is Timestamp
-        ? DateFormat('dd MMM yyyy HH:mm').format(createdAt.toDate())
-        : '';
+    final price = (d['productPrice'] ?? 0).toDouble();
+    final totalAmount = (d['totalAmount'] as num?)?.toDouble() ?? price;
+    final orderIdDisplay = widget.docId.length > 12 ? '#...${widget.docId.substring(widget.docId.length - 8)}' : '#${widget.docId}';
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: isDark
-                  ? [cs.surface.withValues(alpha: 0.2), cs.surfaceContainerLow.withValues(alpha: 0.12)]
-                  : [Colors.white.withValues(alpha: 0.9), Colors.white.withValues(alpha: 0.75)],
-            ),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: cs.outlineVariant.withValues(alpha: isDark ? 0.15 : 0.2), width: 0.5),
-            boxShadow: [
-              BoxShadow(color: cs.primary.withValues(alpha: 0.06), blurRadius: 40, offset: const Offset(0, 12)),
-            ],
-          ),
-          child: Column(
-            children: [
-              if (productImage.isNotEmpty)
-                Hero(
-                  tag: 'order_img_${widget.docId}',
-                  child: ClipRRect(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                    child: Stack(
-                      children: [
-                        CachedNetworkImage(imageUrl: productImage,
-                          width: double.infinity, height: 220, fit: BoxFit.cover,
-                          errorWidget: (_, _, _) => Container(height: 220, color: cs.surfaceContainerHighest,
-                            child: Icon(Icons.image_rounded, size: 48, color: cs.onSurfaceVariant.withValues(alpha: 0.3))),
-                        ),
-                        Positioned(
-                          bottom: 0, left: 0, right: 0,
-                          child: Container(
-                            height: 60,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.bottomCenter,
-                                end: Alignment.topCenter,
-                                colors: [Colors.black.withValues(alpha: 0.4), Colors.transparent],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Text(productName, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: cs.onSurface),
-                            maxLines: 2, overflow: TextOverflow.ellipsis),
-                        ),
-                        const SizedBox(width: 12),
-                        _buildStatusBadge(context),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 16,
-                          backgroundImage: sellerAvatar.isNotEmpty ? NetworkImage(sellerAvatar) : null,
-                          backgroundColor: cs.primary.withValues(alpha: 0.12),
-                          child: sellerAvatar.isEmpty && sellerName.isNotEmpty
-                              ? Text(sellerName[0].toUpperCase(),
-                                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: cs.primary))
-                              : null,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(sellerName, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: cs.onSurface)),
-                              Text(context.tr('seller'), style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-                            ],
-                          ),
-                        ),
-                        if (sellerId.isNotEmpty)
-                          Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(20),
-                              onTap: () => ChatNavigation.openSellerChat(context, sellerId, sellerName),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: cs.whatsappGreen.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.chat_outlined, size: 14, color: cs.whatsappGreen),
-                                    const SizedBox(width: 4),
-                                    Text(context.tr('chat'), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.whatsappGreen)),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Icon(Icons.tag, size: 13, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text('#${widget.docId.length > 12 ? widget.docId.substring(0, 12) : widget.docId}',
-                            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
-                        ),
-                        const SizedBox(width: 16),
-                        Icon(Icons.access_time, size: 13, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
-                        const SizedBox(width: 4),
-                        Text(dateStr, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
-                      ],
-                    ),
-                    if (_remaining != null && !_remaining!.isNegative && _remaining!.inSeconds > 0) ...[
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.orange.withValues(alpha: 0.15)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.timer_outlined, size: 13, color: Colors.orange),
-                            const SizedBox(width: 5),
-                            Text('${context.tr('delivery_countdown')}: ${_formatCountdown(_remaining!)}',
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.orange)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
+      child: Stack(
+        children: [
+          productImage.isNotEmpty
+              ? CachedNetworkImage(imageUrl: productImage,
+                  width: double.infinity, height: 220, fit: BoxFit.cover,
+                  errorWidget: (_, _, _) => _heroPlaceholder(cs, productName))
+              : _heroPlaceholder(cs, productName),
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.transparent, Colors.black.withValues(alpha: 0.75)],
                 ),
               ),
-            ],
+            ),
           ),
+          Positioned(
+            top: 12, right: 12,
+            child: _statusPill(context, cs),
+          ),
+          Positioned(
+            bottom: 16, left: 16, right: 16,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(productName,
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white),
+                  maxLines: 2, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Text('TZS ${_nf(totalAmount.toInt())}',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.greenAccent)),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(orderIdDisplay,
+                        style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.8))),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _heroPlaceholder(ColorScheme cs, String name) {
+    return Container(
+      width: double.infinity, height: 220,
+      color: cs.primary.withValues(alpha: 0.1),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.shopping_bag_outlined, size: 48, color: cs.primary.withValues(alpha: 0.3)),
+            const SizedBox(height: 8),
+            Text(name, style: TextStyle(color: cs.onSurfaceVariant)),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildStatusBadge(BuildContext context) {
+  Widget _statusPill(BuildContext context, ColorScheme cs) {
     final color = _statusColor(context);
     return AnimatedBuilder(
       animation: _pulseAnim,
-      builder: (context, child) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      builder: (context, _) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: _pulseAnim.value * 0.2),
+          color: color.withValues(alpha: 0.9),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withValues(alpha: _pulseAnim.value * 0.4), width: 1),
           boxShadow: [
-            BoxShadow(color: color.withValues(alpha: _pulseAnim.value * 0.15), blurRadius: 12, spreadRadius: 1),
+            BoxShadow(color: color.withValues(alpha: _pulseAnim.value * 0.4), blurRadius: 12, spreadRadius: 1),
           ],
         ),
         child: Row(
@@ -491,146 +330,220 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
             Container(
               width: 6, height: 6,
               decoration: BoxDecoration(
-                color: color, shape: BoxShape.circle,
-                boxShadow: [BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 4)],
+                color: Colors.white, shape: BoxShape.circle,
+                boxShadow: [BoxShadow(color: Colors.white.withValues(alpha: 0.6), blurRadius: 4)],
               ),
             ),
             const SizedBox(width: 6),
-            Text(_statusLabel(context), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
+            Text(_statusLabel(context),
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
           ],
         ),
       ),
     );
   }
 
-  // ── Animated Timeline ──
+  Widget _buildQuickInfoRow(BuildContext context, ColorScheme cs) {
+    final sellerName = d['sellerName'] as String? ?? '';
+    final sellerId = d['sellerId'] as String? ?? '';
+    final createdAt = d['createdAt'];
+    final dateStr = createdAt is Timestamp
+        ? DateFormat('dd MMM yyyy').format(createdAt.toDate())
+        : '';
+    final paymentMethod = d['paymentMethod'] as String? ?? 'Mongike';
+
+    return Row(
+      children: [
+        Expanded(
+          child: _infoTile(
+            cs,
+            icon: Icons.person_outline,
+            label: context.tr('seller'),
+            value: sellerName,
+            onTap: sellerId.isNotEmpty ? () => ChatNavigation.openSellerChat(context, sellerId, sellerName) : null,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _infoTile(
+            cs,
+            icon: Icons.calendar_today_outlined,
+            label: context.tr('date'),
+            value: dateStr,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _infoTile(
+            cs,
+            icon: Icons.payment_outlined,
+            label: context.tr('payment'),
+            value: paymentMethod,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _infoTile(ColorScheme cs, {required IconData icon, required String label, required String value, VoidCallback? onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: cs.surface.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.08)),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 4)),
+          ],
+        ),
+        child: Column(
+          children: [
+            Icon(icon, size: 18, color: cs.primary),
+            const SizedBox(height: 6),
+            Text(label, style: TextStyle(fontSize: 9, color: cs.onSurfaceVariant)),
+            const SizedBox(height: 2),
+            Text(value, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.onSurface),
+              maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildTimeline(BuildContext context, ColorScheme cs) {
     final steps = [
-      _TimelineStepData(context.tr('step_received'), Icons.access_time_rounded, cs.onSurfaceVariant),
-      _TimelineStepData(context.tr('step_shipping_quote'), Icons.local_shipping_outlined, Colors.orange),
-      _TimelineStepData(context.tr('waiting_payment'), Icons.account_balance_wallet_outlined, Colors.blue),
-      _TimelineStepData(context.tr('step_in_escrow'), Icons.verified_user_outlined, Colors.purple),
-      _TimelineStepData(context.tr('shipped'), Icons.inventory_2_outlined, cs.successGreen),
-      _TimelineStepData(context.tr('confirmed'), Icons.check_circle_outline, cs.successGreen),
-      _TimelineStepData(context.tr('completed'), Icons.check_circle_rounded, cs.successGreen),
+      _StepData(context.tr('step_received'), Icons.access_time_rounded, cs.onSurfaceVariant),
+      _StepData(context.tr('step_shipping_quote'), Icons.local_shipping_outlined, Colors.orange),
+      _StepData(context.tr('waiting_payment'), Icons.account_balance_wallet_outlined, Colors.blue),
+      _StepData(context.tr('step_in_escrow'), Icons.verified_user_outlined, Colors.purple),
+      _StepData(context.tr('shipped'), Icons.inventory_2_outlined, cs.successGreen),
+      _StepData(context.tr('confirmed'), Icons.check_circle_outline, cs.successGreen),
+      _StepData(context.tr('completed'), Icons.check_circle_rounded, cs.successGreen),
     ];
     final current = _currentStep();
 
-    return _glassContainer(
-      cs: cs,
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surface.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.08)),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 4)),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _sectionHeader(cs, Icons.timeline_rounded, context.tr('order_status')),
-          const SizedBox(height: 20),
-          ...List.generate(steps.length, (i) {
-            final step = steps[i];
-            final active = i <= current;
-            final isCurrent = i == current;
-            return IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 32,
-                    child: Column(
-                      children: [
-                        AnimatedBuilder(
-                          animation: _pulseAnim,
-                          builder: (context, _) {
-                            final size = isCurrent ? 28.0 : 24.0;
-                            return Container(
-                              width: size, height: size,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: active ? step.color : cs.surfaceContainerHighest.withValues(alpha: 0.3),
-                                border: isCurrent ? Border.all(color: step.color.withValues(alpha: 0.5), width: 2) : null,
-                                boxShadow: isCurrent
-                                    ? [BoxShadow(color: step.color.withValues(alpha: _pulseAnim.value * 0.5), blurRadius: 12, spreadRadius: 2)]
-                                    : active
-                                        ? [BoxShadow(color: step.color.withValues(alpha: 0.2), blurRadius: 6)]
-                                        : [],
-                              ),
-                              child: Icon(
-                                active ? Icons.check_rounded : Icons.circle_outlined,
-                                size: isCurrent ? 14 : 12,
-                                color: active ? cs.surface : cs.onSurfaceVariant.withValues(alpha: 0.4),
-                              ),
-                            );
-                          },
-                        ),
-                        if (i < steps.length - 1)
-                          Expanded(
-                            child: Container(
-                              width: 2,
-                              margin: const EdgeInsets.symmetric(vertical: 4),
-                              decoration: BoxDecoration(
-                                gradient: active && i < current
-                                    ? LinearGradient(
-                                        colors: [step.color.withValues(alpha: 0.6), steps[i + 1].color.withValues(alpha: 0.6)],
-                                      )
-                                    : i == current
-                                        ? LinearGradient(
-                                            colors: [step.color.withValues(alpha: 0.6), cs.outlineVariant.withValues(alpha: 0.15)],
-                                          )
-                                        : null,
-                                color: !active || i >= current ? cs.outlineVariant.withValues(alpha: 0.15) : null,
-                                borderRadius: BorderRadius.circular(1),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
+          Row(
+            children: [
+              Icon(Icons.timeline_rounded, size: 16, color: cs.primary),
+              const SizedBox(width: 8),
+              Text(context.tr('order_status'),
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: cs.onSurface)),
+              const Spacer(),
+              if (_remaining != null && !_remaining!.isNegative && _remaining!.inSeconds > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.only(bottom: i < steps.length - 1 ? 20 : 0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(top: 3),
-                            child: Text(step.label,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
-                                color: active ? cs.onSurface : cs.onSurfaceVariant.withValues(alpha: 0.4),
-                              ),
-                            ),
-                          ),
-                          if (isCurrent)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: AnimatedBuilder(
-                                animation: _pulseAnim,
-                                builder: (context, _) => Container(
-                                  height: 2,
-                                  width: 60 * _pulseAnim.value,
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [step.color.withValues(alpha: 0.6), step.color.withValues(alpha: 0.05)],
-                                    ),
-                                    borderRadius: BorderRadius.circular(1),
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.timer_outlined, size: 12, color: Colors.orange),
+                      const SizedBox(width: 4),
+                      Text(_formatCountdown(_remaining!),
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.orange)),
+                    ],
                   ),
-                ],
-              ),
-            );
-          }),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 80,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: steps.length,
+              separatorBuilder: (_, _) => _timelineConnector(cs, current, steps),
+              itemBuilder: (_, i) {
+                final step = steps[i];
+                final active = i <= current;
+                final isCurrent = i == current;
+                return _timelineStep(step, active, isCurrent, i, current, cs);
+              },
+            ),
+          ),
         ],
       ),
     );
   }
 
-  // ── Payment Summary ──
-  Widget _buildPaymentSummary(BuildContext context, ColorScheme cs) {
+  Widget _timelineConnector(ColorScheme cs, int current, List<_StepData> steps) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Container(
+        width: 20, height: 2,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              current < steps.length ? steps[current].color.withValues(alpha: 0.4) : cs.outlineVariant,
+              cs.outlineVariant.withValues(alpha: 0.2),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(1),
+        ),
+      ),
+    );
+  }
+
+  Widget _timelineStep(_StepData step, bool active, bool isCurrent, int i, int current, ColorScheme cs) {
+    return SizedBox(
+      width: 56,
+      child: Column(
+        children: [
+          AnimatedBuilder(
+            animation: _pulseAnim,
+            builder: (context, _) {
+              final size = isCurrent ? 36.0 : 32.0;
+              return Container(
+                width: size, height: size,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: active ? step.color : cs.surfaceContainerHighest.withValues(alpha: 0.3),
+                  border: isCurrent ? Border.all(color: step.color.withValues(alpha: 0.6), width: 2.5) : null,
+                  boxShadow: isCurrent
+                      ? [BoxShadow(color: step.color.withValues(alpha: _pulseAnim.value * 0.5), blurRadius: 10)]
+                      : active ? [BoxShadow(color: step.color.withValues(alpha: 0.2), blurRadius: 4)] : [],
+                ),
+                child: Icon(
+                  active ? Icons.check_rounded : Icons.circle_outlined,
+                  size: isCurrent ? 16 : 13,
+                  color: active ? cs.surface : cs.onSurfaceVariant.withValues(alpha: 0.3),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 6),
+          Text(step.label,
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
+              color: active ? cs.onSurface : cs.onSurfaceVariant.withValues(alpha: 0.4),
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 2, overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentCard(BuildContext context, ColorScheme cs) {
     final price = (d['productPrice'] ?? 0).toDouble();
     final shippingCost = (d['shippingCost'] as num?)?.toDouble();
     final totalAmount = (d['totalAmount'] as num?)?.toDouble() ?? price;
@@ -640,80 +553,68 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
     final discount = (d['discount'] as num?)?.toDouble();
     final txId = d['transactionId'] as String? ?? d['mpesaTransactionId'] as String? ?? '';
 
-    return _glassContainer(
-      cs: cs,
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surface.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.08)),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 4)),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _sectionHeader(cs, Icons.receipt_outlined, context.tr('payment_summary')),
-          const SizedBox(height: 16),
-          _summaryRow(cs, context.tr('product_price'), '${_nf(price.toInt())} TZS', cs.onSurface),
-          if (shippingCost != null && shippingCost > 0) ...[
-            const SizedBox(height: 10),
-            _summaryRow(cs, context.tr('shipping_cost'), '${_nf(shippingCost.toInt())} TZS', cs.secondary),
-          ],
-          if (discount != null && discount > 0) ...[
-            const SizedBox(height: 10),
-            _summaryRow(cs, context.tr('discount'), '-${_nf(discount.toInt())} TZS', cs.successGreen),
-          ],
-          if (platformFee > 0) ...[
-            const SizedBox(height: 10),
-            _summaryRow(cs, context.tr('service_fee'), '+${_nf(platformFee.toInt())} TZS', cs.tertiary),
-          ],
-          if (processingFee > 0) ...[
-            const SizedBox(height: 10),
-            _summaryRow(cs, context.tr('processing_fee'), '${_nf(processingFee.toInt())} TZS', cs.onSurfaceVariant),
-          ],
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: Divider(height: 1, thickness: 1),
-          ),
-          _summaryRow(cs, context.tr('total'), '${_nf(totalAmount.toInt())} TZS', cs.primary, bold: true),
-          const SizedBox(height: 14),
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: cs.whatsappGreen.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: cs.whatsappGreen.withValues(alpha: 0.15)),
+                  color: cs.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.payment, size: 14, color: cs.whatsappGreen),
-                    const SizedBox(width: 6),
-                    Text(paymentMethod, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.whatsappGreen)),
-                  ],
-                ),
+                child: Icon(Icons.receipt_outlined, size: 16, color: cs.primary),
               ),
+              const SizedBox(width: 10),
+              Text(context.tr('payment_summary'),
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: cs.onSurface)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _payRow(cs, context.tr('product_price'), 'TZS ${_nf(price.toInt())}', null),
+          if (shippingCost != null && shippingCost > 0)
+            _payRow(cs, context.tr('shipping_cost'), 'TZS ${_nf(shippingCost.toInt())}', cs.secondary),
+          if (discount != null && discount > 0)
+            _payRow(cs, context.tr('discount'), '-TZS ${_nf(discount.toInt())}', cs.successGreen),
+          if (platformFee > 0)
+            _payRow(cs, context.tr('service_fee'), '+TZS ${_nf(platformFee.toInt())}', cs.tertiary),
+          if (processingFee > 0)
+            _payRow(cs, context.tr('processing_fee'), 'TZS ${_nf(processingFee.toInt())}', cs.onSurfaceVariant),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Divider(height: 1),
+          ),
+          _payRow(cs, context.tr('total'), 'TZS ${_nf(totalAmount.toInt())}', cs.primary, bold: true),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _miniChip(cs, Icons.payment, paymentMethod, cs.whatsappGreen),
               const Spacer(),
               if (txId.isNotEmpty)
-                _copyButton(cs, txId, context.tr('transaction_id_label')),
+                _copyBtn(cs, txId, context.tr('transaction_id_label')),
             ],
           ),
           if (txId.isNotEmpty) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Row(
               children: [
-                Icon(Icons.fingerprint, size: 12, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
+                Icon(Icons.fingerprint, size: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
                 const SizedBox(width: 4),
                 Expanded(
-                  child: Text('${context.tr('transaction_id_label')}: ${txId.length > 16 ? '...${txId.substring(txId.length - 12)}' : txId}',
+                  child: Text('${context.tr('transaction_id_label')}: ...${txId.length > 12 ? txId.substring(txId.length - 12) : txId}',
                     style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant.withValues(alpha: 0.5))),
                 ),
-              ],
-            ),
-          ],
-          if (status == 'paid_escrow_hold' || status == 'escrow_hold' || status == 'dispatched') ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                _miniBadge(cs, Icons.verified_user_rounded, context.tr('escrow_status'), Colors.purple),
-                const SizedBox(width: 8),
-                if (status == 'paid_escrow_hold' || status == 'escrow_hold')
-                  _miniBadge(cs, Icons.check_circle_rounded, context.tr('payment_verified'), cs.successGreen),
               ],
             ),
           ],
@@ -722,9 +623,319 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
     );
   }
 
-  Widget _miniBadge(ColorScheme cs, IconData icon, String label, Color color) {
+  Widget _payRow(ColorScheme cs, String label, String value, Color? valueColor, {bool bold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant, fontWeight: bold ? FontWeight.w600 : FontWeight.w400)),
+          Text(value, style: TextStyle(fontSize: 14, fontWeight: bold ? FontWeight.w800 : FontWeight.w600, color: valueColor ?? cs.onSurface)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailsSection(BuildContext context, ColorScheme cs) {
+    final buyerName = d['buyerName'] as String? ?? '';
+    final buyerPhone = d['buyerPhone'] as String? ?? '';
+    final buyerEmail = d['buyerEmail'] as String? ?? '';
+    final sellerName = d['sellerName'] as String? ?? '';
+    final sellerId = d['sellerId'] as String? ?? '';
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surface.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.08)),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.person_outline, size: 16, color: cs.primary),
+              ),
+              const SizedBox(width: 10),
+              Text(context.tr('order_information'),
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: cs.onSurface)),
+              const Spacer(),
+              if (sellerId.isNotEmpty)
+                GestureDetector(
+                  onTap: () => ChatNavigation.openSellerChat(context, sellerId, sellerName),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: cs.whatsappGreen.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.chat_outlined, size: 13, color: cs.whatsappGreen),
+                        const SizedBox(width: 4),
+                        Text(context.tr('chat'), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: cs.whatsappGreen)),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _detailRow(cs, Icons.person_outline, context.tr('buyer_label'), buyerName),
+          if (buyerPhone.isNotEmpty)
+            _detailRow(cs, Icons.phone_outlined, context.tr('phone'), buyerPhone, copyable: true),
+          if (buyerEmail.isNotEmpty)
+            _detailRow(cs, Icons.email_outlined, context.tr('email'), buyerEmail, copyable: true),
+          _detailRow(cs, Icons.person_outline, context.tr('seller'), sellerName),
+          _detailRow(cs, Icons.tag, context.tr('order_id'), widget.docId, copyable: true),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailRow(ColorScheme cs, IconData icon, String label, String value, {bool copyable = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Icon(icon, size: 15, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+          const SizedBox(width: 10),
+          SizedBox(width: 80, child: Text(label, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant))),
+          Expanded(
+            child: Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cs.onSurface)),
+          ),
+          if (copyable)
+            GestureDetector(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                Clipboard.setData(ClipboardData(text: value));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(context.tr('copied_to_clipboard')), duration: const Duration(seconds: 1), behavior: SnackBarBehavior.floating),
+                );
+              },
+              child: Icon(Icons.copy_rounded, size: 14, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExpandableDetails(BuildContext context, ColorScheme cs) {
+    final address = d['deliveryAddress'] as Map<String, dynamic>?;
+    final dispatch = d['dispatchProof'] as Map<String, dynamic>?;
+    final hasAddress = address != null;
+    final hasDispatch = dispatch != null;
+    final hasFees = _hasFees();
+
+    if (!hasAddress && !hasDispatch && !hasFees) return const SizedBox.shrink();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surface.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.08)),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: cs.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(_showAllDetails ? Icons.expand_less : Icons.expand_more, size: 16, color: cs.primary),
+          ),
+          title: Text(context.tr('more_details'),
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: cs.onSurface)),
+          children: [
+            if (hasAddress) ...[
+              Row(
+                children: [
+                  Icon(Icons.location_on_outlined, size: 15, color: cs.primary.withValues(alpha: 0.7)),
+                  const SizedBox(width: 8),
+                  Text(context.tr('shipping_address'),
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: cs.onSurface)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (address['region'] != null) _addrRow(cs, context.tr('region'), address['region'] as String),
+              if (address['district'] != null) _addrRow(cs, context.tr('district'), address['district'] as String),
+              if (address['ward'] != null) _addrRow(cs, context.tr('ward'), address['ward'] as String),
+              if (address['street'] != null) _addrRow(cs, context.tr('street'), address['street'] as String),
+              if (address['houseNumber'] != null) _addrRow(cs, context.tr('house_number'), address['houseNumber'] as String),
+              if (address['landmarks'] != null) _addrRow(cs, context.tr('landmarks'), address['landmarks'] as String),
+              const SizedBox(height: 12),
+            ],
+            if (hasDispatch) ...[
+              Row(
+                children: [
+                  Icon(Icons.local_shipping_outlined, size: 15, color: cs.primary.withValues(alpha: 0.7)),
+                  const SizedBox(width: 8),
+                  Text(context.tr('shipping_details'),
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: cs.onSurface)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (dispatch['courierName'] != null) _addrRow(cs, context.tr('courier_company_name'), dispatch['courierName'] as String),
+              if (dispatch['trackingNumber'] != null) _addrRow(cs, context.tr('tracking_number'), dispatch['trackingNumber'] as String),
+              if (dispatch['driverPhone'] != null) _addrRow(cs, context.tr('driver_phone'), dispatch['driverPhone'] as String),
+              if (dispatch['notes'] != null) _addrRow(cs, context.tr('additional_notes'), dispatch['notes'] as String),
+              const SizedBox(height: 12),
+            ],
+            if (hasFees) ...[
+              Row(
+                children: [
+                  Icon(Icons.account_balance_wallet_outlined, size: 15, color: cs.primary.withValues(alpha: 0.7)),
+                  const SizedBox(width: 8),
+                  Text(context.tr('payment_breakdown'),
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: cs.onSurface)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              _buildFeeRows(cs),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  bool _hasFees() {
+    final platformFee = (d['platformFee'] as num?)?.toDouble() ?? (d['sokoLanguCommission'] as num?)?.toDouble() ?? 0;
+    final processingFee = (d['processingFee'] as num?)?.toDouble() ?? 0;
+    final sellerReceives = (d['sellerReceives'] as num?)?.toDouble() ?? 0;
+    return platformFee > 0 || processingFee > 0 || sellerReceives > 0;
+  }
+
+  Widget _buildFeeRows(ColorScheme cs) {
+    final platformFee = (d['platformFee'] as num?)?.toDouble() ?? (d['sokoLanguCommission'] as num?)?.toDouble() ?? 0;
+    final processingFee = (d['processingFee'] as num?)?.toDouble() ?? 0;
+    final sellerReceives = (d['sellerReceives'] as num?)?.toDouble() ?? 0;
+    final children = <Widget>[];
+    if (platformFee > 0) {
+      children.add(_addrRow(cs, context.tr('service_fee'), '+TZS ${_nf(platformFee.toInt())}'));
+    }
+    if (processingFee > 0) {
+      children.add(_addrRow(cs, context.tr('processing_fee'), 'TZS ${_nf(processingFee.toInt())}'));
+    }
+    if (sellerReceives > 0) {
+      children.add(const SizedBox(height: 4));
+      children.add(Container(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)));
+      children.add(const SizedBox(height: 4));
+      children.add(_addrRow(cs, context.tr('seller_receives'), 'TZS ${_nf(sellerReceives.toInt())}', bold: true));
+    }
+    return Column(children: children);
+  }
+
+  Widget _addrRow(ColorScheme cs, String label, String value, {bool bold = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          SizedBox(width: 100, child: Text(label, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant))),
+          Expanded(child: Text(value, style: TextStyle(fontSize: 13, fontWeight: bold ? FontWeight.w700 : FontWeight.w600, color: cs.onSurface))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActions(BuildContext context, ColorScheme cs) {
+    final canConfirm = status == 'delivered' || status == 'dispatched';
+    final canDispute = status == 'paid_escrow_hold' || status == 'escrow_hold' || status == 'dispatched' || status == 'delivered';
+    final canCancel = status == 'paid_escrow_hold' || status == 'escrow_hold';
+
+    if (!canConfirm && !canDispute && !canCancel) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surface.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.08)),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Column(
+        children: [
+          if (canConfirm)
+            SizedBox(
+              width: double.infinity, height: 48,
+              child: ElevatedButton.icon(
+                onPressed: _releasingTxId == widget.docId ? null : () => _confirmDelivery(widget.docId),
+                icon: _releasingTxId == widget.docId
+                    ? const GoogleLoading(size: 20, strokeWidth: 2)
+                    : const Icon(Icons.verified, size: 20),
+                label: Text(_releasingTxId == widget.docId ? context.tr('confirming_label') : context.tr('confirm_receipt')),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: cs.successGreen,
+                  foregroundColor: cs.surface,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                ),
+              ),
+            ),
+          if (canDispute || canCancel) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                if (canDispute)
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _disputingTxId == widget.docId ? null : () => _raiseDispute(widget.docId),
+                      icon: _disputingTxId == widget.docId
+                          ? const GoogleLoading(size: 16, strokeWidth: 2)
+                          : const Icon(Icons.gavel, size: 16),
+                      label: Text(context.tr('dispute_button')),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: cs.error,
+                        side: BorderSide(color: cs.error.withValues(alpha: 0.3)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
+                  ),
+                if (canDispute && canCancel) const SizedBox(width: 10),
+                if (canCancel)
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _cancelOrder(widget.docId),
+                      icon: const Icon(Icons.money_off, size: 16),
+                      label: Text(context.tr('cancel')),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: cs.error,
+                        side: BorderSide(color: cs.error.withValues(alpha: 0.3)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _miniChip(ColorScheme cs, IconData icon, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
@@ -733,416 +944,34 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 11, color: color),
+          Icon(icon, size: 12, color: color),
           const SizedBox(width: 4),
-          Text(label, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: color)),
+          Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color)),
         ],
       ),
     );
   }
 
-  Widget _summaryRow(ColorScheme cs, String label, String value, Color valueColor, {bool bold = false}) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant, fontWeight: bold ? FontWeight.w600 : FontWeight.w400)),
-        Text(value, style: TextStyle(fontSize: 15, fontWeight: bold ? FontWeight.w800 : FontWeight.w600, color: valueColor)),
-      ],
-    );
-  }
-
-  // ── Order Information ──
-  Widget _buildOrderInfo(BuildContext context, ColorScheme cs) {
-    final buyerName = d['buyerName'] as String? ?? '';
-    final buyerPhone = d['buyerPhone'] as String? ?? '';
-    final buyerEmail = d['buyerEmail'] as String? ?? '';
-    final paymentMethod = d['paymentMethod'] as String? ?? 'Mongike';
-    final txId = d['transactionId'] as String? ?? d['mpesaTransactionId'] as String? ?? '';
-
-    final info = <_InfoRowData>[
-      _InfoRowData(Icons.person_outline, context.tr('buyer_label'), buyerName, null),
-      if (buyerPhone.isNotEmpty) _InfoRowData(Icons.phone_outlined, context.tr('phone'), buyerPhone, Icons.copy_rounded),
-      if (buyerEmail.isNotEmpty) _InfoRowData(Icons.email_outlined, context.tr('email'), buyerEmail, Icons.copy_rounded),
-      _InfoRowData(Icons.payment_outlined, context.tr('payment_method'), paymentMethod, null),
-      _InfoRowData(Icons.tag, context.tr('order_id'), '#${widget.docId}', Icons.copy_rounded),
-      if (txId.isNotEmpty)
-        _InfoRowData(Icons.fingerprint, context.tr('transaction_id_label'),
-            txId.length > 20 ? '...${txId.substring(txId.length - 16)}' : txId, Icons.copy_rounded),
-    ];
-
-    return _glassContainer(
-      cs: cs,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sectionHeader(cs, Icons.info_outline_rounded, context.tr('order_information')),
-          const SizedBox(height: 16),
-          ...info.map((row) => Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Row(
-              children: [
-                Container(
-                  width: 36, height: 36,
-                  decoration: BoxDecoration(
-                    color: cs.primary.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(row.icon, size: 16, color: cs.primary),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(row.label, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-                      const SizedBox(height: 2),
-                      Text(row.value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cs.onSurface)),
-                    ],
-                  ),
-                ),
-                if (row.actionIcon != null)
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: () {
-                        HapticFeedback.lightImpact();
-                        Clipboard.setData(ClipboardData(text: row.value.replaceFirst('#', '')));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(context.tr('copied_to_clipboard')),
-                            duration: const Duration(seconds: 1),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.all(6),
-                        child: Icon(row.actionIcon, size: 16, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          )),
-        ],
-      ),
-    );
-  }
-
-  Widget _copyButton(ColorScheme cs, String text, String label) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: () {
-          HapticFeedback.lightImpact();
-          Clipboard.setData(ClipboardData(text: text));
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(context.tr('copied_to_clipboard')),
-              duration: const Duration(seconds: 1),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(6),
-          child: Icon(Icons.copy_rounded, size: 14, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
-        ),
-      ),
-    );
-  }
-
-  // ── Shipping Address ──
-  Widget _buildAddressCard(BuildContext context, ColorScheme cs, bool isDark) {
-    final address = d['deliveryAddress'] as Map<String, dynamic>?;
-    if (address == null) return const SizedBox.shrink();
-
-    final region = address['region'] as String?;
-    final district = address['district'] as String?;
-    final ward = address['ward'] as String?;
-    final street = address['street'] as String?;
-    final houseNumber = address['houseNumber'] as String? ?? address['house_number'] as String?;
-    final landmarks = address['landmarks'] as String?;
-
-    return _glassContainer(
-      cs: cs,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sectionHeader(
-            cs, Icons.location_on_rounded, context.tr('shipping_address'),
-            trailing: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(context.tr('feature_coming_soon')), behavior: SnackBarBehavior.floating),
-                ),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: cs.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.map_outlined, size: 14, color: cs.primary),
-                      const SizedBox(width: 4),
-                      Text(context.tr('view_map'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.primary)),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          if (region != null) _addressRow(cs, Icons.location_city_outlined, context.tr('region'), region),
-          if (district != null) _addressRow(cs, Icons.map_outlined, context.tr('district'), district),
-          if (ward != null) _addressRow(cs, Icons.layers_outlined, context.tr('ward'), ward),
-          if (street != null) _addressRow(cs, Icons.signpost_outlined, context.tr('street'), street),
-          if (houseNumber != null && houseNumber.isNotEmpty) _addressRow(cs, Icons.home_outlined, context.tr('house_number'), houseNumber),
-          if (landmarks != null) _addressRow(cs, Icons.landscape_outlined, context.tr('landmarks'), landmarks),
-        ],
-      ),
-    );
-  }
-
-  Widget _addressRow(ColorScheme cs, IconData icon, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        children: [
-          Container(
-            width: 32, height: 32,
-            decoration: BoxDecoration(
-              color: cs.primary.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, size: 14, color: cs.primary.withValues(alpha: 0.7)),
-          ),
-          const SizedBox(width: 10),
-          SizedBox(width: 80, child: Text(label, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant))),
-          Expanded(child: Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cs.onSurface))),
-        ],
-      ),
-    );
-  }
-
-  // ── Dispatch Info ──
-  Widget _buildDispatchInfo(BuildContext context, ColorScheme cs) {
-    final dispatch = d['dispatchProof'] as Map<String, dynamic>?;
-    if (dispatch == null) return const SizedBox.shrink();
-
-    final courier = dispatch['courierName'] as String?;
-    final tracking = dispatch['trackingNumber'] as String?;
-    final driverPhone = dispatch['driverPhone'] as String?;
-    final notes = dispatch['notes'] as String?;
-    final courierLogo = dispatch['courierLogo'] as String?;
-
-    return _glassContainer(
-      cs: cs,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sectionHeader(cs, Icons.local_shipping_outlined, context.tr('shipping_details'),
-            trailing: _buildLiveStatus(cs),
-          ),
-          const SizedBox(height: 16),
-          if (courier != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(
-                children: [
-                  if (courierLogo != null && courierLogo.isNotEmpty)
-                    Container(
-                      width: 28, height: 28,
-                      margin: const EdgeInsets.only(right: 10),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(5),
-                        child: Image.network(courierLogo, fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => Icon(Icons.local_shipping, size: 14, color: cs.primary)),
-                      ),
-                    )
-                  else
-                    Container(
-                      width: 28, height: 28,
-                      margin: const EdgeInsets.only(right: 10),
-                      decoration: BoxDecoration(
-                        color: cs.primary.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(Icons.local_shipping, size: 14, color: cs.primary.withValues(alpha: 0.7)),
-                    ),
-                  SizedBox(width: 80, child: Text(context.tr('courier_company_name'), style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant))),
-                  Expanded(child: Text(courier, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cs.onSurface))),
-                ],
-              ),
-            ),
-          if (tracking != null) _addressRow(cs, Icons.qr_code_outlined, context.tr('tracking_number'), tracking),
-          if (driverPhone != null) _addressRow(cs, Icons.phone_outlined, context.tr('driver_phone'), driverPhone),
-          if (notes != null) _addressRow(cs, Icons.notes_outlined, context.tr('additional_notes'), notes),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLiveStatus(ColorScheme cs) {
-    if (status != 'dispatched') return const SizedBox.shrink();
-    return AnimatedBuilder(
-      animation: _pulseAnim,
-      builder: (context, _) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+  Widget _copyBtn(ColorScheme cs, String text, String label) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        Clipboard.setData(ClipboardData(text: text));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('copied_to_clipboard')), duration: const Duration(seconds: 1), behavior: SnackBarBehavior.floating),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
-          color: Colors.green.withValues(alpha: _pulseAnim.value * 0.2),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.green.withValues(alpha: _pulseAnim.value * 0.3)),
+          color: cs.primary.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(6),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 5, height: 5,
-              decoration: BoxDecoration(
-                color: Colors.green, shape: BoxShape.circle,
-                boxShadow: [BoxShadow(color: Colors.green.withValues(alpha: _pulseAnim.value * 0.6), blurRadius: 4)],
-              ),
-            ),
-            const SizedBox(width: 4),
-            Text(context.tr('track_shipment'), style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: Colors.green)),
-          ],
-        ),
+        child: Icon(Icons.copy_rounded, size: 14, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
       ),
     );
   }
 
-  // ── Fee Breakdown ──
-  Widget _buildFeeBreakdown(BuildContext context, ColorScheme cs) {
-    final platformFee = (d['platformFee'] as num?)?.toDouble() ?? (d['sokoLanguCommission'] as num?)?.toDouble() ?? 0;
-    final processingFee = (d['processingFee'] as num?)?.toDouble() ?? 0;
-    final sellerReceives = (d['sellerReceives'] as num?)?.toDouble() ?? 0;
-
-    if (platformFee <= 0 && processingFee <= 0 && sellerReceives <= 0) return const SizedBox.shrink();
-
-    return _glassContainer(
-      cs: cs,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sectionHeader(cs, Icons.account_balance_wallet_outlined, context.tr('payment_breakdown')),
-          const SizedBox(height: 16),
-          if (platformFee > 0) ...[
-            _summaryRow(cs, context.tr('service_fee'), '+${_nf(platformFee.toInt())} TZS', cs.tertiary),
-            const SizedBox(height: 10),
-          ],
-          if (processingFee > 0) ...[
-            _summaryRow(cs, context.tr('processing_fee'), '${_nf(processingFee.toInt())} TZS', cs.onSurfaceVariant),
-            const SizedBox(height: 10),
-          ],
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 10),
-            child: Divider(height: 1, thickness: 1),
-          ),
-          _summaryRow(cs, context.tr('seller_receives'), '${_nf(sellerReceives.toInt())} TZS', cs.successGreen, bold: true),
-        ],
-      ),
-    );
-  }
-
-  // ── Actions ──
-  Widget _buildActions(BuildContext context, ColorScheme cs) {
-    final canConfirm = status == 'delivered' || status == 'dispatched';
-    final canDispute = status == 'paid_escrow_hold' || status == 'escrow_hold' || status == 'dispatched' || status == 'delivered';
-    final canCancel = status == 'paid_escrow_hold' || status == 'escrow_hold';
-
-    if (!canConfirm && !canDispute && !canCancel) return const SizedBox.shrink();
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                cs.surface.withValues(alpha: 0.15), cs.surfaceContainerLow.withValues(alpha: 0.08),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
-          ),
-          child: Column(
-            children: [
-              if (canConfirm)
-                SizedBox(
-                  width: double.infinity, height: 50,
-                  child: ElevatedButton.icon(
-                    onPressed: _releasingTxId == widget.docId ? null : () => _confirmDelivery(widget.docId),
-                    icon: _releasingTxId == widget.docId
-                        ? const GoogleLoading(size: 20, strokeWidth: 2)
-                        : const Icon(Icons.verified, size: 20),
-                    label: Text(_releasingTxId == widget.docId ? context.tr('confirming_label') : context.tr('confirm_receipt')),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: cs.successGreen,
-                      foregroundColor: cs.surface,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      elevation: 0,
-                    ),
-                  ),
-                ),
-              if (canDispute || canCancel) ...[
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    if (canDispute)
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _disputingTxId == widget.docId ? null : () => _raiseDispute(widget.docId),
-                          icon: _disputingTxId == widget.docId
-                              ? const GoogleLoading(size: 16, strokeWidth: 2)
-                              : const Icon(Icons.gavel, size: 16),
-                          label: Text(context.tr('dispute_button')),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: cs.error,
-                            side: BorderSide(color: cs.error.withValues(alpha: 0.3)),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          ),
-                        ),
-                      ),
-                    if (canDispute && canCancel) const SizedBox(width: 10),
-                    if (canCancel)
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _cancelOrder(widget.docId),
-                          icon: const Icon(Icons.money_off, size: 16),
-                          label: Text(context.tr('cancel')),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: cs.error,
-                            side: BorderSide(color: cs.error.withValues(alpha: 0.3)),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── Bottom Bar ──
   Widget _buildBottomBar(BuildContext context, ColorScheme cs) {
     final sellerId = d['sellerId'] as String? ?? '';
     final sellerName = d['sellerName'] as String? ?? '';
@@ -1154,11 +983,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
       ),
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.15))),
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [cs.surface.withValues(alpha: 0.95), cs.surface],
-        ),
+        color: cs.surface,
       ),
       child: SafeArea(
         top: false,
@@ -1166,19 +991,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
           children: [
             Expanded(
               child: SizedBox(
-                height: 48,
+                height: 46,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: cs.whatsappGreen,
                     foregroundColor: cs.surface,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     elevation: 0,
                   ),
-                  icon: const Icon(Icons.chat_outlined, size: 18),
+                  icon: const Icon(Icons.chat_outlined, size: 17),
                   onPressed: sellerId.isNotEmpty
                       ? () => ChatNavigation.openSellerChat(context, sellerId, sellerName)
                       : null,
-                  label: Text(context.tr('contact_seller'), style: const TextStyle(fontSize: 13)),
+                  label: Text(context.tr('contact_seller'), style: const TextStyle(fontSize: 12)),
                 ),
               ),
             ),
@@ -1186,35 +1011,34 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
               const SizedBox(width: 8),
               Expanded(
                 child: SizedBox(
-                  height: 48,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: cs.primary,
-                      foregroundColor: cs.surface,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      elevation: 0,
+                  height: 46,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: cs.primary,
+                      side: BorderSide(color: cs.primary.withValues(alpha: 0.3)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
-                    icon: const Icon(Icons.track_changes_outlined, size: 18),
+                    icon: const Icon(Icons.track_changes_outlined, size: 17),
                     onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text(context.tr('feature_coming_soon')), behavior: SnackBarBehavior.floating),
                     ),
-                    label: Text(context.tr('track_shipment'), style: const TextStyle(fontSize: 13)),
+                    label: Text(context.tr('track'), style: const TextStyle(fontSize: 12)),
                   ),
                 ),
               ),
             ],
             const SizedBox(width: 8),
             SizedBox(
-              height: 48,
+              height: 46,
               child: OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
                   foregroundColor: cs.primary,
                   side: BorderSide(color: cs.primary.withValues(alpha: 0.3)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
-                icon: const Icon(Icons.download_rounded, size: 18),
+                icon: const Icon(Icons.receipt_outlined, size: 17),
                 onPressed: () => context.push('${AppRoutes.receipt}/${widget.docId}'),
-                label: const Text('PDF', style: TextStyle(fontSize: 12)),
+                label: Text(context.tr('receipt'), style: const TextStyle(fontSize: 12)),
               ),
             ),
           ],
@@ -1223,7 +1047,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
     );
   }
 
-  // ── Action Handlers ──
   Future<void> _confirmDelivery(String txId) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -1360,17 +1183,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with TickerProvid
   }
 }
 
-class _TimelineStepData {
+class _StepData {
   final String label;
   final IconData icon;
   final Color color;
-  const _TimelineStepData(this.label, this.icon, this.color);
-}
-
-class _InfoRowData {
-  final IconData icon;
-  final String label;
-  final String value;
-  final IconData? actionIcon;
-  const _InfoRowData(this.icon, this.label, this.value, this.actionIcon);
+  const _StepData(this.label, this.icon, this.color);
 }
