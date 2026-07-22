@@ -103,16 +103,25 @@ function buildFcmMessage({ token, tokens, title, body, data = {} }) {
 }
 
 async function sendFcmToToken(message, userIdForCleanup = null) {
+  const notifType = (message.data && message.data.type) || 'unknown';
   try {
     const result = await admin.messaging().send(message);
+    console.log(`[FCM] sent user=${userIdForCleanup || '?'} type=${notifType} success=${result}`);
     return result;
   } catch (e) {
-    console.error(`[FCM] send failed for user ${userIdForCleanup || '?'}: ${e.code || e.message}`, e.errorInfo || '');
+    const errCode = e.code || '';
+    const errMsg = e.message || '';
+    console.error(`[FCM] FAILED user=${userIdForCleanup || '?'} type=${notifType} code=${errCode} msg=${errMsg}`, e.errorInfo || '');
+
+    // Log quota / sender-id errors specifically
+    if (errCode === 'messaging/quota-exceeded') console.error(`[FCM] QUOTA EXCEEDED`);
+    if (errCode === 'messaging/sender-id-mismatch') console.error(`[FCM] SENDER ID MISMATCH`);
+
+    // Stale / invalid token — try topic fallback, then clean up
     if (userIdForCleanup && db &&
-        (e.code === 'messaging/registration-token-not-registered' ||
-         e.code === 'messaging/invalid-registration-token')) {
+        (errCode === 'messaging/registration-token-not-registered' ||
+         errCode === 'messaging/invalid-registration-token')) {
       console.log(`[FCM] Token stale for ${userIdForCleanup}, trying topic fallback...`);
-      // Try sending via user-specific topic as fallback
       try {
         const topicMsg = {
           topic: `user_${userIdForCleanup}`,
@@ -124,11 +133,15 @@ async function sendFcmToToken(message, userIdForCleanup = null) {
         console.log(`[FCM] Topic fallback succeeded for ${userIdForCleanup}: ${topicResult}`);
         return topicResult;
       } catch (topicErr) {
-        console.error(`[FCM] Topic fallback also failed for ${userIdForCleanup}: ${topicErr.code || topicErr.message}`);
+        console.error(`[FCM] Topic fallback ALSO failed for ${userIdForCleanup}: ${topicErr.code || topicErr.message}`);
       }
-      // Still clean the stale token so next attempt gets fresh data
+      // Clean stale token so next attempt gets fresh data
       await db.collection('users').doc(userIdForCleanup).update({ fcmToken: null });
+      console.log(`[FCM] Cleared stale token for ${userIdForCleanup}`);
+      return null; // Token handled — don't throw
     }
+
+    // For other errors, re-throw so callers can decide how to handle
     throw e;
   }
 }
@@ -5475,7 +5488,8 @@ app.post('/api/chat/send', async (req, res) => {
       last_timestamp: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    // Send FCM push to receiver
+    // Send FCM push to receiver — data-only so Awesome Notifications background
+    // handler shows the custom chat layout (Messaging layout + Reply button).
     const senderName = senderDoc.exists
       ? (senderDoc.data().displayName || senderDoc.data().name || 'Mtumiaji')
       : 'Mtumiaji';
@@ -5483,16 +5497,12 @@ app.post('/api/chat/send', async (req, res) => {
     if (receiverDoc.exists) {
       const fcmToken = receiverDoc.data().fcmToken;
       if (fcmToken) {
-        sendFcmToToken(buildFcmMessage({
+        const chatMessage = {
+          data: { title: senderName, body: text, type: 'chat', senderId, senderName, roomId },
           token: fcmToken,
-          title: senderName,
-          body: text,
-          data: { type: 'chat', senderId, senderName, roomId },
-        }), receiverId).catch((err) => {
-          if (err.code?.startsWith('messaging/')) {
-            db.collection('users').doc(receiverId).update({ fcmToken: null });
-          }
-        });
+          android: { priority: 'high' },
+        };
+        sendFcmToToken(chatMessage, receiverId).catch(() => {});
       }
     }
 
