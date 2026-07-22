@@ -23,6 +23,9 @@ class BoostService {
     required BoostTier tier,
     required String phone,
     required String userId,
+    String productName = '',
+    String productImage = '',
+    int productPrice = 0,
   }) async {
     try {
       final resp = await http.post(
@@ -35,15 +38,22 @@ class BoostService {
           'durationDays': tier.durationDays,
           'phone': phone,
           'userId': userId,
+          'productName': productName,
+          'productImage': productImage,
+          'productPrice': productPrice,
         }),
       );
 
       if (resp.statusCode != 200) {
         try {
           final body = jsonDecode(resp.body);
-          throw Exception(body['error'] ?? body['message'] ?? 'Boost payment failed');
+          throw Exception(
+            body['error'] ?? body['message'] ?? 'Boost payment failed',
+          );
         } on FormatException {
-          throw Exception('Server error (${resp.statusCode}). Tafadhali jaribu tena.');
+          throw Exception(
+            'Server error (${resp.statusCode}). Tafadhali jaribu tena.',
+          );
         }
       }
 

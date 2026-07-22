@@ -1177,7 +1177,7 @@ class LocalizationService {
       'fee_breakdown_per_sale': 'Uchambuzi wa Ada kwa Mauzo',
       'full_amount_paid_by_buyer': 'Kiasi kamili kilicholipwa na mnunuzi',
       'soko_vibe_commission': 'Ada ya Soko Vibe',
-      'commission_percentage': '4% ya bei ya bidhaa',
+      'commission_percentage': '3.5% ya bei ya bidhaa',
       'net_earnings_formula':
           'Mapato Halisi = Bei - Ada ya Kuchakata - Ada ya Soko Vibe',
       'phone_example': 'mfano 0712345678',
@@ -2773,7 +2773,7 @@ class LocalizationService {
       'fee_breakdown_per_sale': 'Fee Breakdown per Sale',
       'full_amount_paid_by_buyer': 'Full amount paid by buyer',
       'soko_vibe_commission': 'Soko Vibe Commission',
-      'commission_percentage': '4% of product price',
+      'commission_percentage': '3.5% of product price',
       'net_earnings_formula':
           'Net Earnings = Price - Processing Fee - Soko Vibe Commission',
       'phone_example': 'e.g. 0712345678',

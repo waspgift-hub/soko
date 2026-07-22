@@ -489,7 +489,7 @@ app.post('/api/boost-product', async (req, res) => {
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
     try { await admin.auth().verifyIdToken(token); } catch (_) { return res.status(403).json({ error: 'Invalid token' }); }
 
-    const { productId, tier, amount, durationDays, phone, userId } = req.body;
+    const { productId, tier, amount, durationDays, phone, userId, productName, productImage, productPrice } = req.body;
     if (!productId || !tier || !phone) {
       return res.status(400).json({ error: 'Missing required fields (productId, tier, phone)' });
     }
@@ -516,11 +516,18 @@ app.post('/api/boost-product', async (req, res) => {
       await db.collection('transactions').doc(order_id).set({
         type: 'boost',
         productId,
+        productName: productName || '',
+        productImage: productImage || '',
+        productPrice: productPrice || 0,
         tier: tier.toLowerCase(),
         amount: tierConfig.price,
+        totalAmount: tierConfig.price,
         durationDays: tierConfig.days,
         userId: userId || '',
+        buyerId: userId || '',
+        buyerName: userId || '',
         buyerPhone: phone,
+        sellerName: 'Soko Vibe',
         mongikeReference: ref,
         status: 'pending',
         paymentMethod: 'Mongike',
@@ -1401,20 +1408,7 @@ app.post('/api/mongike/webhook', verifyWebhook, async (req, res) => {
         const tierConfig = BOOST_TIERS[tier] || BOOST_TIERS.bronze;
         const boostedUntil = new Date(Date.now() + tierConfig.days * 24 * 60 * 60 * 1000);
 
-        try {
-          await db.collection('products').doc(tx.productId).update({
-            isBoosted: true,
-            boostedUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
-            boostTier: tier,
-            isFeatured: true,
-            featuredUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
-          });
-        } catch (productErr) {
-          console.error(`Mongike: Failed to boost product ${tx.productId}:`, productErr);
-          await txDoc.ref.update({ status: 'failed', failureReason: `Product update failed: ${productErr.message}` });
-          return res.status(200).json({ received: true });
-        }
-
+        // Mark transaction as completed FIRST so the UI updates immediately
         await txDoc.ref.update({
           status: 'completed',
           mongikeReference: mongikeRef,
@@ -1422,35 +1416,42 @@ app.post('/api/mongike/webhook', verifyWebhook, async (req, res) => {
           totalAmount: tx.amount || 0,
         });
 
-        // Notify the boost purchaser
+        // Update product boost — non-blocking, don't await
+        db.collection('products').doc(tx.productId).update({
+          isBoosted: true,
+          boostedUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
+          boostTier: tier,
+          isFeatured: true,
+          featuredUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
+        }).catch(err => console.error(`Boost product update failed: ${err.message}`));
+
+        // Notify user — non-blocking
         if (tx.userId) {
-          await db.collection('notifications').add({
+          db.collection('notifications').add({
             userId: tx.userId,
             title: '✅ Boost imewashwa!',
             body: `Bidhaa yako imepandishwa kwa daraja la ${tier} kwa siku ${tierConfig.days}.`,
             data: { type: 'boost', productId: tx.productId },
             isRead: false,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-          try {
-            const userSnap = await db.collection('users').doc(tx.userId).get();
-            const token = userSnap.data()?.fcmToken;
-            if (token) {
-              await sendFcmToToken(buildFcmMessage({
-                token,
-                title: '✅ Boost imewashwa!',
-                body: `Bidhaa yako imepandishwa kwa daraja la ${tier} kwa siku ${tierConfig.days}.`,
-                data: { type: 'boost', productId: tx.productId || '' },
-              }), tx.userId);
-            }
-          } catch (_) {}
+          }).catch(() => {});
+          const userSnap = await db.collection('users').doc(tx.userId).get();
+          const token = userSnap.data()?.fcmToken;
+          if (token) {
+            sendFcmToToken(buildFcmMessage({
+              token,
+              title: '✅ Boost imewashwa!',
+              body: `Bidhaa yako imepandishwa kwa daraja la ${tier} kwa siku ${tierConfig.days}.`,
+              data: { type: 'boost', productId: tx.productId || '' },
+            }), tx.userId).catch(() => {});
+          }
         }
 
         notifyBoostBroadcast(tx.productId, tier, tx.userId).catch(() => {});
 
         // Record boost revenue
         const boostAmount = tx.amount || tierConfig.price;
-        await db.collection('revenue_transactions').add({
+        db.collection('revenue_transactions').add({
           userId: 'platform',
           amount: boostAmount,
           sokoLanguCommission: boostAmount,
@@ -1461,18 +1462,16 @@ app.post('/api/mongike/webhook', verifyWebhook, async (req, res) => {
           buyerPhone: tx.buyerPhone || '',
           paymentMethod: 'Mongike',
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
+        }).catch(() => {});
 
-        // SMS seller about boost payment
-        try {
-          const sellerSnap = await db.collection('users').doc(tx.userId).get();
+        db.collection('users').doc(tx.userId).get().then(sellerSnap => {
           const sellerPhone = sellerSnap.data()?.phone;
           if (sellerPhone) {
             const expiryStr = new Date(Date.now() + tierConfig.days * 24 * 60 * 60 * 1000).toLocaleDateString('sw-TZ');
             const msg = `Soko Vibe: Malipo ya Boost ya TZS ${boostAmount.toLocaleString()} yamefanikiwa! Bidhaa yako sasa inaonyeshwa kipaumbele hadi ${expiryStr}.`;
             sendSms(sellerPhone, msg);
           }
-        } catch (_) {}
+        }).catch(() => {});
 
       } else if (tx.type === 'purchase') {
         // ── Move to escrow hold ──
@@ -1499,8 +1498,8 @@ app.post('/api/mongike/webhook', verifyWebhook, async (req, res) => {
           escrowExpiresAt: admin.firestore.Timestamp.fromDate(escrowExpiry),
         });
 
-        // Record platform commission
-        await db.collection('revenue_transactions').add({
+        // Everything below is non-critical — fire-and-forget for speed
+        db.collection('revenue_transactions').add({
           userId: 'platform',
           amount: platformFee,
           type: 'commission',
@@ -1512,72 +1511,56 @@ app.post('/api/mongike/webhook', verifyWebhook, async (req, res) => {
           buyerName: tx.buyerName || '',
           paymentMethod: 'Mongike',
           timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        });
+        }).catch(() => {});
 
-        // Decrement flash sale stock
-        try {
-          const fsSnap = await db.collection('flash_sales')
-            .where('productId', '==', tx.productId)
-            .where('isActive', '==', true)
-            .limit(5)
-            .get();
-          const payNow = new Date();
-          const activeDoc = fsSnap.docs.find(d => isFlashSaleStillActive(d.data(), payNow));
-          if (activeDoc) {
-            const fsData = activeDoc.data();
-            const newStock = Math.max(0, (fsData.stock || 0) - 1);
-            const newSold = (fsData.soldCount || 0) + 1;
-            await activeDoc.ref.update({
-              stock: newStock,
-              soldCount: newSold,
-              isActive: newStock > 0,
-            });
-          }
-        } catch (_) {}
+        db.collection('flash_sales')
+          .where('productId', '==', tx.productId)
+          .where('isActive', '==', true)
+          .limit(5)
+          .get().then(fsSnap => {
+            const payNow = new Date();
+            const activeDoc = fsSnap.docs.find(d => isFlashSaleStillActive(d.data(), payNow));
+            if (activeDoc) {
+              const fsData = activeDoc.data();
+              const newStock = Math.max(0, (fsData.stock || 0) - 1);
+              const newSold = (fsData.soldCount || 0) + 1;
+              activeDoc.ref.update({ stock: newStock, soldCount: newSold, isActive: newStock > 0 });
+            }
+          }).catch(() => {});
 
-        // Credit seller's pendingEscrow
         if (sellerReceives > 0 && tx.sellerId) {
-          await db.collection('users').doc(tx.sellerId).set({
+          db.collection('users').doc(tx.sellerId).set({
             pendingEscrow: admin.firestore.FieldValue.increment(sellerReceives),
             totalSales: admin.firestore.FieldValue.increment(1),
             grossSalesVolume: admin.firestore.FieldValue.increment(productPrice),
             lastSaleAt: admin.firestore.FieldValue.serverTimestamp(),
-          }, { merge: true });
-
-          // Notify seller
-          await db.collection('notifications').add({
-            userId: tx.sellerId,
-            title: 'Umepata Mauzo!',
-            body: `${tx.productName || 'Bidhaa'} imeuzwa. TZS ${sellerReceives.toLocaleString()} zimewekwa escrow. Mnunuzi atathibitisha upokeaji ili pesa zifunguliwe.`,
-            isRead: false,
-            type: 'sale',
-            transactionId: orderId,
-            buyerPhone: tx.buyerPhone || '',
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-          // FCM push to seller
-          try {
-            const sellerSnap = await db.collection('users').doc(tx.sellerId).get();
-            const sellerToken = sellerSnap.data()?.fcmToken;
-            if (sellerToken) {
-              await sendFcmToToken(buildFcmMessage({
-                token: sellerToken,
-                title: 'Umepata Mauzo!',
-                body: `${tx.productName || 'Bidhaa'} imeuzwa. TZS ${sellerReceives.toLocaleString()} zimewekwa escrow.`,
-                data: {
-                  type: 'order',
-                  productId: tx.productId || '',
-                  transactionId: orderId,
-                  buyerPhone: tx.buyerPhone || '',
-                },
-              }), tx.sellerId);
-            }
-          } catch (_) {}
+          }, { merge: true }).then(() => {
+            db.collection('notifications').add({
+              userId: tx.sellerId,
+              title: 'Umepata Mauzo!',
+              body: `${tx.productName || 'Bidhaa'} imeuzwa. TZS ${sellerReceives.toLocaleString()} zimewekwa escrow.`,
+              isRead: false,
+              type: 'sale',
+              transactionId: orderId,
+              buyerPhone: tx.buyerPhone || '',
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            }).catch(() => {});
+            db.collection('users').doc(tx.sellerId).get().then(sellerSnap => {
+              const sellerToken = sellerSnap.data()?.fcmToken;
+              if (sellerToken) {
+                sendFcmToToken(buildFcmMessage({
+                  token: sellerToken,
+                  title: 'Umepata Mauzo!',
+                  body: `${tx.productName || 'Bidhaa'} imeuzwa. TZS ${sellerReceives.toLocaleString()} zimewekwa escrow.`,
+                  data: { type: 'order', productId: tx.productId || '', transactionId: orderId },
+                }), tx.sellerId).catch(() => {});
+              }
+            }).catch(() => {});
+          }).catch(() => {});
         }
 
-        // Notify buyer
         if (tx.buyerId) {
-          await db.collection('notifications').add({
+          db.collection('notifications').add({
             userId: tx.buyerId,
             title: 'Malipo Yamekamilika!',
             body: `Malipo ya ${tx.productName || 'Bidhaa'} yamepokelewa. Thibitisha upokeaji ili muuzaji apate hela zake.`,
@@ -1585,17 +1568,18 @@ app.post('/api/mongike/webhook', verifyWebhook, async (req, res) => {
             type: 'escrow_confirm',
             transactionId: orderId,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-          try {
-            const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
+          }).catch(() => {});
+          db.collection('users').doc(tx.buyerId).get().then(buyerSnap => {
             const buyerToken = buyerSnap.data()?.fcmToken;
             if (buyerToken) {
-              await sendFcmToToken(buildFcmMessage({
+              sendFcmToToken(buildFcmMessage({
                 token: buyerToken,
                 title: 'Malipo Yamekamilika!',
                 body: `Malipo ya ${tx.productName || 'Bidhaa'} yamepokelewa.`,
                 data: { type: 'order', productId: tx.productId || '', transactionId: orderId },
-              }), tx.buyerId);
+              }), tx.buyerId).catch(() => {});
+            }
+          }).catch(() => {});
             }
           } catch (_) {}
         }
@@ -3581,7 +3565,7 @@ app.get('/api/admin/finance-summary', async (req, res) => {
     // 4. Total admin balance = actual ad revenue + commissions + boost revenue
     const totalAdminBalance = actualAdRevenue + totalCommissions + totalBoostRevenue;
 
-    // 4. Total money ever processed
+    // 5. Total money ever processed
     const txSnap = await db.collection('transactions').get();
     let totalProcessed = 0;
     txSnap.docs.forEach(doc => {
@@ -3589,7 +3573,7 @@ app.get('/api/admin/finance-summary', async (req, res) => {
       totalProcessed += (d.totalAmount || 0);
     });
 
-    // 5. Total payouts sent
+    // 6. Total payouts sent
     const withdrawSnap = await db.collection('withdrawals').get();
     let totalPaidOut = 0;
     withdrawSnap.docs.forEach(doc => {
@@ -3608,12 +3592,20 @@ app.get('/api/admin/finance-summary', async (req, res) => {
 
     const availableBalance = totalAdminBalance - totalAdminPaidOut;
 
-    // 6. Admin withdrawal history
+    // 7. Admin withdrawal history
     let totalAdminWithdrawn = 0;
     adminWithdrawSnap.docs.forEach(doc => {
       const d = doc.data();
       if (d.status === 'completed') totalAdminWithdrawn += (d.amount || 0);
     });
+
+    // 8. Actual Mongike wallet balance
+    let actualMongikeBalance = 0;
+    try {
+      actualMongikeBalance = await mongikeBalance();
+    } catch (_) {
+      actualMongikeBalance = 0;
+    }
 
     res.json({
       success: true,
@@ -3625,6 +3617,7 @@ app.get('/api/admin/finance-summary', async (req, res) => {
       totalPaidOut: totalAdminPaidOut,
       availableBalance,
       totalAdminWithdrawn,
+      actualMongikeBalance,
       paymentProcessor: 'Mongike',
     });
   } catch (e) {

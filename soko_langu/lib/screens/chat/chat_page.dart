@@ -51,10 +51,9 @@ class _ChatPageState extends State<ChatPage> {
 
   // Optimistic messages: tempId → Message
   final Map<String, Message> _optimisticMsgs = {};
-  // Temp IDs whose HTTP send has returned successfully
   final Set<String> _confirmedSends = {};
-  // Temp IDs whose HTTP send failed
   final Set<String> _failedSends = {};
+  final Map<String, String> _tempToRealId = {};
 
   // Presence
   DateTime? _otherLastActive;
@@ -190,10 +189,10 @@ class _ChatPageState extends State<ChatPage> {
       replyToSender: replyToSender,
     ).then((realId) {
       if (!mounted) return;
-      if (realId != null) {
+      if (realId != null && realId.isNotEmpty) {
         setState(() {
           _confirmedSends.add(tempId);
-          // Update optimistic message with real ID
+          _tempToRealId[tempId] = realId;
           _optimisticMsgs[tempId] = optimistic.copyWith(
             isDelivered: true,
           );
@@ -240,9 +239,10 @@ class _ChatPageState extends State<ChatPage> {
       replyToSender: failedMsg.replyToSender,
     ).then((realId) {
       if (!mounted) return;
-      if (realId != null) {
+      if (realId != null && realId.isNotEmpty) {
         setState(() {
           _confirmedSends.add(tempId);
+          _tempToRealId[tempId] = realId;
           _optimisticMsgs[tempId] = optimistic.copyWith(isDelivered: true);
         });
       } else {
@@ -268,21 +268,22 @@ class _ChatPageState extends State<ChatPage> {
   /// Remove optimistic messages that are now confirmed by Firestore.
   void _removeConfirmedOptimistics() {
     _optimisticMsgs.removeWhere((tempId, msg) {
-      if (_confirmedSends.contains(tempId)) {
-        // Check if a Firestore message exists with matching content
-        final matched = _messages.any((m) =>
-            m.senderId == _uid &&
-            m.content == msg.content &&
-            (m.timestamp.difference(msg.timestamp).inSeconds.abs() < 30));
-        if (matched) return true;
+      if (!_confirmedSends.contains(tempId)) return false;
+      final realId = _tempToRealId[tempId];
+      if (realId != null) {
+        if (_messages.any((m) => m.id == realId)) return true;
       }
+      final matched = _messages.any((m) =>
+          m.senderId == _uid &&
+          m.content == msg.content &&
+          (m.timestamp.difference(msg.timestamp).inSeconds.abs() < 60));
+      if (matched) return true;
       return false;
     });
-    // Also remove stale failed sends older than 30s
     _failedSends.removeWhere((id) {
       final msg = _optimisticMsgs[id];
       return msg != null &&
-          DateTime.now().difference(msg.timestamp).inSeconds > 30;
+          DateTime.now().difference(msg.timestamp).inSeconds > 60;
     });
   }
 

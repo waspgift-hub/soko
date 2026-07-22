@@ -20,15 +20,22 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
   final AnalyticsService _analytics = AnalyticsService();
   SellerAnalytics? _data;
   bool _loading = true;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
     try {
       final uid = widget.sellerId.isNotEmpty
           ? widget.sellerId
@@ -41,7 +48,7 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
           _loading = false;
         });
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && _loading) setState(() => _loading = false);
     }
   }
 
@@ -66,7 +73,12 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white, cs.surface],
+            colors: [
+              Theme.of(context).brightness == Brightness.dark
+                  ? Colors.black
+                  : Colors.white,
+              cs.surface,
+            ],
           ),
         ),
         child: _loading
@@ -102,8 +114,18 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
 
   Widget _buildSummaryRow(ColorScheme cs, NumberFormat nf) {
     final items = [
-      (context.tr('products'), '${_data!.totalProducts}', Icons.inventory_2, cs.primary),
-      (context.tr('reviews'), '${_data!.totalProductViews}', Icons.visibility, cs.secondary),
+      (
+        context.tr('products'),
+        '${_data!.totalProducts}',
+        Icons.inventory_2,
+        cs.primary,
+      ),
+      (
+        context.tr('reviews'),
+        '${_data!.totalProductViews}',
+        Icons.visibility,
+        cs.secondary,
+      ),
       (
         context.tr('sales'),
         '${_data!.successfulOrders}',
@@ -298,7 +320,12 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
           const SizedBox(height: 16),
           Row(
             children: [
-              _statPill(cs, '${_data!.totalOrders}', context.tr('total'), cs.onSurface),
+              _statPill(
+                cs,
+                '${_data!.totalOrders}',
+                context.tr('total'),
+                cs.onSurface,
+              ),
               const SizedBox(width: 8),
               _statPill(
                 cs,

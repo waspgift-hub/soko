@@ -124,25 +124,25 @@ class _SearchScreenState extends State<SearchScreen> {
       _liveResults = [];
     });
 
+    List<Product>? products;
+    List<UserProfile>? users;
     try {
-      final results = await Future.wait([
-        _productService.searchProductsOnce(query),
-        _userService.searchUsers(query),
-      ]);
-      if (mounted) {
-        setState(() {
-          _lastResults = results[0] as List<Product>;
-          _userResults = results[1] as List<UserProfile>;
-          _loading = false;
-        });
-      }
+      products = await _productService.searchProductsOnce(query);
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = true;
-          _loading = false;
-        });
-      }
+      debugPrint('searchProductsOnce error: $e');
+    }
+    try {
+      users = await _userService.searchUsers(query);
+    } catch (e) {
+      debugPrint('searchUsers error: $e');
+    }
+    if (mounted) {
+      setState(() {
+        _lastResults = products ?? [];
+        _userResults = users ?? [];
+        _loading = false;
+        _error = products == null && users == null;
+      });
     }
   }
 
