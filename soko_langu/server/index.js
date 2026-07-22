@@ -1299,27 +1299,75 @@ app.post('/api/escrow/release', async (req, res) => {
       metadata: { buyerId: userId, productName, pendingBefore, pendingAfter: pendingBefore - sellerReceives },
     });
 
-    // Notify seller
-    await db.collection('notifications').add({
-      userId: sellerId,
-      title: 'Escrow Imefunguliwa!',
-      body: `Mnunuzi amethibitisha upokeaji wa ${productName}. TZS ${sellerReceives.toLocaleString()} zimewekwa kwenye salio lako.`,
-      isRead: false,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-    // Send FCM to seller
+    // Auto payout if seller enabled it
+    let autoPaidOut = false;
     try {
-      const sellerUser = await db.collection('users').doc(sellerId).get();
-      const sellerToken = sellerUser.data()?.fcmToken;
-      if (sellerToken) {
-        await sendFcmToToken(buildFcmMessage({
-          token: sellerToken,
-          title: 'Escrow Imefunguliwa!',
-          body: `${productName} — TZS ${sellerReceives.toLocaleString()} zimewekwa salio lako.`,
-          data: { type: 'escrow_release', transactionId: orderId },
-        }), sellerId);
+      const sellerData = sellerDoc.data();
+      if (sellerData?.autoPayout === true) {
+        const sellerPhone = sellerData?.phone;
+        if (sellerPhone && sellerReceives > PAYOUT_FEE) {
+          const netPayout = sellerReceives - PAYOUT_FEE;
+          const payoutRef = generatePayoutReference('ap');
+          await db.collection('users').doc(sellerId).update({
+            sellerBalance: admin.firestore.FieldValue.increment(-sellerReceives),
+          });
+          const mRef = await mongikePayout({
+            amount: netPayout,
+            recipientPhone: sellerPhone,
+            recipientName: sellerData?.name || sellerData?.displayName || '',
+            narration: `Soko Vibe auto payout: ${productName}`,
+            externalReference: payoutRef,
+          });
+          await db.collection('payouts').doc(payoutRef).set({
+            userId: sellerId, userPhone: sellerPhone,
+            type: 'auto_payout', amount: sellerReceives, fee: PAYOUT_FEE,
+            netAmount: netPayout, mongikeReference: mRef.id || '',
+            status: 'completed', transactionId: orderId,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          autoPaidOut = true;
+        }
       }
     } catch (_) {}
+
+    // Notify seller
+    if (autoPaidOut) {
+      await db.collection('notifications').add({
+        userId: sellerId,
+        title: 'Pesa Zimetumwa Moja kwa Moja!',
+        body: `${productName} — TZS ${(sellerReceives - PAYOUT_FEE).toLocaleString()} zimetumwa kwa simu yako. Fee ya TZS ${PAYOUT_FEE.toLocaleString()} imekatwa.`,
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      try {
+        const st = (sellerDoc.data())?.fcmToken;
+        if (st) sendFcmToToken(buildFcmMessage({
+          token: st, title: 'Pesa Zimetumwa Moja kwa Moja!',
+          body: `TZS ${(sellerReceives - PAYOUT_FEE).toLocaleString()} zimetumwa kwa simu yako (fee TZS ${PAYOUT_FEE.toLocaleString()}).`,
+          data: { type: 'auto_payout', transactionId: orderId },
+        }), sellerId).catch(() => {});
+      } catch (_) {}
+    } else {
+      await db.collection('notifications').add({
+        userId: sellerId,
+        title: 'Escrow Imefunguliwa!',
+        body: `Mnunuzi amethibitisha upokeaji wa ${productName}. TZS ${sellerReceives.toLocaleString()} zimewekwa kwenye salio lako.`,
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      try {
+        const sellerUser = await db.collection('users').doc(sellerId).get();
+        const sellerToken = sellerUser.data()?.fcmToken;
+        if (sellerToken) {
+          await sendFcmToToken(buildFcmMessage({
+            token: sellerToken,
+            title: 'Escrow Imefunguliwa!',
+            body: `${productName} — TZS ${sellerReceives.toLocaleString()} zimewekwa salio lako.`,
+            data: { type: 'escrow_release', transactionId: orderId },
+          }), sellerId);
+        }
+      } catch (_) {}
+    }
 
     // Notify buyer
     await db.collection('notifications').add({
@@ -1343,15 +1391,25 @@ app.post('/api/escrow/release', async (req, res) => {
       }
     } catch (_) {}
 
-    // SMS seller about escrow release
+    // SMS seller about escrow release / auto payout
     try {
-      const sellerMsg = `Soko Vibe: Mteja amethibitisha kupokea mzigo #${orderId}. TZS ${sellerReceives.toLocaleString()} zimetolewa Escrow na kuwekwa kwenye pochi yako.`;
       const sellerUser = await db.collection('users').doc(sellerId).get();
       const sellerPhone = sellerUser.data()?.phone;
-      if (sellerPhone) sendSms(sellerPhone, sellerMsg);
+      if (sellerPhone) {
+        const sellerMsg = autoPaidOut
+          ? `Soko Vibe: TZS ${(sellerReceives - PAYOUT_FEE).toLocaleString()} zimetumwa kwa simu yako kwa mauzo ya ${productName} (fee TZS ${PAYOUT_FEE.toLocaleString()}).`
+          : `Soko Vibe: Mteja amethibitisha kupokea mzigo #${orderId}. TZS ${sellerReceives.toLocaleString()} zimetolewa Escrow na kuwekwa kwenye pochi yako.`;
+        sendSms(sellerPhone, sellerMsg);
+      }
     } catch (_) {}
 
-    res.json({ success: true, message: 'Escrow released. Seller balance credited.' });
+    res.json({
+      success: true,
+      message: autoPaidOut
+        ? `Auto payout: TZS ${(sellerReceives - PAYOUT_FEE).toLocaleString()} sent to seller phone`
+        : 'Escrow released. Seller balance credited.',
+      autoPaidOut,
+    });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
   }
