@@ -13,6 +13,7 @@ import '../../app/routes.dart';
 import '../../utils/network_error.dart';
 import '../../theme/app_colors.dart';
 import '../chat/chat_navigation.dart';
+import '../../widgets/payment_banner.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -89,7 +90,32 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
         return;
       }
 
-      if (mounted) _showSuccess(context.tr('check_phone_enter_pin'));
+      if (mounted) {
+        _showSuccess(context.tr('check_phone_enter_pin'));
+        RealtimePaymentBanner.show(
+          context: context,
+          orderId: result['order_id'] as String,
+          successStatuses: ['escrow_hold', 'paid_escrow_held'],
+          processingTitle: context.tr('processing_payment'),
+          successTitle: context.tr('payment_successful'),
+          failedTitle: context.tr('payment_failed'),
+          onSuccess: () {
+            if (mounted) {
+              setState(() {});
+            }
+          },
+          onError: (msg) {
+            if (mounted) {
+              PaymentBanner.show(
+                context: context,
+                type: PaymentBannerType.failed,
+                title: context.tr('payment_failed'),
+                subtitle: msg,
+              );
+            }
+          },
+        );
+      }
     } catch (e) {
       _showError(translateError(e));
     }

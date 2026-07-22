@@ -138,6 +138,15 @@ service cloud.firestore {
       }
     }
 
+    // ─── CHAT ROOMS ─────────────────────────────────────────
+    match /chat_rooms/{roomId} {
+      allow read, write: if isSignedIn();
+
+      match /messages/{msgId} {
+        allow read, write: if isSignedIn();
+      }
+    }
+
     // ─── FLASH SALES ────────────────────────────────────────
     match /flash_sales/{saleId} {
       allow read: if true;

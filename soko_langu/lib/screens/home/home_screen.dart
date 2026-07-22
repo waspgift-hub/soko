@@ -48,7 +48,7 @@ class _HomeScreenState extends State<HomeScreen>
   String _locationFilter = '';
 
   List<String> _brands = [
-    'Nike', 'Adidas', 'Samsung', 'Apple', 'Sony', 'LG', 'Toyota', 'Hp', 'Dell', 'Other',
+    'Nike', 'Adidas', 'Samsung', 'Apple', 'Sony', 'LG', 'Toyota', 'Hp', 'Dell', 'Others',
   ];
 
   void _showCurrencyPicker(BuildContext context) {
