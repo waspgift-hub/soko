@@ -535,7 +535,14 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
 
       if (result == null || result['order_id'] == null) {
         final errMsg = result?['error'] as String? ?? context.tr('payment_initiation_failed');
-        if (mounted) _showError(errMsg);
+        if (mounted) {
+          PaymentBanner.show(
+            context: context,
+            type: PaymentBannerType.failed,
+            title: context.tr('payment_failed'),
+            subtitle: errMsg,
+          );
+        }
         return;
       }
 
@@ -550,11 +557,17 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
           successTitle: context.tr('payment_successful'),
           failedTitle: context.tr('payment_failed'),
           onSuccess: () {
-            if (mounted) _onPaymentSuccess();
+            if (mounted) {
+              PaymentBanner.show(
+                context: context,
+                type: PaymentBannerType.success,
+                title: context.tr('payment_successful'),
+              );
+              _onPaymentSuccess();
+            }
           },
           onError: (msg) {
             if (mounted) {
-              _showError(msg);
               PaymentBanner.show(
                 context: context,
                 type: PaymentBannerType.failed,
@@ -566,7 +579,14 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
         );
       }
     } catch (e) {
-      if (mounted) _showError(translateError(e));
+      if (mounted) {
+        PaymentBanner.show(
+          context: context,
+          type: PaymentBannerType.failed,
+          title: context.tr('payment_failed'),
+          subtitle: translateError(e),
+        );
+      }
     } finally {
       if (mounted) setState(() => _processing = false);
     }

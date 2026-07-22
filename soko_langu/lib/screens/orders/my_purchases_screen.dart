@@ -57,8 +57,14 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     try {
       final existingStatus = d['status'] as String? ?? '';
       if (existingStatus == 'completed' || existingStatus == 'delivered' || existingStatus == 'delivery_confirmed') {
-        _showSuccess(context.tr('order_already_paid'));
-        setState(() => _payingTxId = null);
+        if (mounted) {
+          PaymentBanner.show(
+            context: context,
+            type: PaymentBannerType.success,
+            title: context.tr('order_already_paid'),
+          );
+        }
+        if (mounted) setState(() => _payingTxId = null);
         return;
       }
 
@@ -68,14 +74,6 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
       final productId = d['productId'] as String? ?? '';
       final sellerId = d['sellerId'] as String? ?? '';
       final sellerName = d['sellerName'] as String? ?? '';
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.tr('preparing_payment_wait')),
-          backgroundColor: Theme.of(context).colorScheme.primary,
-          duration: const Duration(seconds: 2),
-        ),
-      );
 
       final result = await MongikeService.initiateMarketplacePayment(
         productPrice: productPrice, productName: productName,
@@ -88,13 +86,19 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
 
       if (result['order_id'] == null) {
         final errMsg = result['error'] as String? ?? context.tr('payment_initiation_failed');
-        _showError(errMsg);
-        setState(() => _payingTxId = null);
+        if (mounted) {
+          PaymentBanner.show(
+            context: context,
+            type: PaymentBannerType.failed,
+            title: context.tr('payment_failed'),
+            subtitle: errMsg,
+          );
+        }
+        if (mounted) setState(() => _payingTxId = null);
         return;
       }
 
       if (mounted) {
-        _showSuccess(context.tr('check_phone_enter_pin'));
         RealtimePaymentBanner.show(
           context: context,
           orderId: result['order_id'] as String,
@@ -104,6 +108,11 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
           failedTitle: context.tr('payment_failed'),
           onSuccess: () {
             if (mounted) {
+              PaymentBanner.show(
+                context: context,
+                type: PaymentBannerType.success,
+                title: context.tr('payment_successful'),
+              );
               setState(() {});
             }
           },
@@ -120,9 +129,16 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
         );
       }
     } catch (e) {
-      _showError(translateError(e));
+      if (mounted) {
+        PaymentBanner.show(
+          context: context,
+          type: PaymentBannerType.failed,
+          title: context.tr('payment_failed'),
+          subtitle: translateError(e),
+        );
+      }
     }
-    setState(() => _payingTxId = null);
+    if (mounted) setState(() => _payingTxId = null);
   }
 
   Future<void> _confirmDelivery(String txId) async {

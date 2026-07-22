@@ -1,38 +1,16 @@
-import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../theme/app_dimens.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import '../../services/receipt_pdf_service.dart';
 import '../../widgets/order_timeline.dart';
-import '../../widgets/glass_container.dart';
 import '../../models/transaction_model.dart';
 import '../../extensions/context_tr.dart';
-import 'package:go_router/go_router.dart';
 import '../../widgets/google_loading.dart';
 
 class ReceiptScreen extends StatelessWidget {
   final String orderId;
   const ReceiptScreen({super.key, required this.orderId});
-
-  String _escrowLabel(String status, BuildContext context) {
-    switch (status) {
-      case 'paid_escrow_held':
-      case 'escrow_hold':
-        return context.tr('secured_in_escrow');
-      case 'dispatched':
-        return context.tr('dispatched_label');
-      case 'delivered':
-      case 'delivery_confirmed':
-      case 'completed':
-        return context.tr('delivered_and_completed');
-      case 'failed':
-        return context.tr('failed');
-      case 'refunded':
-        return context.tr('refunded');
-      default:
-        return context.tr('pending');
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -82,12 +60,16 @@ class ReceiptScreen extends StatelessWidget {
             final dispatchProof = d['dispatchProof'] as Map<String, dynamic>?;
             final createdAt = d['createdAt'] is Timestamp ? (d['createdAt'] as Timestamp).toDate() : DateTime.now();
             final txStatus = MarketplaceTransaction.parseStatus(status);
+            final productImage = d['productImage'] as String? ?? '';
+            final paymentMethod = d['paymentMethod'] as String? ?? 'Mongike';
+            final transactionReference = d['transactionReference'] as String? ?? d['transactionId'] as String?;
 
             return SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(16, kToolbarHeight + 20, 16, 32),
               child: _build3DGlassCard(context, cs, d, status, productName, price, shippingCost, mongikeFee,
                   totalAmount, buyerName, sellerName, buyerPhone, sellerPhone,
-                  deliveryAddress, dispatchProof, createdAt, txStatus),
+                  deliveryAddress, dispatchProof, createdAt, txStatus,
+                  productImage, paymentMethod, transactionReference),
             );
           },
         ),
@@ -113,6 +95,9 @@ class ReceiptScreen extends StatelessWidget {
     Map<String, dynamic>? dispatchProof,
     DateTime createdAt,
     TransactionStatus txStatus,
+    String productImage,
+    String paymentMethod,
+    String? transactionReference,
   ) {
     return Container(
       decoration: BoxDecoration(
@@ -143,58 +128,12 @@ class ReceiptScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Header
-                  Center(
-                    child: Column(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(18),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [cs.primary.withValues(alpha: 0.15), cs.primary.withValues(alpha: 0.05)],
-                            ),
-                            shape: BoxShape.circle,
-                            border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
-                          ),
-                          child: Icon(Icons.receipt_long, color: cs.primary, size: 36),
-                        ),
-                        const SizedBox(height: 14),
-                        Text(context.tr('receipt_title'), style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: cs.onSurface, letterSpacing: 1)),
-                        const SizedBox(height: 6),
-                        Text('#$orderId', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-                        const SizedBox(height: 2),
-                        Text('${context.tr('placed_label')}${createdAt.day}/${createdAt.month}/${createdAt.year} ${createdAt.hour}:${createdAt.minute.toString().padLeft(2, '0')}',
-                          style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
-                      ],
-                    ),
-                  ),
+                  _buildHeader(context, cs, orderId, createdAt),
                   const SizedBox(height: 24),
-                  // Status badge
-                  Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: _statusColor(status, cs).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: _statusColor(status, cs).withValues(alpha: 0.3)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(_statusIcon(status), size: 16, color: _statusColor(status, cs)),
-                          const SizedBox(width: 8),
-                          Text(_statusLabel(status, context), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _statusColor(status, cs))),
-                        ],
-                      ),
-                    ),
-                  ),
+                  _buildStatusBadge(context, cs, status),
                   const SizedBox(height: 24),
-                  // Divider
-                  Container(height: 1, decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: [cs.primary.withValues(alpha: 0), cs.primary.withValues(alpha: 0.3), cs.primary.withValues(alpha: 0)]),
-                  )),
+                  _divider(cs),
                   const SizedBox(height: 20),
-                  // Info sections
                   _infoSection(cs, context.tr('order_details'), [
                     _infoRow(cs, context.tr('product'), productName),
                     _infoRow(cs, context.tr('buyer_label'), buyerName),
@@ -213,16 +152,13 @@ class ReceiptScreen extends StatelessWidget {
                     ]),
                     const SizedBox(height: 16),
                   ],
-                  // Payment breakdown
                   _infoSection(cs, context.tr('payment_breakdown'), [
                     _infoRow(cs, context.tr('product_price'), context.formatPrice(price)),
                     if (shippingCost > 0) _infoRow(cs, context.tr('shipping_cost'), context.formatPrice(shippingCost), valueColor: cs.secondary),
                     _infoRow(cs, context.tr('mongike_fee_label'), context.formatPrice(mongikeFee), valueColor: cs.tertiary),
                   ]),
                   const SizedBox(height: 8),
-                  Container(height: 1, decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: [cs.primary.withValues(alpha: 0), cs.primary.withValues(alpha: 0.3), cs.primary.withValues(alpha: 0)]),
-                  )),
+                  _divider(cs),
                   const SizedBox(height: 8),
                   Row(
                     children: [
@@ -236,7 +172,12 @@ class ReceiptScreen extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 24),
-                  // Timeline
+                  _buildQrCode(context, cs),
+                  const SizedBox(height: 20),
+                  _buildDownloadButton(context, cs, productName, price, shippingCost, mongikeFee,
+                      totalAmount, buyerName, sellerName, buyerPhone, sellerPhone,
+                      deliveryAddress, createdAt, status, productImage, paymentMethod, transactionReference),
+                  const SizedBox(height: 24),
                   Text(context.tr('order_status'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: cs.onSurface)),
                   const SizedBox(height: 12),
                   OrderTimeline(
@@ -262,26 +203,151 @@ class ReceiptScreen extends StatelessWidget {
                     plateNumber: d['plateNumber'] as String?,
                   ),
                   const SizedBox(height: 24),
-                  // Close button
-                  Center(
-                    child: GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
-                        decoration: BoxDecoration(
-                          color: cs.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(30),
-                          border: Border.all(color: cs.primary.withValues(alpha: 0.25)),
-                        ),
-                        child: Text(context.tr('close'), style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600, fontSize: 15)),
-                      ),
-                    ),
-                  ),
+                  _buildCloseButton(context, cs),
                 ],
               ),
             ),
           ),
         ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context, ColorScheme cs, String orderId, DateTime createdAt) {
+    return Center(
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [cs.primary.withValues(alpha: 0.15), cs.primary.withValues(alpha: 0.05)],
+              ),
+              shape: BoxShape.circle,
+              border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
+            ),
+            child: Icon(Icons.receipt_long, color: cs.primary, size: 36),
+          ),
+          const SizedBox(height: 14),
+          Text(context.tr('receipt_title'), style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: cs.onSurface, letterSpacing: 1)),
+          const SizedBox(height: 6),
+          Text('#$orderId', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+          const SizedBox(height: 2),
+          Text('${context.tr('placed_label')}${createdAt.day}/${createdAt.month}/${createdAt.year} ${createdAt.hour}:${createdAt.minute.toString().padLeft(2, '0')}',
+            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge(BuildContext context, ColorScheme cs, String status) {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        decoration: BoxDecoration(
+          color: _statusColor(status, cs).withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: _statusColor(status, cs).withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(_statusIcon(status), size: 16, color: _statusColor(status, cs)),
+            const SizedBox(width: 8),
+            Text(_statusLabel(status, context), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _statusColor(status, cs))),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQrCode(BuildContext context, ColorScheme cs) {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.2)),
+        ),
+        child: Column(
+          children: [
+            QrImageView(
+              data: orderId,
+              version: QrVersions.auto,
+              size: 120,
+              eyeStyle: QrEyeStyle(eyeShape: QrEyeShape.square, color: cs.primary),
+              dataModuleStyle: QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: cs.onSurface),
+            ),
+            const SizedBox(height: 8),
+            Text(context.tr('scan_to_verify'),
+                style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDownloadButton(
+    BuildContext context,
+    ColorScheme cs,
+    String productName,
+    double price,
+    double shippingCost,
+    double mongikeFee,
+    double totalAmount,
+    String buyerName,
+    String sellerName,
+    String buyerPhone,
+    String sellerPhone,
+    Map<String, dynamic>? deliveryAddress,
+    DateTime createdAt,
+    String status,
+    String productImage,
+    String paymentMethod,
+    String? transactionReference,
+  ) {
+    return Center(
+      child: _PdfDownloadButton(
+        orderId: orderId,
+        productName: productName,
+        productImageUrl: productImage,
+        price: price,
+        shippingCost: shippingCost,
+        mongikeFee: mongikeFee,
+        totalAmount: totalAmount,
+        buyerName: buyerName,
+        sellerName: sellerName,
+        buyerPhone: buyerPhone,
+        sellerPhone: sellerPhone,
+        deliveryAddress: deliveryAddress,
+        createdAt: createdAt,
+        status: status,
+        paymentMethod: paymentMethod,
+        transactionReference: transactionReference,
+      ),
+    );
+  }
+
+  Widget _divider(ColorScheme cs) {
+    return Container(height: 1, decoration: BoxDecoration(
+      gradient: LinearGradient(colors: [cs.primary.withValues(alpha: 0), cs.primary.withValues(alpha: 0.3), cs.primary.withValues(alpha: 0)]),
+    ));
+  }
+
+  Widget _buildCloseButton(BuildContext context, ColorScheme cs) {
+    return Center(
+      child: GestureDetector(
+        onTap: () => Navigator.pop(context),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+          decoration: BoxDecoration(
+            color: cs.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(color: cs.primary.withValues(alpha: 0.25)),
+          ),
+          child: Text(context.tr('close'), style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600, fontSize: 15)),
+        ),
+      ),
     );
   }
 
@@ -373,5 +439,106 @@ class ReceiptScreen extends StatelessWidget {
       default:
         return context.tr('pending');
     }
+  }
+}
+
+class _PdfDownloadButton extends StatefulWidget {
+  final String orderId;
+  final String productName;
+  final String productImageUrl;
+  final double price;
+  final double shippingCost;
+  final double mongikeFee;
+  final double totalAmount;
+  final String buyerName;
+  final String sellerName;
+  final String buyerPhone;
+  final String sellerPhone;
+  final Map<String, dynamic>? deliveryAddress;
+  final DateTime createdAt;
+  final String status;
+  final String paymentMethod;
+  final String? transactionReference;
+
+  const _PdfDownloadButton({
+    required this.orderId,
+    required this.productName,
+    required this.productImageUrl,
+    required this.price,
+    required this.shippingCost,
+    required this.mongikeFee,
+    required this.totalAmount,
+    required this.buyerName,
+    required this.sellerName,
+    required this.buyerPhone,
+    required this.sellerPhone,
+    this.deliveryAddress,
+    required this.createdAt,
+    required this.status,
+    required this.paymentMethod,
+    this.transactionReference,
+  });
+
+  @override
+  State<_PdfDownloadButton> createState() => _PdfDownloadButtonState();
+}
+
+class _PdfDownloadButtonState extends State<_PdfDownloadButton> {
+  bool _isGenerating = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: _isGenerating ? null : _onDownload,
+        icon: _isGenerating
+            ? SizedBox(
+                width: 16, height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
+              )
+            : const Icon(Icons.download_rounded, size: 18),
+        label: Text(_isGenerating ? context.tr('generating_pdf') : context.tr('download_pdf_receipt')),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: cs.primary,
+          side: BorderSide(color: cs.primary.withValues(alpha: 0.3)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _onDownload() async {
+    setState(() => _isGenerating = true);
+    try {
+      final pdfBytes = await ReceiptPdfService.generate(
+        orderId: widget.orderId,
+        productName: widget.productName,
+        productImageUrl: widget.productImageUrl,
+        price: widget.price,
+        shippingCost: widget.shippingCost,
+        mongikeFee: widget.mongikeFee,
+        totalAmount: widget.totalAmount,
+        buyerName: widget.buyerName,
+        sellerName: widget.sellerName,
+        buyerPhone: widget.buyerPhone,
+        sellerPhone: widget.sellerPhone,
+        deliveryAddress: widget.deliveryAddress,
+        createdAt: widget.createdAt,
+        status: widget.status,
+        paymentMethod: widget.paymentMethod,
+        transactionReference: widget.transactionReference,
+      );
+      await ReceiptPdfService.saveToDevice(pdfBytes: pdfBytes, orderId: widget.orderId);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to generate PDF: $e')),
+        );
+      }
+    }
+    if (mounted) setState(() => _isGenerating = false);
   }
 }

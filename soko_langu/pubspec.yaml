@@ -73,6 +73,8 @@ dependencies:
   hive_flutter: ^1.1.0
   crypto: ^3.0.6
   qr_flutter: ^4.1.0
+  pdf: ^3.11.1
+  printing: ^5.13.4
   gal: ^2.3.2
   video_player: ^2.9.2
 
