@@ -1477,7 +1477,7 @@ app.post('/api/mongike/webhook', verifyWebhook, async (req, res) => {
         // ── Move to escrow hold ──
         const productPrice = tx.productPrice || 0;
         const platformFee = Math.round(productPrice * PLATFORM_COMMISSION_PERCENT);
-        const processingFee = 0; // Flat 180 TZS absorbed by platform
+        const processingFee = COLLECTION_FEE;
         const sellerReceives = productPrice;
         const deliveryType = tx.deliveryType || 'local';
         const autoReleaseDays = tx.autoReleaseDays || (deliveryType === 'regional' ? ESCROW_REGIONAL_DAYS : ESCROW_LOCAL_DAYS);
@@ -1487,7 +1487,7 @@ app.post('/api/mongike/webhook', verifyWebhook, async (req, res) => {
           processingFee,
           platformFee,
           sokoLanguCommission: platformFee,
-          totalAmount: productPrice + platformFee,
+          totalAmount: productPrice + platformFee + processingFee,
           sellerReceives,
           status: 'escrow_hold',
           paymentMethod: 'Mongike',
@@ -2518,9 +2518,9 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
     // Use existing transaction ID if provided, otherwise generate new one
     const order_id = existingTransactionId || `p${Date.now().toString(36)}${buyerId ? buyerId.substring(0, 4) : 'x'}`;
 
-    // Include shipping + platform commission in total sent to Mongike
+    // Include shipping + platform commission + transaction fee in total sent to Mongike
     const commission = Math.round(Math.round(productPrice) * PLATFORM_COMMISSION_PERCENT);
-    const totalAmount = Math.round(productPrice) + Math.round(shippingCost || 0) + commission;
+    const totalAmount = Math.round(productPrice) + Math.round(shippingCost || 0) + commission + COLLECTION_FEE;
     const callbackUrl = `${req.protocol}://${req.get('host')}/api/mongike/webhook`;
 
     const result = await mongikeCollect({
@@ -2550,6 +2550,7 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
         productPrice: Math.round(productPrice),
         shippingCost: Math.round(shippingCost || 0),
         platformFee: commission,
+        processingFee: COLLECTION_FEE,
         totalAmount,
         status: 'pending',
         paymentMethod: 'Mongike',
