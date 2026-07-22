@@ -100,13 +100,22 @@ class _CommentSectionState extends State<CommentSection> {
                               final text = replyController.text.trim();
                               if (text.isEmpty) return;
                               setSheetState(() => sending = true);
-                              await _commentService.addReply(
-                                productId: widget.productId,
-                                commentId: commentId,
-                                text: text,
-                              );
-                              replyController.clear();
-                              if (ctx.mounted) Navigator.pop(ctx);
+                              try {
+                                await _commentService.addReply(
+                                  productId: widget.productId,
+                                  commentId: commentId,
+                                  text: text,
+                                );
+                                replyController.clear();
+                                if (ctx.mounted) Navigator.pop(ctx);
+                              } catch (e) {
+                                setSheetState(() => sending = false);
+                                if (ctx.mounted) {
+                                  ScaffoldMessenger.of(ctx).showSnackBar(
+                                    SnackBar(content: Text('${context.tr('something_wrong')}: $e')),
+                                  );
+                                }
+                              }
                             },
                           ),
                   ],
@@ -487,7 +496,7 @@ class _CommentTile extends StatelessWidget {
                   Row(
                     children: [
                       Expanded(
-                        child: TextField(
+                        child:                     TextField(
                           controller: replyController,
                           maxLines: 2,
                           decoration: InputDecoration(
@@ -508,12 +517,20 @@ class _CommentTile extends StatelessWidget {
                         onPressed: () async {
                           final text = replyController.text.trim();
                           if (text.isEmpty) return;
-                          await CommentService().addReply(
-                            productId: productId,
-                            commentId: comment.id,
-                            text: text,
-                          );
-                          replyController.clear();
+                          try {
+                            await CommentService().addReply(
+                              productId: productId,
+                              commentId: comment.id,
+                              text: text,
+                            );
+                            replyController.clear();
+                          } catch (e) {
+                            if (ctx.mounted) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
+                                SnackBar(content: Text('${context.tr('something_wrong')}: $e')),
+                              );
+                            }
+                          }
                         },
                       ),
                     ],
