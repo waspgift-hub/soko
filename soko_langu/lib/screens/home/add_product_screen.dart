@@ -209,7 +209,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
           isWholesale: _isWholesale,
           variants: variantData.isNotEmpty ? variantData : null,
           brand: _brandController.text.isNotEmpty
-              ? _brandController.text
+              ? _normalizeBrand(_brandController.text)
               : null,
           condition: _selectedCondition,
           location: _locationController.text.isNotEmpty
@@ -234,7 +234,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
           isWholesale: _isWholesale,
           variants: variantData.isNotEmpty ? variantData : null,
           brand: _brandController.text.isNotEmpty
-              ? _brandController.text
+              ? _normalizeBrand(_brandController.text)
               : null,
           condition: _selectedCondition,
         );
@@ -277,6 +277,15 @@ class _AddProductScreenState extends State<AddProductScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  String _normalizeBrand(String brand) {
+    final trimmed = brand.trim();
+    if (trimmed.isEmpty) return '';
+    return trimmed.split(' ').map((word) {
+      if (word.isEmpty) return '';
+      return word[0].toUpperCase() + word.substring(1).toLowerCase();
+    }).join(' ');
   }
 
   @override
