@@ -347,20 +347,30 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                       Expanded(
                         child: GestureDetector(
-                          onTap: () => context.push(AppRoutes.privacyPolicy),
+                          onTap: () {},
                           child: RichText(
                             text: TextSpan(
                               style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                               children: [
-                                TextSpan(text: context.tr('accept_terms_part1')),
-                                TextSpan(
-                                  text: context.tr('terms_of_service'),
-                                  style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600),
+                                TextSpan(text: 'I ACCEPT THE '),
+                                WidgetSpan(
+                                  child: GestureDetector(
+                                    onTap: () => context.push(AppRoutes.privacyPolicy),
+                                    child: Text(
+                                      'TERMS OF SERVICE',
+                                      style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
                                 ),
-                                TextSpan(text: ' ${context.tr('accept_terms_and')} '),
-                                TextSpan(
-                                  text: context.tr('privacy_policy'),
-                                  style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600),
+                                TextSpan(text: ' AND '),
+                                WidgetSpan(
+                                  child: GestureDetector(
+                                    onTap: () => context.push(AppRoutes.privacyPolicy),
+                                    child: Text(
+                                      'PRIVACY POLICY',
+                                      style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
