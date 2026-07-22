@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import '../../services/api_config.dart';
 import '../../services/mongike_service.dart';
 import '../../services/sms_notification_service.dart';
+import '../../services/rating_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../utils/network_error.dart';
@@ -141,6 +142,8 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
         if (txDoc.exists) {
           final tx = txDoc.data()!;
           final sellerId = tx['sellerId'] as String? ?? '';
+          final productId = tx['productId'] as String? ?? '';
+          final productName = tx['productName'] as String? ?? '';
           final grandTotal = ((tx['totalAmount'] as num?)?.toDouble() ?? 0);
           if (sellerId.isNotEmpty) {
             final sellerDoc = await FirebaseFirestore.instance.collection('users').doc(sellerId).get();
@@ -148,6 +151,9 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
             if (sellerPhone != null && sellerPhone.isNotEmpty) {
               SmsNotificationService.notifyEscrowReleased(sellerPhone: sellerPhone, grandTotal: grandTotal.toStringAsFixed(0), orderId: txId);
             }
+          }
+          if (mounted && sellerId.isNotEmpty && productId.isNotEmpty) {
+            _showSellerRatingDialog(txId, sellerId, productId, productName);
           }
         }
       } else {
@@ -157,6 +163,75 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
       _showError('${context.tr('confirm_failed_msg')}: $e');
     }
     setState(() => _releasingTxId = null);
+  }
+
+  void _showSellerRatingDialog(String txId, String sellerId, String productId, String productName) {
+    double rating = 5;
+    final commentCtrl = TextEditingController();
+    final user = FirebaseAuth.instance.currentUser;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text(context.tr('rate_seller')),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(context.tr('rate_seller_desc').replaceAll('{0}', productName)),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(5, (i) {
+                    final star = i + 1;
+                    return IconButton(
+                      icon: Icon(
+                        star <= rating ? Icons.star : Icons.star_border,
+                        color: Colors.amber,
+                        size: 36,
+                      ),
+                      onPressed: () => setDialogState(() => rating = star.toDouble()),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: commentCtrl,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    hintText: context.tr('review_hint'),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(context.tr('skip')),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await RatingService().submitReview(
+                  productId: productId,
+                  sellerId: sellerId,
+                  userId: user?.uid ?? '',
+                  userName: user?.displayName ?? user?.email ?? 'Anonymous',
+                  userImage: user?.photoURL,
+                  rating: rating,
+                  comment: commentCtrl.text.trim(),
+                );
+                if (mounted) _showSuccess(context.tr('rating_submitted'));
+              },
+              child: Text(context.tr('submit')),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _raiseDispute(String txId) async {
