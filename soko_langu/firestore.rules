@@ -21,17 +21,6 @@ service cloud.firestore {
       );
     }
 
-    function kycApproved() {
-      return isSignedIn() && (
-        request.auth.token.email == 'admin@soko-langu.com' ||
-        request.auth.token.email == 'admin@soko-vibe.com' ||
-        (
-          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.kyc.approved == true
-        )
-      );
-    }
-
     function notSuspended() {
       return isSignedIn() && (
         !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||

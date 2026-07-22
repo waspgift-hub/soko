@@ -56,29 +56,32 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [brightness == Brightness.dark ? Colors.black : Colors.white, cs.surface],
+            colors: [
+              brightness == Brightness.dark ? Colors.black : Colors.white,
+              cs.surface,
+            ],
           ),
         ),
         child: SafeArea(
           top: true,
           child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-              children: [
-                _buildProductHeader(cardBg),
-                const SizedBox(height: 24),
-                _buildSectionTitle(context.tr('choose_boost_package')),
-                const SizedBox(height: 16),
-                _buildTierCard(BoostTier.bronze, cardBg, brightness),
-                const SizedBox(height: 12),
-                _buildTierCard(BoostTier.silver, cardBg, brightness),
-                const SizedBox(height: 12),
-                _buildTierCard(BoostTier.gold, cardBg, brightness),
-                const SizedBox(height: 32),
-                _buildPaymentButton(),
-              ],
-            ),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+            children: [
+              _buildProductHeader(cardBg),
+              const SizedBox(height: 24),
+              _buildSectionTitle(context.tr('choose_boost_package')),
+              const SizedBox(height: 16),
+              _buildTierCard(BoostTier.bronze, cardBg, brightness),
+              const SizedBox(height: 12),
+              _buildTierCard(BoostTier.silver, cardBg, brightness),
+              const SizedBox(height: 12),
+              _buildTierCard(BoostTier.gold, cardBg, brightness),
+              const SizedBox(height: 32),
+              _buildPaymentButton(),
+            ],
           ),
         ),
+      ),
     );
   }
 
@@ -103,7 +106,9 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
               child: widget.product.images.isNotEmpty
                   ? CachedNetworkImage(
                       imageUrl: widget.product.images.first,
-                      fit: BoxFit.cover, width: 64, height: 64,
+                      fit: BoxFit.cover,
+                      width: 64,
+                      height: 64,
                       errorWidget: (_, _, _) => Icon(
                         Icons.image,
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -531,10 +536,17 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
         tier: tier,
         phone: phone,
         userId: user.uid,
+        productName: widget.product.name,
+        productImage: widget.product.images.isNotEmpty
+            ? widget.product.images.first
+            : '',
+        productPrice: widget.product.price,
       );
 
       if (result == null || result['order_id'] == null) {
-        final errMsg = result?['error'] as String? ?? context.tr('payment_initiation_failed');
+        final errMsg =
+            result?['error'] as String? ??
+            context.tr('payment_initiation_failed');
         if (mounted) {
           PaymentBanner.show(
             context: context,

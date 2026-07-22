@@ -32,6 +32,7 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
   double _totalProcessed = 0;
   double _totalPayouts = 0;
   double _mongikeBalance = 0;
+  double _actualMongikeBalance = 0;
   double _totalAdminWithdrawn = 0;
 
   @override
@@ -52,27 +53,40 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
       // Try API first (gives actual Mongike balance if available)
       final token = await FirebaseAuth.instance.currentUser?.getIdToken();
       if (token != null) {
-        final resp = await http.get(
-          Uri.parse('${ApiConfig.baseUrl}/api/admin/finance-summary'),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $token',
-          },
-        ).timeout(const Duration(seconds: 10));
+        final resp = await http
+            .get(
+              Uri.parse('${ApiConfig.baseUrl}/api/admin/finance-summary'),
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $token',
+              },
+            )
+            .timeout(const Duration(seconds: 10));
         if (resp.statusCode == 200) {
           final result = jsonDecode(resp.body);
           if (result['success'] == true) {
-            if (mounted) setState(() {
-              _totalCommissions = (result['totalCommissions'] as num?)?.toDouble() ?? 0;
-              _totalBoostRevenue = (result['totalBoostRevenue'] as num?)?.toDouble() ?? 0;
-              _totalAdminBalance = (result['totalAdminBalance'] as num?)?.toDouble() ?? 0;
-              _totalAdminWithdrawn = (result['totalAdminWithdrawn'] as num?)?.toDouble() ?? 0;
-              _availableBalance = (result['availableBalance'] as num?)?.toDouble() ?? (_totalAdminBalance - _totalAdminWithdrawn);
-              if (_availableBalance < 0) _availableBalance = 0;
-              _totalProcessed = (result['totalProcessed'] as num?)?.toDouble() ?? 0;
-              _totalPayouts = (result['totalPaidOut'] as num?)?.toDouble() ?? 0;
-              _mongikeBalance = _availableBalance;
-            });
+            if (mounted)
+              setState(() {
+                _totalCommissions =
+                    (result['totalCommissions'] as num?)?.toDouble() ?? 0;
+                _totalBoostRevenue =
+                    (result['totalBoostRevenue'] as num?)?.toDouble() ?? 0;
+                _totalAdminBalance =
+                    (result['totalAdminBalance'] as num?)?.toDouble() ?? 0;
+                _totalAdminWithdrawn =
+                    (result['totalAdminWithdrawn'] as num?)?.toDouble() ?? 0;
+                _availableBalance =
+                    (result['availableBalance'] as num?)?.toDouble() ??
+                    (_totalAdminBalance - _totalAdminWithdrawn);
+                if (_availableBalance < 0) _availableBalance = 0;
+                _totalProcessed =
+                    (result['totalProcessed'] as num?)?.toDouble() ?? 0;
+                _totalPayouts =
+                    (result['totalPaidOut'] as num?)?.toDouble() ?? 0;
+                _actualMongikeBalance =
+                    (result['actualMongikeBalance'] as num?)?.toDouble() ?? 0;
+                _mongikeBalance = _availableBalance;
+              });
             if (mounted) setState(() => _loading = false);
             return;
           }
@@ -162,17 +176,19 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
 
     setState(() => _withdrawing = true);
     try {
-                  final result = await MongikeService.adminWithdraw(
+      final result = await MongikeService.adminWithdraw(
         userId: uid,
         amount: _availableBalance.round().toDouble(),
         phone: phone,
       );
-      
+
       if (mounted) {
         _phoneController.clear();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${context.tr('withdrawal_success')} ${result['netAmount']} TZS \u2192 $phone'),
+            content: Text(
+              '${context.tr('withdrawal_success')} ${result['netAmount']} TZS \u2192 $phone',
+            ),
             backgroundColor: Theme.of(context).colorScheme.primary,
           ),
         );
@@ -187,7 +203,10 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
 
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.error),
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ),
     );
   }
 
@@ -197,31 +216,34 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
     final cs = Theme.of(context).colorScheme;
 
     final body = _loading
-          ? const GoogleLoadingPage()
-          : SafeArea(
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  _buildBalanceCard(cs, nf),
-                  const SizedBox(height: 16),
-                  _buildBreakdownCard(cs, nf),
-                  const SizedBox(height: 16),
-                  _buildMongikeCard(cs, nf),
-                  const SizedBox(height: 20),
-                  _buildWithdrawCard(cs, nf),
-                  const SizedBox(height: 20),
-                  _buildWithdrawalHistory(cs, nf),
-                ],
-              ),
-            );
+        ? const GoogleLoadingPage()
+        : SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _buildBalanceCard(cs, nf),
+                const SizedBox(height: 16),
+                _buildBreakdownCard(cs, nf),
+                const SizedBox(height: 16),
+                _buildMongikeCard(cs, nf),
+                const SizedBox(height: 20),
+                _buildWithdrawCard(cs, nf),
+                const SizedBox(height: 20),
+                _buildWithdrawalHistory(cs, nf),
+              ],
+            ),
+          );
 
     if (widget.embedded) return body;
 
     return Scaffold(
       appBar: AppBar(
-          title: Text(context.tr('admin_wallet_title')),
+        title: Text(context.tr('admin_wallet_title')),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadFinanceData),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadFinanceData,
+          ),
         ],
       ),
       body: body,
@@ -254,12 +276,19 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
             const SizedBox(height: 4),
             Text(
               '${context.tr('inapatikana_kutoa')}: ${nf.format(_availableBalance.round())} TZS',
-              style: TextStyle(color: cs.primary, fontSize: 12, fontWeight: FontWeight.w500),
+              style: TextStyle(
+                color: cs.primary,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
             ),
             const SizedBox(height: 2),
             Text(
               '${context.tr('jumla_ya_mapato_yote')}: ${nf.format(_totalAdminBalance.round())} TZS  |  ${context.tr('imetolewa')}: ${nf.format(_totalAdminWithdrawn.round())} TZS',
-              style: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 11),
+              style: TextStyle(
+                color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                fontSize: 11,
+              ),
             ),
           ],
         ),
@@ -274,18 +303,42 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(context.tr('revenue_breakdown'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            Text(
+              context.tr('revenue_breakdown'),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
             const Divider(),
-            _row(context.tr('sales_commissions'), _totalCommissions, cs.primary, nf),
+            _row(
+              context.tr('sales_commissions'),
+              _totalCommissions,
+              cs.primary,
+              nf,
+            ),
             const SizedBox(height: 4),
-            _row(context.tr('boost_revenue'), _totalBoostRevenue, Colors.orange, nf),
+            _row(
+              context.tr('boost_revenue'),
+              _totalBoostRevenue,
+              Colors.orange,
+              nf,
+            ),
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Divider(thickness: 2),
             ),
-            _row(context.tr('jumla_ya_mapato_yote'), _totalAdminBalance, cs.onSurfaceVariant, nf),
+            _row(
+              context.tr('jumla_ya_mapato_yote'),
+              _totalAdminBalance,
+              cs.onSurfaceVariant,
+              nf,
+            ),
             const SizedBox(height: 4),
-            _row(context.tr('inapatikana_kutoa'), _availableBalance, cs.secondary, nf, bold: true),
+            _row(
+              context.tr('inapatikana_kutoa'),
+              _availableBalance,
+              cs.secondary,
+              nf,
+              bold: true,
+            ),
           ],
         ),
       ),
@@ -293,6 +346,8 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
   }
 
   Widget _buildMongikeCard(ColorScheme cs, NumberFormat nf) {
+    final hasDiscrepancy =
+        _actualMongikeBalance > 0 && _actualMongikeBalance != _mongikeBalance;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -303,18 +358,70 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
               children: [
                 Icon(Icons.account_balance, color: cs.tertiary),
                 const SizedBox(width: 8),
-                Text(context.tr('payment_status_title'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                Text(
+                  context.tr('payment_status_title'),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
               ],
             ),
             const Divider(),
-            _row(context.tr('total_via_mongike'), _totalProcessed, cs.tertiary, nf),
+            _row(
+              context.tr('total_via_mongike'),
+              _totalProcessed,
+              cs.tertiary,
+              nf,
+            ),
             const SizedBox(height: 8),
             _row(context.tr('total_payouts'), _totalPayouts, cs.error, nf),
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Divider(thickness: 2),
             ),
-            _row(context.tr('balance'), _mongikeBalance, cs.primary, nf, bold: true),
+            _row(
+              'Salio (Kitabu)',
+              _mongikeBalance,
+              cs.primary,
+              nf,
+              bold: true,
+            ),
+            if (_actualMongikeBalance > 0) ...[
+              const SizedBox(height: 4),
+              _row(
+                'Salio (Mongike)',
+                _actualMongikeBalance,
+                hasDiscrepancy ? Colors.orange : cs.successGreen,
+                nf,
+                bold: true,
+              ),
+            ],
+            if (hasDiscrepancy)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        size: 14,
+                        color: Colors.orange,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Mongike wallet: TZS ${nf.format(_actualMongikeBalance.round())}, '
+                          'Kitabu: TZS ${nf.format(_mongikeBalance.round())}',
+                          style: TextStyle(fontSize: 11, color: Colors.orange),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -346,15 +453,24 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: _availableBalance >= 2001 && !_withdrawing ? _withdraw : null,
+                onPressed: _availableBalance >= 2001 && !_withdrawing
+                    ? _withdraw
+                    : null,
                 icon: _withdrawing
                     ? SizedBox(
-                        width: 18, height: 18,
-                        child: GoogleLoading(size: 18, strokeWidth: 2, color: cs.surface),
+                        width: 18,
+                        height: 18,
+                        child: GoogleLoading(
+                          size: 18,
+                          strokeWidth: 2,
+                          color: cs.surface,
+                        ),
                       )
                     : const Icon(Icons.send),
                 label: Text(
-                  _withdrawing ? context.tr('withdrawal_processing') : context.tr('withdraw'),
+                  _withdrawing
+                      ? context.tr('withdrawal_processing')
+                      : context.tr('withdraw'),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: cs.secondary,
@@ -393,10 +509,11 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
               .orderBy('createdAt', descending: true)
               .snapshots(),
           builder: (context, snap) {
-            if (!snap.hasData) return const Padding(
-              padding: EdgeInsets.all(32),
-              child: GoogleLoading(size: 24, strokeWidth: 2),
-            );
+            if (!snap.hasData)
+              return const Padding(
+                padding: EdgeInsets.all(32),
+                child: GoogleLoading(size: 24, strokeWidth: 2),
+              );
             final docs = snap.data!.docs;
             if (docs.isEmpty) {
               return Card(
@@ -405,7 +522,9 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
                   child: Center(
                     child: Text(
                       context.tr('no_withdrawals'),
-                      style: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6)),
+                      style: TextStyle(
+                        color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                      ),
                     ),
                   ),
                 ),
@@ -426,10 +545,18 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
                 };
                 return Card(
                   child: ListTile(
-                    leading: Icon(Icons.history,
-                        color: statusColors[status] ?? cs.onSurfaceVariant.withValues(alpha: 0.6)),
-                    title: Text('${nf.format(amount.round())} TZS \u2192 ${PhoneUtils.formatForDisplay(phone)}'),
-                    subtitle: Text('${DateFormat('MMM dd, yyyy HH:mm').format(date)} \u2022 $status'),
+                    leading: Icon(
+                      Icons.history,
+                      color:
+                          statusColors[status] ??
+                          cs.onSurfaceVariant.withValues(alpha: 0.6),
+                    ),
+                    title: Text(
+                      '${nf.format(amount.round())} TZS \u2192 ${PhoneUtils.formatForDisplay(phone)}',
+                    ),
+                    subtitle: Text(
+                      '${DateFormat('MMM dd, yyyy HH:mm').format(date)} \u2022 $status',
+                    ),
                   ),
                 );
               }).toList(),
@@ -440,11 +567,22 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
     );
   }
 
-  Widget _row(String label, double amount, Color color, NumberFormat nf, {bool bold = false}) {
+  Widget _row(
+    String label,
+    double amount,
+    Color color,
+    NumberFormat nf, {
+    bool bold = false,
+  }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        Text(
+          label,
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
         Text(
           '${nf.format(amount.round())} TZS',
           style: TextStyle(

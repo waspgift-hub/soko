@@ -194,6 +194,7 @@ class _PaymentBannerState extends State<_PaymentBanner>
                         if (widget.amount != null) ...[
                           const SizedBox(width: 8),
                           Container(
+                            constraints: const BoxConstraints(maxWidth: 140),
                             padding: const EdgeInsets.symmetric(
                               horizontal: 12,
                               vertical: 6,
@@ -204,6 +205,8 @@ class _PaymentBannerState extends State<_PaymentBanner>
                             ),
                             child: Text(
                               widget.amount!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 14,
@@ -575,20 +578,22 @@ class _RealtimePaymentBannerWidgetState
                             ),
                             if (trailing != null) ...[
                               const SizedBox(width: 8),
-                              trailing,
+                              Flexible(child: trailing),
                             ],
                             if (isSuccess || isFailed)
-                              IconButton(
-                                icon: const Icon(Icons.close, size: 18),
-                                onPressed: RealtimePaymentBanner.dismiss,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(
-                                  minWidth: 32,
-                                  minHeight: 32,
+                              Flexible(
+                                child: IconButton(
+                                  icon: const Icon(Icons.close, size: 18),
+                                  onPressed: RealtimePaymentBanner.dismiss,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 32,
+                                    minHeight: 32,
+                                  ),
+                                  color: isDark
+                                      ? Colors.white.withValues(alpha: 0.5)
+                                      : cs.onSurface.withValues(alpha: 0.4),
                                 ),
-                                color: isDark
-                                    ? Colors.white.withValues(alpha: 0.5)
-                                    : cs.onSurface.withValues(alpha: 0.4),
                               ),
                           ],
                         ),

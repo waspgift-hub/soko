@@ -22,9 +22,10 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
       vsync: this,
       duration: const Duration(milliseconds: 2000),
     )..repeat(reverse: true);
-    _pulse = Tween<double>(begin: 0.85, end: 1.0).animate(
-      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
-    );
+    _pulse = Tween<double>(
+      begin: 0.85,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
   }
 
   @override
@@ -111,10 +112,7 @@ class _FlowNodeCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: LinearGradient(
-                      colors: [
-                        node.color.withValues(alpha: 0.85),
-                        node.color,
-                      ],
+                      colors: [node.color.withValues(alpha: 0.85), node.color],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
@@ -139,10 +137,7 @@ class _FlowNodeCard extends StatelessWidget {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: cs.surface,
-                            border: Border.all(
-                              color: node.color,
-                              width: 2,
-                            ),
+                            border: Border.all(color: node.color, width: 2),
                           ),
                           child: Center(
                             child: Text(
@@ -169,9 +164,7 @@ class _FlowNodeCard extends StatelessWidget {
                           end: Alignment.bottomCenter,
                           colors: [
                             node.color.withValues(alpha: 0.7),
-                            flowNodes[index + 1]
-                                .color
-                                .withValues(alpha: 0.25),
+                            flowNodes[index + 1].color.withValues(alpha: 0.25),
                           ],
                         ),
                       ),
@@ -215,11 +208,7 @@ class _FlowNodeCard extends StatelessWidget {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(
-                                  node.icon,
-                                  size: 12,
-                                  color: node.color,
-                                ),
+                                Icon(node.icon, size: 12, color: node.color),
                                 const SizedBox(width: 5),
                                 Text(
                                   flowLabels[index],
@@ -251,12 +240,7 @@ class _FlowNodeCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 10),
-                      _buildDataRow(
-                        detail.$1,
-                        detail.$2,
-                        node.color,
-                        cs,
-                      ),
+                      _buildDataRow(detail.$1, detail.$2, node.color, cs),
                     ],
                   ),
                 ),
@@ -400,21 +384,21 @@ final phaseLabels = [
 ];
 
 final flowDetails = [
-  ('Order Created • Awaiting seller quote', 'TZS 0'),
-  ('Shipping cost set by seller', 'TZS 2,500 - 15,000'),
-  ('Paid via Mongike mobile money', 'TZS 47,500'),
-  ('Funds secured in escrow • 14 day hold', 'TZS 45,000'),
-  ('Dispatched via courier', 'Order #A1B2C3'),
-  ('Buyer confirms receipt', 'Release escrow'),
-  ('Seller receives payout', 'TZS 43,200'),
+  ('Order is placed • Seller will confirm', ''),
+  ('Seller sets shipping cost', ''),
+  ('Buyer pays via Mongike mobile money', ''),
+  ('Funds held securely in escrow', ''),
+  ('Seller dispatches via courier', ''),
+  ('Buyer confirms receipt', ''),
+  ('Seller receives payout', ''),
 ];
 
 final flowDetailsSW = [
-  ('Oda imewekwa • Inasubiri muuzaji', 'TZS 0'),
-  ('Gharama ya usafirishaji imewekwa', 'TZS 2,500 - 15,000'),
-  ('Imelipwa kwa Mongike', 'TZS 47,500'),
-  ('Fedha zinalindwa kwenye escrow', 'TZS 45,000'),
-  ('Imesafirishwa na kampuni ya usafiri', 'Oda #A1B2C3'),
-  ('Mnunuzi anathibitisha upokeaji', 'Fungua escrow'),
-  ('Muuzaji anapokea malipo', 'TZS 43,200'),
+  ('Oda imewekwa • Muuzaji atathibitisha', ''),
+  ('Muuzaji anaweka gharama ya usafiri', ''),
+  ('Mnunuzi analipa kwa Mongike', ''),
+  ('Fedha zinalindwa kwenye escrow', ''),
+  ('Muuzaji anasafirisha bidhaa', ''),
+  ('Mnunuzi anathibitisha upokeaji', ''),
+  ('Muuzaji anapokea malipo yake', ''),
 ];
