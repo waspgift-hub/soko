@@ -1580,8 +1580,6 @@ app.post('/api/mongike/webhook', verifyWebhook, async (req, res) => {
               }), tx.buyerId).catch(() => {});
             }
           }).catch(() => {});
-            }
-          } catch (_) {}
         }
 
         // SMS notifications for escrow_hold
