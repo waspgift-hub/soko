@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
@@ -7,6 +8,15 @@ import 'api_config.dart';
 
 class BoostService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  Future<Map<String, String>> _authHeaders() async {
+    final user = FirebaseAuth.instance.currentUser;
+    final token = await user?.getIdToken();
+    return {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
+  }
 
   Future<Map<String, dynamic>?> initiateBoostPayment({
     required String productId,
@@ -17,7 +27,7 @@ class BoostService {
     try {
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/boost-product'),
-        headers: {'Content-Type': 'application/json'},
+        headers: await _authHeaders(),
         body: jsonEncode({
           'productId': productId,
           'tier': tier.name,

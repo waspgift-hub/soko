@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../services/notification_service.dart';
 import '../../widgets/glass_container.dart';
 import '../../extensions/context_tr.dart';
@@ -121,8 +122,10 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
               final d = docs[i].data() as Map<String, dynamic>;
               final txId = docs[i].id;
               final productName = d['productName'] ?? context.tr('product');
+              final productImage = d['productImage'] as String? ?? '';
               final productPrice = (d['productPrice'] as num?)?.toDouble() ?? 0;
               final buyerName = d['buyerName'] ?? '';
+              final buyerPhone = d['buyerPhone'] as String? ?? '';
               final buyerId = d['buyerId'] ?? '';
               final addr = d['deliveryAddress'] as Map<String, dynamic>?;
 
@@ -156,14 +159,47 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
                         ],
                       ),
                       const SizedBox(height: 14),
-                      Text(productName, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: cs.onSurface)),
-                      const SizedBox(height: 6),
+                      // Product header with image
+                      Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              width: 56, height: 56,
+                              color: cs.surfaceContainerHighest,
+                              child: productImage.isNotEmpty
+                                  ? CachedNetworkImage(imageUrl: productImage, fit: BoxFit.cover, width: 56, height: 56)
+                                  : Icon(Icons.image, size: 24, color: cs.onSurfaceVariant),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(productName, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: cs.onSurface)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Container(height: 1, color: cs.primary.withValues(alpha: 0.08)),
+                      const SizedBox(height: 12),
+                      // Buyer & delivery details section
+                      Text(context.tr('buyer_details'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: cs.onSurfaceVariant)),
+                      const SizedBox(height: 8),
                       _detailRow(cs, context.tr('buyer_label'), buyerName),
+                      if (buyerPhone.isNotEmpty) _detailRow(cs, context.tr('phone'), buyerPhone),
+                      const SizedBox(height: 8),
+                      Text(context.tr('product'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: cs.onSurfaceVariant)),
+                      const SizedBox(height: 8),
                       _detailRow(cs, context.tr('product_price'), context.formatPrice(productPrice)),
-                      if (addr != null)
-                        _detailRow(cs, context.tr('address'), '${addr['region'] ?? ''}, ${addr['district'] ?? ''}, ${addr['street'] ?? ''}'),
-                      if (addr?['landmarks'] != null)
-                        _detailRow(cs, context.tr('landmarks'), addr!['landmarks'] as String? ?? ''),
+                      if (addr != null) ...[
+                        const SizedBox(height: 8),
+                        Text(context.tr('delivery_address'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: cs.onSurfaceVariant)),
+                        const SizedBox(height: 8),
+                        _detailRow(cs, context.tr('region_label'), addr['region'] ?? ''),
+                        _detailRow(cs, context.tr('district_label'), addr['district'] ?? ''),
+                        _detailRow(cs, context.tr('street_label'), addr['street'] ?? ''),
+                        if (addr['landmarks'] != null && (addr['landmarks'] as String).isNotEmpty)
+                          _detailRow(cs, context.tr('landmarks'), addr!['landmarks'] as String? ?? ''),
+                      ],
 
                       const SizedBox(height: 16),
                       Container(height: 1, color: cs.primary.withValues(alpha: 0.1)),
