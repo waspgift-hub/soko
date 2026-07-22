@@ -10,6 +10,15 @@ import 'fraud_prevention_service.dart';
 import 'api_config.dart';
 import '../utils/network_error.dart';
 
+String _normalizeBrand(String? brand) {
+  final trimmed = brand?.trim() ?? '';
+  if (trimmed.isEmpty) return '';
+  return trimmed.split(' ').map((word) {
+    if (word.isEmpty) return '';
+    return word[0].toUpperCase() + word.substring(1).toLowerCase();
+  }).join(' ');
+}
+
 List<String> _generateSearchKeywords(String name, String description, String category, String? brand) {
   final words = <String>{};
   final text = '$name $description $category ${brand ?? ''}';
@@ -157,7 +166,7 @@ class ProductService {
       "wholesaleTiers": wholesaleTiers ?? [],
       "variants": variants ?? [],
       "attributes": attributes ?? {},
-      "brand": brand,
+      "brand": _normalizeBrand(brand),
       "condition": condition,
       "rating": 0.0,
       "reviewCount": 0,
@@ -463,7 +472,7 @@ class ProductService {
       if (name != null) { data["name"] = name; data["searchName"] = name.toLowerCase(); needsKeywordUpdate = true; }
       if (description != null) { data["description"] = description; needsKeywordUpdate = true; }
       if (category != null) { data["category"] = category; needsKeywordUpdate = true; }
-      if (brand != null) { data["brand"] = brand; needsKeywordUpdate = true; }
+      if (brand != null) { data["brand"] = _normalizeBrand(brand); needsKeywordUpdate = true; }
       if (price != null) data["price"] = price;
       if (subcategory != null) data["subcategory"] = subcategory;
       if (stock != null) data["stock"] = stock;
