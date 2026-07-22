@@ -179,19 +179,33 @@ class _AddProductScreenState extends State<AddProductScreen> {
       return;
     }
 
+    final priceText = _priceController.text.replaceAll(',', '').trim();
+    final stockText = _stockController.text.replaceAll(',', '').trim();
+    final parsedPrice = double.tryParse(priceText);
+    final parsedStock = int.tryParse(stockText);
+    if (parsedPrice == null || parsedPrice <= 0) {
+      messenger.showSnackBar(SnackBar(content: Text(tr('enter_valid_price'))));
+      setState(() => _saving = false);
+      return;
+    }
+    if (parsedStock == null || parsedStock < 0) {
+      messenger.showSnackBar(SnackBar(content: Text(tr('enter_valid_stock'))));
+      setState(() => _saving = false);
+      return;
+    }
+
     setState(() => _saving = true);
     try {
       final variantData = _buildVariantData();
       if (_isEditing) {
-        final newPrice = double.parse(_priceController.text);
         await _productService.updateProduct(
           productId: widget.product!.id,
           name: _nameController.text,
           description: _descriptionController.text,
-          price: newPrice,
+          price: parsedPrice,
           category: _selectedCategory,
           subcategory: _selectedSubcategory,
-          stock: int.parse(_stockController.text),
+          stock: parsedStock,
           isWholesale: _isWholesale,
           variants: variantData.isNotEmpty ? variantData : null,
           brand: _brandController.text.isNotEmpty
@@ -208,11 +222,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
         await _productService.addProduct(
           name: _nameController.text,
           description: _descriptionController.text,
-          price: double.parse(_priceController.text),
+          price: parsedPrice,
           category: _selectedCategory,
           subcategory: _selectedSubcategory,
           currency: 'TZS',
-          stock: int.parse(_stockController.text),
+          stock: parsedStock,
           imageFiles: _newImages,
           location: _locationController.text.isNotEmpty
               ? _locationController.text
@@ -245,6 +259,14 @@ class _AddProductScreenState extends State<AddProductScreen> {
             content: Text(
               '${context.tr('error')}: ${context.tr('permission_denied')}. ${context.tr('try_again')}',
             ),
+          ),
+        );
+      } else if (msg.contains('KYC') || msg.contains('kyc') || msg.contains('KYC not approved')) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(context.tr('kyc_required_selling')),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            duration: const Duration(seconds: 5),
           ),
         );
       } else {
