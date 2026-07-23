@@ -5758,3 +5758,26 @@ function startProductListener() {
       (error) => console.error('[PRODUCT] Listener error:', error)
     );
 }
+
+// ============================================================
+// 🔍 DIAGNOSTIC — Check FCM token status for a user
+// ============================================================
+app.get('/api/diag/fcm-token/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
+    const fcmToken = userDoc.data()?.fcmToken || null;
+    const email = userDoc.data()?.email || null;
+    res.json({
+      userId,
+      email,
+      hasToken: !!fcmToken,
+      tokenPrefix: fcmToken ? fcmToken.substring(0, 12) + '...' : null,
+      topic: `user_${userId}`,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
