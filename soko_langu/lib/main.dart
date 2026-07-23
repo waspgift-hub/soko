@@ -7,7 +7,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
+
 import 'package:firebase_performance/firebase_performance.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
@@ -19,7 +19,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 // --- App modules ---
 import 'app/app_state.dart' as app_state;
 import 'app/router.dart' as router_lib;
-import 'firebase_messaging_background.dart';
 import 'firebase_options.dart';
 import 'notifiers/auth_notifier.dart';
 import 'providers/product_feed_provider.dart';
@@ -102,10 +101,6 @@ void main() async {
       debugPrint('GoogleSignIn: init failed — $e');
     }
   }
-
-  // --- FCM background handler registration ---
-  // SAFE: only stores a callback reference; the handler itself calls Firebase.initializeApp.
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   runApp(const SokoVibeApp());
 }

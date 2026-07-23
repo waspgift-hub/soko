@@ -7,6 +7,8 @@ class ChatRoom {
   final int unreadCountSeller;
   final String? productId;
   final String? productTitle;
+  final String? buyerId;
+  final String? sellerId;
 
   ChatRoom({
     required this.id,
@@ -17,6 +19,8 @@ class ChatRoom {
     this.unreadCountSeller = 0,
     this.productId,
     this.productTitle,
+    this.buyerId,
+    this.sellerId,
   });
 
   factory ChatRoom.fromMap(String id, Map<String, dynamic> data) {
@@ -29,6 +33,8 @@ class ChatRoom {
       unreadCountSeller: (data['unread_count_seller'] as num?)?.toInt() ?? 0,
       productId: data['product_id'] as String?,
       productTitle: data['product_title'] as String?,
+      buyerId: data['buyer_id'] as String?,
+      sellerId: data['seller_id'] as String?,
     );
   }
 }

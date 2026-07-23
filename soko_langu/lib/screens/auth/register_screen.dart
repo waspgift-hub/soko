@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,9 +12,11 @@ import '../../extensions/context_tr.dart';
 import '../../models/saved_account.dart';
 import '../../notifiers/auth_notifier.dart';
 import '../../services/account_manager.dart';
+import '../../services/api_config.dart';
 import '../../utils/network_error.dart';
 import '../../utils/phone_utils.dart';
 import '../../widgets/auth_form_widgets.dart';
+import 'otp_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -28,12 +32,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final _otpController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
   bool _acceptedTerms = false;
-  bool _otpSent = false;
 
   String? _normalizedPhone;
 
@@ -58,7 +60,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _phoneController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
-    _otpController.dispose();
     super.dispose();
   }
 
@@ -108,75 +109,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     setState(() => _isLoading = true);
     try {
-      await context.read<AuthNotifier>().sendPhoneOtp(_normalizedPhone!);
-      if (mounted) {
-        setState(() => _otpSent = true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              context
-                  .tr('otp_sent_to')
-                  .replaceAll(
-                    '{0}',
-                    PhoneUtils.formatForDisplay(_normalizedPhone!),
-                  ),
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        _showError(e is NetworkError ? e.userMessage : e.toString());
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _register() async {
-    final otp = _otpController.text.trim();
-    if (otp.length != 6) {
-      _showError(context.tr('otp_six_digits'));
-      return;
-    }
-
-    setState(() => _isLoading = true);
-    try {
-      final notifier = context.read<AuthNotifier>();
-      final ok = await notifier.verifyPhoneOtp(_normalizedPhone!, otp);
-      if (!ok) {
-        _showError(notifier.error ?? context.tr('otp_invalid'));
+      final phoneCheck = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/auth/check-phone'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'phone': _normalizedPhone}),
+      );
+      final phoneResult = jsonDecode(phoneCheck.body);
+      if (phoneResult['exists'] == true) {
+        setState(() => _isLoading = false);
+        _showError('Namba hii tayari imesajiliwa. Tumia namba nyingine au ingia kwenye akaunti yako.');
         return;
       }
-
-      await notifier.register(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-        displayName: _nameController.text.trim(),
+      final emailCheck = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/auth/check-email'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': _emailController.text.trim()}),
       );
-
-      // Store phone in Firestore
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .update({'phone': _normalizedPhone});
-        await AccountManager.instance.addOrUpdateAccount(
-          SavedAccount(
-            uid: user.uid,
-            email: user.email ?? '',
-            displayName: _nameController.text.trim(),
-            photoUrl: user.photoURL,
-            provider: 'email',
-            addedAt: DateTime.now(),
-            isActive: true,
-          ),
-        );
+      final emailResult = jsonDecode(emailCheck.body);
+      if (emailResult['exists'] == true) {
+        setState(() => _isLoading = false);
+        _showError('Barua pepe hii tayari imesajiliwa. Tumia barua pepe nyingine au ingia kwenye akaunti yako.');
+        return;
       }
-
+      await context.read<AuthNotifier>().sendPhoneOtp(_normalizedPhone!);
       if (mounted) {
-        context.go(AppRoutes.home);
+        Navigator.push(context, MaterialPageRoute(
+          builder: (_) => OtpScreen(
+            phone: _normalizedPhone!,
+            email: _emailController.text.trim(),
+            password: _passwordController.text,
+            displayName: _nameController.text.trim(),
+          ),
+        ));
       }
     } catch (e) {
       if (mounted) {
@@ -380,55 +344,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  if (!_otpSent)
-                    AuthPrimaryButton(
-                      label: context.tr('send_otp'),
-                      onPressed: _sendOtp,
-                      loading: _isLoading,
-                    ),
-                  if (_otpSent) ...[
-                    TextFormField(
-                      controller: _otpController,
-                      keyboardType: TextInputType.number,
-                      maxLength: 6,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 8,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: '000000',
-                        counterText: '',
-                        filled: true,
-                        fillColor: cs.surfaceContainerHighest.withValues(
-                          alpha: 0.5,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(color: cs.outlineVariant),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(color: cs.primary, width: 2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    AuthPrimaryButton(
-                      label: context.tr('verify_otp_register'),
-                      onPressed: _register,
-                      loading: _isLoading,
-                    ),
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: _isLoading ? null : _sendOtp,
-                      child: Text(
-                        context.tr('resend_otp'),
-                        style: TextStyle(color: cs.primary),
-                      ),
-                    ),
-                  ],
+                  AuthPrimaryButton(
+                    label: context.tr('send_otp'),
+                    onPressed: _sendOtp,
+                    loading: _isLoading,
+                  ),
                   const SizedBox(height: 20),
                   Row(
                     children: [

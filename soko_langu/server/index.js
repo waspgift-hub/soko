@@ -56,6 +56,77 @@ function asyncHandler(fn) {
   };
 }
 
+// ─── OneSignal helpers ──────────────────────────────────────────
+const ONE_SIGNAL_APP_ID = process.env.ONE_SIGNAL_APP_ID;
+const ONE_SIGNAL_REST_API_KEY = process.env.ONE_SIGNAL_REST_API_KEY;
+
+function getChannelId(data = {}) {
+  const type = (data && data.type) || 'general';
+  if (type === 'chat' || type === 'group_chat') return 'chat_messages_v4';
+  if (type === 'payment' || type === 'order' || type === 'withdrawal') return 'payments_notifications_v4';
+  return 'general_notifications_v4';
+}
+
+async function sendOneSignalNotification(userId, title, body, data = {}) {
+  if (!userId) { console.log('[OS] No userId'); return null; }
+  if (!ONE_SIGNAL_APP_ID || !ONE_SIGNAL_REST_API_KEY) {
+    console.error('[OS] Missing ONE_SIGNAL_APP_ID or ONE_SIGNAL_REST_API_KEY'); return null;
+  }
+  try {
+    const resp = await fetch('https://onesignal.com/api/v1/notifications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${ONE_SIGNAL_REST_API_KEY}` },
+      body: JSON.stringify({
+        app_id: ONE_SIGNAL_APP_ID,
+        include_external_user_ids: [userId],
+        headings: { en: title || '' },
+        contents: { en: body || '' },
+        data: { ...(data || {}), type: (data && data.type) || 'general' },
+        android_channel_id: getChannelId(data),
+        android_sound: 'soko_notification',
+        android_icon: 'ic_notification', priority: 10,
+        small_icon: 'ic_notification', large_icon: 'ic_notification', android_accent_color: 'FF40916C',
+      }),
+    });
+    const result = await resp.json();
+    if (result.id) console.log(`[OS] sent to ${userId} type=${(data && data.type) || 'general'} id=${result.id}`);
+    else console.error(`[OS] send failed:`, JSON.stringify(result));
+    return result;
+  } catch (e) { console.error(`[OS] FAILED user=${userId}: ${e.message}`); return null; }
+}
+
+async function sendOneSignalBulk(userIds, title, body, data = {}) {
+  if (!userIds || userIds.length === 0) return { successCount: 0 };
+  if (!ONE_SIGNAL_APP_ID || !ONE_SIGNAL_REST_API_KEY) { console.error('[OS] Missing config'); return { successCount: 0 }; }
+  let successCount = 0;
+  for (let i = 0; i < userIds.length; i += 2000) {
+    const batch = userIds.slice(i, i + 2000);
+    try {
+      const resp = await fetch('https://onesignal.com/api/v1/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${ONE_SIGNAL_REST_API_KEY}` },
+        body: JSON.stringify({
+          app_id: ONE_SIGNAL_APP_ID, include_external_user_ids: batch,
+          headings: { en: title || '' }, contents: { en: body || '' },
+          data: { ...(data || {}), type: (data && data.type) || 'general' },
+          android_channel_id: getChannelId(data), android_sound: 'soko_notification',
+          android_icon: 'ic_notification', priority: 10,
+        }),
+      });
+      const result = await resp.json();
+      if (result.id) { successCount += batch.length; console.log(`[OS] bulk sent to ${batch.length} users`); }
+      else console.error(`[OS] bulk send failed:`, JSON.stringify(result));
+    } catch (e) { console.error(`[OS] bulk error: ${e.message}`); }
+  }
+  return { successCount };
+}
+
+/** @deprecated Replaced by sendOneSignalNotification — kept for backward compat */
+// sendFcmToToken moved to OneSignal helpers above
+
+
+
+
 const PORT = process.env.PORT || 3000;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || '';
 const ESCROW_AUTO_RELEASE_DAYS = parseInt(process.env.ESCROW_AUTO_RELEASE_DAYS) || 14;
@@ -63,106 +134,9 @@ const ESCROW_LOCAL_DAYS = 3;
 const ESCROW_REGIONAL_DAYS = 7;
 const MAX_DAILY_SALE_AMOUNT = parseInt(process.env.MAX_DAILY_SALE_AMOUNT) || 5000000;
 
-// ─── Shared FCM helpers (Android data-only → Flutter/Awesome Notifications) ───
-function stringifyFcmData(data = {}) {
-  const out = {};
-  for (const [k, v] of Object.entries(data || {})) {
-    if (v === undefined || v === null) continue;
-    out[String(k)] = String(v);
-  }
-  return out;
-}
+// ─── (All FCM helpers migrated to OneSignal helpers above) ───
 
-function buildFcmDataPayload(title, body, data = {}) {
-  return stringifyFcmData({ title: title || '', body: body || '', ...data });
-}
 
-/**
- * Builds an FCM data-only message. The `data` payload ensures
- * the background handler processes every message through
- * Awesome Notifications, giving us heads-up pop-up notifications.
- */
-function buildFcmMessage({ token, tokens, title, body, data = {} }) {
-  const notifType = (data && data.type) || 'general';
-  const channelId = notifType === 'chat' ? 'chat_messages_v4'
-    : notifType === 'payment' || notifType === 'order' || notifType === 'withdrawal' ? 'payments_notifications_v4'
-    : 'general_notifications_v4';
-  const msg = {
-    data: buildFcmDataPayload(title, body, data),
-    android: {
-      priority: 'high',
-      notification: { channel_id: channelId, sound: 'soko_notification', icon: 'ic_notification' },
-    },
-    apns: { payload: { aps: { sound: 'default' } } },
-  };
-  if (token) msg.token = token;
-  if (tokens && tokens.length) msg.tokens = tokens;
-  return msg;
-}
-
-async function sendFcmToToken(message, userIdForCleanup = null) {
-  const notifType = (message.data && message.data.type) || 'unknown';
-  try {
-    const result = await admin.messaging().send(message);
-    console.log(`[FCM] sent user=${userIdForCleanup || '?'} type=${notifType} success=${result}`);
-    return result;
-  } catch (e) {
-    const errCode = e.code || '';
-    const errMsg = e.message || '';
-    console.error(`[FCM] FAILED user=${userIdForCleanup || '?'} type=${notifType} code=${errCode} msg=${errMsg}`, e.errorInfo || '');
-
-    // Log quota / sender-id errors specifically
-    if (errCode === 'messaging/quota-exceeded') console.error(`[FCM] QUOTA EXCEEDED`);
-    if (errCode === 'messaging/sender-id-mismatch') console.error(`[FCM] SENDER ID MISMATCH`);
-
-    // Stale / invalid token — try topic fallback, then clean up
-    if (userIdForCleanup && db &&
-        (errCode === 'messaging/registration-token-not-registered' ||
-         errCode === 'messaging/invalid-registration-token')) {
-      console.log(`[FCM] Token stale for ${userIdForCleanup}, trying topic fallback...`);
-      try {
-        const topicMsg = {
-          topic: `user_${userIdForCleanup}`,
-          data: message.data || {},
-          android: { priority: 'high' },
-        };
-        const topicResult = await admin.messaging().send(topicMsg);
-        console.log(`[FCM] Topic fallback succeeded for ${userIdForCleanup}: ${topicResult}`);
-        return topicResult;
-      } catch (topicErr) {
-        console.error(`[FCM] Topic fallback ALSO failed for ${userIdForCleanup}: ${topicErr.code || topicErr.message}`);
-      }
-      // Clean stale token so next attempt gets fresh data
-      await db.collection('users').doc(userIdForCleanup).update({ fcmToken: null });
-      console.log(`[FCM] Cleared stale token for ${userIdForCleanup}`);
-      return null; // Token handled — don't throw
-    }
-
-    // For other errors, re-throw so callers can decide how to handle
-    throw e;
-  }
-}
-
-/** @deprecated Use buildFcmMessage — kept for reference */
-function androidNotifConfig(channelId, tag) {
-  return {
-    priority: 'high',
-    notification: {
-      channelId,
-      priority: 'max',
-      visibility: 'public',
-      sound: 'soko_notification',
-      notificationPriority: 'PRIORITY_MAX',
-      defaultSound: false,
-      vibrateTimingsMillis: [0, 200, 100, 200, 100, 300],
-      defaultVibrateTimings: false,
-      lights: [true, 500, 500],
-      defaultLightSettings: false,
-      ...(tag ? { tag } : {}),
-      color: '#40916C',
-    },
-  };
-}
 
 // ─── Rate limiter (in-memory) ───
 const rateHits = new Map();
@@ -621,14 +595,13 @@ async function sendSms(phone, message) {
   }
 }
 
-// ─── Admin notification helper — sends FCM + in-app to ALL admins ───
+// ─── Admin notification helper — sends OneSignal + in-app to ALL admins ───
 async function notifyAdmins(title, body, data = {}) {
   try {
     const adminSnap = await db.collection('users').where('isAdmin', '==', true).get();
     const promises = [];
     adminSnap.forEach(doc => {
       const uid = doc.id;
-      const fcmToken = doc.data().fcmToken;
       promises.push(db.collection('notifications').add({
         userId: uid,
         title, body,
@@ -636,11 +609,7 @@ async function notifyAdmins(title, body, data = {}) {
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         data,
       }));
-      if (fcmToken) {
-        promises.push(sendFcmToToken(buildFcmMessage({
-          token: fcmToken, title, body, data,
-        }), uid).catch(() => {}));
-      }
+      promises.push(sendOneSignalNotification(uid, title, body, data));
     });
     await Promise.allSettled(promises);
   } catch (e) {
@@ -742,6 +711,112 @@ app.post('/api/auth/verify-otp', async (req, res) => {
 });
 
 // ============================================================
+// 🔐 AUTH — Check if phone already registered
+// ============================================================
+app.post('/api/auth/check-phone', async (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ error: 'Phone is required' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const cleanPhone = phone.replace(/\D/g, '');
+    const snap = await db.collection('users')
+      .where('phone', 'in', [cleanPhone, `0${cleanPhone.slice(-9)}`, `+${cleanPhone}`])
+      .limit(1)
+      .get();
+
+    res.json({ exists: !snap.empty });
+  } catch (e) {
+    console.error('/api/auth/check-phone error:', e.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================================
+// 🔐 AUTH — Check if email already registered
+// ============================================================
+app.post('/api/auth/check-email', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const snap = await db.collection('users')
+      .where('email', '==', email.trim().toLowerCase())
+      .limit(1)
+      .get();
+
+    let exists = !snap.empty;
+    if (!exists) {
+      try {
+        await admin.auth().getUserByEmail(email.trim().toLowerCase());
+        exists = true;
+      } catch (_) {}
+    }
+
+    res.json({ exists });
+  } catch (e) {
+    console.error('/api/auth/check-email error:', e.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================================
+// 🔐 AUTH — Reset password by phone + OTP
+// ============================================================
+app.post('/api/auth/reset-password-by-phone', async (req, res) => {
+  try {
+    const { phone, otp, newPassword } = req.body;
+    if (!phone || !otp || !newPassword) {
+      return res.status(400).json({ error: 'Phone, OTP, and new password are required' });
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const cleanPhone = phone.replace(/\D/g, '');
+
+    // Verify OTP
+    const otpDoc = await db.collection('otp_codes').doc(cleanPhone).get();
+    if (!otpDoc.exists) return res.status(400).json({ error: 'Hakuna OTP. Tuma mpya.' });
+
+    const otpData = otpDoc.data();
+    if (otpData.used) return res.status(400).json({ error: 'OTP tayari imetumika' });
+    if (Date.now() > otpData.expiresAt) return res.status(400).json({ error: 'OTP imeisha muda. Tuma mpya.' });
+
+    const hashed = crypto.createHash('sha256').update(otp).digest('hex');
+    if (hashed !== otpData.otpHash) return res.status(400).json({ error: 'OTP si sahihi' });
+
+    await otpDoc.ref.update({ used: true });
+
+    // Look up user by phone
+    const usersSnap = await db.collection('users')
+      .where('phone', 'in', [cleanPhone, `0${cleanPhone.slice(-9)}`, `+${cleanPhone}`])
+      .limit(1)
+      .get();
+
+    if (usersSnap.empty) {
+      return res.status(404).json({ error: 'Hakuna akaunti yenye namba hii.' });
+    }
+
+    const uid = usersSnap.docs[0].id;
+
+    // Update Firebase Auth password
+    try {
+      await admin.auth().updateUser(uid, { password: newPassword });
+    } catch (authErr) {
+      return res.status(500).json({ error: 'Imeshindwa kubadilisha nenosiri. Jaribu tena.' });
+    }
+
+    res.json({ success: true, message: 'Nenosiri limebadilishwa kwa mafanikio.' });
+  } catch (e) {
+    console.error('/api/auth/reset-password-by-phone error:', e.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================================
 // 🔐 PHONE LOGIN — Login with phone + OTP, returns Firebase custom token
 // ============================================================
 app.post('/api/phone-login', async (req, res) => {
@@ -818,7 +893,7 @@ app.post('/api/phone-login', async (req, res) => {
   }
 });
 
-// 📲 FCM — SEND PUSH NOTIFICATION
+// 📲 OneSignal — SEND PUSH NOTIFICATION
 // ============================================================
 app.post('/api/send-notification', async (req, res) => {
   try {
@@ -832,7 +907,7 @@ app.post('/api/send-notification', async (req, res) => {
     const userDoc = await db.collection('users').doc(userId).get();
     if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
 
-    // Write in-app notification to Firestore (always, even without FCM token)
+    // Write in-app notification to Firestore
     await db.collection('notifications').add({
       userId,
       title,
@@ -842,26 +917,8 @@ app.post('/api/send-notification', async (req, res) => {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    const fcmToken = userDoc.data().fcmToken;
-    if (!fcmToken) return res.json({ sent: true, reason: 'No FCM token, in-app only' });
-
     const notifType = data && data.type;
-    const message = buildFcmMessage({
-      token: fcmToken,
-      title,
-      body: body || '',
-      data: { ...(data || {}), type: notifType || 'general' },
-    });
-
-    try {
-      await sendFcmToToken(message, userId);
-    } catch (e) {
-      // sendFcmToToken already cleaned the stale token and tried topic fallback
-      if (e.code !== 'messaging/registration-token-not-registered' &&
-          e.code !== 'messaging/invalid-registration-token') {
-        throw e;
-      }
-    }
+    await sendOneSignalNotification(userId, title, body || '', { ...(data || {}), type: notifType || 'general' });
 
     res.json({ sent: true });
   } catch (e) {
@@ -1048,64 +1105,35 @@ app.get('/api/admin/orders', async (req, res) => {
 });
 
 // ============================================================
-// 📲 FCM — SEND BULK PUSH NOTIFICATION (to multiple tokens)
+// 📲 OneSignal — SEND BULK PUSH NOTIFICATION
 // ============================================================
 app.post('/api/send-bulk-notification', async (req, res) => {
   try {
     const auth = await requireAdmin(req, res);
     if (!auth.ok) return;
 
-    const { title, body, tokens, target, data } = req.body;
-    if (!title || !tokens || !Array.isArray(tokens) || tokens.length === 0) {
-      return res.status(400).json({ error: 'Missing title or tokens array' });
+    const { title, body, userIds, target, data } = req.body;
+    if (!title || !userIds || !Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ error: 'Missing title or userIds array' });
     }
 
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-    const BATCH_SIZE = 500;
-    let sent = 0;
-    const errors = [];
-
-    for (let i = 0; i < tokens.length; i += BATCH_SIZE) {
-      const batch = tokens.slice(i, i + BATCH_SIZE);
-      try {
-        const message = buildFcmMessage({
-          tokens: batch,
-          title,
-          body: body || '',
-          data: { ...(data || {}), type: (data && data.type) || 'general' },
-        });
-
-        const response = await admin.messaging().sendEachForMulticast(message);
-        sent += response.successCount;
-
-        if (response.failureCount > 0) {
-          response.responses.forEach((resp, idx) => {
-            if (!resp.success) {
-              errors.push({ token: batch[idx].substring(0, 20) + '...', error: resp.error.message });
-            }
-          });
-        }
-      } catch (e) {
-        errors.push({ batch: i / BATCH_SIZE, error: e.message });
-      }
-    }
+    const result = await sendOneSignalBulk(userIds, title, body || '', { ...(data || {}), type: (data && data.type) || 'general' });
 
     // Log the notification in Firestore
     await db.collection('admin_notifications').add({
       title,
       body,
       target: target || 'all',
-      sentCount: sent,
-      errorCount: errors.length,
+      sentCount: result.successCount,
       sentAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
     res.json({
       sent: true,
-      totalTokens: tokens.length,
-      delivered: sent,
-      errors: errors.length > 0 ? errors.slice(0, 10) : [],
+      totalUsers: userIds.length,
+      delivered: result.successCount,
     });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
@@ -1173,18 +1201,9 @@ app.post('/api/escrow/dispatch', async (req, res) => {
       if (tx.buyerPhone) sendSms(tx.buyerPhone, msg);
     } catch (_) {}
 
-    // FCM push to buyer
+    // Push to buyer
     try {
-      const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
-      const buyerToken = buyerSnap.data()?.fcmToken;
-      if (buyerToken) {
-        await sendFcmToToken(buildFcmMessage({
-          token: buyerToken,
-          title: 'Bidhaa Imesafirishwa!',
-          body: `${tx.productName || 'Bidhaa'} imesafirishwa. Thibitisha upokeaji ukishapata mzigo.`,
-          data: { type: 'dispatched', transactionId: orderId },
-        }), tx.buyerId);
-      }
+      await sendOneSignalNotification(tx.buyerId, 'Bidhaa Imesafirishwa!', `${tx.productName || 'Bidhaa'} imesafirishwa. Thibitisha upokeaji ukishapata mzigo.`, { type: 'dispatched', transactionId: orderId });
     } catch (_) {}
 
     res.json({ success: true, message: 'Bidhaa imesafirishwa. Mnunuzi ataarifiwa.' });
@@ -1340,12 +1359,7 @@ app.post('/api/escrow/release', async (req, res) => {
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       try {
-        const st = (sellerDoc.data())?.fcmToken;
-        if (st) sendFcmToToken(buildFcmMessage({
-          token: st, title: 'Pesa Zimetumwa Moja kwa Moja!',
-          body: `TZS ${(sellerReceives - PAYOUT_FEE).toLocaleString()} zimetumwa kwa simu yako (fee TZS ${PAYOUT_FEE.toLocaleString()}).`,
-          data: { type: 'auto_payout', transactionId: orderId },
-        }), sellerId).catch(() => {});
+        sendOneSignalNotification(sellerId, 'Pesa Zimetumwa Moja kwa Moja!', `TZS ${(sellerReceives - PAYOUT_FEE).toLocaleString()} zimetumwa kwa simu yako (fee TZS ${PAYOUT_FEE.toLocaleString()}).`, { type: 'auto_payout', transactionId: orderId }).catch(() => {});
       } catch (_) {}
     } else {
       await db.collection('notifications').add({
@@ -1356,16 +1370,7 @@ app.post('/api/escrow/release', async (req, res) => {
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       try {
-        const sellerUser = await db.collection('users').doc(sellerId).get();
-        const sellerToken = sellerUser.data()?.fcmToken;
-        if (sellerToken) {
-          await sendFcmToToken(buildFcmMessage({
-            token: sellerToken,
-            title: 'Escrow Imefunguliwa!',
-            body: `${productName} — TZS ${sellerReceives.toLocaleString()} zimewekwa salio lako.`,
-            data: { type: 'escrow_release', transactionId: orderId },
-          }), sellerId);
-        }
+        await sendOneSignalNotification(sellerId, 'Escrow Imefunguliwa!', `${productName} — TZS ${sellerReceives.toLocaleString()} zimewekwa salio lako.`, { type: 'escrow_release', transactionId: orderId });
       } catch (_) {}
     }
 
@@ -1377,18 +1382,9 @@ app.post('/api/escrow/release', async (req, res) => {
       isRead: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-    // Send FCM to buyer
+    // Push to buyer
     try {
-      const buyerSnap = await db.collection('users').doc(userId).get();
-      const buyerToken = buyerSnap.data()?.fcmToken;
-      if (buyerToken) {
-        await sendFcmToToken(buildFcmMessage({
-          token: buyerToken,
-          title: 'Umethibitisha Upokeaji',
-          body: `${productName} — asante kwa kununua ndani ya SokoVibe!`,
-          data: { type: 'delivery_confirmed', transactionId: orderId },
-        }), userId);
-      }
+      await sendOneSignalNotification(userId, 'Umethibitisha Upokeaji', `${productName} — asante kwa kununua ndani ya SokoVibe!`, { type: 'delivery_confirmed', transactionId: orderId });
     } catch (_) {}
 
     // SMS seller about escrow release / auto payout
@@ -1493,16 +1489,7 @@ app.post('/api/mongike/webhook', verifyWebhook, async (req, res) => {
             isRead: false,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
           }).catch(() => {});
-          const userSnap = await db.collection('users').doc(tx.userId).get();
-          const token = userSnap.data()?.fcmToken;
-          if (token) {
-            sendFcmToToken(buildFcmMessage({
-              token,
-              title: '✅ Boost imewashwa!',
-              body: `Bidhaa yako imepandishwa kwa daraja la ${tier} kwa siku ${tierConfig.days}.`,
-              data: { type: 'boost', productId: tx.productId || '' },
-            }), tx.userId).catch(() => {});
-          }
+          sendOneSignalNotification(tx.userId, '✅ Boost imewashwa!', `Bidhaa yako imepandishwa kwa daraja la ${tier} kwa siku ${tierConfig.days}.`, { type: 'boost', productId: tx.productId || '' }).catch(() => {});
         }
 
         notifyBoostBroadcast(tx.productId, tier, tx.userId).catch(() => {});
@@ -1603,17 +1590,7 @@ app.post('/api/mongike/webhook', verifyWebhook, async (req, res) => {
               buyerPhone: tx.buyerPhone || '',
               createdAt: admin.firestore.FieldValue.serverTimestamp(),
             }).catch(() => {});
-            db.collection('users').doc(tx.sellerId).get().then(sellerSnap => {
-              const sellerToken = sellerSnap.data()?.fcmToken;
-              if (sellerToken) {
-                sendFcmToToken(buildFcmMessage({
-                  token: sellerToken,
-                  title: 'Umepata Mauzo!',
-                  body: `${tx.productName || 'Bidhaa'} imeuzwa. TZS ${sellerReceives.toLocaleString()} zimewekwa escrow.`,
-                  data: { type: 'order', productId: tx.productId || '', transactionId: orderId },
-                }), tx.sellerId).catch(() => {});
-              }
-            }).catch(() => {});
+            sendOneSignalNotification(tx.sellerId, 'Umepata Mauzo!', `${tx.productName || 'Bidhaa'} imeuzwa. TZS ${sellerReceives.toLocaleString()} zimewekwa escrow.`, { type: 'order', productId: tx.productId || '', transactionId: orderId }).catch(() => {});
           }).catch(() => {});
         }
 
@@ -1627,17 +1604,7 @@ app.post('/api/mongike/webhook', verifyWebhook, async (req, res) => {
             transactionId: orderId,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
           }).catch(() => {});
-          db.collection('users').doc(tx.buyerId).get().then(buyerSnap => {
-            const buyerToken = buyerSnap.data()?.fcmToken;
-            if (buyerToken) {
-              sendFcmToToken(buildFcmMessage({
-                token: buyerToken,
-                title: 'Malipo Yamekamilika!',
-                body: `Malipo ya ${tx.productName || 'Bidhaa'} yamepokelewa.`,
-                data: { type: 'order', productId: tx.productId || '', transactionId: orderId },
-              }), tx.buyerId).catch(() => {});
-            }
-          }).catch(() => {});
+          sendOneSignalNotification(tx.buyerId, 'Malipo Yamekamilika!', `Malipo ya ${tx.productName || 'Bidhaa'} yamepokelewa.`, { type: 'order', productId: tx.productId || '', transactionId: orderId }).catch(() => {});
         }
 
         // SMS notifications for escrow_hold
@@ -1676,16 +1643,7 @@ app.post('/api/mongike/webhook', verifyWebhook, async (req, res) => {
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
         try {
-          const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
-          const buyerToken = buyerSnap.data()?.fcmToken;
-          if (buyerToken) {
-            await sendFcmToToken(buildFcmMessage({
-              token: buyerToken,
-              title: 'Malipo Yameshindikana',
-              body: `Malipo ya ${tx.productName || 'Bidhaa'} hayakukamilika. Jaribu tena kwenye app.`,
-              data: { type: 'payment_failed', productId: tx.productId || '', transactionId: orderId },
-            }), tx.buyerId);
-          }
+          await sendOneSignalNotification(tx.buyerId, 'Malipo Yameshindikana', `Malipo ya ${tx.productName || 'Bidhaa'} hayakukamilika. Jaribu tena kwenye app.`, { type: 'payment_failed', productId: tx.productId || '', transactionId: orderId });
         } catch (_) {}
         try {
           const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
@@ -1880,16 +1838,7 @@ app.post('/api/escrow/cancel', async (req, res) => {
       data: { type: 'refund', orderId },
     });
     try {
-      const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
-      const buyerToken = buyerSnap.data()?.fcmToken;
-      if (buyerToken) {
-        await sendFcmToToken(buildFcmMessage({
-          token: buyerToken,
-          title: '💰 Pesa Zimerudishwa',
-          body: `TZS ${refundAmount.toLocaleString()} zimerudishwa kwa ${productName}. Ada ya TZS ${PAYOUT_FEE.toLocaleString()} imekatwa kwa gharama za payout.`,
-          data: { type: 'refund', orderId },
-        }), tx.buyerId);
-      }
+      await sendOneSignalNotification(tx.buyerId, '💰 Pesa Zimerudishwa', `TZS ${refundAmount.toLocaleString()} zimerudishwa kwa ${productName}. Ada ya TZS ${PAYOUT_FEE.toLocaleString()} imekatwa kwa gharama za payout.`, { type: 'refund', orderId });
     } catch (_) {}
 
     // Notify seller
@@ -1903,16 +1852,7 @@ app.post('/api/escrow/cancel', async (req, res) => {
         data: { type: 'cancelled', orderId },
       });
       try {
-        const sellerSnap = await db.collection('users').doc(sellerId).get();
-        const sellerToken = sellerSnap.data()?.fcmToken;
-        if (sellerToken) {
-          await sendFcmToToken(buildFcmMessage({
-            token: sellerToken,
-            title: '❌ Oda Imeghairiwa',
-            body: `${productName} imeghairiwa na mnunuzi. Pesa zimetolewa kwenye pendingEscrow yako.`,
-            data: { type: 'cancelled', orderId },
-          }), sellerId);
-        }
+        await sendOneSignalNotification(sellerId, '❌ Oda Imeghairiwa', `${productName} imeghairiwa na mnunuzi. Pesa zimetolewa kwenye pendingEscrow yako.`, { type: 'cancelled', orderId });
       } catch (_) {}
     }
 
@@ -1973,16 +1913,7 @@ app.post('/api/escrow/dispute', async (req, res) => {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     try {
-      const sellerSnap = await db.collection('users').doc(tx.sellerId).get();
-      const sellerToken = sellerSnap.data()?.fcmToken;
-      if (sellerToken) {
-        await sendFcmToToken(buildFcmMessage({
-          token: sellerToken,
-          title: '\u2696\uFE0F Mgogoro Umefunguliwa',
-          body: `Mnunuzi amefungua mgogoro kwa ${productName}. Tafadhali wasilisha ushahidi wako.`,
-          data: { type: 'disputed', transactionId: orderId },
-        }), tx.sellerId);
-      }
+      await sendOneSignalNotification(tx.sellerId, '\u2696\uFE0F Mgogoro Umefunguliwa', `Mnunuzi amefungua mgogoro kwa ${productName}. Tafadhali wasilisha ushahidi wako.`, { type: 'disputed', transactionId: orderId });
     } catch (_) {}
 
     // Notify buyer
@@ -1995,16 +1926,7 @@ app.post('/api/escrow/dispute', async (req, res) => {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     try {
-      const buyerSnap = await db.collection('users').doc(userId).get();
-      const buyerToken = buyerSnap.data()?.fcmToken;
-      if (buyerToken) {
-        await sendFcmToToken(buildFcmMessage({
-          token: buyerToken,
-          title: '\u2696\uFE0F Mgogoro Umefunguliwa',
-          body: `Tumepokea mgogoro wako kwa ${productName}. Admin atakagua na kutoa uamuzi.`,
-          data: { type: 'disputed', transactionId: orderId },
-        }), userId);
-      }
+      await sendOneSignalNotification(userId, '\u2696\uFE0F Mgogoro Umefunguliwa', `Tumepokea mgogoro wako kwa ${productName}. Admin atakagua na kutoa uamuzi.`, { type: 'disputed', transactionId: orderId });
     } catch (_) {}
 
     // Alert admin
@@ -2083,16 +2005,7 @@ app.post('/api/escrow/admin-resolve-dispute', async (req, res) => {
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       try {
-        const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
-        const buyerToken = buyerSnap.data()?.fcmToken;
-        if (buyerToken) {
-          await sendFcmToToken(buildFcmMessage({
-            token: buyerToken,
-            title: '\u2696\uFE0F Uamuzi wa Mgogoro',
-            body: `Admin ameamua pesa zitolewe kwa muuzaji. ${note || ''}`,
-            data: { type: 'dispute_resolved', transactionId: orderId },
-          }), tx.buyerId);
-        }
+        await sendOneSignalNotification(tx.buyerId, '\u2696\uFE0F Uamuzi wa Mgogoro', `Admin ameamua pesa zitolewe kwa muuzaji. ${note || ''}`, { type: 'dispute_resolved', transactionId: orderId });
       } catch (_) {}
       await db.collection('notifications').add({
         userId: sellerId,
@@ -2103,16 +2016,7 @@ app.post('/api/escrow/admin-resolve-dispute', async (req, res) => {
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       try {
-        const sellerSnap = await db.collection('users').doc(sellerId).get();
-        const sellerToken = sellerSnap.data()?.fcmToken;
-        if (sellerToken) {
-          await sendFcmToToken(buildFcmMessage({
-            token: sellerToken,
-            title: '\u2696\uFE0F Uamuzi wa Mgogoro',
-            body: `Admin ameamua pesa zikutolee. ${note || ''}`,
-            data: { type: 'dispute_resolved', transactionId: orderId },
-          }), sellerId);
-        }
+        await sendOneSignalNotification(sellerId, '\u2696\uFE0F Uamuzi wa Mgogoro', `Admin ameamua pesa zikutolee. ${note || ''}`, { type: 'dispute_resolved', transactionId: orderId });
       } catch (_) {}
 
       return res.json({ success: true, message: 'Dispute resolved: funds released to seller' });
@@ -2178,16 +2082,7 @@ app.post('/api/escrow/admin-resolve-dispute', async (req, res) => {
         data: { type: 'refund', orderId },
       });
       try {
-        const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
-        const buyerToken = buyerSnap.data()?.fcmToken;
-        if (buyerToken) {
-          await sendFcmToToken(buildFcmMessage({
-            token: buyerToken,
-            title: '\uD83D\uDCB0 Pesa Zimerudishwa Kamili',
-            body: `Refund kamili ya TZS ${refundAmount.toLocaleString()} kwa ${productName} imetumwa kwa namba yako.`,
-            data: { type: 'refund', orderId },
-          }), tx.buyerId);
-        }
+        await sendOneSignalNotification(tx.buyerId, '\uD83D\uDCB0 Pesa Zimerudishwa Kamili', `Refund kamili ya TZS ${refundAmount.toLocaleString()} kwa ${productName} imetumwa kwa namba yako.`, { type: 'refund', orderId });
       } catch (_) {}
 
       // Notify seller
@@ -2201,16 +2096,7 @@ app.post('/api/escrow/admin-resolve-dispute', async (req, res) => {
           data: { type: 'refund', orderId },
         });
         try {
-          const sellerSnap = await db.collection('users').doc(sellerId).get();
-          const sellerToken = sellerSnap.data()?.fcmToken;
-          if (sellerToken) {
-            await sendFcmToToken(buildFcmMessage({
-              token: sellerToken,
-              title: '\u274C Mgogoro Umekamilika',
-              body: `${productName} imerefundiwa mnunuzi. Pesa zimetolewa kwenye pendingEscrow yako.${gatewayFee > 0 ? ' Ada ya gateway imetozwa kwenye akaunti yako.' : ''}`,
-              data: { type: 'refund', orderId },
-            }), sellerId);
-          }
+          await sendOneSignalNotification(sellerId, '\u274C Mgogoro Umekamilika', `${productName} imerefundiwa mnunuzi. Pesa zimetolewa kwenye pendingEscrow yako.${gatewayFee > 0 ? ' Ada ya gateway imetozwa kwenye akaunti yako.' : ''}`, { type: 'refund', orderId });
         } catch (_) {}
       }
 
@@ -2242,7 +2128,7 @@ app.post('/api/escrow/retry-payout', async (req, res) => {
     // Verify admin
     const authHeader = req.headers.authorization || '';
     const token = authHeader.replace('Bearer ', '');
-    if (token) {
+    if (true) {
       const decoded = await admin.auth().verifyIdToken(token);
       const userDoc = await db.collection('users').doc(decoded.uid).get();
       if (!userDoc.exists || !userDoc.data().isAdmin) {
@@ -2415,20 +2301,11 @@ app.post('/api/kyc/submit', async (req, res) => {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     try {
-      const userSnap = await db.collection('users').doc(userId).get();
-      const fcmToken = userSnap.data()?.fcmToken;
-      if (fcmToken) {
-        const kycTitle = autoApproved ? 'KYC Imekubaliwa!' : 'KYC Inahitaji Ukaguzi';
-        const kycBody = autoApproved
-          ? 'Umekubaliwa kuuza bidhaa. Sasa unaweza kuongeza bidhaa zako.'
-          : `KYC yako inahitaji marekebisho: ${reason}. Tuma tena baada ya kusahihisha.`;
-        await sendFcmToToken(buildFcmMessage({
-          token: fcmToken,
-          title: kycTitle,
-          body: kycBody,
-          data: { type: 'kyc', status: autoApproved ? 'approved' : 'pending' },
-        }), userId);
-      }
+      const kycTitle = autoApproved ? 'KYC Imekubaliwa!' : 'KYC Inahitaji Ukaguzi';
+      const kycBody = autoApproved
+        ? 'Umekubaliwa kuuza bidhaa. Sasa unaweza kuongeza bidhaa zako.'
+        : `KYC yako inahitaji marekebisho: ${reason}. Tuma tena baada ya kusahihisha.`;
+      await sendOneSignalNotification(userId, kycTitle, kycBody, { type: 'kyc', status: autoApproved ? 'approved' : 'pending' });
     } catch (_) {}
 
     res.json({
@@ -2486,20 +2363,11 @@ app.post('/api/admin/kyc/review', async (req, res) => {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     try {
-      const userSnap = await db.collection('users').doc(userId).get();
-      const fcmToken = userSnap.data()?.fcmToken;
-      if (fcmToken) {
-        const kycTitle = approve ? 'KYC Imekubaliwa!' : 'KYC Imekataliwa';
-        const kycBody = approve
-          ? 'Umekubaliwa kuuza bidhaa. Sasa unaweza kuongeza bidhaa mpya.'
-          : `KYC yako imekataliwa. Sababu: ${notes || 'Tafadhali wasiliana na msaada'}. Wasilisha tena baada ya kurekebisha.`;
-        await sendFcmToToken(buildFcmMessage({
-          token: fcmToken,
-          title: kycTitle,
-          body: kycBody,
-          data: { type: 'kyc', status: approve ? 'approved' : 'rejected' },
-        }), userId);
-      }
+      const kycTitle = approve ? 'KYC Imekubaliwa!' : 'KYC Imekataliwa';
+      const kycBody = approve
+        ? 'Umekubaliwa kuuza bidhaa. Sasa unaweza kuongeza bidhaa mpya.'
+        : `KYC yako imekataliwa. Sababu: ${notes || 'Tafadhali wasiliana na msaada'}. Wasilisha tena baada ya kurekebisha.`;
+      await sendOneSignalNotification(userId, kycTitle, kycBody, { type: 'kyc', status: approve ? 'approved' : 'rejected' });
     } catch (_) {}
 
     // Update sellerKycApproved on all products if approved
@@ -2685,7 +2553,7 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
         // Product updated successfully — now mark transaction completed
         await txDoc.ref.update({ status: 'completed' });
 
-        // Send notification + FCM push
+        // Send notification + push
         if (tx.userId) {
           await db.collection('notifications').add({
             userId: tx.userId,
@@ -2695,18 +2563,8 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
             isRead: false,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
           });
-          // Send FCM push
           try {
-            const userSnap = await db.collection('users').doc(tx.userId).get();
-            const token = userSnap.data()?.fcmToken;
-            if (token) {
-              await sendFcmToToken(buildFcmMessage({
-                token,
-                title: '✅ Boost imewashwa!',
-                body: `Bidhaa yako imepandishwa kwa daraja la ${tier} kwa siku ${tierConfig.days}.`,
-                data: { type: 'boost', productId: tx.productId || '' },
-              }), tx.userId);
-            }
+            await sendOneSignalNotification(tx.userId, '✅ Boost imewashwa!', `Bidhaa yako imepandishwa kwa daraja la ${tier} kwa siku ${tierConfig.days}.`, { type: 'boost', productId: tx.productId || '' });
           } catch (_) {}
         }
 
@@ -2824,23 +2682,8 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
             buyerPhone: tx.buyerPhone || '',
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
           });
-          // Send FCM push to seller
           try {
-            const sellerSnap = await db.collection('users').doc(tx.sellerId).get();
-            const sellerToken = sellerSnap.data()?.fcmToken;
-            if (sellerToken) {
-              await sendFcmToToken(buildFcmMessage({
-                token: sellerToken,
-                title: 'Umepata Mauzo!',
-                body: `${tx.productName || 'Bidhaa'} imeuzwa. TZS ${sellerReceives.toLocaleString()} imewekwa escrow.`,
-                data: {
-                  type: 'order',
-                  productId: tx.productId || '',
-                  transactionId: order_id,
-                  buyerPhone: tx.buyerPhone || '',
-                },
-              }), tx.sellerId);
-            }
+            await sendOneSignalNotification(tx.sellerId, 'Umepata Mauzo!', `${tx.productName || 'Bidhaa'} imeuzwa. TZS ${sellerReceives.toLocaleString()} imewekwa escrow.`, { type: 'order', productId: tx.productId || '', transactionId: order_id, buyerPhone: tx.buyerPhone || '' });
           } catch (_) {}
         }
 
@@ -2855,18 +2698,8 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
             transactionId: order_id,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
           });
-          // Send FCM push to buyer
           try {
-            const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
-            const buyerToken = buyerSnap.data()?.fcmToken;
-            if (buyerToken) {
-              await sendFcmToToken(buildFcmMessage({
-                token: buyerToken,
-                title: 'Malipo Yamekamilika!',
-                body: `Malipo ya ${tx.productName || 'Bidhaa'} yamepokelewa.`,
-                data: { type: 'order', productId: tx.productId || '', transactionId: order_id },
-              }), tx.buyerId);
-            }
+            await sendOneSignalNotification(tx.buyerId, 'Malipo Yamekamilika!', `Malipo ya ${tx.productName || 'Bidhaa'} yamepokelewa.`, { type: 'order', productId: tx.productId || '', transactionId: order_id });
           } catch (_) {}
         }
       }
@@ -3251,8 +3084,6 @@ app.post('/api/seller/withdraw', async (req, res) => {
 
     // Notify seller about withdrawal initiation
     try {
-      const userSnap = await db.collection('users').doc(userId).get();
-      const fcmToken = userSnap.data()?.fcmToken;
       await db.collection('notifications').add({
         userId,
         title: '💰 Utoaji wa Pesa Umeanzishwa',
@@ -3261,14 +3092,7 @@ app.post('/api/seller/withdraw', async (req, res) => {
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         data: { type: 'withdrawal', payoutId: payoutResult.payoutId },
       });
-      if (fcmToken) {
-        await sendFcmToToken(buildFcmMessage({
-          token: fcmToken,
-          title: '💰 Utoaji wa Pesa Umeanzishwa',
-          body: `TZS ${netAmount.toLocaleString()} zinaandaliwa kutuma kwa ${phone}.`,
-          data: { type: 'withdrawal', payoutId: payoutResult.payoutId },
-        }), userId);
-      }
+      await sendOneSignalNotification(userId, '💰 Utoaji wa Pesa Umeanzishwa', `TZS ${netAmount.toLocaleString()} zinaandaliwa kutuma kwa ${phone}.`, { type: 'withdrawal', payoutId: payoutResult.payoutId });
     } catch (_) {}
 
     res.json({
@@ -3857,16 +3681,7 @@ app.delete('/api/admin/users/:uid', async (req, res) => {
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         data: { type: 'account', status: 'suspended' },
       });
-      const userSnap = await db.collection('users').doc(uid).get();
-      const fcmToken = userSnap.data()?.fcmToken;
-      if (fcmToken) {
-        await sendFcmToToken(buildFcmMessage({
-          token: fcmToken,
-          title: 'Akaunti Yako Imesitishwa',
-          body: 'Akaunti yako imesitishwa. Wasiliana na msaada kwa maelezo zaidi.',
-          data: { type: 'account', status: 'suspended' },
-        }), uid);
-      }
+      await sendOneSignalNotification(uid, 'Akaunti Yako Imesitishwa', 'Akaunti yako imesitishwa. Wasiliana na msaada kwa maelezo zaidi.', { type: 'account', status: 'suspended' });
     } catch (_) {}
 
     res.json({ success: true, message: 'User suspended' });
@@ -3916,16 +3731,7 @@ app.post('/api/admin/users/:uid/unsuspend', async (req, res) => {
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         data: { type: 'account', status: 'unsuspended' },
       });
-      const userSnap = await db.collection('users').doc(uid).get();
-      const fcmToken = userSnap.data()?.fcmToken;
-      if (fcmToken) {
-        await sendFcmToToken(buildFcmMessage({
-          token: fcmToken,
-          title: 'Akaunti Yako Imerejeshwa',
-          body: 'Akaunti yako imerejeshwa. Sasa unaweza kuendelea kutumia Soko Vibe.',
-          data: { type: 'account', status: 'unsuspended' },
-        }), uid);
-      }
+      await sendOneSignalNotification(uid, 'Akaunti Yako Imerejeshwa', 'Akaunti yako imerejeshwa. Sasa unaweza kuendelea kutumia Soko Vibe.', { type: 'account', status: 'unsuspended' });
     } catch (_) {}
 
     res.json({ success: true, message: 'User unsuspended' });
@@ -4668,49 +4474,29 @@ app.post('/api/flash-sale/notify', asyncHandler(async (req, res) => {
 
     const { productName, salePrice, discountPercent, sellerId, productImage } = req.body;
 
-    // Get all users with FCM tokens (paginated by document ID)
+    // Get all users (paginated by document ID)
     let sentCount = 0;
     let lastPushId = null;
     const PAGE_SIZE = 500;
 
     try {
+      const userIds = [];
+      let lastPushId = null;
       while (true) {
-        let query = db.collection('users')
-          .where('fcmToken', '!=', null);
+        let query = db.collection('users');
         if (lastPushId) query = query.startAfter(lastPushId);
         query = query.limit(PAGE_SIZE);
         const usersSnap = await query.get();
         if (usersSnap.empty) break;
-
-        const tokens = [];
         for (const doc of usersSnap.docs) {
-          const token = doc.data().fcmToken;
-          if (token) tokens.push(token);
+          if (doc.id) userIds.push(doc.id);
         }
-
-        // Send FCM in batches of 500
-        for (let i = 0; i < tokens.length; i += PAGE_SIZE) {
-          const chunk = tokens.slice(i, i + PAGE_SIZE);
-          const message = buildFcmMessage({
-            tokens: chunk,
-            title: `⚡ Flash Sale! -${discountPercent}%`,
-            body: `${productName} sasa TSh ${salePrice} pekee!`,
-            data: {
-              type: 'flash_sale',
-              productName: productName || '',
-              image: productImage || '',
-            },
-          });
-          try {
-            const resp = await admin.messaging().sendEachForMulticast(message);
-            sentCount += resp.successCount;
-          } catch (_) {}
-        }
-
         lastPushId = usersSnap.docs[usersSnap.docs.length - 1].id;
       }
-    } catch (fcmErr) {
-      console.error('FCM push skipped for flash sale:', fcmErr.message);
+      const osResult = await sendOneSignalBulk(userIds, `⚡ Flash Sale! -${discountPercent}%`, `${productName} sasa TSh ${salePrice} pekee!`, { type: 'flash_sale', productName: productName || '', image: productImage || '' });
+      sentCount = osResult.successCount;
+    } catch (pushErr) {
+      console.error('OneSignal push skipped for flash sale:', pushErr.message);
     }
 
     // Write in-app notification for all users
@@ -4784,41 +4570,22 @@ async function notifyBoostBroadcast(productId, tier, sellerId) {
     const PAGE_SIZE = 500;
 
     try {
+      const userIds = [];
       while (true) {
-        let query = db.collection('users').where('fcmToken', '!=', null);
+        let query = db.collection('users');
         if (lastDocId) query = query.startAfter(lastDocId);
         query = query.limit(PAGE_SIZE);
         const snap = await query.get();
         if (snap.empty) break;
-
-        const tokens = [];
         for (const doc of snap.docs) {
-          const token = doc.data().fcmToken;
-          if (token) tokens.push(token);
-        }
-
-        for (let i = 0; i < tokens.length; i += PAGE_SIZE) {
-          const chunk = tokens.slice(i, i + PAGE_SIZE);
-          const message = buildFcmMessage({
-            tokens: chunk,
-            title,
-            body,
-            data: {
-              type: 'boost',
-              productId: productId || '',
-              productName: productName || '',
-              image: imageUrl || '',
-            },
-          });
-          try {
-            const resp = await admin.messaging().sendEachForMulticast(message);
-            sentCount += resp.successCount;
-          } catch (_) {}
+          if (doc.id) userIds.push(doc.id);
         }
         lastDocId = snap.docs[snap.docs.length - 1].id;
       }
-    } catch (fcmErr) {
-      console.error('FCM push skipped for boost:', fcmErr.message);
+      const osResult = await sendOneSignalBulk(userIds, title, body, { type: 'boost', productId: productId || '', productName: productName || '', image: imageUrl || '' });
+      sentCount = osResult.successCount;
+    } catch (pushErr) {
+      console.error('OneSignal push skipped for boost:', pushErr.message);
     }
 
     let inAppNotified = 0;
@@ -4850,7 +4617,7 @@ async function notifyBoostBroadcast(productId, tier, sellerId) {
       lastNotifId = usersSnap.docs[usersSnap.docs.length - 1].id;
     }
 
-    console.log(`Boost notify: ${sentCount} FCM, ${inAppNotified} in-app`);
+    console.log(`Boost notify: ${sentCount} OneSignal, ${inAppNotified} in-app`);
   } catch (e) {
     console.error('Boost notify error:', e);
   }
@@ -4926,16 +4693,7 @@ async function releaseExpiredEscrows() {
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
         try {
-          const sellerSnap = await db.collection('users').doc(sellerId).get();
-          const sellerToken = sellerSnap.data()?.fcmToken;
-          if (sellerToken) {
-            await sendFcmToToken(buildFcmMessage({
-              token: sellerToken,
-              title: 'Escrow Imefunguliwa Kiotomatiki',
-              body: `${tx.productName || 'Bidhaa'} — TZS ${sellerReceives.toLocaleString()} zimewekwa salio lako.`,
-              data: { type: 'escrow_auto_release', transactionId: doc.id },
-            }), sellerId);
-          }
+          await sendOneSignalNotification(sellerId, 'Escrow Imefunguliwa Kiotomatiki', `${tx.productName || 'Bidhaa'} — TZS ${sellerReceives.toLocaleString()} zimewekwa salio lako.`, { type: 'escrow_auto_release', transactionId: doc.id });
         } catch (_) {}
       }
 
@@ -4948,16 +4706,7 @@ async function releaseExpiredEscrows() {
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
         try {
-          const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
-          const buyerToken = buyerSnap.data()?.fcmToken;
-          if (buyerToken) {
-            await sendFcmToToken(buildFcmMessage({
-              token: buyerToken,
-              title: 'Escrow Imefunguliwa Kiotomatiki',
-              body: `${tx.productName || 'Bidhaa'} — muda wa escrow umeisha, pesa zimefunguliwa kwa muuzaji.`,
-              data: { type: 'escrow_auto_release', transactionId: doc.id },
-            }), tx.buyerId);
-          }
+          await sendOneSignalNotification(tx.buyerId, 'Escrow Imefunguliwa Kiotomatiki', `${tx.productName || 'Bidhaa'} — muda wa escrow umeisha, pesa zimefunguliwa kwa muuzaji.`, { type: 'escrow_auto_release', transactionId: doc.id });
         } catch (_) {}
       }
     }
@@ -5064,16 +4813,7 @@ app.post('/api/mongike/payout-webhook', verifyWebhook, async (req, res) => {
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
         try {
-          const sellerSnap = await db.collection('users').doc(sellerId).get();
-          const fcmToken = sellerSnap.data()?.fcmToken;
-          if (fcmToken) {
-            await sendFcmToToken(buildFcmMessage({
-              token: fcmToken,
-              title: 'Payout imefanikiwa!',
-              body: `TZS ${(payout.netAmount || payout.amount).toLocaleString()} zimetumwa kwenye mobile money yako.`,
-              data: { type: 'withdrawal', status: 'completed' },
-            }), sellerId);
-          }
+          await sendOneSignalNotification(sellerId, 'Payout imefanikiwa!', `TZS ${(payout.netAmount || payout.amount).toLocaleString()} zimetumwa kwenye mobile money yako.`, { type: 'withdrawal', status: 'completed' });
         } catch (_) {}
       }
     } else if (eventStatus === 'FAILED') {
@@ -5120,16 +4860,7 @@ app.post('/api/mongike/payout-webhook', verifyWebhook, async (req, res) => {
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
             data: { type: 'withdrawal', status: 'failed', payoutId: payoutRef },
           });
-          const userSnap = await db.collection('users').doc(payout.userId).get();
-          const fcmToken = userSnap.data()?.fcmToken;
-          if (fcmToken) {
-            await sendFcmToToken(buildFcmMessage({
-              token: fcmToken,
-              title: '❌ Utoaji wa Pesa Umeshindwa',
-              body: `TZS ${(payout.netAmount || payout.amount).toLocaleString()} hazikutumwa. Pesa zimerudishwa kwenye pochi yako. Jaribu tena.`,
-              data: { type: 'withdrawal', status: 'failed', payoutId: payoutRef },
-            }), payout.userId);
-          }
+          await sendOneSignalNotification(payout.userId, '❌ Utoaji wa Pesa Umeshindwa', `TZS ${(payout.netAmount || payout.amount).toLocaleString()} hazikutumwa. Pesa zimerudishwa kwenye pochi yako. Jaribu tena.`, { type: 'withdrawal', status: 'failed', payoutId: payoutRef });
         } catch (_) {}
       }
 
@@ -5309,7 +5040,7 @@ app.post('/api/notifications/broadcast', asyncHandler(async (req, res) => {
   if (!title) return res.status(400).json({ error: 'title required' });
 
   const usersSnap = await db.collection('users').get();
-  const tokens = [];
+  const userIds = [];
   let notifCount = 0;
   const batch = db.batch();
 
@@ -5325,32 +5056,15 @@ app.post('/api/notifications/broadcast', asyncHandler(async (req, res) => {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     notifCount++;
-    const token = userDoc.data().fcmToken;
-    if (token && typeof token === 'string' && token.length > 0) {
-      tokens.push(token);
-    }
+    userIds.push(uid);
   }
 
   await batch.commit();
 
   let sent = 0;
-  if (tokens.length > 0) {
-    const BATCH_SIZE = 500;
-    for (let i = 0; i < tokens.length; i += BATCH_SIZE) {
-      const tokenBatch = tokens.slice(i, i + BATCH_SIZE);
-      try {
-        const message = buildFcmMessage({
-          tokens: tokenBatch,
-          title,
-          body: body || '',
-          data: { ...(data || {}), type: (data && data.type) || 'general' },
-        });
-        const response = await admin.messaging().sendEachForMulticast(message);
-        sent += response.successCount;
-      } catch (e) {
-        console.error('Broadcast FCM batch error:', e.message);
-      }
-    }
+  if (userIds.length > 0) {
+    const osResult = await sendOneSignalBulk(userIds, title, body || '', { ...(data || {}), type: (data && data.type) || 'general' });
+    sent = osResult.successCount;
   }
 
   await db.collection('admin_notifications').add({
@@ -5362,7 +5076,7 @@ app.post('/api/notifications/broadcast', asyncHandler(async (req, res) => {
     sentAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
-  res.json({ success: true, notifications: notifCount, fcmSent: sent });
+  res.json({ success: true, notifications: notifCount, pushSent: sent });
 }));
 
 // ─── Global error handler (catches unhandled errors, never leaks internals) ───
@@ -5371,121 +5085,57 @@ app.use((err, req, res, _next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// ─── Clear stale FCM token for a user (forces fresh token on next app open) ──
+// ─── Clear-token (no-op — OneSignal manages tokens) ──
 app.post('/api/clear-token', async (req, res) => {
   try {
     const { uid } = req.body;
     if (!uid) return res.status(400).json({ error: 'uid required' });
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
-    await db.collection('users').doc(uid).update({ fcmToken: admin.firestore.FieldValue.delete() });
-    console.log(`[FCM] Cleared token for user ${uid}`);
-    res.json({ success: true });
+    console.log('[OS] Clear-token for ' + uid + ' — no-op (OneSignal manages tokens)');
+    res.json({ success: true, note: 'OneSignal manages tokens' });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// ─── Diagnostic: check FCM credentials + topic test ──────────────────
+// ─── Diagnostic: check OneSignal credentials ──────────────────
 app.get('/api/fcm-check', async (req, res) => {
   try {
-    const projectId = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '{}').project_id;
-    if (!admin.messaging) return res.json({ status: 'error', msg: 'admin.messaging unavailable' });
-    const results = {};
-    // Test 1: dry-run with bogus token
-    try {
-      await admin.messaging().send({ token: '__test__', data: { a: '1' } }, true);
-      results.dryRun = 'unexpected-success';
-    } catch (e) {
-      results.dryRun = { code: e.code, message: e.message };
-    }
-    // Test 2: send to a topic (no registration needed)
-    try {
-      const topicMsgId = await admin.messaging().send({
-        topic: 'test_diagnostic',
-        data: { title: 'FCM Check', body: 'This is a test', type: 'general' },
-        android: { priority: 'high' },
-      });
-      results.topicSend = { success: true, messageId: topicMsgId };
-    } catch (e) {
-      results.topicSend = { code: e.code, message: e.message };
-    }
-    // Test 3: try subscribing user token to topic
-    if (req.query.uid) {
-      try {
-        const userDoc = await db.collection('users').doc(req.query.uid).get();
-        if (userDoc.exists) {
-          const token = userDoc.data().fcmToken;
-          if (token) {
-            const subResult = await admin.messaging().subscribeToTopic([token], 'test_user_topic');
-            results.subscribeToTopic = subResult;
-            // Now try sending to that topic
-            const topicMsgId2 = await admin.messaging().send({
-              topic: 'test_user_topic',
-              data: { title: 'Topic Test', body: 'Sent via topic after subscribe attempt', type: 'general' },
-              android: { priority: 'high' },
-            });
-            results.sendToSubscribedTopic = { success: true, messageId: topicMsgId2 };
-          }
-        }
-      } catch (e) {
-        results.subscribeToTopic = { code: e.code, message: e.message };
-      }
-    }
-    return res.json({ status: 'complete', projectId, results });
+    const hasConfig = !!(process.env.ONE_SIGNAL_APP_ID && process.env.ONE_SIGNAL_REST_API_KEY);
+    res.json({
+      status: hasConfig ? 'configured' : 'missing-config',
+      provider: 'OneSignal',
+      hasAppId: !!process.env.ONE_SIGNAL_APP_ID,
+      hasApiKey: !!process.env.ONE_SIGNAL_REST_API_KEY,
+      appIdPrefix: process.env.ONE_SIGNAL_APP_ID ? process.env.ONE_SIGNAL_APP_ID.substring(0, 8) + '...' : null,
+      note: 'Use POST /api/test-fcm with userId + title to test push delivery',
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// ─── Diagnostic: test FCM push (by userId, email, or direct token) ─────
+// ─── Diagnostic: test OneSignal push (by userId) ─────
 app.post('/api/test-fcm', async (req, res) => {
   try {
-    const { userId, email, token: directToken, title, body } = req.body;
+    const { userId, title, body } = req.body;
     if (!title) return res.status(400).json({ error: 'title required' });
-    if (!userId && !email && !directToken) return res.status(400).json({ error: 'Provide userId, email, or token' });
+    if (!userId) return res.status(400).json({ error: 'userId required' });
     if (!db) return res.status(503).json({ error: 'Database not configured' });
-
-    let fcmToken = directToken;
-    let uid = userId || '';
-    if (!fcmToken) {
-      if (!uid && email) {
-        // Look up by email via Firebase Auth
-        try {
-          const userRecord = await admin.auth().getUserByEmail(email);
-          uid = userRecord.uid;
-        } catch (authErr) {
-          return res.status(404).json({ error: `User not found by email: ${authErr.message}` });
-        }
-      }
-      const userDoc = await db.collection('users').doc(uid).get();
-      if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
-      fcmToken = userDoc.data().fcmToken;
-      if (!fcmToken) return res.status(400).json({ error: 'No FCM token for this user. Open the app first.' });
-    }
-
-    // Try sending via Admin SDK
     try {
-      const result = await admin.messaging().send({
-        token: fcmToken,
-        data: { title: title || '', body: body || 'Test body', type: 'general' },
-        android: { priority: 'high' },
-      });
-      return res.json({ success: true, method: 'admin-sdk', messageId: result, tokenPrefix: fcmToken.substring(0, 8) + '...', uid });
-    } catch (adminErr) {
-      console.error('[FCM-DIAG] Admin SDK failed:', adminErr.code || adminErr.message);
-      const projectId = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '{}').project_id;
-      return res.status(502).json({
-        success: false,
-        error: adminErr.code || adminErr.message,
-        tokenPrefix: fcmToken.substring(0, 12) + '...',
-        uid,
-        hint: projectId ? `Enable FCM v1 API at https://console.cloud.google.com/apis/library/fcm.googleapis.com?project=${projectId}` : 'Check FIREBASE_SERVICE_ACCOUNT_JSON',
-      });
+      const result = await sendOneSignalNotification(userId, title || '', body || 'Test body', { type: 'general', test: 'true' });
+      if (result && result.id) {
+        return res.json({ success: true, method: 'OneSignal', notificationId: result.id, userId });
+      }
+      return res.status(502).json({ success: false, error: 'OneSignal send failed', result });
+    } catch (e) {
+      return res.status(502).json({ success: false, error: e.message });
     }
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
+
+
 
 // ============================================================
 // 💬 CHAT — Send message via REST (replaces onSnapshot listener)
@@ -5550,23 +5200,13 @@ app.post('/api/chat/send', async (req, res) => {
       last_timestamp: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    // Send FCM push to receiver — data-only so Awesome Notifications background
-    // handler shows the custom chat layout (Messaging layout + Reply button).
+    // Send OneSignal push to receiver
     const senderName = senderDoc.exists
       ? (senderDoc.data().displayName || senderDoc.data().name || 'Mtumiaji')
       : 'Mtumiaji';
-    const receiverDoc = await db.collection('users').doc(receiverId).get();
-    if (receiverDoc.exists) {
-      const fcmToken = receiverDoc.data().fcmToken;
-      if (fcmToken) {
-        const chatMessage = {
-          data: { title: senderName, body: text, type: 'chat', senderId, senderName, roomId },
-          token: fcmToken,
-          android: { priority: 'high' },
-        };
-        sendFcmToToken(chatMessage, receiverId).catch(() => {});
-      }
-    }
+    try {
+      await sendOneSignalNotification(receiverId, senderName, text, { type: 'chat', senderId, senderName, roomId });
+    } catch (_) {}
 
     res.json({ success: true, messageId: msgRef.id });
   } catch (e) {
@@ -5730,23 +5370,7 @@ function startProductListener() {
                   isRead: false,
                   createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 }).catch(() => {});
-                db.collection('users').doc(other).get()
-                  .then((userSnap) => {
-                    const fcmToken = userSnap.data()?.fcmToken;
-                    if (fcmToken) {
-                      sendFcmToToken(buildFcmMessage({
-                        token: fcmToken,
-                        title,
-                        body,
-                        data: { type: 'product', productId, sellerId, productName },
-                      }), other).catch((err) => {
-                        if (err.code?.startsWith('messaging/')) {
-                          db.collection('users').doc(other).update({ fcmToken: null });
-                        }
-                      });
-                    }
-                  })
-                  .catch(() => {});
+                sendOneSignalNotification(other, title, body, { type: 'product', productId, sellerId, productName }).catch(() => {});
               }
               if (notified.size > 0) {
                 console.log(`[PRODUCT] Notified ${notified.size} users about new product from ${sellerId}`);
@@ -5760,8 +5384,7 @@ function startProductListener() {
 }
 
 // ============================================================
-// 🔍 DIAGNOSTIC — Check FCM token status for a user
-// ============================================================
+// 🔍 DIAGNOSTIC — Check legacy FCM token in user doc
 app.get('/api/diag/fcm-token/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
@@ -5773,9 +5396,8 @@ app.get('/api/diag/fcm-token/:userId', async (req, res) => {
     res.json({
       userId,
       email,
-      hasToken: !!fcmToken,
+      hasLegacyFcmToken: !!fcmToken,
       tokenPrefix: fcmToken ? fcmToken.substring(0, 12) + '...' : null,
-      topic: `user_${userId}`,
     });
   } catch (e) {
     res.status(500).json({ error: e.message });

@@ -19,68 +19,55 @@ try {
 admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 const db = admin.firestore();
 
-// ─── Helpers (adapted from index.js) ─────────────────────────────────
-function stringifyFcmData(data = {}) {
-  const out = {};
-  for (const [k, v] of Object.entries(data || {})) {
-    if (v === undefined || v === null) continue;
-    out[String(k)] = String(v);
+// ─── OneSignal helpers (adapted from index.js) ──────────────────
+const ONE_SIGNAL_APP_ID = process.env.ONE_SIGNAL_APP_ID;
+const ONE_SIGNAL_REST_API_KEY = process.env.ONE_SIGNAL_REST_API_KEY;
+
+function getChannelId(data = {}) {
+  const type = (data && data.type) || 'general';
+  if (type === 'chat' || type === 'group_chat') return 'chat_messages_v4';
+  if (type === 'payment' || type === 'order' || type === 'withdrawal') return 'payments_notifications_v4';
+  return 'general_notifications_v4';
+}
+
+async function sendOsNotification(userId, title, body, data = {}) {
+  if (!userId) { console.log('[LISTENER][OS] No userId'); return null; }
+  if (!ONE_SIGNAL_APP_ID || !ONE_SIGNAL_REST_API_KEY) {
+    console.error('[LISTENER][OS] Missing ONE_SIGNAL_APP_ID or ONE_SIGNAL_REST_API_KEY');
+    return null;
   }
-  return out;
-}
-
-function buildFcmMessage({ token, title, body, data = {} }) {
-  const notifType = (data && data.type) || 'general';
-  const channelId = notifType === 'chat' ? 'chat_messages_v4'
-    : notifType === 'payment' || notifType === 'order' || notifType === 'withdrawal' ? 'payments_notifications_v4'
-    : 'general_notifications_v4';
-  const msg = {
-    data: stringifyFcmData({ title: title || '', body: body || '', ...data }),
-    android: {
-      priority: 'high',
-      notification: { channel_id: channelId, sound: 'soko_notification', icon: 'ic_notification' },
-    },
-  };
-  if (token) msg.token = token;
-  return msg;
-}
-
-async function sendFcm(message, userIdForCleanup = null) {
-  const notifType = (message.data && message.data.type) || 'unknown';
   try {
-    const result = await admin.messaging().send(message);
-    console.log(`[LISTENER][FCM] sent user=${userIdForCleanup || '?'} type=${notifType} success=${result}`);
+    const resp = await fetch('https://onesignal.com/api/v1/notifications', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Basic ${ONE_SIGNAL_REST_API_KEY}`,
+      },
+      body: JSON.stringify({
+        app_id: ONE_SIGNAL_APP_ID,
+        include_external_user_ids: [userId],
+        headings: { en: title || '' },
+        contents: { en: body || '' },
+        data: { ...(data || {}), type: (data && data.type) || 'general' },
+        android_channel_id: getChannelId(data),
+        android_sound: 'soko_notification',
+        android_icon: 'ic_notification',
+        priority: 10,
+        small_icon: 'ic_notification',
+        large_icon: 'ic_notification',
+        android_accent_color: 'FF40916C',
+      }),
+    });
+    const result = await resp.json();
+    if (result.id) {
+      console.log(`[LISTENER][OS] sent to ${userId} type=${(data && data.type) || 'general'} id=${result.id}`);
+    } else {
+      console.error(`[LISTENER][OS] send failed:`, JSON.stringify(result));
+    }
     return result;
   } catch (e) {
-    const errCode = e.code || '';
-    const errMsg = e.message || '';
-    console.error(`[LISTENER][FCM] FAILED user=${userIdForCleanup || '?'} type=${notifType} code=${errCode} msg=${errMsg}`, e.errorInfo || '');
-
-    // Stale / invalid token — try topic fallback, then clean up
-    if (userIdForCleanup && db &&
-        (errCode === 'messaging/registration-token-not-registered' ||
-         errCode === 'messaging/invalid-registration-token')) {
-      console.log(`[LISTENER][FCM] Token stale for ${userIdForCleanup}, trying topic fallback...`);
-      try {
-        const topicMsg = {
-          topic: `user_${userIdForCleanup}`,
-          data: message.data || {},
-          android: { priority: 'high' },
-        };
-        if (message.notification) topicMsg.notification = message.notification;
-        const topicResult = await admin.messaging().send(topicMsg);
-        console.log(`[LISTENER][FCM] Topic fallback succeeded for ${userIdForCleanup}: ${topicResult}`);
-        return topicResult;
-      } catch (topicErr) {
-        console.error(`[LISTENER][FCM] Topic fallback ALSO failed for ${userIdForCleanup}: ${topicErr.code || topicErr.message}`);
-      }
-      await db.collection('users').doc(userIdForCleanup).update({ fcmToken: null });
-      console.log(`[LISTENER][FCM] Cleared stale token for ${userIdForCleanup}`);
-      return null; // Token handled — don't throw
-    }
-
-    // Re-throw non-token errors so callers can choose how to handle
-    throw e;
+    console.error(`[LISTENER][OS] FAILED user=${userId}: ${e.message}`);
+    return null;
   }
 }
 
@@ -157,19 +144,13 @@ function startListener() {
         if (beforeStatus === 'pending' && (newStatus === 'escrow_hold' || newStatus === 'paid_escrow_held' || newStatus === 'completed')) {
           console.log(`[LISTENER] ${orderId}: ${beforeStatus} → ${newStatus}`);
 
-          // Notify buyer via FCM
+          // Notify buyer via OneSignal
           if (buyerId) {
-            db.collection('users').doc(buyerId).get()
-              .then((userSnap) => {
-                const fcmToken = userSnap.data()?.fcmToken;
-                if (fcmToken) {
-                  const title = 'Payment Received – Escrow Held';
-                  const body = `Your payment for ${productName} is held in escrow.`;
-                  return sendFcm(buildFcmMessage({ token: fcmToken, title, body, data: { type: 'payment', orderId, status: newStatus } }), buyerId);
-                }
-              })
-              .then(() => console.log(`[LISTENER] ${orderId}: FCM sent to buyer ${buyerId}`))
-              .catch((err) => console.error(`[LISTENER] ${orderId}: FCM failed for buyer:`, err.message));
+            const title = 'Payment Received – Escrow Held';
+            const body = `Your payment for ${productName} is held in escrow.`;
+            sendOsNotification(buyerId, title, body, { type: 'payment', orderId, status: newStatus })
+              .then(() => console.log(`[LISTENER] ${orderId}: push sent to buyer ${buyerId}`))
+              .catch((err) => console.error(`[LISTENER] ${orderId}: push failed for buyer:`, err.message));
           }
 
           // SMS buyer + seller
@@ -209,18 +190,12 @@ function startListener() {
         if (newStatus === 'failed' && beforeStatus !== 'failed') {
           console.log(`[LISTENER] ${orderId}: ${beforeStatus} → failed`);
 
-          // FCM to buyer
+          // Push to buyer
           if (buyerId) {
-            db.collection('users').doc(buyerId).get()
-              .then((userSnap) => {
-                const fcmToken = userSnap.data()?.fcmToken;
-                if (fcmToken) {
-                  const title = 'Malipo Yameshindikana';
-                  const body = `Malipo ya ${productName} hayakukamilika. Fungua app ili ujaribu tena.`;
-                  return sendFcm(buildFcmMessage({ token: fcmToken, title, body, data: { type: 'payment_failed', orderId, status: 'failed' } }), buyerId);
-                }
-              })
-              .catch((err) => console.error(`[LISTENER] ${orderId}: FCM failed for buyer:`, err.message));
+            const title = 'Malipo Yameshindikana';
+            const body = `Malipo ya ${productName} hayakukamilika. Fungua app ili ujaribu tena.`;
+            sendOsNotification(buyerId, title, body, { type: 'payment_failed', orderId, status: 'failed' })
+              .catch((err) => console.error(`[LISTENER] ${orderId}: push failed for buyer:`, err.message));
           }
 
           // SMS buyer
@@ -234,16 +209,10 @@ function startListener() {
           console.log(`[LISTENER] ${orderId}: ${beforeStatus} → refunded`);
 
           if (buyerId) {
-            db.collection('users').doc(buyerId).get()
-              .then((userSnap) => {
-                const fcmToken = userSnap.data()?.fcmToken;
-                if (fcmToken) {
-                  const title = 'Fedha Zimerudishwa';
-                  const body = `Fedha za ${productName} zimerudishwa kwenye akaunti yako.`;
-                  return sendFcm(buildFcmMessage({ token: fcmToken, title, body, data: { type: 'refund', orderId, status: 'refunded' } }), buyerId);
-                }
-              })
-              .catch((err) => console.error(`[LISTENER] ${orderId}: FCM failed for buyer:`, err.message));
+            const title = 'Fedha Zimerudishwa';
+            const body = `Fedha za ${productName} zimerudishwa kwenye akaunti yako.`;
+            sendOsNotification(buyerId, title, body, { type: 'refund', orderId, status: 'refunded' })
+              .catch((err) => console.error(`[LISTENER] ${orderId}: push failed for buyer:`, err.message));
           }
 
           // SMS buyer
@@ -328,37 +297,15 @@ function startChatListener() {
                   const senderData = senderSnap.data() || {};
                   const senderName = senderData.displayName || senderData.name || 'Mtumiaji';
 
-                  // Look up recipient's FCM token
-                  return db.collection('users').doc(receiverId).get()
-                    .then((receiverSnap) => {
-                      const receiverData = receiverSnap.data() || {};
-                      const fcmToken = receiverData.fcmToken;
-                      if (!fcmToken) {
-                        console.log(`[LISTENER] No FCM token for user ${receiverId}`);
-                        return;
-                      }
-
-                      // Send notification (data-only — client background handler creates via Awesome Notifications)
-                      const title = senderName;
-                      const body = text;
-
-                      const message = {
-                        data: { title, body, type: 'chat', senderId, senderName, roomId },
-                        token: fcmToken,
-                        android: { priority: 'high' },
-                      };
-
-                      return sendFcm(message, receiverId)
-                        .then(() => {
-                          console.log(`[LISTENER] Chat notification sent to ${receiverId}`);
-                        })
-                        .catch((err) => {
-                          // sendFcm already cleaned stale token and tried topic fallback
-                          if (err.code !== 'messaging/registration-token-not-registered' &&
-                              err.code !== 'messaging/invalid-registration-token') {
-                            console.error('[LISTENER] Chat FCM error:', err.code || err.message);
-                          }
-                        });
+                  // Send via OneSignal
+                  const title = senderName;
+                  const body = text;
+                  return sendOsNotification(receiverId, title, body, { type: 'chat', senderId, senderName, roomId })
+                    .then(() => {
+                      console.log(`[LISTENER] Chat notification sent to ${receiverId}`);
+                    })
+                    .catch((err) => {
+                      console.error('[LISTENER] Chat push error:', err.message);
                     });
                 });
             })
@@ -423,20 +370,7 @@ function startProductListener() {
                 isRead: false,
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
               }).catch(() => {});
-              db.collection('users').doc(other).get()
-                .then((userSnap) => {
-                  const fcmToken = userSnap.data()?.fcmToken;
-                  if (fcmToken) {
-                    sendFcm(buildFcmMessage({
-                      token: fcmToken, title, body,
-                      data: { type: 'product', productId, sellerId, productName },
-                    }), other).catch((err) => {
-                      if (err.code?.startsWith('messaging/')) {
-                        db.collection('users').doc(other).update({ fcmToken: null });
-                      }
-                    });
-                  }
-                }).catch(() => {});
+              sendOsNotification(other, title, body, { type: 'product', productId, sellerId, productName }).catch(() => {});
             }
             if (notified.size > 0) {
               console.log(`[LISTENER] Notified ${notified.size} users about new product from ${sellerId}`);

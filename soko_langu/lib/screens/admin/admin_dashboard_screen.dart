@@ -1861,6 +1861,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                         ),
                       ),
                     ),
+                    onTap: () => context.push('${AppRoutes.adminUserDetail}/${u['uid']}'),
                     title: Text('$name${suspended ? context.tr('suspended_badge') : ''}'),
                     subtitle: Text(phone),
                     trailing: PopupMenuButton<String>(
@@ -2021,7 +2022,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 '$seller — TZS $price${!active ? context.tr('hidden') : ''}${featured ? ' ⭐' : ''}',
               ),
               trailing: PopupMenuButton<String>(
-                onSelected: (v) => _updateProduct(p['id'] as String, v),
+                onSelected: (v) {
+                  if (v == 'feature') {
+                    _showFeatureDurationDialog(p['id'] as String);
+                  } else {
+                    _updateProduct(p['id'] as String, v);
+                  }
+                },
                 itemBuilder: (_) => [
                   PopupMenuItem(
                     value: active ? 'deactivate' : 'activate',
@@ -2055,6 +2062,72 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         },
       ),
     );
+  }
+
+  void _showFeatureDurationDialog(String productId) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Weka Muda wa Featured'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: const Text('Siku 3'),
+              subtitle: const Text('Featured kwa siku 3'),
+              leading: const Icon(Icons.timer_outlined),
+              onTap: () {
+                Navigator.pop(ctx);
+                _setFeatured(productId, 3);
+              },
+            ),
+            ListTile(
+              title: const Text('Siku 7'),
+              subtitle: const Text('Featured kwa siku 7'),
+              leading: const Icon(Icons.timer_outlined),
+              onTap: () {
+                Navigator.pop(ctx);
+                _setFeatured(productId, 7);
+              },
+            ),
+            ListTile(
+              title: const Text('Siku 30'),
+              subtitle: const Text('Featured kwa siku 30'),
+              leading: const Icon(Icons.timer_outlined),
+              onTap: () {
+                Navigator.pop(ctx);
+                _setFeatured(productId, 30);
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.tr('cancel'))),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _setFeatured(String productId, int days) async {
+    try {
+      final now = DateTime.now();
+      await FirebaseFirestore.instance.collection('products').doc(productId).update({
+        'isFeatured': true,
+        'featuredUntil': Timestamp.fromDate(now.add(Duration(days: days))),
+      });
+      _loadProducts();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Product featured for $days days')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Imeshindwa: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _updateProduct(String id, String action) async {
@@ -2108,13 +2181,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         body = {'isActive': true};
       } else if (action == 'deactivate') {
         body = {'isActive': false};
-      } else if (action == 'feature') {
-        body = {
-          'isFeatured': true,
-          'featuredUntil': Timestamp.fromDate(
-            DateTime.now().add(const Duration(days: 30)),
-          ),
-        };
       } else if (action == 'unfeature') {
         body = {'isFeatured': false, 'featuredUntil': null};
       }

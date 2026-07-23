@@ -33,7 +33,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
   String _selectedFilter = 'all';
   bool _isInitialLoad = true;
 
-  static const _filters = ['all', 'pending', 'active', 'completed'];
+  static const _filters = ['all', 'pending', 'active', 'completed', 'failed'];
 
   List<QueryDocumentSnapshot> _filterDocs(List<QueryDocumentSnapshot> docs) {
     docs = docs
@@ -53,9 +53,9 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
               s == 'dispatched' ||
               s == 'delivered';
         case 'completed':
-          return s == 'completed' ||
-              s == 'delivery_confirmed' ||
-              s == 'refunded';
+          return s == 'completed' || s == 'delivery_confirmed';
+        case 'failed':
+          return s == 'failed' || s == 'cancelled' || s == 'refunded';
         default:
           return true;
       }
@@ -485,9 +485,9 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
               s == 'dispatched' ||
               s == 'delivered';
         case 'completed':
-          return s == 'completed' ||
-              s == 'delivery_confirmed' ||
-              s == 'refunded';
+          return s == 'completed' || s == 'delivery_confirmed';
+        case 'failed':
+          return s == 'failed' || s == 'cancelled' || s == 'refunded';
         default:
           return true;
       }

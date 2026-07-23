@@ -52,4 +52,5 @@ class AppRoutes {
   static const String orderDetail = '/order-detail';
   static const String orderFlow = '/order-flow';
   static const String sellerOrders = '/seller-orders';
+  static const String adminUserDetail = '/admin/user';
 }

@@ -1,9 +1,8 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
@@ -18,10 +17,10 @@ class NotificationService {
   static const String _key = 'push_notifications_enabled';
   static const String customSound = 'resource://raw/soko_notification';
 
-  final FirebaseMessaging _fcm = FirebaseMessaging.instance;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  bool _handlersRegistered = false;
+  bool _initialized = false;
+  bool _listenersRegistered = false;
 
   static final GlobalKey<ScaffoldMessengerState> messengerKey =
       GlobalKey<ScaffoldMessengerState>();
@@ -95,7 +94,7 @@ class NotificationService {
         NotificationPermission.FullScreenIntent,
       ],
     );
-    debugPrint('[FCM] Permission result: allowed=$allowed');
+    debugPrint('[OS] Permission result: allowed=$allowed');
   }
 
   Future<bool> isEnabled() async {
@@ -109,143 +108,86 @@ class NotificationService {
     if (value) {
       await initialize();
     } else {
-      await _clearToken();
+      OneSignal.Notifications.clearAll();
+      await OneSignal.logout();
     }
   }
 
   Future<void> initialize() async {
     try {
       if (!await isEnabled()) {
-        debugPrint('[FCM] notifications disabled by user preference');
+        debugPrint('[OS] notifications disabled by user preference');
         return;
       }
 
-      await initLocalNotifications();
+      if (_initialized) return;
+      _initialized = true;
 
-      if (!kIsWeb) {
-        final settings = await _fcm.requestPermission(
-          alert: true,
-          badge: true,
-          sound: true,
-          criticalAlert: true,
-          provisional: false,
-        );
-        debugPrint('[FCM] requestPermission status: ${settings.authorizationStatus}');
+      OneSignal.initialize(ApiConfig.oneSignalAppId);
+
+      final user = _auth.currentUser;
+      if (user != null) {
+        OneSignal.login(user.uid);
+        debugPrint('[OS] logged in user ${user.uid}');
       }
 
-      if (!_handlersRegistered) {
-        _handlersRegistered = true;
-        FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-        FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
-        _fcm.onTokenRefresh.listen(_saveAndSubscribe);
-        _auth.authStateChanges().listen((user) async {
-          if (user != null && await isEnabled()) {
-            final t = await _fcm.getToken();
-            if (t != null) {
-              debugPrint('[FCM] auth change — saving token for ${user.uid}');
-              await _saveAndSubscribe(t);
-            }
-          } else if (user == null) {
-            debugPrint('[FCM] user logged out — no token cleanup needed');
+      if (!_listenersRegistered) {
+        _listenersRegistered = true;
+
+        OneSignal.Notifications.addForegroundWillDisplayListener((event) {
+          final notif = event.notification;
+          final data = notif.additionalData ?? {};
+          final title = notif.title ?? '';
+          final body = notif.body ?? '';
+          final type = data['type'] as String? ?? 'general';
+
+          debugPrint('[OS] foreground notification: type=$type title=$title');
+          FcmNotificationDisplay.showFromMap({
+            'title': title,
+            'body': body,
+            ...data,
+          });
+
+          if (title.isNotEmpty && onForegroundMessage != null) {
+            onForegroundMessage!(title, body, type, data);
           }
         });
+
+        OneSignal.Notifications.addClickListener((event) {
+          final data = event.notification.additionalData ?? {};
+          debugPrint('[OS] notification tapped: type=${data['type']}');
+          _onNotificationTapped(data);
+        });
+
+        _auth.authStateChanges().listen((user) async {
+          if (user != null) {
+            OneSignal.login(user.uid);
+            debugPrint('[OS] auth change — logged in ${user.uid}');
+          } else {
+            await OneSignal.logout();
+            debugPrint('[OS] auth change — logged out');
+          }
+        });
+
         await AwesomeNotifications().setListeners(
           onActionReceivedMethod: (ReceivedAction receivedAction) async {
             final rawPayload = receivedAction.payload;
             if (rawPayload != null) _onNotificationTapped(rawPayload);
           },
         );
-        debugPrint('[FCM] handlers registered');
+        debugPrint('[OS] handlers registered');
       }
 
-      final token = await _fcm.getToken();
-      if (token != null) {
-        debugPrint('[FCM] current token: ${token.substring(0, 20)}...');
-        await _saveAndSubscribe(token);
-      } else {
-        debugPrint('[FCM] no token available');
-      }
+      await initLocalNotifications();
 
-      final user = _auth.currentUser;
-      if (user != null) {
-        try {
-          await _fcm.subscribeToTopic('user_${user.uid}');
-          debugPrint('[FCM] subscribed to topic user_${user.uid}');
-        } catch (e) {
-          debugPrint('[FCM] topic subscribe failed: $e');
-        }
-      }
-
-      final initialMsg = await _fcm.getInitialMessage();
-      if (initialMsg != null) {
-        debugPrint('[FCM] initial message: type=${initialMsg.data['type']}');
-        _handleNotificationTap(initialMsg);
-      }
+      debugPrint('[OS] initialized');
     } catch (e) {
-      debugPrint('[FCM] Notification init error: $e');
+      debugPrint('[OS] Notification init error: $e');
     }
-  }
-
-  Future<void> _clearToken() async {
-    try {
-      final user = _auth.currentUser;
-      if (user != null) {
-        await _db.collection('users').doc(user.uid).set(
-          {'fcmToken': FieldValue.delete()},
-          SetOptions(merge: true),
-        );
-        debugPrint('[FCM] token cleared from Firestore for ${user.uid}');
-      }
-      await _fcm.deleteToken();
-      debugPrint('[FCM] local token deleted');
-    } catch (e) {
-      debugPrint('[FCM] token clear error: $e');
-    }
-  }
-
-  Future<void> _saveAndSubscribe(String token) async {
-    final user = _auth.currentUser;
-    if (user == null) {
-      debugPrint('[FCM] _saveAndSubscribe: no user');
-      return;
-    }
-    try {
-      await _db.collection('users').doc(user.uid).set({
-        'fcmToken': token,
-        'email': user.email,
-      }, SetOptions(merge: true));
-      debugPrint('[FCM] token saved to Firestore for ${user.uid} (prefix=${token.substring(0, 12)}...)');
-    } catch (e) {
-      debugPrint('[FCM] FAILED to save token to Firestore for ${user.uid}: $e');
-    }
-    try {
-      await _fcm.subscribeToTopic('user_${user.uid}');
-      debugPrint('[FCM] subscribed to topic user_${user.uid}');
-    } catch (e) {
-      debugPrint('[FCM] topic subscribe failed: $e');
-    }
-  }
-
-  Future<void> _handleForegroundMessage(RemoteMessage message) async {
-    if (!await isEnabled()) return;
-    debugPrint('[FCM] foreground message: type=${message.data['type']} hasNotification=${message.notification != null}');
-    await FcmNotificationDisplay.show(message);
-    final data = message.data;
-    final title = message.notification?.title ?? data['title'] as String? ?? '';
-    final body = message.notification?.body ?? data['body'] as String? ?? '';
-    final type = data['type'] as String? ?? 'general';
-    if (title.isNotEmpty && onForegroundMessage != null) {
-      onForegroundMessage!(title, body, type, data);
-    }
-  }
-
-  void _handleNotificationTap(RemoteMessage message) {
-    debugPrint('[FCM] notification tapped: type=${message.data['type']}');
-    _onNotificationTapped(message.data);
   }
 
   static void _onNotificationTapped(Map<String, dynamic> data) {
-    debugPrint('[FCM] _onNotificationTapped: type=${data['type']}');
+    debugPrint('[OS] _onNotificationTapped: type=${data['type']}');
     if (data['type'] == 'payment' && onPaymentNotificationTap != null) {
       onPaymentNotificationTap!(data);
     } else if (onNotificationTap != null) {
@@ -260,7 +202,7 @@ class NotificationService {
     Map<String, String> data = const {},
   }) async {
     try {
-      debugPrint('[FCM] sendNotification to $userId: $title');
+      debugPrint('[OS] sendNotification to $userId: $title');
       final response = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/send-notification'),
         headers: {'Content-Type': 'application/json'},
@@ -271,9 +213,9 @@ class NotificationService {
           'data': data,
         }),
       );
-      debugPrint('[FCM] sendNotification response: ${response.statusCode}');
+      debugPrint('[OS] sendNotification response: ${response.statusCode}');
     } catch (e) {
-      debugPrint('[FCM] sendNotification error: $e');
+      debugPrint('[OS] sendNotification error: $e');
     }
   }
 
