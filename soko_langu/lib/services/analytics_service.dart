@@ -268,210 +268,72 @@ class AnalyticsService {
   // ── Get Full Seller Analytics ─────────────────────────────────────────
 
   Future<SellerAnalytics> getSellerAnalytics(String sellerId) async {
-    int totalProducts = 0;
-    int totalProductViews = 0;
-    final genderBreakdown = <String, int>{};
-    final locationBreakdown = <String, int>{};
-    final ageBreakdown = <String, int>{};
-    int boostImpressions = 0;
-    final boostLocations = <String, int>{};
-    final List<TopProduct> topProducts = [];
-    final now = DateTime.now();
-    final monthStart = DateTime(now.year, now.month, 1);
-    final monthlySales = List.generate(12, (i) {
-      final m = (now.month - 1 - (11 - i) + 12) % 12 + 1;
-      return DailyMetric(date: DateTime(now.year, m, 1), count: 0);
-    });
-
     try {
-      final productsSnap = await _firestore
-          .collection('products')
-          .where('sellerId', isEqualTo: sellerId)
-          .get();
-      totalProducts = productsSnap.docs.length;
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      if (token == null) return SellerAnalytics(lastUpdated: DateTime.now());
+      final resp = await http
+          .get(
+            Uri.parse('${ApiConfig.baseUrl}/api/seller-analytics/$sellerId'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 15));
+      if (resp.statusCode != 200) return SellerAnalytics(lastUpdated: DateTime.now());
+      final result = jsonDecode(resp.body);
+      if (result['success'] != true) return SellerAnalytics(lastUpdated: DateTime.now());
 
-      final productFutures = <Future<void>>[];
-      for (final productDoc in productsSnap.docs) {
-        final pid = productDoc.id;
-        final pData = productDoc.data();
-        totalProductViews += (pData['viewCount'] as num?)?.toInt() ?? 0;
-
-        productFutures.add(() async {
-          final results = await Future.wait([
-            _productViews
-                .doc(pid)
-                .collection('views')
-                .where('gender', isNotEqualTo: null)
-                .get(),
-            _productViews
-                .doc(pid)
-                .collection('views')
-                .where('location', isNotEqualTo: null)
-                .get(),
-            _productViews
-                .doc(pid)
-                .collection('views')
-                .where('age', isNotEqualTo: null)
-                .get(),
-            _boostImpressions.doc(pid).collection('impressions').get(),
-            _productViews.doc(pid).collection('views').count().get(),
-          ]);
-
-          final gSnap = results[0] as QuerySnapshot;
-          for (final doc in gSnap.docs) {
-            final g =
-                (doc.data() as Map<String, dynamic>)['gender'] as String? ??
-                'unknown';
-            genderBreakdown[g] = (genderBreakdown[g] ?? 0) + 1;
-          }
-
-          final lSnap = results[1] as QuerySnapshot;
-          final prodLocBreakdown = <String, int>{};
-          for (final doc in lSnap.docs) {
-            final loc =
-                (doc.data() as Map<String, dynamic>)['location'] as String? ??
-                'unknown';
-            locationBreakdown[loc] = (locationBreakdown[loc] ?? 0) + 1;
-            prodLocBreakdown[loc] = (prodLocBreakdown[loc] ?? 0) + 1;
-          }
-
-          final aSnap = results[2] as QuerySnapshot;
-          for (final doc in aSnap.docs) {
-            final age =
-                (doc.data() as Map<String, dynamic>)['age'] as int? ?? 0;
-            final group = _ageGroup(age);
-            ageBreakdown[group] = (ageBreakdown[group] ?? 0) + 1;
-          }
-
-          final bSnap = results[3] as QuerySnapshot;
-          boostImpressions += bSnap.docs.length;
-          for (final doc in bSnap.docs) {
-            final loc =
-                (doc.data() as Map<String, dynamic>)['location'] as String? ??
-                'unknown';
-            boostLocations[loc] = (boostLocations[loc] ?? 0) + 1;
-          }
-
-          final countSnap = results[4] as AggregateQuerySnapshot;
-          final viewCount = countSnap.count ?? 0;
-
-          topProducts.add(
-            TopProduct(
-              productId: pid,
-              productName: pData['name'] as String? ?? 'Bidhaa',
-              productImage: pData['images'] is List
-                  ? (pData['images'] as List).firstOrNull as String?
-                  : pData['image'] as String?,
-              viewCount: viewCount,
-              locationBreakdown: prodLocBreakdown,
-            ),
-          );
-        }());
-      }
-      await Future.wait(productFutures);
-    } catch (_) {}
-
-    // ── Order & Earnings Stats (with monthly breakdown) ────────────────
-
-    int totalOrders = 0;
-    int successfulOrders = 0;
-    int failedOrders = 0;
-    double monthlyEarnings = 0;
-    int totalTransactions = 0;
-    int successfulTransactions = 0;
-    int failedTransactions = 0;
-
-    try {
-      final txSnap = await _firestore
-          .collection('transactions')
-          .where('sellerId', isEqualTo: sellerId)
-          .get();
-      totalTransactions = txSnap.docs.length;
-
-      for (final doc in txSnap.docs) {
-        final data = doc.data();
-        final status = data['status'] as String? ?? '';
-        final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
-
-        if (status == 'completed' ||
-            status == 'delivered' ||
-            status == 'delivery_confirmed') {
-          successfulOrders++;
-          successfulTransactions++;
-          if (createdAt != null) {
-            if (createdAt.isAfter(monthStart)) {
-              monthlyEarnings += (data['totalAmount'] as num?)?.toDouble() ?? 0;
-            }
-            for (int i = 0; i < monthlySales.length; i++) {
-              if (createdAt.month == monthlySales[i].date.month &&
-                  createdAt.year == monthlySales[i].date.year) {
-                monthlySales[i] = DailyMetric(
-                  date: monthlySales[i].date,
-                  count: monthlySales[i].count + 1,
-                );
-                break;
-              }
-            }
-          }
-        } else if (status == 'failed' || status == 'refunded') {
-          failedOrders++;
-          failedTransactions++;
-        }
-        totalOrders++;
-      }
-    } catch (_) {}
-
-    // ── Review Stats ────────────────────────────────────────────────────
-
-    double averageRating = 0;
-    int totalReviews = 0;
-    int positiveReviews = 0;
-    int negativeReviews = 0;
-
-    try {
-      final reviewSnap = await _firestore
-          .collection('reviews')
-          .where('sellerId', isEqualTo: sellerId)
-          .get();
-      totalReviews = reviewSnap.docs.length;
-      double totalRating = 0;
-
-      for (final doc in reviewSnap.docs) {
-        final rating = (doc.data()['rating'] as num?)?.toDouble() ?? 0;
-        totalRating += rating;
-        if (rating >= 4) positiveReviews++;
-        if (rating <= 2) negativeReviews++;
+      List<TopProduct> parseTopProducts(List raw) {
+        return raw.map((e) => TopProduct(
+          productId: e['productId'] ?? '',
+          productName: e['productName'] ?? 'Bidhaa',
+          productImage: e['productImage'] as String?,
+          viewCount: (e['viewCount'] as num?)?.toInt() ?? 0,
+          locationBreakdown: (e['locationBreakdown'] as Map<String, dynamic>?)
+              ?.map((k, v) => MapEntry(k, (v as num).toInt())) ?? {},
+        )).toList();
       }
 
-      averageRating = totalReviews > 0 ? totalRating / totalReviews : 0;
-    } catch (_) {}
+      List<DailyMetric> parseMonthlySales(List raw) {
+        return raw.map((e) {
+          final date = DateTime.tryParse(e['date'] as String? ?? '') ?? DateTime.now();
+          return DailyMetric(date: date, count: (e['count'] as num?)?.toInt() ?? 0);
+        }).toList();
+      }
 
-    topProducts.sort((a, b) => b.viewCount.compareTo(a.viewCount));
+      Map<String, int> parseStringIntMap(Map<String, dynamic>? map) {
+        if (map == null) return {};
+        return map.map((k, v) => MapEntry(k, (v as num).toInt()));
+      }
 
-    return SellerAnalytics(
-      sellerId: sellerId,
-      totalProducts: totalProducts,
-      totalProductViews: totalProductViews,
-      genderBreakdown: genderBreakdown,
-      locationBreakdown: locationBreakdown,
-      ageBreakdown: ageBreakdown,
-      boostImpressions: boostImpressions,
-      boostLocationBreakdown: boostLocations,
-      monthlyEarnings: monthlyEarnings,
-      totalOrders: totalOrders,
-      successfulOrders: successfulOrders,
-      failedOrders: failedOrders,
-      totalTransactions: totalTransactions,
-      successfulTransactions: successfulTransactions,
-      failedTransactions: failedTransactions,
-      averageRating: averageRating,
-      totalReviews: totalReviews,
-      positiveReviews: positiveReviews,
-      negativeReviews: negativeReviews,
-      topProducts: topProducts.take(10).toList(),
-      monthlySales: monthlySales,
-      lastUpdated: DateTime.now(),
-    );
+      return SellerAnalytics(
+        sellerId: result['sellerId'] ?? sellerId,
+        totalProducts: (result['totalProducts'] as num?)?.toInt() ?? 0,
+        totalProductViews: (result['totalProductViews'] as num?)?.toInt() ?? 0,
+        genderBreakdown: parseStringIntMap(result['genderBreakdown'] as Map<String, dynamic>?),
+        locationBreakdown: parseStringIntMap(result['locationBreakdown'] as Map<String, dynamic>?),
+        ageBreakdown: parseStringIntMap(result['ageBreakdown'] as Map<String, dynamic>?),
+        boostImpressions: (result['boostImpressions'] as num?)?.toInt() ?? 0,
+        boostLocationBreakdown: parseStringIntMap(result['boostLocationBreakdown'] as Map<String, dynamic>?),
+        monthlyEarnings: (result['monthlyEarnings'] as num?)?.toDouble() ?? 0,
+        totalOrders: (result['totalOrders'] as num?)?.toInt() ?? 0,
+        successfulOrders: (result['successfulOrders'] as num?)?.toInt() ?? 0,
+        failedOrders: (result['failedOrders'] as num?)?.toInt() ?? 0,
+        totalTransactions: (result['totalTransactions'] as num?)?.toInt() ?? 0,
+        successfulTransactions: (result['successfulTransactions'] as num?)?.toInt() ?? 0,
+        failedTransactions: (result['failedTransactions'] as num?)?.toInt() ?? 0,
+        averageRating: (result['averageRating'] as num?)?.toDouble() ?? 0,
+        totalReviews: (result['totalReviews'] as num?)?.toInt() ?? 0,
+        positiveReviews: (result['positiveReviews'] as num?)?.toInt() ?? 0,
+        negativeReviews: (result['negativeReviews'] as num?)?.toInt() ?? 0,
+        topProducts: parseTopProducts(result['topProducts'] as List? ?? []),
+        monthlySales: parseMonthlySales(result['monthlySales'] as List? ?? []),
+        lastUpdated: DateTime.tryParse(result['lastUpdated'] as String? ?? '') ?? DateTime.now(),
+      );
+    } catch (_) {
+      return SellerAnalytics(lastUpdated: DateTime.now());
+    }
   }
 
   // ── Get App-Wide Analytics (Admin) ────────────────────────────────────
@@ -671,137 +533,65 @@ class AnalyticsService {
   // ── Admin: Load App-Wide Analytics ────────────────────────────────────
 
   Future<AnalyticsData> loadAnalytics() async {
-    int totalUsers = 0;
-    int newUsersToday = 0;
-    int newUsersThisMonth = 0;
-    int totalProducts = 0;
-    int activeProducts = 0;
-    int inactiveProducts = 0;
-    double totalRevenue = 0;
-    double revenueToday = 0;
-    double revenueThisMonth = 0;
-    final productsByCategory = <String, int>{};
-    final revenueOverTime = <DailyMetric>[];
-    final userGrowth = <DailyMetric>[];
-    final locationDistribution = <String, int>{};
-    final ageDistribution = <String, int>{};
-    final now = DateTime.now();
-    final todayStart = DateTime(now.year, now.month, now.day);
-    final monthStart = DateTime(now.year, now.month, 1);
-
     try {
-      // Users
-      final usersSnap = await _firestore.collection('users').get();
-      totalUsers = usersSnap.docs.length;
-      for (final doc in usersSnap.docs) {
-        final data = doc.data();
-        final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
-        if (createdAt != null) {
-          if (createdAt.isAfter(todayStart)) newUsersToday++;
-          if (createdAt.isAfter(monthStart)) newUsersThisMonth++;
-        }
-        // Location + age from user profiles
-        final loc = data['location'] as String?;
-        if (loc != null && loc.isNotEmpty) {
-          locationDistribution[loc] = (locationDistribution[loc] ?? 0) + 1;
-        }
-        final dob = data['dateOfBirth'] as String?;
-        if (dob != null && dob.isNotEmpty) {
-          try {
-            final birth = DateTime.parse(dob);
-            final age = now.year - birth.year;
-            final group = _ageGroup(age);
-            ageDistribution[group] = (ageDistribution[group] ?? 0) + 1;
-          } catch (_) {}
-        }
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      if (token == null) return AnalyticsData();
+      final resp = await http
+          .get(
+            Uri.parse('${ApiConfig.baseUrl}/api/admin/analytics'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 15));
+      if (resp.statusCode != 200) return AnalyticsData();
+      final result = jsonDecode(resp.body);
+      if (result['success'] != true) return AnalyticsData();
+
+      List<DailyMetric> parseMetrics(String key) {
+        final list = result[key] as List? ?? [];
+        return list.map((e) {
+          final date = DateTime.tryParse(e['date'] as String? ?? '') ?? DateTime.now();
+          return DailyMetric(date: date, count: e['count'] ?? 0);
+        }).toList();
       }
 
-      // Products
-      final productsSnap = await _firestore.collection('products').get();
-      totalProducts = productsSnap.docs.length;
-      for (final doc in productsSnap.docs) {
-        final data = doc.data();
-        if (data['isActive'] != false) {
-          activeProducts++;
-        } else {
-          inactiveProducts++;
-        }
-        final cat = data['category'] as String? ?? 'Other';
-        productsByCategory[cat] = (productsByCategory[cat] ?? 0) + 1;
+      Map<String, int> parseStringIntMap(String key) {
+        final map = result[key] as Map<String, dynamic>? ?? {};
+        return map.map((k, v) => MapEntry(k, (v as num).toInt()));
       }
 
-      // Revenue (last 7 days)
-      final txSnap = await _firestore.collection('transactions').get();
-      for (final doc in txSnap.docs) {
-        final data = doc.data();
-        final status = data['status'] as String? ?? '';
-        final amount = (data['totalAmount'] as num?)?.toDouble() ?? 0;
-        final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
-        if (status == 'completed' ||
-            status == 'delivered' ||
-            status == 'delivery_confirmed') {
-          totalRevenue += amount;
-          if (createdAt != null) {
-            if (createdAt.isAfter(todayStart)) revenueToday += amount;
-            if (createdAt.isAfter(monthStart)) revenueThisMonth += amount;
-          }
-        }
-      }
+      final ac = result['activeUserCounts'] as Map<String, dynamic>? ?? {};
 
-      // Build last-7-days revenue & user growth
-      for (int i = 6; i >= 0; i--) {
-        final day = DateTime(now.year, now.month, now.day - i);
-        final nextDay = day.add(const Duration(days: 1));
-        double dayRev = 0;
-        int dayUsers = 0;
-        for (final doc in txSnap.docs) {
-          final data = doc.data();
-          final status = data['status'] as String? ?? '';
-          final amount = (data['totalAmount'] as num?)?.toDouble() ?? 0;
-          final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
-          if (createdAt != null &&
-              createdAt.isAfter(day) &&
-              createdAt.isBefore(nextDay)) {
-            if (status == 'completed' ||
-                status == 'delivered' ||
-                status == 'delivery_confirmed') {
-              dayRev += amount;
-            }
-          }
-        }
-        revenueOverTime.add(DailyMetric(date: day, count: dayRev.toInt()));
-        for (final doc in usersSnap.docs) {
-          final data = doc.data();
-          final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
-          if (createdAt != null &&
-              createdAt.isAfter(day) &&
-              createdAt.isBefore(nextDay)) {
-            dayUsers++;
-          }
-        }
-        userGrowth.add(DailyMetric(date: day, count: dayUsers));
-      }
-    } catch (_) {}
-
-    final activeUserCounts = await getActiveUserCounts();
-
-    return AnalyticsData(
-      totalUsers: totalUsers,
-      newUsersToday: newUsersToday,
-      newUsersThisMonth: newUsersThisMonth,
-      totalProducts: totalProducts,
-      activeProducts: activeProducts,
-      inactiveProducts: inactiveProducts,
-      totalRevenue: totalRevenue,
-      revenueToday: revenueToday,
-      revenueThisMonth: revenueThisMonth,
-      productsByCategory: productsByCategory,
-      revenueOverTime: revenueOverTime,
-      userGrowth: userGrowth,
-      locationDistribution: locationDistribution,
-      ageDistribution: ageDistribution,
-      activeUserCounts: activeUserCounts,
-    );
+      return AnalyticsData(
+        totalUsers: (result['totalUsers'] as num?)?.toInt() ?? 0,
+        newUsersToday: (result['newUsersToday'] as num?)?.toInt() ?? 0,
+        newUsersThisMonth: (result['newUsersThisMonth'] as num?)?.toInt() ?? 0,
+        totalProducts: (result['totalProducts'] as num?)?.toInt() ?? 0,
+        activeProducts: (result['activeProducts'] as num?)?.toInt() ?? 0,
+        inactiveProducts: (result['inactiveProducts'] as num?)?.toInt() ?? 0,
+        totalRevenue: (result['totalRevenue'] as num?)?.toDouble() ?? 0,
+        revenueToday: (result['revenueToday'] as num?)?.toDouble() ?? 0,
+        revenueThisMonth: (result['revenueThisMonth'] as num?)?.toDouble() ?? 0,
+        productsByCategory: parseStringIntMap('productsByCategory'),
+        revenueOverTime: parseMetrics('revenueOverTime'),
+        userGrowth: parseMetrics('userGrowth'),
+        locationDistribution: parseStringIntMap('locationDistribution'),
+        ageDistribution: parseStringIntMap('ageDistribution'),
+        activeUserCounts: AppUsageStats(
+          perSecond: (ac['perSecond'] as num?)?.toInt() ?? 0,
+          perMinute: (ac['perMinute'] as num?)?.toInt() ?? 0,
+          perHour: (ac['perHour'] as num?)?.toInt() ?? 0,
+          perDay: (ac['perDay'] as num?)?.toInt() ?? 0,
+          perMonth: (ac['perMonth'] as num?)?.toInt() ?? 0,
+          perYear: (ac['perYear'] as num?)?.toInt() ?? 0,
+          allTime: (ac['allTime'] as num?)?.toInt() ?? 0,
+        ),
+      );
+    } catch (_) {
+      return AnalyticsData();
+    }
   }
 
   // ── Admin: Send Push Notification to All Users ─────────────────────────

@@ -105,6 +105,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
               slivers: [
                 SliverToBoxAdapter(child: _buildHeader(context, profile)),
                 SliverToBoxAdapter(child: _buildRatingSection(context)),
+                SliverToBoxAdapter(child: _buildTrustSection(context)),
                 SliverToBoxAdapter(child: _buildActionButtons(context)),
                 SliverToBoxAdapter(
                   child: Padding(
@@ -511,7 +512,25 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     );
   }
 
+  Widget _buildTrustSection(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+      child: StreamBuilder<SellerRating>(
+        stream: RatingService().streamSellerRating(widget.userId),
+        builder: (context, snap) {
+          final rating = snap.data;
+          if (rating == null || rating.totalReviews == 0) {
+            return const SizedBox.shrink();
+          }
+          return _buildTrustScore(rating.averageRating, rating.totalReviews);
+        },
+      ),
+    );
+  }
+
   Widget _buildActionButtons(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Row(
@@ -519,20 +538,142 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
           Expanded(
             child: ElevatedButton.icon(
               onPressed: _chatWithSeller,
-              icon: Icon(
-                Icons.chat,
-                color: Theme.of(context).colorScheme.surface,
-              ),
+              icon: Icon(Icons.chat, color: cs.surface),
               label: Text(context.tr('chat')),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.whatsappGreen,
-                foregroundColor: Theme.of(context).colorScheme.surface,
+                backgroundColor: cs.whatsappGreen,
+                foregroundColor: cs.surface,
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: () => _showRateSellerDialog(context),
+              icon: const Icon(Icons.thumb_up_alt_outlined, size: 18),
+              label: Text(context.tr('rate_seller')),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                side: BorderSide(color: cs.primary.withValues(alpha: 0.3)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRateSellerDialog(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('please_log_in_first'))),
+      );
+      return;
+    }
+    if (user.uid == widget.userId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('cannot_rate_self'))),
+      );
+      return;
+    }
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('rate_seller')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(context.tr('rate_seller_trust_prompt')),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.thumb_down_alt, color: Colors.white),
+                  label: Text(context.tr('not_trustworthy')),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _submitSellerRating(user.uid, 1);
+                  },
+                ),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.thumb_up_alt, color: Colors.white),
+                  label: Text(context.tr('trustworthy')),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _submitSellerRating(user.uid, 5);
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _submitSellerRating(String raterId, int rating) async {
+    try {
+      final userProfile = await UserService().getProfile(raterId);
+      final userName = userProfile?.displayName ?? raterId;
+      await RatingService().submitReview(
+        productId: 'seller_${widget.userId}',
+        sellerId: widget.userId,
+        userId: raterId,
+        userName: userName,
+        rating: rating.toDouble(),
+        comment: '',
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('rating_submitted'))),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${context.tr('imeshindwa')}: $e')),
+        );
+      }
+    }
+  }
+
+  Widget _buildTrustScore(double avgRating, int totalReviews) {
+    final cs = Theme.of(context).colorScheme;
+    final trustPct = totalReviews > 0 ? ((avgRating / 5) * 100).round() : 0;
+    Color trustColor;
+    IconData trustIcon;
+    if (trustPct >= 80) {
+      trustColor = Colors.green;
+      trustIcon = Icons.verified;
+    } else if (trustPct >= 50) {
+      trustColor = Colors.orange;
+      trustIcon = Icons.hourglass_empty;
+    } else if (trustPct > 0) {
+      trustColor = Colors.red;
+      trustIcon = Icons.warning_amber;
+    } else {
+      trustColor = cs.onSurfaceVariant.withValues(alpha: 0.5);
+      trustIcon = Icons.help_outline;
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(trustIcon, size: 16, color: trustColor),
+          const SizedBox(width: 6),
+          Text(
+            trustPct > 0
+                ? '${context.tr('trust_score')}: $trustPct% (${totalReviews} ${context.tr('reviews').toLowerCase()})'
+                : context.tr('no_ratings_yet'),
+            style: TextStyle(fontSize: 12, color: trustColor, fontWeight: FontWeight.w500),
           ),
         ],
       ),

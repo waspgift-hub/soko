@@ -126,6 +126,8 @@ class NotificationService {
 
       OneSignal.initialize(ApiConfig.oneSignalAppId);
 
+      OneSignal.Notifications.requestPermission(true);
+
       final user = _auth.currentUser;
       if (user != null) {
         OneSignal.login(user.uid);
