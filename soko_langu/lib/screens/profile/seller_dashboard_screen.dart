@@ -180,13 +180,21 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           const SizedBox(height: 12),
           Row(
             children: [
-              Expanded(child: _actionButton(cs, Icons.price_check, context.tr('give_quote'), () => context.push(AppRoutes.sellerQuote), cs.primary)),
+              Expanded(child: _actionButton(cs, Icons.add_business, context.tr('sell_product'), () => context.push(AppRoutes.addProduct), cs.primary)),
+              const SizedBox(width: 8),
+              Expanded(child: _actionButton(cs, Icons.price_check, context.tr('give_quote'), () => context.push(AppRoutes.sellerQuote), cs.secondary)),
               const SizedBox(width: 8),
               Expanded(child: _actionButton(cs, Icons.local_shipping, context.tr('dispatch_product'), () => context.push(AppRoutes.sellerDispatch), cs.trendingOrange)),
               const SizedBox(width: 8),
               Expanded(child: _actionButton(cs, Icons.store, context.tr('customize_shop_action'), () => context.push(AppRoutes.shopCustomization), cs.primary)),
-              const SizedBox(width: 8),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
               Expanded(child: _actionButton(cs, Icons.verified, context.tr('boost_listing_action'), () => _showBoostDialog(products), cs.trendingOrange)),
+              const SizedBox(width: 8),
+              Expanded(child: _actionButton(cs, Icons.receipt_long, context.tr('order_history'), () => context.push(AppRoutes.sellerOrders), cs.tertiary)),
             ],
           ),
         ],

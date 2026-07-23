@@ -41,6 +41,7 @@ import '../screens/seller/seller_earnings_screen.dart';
 import '../screens/orders/my_purchases_screen.dart';
 import '../screens/orders/seller_dispatch_screen.dart';
 import '../screens/orders/seller_quote_screen.dart';
+import '../screens/orders/seller_orders_screen.dart';
 import '../screens/orders/receipt_screen.dart';
 import '../screens/orders/order_detail_screen.dart';
 import '../screens/kyc/kyc_screen.dart';
@@ -72,6 +73,7 @@ final List<String> _authRequiredRoutes = [
   AppRoutes.sellerEarnings,
   AppRoutes.sellerDispatch,
   AppRoutes.sellerQuote,
+  AppRoutes.sellerOrders,
   AppRoutes.myPurchases,
   AppRoutes.productBoost,
   AppRoutes.notifications,
@@ -318,6 +320,10 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.sellerQuote,
         builder: (context, state) => const SellerQuoteScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.sellerOrders,
+        builder: (context, state) => const SellerOrdersScreen(),
       ),
       GoRoute(
         path: AppRoutes.kyc,
