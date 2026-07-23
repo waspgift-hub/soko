@@ -859,6 +859,9 @@ class LocalizationService {
       'pp_share_title': 'Kushiriki Taarifa',
       'pp_share_body':
           'Hatushiriki taarifa zako na wengine isipokuwa kwa sheria, kwa ridhaa yako, au kwa kusindika malipo.',
+      'pp_ai_title': 'Akili Bandia (AI) na Data Yako',
+      'pp_ai_body':
+          'Soko Vibe inatumia Groq AI (mfano wa Llama) kukusaidia kupata taarifa za bidhaa na kujibu maswali. Ujumbe wako na historia ya mazungumzo inaweza kutumiwa na AI kupitia seva yetu. Hakuna taarifa zako binafsi (namba ya simu, barua pepe) zinazotumwa kwa AI isipokuwa wewe mwenyewe uziandike. Unaweza kuamua kutotumia AI wakati wowote. Ufunguo wa AI hauhifadhiwi kwenye kifaa chako.',
       'pp_security_title': 'Usalama wa Taarifa',
       'pp_security_body':
           'Tunatumia teknolojia za kisasa kulinda taarifa zako dhidi ya upotevu, matumizi mabaya, au ufikiaji usioidhinishwa.',
@@ -2489,6 +2492,9 @@ class LocalizationService {
       'pp_share_title': 'Information Sharing',
       'pp_share_body':
           'We do not share your information with others except as required by law, with your consent, or for payment processing.',
+      'pp_ai_title': 'Artificial Intelligence (AI) and Your Data',
+      'pp_ai_body':
+          'Soko Vibe uses Groq AI (Llama models) to help answer your questions about products and the platform. Your messages and chat history may be processed by AI through our server proxy. No personal information (phone number, email) is sent to the AI unless you explicitly type it. You may choose not to use the AI feature at any time. The AI API key is never stored on your device.',
       'pp_security_title': 'Data Security',
       'pp_security_body':
           'We use modern technology to protect your information against loss, misuse, or unauthorized access.',
