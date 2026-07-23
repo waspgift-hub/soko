@@ -1220,7 +1220,7 @@ app.post('/api/escrow/release', async (req, res) => {
       return res.status(404).json({ error: 'Transaction not found' });
     }
 
-    let sellerId, sellerReceives, productName, productPrice, escrowReleased, platformFee;
+    let sellerId, sellerReceives, productName, productPrice, escrowReleased, platformFee, payoutMethod;
 
     if (txDoc.exists) {
       const tx = txDoc.data();
@@ -1239,6 +1239,7 @@ app.post('/api/escrow/release', async (req, res) => {
       productPrice = tx.productPrice || 0;
       escrowReleased = tx.escrowReleased;
       platformFee = tx.platformFee || 0;
+      payoutMethod = tx.payoutMethod;
     } else {
       const order = orderDoc.data();
       if (order.buyerId !== userId) {
@@ -1256,6 +1257,7 @@ app.post('/api/escrow/release', async (req, res) => {
       productPrice = order.totalAmount || 0;
       escrowReleased = order.escrowReleased;
       platformFee = 0;
+      payoutMethod = order.payoutMethod;
     }
 
     // Mark as released
@@ -1299,11 +1301,11 @@ app.post('/api/escrow/release', async (req, res) => {
       metadata: { buyerId: userId, productName, pendingBefore, pendingAfter: pendingBefore - sellerReceives },
     });
 
-    // Auto payout if seller enabled it
+    // Auto payout if seller enabled it (skip if payout method already set)
     let autoPaidOut = false;
     try {
       const sellerData = sellerDoc.data();
-      if (sellerData?.autoPayout === true) {
+      if (sellerData?.autoPayout === true && !payoutMethod) {
         const sellerPhone = sellerData?.phone;
         if (sellerPhone && sellerReceives > PAYOUT_FEE) {
           const netPayout = sellerReceives - PAYOUT_FEE;
@@ -1325,6 +1327,7 @@ app.post('/api/escrow/release', async (req, res) => {
             status: 'completed', transactionId: orderId,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
           });
+          await ref.update({ payoutMethod: 'auto' });
           autoPaidOut = true;
         }
       }
@@ -1821,10 +1824,16 @@ app.post('/api/escrow/cancel', async (req, res) => {
       return res.status(400).json({ error: 'Buyer phone not found for refund' });
     }
 
-    // Full refund to buyer via Mongike
+    if (productPrice <= PAYOUT_FEE) {
+      return res.status(400).json({ error: `Refund amount must exceed fee of TZS ${PAYOUT_FEE.toLocaleString()}` });
+    }
+
+    const refundAmount = productPrice - PAYOUT_FEE;
+
+    // Refund minus payout fee to buyer via Mongike
     try {
       await mongikePayout({
-        amount: productPrice,
+        amount: refundAmount,
         recipientPhone: buyerPhone,
         narration: `Soko Vibe cancel refund: ${orderId}`,
       });
@@ -1837,6 +1846,7 @@ app.post('/api/escrow/cancel', async (req, res) => {
       status: 'refunded',
       escrowReleased: true,
       cancellationType: 'buyer_cancel',
+      refundFee: PAYOUT_FEE,
       cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
@@ -1855,18 +1865,19 @@ app.post('/api/escrow/cancel', async (req, res) => {
     // Record refund
     await db.collection('revenue_transactions').add({
       userId: 'platform',
-      amount: -productPrice,
+      amount: -refundAmount,
       type: 'refund',
       orderId,
-      description: `Buyer cancel: ${productName} - TZS ${productPrice}`,
+      fee: PAYOUT_FEE,
+      description: `Buyer cancel: ${productName} - TZS ${refundAmount} (fee TZS ${PAYOUT_FEE})`,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
     });
 
     // Notify buyer
     await db.collection('notifications').add({
       userId: tx.buyerId,
-      title: '💰 Pesa Zimerudishwa Kamili',
-      body: `Refund kamili ya TZS ${productPrice.toLocaleString()} kwa ${productName} imetumwa kwa namba yako.`,
+      title: '💰 Pesa Zimerudishwa',
+      body: `TZS ${refundAmount.toLocaleString()} zimerudishwa kwa ${productName}. Ada ya TZS ${PAYOUT_FEE.toLocaleString()} imekatwa kwa gharama za payout.`,
       isRead: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       data: { type: 'refund', orderId },
@@ -1877,8 +1888,8 @@ app.post('/api/escrow/cancel', async (req, res) => {
       if (buyerToken) {
         await sendFcmToToken(buildFcmMessage({
           token: buyerToken,
-          title: '💰 Pesa Zimerudishwa Kamili',
-          body: `Refund kamili ya TZS ${productPrice.toLocaleString()} kwa ${productName} imetumwa kwa namba yako.`,
+          title: '💰 Pesa Zimerudishwa',
+          body: `TZS ${refundAmount.toLocaleString()} zimerudishwa kwa ${productName}. Ada ya TZS ${PAYOUT_FEE.toLocaleString()} imekatwa kwa gharama za payout.`,
           data: { type: 'refund', orderId },
         }), tx.buyerId);
       }
@@ -1908,7 +1919,7 @@ app.post('/api/escrow/cancel', async (req, res) => {
       } catch (_) {}
     }
 
-    res.json({ success: true, refundAmount: productPrice, message: 'Oda imeghairiwa. Hela yako imerudishwa.' });
+    res.json({ success: true, refundAmount, fee: PAYOUT_FEE, message: `Oda imeghairiwa. TZS ${refundAmount.toLocaleString()} zimerudishwa kwa simu yako (ada TZS ${PAYOUT_FEE.toLocaleString()}).` });
   } catch (e) {
     console.error('Escrow cancel error:', e);
     res.status(500).json({ error: 'Internal server error' });
