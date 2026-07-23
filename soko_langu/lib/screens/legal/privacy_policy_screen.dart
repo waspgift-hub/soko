@@ -61,6 +61,12 @@ class PrivacyPolicyScreen extends StatelessWidget {
               const SizedBox(height: 16),
               _section(
                 context,
+                title: context.tr('pp_ai_title'),
+                content: context.tr('pp_ai_body'),
+              ),
+              const SizedBox(height: 16),
+              _section(
+                context,
                 title: context.tr('pp_security_title'),
                 content: context.tr('pp_security_body'),
               ),
