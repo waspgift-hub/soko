@@ -57,7 +57,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 10, vsync: this);
+    _tabController = TabController(length: 11, vsync: this);
     _checkAdmin();
     _loadFraudStats();
   }
@@ -277,6 +277,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               text: context.tr('analytics'),
             ),
             Tab(icon: const Icon(Icons.people), text: context.tr('users')),
+            Tab(icon: const Icon(Icons.verified_user), text: context.tr('verification')),
             Tab(
               icon: const Icon(Icons.inventory_2),
               text: context.tr('products'),
@@ -300,6 +301,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             _buildDashboardTab(),
             _buildAnalyticsTab(),
             _buildUsersTab(),
+            _buildVerificationTab(),
             _buildProductsTab(),
             _buildAdsTab(),
             _buildReportsTab(),
@@ -1979,6 +1981,65 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         ).showSnackBar(SnackBar(content: Text(context.tr('imeshindwa').replaceAll('{0}', '$e'))));
       }
     }
+  }
+
+  // ─── VERIFICATION (KYC) TAB ──────────────────────────────────
+  Widget _buildVerificationTab() {
+    final cs = Theme.of(context).colorScheme;
+    return RefreshIndicator(
+      onRefresh: _loadExceptions,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Row(
+            children: [
+              Icon(Icons.verified_user, color: cs.primary),
+              const SizedBox(width: 8),
+              Text(
+                context.tr('pending_kyc'),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _pendingKycUsers.length > 0 ? Colors.blue.withValues(alpha: 0.12) : Colors.green.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '${_pendingKycUsers.length}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: _pendingKycUsers.length > 0 ? Colors.blue : Colors.green,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (_loadingKyc)
+            const Center(child: Padding(padding: EdgeInsets.all(32), child: GoogleLoading()))
+          else if (_pendingKycUsers.isEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(48),
+                child: Column(
+                  children: [
+                    Icon(Icons.check_circle_outline, size: 64, color: Colors.green.withValues(alpha: 0.5)),
+                    const SizedBox(height: 16),
+                    Text(context.tr('no_pending_kyc'), style: TextStyle(color: cs.onSurfaceVariant, fontSize: 16)),
+                  ],
+                ),
+              ),
+            )
+          else
+            ..._pendingKycUsers.map((u) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _buildKycCard(u, cs),
+            )),
+        ],
+      ),
+    );
   }
 
   // ─── PRODUCTS TAB ─────────────────────────────────────────────

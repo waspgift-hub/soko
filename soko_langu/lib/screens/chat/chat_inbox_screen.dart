@@ -21,6 +21,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
   final Map<String, String> _userNames = {};
   final Map<String, String> _userPhotos = {};
   final Map<String, bool> _userKyc = {};
+  bool _showUnreadOnly = false;
 
   @override
   void initState() {
@@ -62,10 +63,29 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
-      body: StreamBuilder<List<ChatRoom>>(
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: Row(
+              children: [
+                _buildFilterChip(context, context.tr('all'), !_showUnreadOnly, () => setState(() => _showUnreadOnly = false)),
+                const SizedBox(width: 8),
+                _buildFilterChip(context, context.tr('unread'), _showUnreadOnly, () => setState(() => _showUnreadOnly = true)),
+              ],
+            ),
+          ),
+          Expanded(child: StreamBuilder<List<ChatRoom>>(
         stream: _chatService.getRooms(),
         builder: (context, snap) {
-          final rooms = snap.data ?? [];
+          final allRooms = snap.data ?? [];
+          final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+          final rooms = _showUnreadOnly
+              ? allRooms.where((r) {
+                  final isBuyer = r.buyerId == uid;
+                  return isBuyer ? r.unreadCountBuyer > 0 : r.unreadCountSeller > 0;
+                }).toList()
+              : allRooms;
           if (rooms.isEmpty) {
             return Center(
               child: Column(
@@ -114,6 +134,31 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
             },
           );
         },
+      ),
+        ),
+      ],
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(BuildContext context, String label, bool selected, VoidCallback onTap) {
+    final cs = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? cs.primary : cs.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? cs.surface : cs.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+          ),
+        ),
       ),
     );
   }

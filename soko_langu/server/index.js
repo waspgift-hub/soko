@@ -471,7 +471,8 @@ app.post('/api/boost-product', async (req, res) => {
     }
 
     const order_id = `boost_${Date.now()}`;
-    const callbackUrl = `${req.protocol}://${req.get('host')}/api/mongike/webhook`;
+    const baseUrl = process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`;
+    const callbackUrl = `${baseUrl}/api/mongike/webhook`;
 
     const result = await mongikeCollect({
       amount: tierConfig.price,
@@ -2455,10 +2456,11 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
     // Include shipping + platform commission + transaction fee in total sent to Mongike
     const commission = Math.round(Math.round(productPrice) * PLATFORM_COMMISSION_PERCENT);
     const totalAmount = Math.round(productPrice) + Math.round(shippingCost || 0) + commission + COLLECTION_FEE;
-    const callbackUrl = `${req.protocol}://${req.get('host')}/api/mongike/webhook`;
+    const baseUrl = process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`;
+    const callbackUrl = `${baseUrl}/api/mongike/webhook`;
 
     const result = await mongikeCollect({
-      amount: totalAmount,
+      amount: totalCharge,
       orderId: order_id,
       buyerPhone: phone,
       buyerName: buyerName || undefined,
@@ -3404,6 +3406,341 @@ app.get('/api/admin/withdrawals', async (req, res) => {
 });
 
 // ============================================================
+// 📊 ADMIN — App-wide analytics (users, products, revenue, growth)
+// ============================================================
+app.get('/api/admin/analytics', async (req, res) => {
+  try {
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) {
+      const authHeader = req.headers['authorization'];
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        try {
+          const decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
+          const userDoc = await db.collection('users').doc(decoded.uid).get();
+          if (!userDoc.exists || !userDoc.data().isAdmin) return res.status(401).json({ error: 'Unauthorized' });
+        } catch { return res.status(401).json({ error: 'Unauthorized' }); }
+      } else { return res.status(401).json({ error: 'Unauthorized' }); }
+    }
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // Users
+    const usersSnap = await db.collection('users').get();
+    let totalUsers = 0, newUsersToday = 0, newUsersThisMonth = 0;
+    const locationDistribution = {};
+    const ageDistribution = {};
+    for (const doc of usersSnap.docs) {
+      totalUsers++;
+      const d = doc.data();
+      const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
+      if (createdAt) {
+        if (createdAt >= todayStart) newUsersToday++;
+        if (createdAt >= monthStart) newUsersThisMonth++;
+      }
+      const loc = d.location;
+      if (loc) locationDistribution[loc] = (locationDistribution[loc] || 0) + 1;
+      const dob = d.dateOfBirth;
+      if (dob) {
+        try {
+          const birth = new Date(dob);
+          const age = now.getFullYear() - birth.getFullYear();
+          const group = age < 18 ? 'Under 18' : age < 25 ? '18-24' : age < 35 ? '25-34' : age < 50 ? '35-49' : '50+';
+          ageDistribution[group] = (ageDistribution[group] || 0) + 1;
+        } catch (_) {}
+      }
+    }
+
+    // Products
+    const productsSnap = await db.collection('products').get();
+    let totalProducts = 0, activeProducts = 0, inactiveProducts = 0;
+    const productsByCategory = {};
+    for (const doc of productsSnap.docs) {
+      totalProducts++;
+      const d = doc.data();
+      if (d.isActive !== false) activeProducts++; else inactiveProducts++;
+      const cat = d.category || 'Other';
+      productsByCategory[cat] = (productsByCategory[cat] || 0) + 1;
+    }
+
+    // Transactions — revenue
+    const txSnap = await db.collection('transactions').get();
+    let totalRevenue = 0, revenueToday = 0, revenueThisMonth = 0;
+    const completedStatuses = new Set(['completed', 'delivered', 'delivery_confirmed']);
+    for (const doc of txSnap.docs) {
+      const d = doc.data();
+      const status = d.status || '';
+      const amount = d.totalAmount || 0;
+      const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
+      if (completedStatuses.has(status)) {
+        totalRevenue += amount;
+        if (createdAt) {
+          if (createdAt >= todayStart) revenueToday += amount;
+          if (createdAt >= monthStart) revenueThisMonth += amount;
+        }
+      }
+    }
+
+    // Last 7 days revenue & user growth
+    const revenueOverTime = [];
+    const userGrowth = [];
+    for (let i = 6; i >= 0; i--) {
+      const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+      const nextDay = new Date(day.getTime() + 86400000);
+      let dayRev = 0, dayUsers = 0;
+      for (const doc of txSnap.docs) {
+        const d = doc.data();
+        const status = d.status || '';
+        const amount = d.totalAmount || 0;
+        const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
+        if (createdAt && createdAt >= day && createdAt < nextDay && completedStatuses.has(status)) {
+          dayRev += amount;
+        }
+      }
+      revenueOverTime.push({ date: day.toISOString(), count: Math.round(dayRev) });
+      for (const doc of usersSnap.docs) {
+        const d = doc.data();
+        const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
+        if (createdAt && createdAt >= day && createdAt < nextDay) dayUsers++;
+      }
+      userGrowth.push({ date: day.toISOString(), count: dayUsers });
+    }
+
+    // Active user counts from user_sessions
+    const sessionsSnap = await db.collection('user_sessions').get();
+    let perSecond = 0, perMinute = 0, perHour = 0, perDay = 0, perMonth = 0, perYear = 0;
+    const allTime = sessionsSnap.docs.length;
+    for (const doc of sessionsSnap.docs) {
+      const ts = doc.data().lastActive;
+      const lastActive = ts ? (ts.toDate ? ts.toDate() : new Date(ts)) : null;
+      if (!lastActive) continue;
+      const diffMs = now - lastActive;
+      if (diffMs <= 1000) perSecond++;
+      if (diffMs <= 60000) perMinute++;
+      if (diffMs <= 3600000) perHour++;
+      if (diffMs <= 86400000) perDay++;
+      if (diffMs <= 2592000000) perMonth++;
+      if (diffMs <= 31536000000) perYear++;
+    }
+
+    res.json({
+      success: true,
+      totalUsers, newUsersToday, newUsersThisMonth,
+      totalProducts, activeProducts, inactiveProducts,
+      productsByCategory,
+      totalRevenue, revenueToday, revenueThisMonth,
+      revenueOverTime, userGrowth,
+      locationDistribution, ageDistribution,
+      activeUserCounts: { perSecond, perMinute, perHour, perDay, perMonth, perYear, allTime },
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================================
+// 📊 SELLER — Seller-specific analytics (products, views, orders, reviews)
+// ============================================================
+app.get('/api/seller-analytics/:sellerId', async (req, res) => {
+  try {
+    const { sellerId } = req.params;
+    if (!sellerId) return res.status(400).json({ error: 'sellerId required' });
+
+    // Auth: verify Firebase token, uid must match sellerId or be admin
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    let decoded;
+    try {
+      decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
+    } catch {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    if (decoded.uid !== sellerId) {
+      const userDoc = await db.collection('users').doc(decoded.uid).get();
+      if (!userDoc.exists || !userDoc.data().isAdmin) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+    }
+
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // ── Products & Views ──────────────────────────────────────
+    const productsSnap = await db.collection('products')
+      .where('sellerId', '==', sellerId)
+      .get();
+
+    const totalProducts = productsSnap.docs.length;
+    let totalProductViews = 0;
+    const genderBreakdown = {};
+    const locationBreakdown = {};
+    const ageBreakdown = {};
+    let boostImpressions = 0;
+    const boostLocationBreakdown = {};
+    const topProducts = [];
+
+    for (const productDoc of productsSnap.docs) {
+      const pid = productDoc.id;
+      const pData = productDoc.data();
+      totalProductViews += (pData.viewCount || 0);
+
+      const viewsSnap = await db.collection('product_analytics').doc(pid).collection('views').get();
+      const boostSnap = await db.collection('boost_analytics').doc(pid).collection('impressions').get();
+      const prodLocBreakdown = {};
+
+      for (const vDoc of viewsSnap.docs) {
+        const v = vDoc.data();
+        if (v.gender) genderBreakdown[v.gender] = (genderBreakdown[v.gender] || 0) + 1;
+        if (v.location) {
+          locationBreakdown[v.location] = (locationBreakdown[v.location] || 0) + 1;
+          prodLocBreakdown[v.location] = (prodLocBreakdown[v.location] || 0) + 1;
+        }
+        if (v.age != null) {
+          const age = v.age;
+          const group = age < 18 ? 'Under 18' : age < 25 ? '18-24' : age < 35 ? '25-34' : age < 50 ? '35-49' : '50+';
+          ageBreakdown[group] = (ageBreakdown[group] || 0) + 1;
+        }
+      }
+
+      boostImpressions += boostSnap.docs.length;
+      for (const bDoc of boostSnap.docs) {
+        const loc = bDoc.data().location || 'unknown';
+        boostLocationBreakdown[loc] = (boostLocationBreakdown[loc] || 0) + 1;
+      }
+
+      topProducts.push({
+        productId: pid,
+        productName: pData.name || 'Bidhaa',
+        productImage: Array.isArray(pData.images) ? pData.images[0] : (pData.image || null),
+        viewCount: viewsSnap.docs.length,
+        locationBreakdown: prodLocBreakdown,
+      });
+    }
+
+    topProducts.sort((a, b) => b.viewCount - a.viewCount);
+
+    // ── Transactions & Order Stats ──────────────────────────
+    const txSnap = await db.collection('transactions')
+      .where('sellerId', '==', sellerId)
+      .get();
+
+    let totalOrders = 0, successfulOrders = 0, failedOrders = 0;
+    let totalTransactions = 0, successfulTransactions = 0, failedTransactions = 0;
+    let monthlyEarnings = 0;
+    const completedStatuses = new Set(['completed', 'delivered', 'delivery_confirmed']);
+    const monthlySales = [];
+
+    for (let i = 0; i < 12; i++) {
+      const m = new Date(now.getFullYear(), (now.getMonth() - 11 + i + 12) % 12, 1);
+      monthlySales.push({ date: m.toISOString(), count: 0 });
+    }
+
+    for (const doc of txSnap.docs) {
+      const d = doc.data();
+      totalOrders++;
+      totalTransactions++;
+      const status = d.status || '';
+      const amount = d.totalAmount || 0;
+      const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
+
+      if (completedStatuses.has(status)) {
+        successfulOrders++;
+        successfulTransactions++;
+        if (createdAt && createdAt >= monthStart) {
+          monthlyEarnings += (typeof amount === 'number' ? amount : 0);
+        }
+        if (createdAt) {
+          for (let i = 0; i < monthlySales.length; i++) {
+            const saleMonth = new Date(monthlySales[i].date);
+            if (createdAt.getMonth() === saleMonth.getMonth() && createdAt.getFullYear() === saleMonth.getFullYear()) {
+              monthlySales[i].count++;
+              break;
+            }
+          }
+        }
+      } else if (status === 'failed' || status === 'refunded') {
+        failedOrders++;
+        failedTransactions++;
+      }
+    }
+
+    // ── Reviews ──────────────────────────────────────────────
+    const reviewSnap = await db.collection('reviews')
+      .where('sellerId', '==', sellerId)
+      .get();
+
+    let totalReviews = 0, positiveReviews = 0, negativeReviews = 0;
+    let totalRating = 0;
+    for (const doc of reviewSnap.docs) {
+      totalReviews++;
+      const rating = doc.data().rating || 0;
+      totalRating += rating;
+      if (rating >= 4) positiveReviews++;
+      if (rating <= 2) negativeReviews++;
+    }
+    const averageRating = totalReviews > 0 ? totalRating / totalReviews : 0;
+
+    res.json({
+      success: true,
+      sellerId,
+      totalProducts,
+      totalProductViews,
+      genderBreakdown,
+      locationBreakdown,
+      ageBreakdown,
+      boostImpressions,
+      boostLocationBreakdown,
+      monthlyEarnings,
+      totalOrders,
+      successfulOrders,
+      failedOrders,
+      totalTransactions,
+      successfulTransactions,
+      failedTransactions,
+      averageRating,
+      totalReviews,
+      positiveReviews,
+      negativeReviews,
+      lastUpdated: now.toISOString(),
+      topProducts: topProducts.slice(0, 10),
+      monthlySales,
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================================
+// 💳 PAYMENT — Check transaction status (fallback if webhook delayed)
+// ============================================================
+app.get('/api/transaction-status/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    if (!orderId) return res.status(400).json({ error: 'Missing orderId' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const doc = await db.collection('transactions').doc(orderId).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Transaction not found' });
+
+    const data = doc.data();
+    res.json({
+      success: true,
+      status: data.status || 'pending',
+      failureReason: data.failureReason || null,
+      completedAt: data.completedAt || null,
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================================
 // 📊 ADMIN — Finance summary (all admin money + Mongike balance)
 // ============================================================
 app.get('/api/admin/finance-summary', async (req, res) => {
@@ -3505,7 +3842,11 @@ app.get('/api/admin/finance-summary', async (req, res) => {
       totalCommissions,
       totalBoostRevenue,
       totalAdminBalance,
-      totalPaidOut: totalAdminPaidOut,
+      totalProcessed,
+      totalUserPaidOut: totalPaidOut,
+      totalAdminPaidOut,
+      totalPayouts,
+      totalPaidOut: totalPayouts,
       availableBalance,
       totalAdminWithdrawn,
       actualMongikeBalance,

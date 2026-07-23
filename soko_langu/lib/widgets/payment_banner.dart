@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
 import 'google_loading.dart';
 import '../extensions/context_tr.dart';
+import '../services/api_config.dart';
 
 enum PaymentBannerType { success, failed }
 
@@ -311,6 +315,7 @@ class _RealtimePaymentBannerWidgetState
   bool _handled = false;
   String _statusText = '';
   Timer? _timeoutTimer;
+  Timer? _pollTimer;
 
   @override
   void initState() {
@@ -323,17 +328,19 @@ class _RealtimePaymentBannerWidgetState
     _animCtrl.forward();
 
     _startTimeoutTimer();
+    _startPolling();
   }
 
   @override
   void dispose() {
     _animCtrl.dispose();
     _timeoutTimer?.cancel();
+    _pollTimer?.cancel();
     super.dispose();
   }
 
   void _startTimeoutTimer() {
-    _timeoutTimer = Timer(const Duration(seconds: 120), () {
+    _timeoutTimer = Timer(const Duration(seconds: 60), () {
       if (!_handled && mounted) {
         setState(() {
           _statusText = context.tr('payment_timeout');
@@ -341,6 +348,47 @@ class _RealtimePaymentBannerWidgetState
         widget.onError?.call('Payment timeout - no confirmation from Mongike');
         _handleDone();
       }
+    });
+  }
+
+  Future<void> _pollServerStatus() async {
+    if (_handled) return;
+    try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      if (token == null) return;
+      final resp = await http
+          .get(
+            Uri.parse('${ApiConfig.baseUrl}/api/transaction-status/${widget.orderId}'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 5));
+      if (resp.statusCode == 200) {
+        final result = jsonDecode(resp.body) as Map<String, dynamic>;
+        if (result['success'] == true) {
+          final status = result['status'] as String? ?? 'pending';
+          if (status == 'failed' || status == 'cancelled') {
+            final reason = result['failureReason'] as String? ?? context.tr('payment_failed_try_again');
+            if (mounted && !_handled) {
+              widget.onError?.call(reason);
+              _handleDone();
+            }
+          } else if (widget.successStatuses.contains(status)) {
+            if (mounted && !_handled) {
+              widget.onSuccess?.call();
+              _handleDone();
+            }
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _startPolling() {
+    _pollTimer = Timer.periodic(const Duration(seconds: 7), (_) {
+      _pollServerStatus();
     });
   }
 

@@ -16,6 +16,7 @@ import '../../widgets/ad_banner.dart';
 import '../../widgets/banner_rotator.dart';
 import '../../widgets/premium_widgets.dart';
 import '../../widgets/animated_gradient_line.dart';
+import '../../widgets/google_loading.dart';
 
 import '../../extensions/context_tr.dart';
 import '../../utils/responsive.dart';
@@ -437,6 +438,9 @@ class _HomeScreenState extends State<HomeScreen>
               actionLabel: context.tr('try_again'),
               onAction: () => provider.refresh(),
             );
+          }
+          if (provider.isLoading && provider.products.isEmpty) {
+            return const Center(child: Padding(padding: EdgeInsets.all(48), child: GoogleLoading()));
           }
           if (provider.products.isEmpty) {
             return EmptyStateWidget(icon: Icons.inventory_2_outlined, title: context.tr('no_products'));
