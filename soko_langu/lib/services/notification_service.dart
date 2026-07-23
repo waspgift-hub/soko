@@ -204,19 +204,23 @@ class NotificationService {
   }
 
   Future<void> _saveAndSubscribe(String token) async {
-    if (!await isEnabled()) return;
     final user = _auth.currentUser;
     if (user == null) {
       debugPrint('[FCM] _saveAndSubscribe: no user');
       return;
     }
-    await _db.collection('users').doc(user.uid).set({
-      'fcmToken': token,
-      'email': user.email,
-    }, SetOptions(merge: true));
-    debugPrint('[FCM] token saved to Firestore for ${user.uid}');
+    try {
+      await _db.collection('users').doc(user.uid).set({
+        'fcmToken': token,
+        'email': user.email,
+      }, SetOptions(merge: true));
+      debugPrint('[FCM] token saved to Firestore for ${user.uid} (prefix=${token.substring(0, 12)}...)');
+    } catch (e) {
+      debugPrint('[FCM] FAILED to save token to Firestore for ${user.uid}: $e');
+    }
     try {
       await _fcm.subscribeToTopic('user_${user.uid}');
+      debugPrint('[FCM] subscribed to topic user_${user.uid}');
     } catch (e) {
       debugPrint('[FCM] topic subscribe failed: $e');
     }
