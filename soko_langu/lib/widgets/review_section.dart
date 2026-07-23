@@ -69,7 +69,7 @@ class _ReviewSectionState extends State<ReviewSection> {
       ),
     );
 
-    if (result == true && commentController.text.isNotEmpty) {
+    if (result == true) {
       try {
         await _reviewService.addReview(
           productId: widget.productId,
