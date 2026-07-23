@@ -404,12 +404,6 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
         debugPrint('SecurityService: failed — $e');
       }
 
-      // Awesome Notifications (local channels)
-      try {
-        await NotificationService.initLocalNotifications();
-      } catch (e) {
-        debugPrint('AwesomeNotifications init: $e');
-      }
     }
 
     // FCM push + in-app notification service

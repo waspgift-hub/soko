@@ -36,7 +36,6 @@ function buildFcmMessage({ token, title, body, data = {} }) {
     : 'general_notifications_v4';
   const msg = {
     data: stringifyFcmData({ title: title || '', body: body || '', ...data }),
-    notification: { title: title || '', body: body || '' },
     android: {
       priority: 'high',
       notification: { channel_id: channelId, sound: 'soko_notification', icon: 'ic_notification' },

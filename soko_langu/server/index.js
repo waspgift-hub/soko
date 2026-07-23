@@ -78,10 +78,9 @@ function buildFcmDataPayload(title, body, data = {}) {
 }
 
 /**
- * Builds an FCM message with both data + notification payload.
- * The `notification` payload ensures delivery even when app is killed
- * (Android auto-displays it). The background handler skips when
- * notification payload is present to avoid duplicates.
+ * Builds an FCM data-only message. The `data` payload ensures
+ * the background handler processes every message through
+ * Awesome Notifications, giving us heads-up pop-up notifications.
  */
 function buildFcmMessage({ token, tokens, title, body, data = {} }) {
   const notifType = (data && data.type) || 'general';
@@ -90,7 +89,6 @@ function buildFcmMessage({ token, tokens, title, body, data = {} }) {
     : 'general_notifications_v4';
   const msg = {
     data: buildFcmDataPayload(title, body, data),
-    notification: { title: title || '', body: body || '' },
     android: {
       priority: 'high',
       notification: { channel_id: channelId, sound: 'soko_notification', icon: 'ic_notification' },
@@ -128,7 +126,6 @@ async function sendFcmToToken(message, userIdForCleanup = null) {
           data: message.data || {},
           android: { priority: 'high' },
         };
-        if (message.notification) topicMsg.notification = message.notification;
         const topicResult = await admin.messaging().send(topicMsg);
         console.log(`[FCM] Topic fallback succeeded for ${userIdForCleanup}: ${topicResult}`);
         return topicResult;
