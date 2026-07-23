@@ -3,6 +3,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../main.dart';
 import '../../services/localization_service.dart';
 import '../../services/category_service.dart';
@@ -227,17 +229,30 @@ class _HomeScreenState extends State<HomeScreen>
             icon: Icon(Icons.monetization_on_outlined, color: cs.primary),
             onPressed: () => _showCurrencyPicker(context),
           ),
-          Stack(
-            children: [
-              IconButton(
-                icon: Icon(Icons.notifications_outlined, color: cs.primary),
-                onPressed: () => context.push(AppRoutes.notifications),
-              ),
-              Positioned(right: 8, top: 8, child: Container(
-                width: 8, height: 8,
-                decoration: BoxDecoration(color: cs.error, shape: BoxShape.circle),
-              )),
-            ],
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('notifications')
+                .where('userId', isEqualTo: FirebaseAuth.instance.currentUser?.uid ?? '')
+                .where('isRead', isEqualTo: false)
+                .snapshots(),
+            builder: (context, snap) {
+              final count = snap.data?.docs.length ?? 0;
+              return Stack(
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.notifications_outlined, color: cs.primary),
+                    onPressed: () => context.push(AppRoutes.notifications),
+                  ),
+                  if (count > 0)
+                    Positioned(right: 6, top: 6, child: Container(
+                      padding: EdgeInsets.all(count > 9 ? 4 : 6),
+                      decoration: BoxDecoration(color: cs.error, shape: BoxShape.circle),
+                      constraints: BoxConstraints(minWidth: 18, minHeight: 18),
+                      child: Text('$count', style: TextStyle(fontSize: 10, color: cs.surface, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                    )),
+                ],
+              );
+            },
           ),
         ],
       ),

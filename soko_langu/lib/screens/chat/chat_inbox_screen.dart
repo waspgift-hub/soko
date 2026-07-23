@@ -6,6 +6,7 @@ import '../../services/user_service.dart';
 import '../../services/local_cache_service.dart';
 import '../../models/chat_room.dart';
 import '../../extensions/context_tr.dart';
+import '../../widgets/verified_badge.dart';
 
 class ChatInboxScreen extends StatefulWidget {
   const ChatInboxScreen({super.key});
@@ -19,6 +20,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
   final UserService _userService = UserService();
   final Map<String, String> _userNames = {};
   final Map<String, String> _userPhotos = {};
+  final Map<String, bool> _userKyc = {};
 
   @override
   void initState() {
@@ -43,6 +45,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
       setState(() {
         _userNames[uid] = profile.displayName;
         _userPhotos[uid] = profile.profileImage;
+        _userKyc[uid] = profile.kycApproved;
       });
     }
   }
@@ -86,12 +89,16 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
               final name = _userNames[otherId] ?? otherId.substring(0, 8);
               final photo = _userPhotos[otherId] ?? '';
 
+              final isBuyer = room.buyerId == uid;
+              final unreadCount = isBuyer ? room.unreadCountBuyer : room.unreadCountSeller;
+
               return _ChatListTile(
                 name: name,
                 photo: photo,
+                kycApproved: _userKyc[otherId] ?? false,
                 lastMessage: room.lastMessage,
                 lastTimestamp: room.lastTimestamp,
-                unreadCount: room.lastTimestamp != null ? 1 : 0,
+                unreadCount: unreadCount,
                 onTap: () async {
                   await _chatService.getOrCreateRoom(otherUserId: otherId);
                   if (context.mounted) {
@@ -115,6 +122,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
 class _ChatListTile extends StatelessWidget {
   final String name;
   final String photo;
+  final bool kycApproved;
   final String? lastMessage;
   final DateTime? lastTimestamp;
   final int unreadCount;
@@ -124,6 +132,7 @@ class _ChatListTile extends StatelessWidget {
   const _ChatListTile({
     required this.name,
     required this.photo,
+    this.kycApproved = false,
     this.lastMessage,
     this.lastTimestamp,
     this.unreadCount = 0,
@@ -161,7 +170,12 @@ class _ChatListTile extends StatelessWidget {
                       Row(
                         children: [
                           Expanded(
-                            child: Text(name, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: cs.onSurface)),
+                            child: Row(
+                              children: [
+                                Flexible(child: Text(name, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: cs.onSurface))),
+                                if (kycApproved) VerifiedBadge(size: 14),
+                              ],
+                            ),
                           ),
                           if (lastTimestamp != null)
                             Text(
@@ -185,7 +199,7 @@ class _ChatListTile extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                               decoration: BoxDecoration(
-                                color: cs.primary,
+                                color: Colors.green,
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text('$unreadCount', style: TextStyle(fontSize: 11, color: cs.surface, fontWeight: FontWeight.w600)),

@@ -9,7 +9,6 @@ import '../../services/kyc_service.dart';
 import '../../widgets/google_loading.dart';
 import '../../theme/app_colors.dart';
 import '../../extensions/context_tr.dart';
-import '../../utils/network_error.dart';
 
 class KycScreen extends StatefulWidget {
   const KycScreen({super.key});
@@ -27,8 +26,8 @@ class _KycScreenState extends State<KycScreen> {
   String? _reviewNotes;
   String? _kycIdImageUrl;
   String? _kycSelfieUrl;
-  File? _idImageFile;
-  File? _selfieFile;
+  XFile? _idImageFile;
+  XFile? _selfieFile;
 
   final _idTypes = ['National ID', 'Passport', 'Drivers License', 'Voters ID'];
   final _picker = ImagePicker();
@@ -68,13 +67,15 @@ class _KycScreenState extends State<KycScreen> {
     super.dispose();
   }
 
-  Future<String?> _uploadImage(File file, String prefix) async {
+  Future<String?> _uploadImage(XFile file, String prefix) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return null;
       final ext = file.path.split('.').last;
-      final ref = _storage.ref().child('kyc/${user.uid}/${prefix}_${const Uuid().v4()}.$ext');
-      await ref.putFile(file);
+      final extSafe = ext.length > 1 && ext.length < 6 ? ext : 'jpg';
+      final ref = _storage.ref().child('kyc/${user.uid}/${prefix}_${const Uuid().v4()}.$extSafe');
+      final bytes = await file.readAsBytes();
+      await ref.putData(bytes);
       return await ref.getDownloadURL();
     } catch (e) {
       debugPrint('Upload error: $e');
@@ -110,9 +111,9 @@ class _KycScreenState extends State<KycScreen> {
     if (file != null) {
       setState(() {
         if (isSelfie) {
-          _selfieFile = File(file.path);
+          _selfieFile = file;
         } else {
-          _idImageFile = File(file.path);
+          _idImageFile = file;
         }
       });
     }
@@ -145,8 +146,13 @@ class _KycScreenState extends State<KycScreen> {
       final idImageUrl = await _uploadImage(_idImageFile!, 'id');
       final selfieUrl = await _uploadImage(_selfieFile!, 'selfie');
 
-      if (idImageUrl == null || selfieUrl == null) {
-        _showError(context.tr('failed_to_upload_image'));
+      if (idImageUrl == null) {
+        _showError('Imeshindwa kupakia picha ya kitambulisho. Angalia muunganisho wako na ujaribu tena.');
+        setState(() => _submitting = false);
+        return;
+      }
+      if (selfieUrl == null) {
+        _showError('Imeshindwa kupakia selfie yako. Angalia muunganisho wako na ujaribu tena.');
         setState(() => _submitting = false);
         return;
       }
@@ -176,7 +182,7 @@ class _KycScreenState extends State<KycScreen> {
         _showError(result?['error'] ?? context.tr('failed_to_submit_kyc'));
       }
     } catch (e) {
-      _showError(translateError(e));
+      _showError('Imeshindwa: ${e.toString()}');
     }
 
     setState(() => _submitting = false);
@@ -300,7 +306,7 @@ class _KycScreenState extends State<KycScreen> {
         ),
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(
-          initialValue: _idType,
+          value: _idType,
           decoration: InputDecoration(
             labelText: context.tr('id_type'),
             border: const OutlineInputBorder(),
@@ -367,7 +373,7 @@ class _KycScreenState extends State<KycScreen> {
   Widget _buildImagePicker({
     required String label,
     required IconData icon,
-    required File? file,
+    required XFile? file,
     required String? imageUrl,
     required VoidCallback onPick,
   }) {
@@ -390,7 +396,7 @@ class _KycScreenState extends State<KycScreen> {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(10),
                     child: file != null
-                        ? Image.file(file, width: double.infinity, height: 140, fit: BoxFit.cover)
+                        ? Image.file(File(file.path), width: double.infinity, height: 140, fit: BoxFit.cover)
                         : Image.network(imageUrl!, width: double.infinity, height: 140, fit: BoxFit.cover),
                   ),
                   if (file != null)

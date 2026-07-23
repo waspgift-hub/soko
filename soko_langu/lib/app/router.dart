@@ -36,6 +36,7 @@ import '../screens/onboarding/onboarding_screen.dart';
 import '../screens/auth/magic_link_screen.dart';
 
 import '../screens/admin/admin_dashboard_screen.dart';
+import '../screens/admin/admin_user_detail_screen.dart';
 import '../screens/admin/admin_wallet_screen.dart';
 import '../screens/seller/seller_earnings_screen.dart';
 import '../screens/orders/my_purchases_screen.dart';
@@ -89,6 +90,7 @@ final List<String> _authRequiredRoutes = [
 
 final List<String> _adminOnlyRoutes = [
   AppRoutes.admin,
+  AppRoutes.adminUserDetail,
   AppRoutes.adminWallet,
   AppRoutes.adminReports,
 ];
@@ -246,6 +248,13 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.admin,
         builder: (context, state) => const AdminDashboardScreen(),
+      ),
+      GoRoute(
+        path: '${AppRoutes.adminUserDetail}/:uid',
+        builder: (context, state) {
+          final uid = state.pathParameters['uid']!;
+          return AdminUserDetailScreen(uid: uid);
+        },
       ),
       GoRoute(
         path: AppRoutes.adminWallet,

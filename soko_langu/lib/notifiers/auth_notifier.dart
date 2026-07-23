@@ -43,6 +43,9 @@ class AuthNotifier extends ChangeNotifier {
   bool _isAdmin = false;
   bool get isAdmin => _isAdmin;
 
+  bool _isSuspended = false;
+  bool get isSuspended => _isSuspended;
+
   bool _needsProfileSetup = false;
   bool get needsProfileSetup => _needsProfileSetup;
 
@@ -90,18 +93,23 @@ class AuthNotifier extends ChangeNotifier {
       final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       if (!doc.exists) { _needsProfileSetup = true; return; }
       final data = doc.data()!;
-      // Skip setup for existing users (profile created >1 hour ago)
-      if (data['createdAt'] != null) {
-        final createdAt = (data['createdAt'] as Timestamp).toDate();
-        final isNewUser = DateTime.now().difference(createdAt).inMinutes < 60;
-        if (!isNewUser) { _needsProfileSetup = false; return; }
-      }
       final hasGender = (data['gender'] as String?)?.isNotEmpty == true;
       final hasDob = (data['dateOfBirth'] as String?)?.isNotEmpty == true;
       final hasLocation = (data['location'] as String?)?.isNotEmpty == true;
       _needsProfileSetup = !(hasGender && hasDob && hasLocation);
     } catch (_) {
       _needsProfileSetup = false;
+    }
+  }
+
+  Future<void> _checkSuspended() async {
+    try {
+      final user = _authRepo.currentUser;
+      if (user == null) { _isSuspended = false; return; }
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      _isSuspended = doc.data()?['isSuspended'] == true;
+    } catch (_) {
+      _isSuspended = false;
     }
   }
 
@@ -137,6 +145,7 @@ class AuthNotifier extends ChangeNotifier {
         _user = currentUser;
         _status = AuthStatus.authenticated;
         await _fetchAdminStatus();
+        await _checkSuspended();
         await _checkProfileCompleteness();
       } else {
         _status = AuthStatus.unauthenticated;
@@ -154,6 +163,7 @@ class AuthNotifier extends ChangeNotifier {
         if (user != null && _status != AuthStatus.onboarding) {
           _status = AuthStatus.authenticated;
           await _fetchAdminStatus();
+          await _checkSuspended();
         } else if (user == null && _status != AuthStatus.onboarding) {
           _status = AuthStatus.unauthenticated;
           _isAdmin = false;
@@ -194,6 +204,7 @@ class AuthNotifier extends ChangeNotifier {
       await _onboardingService.markCompleted();
       _setAuthState(_authRepo.currentUser);
       await _fetchAdminStatus();
+      await _checkSuspended();
       await _checkProfileCompleteness();
       _syncAppState();
       notifyListeners();
@@ -220,6 +231,7 @@ class AuthNotifier extends ChangeNotifier {
       await _onboardingService.markCompleted();
       _setAuthState(_authRepo.currentUser);
       await _fetchAdminStatus();
+      await _checkSuspended();
       await _checkProfileCompleteness();
       _syncAppState();
       notifyListeners();
@@ -238,6 +250,7 @@ class AuthNotifier extends ChangeNotifier {
       await _onboardingService.markCompleted();
       _setAuthState(_authRepo.currentUser);
       await _fetchAdminStatus();
+      await _checkSuspended();
       await _checkProfileCompleteness();
       _syncAppState();
       notifyListeners();
@@ -313,6 +326,7 @@ class AuthNotifier extends ChangeNotifier {
       await _onboardingService.markCompleted();
       _setAuthState(_authRepo.currentUser);
       await _fetchAdminStatus();
+      await _checkSuspended();
       await _checkProfileCompleteness();
       _syncAppState();
       notifyListeners();
@@ -339,6 +353,7 @@ class AuthNotifier extends ChangeNotifier {
       await _onboardingService.markCompleted();
       _setAuthState(_authRepo.currentUser);
       await _fetchAdminStatus();
+      await _checkSuspended();
       await _checkProfileCompleteness();
       _syncAppState();
       notifyListeners();
@@ -467,6 +482,7 @@ class AuthNotifier extends ChangeNotifier {
       _magicLinkEmail = null;
       await MagicLinkService.clearEmail();
       await _fetchAdminStatus();
+      await _checkSuspended();
       await _checkProfileCompleteness();
       _syncAppState();
       notifyListeners();
@@ -493,6 +509,7 @@ class AuthNotifier extends ChangeNotifier {
     _user = null;
     _status = AuthStatus.unauthenticated;
     _isAdmin = false;
+    _isSuspended = false;
     _needsProfileSetup = false;
     _syncAppState();
     notifyListeners();

@@ -1,26 +1,20 @@
 import 'dart:typed_data';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'notification_service.dart';
 
-/// Shared FCM → Awesome Notifications display for foreground and background.
 class FcmNotificationDisplay {
-  /// Stable notification ID derived from message data for update support.
   static int _stableId(Map<String, dynamic> data) {
     final msgId = data['messageId'] ?? data['notificationId'] ?? '';
     return msgId.hashCode.abs().clamp(1, 2147483647);
   }
 
-  static Future<void> show(
-    RemoteMessage message, {
+  static Future<void> showFromMap(
+    Map<String, dynamic> data, {
     int? notificationId,
     bool displayOnForeground = true,
   }) async {
-    final data = message.data;
-    final title =
-        message.notification?.title ?? data['title'] as String? ?? '';
-    final body =
-        message.notification?.body ?? data['body'] as String? ?? '';
+    final title = data['title'] as String? ?? '';
+    final body = data['body'] as String? ?? '';
     if (title.isEmpty && body.isEmpty) return;
 
     final id = notificationId ?? _stableId(data);
@@ -37,10 +31,8 @@ class FcmNotificationDisplay {
             ? 'payments_notifications_v4'
             : 'general_notifications_v4';
 
-    // Group key for notification groups (Android 7.0+)
     final groupKey = isChat ? 'group_chat' : 'group_general';
 
-    // Action buttons
     final actionButtons = <NotificationActionButton>[];
     if (isChat && data['senderId'] != null) {
       actionButtons.add(NotificationActionButton(
