@@ -228,7 +228,7 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
         _loadData();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(resp.body['message'] ?? context.tr('kyc_status'))),
+            SnackBar(content: Text(jsonDecode(resp.body)['message'] ?? context.tr('kyc_status'))),
           );
         }
       } else {

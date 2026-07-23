@@ -540,7 +540,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
         productImage: widget.product.images.isNotEmpty
             ? widget.product.images.first
             : '',
-        productPrice: widget.product.price,
+        productPrice: widget.product.price.toInt(),
       );
 
       if (result == null || result['order_id'] == null) {
