@@ -219,8 +219,14 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
                           hintText: '0',
                           filled: true,
                           fillColor: cs.surface.withValues(alpha: 0.3),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.5)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.5)),
+                          ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
                             borderSide: BorderSide(color: cs.primary, width: 1.5),

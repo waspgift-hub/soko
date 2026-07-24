@@ -194,6 +194,8 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
             children: [
               Expanded(child: _actionButton(cs, Icons.verified, context.tr('boost_listing_action'), () => _showBoostDialog(products), cs.trendingOrange)),
               const SizedBox(width: 8),
+              Expanded(child: _actionButton(cs, Icons.account_balance, 'Statement', () => context.push(AppRoutes.sellerStatement), cs.premiumTeal)),
+              const SizedBox(width: 8),
               Expanded(child: _actionButton(cs, Icons.receipt_long, context.tr('order_history'), () => context.push(AppRoutes.sellerOrders), cs.tertiary)),
             ],
           ),

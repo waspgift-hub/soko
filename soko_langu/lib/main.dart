@@ -328,24 +328,52 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
   ) {
     switch (type) {
       case 'order':
+        final orderId =
+            data?['orderId'] as String? ?? data?['transactionId'] as String?;
+        if (orderId != null) {
+          _pushIfNotCurrent('/order-detail/$orderId', ctx, extra: data ?? {});
+        } else {
+          _pushIfNotCurrent('/notifications', ctx);
+        }
       case 'boost':
-        _pushIfNotCurrent('/notifications', ctx);
+        final productId = data?['productId'] as String?;
+        if (productId != null) {
+          _pushIfNotCurrent('/product/$productId', ctx);
+        } else {
+          _pushIfNotCurrent('/notifications', ctx);
+        }
+      case 'payment':
+        final orderId =
+            (data?['orderId'] ?? data?['transactionId']) as String?;
+        if (orderId != null) {
+          _pushIfNotCurrent('/receipt/$orderId', ctx);
+        }
+      case 'chat':
+        final receiverId =
+            data?['senderId'] as String? ?? data?['receiverId'] as String?;
+        if (receiverId != null) {
+          _pushIfNotCurrent('/chat/$receiverId', ctx);
+        } else {
+          _pushIfNotCurrent('/chats', ctx);
+        }
       case 'flash_sale':
         _pushIfNotCurrent('/flash-sale', ctx);
       case 'product':
         final productId = data?['productId'] as String?;
         if (productId != null) {
           _pushIfNotCurrent('/product/$productId', ctx);
+        } else {
+          _pushIfNotCurrent('/notifications', ctx);
         }
     }
   }
 
-  void _pushIfNotCurrent(String location, [BuildContext? context]) {
+  void _pushIfNotCurrent(String location, [BuildContext? context, Object? extra]) {
     if (context != null && mounted) {
       final current = GoRouterState.of(context).matchedLocation;
       if (current == location) return;
     }
-    appRouter.push(location);
+    appRouter.push(location, extra: extra);
   }
 
   // -----------------------------------------------------------------------

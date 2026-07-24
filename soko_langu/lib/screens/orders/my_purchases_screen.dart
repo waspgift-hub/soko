@@ -851,128 +851,149 @@ class _OrderGlassCard extends StatelessWidget {
     final isCompleted = status == 'completed';
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          color: cs.boostGold.withValues(alpha: 0.06),
-          border: Border.all(color: cs.boostGold.withValues(alpha: 0.2)),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(24),
-          child: BackdropFilter(
-            filter: ui.ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.rocket_launch_rounded,
-                        size: 18,
-                        color: cs.boostGold,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        context.tr('boost_product'),
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
+      child: InkWell(
+        onTap: isCompleted
+            ? () => context.push(AppRoutes.boostReceipt, extra: data)
+            : null,
+        borderRadius: BorderRadius.circular(24),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            color: cs.boostGold.withValues(alpha: 0.06),
+            border: Border.all(color: cs.boostGold.withValues(alpha: 0.2)),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: BackdropFilter(
+              filter: ui.ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.rocket_launch_rounded,
+                          size: 18,
                           color: cs.boostGold,
                         ),
-                      ),
-                      const Spacer(),
-                      _statusBadge(context, cs, status),
-                    ],
+                        const SizedBox(width: 6),
+                        Text(
+                          context.tr('boost_product'),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                            color: cs.boostGold,
+                          ),
+                        ),
+                        const Spacer(),
+                        _statusBadge(context, cs, status),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 10),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                  child: Row(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          width: 56,
-                          height: 56,
-                          color: cs.surfaceContainerHighest,
-                          child: image.isNotEmpty
-                              ? CachedNetworkImage(
-                                  imageUrl: image,
-                                  fit: BoxFit.cover,
-                                  width: 56,
-                                  height: 56,
-                                )
-                              : Icon(
-                                  Icons.image,
-                                  color: cs.onSurfaceVariant.withValues(
-                                    alpha: 0.3,
+                  const SizedBox(height: 10),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                    child: Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            width: 56,
+                            height: 56,
+                            color: cs.surfaceContainerHighest,
+                            child: image.isNotEmpty
+                                ? CachedNetworkImage(
+                                    imageUrl: image,
+                                    fit: BoxFit.cover,
+                                    width: 56,
+                                    height: 56,
+                                  )
+                                : Icon(
+                                    Icons.image,
+                                    color: cs.onSurfaceVariant.withValues(
+                                      alpha: 0.3,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                name,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  color: cs.onSurface,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              if (tier.isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: cs.boostGold.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    tier,
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: cs.boostGold,
+                                    ),
                                   ),
                                 ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'TZS ${_nf(price.toInt())}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 15,
+                                  color: cs.primary,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              name,
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 14,
-                                color: cs.onSurface,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            if (tier.isNotEmpty)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: cs.boostGold.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  tier,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
-                                    color: cs.boostGold,
-                                  ),
-                                ),
-                              ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'TZS ${_nf(price.toInt())}',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 15,
-                                color: cs.primary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                if (isCompleted) ...[
-                  const Divider(height: 1, indent: 14, endIndent: 14),
-                  _buildReceiptCard(
-                    context,
-                    cs,
-                    status,
-                    Theme.of(context).brightness == Brightness.dark,
-                  ),
+                  if (isCompleted) ...[
+                    const Divider(height: 1, indent: 14, endIndent: 14),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+                      child: Row(
+                        children: [
+                          Icon(Icons.receipt_long_rounded,
+                              size: 16, color: cs.primary),
+                          const SizedBox(width: 6),
+                          Text(
+                            context.tr('view_receipt'),
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: cs.primary,
+                            ),
+                          ),
+                          const Spacer(),
+                          Icon(Icons.chevron_right,
+                              size: 18, color: cs.primary),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),

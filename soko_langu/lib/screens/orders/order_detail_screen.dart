@@ -823,7 +823,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
           if (platformFee > 0)
             _tableRow(
               cs,
-              context.tr('service_fee'),
+              'Soko Vibe Commission',
               '+TZS ${_nf(platformFee.toInt())}',
             ),
           if (processingFee > 0)
@@ -1172,7 +1172,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       children.add(
         _addrRow(
           cs,
-          context.tr('service_fee'),
+          'Soko Vibe Commission',
           '+TZS ${_nf(platformFee.toInt())}',
         ),
       );

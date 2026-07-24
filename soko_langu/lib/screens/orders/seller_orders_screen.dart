@@ -3,11 +3,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:go_router/go_router.dart';
 import '../../theme/app_colors.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/glass_container.dart';
 import '../../utils/network_error.dart';
+import '../../app/routes.dart';
 
 class SellerOrdersScreen extends StatefulWidget {
   const SellerOrdersScreen({super.key});
@@ -343,15 +345,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
   }
 
   void _viewBuyerProfile(String buyerId) {
-    // Navigate to the buyer's public profile
-    // The route is '/public-profile' with buyerId as extra or path param
-    try {
-      // Use go_router if available
-      final router = Router.of(context);
-      // We'll just show a snackbar for now since public profile navigation differs
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Buyer ID: $buyerId')),
-      );
-    } catch (_) {}
+    if (!mounted) return;
+    context.push('${AppRoutes.publicProfile}/$buyerId');
   }
 }
