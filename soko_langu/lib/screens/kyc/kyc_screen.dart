@@ -2,10 +2,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import '../../services/kyc_service.dart';
+import '../../services/cloudinary_service.dart';
 import '../../widgets/google_loading.dart';
 import '../../theme/app_colors.dart';
 import '../../extensions/context_tr.dart';
@@ -31,7 +31,6 @@ class _KycScreenState extends State<KycScreen> {
 
   final _idTypes = ['National ID', 'Passport', 'Drivers License', 'Voters ID'];
   final _picker = ImagePicker();
-  final _storage = FirebaseStorage.instance;
 
   @override
   void initState() {
@@ -71,12 +70,7 @@ class _KycScreenState extends State<KycScreen> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return null;
-      final ext = file.path.split('.').last;
-      final extSafe = ext.length > 1 && ext.length < 6 ? ext : 'jpg';
-      final ref = _storage.ref().child('kyc/${user.uid}/${prefix}_${const Uuid().v4()}.$extSafe');
-      final bytes = await file.readAsBytes();
-      await ref.putData(bytes);
-      return await ref.getDownloadURL();
+      return await CloudinaryService.uploadImage(file, folder: 'kyc/${user.uid}');
     } catch (e) {
       debugPrint('Upload error: $e');
       return null;
