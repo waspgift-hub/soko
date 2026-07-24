@@ -331,7 +331,7 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
         final orderId =
             data?['orderId'] as String? ?? data?['transactionId'] as String?;
         if (orderId != null) {
-          _pushIfNotCurrent('/order-detail/$orderId', ctx, extra: data ?? {});
+          _pushIfNotCurrent('/order-detail/$orderId', ctx, data ?? {});
         } else {
           _pushIfNotCurrent('/notifications', ctx);
         }

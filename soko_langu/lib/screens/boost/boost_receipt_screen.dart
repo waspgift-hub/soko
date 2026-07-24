@@ -103,7 +103,7 @@ class BoostReceiptScreen extends StatelessWidget {
                 _row(cs, context.tr('start_date'), startDate),
                 _row(cs, context.tr('end_date'), expiryDate),
                 const Divider(height: 24),
-                _row(cs, context.tr('receipt_total'), 'TZS ${nf(totalAmount.toInt())}',
+                _row(cs, context.tr('receipt_total'), 'TZS ${nf.format(totalAmount.toInt())}',
                     valueBold: true, valueColor: cs.primary),
                 const SizedBox(height: 20),
                 Container(

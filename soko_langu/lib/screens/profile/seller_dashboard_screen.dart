@@ -127,8 +127,14 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                           Center(
                             child: Text(context.tr('no_transactions'),
                               style: TextStyle(color: cs.onSurfaceVariant)),
-                          ),
-                        ],
+),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(child: _actionButton(cs, Icons.flash_on, context.tr('unda_flash_sale'), () => context.push(AppRoutes.createFlashSale), cs.trendingOrange)),
+            ],
+          ),
+        ],
                       ],
                     ),
                   );
@@ -197,6 +203,12 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
               Expanded(child: _actionButton(cs, Icons.account_balance, 'Statement', () => context.push(AppRoutes.sellerStatement), cs.premiumTeal)),
               const SizedBox(width: 8),
               Expanded(child: _actionButton(cs, Icons.receipt_long, context.tr('order_history'), () => context.push(AppRoutes.sellerOrders), cs.tertiary)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(child: _actionButton(cs, Icons.flash_on, context.tr('unda_flash_sale'), () => context.push(AppRoutes.createFlashSale), cs.trendingOrange)),
             ],
           ),
         ],
