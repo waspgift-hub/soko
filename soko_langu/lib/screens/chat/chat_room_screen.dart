@@ -20,6 +20,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(title: Text(widget.otherUserName ?? context.tr('chat'))),
       body: Column(
         children: [

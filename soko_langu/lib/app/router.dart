@@ -39,6 +39,7 @@ import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_user_detail_screen.dart';
 import '../screens/admin/admin_wallet_screen.dart';
 import '../screens/seller/seller_earnings_screen.dart';
+import '../screens/boost/boost_receipt_screen.dart';
 import '../screens/orders/my_purchases_screen.dart';
 import '../screens/orders/seller_dispatch_screen.dart';
 import '../screens/orders/seller_quote_screen.dart';
@@ -52,6 +53,7 @@ import '../screens/report/report_screen.dart';
 import '../screens/report/admin_reports_screen.dart';
 import '../screens/ai/ai_assistant_screen.dart';
 import '../screens/seller/seller_analytics_screen.dart';
+import '../screens/seller/seller_statement_screen.dart';
 
 import '../screens/legal/privacy_policy_screen.dart';
 import '../screens/legal/terms_of_service_screen.dart';
@@ -300,6 +302,10 @@ GoRouter buildRouter() {
         builder: (context, state) => ProductBoostScreen(product: state.extra as dynamic),
       ),
       GoRoute(
+        path: AppRoutes.boostReceipt,
+        builder: (context, state) => BoostReceiptScreen(data: state.extra as Map<String, dynamic>),
+      ),
+      GoRoute(
         path: AppRoutes.discovery,
         builder: (context, state) => const DiscoveryScreen(),
       ),
@@ -333,6 +339,13 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.sellerOrders,
         builder: (context, state) => const SellerOrdersScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.sellerStatement,
+        builder: (context, state) {
+          final sellerId = state.extra as String? ?? FirebaseAuth.instance.currentUser?.uid ?? '';
+          return SellerStatementScreen(sellerId: sellerId);
+        },
       ),
       GoRoute(
         path: AppRoutes.kyc,
