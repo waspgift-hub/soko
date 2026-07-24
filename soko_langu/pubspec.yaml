@@ -76,6 +76,7 @@ dependencies:
   pdf: ^3.11.1
   printing: ^5.13.4
   gal: ^2.3.2
+  open_file: ^3.5.10
   video_player: ^2.9.2
 
 

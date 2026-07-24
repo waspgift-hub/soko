@@ -1,13 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:open_file/open_file.dart';
 import '../../services/api_config.dart';
 import '../../widgets/google_loading.dart';
 import '../../theme/app_colors.dart';
@@ -57,7 +56,7 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: cs.surface,
       appBar: AppBar(
         title: Text(_lang == 'sw' ? 'Taarifa za Kifedha' : 'Seller Statement'),
         backgroundColor: Colors.transparent,
@@ -390,15 +389,22 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
     if (_data == null) return;
     try {
       final jsonString = const JsonEncoder.withIndent('  ').convert(_data);
-      final dir = await getApplicationDocumentsDirectory();
+      late Directory dir;
+      if (Platform.isAndroid) {
+        final extDir = await getExternalStorageDirectory();
+        dir = extDir != null ? Directory('${extDir.path}/Download') : await getApplicationDocumentsDirectory();
+        if (extDir != null && !await dir.exists()) {
+          await dir.create(recursive: true);
+        }
+      } else {
+        dir = await getApplicationDocumentsDirectory();
+      }
       final file = File('${dir.path}/soko_vibe_statement_${widget.sellerId.substring(0, 8)}.json');
       await file.writeAsString(jsonString);
+      await OpenFile.open(file.path);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_lang == 'sw' ? 'Statement imehifadhiwa' : 'Statement saved'),
-            action: SnackBarAction(label: _lang == 'sw' ? 'Fungua' : 'Open', onPressed: () => Share.shareXFiles([XFile(file.path)])),
-          ),
+          SnackBar(content: Text(_lang == 'sw' ? 'Statement imehifadhiwa' : 'Statement saved'), duration: const Duration(seconds: 3)),
         );
       }
     } catch (e) {

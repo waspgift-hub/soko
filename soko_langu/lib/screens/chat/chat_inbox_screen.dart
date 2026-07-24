@@ -57,7 +57,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: cs.surface,
       appBar: AppBar(
         title: Text(context.tr('chats')),
         backgroundColor: Colors.transparent,
