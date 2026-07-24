@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -8,6 +7,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
+import 'package:open_file/open_file.dart';
 import '../../services/receipt_pdf_service.dart';
 import '../../widgets/order_timeline.dart';
 import '../../models/transaction_model.dart';
@@ -30,7 +30,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      extendBodyBehindAppBar: true,
+      backgroundColor: cs.surface,
       appBar: AppBar(
         title: Text(context.tr('receipt')),
         backgroundColor: Colors.transparent,
@@ -115,47 +115,76 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     // Seller receives = price - platformFee (what seller actually gets)
     final sellerReceives = price - platformFee;
 
-    // QR data as JSON string
-    final qrData = jsonEncode({
-      'type': 'soko_vibe_receipt',
-      'orderId': widget.orderId,
-      'lang': _lang,
-      'date': createdAt.toIso8601String(),
-      'product': {
-        'name': productName,
-        'description': productDescription,
-        'details': productDetails,
-        'price': price,
-        'image': productImage,
-      },
-      'seller': {
-        'name': sellerName,
-        'phone': sellerPhone,
-        'location': sellerLocation,
-      },
-      'buyer': {
-        'name': buyerName,
-        'phone': buyerPhone,
-      },
-      'payment': {
-        'total': totalAmount,
-        'productPrice': price,
-        'shippingCost': shippingCost,
-        'commission': platformFee,
-        'processingFee': mongikeFee,
-        'sellerReceives': sellerReceives,
-        'method': paymentMethod,
-        'reference': transactionReference,
-      },
-      'delivery': deliveryAddress != null ? {
-        'region': deliveryAddress['region'],
-        'district': deliveryAddress['district'],
-        'street': deliveryAddress['street'],
-        'landmarks': deliveryAddress['landmarks'],
-      } : null,
-      'status': status,
-      'timeline': steps,
-    });
+    // Build readable letter for QR scan
+    final dateStr = '${createdAt.day}/${createdAt.month}/${createdAt.year} ${createdAt.hour.toString().padLeft(2, '0')}:${createdAt.minute.toString().padLeft(2, '0')}';
+    final nfLocal = NumberFormat('#,###', 'en');
+    final stepsStr = steps.asMap().entries.map((e) => '${e.key + 1}. ${e.value}').join('\n');
+    final addrStr = deliveryAddress != null
+        ? '\nAnwani: ${deliveryAddress['region']}, ${deliveryAddress['district']}, ${deliveryAddress['street']}${deliveryAddress['landmarks'] != null ? ' (${deliveryAddress['landmarks']})' : ''}'
+        : '';
+    final qrData = _lang == 'sw'
+        ? '''
+══════════════ SOKO VIBE ══════════════
+            RISITI YA UNUNUZI
+
+Agizo #${widget.orderId}
+Tarehe: $dateStr
+
+BIDHAA: $productName
+Maelezo: $productDescription${productDetails.isNotEmpty ? '\nKinachouzwa: $productDetails' : ''}
+
+MNUNUZI: $buyerName
+Simu: $buyerPhone
+
+MUUZAJI: $sellerName
+Simu: $sellerPhone
+Duka: $sellerLocation$addrStr
+
+MALIPO:
+  Bei ya Bidhaa: TSh ${nfLocal.format(price.toInt())}${shippingCost > 0 ? '\n  Nauli: TSh ${nfLocal.format(shippingCost.toInt())}' : ''}${platformFee > 0 ? '\n  Commission ya Soko Vibe: TSh ${nfLocal.format(platformFee.toInt())}' : ''}
+  Ada ya Kuchakata: TSh ${nfLocal.format(mongikeFee.toInt())}
+  Jumla: TSh ${nfLocal.format(totalAmount.toInt())}
+  Muuzaji anapata: TSh ${nfLocal.format(sellerReceives.toInt())}
+
+HALI: ${_statusLabel(status, context)}
+
+HATUA ZA AGIZO:
+$stepsStr
+
+Scan QR code for full receipt
+══════════════════════════════════════
+'''
+        : '''
+══════════════ SOKO VIBE ══════════════
+           PURCHASE RECEIPT
+
+Order #${widget.orderId}
+Date: $dateStr
+
+PRODUCT: $productName
+Description: $productDescription${productDetails.isNotEmpty ? '\nDetails: $productDetails' : ''}
+
+BUYER: $buyerName
+Phone: $buyerPhone
+
+SELLER: $sellerName
+Phone: $sellerPhone
+Shop: $sellerLocation$addrStr
+
+PAYMENT:
+  Product Price: TSh ${nfLocal.format(price.toInt())}${shippingCost > 0 ? '\n  Shipping: TSh ${nfLocal.format(shippingCost.toInt())}' : ''}${platformFee > 0 ? '\n  Soko Vibe Commission: TSh ${nfLocal.format(platformFee.toInt())}' : ''}
+  Processing Fee: TSh ${nfLocal.format(mongikeFee.toInt())}
+  Total: TSh ${nfLocal.format(totalAmount.toInt())}
+  Seller Gets: TSh ${nfLocal.format(sellerReceives.toInt())}
+
+STATUS: ${_statusLabel(status, context)}
+
+ORDER TIMELINE:
+$stepsStr
+
+Scan QR code for full receipt
+══════════════════════════════════════
+''';
 
     return Container(
       decoration: BoxDecoration(
@@ -642,12 +671,17 @@ class _ReceiptDownloadButtonState extends State<_ReceiptDownloadButton> {
 
   Future<void> _saveToDownloads(Uint8List pdfBytes) async {
     if (Platform.isAndroid) {
-      final dir = await getApplicationDocumentsDirectory();
+      final extDir = await getExternalStorageDirectory();
+      final dir = extDir != null ? Directory('${extDir.path}/Download') : await getApplicationDocumentsDirectory();
+      if (extDir != null && !await dir.exists()) {
+        await dir.create(recursive: true);
+      }
       final file = File('${dir.path}/receipt_${widget.orderId}.pdf');
       await file.writeAsBytes(pdfBytes);
+      await OpenFile.open(file.path);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${_tr('Receipt saved')}: ${file.path}'), duration: const Duration(seconds: 4)),
+          SnackBar(content: Text(widget.lang == 'sw' ? 'Risiti imehifadhiwa' : 'Receipt saved'), duration: const Duration(seconds: 3)),
         );
       }
     } else {

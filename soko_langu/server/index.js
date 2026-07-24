@@ -3752,9 +3752,12 @@ app.get('/api/seller-statement/:sellerId', async (req, res) => {
     const sellerEmail = sellerData.email || '';
     const sellerLocation = sellerData.location || '';
 
-    // All transactions for this seller (completed/paid only)
+    // All transactions for this seller (completed/paid only, last 12 months)
+    const twelveMonthsAgo = new Date();
+    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
     const txSnap = await db.collection('transactions')
       .where('sellerId', '==', sellerId)
+      .where('createdAt', '>=', twelveMonthsAgo)
       .orderBy('createdAt', 'asc')
       .get();
 
@@ -3787,9 +3790,10 @@ app.get('/api/seller-statement/:sellerId', async (req, res) => {
       }
     }
 
-    // Payouts/withdrawals for this seller
+    // Payouts/withdrawals for this seller (last 12 months)
     const withdrawSnap = await db.collection('withdrawals')
       .where('userId', '==', sellerId)
+      .where('createdAt', '>=', twelveMonthsAgo)
       .orderBy('createdAt', 'asc')
       .get();
 
@@ -5708,6 +5712,18 @@ app.post('/api/chat/send', async (req, res) => {
       last_message: text,
       last_timestamp: admin.firestore.FieldValue.serverTimestamp(),
     });
+
+    // Increment unread count for receiver
+    try {
+      const receiverDoc = await db.collection('users').doc(receiverId).get();
+      if (receiverDoc.exists) {
+        const receiverData = receiverDoc.data();
+        const fieldName = receiverData.isBuyer === true ? 'unread_count_buyer' : 'unread_count_seller';
+        await db.collection('chat_rooms').doc(roomId).update({
+          [fieldName]: admin.firestore.FieldValue.increment(1),
+        });
+      }
+    } catch (_) {}
 
     // Send OneSignal push to receiver
     const senderName = senderDoc.exists
