@@ -107,141 +107,153 @@ class _PaymentBannerState extends State<_PaymentBanner>
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bottom = MediaQuery.of(context).padding.bottom + 16;
+    final bottom = MediaQuery.of(context).padding.bottom + 24;
     final accent = _accentColor();
 
-    return SlideTransition(
-      position: _slideAnim,
-      child: FadeTransition(
-        opacity: _fadeAnim,
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: EdgeInsets.only(left: 16, right: 16, bottom: bottom),
-            child: GestureDetector(
-              onTap: widget.onDismiss,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: BackdropFilter(
-                  filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: isDark
-                            ? [
-                                accent.withValues(alpha: 0.2),
-                                cs.surface.withValues(alpha: 0.25),
-                              ]
-                            : [
-                                Colors.white.withValues(alpha: 0.85),
-                                Colors.white.withValues(alpha: 0.7),
-                              ],
-                      ),
+    return Stack(
+      children: [
+        GestureDetector(
+          onTap: widget.onDismiss,
+          child: AnimatedBuilder(
+            animation: _fadeAnim,
+            builder: (_, __) => Container(
+              color: Colors.black.withValues(alpha: 0.35 * _fadeAnim.value),
+            ),
+          ),
+        ),
+        SlideTransition(
+          position: _slideAnim,
+          child: FadeTransition(
+            opacity: _fadeAnim,
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: EdgeInsets.only(left: 32, right: 32, bottom: bottom),
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: GestureDetector(
+                    onTap: widget.onDismiss,
+                    child: ClipRRect(
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: accent.withValues(alpha: isDark ? 0.4 : 0.3),
-                        width: 1,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: accent.withValues(alpha: isDark ? 0.3 : 0.15),
-                          blurRadius: 24,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 44,
-                          height: 44,
+                      child: BackdropFilter(
+                        filter: ui.ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                           decoration: BoxDecoration(
-                            color: accent.withValues(alpha: 0.15),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(_icon(), color: accent, size: 26),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                widget.title,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 15,
-                                  color: isDark ? Colors.white : cs.onSurface,
-                                ),
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: isDark
+                                  ? [
+                                      accent.withValues(alpha: 0.3),
+                                      cs.surface.withValues(alpha: 0.35),
+                                    ]
+                                  : [
+                                      Colors.white.withValues(alpha: 0.92),
+                                      Colors.white.withValues(alpha: 0.78),
+                                    ],
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: accent.withValues(alpha: isDark ? 0.5 : 0.3),
+                              width: 1,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: accent.withValues(alpha: isDark ? 0.4 : 0.2),
+                                blurRadius: 32,
+                                offset: const Offset(0, 12),
                               ),
-                              if (widget.subtitle != null) ...[
-                                const SizedBox(height: 2),
-                                Text(
-                                  widget.subtitle!,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: isDark
-                                        ? Colors.white.withValues(alpha: 0.7)
-                                        : cs.onSurface.withValues(alpha: 0.6),
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
                             ],
                           ),
+                          child: IntrinsicHeight(
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 44,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: accent.withValues(alpha: 0.15),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(_icon(), color: accent, size: 26),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        widget.title,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 15,
+                                          color: isDark ? Colors.white : cs.onSurface,
+                                        ),
+                                      ),
+                                      if (widget.subtitle != null) ...[
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          widget.subtitle!,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: isDark
+                                                ? Colors.white.withValues(alpha: 0.7)
+                                                : cs.onSurface.withValues(alpha: 0.6),
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                if (widget.amount != null) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    constraints: const BoxConstraints(maxWidth: 120),
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: accent.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      widget.amount!,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 14,
+                                        color: accent,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                const SizedBox(width: 4),
+                                IconButton(
+                                  icon: Icon(Icons.close, size: 18),
+                                  onPressed: widget.onDismiss,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                  color: isDark
+                                      ? Colors.white.withValues(alpha: 0.5)
+                                      : cs.onSurface.withValues(alpha: 0.4),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                        if (widget.amount != null) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            constraints: const BoxConstraints(maxWidth: 140),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: accent.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              widget.amount!,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 14,
-                                color: accent,
-                              ),
-                            ),
-                          ),
-                        ],
-                        const SizedBox(width: 4),
-                        IconButton(
-                          icon: Icon(Icons.close, size: 18),
-                          onPressed: widget.onDismiss,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                            minWidth: 32,
-                            minHeight: 32,
-                          ),
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.5)
-                      : cs.onSurface.withValues(alpha: 0.4),
+                      ),
+                    ),
+                  ),
                 ),
-              ],
               ),
             ),
           ),
         ),
-      ),
-    ),
-    ),
-  ),
-);
+      ],
+    );
   }
 }
 
@@ -401,11 +413,23 @@ class _RealtimePaymentBannerWidgetState
     });
   }
 
+  Color _stateAccent(bool isSuccess, bool isFailed) {
+    if (isSuccess) return const Color(0xFF2D9F4E);
+    if (isFailed) return const Color(0xFFE53935);
+    return const Color(0xFFFF8F00);
+  }
+
+  IconData _stateIcon(bool isSuccess, bool isFailed) {
+    if (isSuccess) return Icons.check_circle_rounded;
+    if (isFailed) return Icons.cancel_rounded;
+    return Icons.payment_rounded;
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bottom = MediaQuery.of(context).padding.bottom + 16;
+    final bottom = MediaQuery.of(context).padding.bottom + 24;
 
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance
@@ -439,218 +463,189 @@ class _RealtimePaymentBannerWidgetState
           });
         }
 
-        Color accent;
-        IconData icon;
-        String title;
-        Widget? trailing;
-
-        if (isSuccess) {
-          accent = const Color(0xFF2D9F4E);
-          icon = Icons.check_circle_rounded;
-          title = widget.successTitle;
-        } else if (isFailed) {
-          accent = const Color(0xFFE53935);
-          icon = Icons.cancel_rounded;
-          title = widget.failedTitle;
-        } else {
-          accent = cs.primary;
-          icon = Icons.payment_rounded;
-          title = widget.processingTitle;
-          trailing = Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const GoogleLoading(size: 22, strokeWidth: 2.5),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: RealtimePaymentBanner.dismiss,
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.close, size: 14, color: Colors.white.withValues(alpha: 0.7)),
-                ),
-              ),
-            ],
-          );
-        }
+        final accent = _stateAccent(isSuccess, isFailed);
+        final icon = _stateIcon(isSuccess, isFailed);
+        final title = isSuccess
+            ? widget.successTitle
+            : isFailed
+                ? widget.failedTitle
+                : widget.processingTitle;
 
         return FadeTransition(
           opacity: _fadeAnim,
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: EdgeInsets.only(
-                left: 16,
-                right: 16,
-                bottom: bottom + 88,
+          child: Stack(
+            children: [
+              GestureDetector(
+                onTap: () {
+                  if (isSuccess || isFailed) RealtimePaymentBanner.dismiss();
+                },
+                child: AnimatedBuilder(
+                  animation: _fadeAnim,
+                  builder: (_, __) => Container(
+                    color: Colors.black.withValues(alpha: 0.35 * _fadeAnim.value),
+                  ),
+                ),
               ),
-              child: Align(
-                alignment: Alignment.bottomCenter,
-                child: GestureDetector(
-                  onTap: () {
-                    if (isSuccess || isFailed) RealtimePaymentBanner.dismiss();
-                  },
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(24),
-                    child: BackdropFilter(
-                      filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 18,
-                        ),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: isDark
-                                ? [
-                                    accent.withValues(alpha: 0.25),
-                                    cs.surface.withValues(alpha: 0.3),
-                                  ]
-                                : [
-                                    Colors.white.withValues(alpha: 0.92),
-                                    Colors.white.withValues(alpha: 0.78),
-                                  ],
-                          ),
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(
-                            color: accent.withValues(
-                              alpha: isDark ? 0.4 : 0.25,
-                            ),
-                            width: 0.5,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: accent.withValues(
-                                alpha: isDark ? 0.25 : 0.12,
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: EdgeInsets.only(left: 32, right: 32, bottom: bottom),
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: GestureDetector(
+                      onTap: () {
+                        if (isSuccess || isFailed) RealtimePaymentBanner.dismiss();
+                      },
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: BackdropFilter(
+                          filter: ui.ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: isDark
+                                    ? [
+                                        accent.withValues(alpha: 0.3),
+                                        cs.surface.withValues(alpha: 0.35),
+                                      ]
+                                    : [
+                                        Colors.white.withValues(alpha: 0.92),
+                                        Colors.white.withValues(alpha: 0.78),
+                                      ],
                               ),
-                              blurRadius: 24,
-                              offset: const Offset(0, 8),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            AnimatedContainer(
-                              duration: const Duration(milliseconds: 400),
-                              width: 46,
-                              height: 46,
-                              decoration: BoxDecoration(
-                                color: accent.withValues(alpha: 0.15),
-                                shape: BoxShape.circle,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: accent.withValues(alpha: isDark ? 0.5 : 0.3),
+                                width: 1,
                               ),
-                              child: AnimatedSwitcher(
-                                duration:
-                                    const Duration(milliseconds: 300),
-                                child: Icon(
-                                  icon,
-                                  key: ValueKey(icon),
-                                  color: accent,
-                                  size: 26,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: accent.withValues(alpha: isDark ? 0.4 : 0.2),
+                                  blurRadius: 32,
+                                  offset: const Offset(0, 12),
                                 ),
-                              ),
+                              ],
                             ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
+                            child: IntrinsicHeight(
+                              child: Row(
                                 children: [
-                                  Text(
-                                    title,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 15,
-                                      color: isDark
-                                          ? Colors.white
-                                          : cs.onSurface,
+                                  Container(
+                                    width: 44,
+                                    height: 44,
+                                    decoration: BoxDecoration(
+                                      color: accent.withValues(alpha: 0.15),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: AnimatedSwitcher(
+                                      duration: const Duration(milliseconds: 300),
+                                      child: Icon(icon, key: ValueKey(icon), color: accent, size: 24),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          title,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 15,
+                                            color: isDark ? Colors.white : cs.onSurface,
+                                          ),
+                                        ),
+                                        if (isProcessing)
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 2),
+                                            child: Text(
+                                              context.tr('check_phone_enter_pin'),
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                color: isDark
+                                                    ? Colors.white.withValues(alpha: 0.6)
+                                                    : cs.onSurface.withValues(alpha: 0.6),
+                                              ),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        if (isSuccess && widget.successSubtitle != null)
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 2),
+                                            child: Text(
+                                              widget.successSubtitle!,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: isDark
+                                                    ? Colors.white.withValues(alpha: 0.6)
+                                                    : cs.onSurface.withValues(alpha: 0.6),
+                                              ),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        if (_statusText.isNotEmpty && (isFailed || _handled))
+                                          Text(
+                                            _statusText,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: isDark
+                                                  ? Colors.white.withValues(alpha: 0.7)
+                                                  : accent,
+                                            ),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                      ],
                                     ),
                                   ),
                                   if (isProcessing)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 2),
-                                      child: Text(
-                                        context.tr('check_phone_enter_pin'),
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: isDark
-                                              ? Colors.white.withValues(alpha: 0.6)
-                                              : cs.onSurface.withValues(alpha: 0.6),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const SizedBox(width: 8),
+                                        const GoogleLoading(size: 22, strokeWidth: 2.5),
+                                        const SizedBox(width: 8),
+                                        GestureDetector(
+                                          onTap: RealtimePaymentBanner.dismiss,
+                                          child: Container(
+                                            padding: const EdgeInsets.all(6),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white.withValues(alpha: 0.15),
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: Icon(Icons.close, size: 14, color: Colors.white.withValues(alpha: 0.7)),
+                                          ),
                                         ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
+                                      ],
                                     ),
-                                  if (isSuccess &&
-                                      widget.successSubtitle != null)
-                                    Padding(
-                                      padding:
-                                          const EdgeInsets.only(top: 2),
-                                      child: Text(
-                                        widget.successSubtitle!,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: isDark
-                                              ? Colors.white.withValues(
-                                                  alpha: 0.6,
-                                                )
-                                              : cs.onSurface.withValues(
-                                                  alpha: 0.6,
-                                                ),
-                                        ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  if (_statusText.isNotEmpty &&
-                                      (isFailed || _handled))
-                                    Text(
-                                      _statusText,
-                                      style: TextStyle(
-                                        fontSize: 12,
+                                  if (isSuccess || isFailed)
+                                    Flexible(
+                                      child: IconButton(
+                                        icon: const Icon(Icons.close, size: 18),
+                                        onPressed: RealtimePaymentBanner.dismiss,
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                                         color: isDark
-                                            ? Colors.white.withValues(
-                                                alpha: 0.7,
-                                              )
-                                            : accent,
+                                            ? Colors.white.withValues(alpha: 0.5)
+                                            : cs.onSurface.withValues(alpha: 0.4),
                                       ),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
                                     ),
                                 ],
                               ),
                             ),
-                            if (trailing != null) ...[
-                              const SizedBox(width: 8),
-                              Flexible(child: trailing),
-                            ],
-                            if (isSuccess || isFailed)
-                              Flexible(
-                                child: IconButton(
-                                  icon: const Icon(Icons.close, size: 18),
-                                  onPressed: RealtimePaymentBanner.dismiss,
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(
-                                    minWidth: 32,
-                                    minHeight: 32,
-                                  ),
-                                  color: isDark
-                                      ? Colors.white.withValues(alpha: 0.5)
-                                      : cs.onSurface.withValues(alpha: 0.4),
-                                ),
-                              ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
+            ],
           ),
         );
       },
