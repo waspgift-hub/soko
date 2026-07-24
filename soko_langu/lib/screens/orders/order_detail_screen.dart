@@ -824,7 +824,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
             _tableRow(
               cs,
               'Soko Vibe Commission',
-              '+TZS ${_nf(platformFee.toInt())}',
+              'TZS ${_nf(platformFee.toInt())}',
             ),
           if (processingFee > 0)
             _tableRow(
@@ -1173,7 +1173,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         _addrRow(
           cs,
           'Soko Vibe Commission',
-          '+TZS ${_nf(platformFee.toInt())}',
+          '-TZS ${_nf(platformFee.toInt())}',
         ),
       );
     }
