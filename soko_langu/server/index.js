@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
 const admin = require('firebase-admin');
+const nodemailer = require('nodemailer');
 const { mongikeCollect, mongikePayout, mongikeBalance, COLLECTION_FEE, PAYOUT_FEE } = require('./mongike');
 const { groqChat, groqTranscribe } = require('./groq');
 
@@ -109,39 +110,37 @@ async function sendOneSignalNotification(userId, title, body, data = {}) {
     const criticalTypes = ['order', 'payment', 'dispute', 'refund', 'boost', 'kyc', 'withdrawal'];
     const notifType = (data && data.type) || 'general';
     if (criticalTypes.includes(notifType)) {
-      sendOneSignalEmail(userId, title, body, data).catch(() => {});
+      sendEmailSmtp(userId, title, body).catch(() => {});
     }
 
     return result;
   } catch (e) { console.error(`[OS] FAILED user=${userId}: ${e.message}`); return null; }
 }
 
-async function sendOneSignalEmail(userId, subject, bodyText, data = {}) {
-  if (!userId) { console.log('[OS email] No userId'); return null; }
-  if (!ONE_SIGNAL_APP_ID || !ONE_SIGNAL_REST_API_KEY) {
-    console.error('[OS email] Missing config'); return null;
-  }
+// ─── SMTP Email (free via Gmail — no domain needed) ─────
+const smtpTransporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.SMTP_PORT || '587'),
+  secure: process.env.SMTP_SECURE === 'true',
+  auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+});
+
+async function sendEmailSmtp(userId, subject, bodyText) {
+  if (!userId) { console.log('[SMTP] No userId'); return false; }
   try {
-    const emailBody = `<html><body style="font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto"><h2 style="color:#40916C">${subject || ''}</h2><p>${bodyText || ''}</p><hr style="border:none;border-top:1px solid #e0e0e0;margin:20px 0"/><p style="color:#999;font-size:12px">Soko Vibe</p></body></html>`;
-    const resp = await fetch(OS_URL, {
-      method: 'POST',
-      headers: osHeaders(),
-      body: JSON.stringify({
-        app_id: ONE_SIGNAL_APP_ID,
-        idempotency_key: randomUUID(),
-        include_aliases: { external_id: [userId] },
-        target_channel: 'email',
-        email_subject: subject || '',
-        email_preheader: bodyText || '',
-        email_body: emailBody,
-        email_from_name: 'Soko Vibe',
-      }),
+    const userRecord = await admin.auth().getUser(userId);
+    const email = userRecord.email;
+    if (!email) { console.log(`[SMTP] No email for user ${userId}`); return false; }
+    const html = `<html><body style="font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto"><h2 style="color:#40916C">${subject || ''}</h2><p>${bodyText || ''}</p><hr style="border:none;border-top:1px solid #e0e0e0;margin:20px 0"/><p style="color:#999;font-size:12px">Soko Vibe</p></body></html>`;
+    await smtpTransporter.sendMail({
+      from: process.env.SMTP_FROM || 'Soko Vibe <waspgift@gmail.com>',
+      to: email,
+      subject: subject || '',
+      html,
     });
-    const result = await resp.json();
-    if (result.id) console.log(`[OS email] sent to ${userId} subject="${subject}" id=${result.id}`);
-    else console.error(`[OS email] send failed:`, JSON.stringify(result));
-    return result;
-  } catch (e) { console.error(`[OS email] FAILED user=${userId}: ${e.message}`); return null; }
+    console.log(`[SMTP] sent to ${email} subject="${subject}"`);
+    return true;
+  } catch (e) { console.error(`[SMTP] FAILED user=${userId}: ${e.message}`); return false; }
 }
 
 async function sendOneSignalBulk(userIds, title, body, data = {}) {
