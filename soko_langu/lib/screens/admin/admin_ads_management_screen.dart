@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../extensions/context_tr.dart';
 import '../../theme/app_dimens.dart';
 
 class AdminAdsManagementScreen extends StatelessWidget {
@@ -8,8 +9,8 @@ class AdminAdsManagementScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: embedded ? null : AppBar(title: const Text('Ad Management')),
-      body: Center(child: Text('Ad Management', style: TextStyle(color: cs.onSurface))),
+      appBar: embedded ? null : AppBar(title: Text(context.tr('ad_management'))),
+      body: Center(child: Text(context.tr('ad_management'), style: TextStyle(color: cs.onSurface))),
     );
   }
 }

@@ -12,6 +12,7 @@ import '../../models/boost_receipt.dart';
 import '../../models/payment_model.dart';
 import '../../widgets/boost_receipt_card.dart';
 import '../../widgets/payment_banner.dart';
+import '../../widgets/payment_result_dialog.dart';
 import '../../widgets/glass_container.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
@@ -566,6 +567,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
           orderId: orderId,
           successStatuses: ['completed'],
           processingTitle: context.tr('processing_payment'),
+          processingSubtitle: context.tr('check_phone_enter_pin'),
           successTitle: context.tr('payment_successful'),
           failedTitle: context.tr('payment_failed'),
           onSuccess: () {
@@ -580,11 +582,10 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
           },
           onError: (msg) {
             if (mounted) {
-              PaymentBanner.show(
+              PaymentResult.show(
                 context: context,
-                type: PaymentBannerType.failed,
-                title: context.tr('payment_failed'),
-                subtitle: msg,
+                success: false,
+                errorMessage: msg,
               );
             }
           },

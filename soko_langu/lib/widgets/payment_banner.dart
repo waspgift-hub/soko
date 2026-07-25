@@ -6,7 +6,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'google_loading.dart';
-import '../extensions/context_tr.dart';
 import '../services/api_config.dart';
 
 enum PaymentBannerType { success, failed }
@@ -26,7 +25,7 @@ class PaymentBanner {
     dismiss();
 
     _entry = OverlayEntry(
-      builder: (_) => _PaymentBanner(
+      builder: (_) => _PaymentBannerContent(
         type: type,
         title: title,
         subtitle: subtitle,
@@ -47,14 +46,14 @@ class PaymentBanner {
   }
 }
 
-class _PaymentBanner extends StatefulWidget {
+class _PaymentBannerContent extends StatefulWidget {
   final PaymentBannerType type;
   final String title;
   final String? subtitle;
   final String? amount;
   final VoidCallback onDismiss;
 
-  const _PaymentBanner({
+  const _PaymentBannerContent({
     required this.type,
     required this.title,
     this.subtitle,
@@ -63,43 +62,43 @@ class _PaymentBanner extends StatefulWidget {
   });
 
   @override
-  State<_PaymentBanner> createState() => _PaymentBannerState();
+  State<_PaymentBannerContent> createState() => _PaymentBannerContentState();
 }
 
-class _PaymentBannerState extends State<_PaymentBanner>
+class _PaymentBannerContentState extends State<_PaymentBannerContent>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<Offset> _slideAnim;
-  late final Animation<double> _fadeAnim;
+  late final AnimationController _ctrl;
+  late final Animation<Offset> _slide;
+  late final Animation<double> _fade;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
+    _ctrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 400),
     );
-    _slideAnim = Tween<Offset>(
+    _slide = Tween<Offset>(
       begin: const Offset(0, 0.6),
       end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
-    _fadeAnim = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+    _fade = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeOut),
     );
-    _controller.forward();
+    _ctrl.forward();
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _ctrl.dispose();
     super.dispose();
   }
 
-  Color _accentColor() => widget.type == PaymentBannerType.success
+  Color get _accent => widget.type == PaymentBannerType.success
       ? const Color(0xFF2D9F4E)
       : const Color(0xFFE53935);
 
-  IconData _icon() => widget.type == PaymentBannerType.success
+  IconData get _icon => widget.type == PaymentBannerType.success
       ? Icons.check_circle_rounded
       : Icons.cancel_rounded;
 
@@ -108,23 +107,20 @@ class _PaymentBannerState extends State<_PaymentBanner>
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bottom = MediaQuery.of(context).padding.bottom + 24;
-    final accent = _accentColor();
 
     return Stack(
       children: [
         GestureDetector(
           onTap: widget.onDismiss,
-          child: AnimatedBuilder(
-            animation: _fadeAnim,
-            builder: (_, __) => Container(
-              color: Colors.black.withValues(alpha: 0.35 * _fadeAnim.value),
-            ),
+          child: FadeTransition(
+            opacity: _fade,
+            child: Container(color: Colors.black.withValues(alpha: 0.35)),
           ),
         ),
         SlideTransition(
-          position: _slideAnim,
+          position: _slide,
           child: FadeTransition(
-            opacity: _fadeAnim,
+            opacity: _fade,
             child: SafeArea(
               top: false,
               child: Padding(
@@ -140,31 +136,14 @@ class _PaymentBannerState extends State<_PaymentBanner>
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                           decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: isDark
-                                  ? [
-                                      accent.withValues(alpha: 0.3),
-                                      cs.surface.withValues(alpha: 0.35),
-                                    ]
-                                  : [
-                                      Colors.white.withValues(alpha: 0.92),
-                                      Colors.white.withValues(alpha: 0.78),
-                                    ],
-                            ),
+                            color: isDark
+                                ? cs.surface.withValues(alpha: 0.5)
+                                : Colors.white.withValues(alpha: 0.85),
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
-                              color: accent.withValues(alpha: isDark ? 0.5 : 0.3),
+                              color: _accent.withValues(alpha: isDark ? 0.5 : 0.25),
                               width: 1,
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: accent.withValues(alpha: isDark ? 0.4 : 0.2),
-                                blurRadius: 32,
-                                offset: const Offset(0, 12),
-                              ),
-                            ],
                           ),
                           child: IntrinsicHeight(
                             child: Row(
@@ -173,10 +152,10 @@ class _PaymentBannerState extends State<_PaymentBanner>
                                   width: 44,
                                   height: 44,
                                   decoration: BoxDecoration(
-                                    color: accent.withValues(alpha: 0.15),
+                                    color: _accent.withValues(alpha: 0.15),
                                     shape: BoxShape.circle,
                                   ),
-                                  child: Icon(_icon(), color: accent, size: 26),
+                                  child: Icon(_icon, color: _accent, size: 26),
                                 ),
                                 const SizedBox(width: 14),
                                 Expanded(
@@ -215,7 +194,7 @@ class _PaymentBannerState extends State<_PaymentBanner>
                                     constraints: const BoxConstraints(maxWidth: 120),
                                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                     decoration: BoxDecoration(
-                                      color: accent.withValues(alpha: 0.12),
+                                      color: _accent.withValues(alpha: 0.12),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Text(
@@ -225,14 +204,14 @@ class _PaymentBannerState extends State<_PaymentBanner>
                                       style: TextStyle(
                                         fontWeight: FontWeight.w700,
                                         fontSize: 14,
-                                        color: accent,
+                                        color: _accent,
                                       ),
                                     ),
                                   ),
                                 ],
                                 const SizedBox(width: 4),
                                 IconButton(
-                                  icon: Icon(Icons.close, size: 18),
+                                  icon: const Icon(Icons.close, size: 18),
                                   onPressed: widget.onDismiss,
                                   padding: EdgeInsets.zero,
                                   constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
@@ -268,18 +247,20 @@ class RealtimePaymentBanner {
     required String successTitle,
     String? successSubtitle,
     required String failedTitle,
+    String? processingSubtitle,
     VoidCallback? onSuccess,
     void Function(String msg)? onError,
   }) {
     dismiss();
     _entry = OverlayEntry(
-      builder: (_) => _RealtimePaymentBannerWidget(
+      builder: (_) => _RealtimeBanner(
         orderId: orderId,
         successStatuses: successStatuses,
         processingTitle: processingTitle,
         successTitle: successTitle,
         successSubtitle: successSubtitle,
         failedTitle: failedTitle,
+        processingSubtitle: processingSubtitle,
         onSuccess: onSuccess,
         onError: onError,
       ),
@@ -293,78 +274,66 @@ class RealtimePaymentBanner {
   }
 }
 
-class _RealtimePaymentBannerWidget extends StatefulWidget {
+class _RealtimeBanner extends StatefulWidget {
   final String orderId;
   final List<String> successStatuses;
   final String processingTitle;
   final String successTitle;
   final String? successSubtitle;
   final String failedTitle;
+  final String? processingSubtitle;
   final VoidCallback? onSuccess;
   final void Function(String msg)? onError;
 
-  const _RealtimePaymentBannerWidget({
+  const _RealtimeBanner({
     required this.orderId,
     required this.successStatuses,
     required this.processingTitle,
     required this.successTitle,
     this.successSubtitle,
     required this.failedTitle,
+    this.processingSubtitle,
     this.onSuccess,
     this.onError,
   });
 
   @override
-  State<_RealtimePaymentBannerWidget> createState() =>
-      _RealtimePaymentBannerWidgetState();
+  State<_RealtimeBanner> createState() => _RealtimeBannerState();
 }
 
-class _RealtimePaymentBannerWidgetState
-    extends State<_RealtimePaymentBannerWidget>
+class _RealtimeBannerState extends State<_RealtimeBanner>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _animCtrl;
-  late final Animation<double> _fadeAnim;
-  bool _handled = false;
-  String _statusText = '';
-  Timer? _timeoutTimer;
+  late final AnimationController _ctrl;
+  late final Animation<double> _fade;
+  bool _done = false;
+  String _errorMsg = '';
   Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
-    _animCtrl = AnimationController(
+    _ctrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 400),
     );
-    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeIn);
-    _animCtrl.forward();
-
-    _startTimeoutTimer();
+    _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeIn);
+    _ctrl.forward();
     _startPolling();
   }
 
   @override
   void dispose() {
-    _animCtrl.dispose();
-    _timeoutTimer?.cancel();
+    _ctrl.dispose();
     _pollTimer?.cancel();
     super.dispose();
   }
 
-  void _startTimeoutTimer() {
-    _timeoutTimer = Timer(const Duration(seconds: 60), () {
-      if (!_handled && mounted) {
-        setState(() {
-          _statusText = context.tr('payment_timeout');
-        });
-        widget.onError?.call('Payment timeout - no confirmation from Mongike');
-        _handleDone();
-      }
-    });
+  void _startPolling() {
+    _pollTimer = Timer.periodic(const Duration(seconds: 7), (_) => _checkStatus());
   }
 
-  Future<void> _pollServerStatus() async {
-    if (_handled) return;
+  Future<void> _checkStatus() async {
+    if (_done) return;
     try {
       final token = await FirebaseAuth.instance.currentUser?.getIdToken();
       if (token == null) return;
@@ -382,15 +351,15 @@ class _RealtimePaymentBannerWidgetState
         if (result['success'] == true) {
           final status = result['status'] as String? ?? 'pending';
           if (status == 'failed' || status == 'cancelled') {
-            final reason = result['failureReason'] as String? ?? context.tr('payment_failed_try_again');
-            if (mounted && !_handled) {
+            final reason = result['failureReason'] as String? ?? 'Payment failed';
+            if (mounted && !_done) {
               widget.onError?.call(reason);
-              _handleDone();
+              _finish();
             }
           } else if (widget.successStatuses.contains(status)) {
-            if (mounted && !_handled) {
+            if (mounted && !_done) {
               widget.onSuccess?.call();
-              _handleDone();
+              _finish();
             }
           }
         }
@@ -398,30 +367,23 @@ class _RealtimePaymentBannerWidgetState
     } catch (_) {}
   }
 
-  void _startPolling() {
-    _pollTimer = Timer.periodic(const Duration(seconds: 7), (_) {
-      _pollServerStatus();
-    });
-  }
-
-  void _handleDone() {
-    if (_handled) return;
-    _handled = true;
-    _timeoutTimer?.cancel();
+  void _finish() {
+    if (_done) return;
+    _done = true;
     Future.delayed(const Duration(milliseconds: 1500), () {
       if (mounted) RealtimePaymentBanner.dismiss();
     });
   }
 
-  Color _stateAccent(bool isSuccess, bool isFailed) {
-    if (isSuccess) return const Color(0xFF2D9F4E);
-    if (isFailed) return const Color(0xFFE53935);
-    return const Color(0xFFFF8F00);
+  Color _accent(bool ok, bool fail) {
+    if (ok) return const Color(0xFF2D9F4E);
+    if (fail) return const Color(0xFFE53935);
+    return const Color(0xFF2D6A4F);
   }
 
-  IconData _stateIcon(bool isSuccess, bool isFailed) {
-    if (isSuccess) return Icons.check_circle_rounded;
-    if (isFailed) return Icons.cancel_rounded;
+  IconData _icon(bool ok, bool fail) {
+    if (ok) return Icons.check_circle_rounded;
+    if (fail) return Icons.cancel_rounded;
     return Icons.payment_rounded;
   }
 
@@ -440,51 +402,49 @@ class _RealtimePaymentBannerWidgetState
         final data = snap.data?.data() as Map<String, dynamic>?;
         final status = data?['status'] as String? ?? 'pending';
 
-        final isSuccess = widget.successStatuses.contains(status);
-        final isFailed = status == 'failed' || status == 'cancelled';
-        final isProcessing = !isSuccess && !isFailed;
+        final isOk = widget.successStatuses.contains(status);
+        final isFail = status == 'failed' || status == 'cancelled';
+        final isLoading = !isOk && !isFail;
 
-        if (isSuccess && !_handled) {
+        if (isOk && !_done) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             widget.onSuccess?.call();
-            _handleDone();
+            _finish();
           });
         }
-
-        if (isFailed && !_handled) {
-          final reason =
-              data?['failureReason'] as String? ??
+        if (isFail && !_done) {
+          final reason = data?['failureReason'] as String? ??
               data?['errorMessage'] as String? ??
-              context.tr('payment_failed_try_again');
+              'Payment failed';
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            _statusText = reason;
+            _errorMsg = reason;
             widget.onError?.call(reason);
-            _handleDone();
+            _finish();
           });
         }
 
-        final accent = _stateAccent(isSuccess, isFailed);
-        final icon = _stateIcon(isSuccess, isFailed);
-        final title = isSuccess
+        final accent = _accent(isOk, isFail);
+        final icon = _icon(isOk, isFail);
+        final title = isOk
             ? widget.successTitle
-            : isFailed
+            : isFail
                 ? widget.failedTitle
                 : widget.processingTitle;
+        final subtitle = isLoading
+            ? widget.processingSubtitle
+            : isOk
+                ? widget.successSubtitle
+                : _errorMsg.isNotEmpty ? _errorMsg : null;
 
         return FadeTransition(
-          opacity: _fadeAnim,
+          opacity: _fade,
           child: Stack(
             children: [
               GestureDetector(
                 onTap: () {
-                  if (isSuccess || isFailed) RealtimePaymentBanner.dismiss();
+                  if (isOk || isFail) RealtimePaymentBanner.dismiss();
                 },
-                child: AnimatedBuilder(
-                  animation: _fadeAnim,
-                  builder: (_, __) => Container(
-                    color: Colors.black.withValues(alpha: 0.35 * _fadeAnim.value),
-                  ),
-                ),
+                child: Container(color: Colors.black.withValues(alpha: 0.35)),
               ),
               SafeArea(
                 top: false,
@@ -494,7 +454,7 @@ class _RealtimePaymentBannerWidgetState
                     alignment: Alignment.bottomCenter,
                     child: GestureDetector(
                       onTap: () {
-                        if (isSuccess || isFailed) RealtimePaymentBanner.dismiss();
+                        if (isOk || isFail) RealtimePaymentBanner.dismiss();
                       },
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(20),
@@ -503,31 +463,14 @@ class _RealtimePaymentBannerWidgetState
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                             decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: isDark
-                                    ? [
-                                        accent.withValues(alpha: 0.3),
-                                        cs.surface.withValues(alpha: 0.35),
-                                      ]
-                                    : [
-                                        Colors.white.withValues(alpha: 0.92),
-                                        Colors.white.withValues(alpha: 0.78),
-                                      ],
-                              ),
+                              color: isDark
+                                  ? cs.surface.withValues(alpha: 0.5)
+                                  : Colors.white.withValues(alpha: 0.85),
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: accent.withValues(alpha: isDark ? 0.5 : 0.3),
+                                color: accent.withValues(alpha: isDark ? 0.5 : 0.25),
                                 width: 1,
                               ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: accent.withValues(alpha: isDark ? 0.4 : 0.2),
-                                  blurRadius: 32,
-                                  offset: const Offset(0, 12),
-                                ),
-                              ],
                             ),
                             child: IntrinsicHeight(
                               child: Row(
@@ -558,82 +501,44 @@ class _RealtimePaymentBannerWidgetState
                                             color: isDark ? Colors.white : cs.onSurface,
                                           ),
                                         ),
-                                        if (isProcessing)
+                                        if (subtitle != null && subtitle.isNotEmpty)
                                           Padding(
                                             padding: const EdgeInsets.only(top: 2),
                                             child: Text(
-                                              context.tr('check_phone_enter_pin'),
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                color: isDark
-                                                    ? Colors.white.withValues(alpha: 0.6)
-                                                    : cs.onSurface.withValues(alpha: 0.6),
-                                              ),
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                        if (isSuccess && widget.successSubtitle != null)
-                                          Padding(
-                                            padding: const EdgeInsets.only(top: 2),
-                                            child: Text(
-                                              widget.successSubtitle!,
+                                              subtitle,
                                               style: TextStyle(
                                                 fontSize: 12,
                                                 color: isDark
-                                                    ? Colors.white.withValues(alpha: 0.6)
-                                                    : cs.onSurface.withValues(alpha: 0.6),
+                                                    ? Colors.white.withValues(alpha: 0.7)
+                                                    : isFail
+                                                        ? accent
+                                                        : cs.onSurface.withValues(alpha: 0.6),
                                               ),
                                               maxLines: 2,
                                               overflow: TextOverflow.ellipsis,
                                             ),
-                                          ),
-                                        if (_statusText.isNotEmpty && (isFailed || _handled))
-                                          Text(
-                                            _statusText,
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: isDark
-                                                  ? Colors.white.withValues(alpha: 0.7)
-                                                  : accent,
-                                            ),
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
                                           ),
                                       ],
                                     ),
                                   ),
-                                  if (isProcessing)
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const SizedBox(width: 8),
-                                        const GoogleLoading(size: 22, strokeWidth: 2.5),
-                                        const SizedBox(width: 8),
-                                        GestureDetector(
-                                          onTap: RealtimePaymentBanner.dismiss,
-                                          child: Container(
-                                            padding: const EdgeInsets.all(6),
-                                            decoration: BoxDecoration(
-                                              color: Colors.white.withValues(alpha: 0.15),
-                                              shape: BoxShape.circle,
-                                            ),
-                                            child: Icon(Icons.close, size: 14, color: Colors.white.withValues(alpha: 0.7)),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  if (isSuccess || isFailed)
-                                    Flexible(
-                                      child: IconButton(
-                                        icon: const Icon(Icons.close, size: 18),
-                                        onPressed: RealtimePaymentBanner.dismiss,
-                                        padding: EdgeInsets.zero,
-                                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                                        color: isDark
-                                            ? Colors.white.withValues(alpha: 0.5)
-                                            : cs.onSurface.withValues(alpha: 0.4),
+                                  if (isLoading)
+                                    Padding(
+                                      padding: const EdgeInsets.only(left: 8),
+                                      child: SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: GoogleLoading(size: 22, strokeWidth: 2.5),
                                       ),
+                                    ),
+                                  if (isOk || isFail)
+                                    IconButton(
+                                      icon: const Icon(Icons.close, size: 18),
+                                      onPressed: RealtimePaymentBanner.dismiss,
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                      color: isDark
+                                          ? Colors.white.withValues(alpha: 0.5)
+                                          : cs.onSurface.withValues(alpha: 0.4),
                                     ),
                                 ],
                               ),

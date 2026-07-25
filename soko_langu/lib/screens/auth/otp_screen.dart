@@ -61,7 +61,7 @@ class _OtpScreenState extends State<OtpScreen> {
   Future<void> _verify() async {
     final otp = _otpController.text.trim();
     if (otp.length != 6) {
-      setState(() => _error = 'Tafadhali weka OTP yenye tarakimu 6');
+      setState(() => _error = context.tr('enter_otp_6_digits'));
       return;
     }
     setState(() { _isLoading = true; _error = null; });
@@ -69,7 +69,7 @@ class _OtpScreenState extends State<OtpScreen> {
       final notifier = context.read<AuthNotifier>();
       final ok = await notifier.verifyPhoneOtp(widget.phone, otp);
       if (!ok) {
-        setState(() { _error = notifier.error ?? 'OTP si sahihi'; _isLoading = false; });
+        setState(() { _error = notifier.error ?? context.tr('otp_invalid'); _isLoading = false; });
         return;
       }
       await notifier.register(
@@ -118,7 +118,7 @@ class _OtpScreenState extends State<OtpScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Weka OTP')),
+      appBar: AppBar(title: Text(context.tr('enter_otp_title'))),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -127,9 +127,9 @@ class _OtpScreenState extends State<OtpScreen> {
               const Spacer(),
               Icon(Icons.sms, size: 64, color: cs.primary),
               const SizedBox(height: 16),
-              Text('Ingiza Msimbo wa OTP', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: cs.onSurface)),
+              Text(context.tr('otp_code_hint'), style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: cs.onSurface)),
               const SizedBox(height: 8),
-              Text('Msimbo umetumwa kwa ${widget.phone}', style: TextStyle(color: cs.onSurfaceVariant), textAlign: TextAlign.center),
+              Text(context.tr('otp_sent_to').replaceAll('{0}', widget.phone), style: TextStyle(color: cs.onSurfaceVariant), textAlign: TextAlign.center),
               const SizedBox(height: 32),
               TextField(
                 controller: _otpController,
@@ -154,13 +154,13 @@ class _OtpScreenState extends State<OtpScreen> {
                 child: ElevatedButton(
                   onPressed: _isLoading ? null : _verify,
                   style: ElevatedButton.styleFrom(backgroundColor: cs.primary, foregroundColor: cs.surface, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                  child: _isLoading ? SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: cs.surface)) : Text('Thibitisha', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  child: _isLoading ? SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: cs.surface)) : Text(context.tr('verify'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
               ),
               const SizedBox(height: 16),
               TextButton(
                 onPressed: _canResend && !_isLoading ? _resend : null,
-                child: Text(_canResend ? 'Tuma OTP tena' : 'Subiri sekunde $_resendSeconds ...'),
+                child: Text(_canResend ? context.tr('resend_otp') : context.tr('resend_wait').replaceAll('{0}', '$_resendSeconds')),
               ),
               const Spacer(),
             ],

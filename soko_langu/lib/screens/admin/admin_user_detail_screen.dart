@@ -325,7 +325,7 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
                       if (suspended) Chip(label: Text(context.tr('suspended'), style: const TextStyle(fontSize: 11, color: Colors.white)), backgroundColor: cs.error, padding: EdgeInsets.zero, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
                       if (admin) ...[
                         if (suspended) const SizedBox(width: 8),
-                        Chip(label: Text('Admin', style: const TextStyle(fontSize: 11)), backgroundColor: cs.primary.withValues(alpha: 0.2), padding: EdgeInsets.zero, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                        Chip(label: Text(context.tr('admin'), style: const TextStyle(fontSize: 11)), backgroundColor: cs.primary.withValues(alpha: 0.2), padding: EdgeInsets.zero, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
                       ],
                     ],
                   ),
@@ -401,7 +401,7 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
                 Expanded(
                   child: OutlinedButton.icon(
                     icon: const Icon(Icons.admin_panel_settings, size: 18),
-                    label: const Text('Toggle Admin'),
+                    label: Text(context.tr('toggle_admin')),
                     onPressed: () => _updateUser({'isAdmin': !(_userData?['isAdmin'] == true)}),
                   ),
                 ),
@@ -434,11 +434,11 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(child: _statTile(cs, 'Seller Balance', 'TZS ${balance.toStringAsFixed(0)}', Icons.account_balance_wallet, cs.primary)),
+                Expanded(child: _statTile(cs, context.tr('seller_balance'), 'TZS ${balance.toStringAsFixed(0)}', Icons.account_balance_wallet, cs.primary)),
                 const SizedBox(width: 8),
-                Expanded(child: _statTile(cs, 'Pending Escrow', 'TZS ${escrow.toStringAsFixed(0)}', Icons.lock, Colors.orange)),
+                Expanded(child: _statTile(cs, context.tr('pending_escrow'), 'TZS ${escrow.toStringAsFixed(0)}', Icons.lock, Colors.orange)),
                 const SizedBox(width: 8),
-                Expanded(child: _statTile(cs, 'Total Sales', '$sales', Icons.shopping_bag, Colors.green)),
+                Expanded(child: _statTile(cs, context.tr('total_sales'), '$sales', Icons.shopping_bag, Colors.green)),
               ],
             ),
           ],
@@ -461,7 +461,7 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
               return ListTile(
                 dense: true,
                 leading: Icon(Icons.receipt, color: cs.primary),
-                title: Text(order['productName'] ?? 'Product', maxLines: 1, overflow: TextOverflow.ellipsis),
+                title: Text(order['productName'] ?? context.tr('product'), maxLines: 1, overflow: TextOverflow.ellipsis),
                 subtitle: Text('TZS ${(order['productPrice'] ?? 0).toStringAsFixed(0)} — ${order['status'] ?? '?'}'),
                 trailing: Text(order['createdAt']?.toString()?.substring(0, 10) ?? ''),
               );

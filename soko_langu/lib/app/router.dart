@@ -62,6 +62,26 @@ import 'app_state.dart' as app_state;
 
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
+Page<T> _premiumPage<T>(Widget child) {
+  return CustomTransitionPage<T>(
+    child: child,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      return SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0.08, 0),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+        child: FadeTransition(
+          opacity: animation,
+          child: child,
+        ),
+      );
+    },
+    transitionDuration: const Duration(milliseconds: 300),
+    reverseTransitionDuration: const Duration(milliseconds: 250),
+  );
+}
+
 final List<String> _authRequiredRoutes = [
   AppRoutes.checkout,
   AppRoutes.kyc,
@@ -130,258 +150,257 @@ GoRouter buildRouter() {
     routes: [
       GoRoute(
         path: AppRoutes.home,
-        builder: (context, state) => const AuthGate(),
+        pageBuilder: (context, state) => _premiumPage(const AuthGate()),
       ),
       GoRoute(
         path: AppRoutes.login,
-        builder: (context, state) => const LoginScreen(),
+        pageBuilder: (context, state) => _premiumPage(const LoginScreen()),
       ),
       GoRoute(
         path: AppRoutes.register,
-        builder: (context, state) => const RegisterScreen(),
+        pageBuilder: (context, state) => _premiumPage(const RegisterScreen()),
       ),
       GoRoute(
         path: AppRoutes.forgotPassword,
-        builder: (context, state) => const ForgotPasswordScreen(),
+        pageBuilder: (context, state) => _premiumPage(const ForgotPasswordScreen()),
       ),
       GoRoute(
         path: AppRoutes.magicLink,
-        builder: (context, state) => const MagicLinkScreen(),
+        pageBuilder: (context, state) => _premiumPage(const MagicLinkScreen()),
       ),
       GoRoute(
         path: AppRoutes.accountSelection,
-        builder: (context, state) => const AccountSelectionScreen(),
+        pageBuilder: (context, state) => _premiumPage(const AccountSelectionScreen()),
       ),
       GoRoute(
         path: AppRoutes.chats,
-        builder: (context, state) => const ChatsListScreen(),
+        pageBuilder: (context, state) => _premiumPage(const ChatsListScreen()),
       ),
       GoRoute(
         path: AppRoutes.profile,
-        builder: (context, state) => const ProfilePage(),
+        pageBuilder: (context, state) => _premiumPage(const ProfilePage()),
       ),
       GoRoute(
         path: '${AppRoutes.productDetail}/:id',
-        builder: (context, state) {
-          return ProductDetailPage(product: state.extra as Product);
+        pageBuilder: (context, state) {
+          return _premiumPage(ProductDetailPage(product: state.extra as Product));
         },
       ),
       GoRoute(
         path: '${AppRoutes.chat}/:receiverId',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final receiverId = state.pathParameters['receiverId']!;
           final extra = state.extra as Map<String, String>?;
-          return ChatPage(
+          return _premiumPage(ChatPage(
             receiverId: receiverId,
             receiverName: extra?['name'] ?? '',
             productName: extra?['productTitle'] ?? extra?['product'] ?? '',
             productId: extra?['productId'],
-          );
+          ));
         },
       ),
       GoRoute(
         path: AppRoutes.notifications,
-        builder: (context, state) => const NotificationScreen(),
+        pageBuilder: (context, state) => _premiumPage(const NotificationScreen()),
       ),
       GoRoute(
         path: '${AppRoutes.publicProfile}/:userId',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final userId = state.pathParameters['userId']!;
           final name = state.extra as String? ?? '';
-          return PublicProfileScreen(userId: userId, userName: name);
+          return _premiumPage(PublicProfileScreen(userId: userId, userName: name));
         },
       ),
       GoRoute(
         path: AppRoutes.settings,
-        builder: (context, state) => const SettingsScreen(),
+        pageBuilder: (context, state) => _premiumPage(const SettingsScreen()),
       ),
       GoRoute(
         path: AppRoutes.sellerDashboard,
-        builder: (context, state) => const SellerDashboardScreen(),
+        pageBuilder: (context, state) => _premiumPage(const SellerDashboardScreen()),
       ),
       GoRoute(
         path: AppRoutes.search,
-        builder: (context, state) => const SearchScreen(),
+        pageBuilder: (context, state) => _premiumPage(const SearchScreen()),
       ),
       GoRoute(
         path: AppRoutes.category,
-        builder: (context, state) => const CategoryScreen(),
+        pageBuilder: (context, state) => _premiumPage(const CategoryScreen()),
       ),
       GoRoute(
         path: '${AppRoutes.categoryProducts}/:name',
-        builder: (context, state) {
-          return CategoryProductsScreen(category: state.extra as dynamic);
+        pageBuilder: (context, state) {
+          return _premiumPage(CategoryProductsScreen(category: state.extra as dynamic));
         },
       ),
       GoRoute(
         path: AppRoutes.editProfile,
-        builder: (context, state) => const EditProfileScreen(),
+        pageBuilder: (context, state) => _premiumPage(const EditProfileScreen()),
       ),
       GoRoute(
         path: AppRoutes.shopCustomization,
-        builder: (context, state) => const ShopCustomizationScreen(),
+        pageBuilder: (context, state) => _premiumPage(const ShopCustomizationScreen()),
       ),
       GoRoute(
         path: AppRoutes.wishlist,
-        builder: (context, state) => const WishlistScreen(),
+        pageBuilder: (context, state) => _premiumPage(const WishlistScreen()),
       ),
       GoRoute(
         path: AppRoutes.myAds,
-        builder: (context, state) => const MyAdsScreen(),
+        pageBuilder: (context, state) => _premiumPage(const MyAdsScreen()),
       ),
       GoRoute(
         path: AppRoutes.help,
-        builder: (context, state) => const HelpCenterScreen(),
+        pageBuilder: (context, state) => _premiumPage(const HelpCenterScreen()),
       ),
       GoRoute(
         path: AppRoutes.about,
-        builder: (context, state) => const AboutAppScreen(),
+        pageBuilder: (context, state) => _premiumPage(const AboutAppScreen()),
       ),
       GoRoute(
         path: AppRoutes.orderFlow,
-        builder: (context, state) => const OrderFlowScreen(),
+        pageBuilder: (context, state) => _premiumPage(const OrderFlowScreen()),
       ),
       GoRoute(
         path: AppRoutes.addProduct,
-        builder: (context, state) {
-          return AddProductScreen(product: state.extra as dynamic);
+        pageBuilder: (context, state) {
+          return _premiumPage(AddProductScreen(product: state.extra as dynamic));
         },
       ),
       GoRoute(
         path: AppRoutes.admin,
-        builder: (context, state) => const AdminDashboardScreen(),
+        pageBuilder: (context, state) => _premiumPage(const AdminDashboardScreen()),
       ),
       GoRoute(
         path: '${AppRoutes.adminUserDetail}/:uid',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final uid = state.pathParameters['uid']!;
-          return AdminUserDetailScreen(uid: uid);
+          return _premiumPage(AdminUserDetailScreen(uid: uid));
         },
       ),
       GoRoute(
         path: AppRoutes.adminWallet,
-        builder: (context, state) => const AdminWalletScreen(),
+        pageBuilder: (context, state) => _premiumPage(const AdminWalletScreen()),
       ),
       GoRoute(
         path: AppRoutes.createGroup,
-        builder: (context, state) => const CreateGroupScreen(),
+        pageBuilder: (context, state) => _premiumPage(const CreateGroupScreen()),
       ),
       GoRoute(
         path: '${AppRoutes.groupChat}/:groupId',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final groupId = state.pathParameters['groupId']!;
-          return GroupChatScreen(groupId: groupId);
+          return _premiumPage(GroupChatScreen(groupId: groupId));
         },
       ),
       GoRoute(
         path: AppRoutes.onboarding,
-        builder: (context, state) => const OnboardingScreen(),
+        pageBuilder: (context, state) => _premiumPage(const OnboardingScreen()),
       ),
-
       GoRoute(
         path: AppRoutes.aiAssistant,
-        builder: (context, state) => const AiAssistantScreen(),
+        pageBuilder: (context, state) => _premiumPage(const AiAssistantScreen()),
       ),
       GoRoute(
         path: AppRoutes.sellerEarnings,
-        builder: (context, state) => const SellerEarningsScreen(),
+        pageBuilder: (context, state) => _premiumPage(const SellerEarningsScreen()),
       ),
       GoRoute(
         path: AppRoutes.sellerAnalytics,
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final sellerId = state.extra as String? ?? FirebaseAuth.instance.currentUser?.uid ?? '';
-          return SellerAnalyticsScreen(sellerId: sellerId);
+          return _premiumPage(SellerAnalyticsScreen(sellerId: sellerId));
         },
       ),
       GoRoute(
         path: AppRoutes.checkout,
-        builder: (context, state) => CheckoutScreen(product: state.extra as dynamic),
+        pageBuilder: (context, state) => _premiumPage(CheckoutScreen(product: state.extra as dynamic)),
       ),
       GoRoute(
         path: AppRoutes.productBoost,
-        builder: (context, state) => ProductBoostScreen(product: state.extra as dynamic),
+        pageBuilder: (context, state) => _premiumPage(ProductBoostScreen(product: state.extra as dynamic)),
       ),
       GoRoute(
         path: AppRoutes.boostReceipt,
-        builder: (context, state) => BoostReceiptScreen(data: state.extra as Map<String, dynamic>),
+        pageBuilder: (context, state) => _premiumPage(BoostReceiptScreen(data: state.extra as Map<String, dynamic>)),
       ),
       GoRoute(
         path: AppRoutes.discovery,
-        builder: (context, state) => const DiscoveryScreen(),
+        pageBuilder: (context, state) => _premiumPage(const DiscoveryScreen()),
       ),
       GoRoute(
         path: AppRoutes.myPurchases,
-        builder: (context, state) => const MyPurchasesScreen(),
+        pageBuilder: (context, state) => _premiumPage(const MyPurchasesScreen()),
       ),
       GoRoute(
         path: '${AppRoutes.receipt}/:orderId',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final orderId = state.pathParameters['orderId']!;
-          return ReceiptScreen(orderId: orderId);
+          return _premiumPage(ReceiptScreen(orderId: orderId));
         },
       ),
       GoRoute(
         path: '${AppRoutes.orderDetail}/:docId',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final docId = state.pathParameters['docId']!;
           final data = state.extra as Map<String, dynamic>;
-          return OrderDetailScreen(docId: docId, data: data);
+          return _premiumPage(OrderDetailScreen(docId: docId, data: data));
         },
       ),
       GoRoute(
         path: AppRoutes.sellerDispatch,
-        builder: (context, state) => const SellerDispatchScreen(),
+        pageBuilder: (context, state) => _premiumPage(const SellerDispatchScreen()),
       ),
       GoRoute(
         path: AppRoutes.sellerQuote,
-        builder: (context, state) => const SellerQuoteScreen(),
+        pageBuilder: (context, state) => _premiumPage(const SellerQuoteScreen()),
       ),
       GoRoute(
         path: AppRoutes.sellerOrders,
-        builder: (context, state) => const SellerOrdersScreen(),
+        pageBuilder: (context, state) => _premiumPage(const SellerOrdersScreen()),
       ),
       GoRoute(
         path: AppRoutes.sellerStatement,
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final sellerId = state.extra as String? ?? FirebaseAuth.instance.currentUser?.uid ?? '';
-          return SellerStatementScreen(sellerId: sellerId);
+          return _premiumPage(SellerStatementScreen(sellerId: sellerId));
         },
       ),
       GoRoute(
         path: AppRoutes.kyc,
-        builder: (context, state) => const KycScreen(),
+        pageBuilder: (context, state) => _premiumPage(const KycScreen()),
       ),
       GoRoute(
         path: AppRoutes.report,
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final extra = state.extra as Map<String, dynamic>;
-          return ReportScreen(
+          return _premiumPage(ReportScreen(
             reportedUserId: extra['reportedUserId'] as String,
             reportedUserName: extra['reportedUserName'] as String,
             productId: extra['productId'] as String?,
             productName: extra['productName'] as String?,
-          );
+          ));
         },
       ),
       GoRoute(
         path: AppRoutes.adminReports,
-        builder: (context, state) => const AdminReportsScreen(),
+        pageBuilder: (context, state) => _premiumPage(const AdminReportsScreen()),
       ),
       GoRoute(
         path: AppRoutes.flashSale,
-        builder: (context, state) => const FlashSaleScreen(),
+        pageBuilder: (context, state) => _premiumPage(const FlashSaleScreen()),
       ),
       GoRoute(
         path: AppRoutes.createFlashSale,
-        builder: (context, state) => const CreateFlashSaleScreen(),
+        pageBuilder: (context, state) => _premiumPage(const CreateFlashSaleScreen()),
       ),
       GoRoute(
         path: AppRoutes.privacyPolicy,
-        builder: (context, state) => const PrivacyPolicyScreen(),
+        pageBuilder: (context, state) => _premiumPage(const PrivacyPolicyScreen()),
       ),
       GoRoute(
         path: AppRoutes.termsOfService,
-        builder: (context, state) => const TermsOfServiceScreen(),
+        pageBuilder: (context, state) => _premiumPage(const TermsOfServiceScreen()),
       ),
     ],
   );

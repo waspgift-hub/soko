@@ -217,6 +217,7 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
     } else if (state == AppLifecycleState.resumed) {
       AppLockService.instance.onResume();
       _trackSession();
+      if (mounted) setState(() {});
     }
   }
 
@@ -291,17 +292,20 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
 
   void _setupNotificationCallbacks() {
     NotificationService.onForegroundMessage = (title, body, type, data) {
-      final ctx = router_lib.rootNavigatorKey.currentContext;
-      if (ctx != null && ctx.mounted) {
-        InAppNotificationOverlay.show(
-          context: ctx,
-          title: title,
-          body: body,
-          type: type,
-          data: data,
-          onTap: () => _onNotificationTap(type, data, ctx),
-        );
-      }
+      final navState = router_lib.rootNavigatorKey.currentState;
+      if (navState == null) return;
+      final overlay = navState.overlay;
+      InAppNotificationOverlay.show(
+        overlay: overlay,
+        title: title,
+        body: body,
+        type: type,
+        data: data,
+        onTap: () {
+          final ctx = router_lib.rootNavigatorKey.currentContext;
+          if (ctx != null) _onNotificationTap(type, data, ctx);
+        },
+      );
     };
 
     NotificationService.onNotificationTap = (Map<String, dynamic> data) {

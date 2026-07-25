@@ -15,6 +15,7 @@ import '../../utils/network_error.dart';
 import '../../theme/app_colors.dart';
 import '../chat/chat_navigation.dart';
 import '../../widgets/payment_banner.dart';
+import '../../widgets/payment_result_dialog.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -32,6 +33,10 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
   String? _cancellingTxId;
   String _selectedFilter = 'all';
   bool _isInitialLoad = true;
+  bool _isSelectionMode = false;
+  final Set<String> _selectedIds = {};
+  bool _isDeletingSelected = false;
+  List<QueryDocumentSnapshot> _currentDocs = [];
 
   static const _filters = ['all', 'pending', 'active', 'completed', 'failed'];
 
@@ -127,6 +132,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
           orderId: result['order_id'] as String,
           successStatuses: ['escrow_hold', 'paid_escrow_held'],
           processingTitle: context.tr('processing_payment'),
+          processingSubtitle: context.tr('check_phone_enter_pin'),
           successTitle: context.tr('payment_successful'),
           failedTitle: context.tr('payment_failed'),
           onSuccess: () {
@@ -141,11 +147,10 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
           },
           onError: (msg) {
             if (mounted) {
-              PaymentBanner.show(
+              PaymentResult.show(
                 context: context,
-                type: PaymentBannerType.failed,
-                title: context.tr('payment_failed'),
-                subtitle: msg,
+                success: false,
+                errorMessage: msg,
               );
             }
           },
@@ -411,6 +416,51 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     }
   }
 
+  Future<void> _deleteSelectedOrders() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('delete_orders_title')),
+        content: Text('${context.tr('delete_orders_confirm')} ${_selectedIds.length}'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(context.tr('cancel')),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: Text(context.tr('yes_delete')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() => _isDeletingSelected = true);
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+      for (final id in _selectedIds) {
+        batch.update(
+          FirebaseFirestore.instance.collection('transactions').doc(id),
+          {'deletedForBuyer': true},
+        );
+      }
+      await batch.commit();
+      setState(() {
+        _selectedIds.clear();
+        _isSelectionMode = false;
+        _isDeletingSelected = false;
+      });
+      if (mounted) _showSuccess(context.tr('orders_deleted'));
+    } catch (e) {
+      setState(() => _isDeletingSelected = false);
+      if (mounted) _showError(translateError(e));
+    }
+  }
+
   void _showError(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -601,16 +651,87 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     }
 
     return Scaffold(
+      bottomNavigationBar: _isSelectionMode && _selectedIds.isNotEmpty
+          ? SafeArea(
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  border: Border(
+                    top: BorderSide(
+                      color: cs.outlineVariant.withValues(alpha: 0.2),
+                    ),
+                  ),
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: _isDeletingSelected ? null : _deleteSelectedOrders,
+                    icon: _isDeletingSelected
+                        ? SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: cs.surface,
+                            ),
+                          )
+                        : const Icon(Icons.delete_outline, size: 20),
+                    label: Text(
+                      _isDeletingSelected
+                          ? context.tr('deleting_label')
+                          : '${context.tr('delete_selected')} (${_selectedIds.length})',
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: cs.error,
+                      foregroundColor: cs.surface,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            )
+          : null,
       appBar: AppBar(
-        title: Text(context.tr('my_purchases')),
+        title: Text(_isSelectionMode
+            ? '${_selectedIds.length} ${context.tr('selected')}'
+            : context.tr('my_purchases')),
         centerTitle: true,
-        actions: [
-          TextButton.icon(
-            onPressed: () => context.go(AppRoutes.home),
-            icon: const Icon(Icons.storefront_outlined, size: 18),
-            label: Text(context.tr('home')),
-          ),
-        ],
+        leading: _isSelectionMode
+            ? IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => setState(() {
+                  _isSelectionMode = false;
+                  _selectedIds.clear();
+                }),
+              )
+            : null,
+        actions: _isSelectionMode
+            ? [
+                TextButton(
+                  onPressed: _currentDocs.isEmpty || _selectedIds.length == _currentDocs.length
+                      ? () => setState(() => _selectedIds.clear())
+                      : () => setState(() => _selectedIds.addAll(_currentDocs.map((d) => d.id))),
+                  child: Text(_currentDocs.isNotEmpty && _selectedIds.length == _currentDocs.length
+                      ? context.tr('deselect_all')
+                      : context.tr('select_all')),
+                ),
+              ]
+            : [
+                TextButton.icon(
+                  onPressed: () => setState(() => _isSelectionMode = true),
+                  icon: const Icon(Icons.checklist, size: 18),
+                  label: Text(context.tr('select')),
+                ),
+                TextButton.icon(
+                  onPressed: () => context.go(AppRoutes.home),
+                  icon: const Icon(Icons.storefront_outlined, size: 18),
+                  label: Text(context.tr('home')),
+                ),
+              ],
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
@@ -655,8 +776,9 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
           });
 
           final docs = _filterDocs(allDocs);
+          _currentDocs = docs;
 
-          return RefreshIndicator(
+            return RefreshIndicator(
             onRefresh: () async {
               setState(() => _isInitialLoad = true);
               await Future.delayed(const Duration(milliseconds: 300));
@@ -684,11 +806,24 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                         onCancel: _cancelOrder,
                         onDelete: _deleteOrder,
                         escrowLabel: _escrowLabel,
+                        isSelectionMode: _isSelectionMode,
+                        isSelected: _selectedIds.contains(docs[i].id),
+                        onToggleSelect: () => setState(() {
+                          if (_selectedIds.contains(docs[i].id)) {
+                            _selectedIds.remove(docs[i].id);
+                          } else {
+                            _selectedIds.add(docs[i].id);
+                          }
+                        }),
                       ),
                       childCount: docs.length,
                     ),
                   ),
-                SliverToBoxAdapter(child: SizedBox(height: 32)),
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: _isSelectionMode && _selectedIds.isNotEmpty ? 80 : 32,
+                  ),
+                ),
               ],
             ),
           );
@@ -711,6 +846,9 @@ class _OrderGlassCard extends StatelessWidget {
   final Function(String) onCancel;
   final Function(String) onDelete;
   final String Function(String) escrowLabel;
+  final bool isSelectionMode;
+  final bool isSelected;
+  final VoidCallback onToggleSelect;
 
   const _OrderGlassCard({
     super.key,
@@ -726,6 +864,9 @@ class _OrderGlassCard extends StatelessWidget {
     required this.onCancel,
     required this.onDelete,
     required this.escrowLabel,
+    this.isSelectionMode = false,
+    this.isSelected = false,
+    required this.onToggleSelect,
   });
 
   @override
@@ -763,14 +904,19 @@ class _OrderGlassCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: InkWell(
-        onTap: () =>
+        onTap: isSelectionMode ? onToggleSelect : () =>
             context.push('${AppRoutes.orderDetail}/$docId', extra: data),
         borderRadius: BorderRadius.circular(24),
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(24),
             color: cs.surface.withValues(alpha: 0.5),
-            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
+            border: Border.all(
+              color: isSelected
+                  ? cs.primary
+                  : cs.outlineVariant.withValues(alpha: 0.1),
+              width: isSelected ? 1.5 : 1,
+            ),
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(24),
@@ -779,6 +925,24 @@ class _OrderGlassCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (isSelectionMode)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(0, 8, 12, 0),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Transform.scale(
+                          scale: 1.1,
+                          child: Checkbox(
+                            value: isSelected,
+                            onChanged: (_) => onToggleSelect(),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            activeColor: cs.primary,
+                          ),
+                        ),
+                      ),
+                    ),
                   _buildTopSection(
                     context,
                     cs,
@@ -852,15 +1016,22 @@ class _OrderGlassCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: InkWell(
-        onTap: isCompleted
-            ? () => context.push(AppRoutes.boostReceipt, extra: data)
-            : null,
+        onTap: isSelectionMode
+            ? onToggleSelect
+            : isCompleted
+                ? () => context.push(AppRoutes.boostReceipt, extra: data)
+                : null,
         borderRadius: BorderRadius.circular(24),
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(24),
-            color: cs.boostGold.withValues(alpha: 0.06),
-            border: Border.all(color: cs.boostGold.withValues(alpha: 0.2)),
+            color: cs.boostGold.withValues(alpha: isSelected ? 0.12 : 0.06),
+            border: Border.all(
+              color: isSelected
+                  ? cs.primary
+                  : cs.boostGold.withValues(alpha: 0.2),
+              width: isSelected ? 1.5 : 1,
+            ),
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(24),
@@ -869,6 +1040,24 @@ class _OrderGlassCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (isSelectionMode)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(0, 8, 12, 0),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Transform.scale(
+                          scale: 1.1,
+                          child: Checkbox(
+                            value: isSelected,
+                            onChanged: (_) => onToggleSelect(),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            activeColor: cs.primary,
+                          ),
+                        ),
+                      ),
+                    ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
                     child: Row(
@@ -1525,6 +1714,7 @@ class _OrderGlassCard extends StatelessWidget {
     final productPrice = (data['productPrice'] as num?)?.toDouble() ?? 0;
     final shippingCost = (data['shippingCost'] as num?)?.toDouble() ?? 0;
     final mongikeFee = (data['processingFee'] as num?)?.toDouble() ?? 0;
+    final platformFee = (data['platformFee'] as num?)?.toDouble() ?? 0;
     final totalAmount =
         (data['totalAmount'] as num?)?.toDouble() ?? productPrice;
     final buyerName = data['buyerName'] as String? ?? '';
@@ -1579,6 +1769,13 @@ class _OrderGlassCard extends StatelessWidget {
                 context.tr('shipping_cost'),
                 'TZS ${_nf(shippingCost.toInt())}',
                 valueColor: cs.secondary,
+              ),
+            if (platformFee > 0)
+              _receiptRow(
+                cs,
+                context.tr('soko_vibe_commission'),
+                'TZS ${_nf(platformFee.toInt())}',
+                valueColor: cs.tertiary,
               ),
             if (mongikeFee > 0)
               _receiptRow(

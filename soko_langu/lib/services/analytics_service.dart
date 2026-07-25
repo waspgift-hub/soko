@@ -601,12 +601,12 @@ class AnalyticsService {
       final token = await FirebaseAuth.instance.currentUser?.getIdToken();
       if (token == null) return;
       await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/send-notification'),
+        Uri.parse('${ApiConfig.baseUrl}/api/notifications/broadcast'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
-        body: jsonEncode({'title': title, 'body': body, 'sendToAll': true}),
+        body: jsonEncode({'title': title, 'body': body}),
       );
     } catch (_) {}
   }

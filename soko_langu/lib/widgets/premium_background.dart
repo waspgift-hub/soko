@@ -111,8 +111,8 @@ class _AuroraPainter extends CustomPainter {
   _AuroraPainter({required this.context});
 
   // ---- Cached data (re‑built only when context changes) -------------------
-  late final bool _isDark = Theme.of(context).brightness == Brightness.dark;
-  late final ColorScheme _cs = Theme.of(context).colorScheme;
+  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
+  ColorScheme get _cs => Theme.of(context).colorScheme;
   late final double _progress = _AuroraProgress.of(context);
 
   // ---- Aurora blob definitions (deterministic, seeded) --------------------

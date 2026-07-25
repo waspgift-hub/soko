@@ -1,22 +1,14 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:http/http.dart' as http;
 import 'api_config.dart';
-import 'fcm_notification_display.dart';
-
-final Int64List localHighVibrationPattern =
-    Int64List.fromList([0, 200, 100, 200, 100, 300]);
 
 class NotificationService {
   static const String _key = 'push_notifications_enabled';
-  static const String customSound = 'resource://raw/soko_notification';
 
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -29,75 +21,6 @@ class NotificationService {
   static void Function(Map<String, dynamic> data)? onPaymentNotificationTap;
   static void Function(String title, String body, String type, Map<String, dynamic>? data)? onForegroundMessage;
 
-  static List<NotificationChannel> get channels => _channels;
-
-  static List<NotificationChannel> get _channels => [
-        NotificationChannel(
-          channelKey: 'chat_messages_v4',
-          channelName: 'Chat Messages',
-          channelDescription: 'New message notifications from chats',
-          defaultColor: const Color(0xFF40916C),
-          ledColor: const Color(0xFF40916C),
-          importance: NotificationImportance.Max,
-          channelShowBadge: true,
-          playSound: true,
-          soundSource: customSound,
-          vibrationPattern: localHighVibrationPattern,
-          enableVibration: true,
-          enableLights: true,
-          defaultPrivacy: NotificationPrivacy.Public,
-        ),
-        NotificationChannel(
-          channelKey: 'general_notifications_v4',
-          channelName: 'Soko Vibe',
-          channelDescription: 'Flash sale & other notifications',
-          defaultColor: const Color(0xFF40916C),
-          ledColor: const Color(0xFF40916C),
-          importance: NotificationImportance.Max,
-          channelShowBadge: true,
-          playSound: true,
-          soundSource: customSound,
-          vibrationPattern: localHighVibrationPattern,
-          enableVibration: true,
-          enableLights: true,
-        ),
-        NotificationChannel(
-          channelKey: 'payments_notifications_v4',
-          channelName: 'Payments',
-          channelDescription: 'Notifications for payment transactions',
-          defaultColor: const Color(0xFF2D6A4F),
-          ledColor: const Color(0xFF2D6A4F),
-          importance: NotificationImportance.Max,
-          channelShowBadge: true,
-          playSound: true,
-          soundSource: customSound,
-          vibrationPattern: localHighVibrationPattern,
-          enableVibration: true,
-          enableLights: true,
-        ),
-      ];
-
-  static Future<void> initLocalNotifications() async {
-    await AwesomeNotifications().initialize(
-      'resource://drawable/ic_notification',
-      channels,
-    );
-    await requestNotificationPermission();
-  }
-
-  static Future<void> requestNotificationPermission() async {
-    final allowed = await AwesomeNotifications().requestPermissionToSendNotifications(
-      permissions: [
-        NotificationPermission.Vibration,
-        NotificationPermission.Sound,
-        NotificationPermission.Alert,
-        NotificationPermission.Light,
-        NotificationPermission.FullScreenIntent,
-      ],
-    );
-    debugPrint('[OS] Permission result: allowed=$allowed');
-  }
-
   Future<bool> isEnabled() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(_key) ?? true;
@@ -107,10 +30,12 @@ class NotificationService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_key, value);
     if (value) {
+      _initialized = false;
       await initialize();
     } else {
       OneSignal.Notifications.clearAll();
       await OneSignal.logout();
+      _initialized = false;
     }
   }
 
@@ -122,16 +47,21 @@ class NotificationService {
       }
 
       if (_initialized) return;
-      _initialized = true;
 
+      OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
       OneSignal.initialize(ApiConfig.oneSignalAppId);
 
-      OneSignal.Notifications.requestPermission(true);
+      final perm = await OneSignal.Notifications.requestPermission(false);
+      debugPrint('[OS] permission result: $perm');
 
       final user = _auth.currentUser;
       if (user != null) {
         OneSignal.login(user.uid);
         debugPrint('[OS] logged in user ${user.uid}');
+        if (user.email != null && user.email!.isNotEmpty) {
+          OneSignal.User.addEmail(user.email!);
+          debugPrint('[OS] registered email: ${user.email}');
+        }
       }
 
       if (!_listenersRegistered) {
@@ -145,11 +75,6 @@ class NotificationService {
           final type = data['type'] as String? ?? 'general';
 
           debugPrint('[OS] foreground notification: type=$type title=$title');
-          FcmNotificationDisplay.showFromMap({
-            'title': title,
-            'body': body,
-            ...data,
-          });
 
           if (title.isNotEmpty && onForegroundMessage != null) {
             onForegroundMessage!(title, body, type, data);
@@ -166,25 +91,22 @@ class NotificationService {
           if (user != null) {
             OneSignal.login(user.uid);
             debugPrint('[OS] auth change — logged in ${user.uid}');
+            if (user.email != null && user.email!.isNotEmpty) {
+              OneSignal.User.addEmail(user.email!);
+            }
           } else {
             await OneSignal.logout();
             debugPrint('[OS] auth change — logged out');
           }
         });
 
-        await AwesomeNotifications().setListeners(
-          onActionReceivedMethod: (ReceivedAction receivedAction) async {
-            final rawPayload = receivedAction.payload;
-            if (rawPayload != null) _onNotificationTapped(rawPayload);
-          },
-        );
         debugPrint('[OS] handlers registered');
       }
 
-      await initLocalNotifications();
-
+      _initialized = true;
       debugPrint('[OS] initialized');
     } catch (e) {
+      _initialized = false;
       debugPrint('[OS] Notification init error: $e');
     }
   }
@@ -219,6 +141,26 @@ class NotificationService {
       debugPrint('[OS] sendNotification response: ${response.statusCode}');
     } catch (e) {
       debugPrint('[OS] sendNotification error: $e');
+    }
+  }
+
+  /// Register user's email with OneSignal for email notifications
+  Future<void> registerEmail(String email) async {
+    try {
+      OneSignal.User.addEmail(email);
+      debugPrint('[OS] registered email: $email');
+    } catch (e) {
+      debugPrint('[OS] registerEmail error: $e');
+    }
+  }
+
+  /// Remove email subscription from OneSignal
+  Future<void> unregisterEmail(String email) async {
+    try {
+      OneSignal.User.removeEmail(email);
+      debugPrint('[OS] unregistered email: $email');
+    } catch (e) {
+      debugPrint('[OS] unregisterEmail error: $e');
     }
   }
 

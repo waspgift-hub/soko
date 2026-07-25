@@ -2129,13 +2129,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Weka Muda wa Featured'),
+        title: Text(context.tr('set_featured_duration')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              title: const Text('Siku 3'),
-              subtitle: const Text('Featured kwa siku 3'),
+              title: Text(context.tr('days_3')),
+              subtitle: Text(context.tr('featured_for_days_3')),
               leading: const Icon(Icons.timer_outlined),
               onTap: () {
                 Navigator.pop(ctx);
@@ -2143,8 +2143,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               },
             ),
             ListTile(
-              title: const Text('Siku 7'),
-              subtitle: const Text('Featured kwa siku 7'),
+              title: Text(context.tr('days_7')),
+              subtitle: Text(context.tr('featured_for_days_7')),
               leading: const Icon(Icons.timer_outlined),
               onTap: () {
                 Navigator.pop(ctx);
@@ -2152,8 +2152,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               },
             ),
             ListTile(
-              title: const Text('Siku 30'),
-              subtitle: const Text('Featured kwa siku 30'),
+              title: Text(context.tr('days_30')),
+              subtitle: Text(context.tr('featured_for_days_30')),
               leading: const Icon(Icons.timer_outlined),
               onTap: () {
                 Navigator.pop(ctx);
@@ -2179,13 +2179,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       _loadProducts();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Product featured for $days days')),
+          SnackBar(content: Text(context.tr('product_featured_for_days').replaceAll('{days}', '$days'))),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Imeshindwa: $e')),
+          SnackBar(content: Text(context.tr('imeshindwa').replaceAll('{0}', '$e'))),
         );
       }
     }

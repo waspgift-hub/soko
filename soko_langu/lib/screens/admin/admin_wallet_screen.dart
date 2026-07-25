@@ -86,7 +86,7 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
                     (result['totalPaidOut'] as num?)?.toDouble() ?? 0;
                 _actualMongikeBalance =
                     (result['actualMongikeBalance'] as num?)?.toDouble() ?? 0;
-                _mongikeBalance = _availableBalance;
+                _mongikeBalance = _actualMongikeBalance > 0 ? _actualMongikeBalance : _availableBalance;
               });
             if (mounted) setState(() => _loading = false);
             return;
