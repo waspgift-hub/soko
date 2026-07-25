@@ -7,7 +7,7 @@ class InAppNotificationOverlay {
   static Timer? _timer;
 
   static void show({
-    required BuildContext context,
+    required OverlayState overlay,
     required String title,
     String body = '',
     String type = 'general',
@@ -28,7 +28,7 @@ class InAppNotificationOverlay {
       ),
     );
 
-    Overlay.of(context).insert(_entry!);
+    overlay.insert(_entry!);
 
     _timer = Timer(duration, dismiss);
   }

@@ -133,7 +133,8 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
             children: [
               Expanded(child: _actionButton(cs, Icons.flash_on, context.tr('unda_flash_sale'), () => context.push(AppRoutes.createFlashSale), cs.trendingOrange)),
             ],
-          ),
+            ),
+          ],
         ],
                       ],
                     ),
@@ -316,6 +317,14 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('${tx.buyerName} - TZS ${tx.sellerReceives.toStringAsFixed(0)}'),
+            if (tx.platformFee > 0)
+              Text(
+                'Commission: -TZS ${tx.platformFee.toStringAsFixed(0)}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
             if (tx.buyerPhone.isNotEmpty)
               Text(
                 PhoneUtils.formatForDisplay(tx.buyerPhone),

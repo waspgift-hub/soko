@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
 import 'package:open_file/open_file.dart';
 import '../../services/receipt_pdf_service.dart';
+import '../../services/localization_service.dart';
 import '../../widgets/order_timeline.dart';
 import '../../models/transaction_model.dart';
 import '../../extensions/context_tr.dart';
@@ -106,7 +107,6 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     String paymentMethod, String? transactionReference,
     String? courierName, String? driverPhone, String? trackingNumber,
   ) {
-    final loc = _lang == 'sw' ? Locale('sw') : Locale('en');
     final nf = NumberFormat('#,###', 'en');
 
     // Build timeline steps for QR
@@ -218,56 +218,56 @@ Scan QR code for full receipt
                 _divider(cs),
                 const SizedBox(height: 20),
                 // Product + Seller Details
-                _infoSection(cs, _tr(loc, 'order_details', 'Maelezo ya Agizo'), [
-                  _infoRow(cs, _tr(loc, 'product', 'Bidhaa'), productName),
+                _infoSection(cs, _tr( 'order_details', 'Maelezo ya Agizo'), [
+                  _infoRow(cs, _tr( 'product', 'Bidhaa'), productName),
                   if (productDescription.isNotEmpty)
-                    _infoRow(cs, _tr(loc, 'description', 'Maelezo'), productDescription),
+                    _infoRow(cs, _tr( 'description', 'Maelezo'), productDescription),
                   if (productDetails.isNotEmpty)
-                    _infoRow(cs, _tr(loc, 'details', 'Kinachouzwa'), productDetails),
-                  _infoRow(cs, _tr(loc, 'buyer_label', 'Mnunuzi'), buyerName),
-                  _infoRow(cs, _tr(loc, 'seller', 'Muuzaji'), sellerName),
+                    _infoRow(cs, _tr( 'details', 'Kinachouzwa'), productDetails),
+                  _infoRow(cs, _tr( 'buyer_label', 'Mnunuzi'), buyerName),
+                  _infoRow(cs, _tr( 'seller', 'Muuzaji'), sellerName),
                   if (sellerPhone.isNotEmpty)
-                    _infoRow(cs, _tr(loc, 'seller_phone', 'Simu ya Muuzaji'), sellerPhone),
+                    _infoRow(cs, _tr( 'seller_phone', 'Simu ya Muuzaji'), sellerPhone),
                   if (sellerLocation.isNotEmpty)
-                    _infoRow(cs, _tr(loc, 'seller_location', 'Duka lipo'), sellerLocation),
+                    _infoRow(cs, _tr( 'seller_location', 'Duka lipo'), sellerLocation),
                   if (buyerPhone.isNotEmpty)
-                    _infoRow(cs, _tr(loc, 'buyer_phone', 'Simu ya Mnunuzi'), buyerPhone),
+                    _infoRow(cs, _tr( 'buyer_phone', 'Simu ya Mnunuzi'), buyerPhone),
                 ]),
                 const SizedBox(height: 16),
                 // Delivery Address
                 if (deliveryAddress != null) ...[
-                  _infoSection(cs, _tr(loc, 'shipping_address', 'Anwani ya Usafirishaji'), [
-                    _infoRow(cs, _tr(loc, 'region', 'Mkoa'), deliveryAddress['region'] as String? ?? ''),
-                    _infoRow(cs, _tr(loc, 'district', 'Wilaya'), deliveryAddress['district'] as String? ?? ''),
-                    _infoRow(cs, _tr(loc, 'street', 'Mtaa'), deliveryAddress['street'] as String? ?? ''),
+                  _infoSection(cs, _tr( 'shipping_address', 'Anwani ya Usafirishaji'), [
+                    _infoRow(cs, _tr( 'region', 'Mkoa'), deliveryAddress['region'] as String? ?? ''),
+                    _infoRow(cs, _tr( 'district', 'Wilaya'), deliveryAddress['district'] as String? ?? ''),
+                    _infoRow(cs, _tr( 'street', 'Mtaa'), deliveryAddress['street'] as String? ?? ''),
                     if (deliveryAddress['landmarks'] != null)
-                      _infoRow(cs, _tr(loc, 'landmarks', 'Alama'), deliveryAddress['landmarks'] as String),
+                      _infoRow(cs, _tr( 'landmarks', 'Alama'), deliveryAddress['landmarks'] as String),
                   ]),
                   if (courierName != null || driverPhone != null || trackingNumber != null) ...[
                     const SizedBox(height: 16),
-                    _infoSection(cs, _tr(loc, 'dispatch_info', 'Maelezo ya Usafirishaji'), [
-                      if (courierName != null) _infoRow(cs, _tr(loc, 'courier', 'Mtoa huduma'), courierName!),
-                      if (driverPhone != null) _infoRow(cs, _tr(loc, 'driver_phone', 'Simu ya Dereva'), driverPhone!),
-                      if (trackingNumber != null) _infoRow(cs, _tr(loc, 'tracking', 'Namba ya kufuatilia'), trackingNumber!),
+                    _infoSection(cs, _tr( 'dispatch_info', 'Maelezo ya Usafirishaji'), [
+                      if (courierName != null) _infoRow(cs, _tr( 'courier', 'Mtoa huduma'), courierName!),
+                      if (driverPhone != null) _infoRow(cs, _tr( 'driver_phone', 'Simu ya Dereva'), driverPhone!),
+                      if (trackingNumber != null) _infoRow(cs, _tr( 'tracking', 'Namba ya kufuatilia'), trackingNumber!),
                     ]),
                   ],
                   const SizedBox(height: 16),
                 ],
                 // Payment Breakdown
-                _infoSection(cs, _tr(loc, 'payment_breakdown', 'Mgawanyo wa Malipo'), [
-                  _infoRow(cs, _tr(loc, 'product_price', 'Bei ya Bidhaa'), 'TSh ${nf.format(price.toInt())}'),
+                _infoSection(cs, _tr( 'payment_breakdown', 'Mgawanyo wa Malipo'), [
+                  _infoRow(cs, _tr( 'product_price', 'Bei ya Bidhaa'), 'TSh ${nf.format(price.toInt())}'),
                   if (shippingCost > 0)
-                    _infoRow(cs, _tr(loc, 'shipping_cost', 'Nauli ya Usafirishaji'), 'TSh ${nf.format(shippingCost.toInt())}', valueColor: cs.secondary),
+                    _infoRow(cs, _tr( 'shipping_cost', 'Nauli ya Usafirishaji'), 'TSh ${nf.format(shippingCost.toInt())}', valueColor: cs.secondary),
                   if (platformFee > 0)
-                    _infoRow(cs, _tr(loc, 'commission', 'Commission ya Soko Vibe'), 'TSh ${nf.format(platformFee.toInt())}', valueColor: cs.tertiary),
-                  _infoRow(cs, _tr(loc, 'mongike_fee_label', 'Ada ya Kuchakata'), 'TSh ${nf.format(mongikeFee.toInt())}', valueColor: cs.tertiary),
+                    _infoRow(cs, _tr( 'commission', 'Commission ya Soko Vibe'), 'TSh ${nf.format(platformFee.toInt())}', valueColor: cs.tertiary),
+                  _infoRow(cs, _tr( 'mongike_fee_label', 'Ada ya Kuchakata'), 'TSh ${nf.format(mongikeFee.toInt())}', valueColor: cs.tertiary),
                 ]),
                 const SizedBox(height: 8),
                 _divider(cs),
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Text(_tr(loc, 'total', 'Jumla'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: cs.onSurface)),
+                    Text(_tr( 'total', 'Jumla'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: cs.onSurface)),
                     const Spacer(),
                     Text('TSh ${nf.format(totalAmount.toInt())}',
                       style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: cs.primary,
@@ -279,7 +279,7 @@ Scan QR code for full receipt
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      Text(_tr(loc, 'seller_gets', 'Muuzaji anapata'), style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                      Text(_tr( 'seller_gets', 'Muuzaji anapata'), style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
                       const Spacer(),
                       Text('TSh ${nf.format(sellerReceives.toInt())}',
                         style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.successGreen)),
@@ -297,7 +297,7 @@ Scan QR code for full receipt
                     productDescription, productDetails),
                 const SizedBox(height: 24),
                 // Order Timeline
-                Text(_tr(loc, 'order_status', 'Hatua za Agizo'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: cs.onSurface)),
+                Text(_tr( 'order_status', 'Hatua za Agizo'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: cs.onSurface)),
                 const SizedBox(height: 12),
                 OrderTimeline(
                   status: txStatus,
@@ -355,7 +355,7 @@ Scan QR code for full receipt
             child: Icon(Icons.receipt_long, color: cs.primary, size: 28),
           ),
           const SizedBox(height: 10),
-          Text(_tr(context, 'receipt_title', 'RISITI YA UNUNUZI'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: cs.onSurface, letterSpacing: 1)),
+          Text(_tr( 'receipt_title', 'RISITI YA UNUNUZI'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: cs.onSurface, letterSpacing: 1)),
           const SizedBox(height: 6),
           Text('#$orderId', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
           const SizedBox(height: 2),
@@ -415,7 +415,7 @@ Scan QR code for full receipt
               dataModuleStyle: QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: Colors.black),
             ),
             const SizedBox(height: 8),
-            Text(_tr(context, 'scan_to_verify', 'Scan QR kupata taarifa zote'),
+            Text(_tr( 'scan_to_verify', 'Scan QR kupata taarifa zote'),
                 style: TextStyle(fontSize: 9, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
           ],
         ),
@@ -444,13 +444,20 @@ Scan QR code for full receipt
     );
   }
 
-  String _tr(context, String key, String fallback) {
-    return _lang == 'sw' ? fallback : (context.tr(key) == key ? fallback : context.tr(key));
+  String _tr(String key, [String? fallback]) {
+    final result = LocalizationService.translate(key, _lang);
+    return result == key ? (fallback ?? key) : result;
   }
-  String _trLoc(Locale loc, String key, String fallback) => _lang == 'sw' ? fallback : fallback;
 
   List<String> _getTimelineSteps(String status) {
-    final allSteps = ['Order placed', 'Payment received', 'Processing', 'Dispatched', 'Delivered', 'Confirmed'];
+    final allSteps = [
+      _tr('order_placed', 'Order placed'),
+      _tr('payment_received', 'Payment received'),
+      _tr('processing', 'Processing'),
+      _tr('dispatched_label', 'Dispatched'),
+      _tr('delivered', 'Delivered'),
+      _tr('confirmed', 'Confirmed'),
+    ];
     switch (status) {
       case 'pending': return allSteps.take(1).toList();
       case 'awaiting_shipping_quote': return allSteps.take(2).toList();
@@ -458,8 +465,8 @@ Scan QR code for full receipt
       case 'dispatched': return allSteps.take(4).toList();
       case 'delivered': return allSteps.take(5).toList();
       case 'delivery_confirmed': case 'completed': return allSteps;
-      case 'failed': return ['Order placed', 'Payment failed'];
-      case 'refunded': return ['Order placed', 'Payment received', 'Refunded'];
+      case 'failed': return [_tr('order_placed', 'Order placed'), _tr('payment_failed_short', 'Payment failed')];
+      case 'refunded': return [_tr('order_placed', 'Order placed'), _tr('payment_received', 'Payment received'), _tr('refunded', 'Refunded')];
       default: return [status];
     }
   }
@@ -588,7 +595,7 @@ class _ReceiptDownloadButtonState extends State<_ReceiptDownloadButton> {
             icon: _isGenerating
                 ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary))
                 : const Icon(Icons.download_rounded, size: 18),
-            label: Text(_isGenerating ? (isSw ? 'Inatayarisha...' : 'Generating...') : (isSw ? 'Pakua Risiti' : 'Download Receipt')),
+            label: Text(_isGenerating ? _tr('generating', 'Generating...') : _tr('download_receipt', 'Download Receipt')),
             style: OutlinedButton.styleFrom(
               foregroundColor: cs.primary,
               side: BorderSide(color: cs.primary.withValues(alpha: 0.3)),
@@ -603,7 +610,7 @@ class _ReceiptDownloadButtonState extends State<_ReceiptDownloadButton> {
           child: OutlinedButton.icon(
             onPressed: _isGenerating ? null : _onShare,
             icon: const Icon(Icons.share, size: 18),
-            label: Text(isSw ? 'Shiriki Risiti' : 'Share Receipt'),
+            label: Text(_tr('share_receipt', 'Share Receipt')),
             style: OutlinedButton.styleFrom(
               foregroundColor: cs.secondary,
               side: BorderSide(color: cs.secondary.withValues(alpha: 0.3)),
@@ -635,7 +642,7 @@ class _ReceiptDownloadButtonState extends State<_ReceiptDownloadButton> {
       await _saveToDownloads(pdfBytes);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${_tr('Failed')}: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${_tr('error_label', 'Error')}: $e')));
       }
     }
     if (mounted) setState(() => _isGenerating = false);
@@ -663,7 +670,7 @@ class _ReceiptDownloadButtonState extends State<_ReceiptDownloadButton> {
       await Share.shareXFiles([XFile(file.path)], text: 'Soko Vibe Receipt #${widget.orderId}');
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${_tr('Failed')}: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${_tr('error_label', 'Error')}: $e')));
       }
     }
     if (mounted) setState(() => _isGenerating = false);
@@ -681,7 +688,7 @@ class _ReceiptDownloadButtonState extends State<_ReceiptDownloadButton> {
       await OpenFile.open(file.path);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(widget.lang == 'sw' ? 'Risiti imehifadhiwa' : 'Receipt saved'), duration: const Duration(seconds: 3)),
+          SnackBar(content: Text(_tr('receipt_saved', 'Receipt saved')), duration: const Duration(seconds: 3)),
         );
       }
     } else {
@@ -692,5 +699,8 @@ class _ReceiptDownloadButtonState extends State<_ReceiptDownloadButton> {
     }
   }
 
-  String _tr(String en) => widget.lang == 'sw' ? en : en;
+  String _tr(String key, [String? fallback]) {
+    final result = LocalizationService.translate(key, widget.lang);
+    return result == key ? (fallback ?? key) : result;
+  }
 }

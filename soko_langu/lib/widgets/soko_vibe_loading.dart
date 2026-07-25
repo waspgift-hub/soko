@@ -17,13 +17,6 @@ class _SokoVibeLoadingState extends State<SokoVibeLoading>
   late Animation<double> _arcStart;
   late Animation<double> _arcSweep;
 
-  static const _colors = [
-    Color(0xFF4285F4),
-    Color(0xFFEA4335),
-    Color(0xFFFBBC05),
-    Color(0xFF34A853),
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -75,6 +68,7 @@ class _SokoVibeLoadingState extends State<SokoVibeLoading>
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final strokeWidth = widget.size * 0.12;
     final iconSize = widget.size * 0.4;
 
@@ -94,9 +88,10 @@ class _SokoVibeLoadingState extends State<SokoVibeLoading>
                   arcStart: _arcStart.value,
                   arcSweep: _arcSweep.value,
                   strokeWidth: strokeWidth,
+                  color: cs.primary,
                 ),
               ),
-              Icon(Icons.shopping_cart, size: iconSize, color: Theme.of(context).colorScheme.primary),
+              Icon(Icons.store_rounded, size: iconSize, color: cs.primary),
             ],
           ),
         );
@@ -110,50 +105,45 @@ class _SpinningArcsPainter extends CustomPainter {
   final double arcStart;
   final double arcSweep;
   final double strokeWidth;
+  final Color color;
 
   _SpinningArcsPainter({
     required this.rotation,
     required this.arcStart,
     required this.arcSweep,
     required this.strokeWidth,
+    required this.color,
   });
-
-  static const _colors = [
-    Color(0xFF4285F4),
-    Color(0xFFEA4335),
-    Color(0xFFFBBC05),
-    Color(0xFF34A853),
-  ];
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = (size.width - strokeWidth) / 2 - 2;
-    final segmentSweep = arcSweep / _colors.length;
 
-    for (int i = 0; i < _colors.length; i++) {
-      final paint = Paint()
-        ..color = _colors[i]
-        ..strokeWidth = strokeWidth
-        ..strokeCap = StrokeCap.round
-        ..style = PaintingStyle.stroke;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
 
-      final startAngle = rotation + arcStart * 2 * pi + i * segmentSweep * 2 * pi;
-      final sweepAngle = segmentSweep * 2 * pi - 0.05;
+    final startAngle = rotation + arcStart * 2 * pi;
+    final sweepAngle = arcSweep * 2 * pi - 0.05;
 
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius),
-        startAngle,
-        sweepAngle,
-        false,
-        paint,
-      );
-    }
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      startAngle,
+      sweepAngle,
+      false,
+      paint,
+    );
   }
 
   @override
   bool shouldRepaint(_SpinningArcsPainter old) =>
-      old.rotation != rotation || old.arcStart != arcStart || old.arcSweep != arcSweep;
+      old.rotation != rotation ||
+      old.arcStart != arcStart ||
+      old.arcSweep != arcSweep ||
+      old.color != color;
 }
 
 class SokoVibeLoadingPage extends StatelessWidget {

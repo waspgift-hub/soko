@@ -98,6 +98,8 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                     final productPrice = (d['productPrice'] as num?)?.toDouble() ?? 0;
                     final shippingCost = (d['shippingCost'] as num?)?.toDouble();
                     final totalAmount = (d['totalAmount'] as num?)?.toDouble() ?? 0;
+                    final platformFee = (d['platformFee'] as num?)?.toDouble() ?? 0;
+                    final processingFee = (d['processingFee'] as num?)?.toDouble() ?? 0;
                     final createdAt = d['createdAt'] as Timestamp?;
                     final dateStr = createdAt != null
                         ? DateFormat('dd/MM/yyyy HH:mm').format(createdAt.toDate())
@@ -153,6 +155,12 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                             if (shippingCost != null && shippingCost > 0)
                               _infoRow(cs, Icons.local_shipping, context.tr('shipping_cost'),
                                   'TZS ${NumberFormat('#,###').format(shippingCost)}'),
+                            if (platformFee > 0)
+                              _infoRow(cs, Icons.percent, context.tr('soko_vibe_commission'),
+                                  'TZS ${NumberFormat('#,###').format(platformFee)}'),
+                            if (processingFee > 0)
+                              _infoRow(cs, Icons.receipt_long, context.tr('mongike_fee_label'),
+                                  'TZS ${NumberFormat('#,###').format(processingFee)}'),
                             if (totalAmount > 0)
                               _infoRow(cs, Icons.payments, context.tr('total_payment'),
                                   'TZS ${NumberFormat('#,###').format(totalAmount)}',

@@ -349,7 +349,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
               children: [
                 Icon(Icons.smart_toy_outlined, color: cs.primary, size: 22),
                 const SizedBox(width: 8),
-                Text('AI Dalali', style: GoogleFonts.spaceGrotesk(color: cs.onSurface, fontWeight: FontWeight.w600, fontSize: 18)),
+                Text(context.tr('ai_dalali'), style: GoogleFonts.spaceGrotesk(color: cs.onSurface, fontWeight: FontWeight.w600, fontSize: 18)),
               ],
             ),
             Row(
@@ -734,7 +734,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
             children: [
               Icon(Icons.auto_awesome, size: 12, color: cs.primary),
               const SizedBox(width: 4),
-              Text('AI', style: GoogleFonts.jetBrainsMono(color: cs.primary, fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+              Text(context.tr('ai_label'), style: GoogleFonts.jetBrainsMono(color: cs.primary, fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
             ],
           ),
           const SizedBox(height: 8),

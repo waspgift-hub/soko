@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/review_model.dart';
 
 class SellerRating {
@@ -123,6 +124,9 @@ class RatingService {
     required double rating,
     required String comment,
   }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) await user.getIdToken(true);
+
     final data = {
       'productId': productId,
       'sellerId': sellerId,

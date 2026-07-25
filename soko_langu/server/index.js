@@ -1,24 +1,35 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const compression = require('compression');
 const crypto = require('crypto');
 const admin = require('firebase-admin');
-const helmet = require('helmet');
 const { mongikeCollect, mongikePayout, mongikeBalance, COLLECTION_FEE, PAYOUT_FEE } = require('./mongike');
 const { groqChat, groqTranscribe } = require('./groq');
 
 const ADMIN_EMAILS = ["admin@soko-langu.com", "admin@soko-vibe.com"];
 
+// Catch unhandled promise rejections to prevent hanging promises leaking memory
+process.on('unhandledRejection', (reason) => {
+  console.error('[MEM] Unhandled Rejection:', reason?.message || reason);
+});
+process.on('warning', (warning) => {
+  if (warning.name === 'MaxListenersExceededWarning') {
+    console.warn('[MEM] Warning:', warning.message);
+  }
+});
+
 const app = express();
 
 const REQUEST_TIMEOUT = 20000; // 20 seconds
 
-// Security headers
-app.use(helmet());
-
-// Gzip compression — smaller response bodies = faster downloads
-app.use(compression({ level: 6, threshold: 256 }));
+// Manual security headers (lightweight replacement for helmet)
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '0');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  next();
+});
 
 // Tight CORS — only allow the Flutter app origins
 const ALLOWED_ORIGINS = [
@@ -59,12 +70,13 @@ function asyncHandler(fn) {
 // ─── OneSignal helpers ──────────────────────────────────────────
 const ONE_SIGNAL_APP_ID = process.env.ONE_SIGNAL_APP_ID;
 const ONE_SIGNAL_REST_API_KEY = process.env.ONE_SIGNAL_REST_API_KEY;
+const { randomUUID } = require('node:crypto');
 
-function getChannelId(data = {}) {
-  const type = (data && data.type) || 'general';
-  if (type === 'chat' || type === 'group_chat') return 'chat_messages_v4';
-  if (type === 'payment' || type === 'order' || type === 'withdrawal') return 'payments_notifications_v4';
-  return 'general_notifications_v4';
+const OS_AUTH = `Key ${ONE_SIGNAL_REST_API_KEY}`;
+const OS_URL = 'https://api.onesignal.com/notifications';
+
+function osHeaders() {
+  return { 'Content-Type': 'application/json', 'Authorization': OS_AUTH };
 }
 
 async function sendOneSignalNotification(userId, title, body, data = {}) {
@@ -73,26 +85,63 @@ async function sendOneSignalNotification(userId, title, body, data = {}) {
     console.error('[OS] Missing ONE_SIGNAL_APP_ID or ONE_SIGNAL_REST_API_KEY'); return null;
   }
   try {
-    const resp = await fetch('https://onesignal.com/api/v1/notifications', {
+    const resp = await fetch(OS_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${ONE_SIGNAL_REST_API_KEY}` },
+      headers: osHeaders(),
       body: JSON.stringify({
         app_id: ONE_SIGNAL_APP_ID,
+        idempotency_key: randomUUID(),
         include_external_user_ids: [userId],
         headings: { en: title || '' },
         contents: { en: body || '' },
         data: { ...(data || {}), type: (data && data.type) || 'general' },
-        android_channel_id: getChannelId(data),
+        priority: 10, android_priority: 'high', android_visibility: 1,
         android_sound: 'soko_notification',
-        android_icon: 'ic_notification', priority: 10,
+        android_icon: 'ic_notification',
         small_icon: 'ic_notification', large_icon: 'ic_notification', android_accent_color: 'FF40916C',
       }),
     });
     const result = await resp.json();
-    if (result.id) console.log(`[OS] sent to ${userId} type=${(data && data.type) || 'general'} id=${result.id}`);
-    else console.error(`[OS] send failed:`, JSON.stringify(result));
+    if (result.id) console.log(`[OS] sent push to ${userId} type=${(data && data.type) || 'general'} id=${result.id}`);
+    else console.error(`[OS] push send failed:`, JSON.stringify(result));
+
+    // Also send email if this is a critical notification type
+    const criticalTypes = ['order', 'payment', 'dispute', 'refund', 'boost', 'kyc', 'withdrawal'];
+    const notifType = (data && data.type) || 'general';
+    if (criticalTypes.includes(notifType)) {
+      sendOneSignalEmail(userId, title, body, data).catch(() => {});
+    }
+
     return result;
   } catch (e) { console.error(`[OS] FAILED user=${userId}: ${e.message}`); return null; }
+}
+
+async function sendOneSignalEmail(userId, subject, bodyText, data = {}) {
+  if (!userId) { console.log('[OS email] No userId'); return null; }
+  if (!ONE_SIGNAL_APP_ID || !ONE_SIGNAL_REST_API_KEY) {
+    console.error('[OS email] Missing config'); return null;
+  }
+  try {
+    const emailBody = `<html><body style="font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto"><h2 style="color:#40916C">${subject || ''}</h2><p>${bodyText || ''}</p><hr style="border:none;border-top:1px solid #e0e0e0;margin:20px 0"/><p style="color:#999;font-size:12px">Soko Vibe</p></body></html>`;
+    const resp = await fetch(OS_URL, {
+      method: 'POST',
+      headers: osHeaders(),
+      body: JSON.stringify({
+        app_id: ONE_SIGNAL_APP_ID,
+        idempotency_key: randomUUID(),
+        include_aliases: { external_id: [userId] },
+        target_channel: 'email',
+        email_subject: subject || '',
+        email_preheader: bodyText || '',
+        email_body: emailBody,
+        email_from_name: 'Soko Vibe',
+      }),
+    });
+    const result = await resp.json();
+    if (result.id) console.log(`[OS email] sent to ${userId} subject="${subject}" id=${result.id}`);
+    else console.error(`[OS email] send failed:`, JSON.stringify(result));
+    return result;
+  } catch (e) { console.error(`[OS email] FAILED user=${userId}: ${e.message}`); return null; }
 }
 
 async function sendOneSignalBulk(userIds, title, body, data = {}) {
@@ -102,15 +151,16 @@ async function sendOneSignalBulk(userIds, title, body, data = {}) {
   for (let i = 0; i < userIds.length; i += 2000) {
     const batch = userIds.slice(i, i + 2000);
     try {
-      const resp = await fetch('https://onesignal.com/api/v1/notifications', {
+      const resp = await fetch(OS_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${ONE_SIGNAL_REST_API_KEY}` },
+        headers: osHeaders(),
         body: JSON.stringify({
-          app_id: ONE_SIGNAL_APP_ID, include_external_user_ids: batch,
+          app_id: ONE_SIGNAL_APP_ID, idempotency_key: randomUUID(), include_external_user_ids: batch,
           headings: { en: title || '' }, contents: { en: body || '' },
           data: { ...(data || {}), type: (data && data.type) || 'general' },
-          android_channel_id: getChannelId(data), android_sound: 'soko_notification',
-          android_icon: 'ic_notification', priority: 10,
+          priority: 10, android_priority: 'high', android_visibility: 1,
+          android_sound: 'soko_notification',
+          android_icon: 'ic_notification',
         }),
       });
       const result = await resp.json();
@@ -461,6 +511,32 @@ app.post('/api/boost-product', async (req, res) => {
     try { await admin.auth().verifyIdToken(token); } catch (_) { return res.status(403).json({ error: 'Invalid token' }); }
 
     const { productId, tier, amount, durationDays, phone, userId, productName, productImage, productPrice } = req.body;
+
+    // Cancel stale pending boosts for same user+product so they don't get stuck
+    if (db && userId && productId) {
+      const staleSnap = await db.collection('transactions')
+        .where('type', '==', 'boost')
+        .where('productId', '==', productId)
+        .where('userId', '==', userId)
+        .where('status', '==', 'pending')
+        .get();
+      if (!staleSnap.empty) {
+        const now = Date.now();
+        const PENDING_TIMEOUT = 5 * 60 * 1000;
+        for (const doc of staleSnap.docs) {
+          const data = doc.data();
+          const createdAt = data.createdAt?.toDate?.()?.getTime?.() || 0;
+          const reason = createdAt > 0 && (now - createdAt) > PENDING_TIMEOUT
+            ? 'auto-cancelled (stale)'
+            : 'superseded by new boost';
+          await doc.ref.update({
+            status: 'failed',
+            cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+            cancelReason: reason,
+          });
+        }
+      }
+    }
     if (!productId || !tier || !phone) {
       return res.status(400).json({ error: 'Missing required fields (productId, tier, phone)' });
     }
@@ -2706,7 +2782,21 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
         }
       }
     } else if (paymentStatus === 'failed' || paymentStatus === 'cancelled') {
-      await txDoc.ref.update({ status: 'failed' });
+      await txDoc.ref.update({ status: 'failed', failureReason: 'Payment failed via webhook' });
+      if (tx.buyerId) {
+        await db.collection('notifications').add({
+          userId: tx.buyerId,
+          title: 'Malipo Yameshindikana',
+          body: `Malipo ya ${tx.productName || 'Bidhaa'} hayakukamilika. Jaribu tena kwenye app.`,
+          isRead: false,
+          type: 'payment_failed',
+          transactionId: order_id,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        try {
+          await sendOneSignalNotification(tx.buyerId, 'Malipo Yameshindikana', `Malipo ya ${tx.productName || 'Bidhaa'} hayakukamilika. Jaribu tena kwenye app.`, { type: 'payment_failed', productId: tx.productId || '', transactionId: order_id });
+        } catch (_) {}
+      }
     }
 
     res.status(200).json({ received: true });
@@ -5816,9 +5906,18 @@ app.post('/api/release-expired-escrows', async (req, res) => {
   }
 });
 
+// Periodic GC every 5 minutes to keep memory in check (--expose-gc must be enabled)
+if (global.gc) {
+  setInterval(() => {
+    global.gc();
+    console.log('[MEM] Garbage collection triggered');
+  }, 5 * 60 * 1000);
+}
+
 startProductListener();
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT} (PID ${process.pid})`);
+  console.log(`[MEM] RSS: ${(process.memoryUsage().rss / 1024 / 1024).toFixed(1)}MB`);
   // Self-ping every 10 minutes to prevent Render free-tier spin-down
   const publicUrl = process.env.RENDER_EXTERNAL_URL || '';
   if (publicUrl) {
@@ -5845,9 +5944,10 @@ app.listen(PORT, () => {
 function startProductListener() {
   if (!db) return;
   console.log('[PRODUCT] Starting product listener...');
-  let knownProductIds = new Set();
-  const listenerStartedAt = admin.firestore.Timestamp.now();
+  const MAX_KNOWN = 500;
 
+  // Load recent product IDs on startup
+  let knownProductIds = new Set();
   db.collection('products')
     .orderBy('createdAt', 'desc')
     .limit(200)
@@ -5865,11 +5965,13 @@ function startProductListener() {
           if (change.type !== 'added') return;
           const productId = change.doc.id;
           if (knownProductIds.has(productId)) return;
-          const product = change.doc.data();
-          const productTime = product.createdAt;
-          if (productTime && productTime < listenerStartedAt) return;
+          if (knownProductIds.size >= MAX_KNOWN) {
+            const first = knownProductIds.values().next().value;
+            if (first) knownProductIds.delete(first);
+          }
           knownProductIds.add(productId);
 
+          const product = change.doc.data();
           const sellerId = product.sellerId;
           if (!sellerId) return;
           const sellerName = product.sellerName || 'Mfanyabiashara';
