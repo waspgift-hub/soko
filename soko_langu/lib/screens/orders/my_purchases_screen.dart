@@ -107,9 +107,9 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
         deliveryType: 'local',
       );
 
-      if (result['order_id'] == null) {
+      if (result == null || result['order_id'] == null) {
         final errMsg =
-            result['error'] as String? ??
+            result?['error'] as String? ??
             context.tr('payment_initiation_failed');
         if (mounted) {
           PaymentBanner.show(
@@ -126,7 +126,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
       if (mounted) {
         RealtimePaymentBanner.show(
           context: context,
-          orderId: result['order_id'] as String,
+          orderId: result!['order_id'] as String,
           successStatuses: ['escrow_hold', 'paid_escrow_held'],
           processingTitle: context.tr('processing_payment'),
           processingSubtitle: context.tr('check_phone_enter_pin'),

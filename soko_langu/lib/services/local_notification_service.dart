@@ -31,10 +31,7 @@ class LocalNotificationService {
     final android = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
     if (android == null) return;
-    // Delete old v4 channels so v5 channels take effect without reinstall
-    for (final oldId in ['general_notifications_v4', 'chat_messages_v4', 'payments_notifications_v4']) {
-      try { await android.deleteNotificationChannel(oldId); } catch (_) {}
-    }
+    // Old v4 channels are superseded by v5; deletion skipped (API removed in newer plugin versions)
     await android.createNotificationChannel(const AndroidNotificationChannel(
       'general_notifications_v5',
       'Soko Vibe',
