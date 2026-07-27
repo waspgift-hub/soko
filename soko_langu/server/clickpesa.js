@@ -270,13 +270,17 @@ function calcGatewayFee(methodId, amount) {
 // ORIGINAL CLICKPESA API FUNCTIONS (unchanged)
 // =================================================================
 
-async function clickpesaCollect({ amount, orderReference, phoneNumber }) {
-  return api('POST', '/payments/initiate-ussd-push-request', {
+async function clickpesaCollect({ amount, orderReference, phoneNumber, callbackUrl }) {
+  const body = {
     amount: String(amount),
     orderReference,
     phoneNumber,
     currency: 'TZS',
-  });
+  };
+  if (callbackUrl) {
+    body.callbackUrl = callbackUrl;
+  }
+  return api('POST', '/payments/initiate-ussd-push-request', body);
 }
 
 async function clickpesaPaymentStatus(orderReference) {

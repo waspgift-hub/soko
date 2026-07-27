@@ -354,9 +354,13 @@ class _WalletScreenState extends State<WalletScreen> {
     setState(() => _loading = true);
 
     try {
+      final token = await user.getIdToken();
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/wallet/deposit'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
         body: jsonEncode({
           'userId': user.uid,
           'phone': phone,
@@ -369,13 +373,8 @@ class _WalletScreenState extends State<WalletScreen> {
       if (!mounted) return;
 
       if (resp.statusCode == 200 && data['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(data['message'] ?? 'USSD push sent! Check your phone.'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        _load();
+        final depositRef = data['depositRef'] as String;
+        _showUssdWaitingSheet(depositRef);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -398,9 +397,13 @@ class _WalletScreenState extends State<WalletScreen> {
     if (user == null) return;
 
     try {
+      final token = await user.getIdToken();
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/wallet/deposit'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
         body: jsonEncode({
           'userId': user.uid,
           'phone': phone,
@@ -542,6 +545,124 @@ class _WalletScreenState extends State<WalletScreen> {
                         ],
                       ),
                     ),
+                    const SizedBox(height: 24),
+                    if (status == 'completed' || status == 'failed')
+                      FilledButton(
+                        onPressed: () {
+                          if (!completer.isCompleted) {
+                            completer.complete();
+                          }
+                          Navigator.of(ctx).pop();
+                        },
+                        child: Text(status == 'completed' ? tr('continue') : tr('retry')),
+                      ),
+                    if (status == 'pending')
+                      TextButton(
+                        onPressed: () {
+                          if (!completer.isCompleted) {
+                            completer.complete();
+                          }
+                          Navigator.of(ctx).pop();
+                        },
+                        child: Text(tr('cancel')),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+
+    if (!completer.isCompleted) {
+      completer.complete();
+      sub?.cancel();
+    }
+    _load();
+  }
+
+  Future<void> _showUssdWaitingSheet(String depositRef) async {
+    final tr = context.tr;
+    final completer = Completer<void>();
+    StreamSubscription<DocumentSnapshot>? sub;
+
+    await showModalBottomSheet(
+      context: context,
+      isDismissible: false,
+      enableDrag: false,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop && sub != null) sub!.cancel();
+          },
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+            child: StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('deposits')
+                  .doc(depositRef)
+                  .snapshots(),
+              builder: (ctx, snap) {
+                final status = snap.data?.get('status') as String? ?? 'pending';
+
+                if (status == 'completed' || status == 'failed') {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (ctx.mounted && !completer.isCompleted) {
+                      completer.complete();
+                      Navigator.of(ctx).pop();
+                    }
+                  });
+                }
+
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40, height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    if (status == 'completed')
+                      const Icon(Icons.check_circle, color: Colors.green, size: 64)
+                    else if (status == 'failed')
+                      const Icon(Icons.cancel, color: Colors.red, size: 64)
+                    else
+                      const SizedBox(
+                        width: 64, height: 64,
+                        child: CircularProgressIndicator(strokeWidth: 4),
+                      ),
+                    const SizedBox(height: 20),
+                    Text(
+                      status == 'completed'
+                          ? 'Deposit successful'
+                          : status == 'failed'
+                              ? 'Deposit failed'
+                              : 'Waiting for payment...',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    if (status == 'pending')
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          'Complete payment on your phone via USSD push',
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.6)),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
                     const SizedBox(height: 24),
                     if (status == 'completed' || status == 'failed')
                       FilledButton(

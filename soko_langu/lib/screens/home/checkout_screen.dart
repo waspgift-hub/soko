@@ -36,33 +36,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   String _selectedMethod = 'ussd_push';
   List<Map<String, dynamic>> _methods = [];
   bool _methodsLoading = true;
+  double _gatewayFee = 0;
 
   double get _totalPrice => _salePrice ?? widget.product.price;
+
   double get _serviceFeePercent => 3.5;
   double get _serviceFee => _totalPrice * _serviceFeePercent / 100;
-
-  double get _gatewayFee {
-    final amt = _totalPrice.round();
-    switch (_selectedMethod) {
-      case 'wallet': return 0;
-      case 'lipa_namba': return (amt * 0.02).round().toDouble();
-      case 'card': return (amt * 0.0485).round().toDouble();
-      case 'billpay': return (amt * 0.01).round().toDouble();
-      default: // ussd_push
-        const tiers = [
-          [500, 899, 54], [900, 1999, 92], [2000, 2999, 124], [3000, 3999, 230],
-          [4000, 4399, 380], [4400, 8999, 580], [9000, 19999, 920], [20000, 39999, 1150],
-          [40000, 49999, 1572], [50000, 95999, 2136], [96000, 199999, 3240],
-          [200000, 299999, 3660], [300000, 399999, 4080], [400000, 499999, 4340],
-          [500000, 599999, 4820], [600000, 799999, 5230], [800000, 999999, 6146],
-          [1000000, 1999999, 7210], [2000000, 3000000, 7960],
-        ];
-        for (final t in tiers) {
-          if (amt >= t[0] && amt <= t[1]) return (t[2] as int).toDouble();
-        }
-        return 7960.0;
-    }
-  }
 
   double get _sellerReceives => _totalPrice;
   double get _totalWithFee => _totalPrice + _serviceFee + _gatewayFee;
@@ -84,6 +63,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         .first;
     if (fs != null && mounted) {
       setState(() => _salePrice = fs.salePrice);
+      _fetchGatewayFee();
     }
   }
 
@@ -118,6 +98,24 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       }
     } catch (_) {}
     setState(() => _methodsLoading = false);
+    _fetchGatewayFee();
+  }
+
+  Future<void> _fetchGatewayFee() async {
+    try {
+      final resp = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/gateway-fee'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'method': _selectedMethod,
+          'amount': _totalPrice.round(),
+        }),
+      );
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        if (mounted) setState(() => _gatewayFee = (data['fee'] as num).toDouble());
+      }
+    } catch (_) {}
   }
 
   IconData _methodIcon(String id) {
@@ -310,7 +308,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         padding: const EdgeInsets.only(bottom: 8),
                         child: InkWell(
                           borderRadius: BorderRadius.circular(12),
-                          onTap: () => setState(() => _selectedMethod = id),
+                          onTap: () {
+                            setState(() => _selectedMethod = id);
+                            _fetchGatewayFee();
+                          },
                           child: Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
