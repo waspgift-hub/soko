@@ -22,20 +22,12 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
   final Map<String, String> _userPhotos = {};
   final Map<String, bool> _userKyc = {};
   bool _showUnreadOnly = false;
-  final TextEditingController _searchCtrl = TextEditingController();
-  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     _loadCached();
-    _searchCtrl.addListener(() => setState(() => _searchQuery = _searchCtrl.text.toLowerCase()));
   }
-
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
 
   void _loadCached() {
     final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -73,32 +65,6 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
       ),
       body: Column(
         children: [
-          // Search bar
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-            child: TextField(
-              controller: _searchCtrl,
-              style: TextStyle(fontSize: 14, color: cs.onSurface),
-              decoration: InputDecoration(
-                hintText: context.tr('search_chats'),
-                hintStyle: TextStyle(fontSize: 14, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
-                prefixIcon: Icon(Icons.search, color: cs.onSurfaceVariant, size: 20),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: Icon(Icons.clear, size: 18, color: cs.onSurfaceVariant),
-                        onPressed: () { _searchCtrl.clear(); },
-                      )
-                    : null,
-                filled: true,
-                fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-          ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             child: Row(
@@ -114,36 +80,20 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
         builder: (context, snap) {
           final allRooms = snap.data ?? [];
           final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
-          var rooms = _showUnreadOnly
+          final rooms = _showUnreadOnly
               ? allRooms.where((r) {
                   final isBuyer = r.buyerId == uid;
                   return isBuyer ? r.unreadCountBuyer > 0 : r.unreadCountSeller > 0;
                 }).toList()
               : allRooms;
-          // Filter by search query
-          if (_searchQuery.isNotEmpty) {
-            rooms = rooms.where((r) {
-              final otherId = r.participants.where((p) => p != uid).firstOrNull ?? '';
-              final name = _userNames[otherId] ?? '';
-              return name.toLowerCase().contains(_searchQuery);
-            }).toList();
-          }
           if (rooms.isEmpty) {
-            final hasRooms = snap.data != null && snap.data!.isNotEmpty;
             return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    hasRooms ? Icons.search_off : Icons.chat_bubble_outline,
-                    size: 64,
-                    color: cs.onSurfaceVariant.withValues(alpha: 0.4),
-                  ),
+                  Icon(Icons.chat_bubble_outline, size: 64, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
                   const SizedBox(height: 16),
-                  Text(
-                    hasRooms ? context.tr('no_search_results') : context.tr('no_conversations'),
-                    style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant),
-                  ),
+                  Text(context.tr('no_conversations'), style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant)),
                 ],
               ),
             );
