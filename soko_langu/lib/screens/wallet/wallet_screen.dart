@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../services/api_config.dart';
 import '../../services/balance_privacy_service.dart';
@@ -539,7 +540,7 @@ class _WalletScreenState extends State<WalletScreen> {
                             ),
                             const SizedBox(height: 12),
                             Text(
-                              'TZS ${totalCharge.toLocaleString()}',
+                              'TZS ${NumberFormat('#,###', 'en').format(totalCharge)}',
                               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
                               textAlign: TextAlign.center,
                             ),
@@ -576,7 +577,7 @@ class _WalletScreenState extends State<WalletScreen> {
                             _instructionStep('2', 'Select "Lipa"'),
                             _instructionStep('3', 'Select "BillPay" (or "Kulipa Bili")'),
                             _instructionStep('4', 'Enter control number: $billPayNumber'),
-                            _instructionStep('5', 'Enter amount: TZS ${totalCharge.toLocaleString()}'),
+                            _instructionStep('5', 'Enter amount: TZS ${NumberFormat('#,###', 'en').format(totalCharge)}'),
                             _instructionStep('6', 'Enter your M-Pesa PIN and confirm'),
                             const SizedBox(height: 8),
                             Text(
