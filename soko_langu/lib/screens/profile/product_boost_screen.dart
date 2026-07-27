@@ -1,11 +1,14 @@
+import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:http/http.dart' as http;
 import '../../models/product_model.dart';
 import '../../models/boost_tier.dart';
 import '../../services/boost_service.dart';
+import '../../services/api_config.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/sms_notification_service.dart';
 import '../../models/boost_receipt.dart';
@@ -32,8 +35,55 @@ class ProductBoostScreen extends StatefulWidget {
 class _ProductBoostScreenState extends State<ProductBoostScreen> {
   BoostTier? _selectedTier;
   bool _processing = false;
+  String _selectedMethod = 'ussd_push';
+  List<Map<String, dynamic>> _methods = [];
+  int _gatewayFee = 0;
 
   final _nf = NumberFormat('#,###', 'en');
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMethods();
+  }
+
+  Future<void> _loadMethods() async {
+    try {
+      final resp = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/api/payment-methods'),
+      );
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        final methods = (data['methods'] as List?)
+            ?.map((e) => e as Map<String, dynamic>)
+            .toList() ?? [];
+        if (mounted) setState(() => _methods = methods);
+      }
+    } catch (_) {}
+    _fetchGatewayFee();
+  }
+
+  Future<void> _fetchGatewayFee() async {
+    final price = _selectedTier?.priceTzs ?? 0;
+    if (price <= 0) return;
+    try {
+      final resp = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/gateway-fee'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'method': _selectedMethod, 'amount': price}),
+      );
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        if (mounted) setState(() => _gatewayFee = (data['fee'] as num).toInt());
+      }
+    } catch (_) {}
+  }
+
+  int _calcGatewayFee(int price) {
+    // Use cached value from server if available, fallback to approximate
+    if (_gatewayFee > 0 && price == (_selectedTier?.priceTzs ?? 0)) return _gatewayFee;
+    return 0;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -203,7 +253,10 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
     }
 
     return GestureDetector(
-      onTap: _processing ? null : () => setState(() => _selectedTier = tier),
+      onTap: _processing ? null : () {
+        setState(() => _selectedTier = tier);
+        _fetchGatewayFee();
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(20),
@@ -322,26 +375,13 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
     );
   }
 
-  int _boostGatewayFee(int price) {
-    const tiers = [
-      [500, 899, 54], [900, 1999, 92], [2000, 2999, 124], [3000, 3999, 230],
-      [4000, 4399, 380], [4400, 8999, 580], [9000, 19999, 920], [20000, 39999, 1150],
-      [40000, 49999, 1572], [50000, 95999, 2136], [96000, 199999, 3240],
-      [200000, 299999, 3660], [300000, 399999, 4080], [400000, 499999, 4340],
-      [500000, 599999, 4820], [600000, 799999, 5230], [800000, 999999, 6146],
-      [1000000, 1999999, 7210], [2000000, 3000000, 7960],
-    ];
-    for (final t in tiers) { if (price >= t[0] && price <= t[1]) return t[2] as int; }
-    return 7960;
-  }
-
   Widget _buildPaymentButton() {
     final cs2 = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Calculate gateway fee and total
     final tierPrice = _selectedTier?.priceTzs ?? 0;
-    final gwFee = _boostGatewayFee(tierPrice);
+    final gwFee = _calcGatewayFee(tierPrice);
     final totalWithFee = tierPrice + gwFee;
 
     return Column(
@@ -353,86 +393,96 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: _selectedTier == BoostTier.gold
-                    ? Theme.of(
-                        context,
-                      ).colorScheme.boostGold.withValues(alpha: 0.06)
+                    ? Theme.of(context).colorScheme.boostGold.withValues(alpha: 0.06)
                     : _selectedTier == BoostTier.silver
-                    ? Theme.of(
-                        context,
-                      ).colorScheme.boostSilver.withValues(alpha: 0.06)
-                    : Theme.of(
-                        context,
-                      ).colorScheme.boostBronze.withValues(alpha: 0.06),
+                    ? Theme.of(context).colorScheme.boostSilver.withValues(alpha: 0.06)
+                    : Theme.of(context).colorScheme.boostBronze.withValues(alpha: 0.06),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: _selectedTier == BoostTier.gold
-                      ? Theme.of(
-                          context,
-                        ).colorScheme.boostGold.withValues(alpha: 0.3)
+                      ? Theme.of(context).colorScheme.boostGold.withValues(alpha: 0.3)
                       : _selectedTier == BoostTier.silver
-                      ? Theme.of(
-                          context,
-                        ).colorScheme.boostSilver.withValues(alpha: 0.3)
-                      : Theme.of(
-                          context,
-                        ).colorScheme.boostBronze.withValues(alpha: 0.3),
+                      ? Theme.of(context).colorScheme.boostSilver.withValues(alpha: 0.3)
+                      : Theme.of(context).colorScheme.boostBronze.withValues(alpha: 0.3),
                 ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // ── Payment Method Selector ──
+                  if (_methods.any((m) => m['id'] != 'wallet'))
+                    ..._methods.where((m) => m['id'] != 'wallet').map((m) {
+                      final id = m['id'] as String? ?? '';
+                      final name = m['name'] as String? ?? id;
+                      final selected = _selectedMethod == id;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(10),
+                          onTap: () {
+                            setState(() => _selectedMethod = id);
+                            _fetchGatewayFee();
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: selected ? Theme.of(context).colorScheme.primary : Colors.transparent,
+                                width: 1.5,
+                              ),
+                              color: selected
+                                  ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.06)
+                                  : Colors.transparent,
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  id == 'ussd_push' ? Icons.phone_android : id == 'lipa_namba' ? Icons.qr_code_scanner : id == 'card' ? Icons.credit_card : Icons.receipt_long,
+                                  size: 20,
+                                  color: selected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    name,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                                      color: selected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                                if (selected)
+                                  Icon(Icons.check_circle, size: 18, color: Theme.of(context).colorScheme.primary),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  const SizedBox(height: 8),
                   Text(
                     context.tr('order_summary'),
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Theme.of(context).colorScheme.onSurface),
                   ),
                   const SizedBox(height: 8),
-                  _summaryRow(
-                    context.tr('plan'),
-                    _selectedTier!.displayName,
-                    Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                  _summaryRow(context.tr('plan'), _selectedTier!.displayName, Theme.of(context).colorScheme.onSurfaceVariant),
                   const SizedBox(height: 4),
-                  _summaryRow(
-                    context.tr('duration'),
-                    '${_selectedTier!.durationDays} ${context.tr('days')}',
-                    Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                  _summaryRow(context.tr('duration'), '${_selectedTier!.durationDays} ${context.tr('days')}', Theme.of(context).colorScheme.onSurfaceVariant),
                   const SizedBox(height: 4),
-                  _summaryRow(
-                    'Ada ya Gateway (ClickPesa)',
-                    'TZS ${_nf.format(gwFee)}',
-                    Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                  _summaryRow('Ada ya Gateway (ClickPesa)', 'TZS ${_nf.format(gwFee)}', Theme.of(context).colorScheme.onSurfaceVariant),
                   const SizedBox(height: 4),
-                  _summaryRow(
-                    context.tr('total'),
-                    'TZS ${_nf.format(totalWithFee)}',
-                    Theme.of(context).colorScheme.primary,
-                  ),
+                  _summaryRow(context.tr('total'), 'TZS ${_nf.format(totalWithFee)}', Theme.of(context).colorScheme.primary),
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Icon(
-                        Icons.info_outline,
-                        size: 14,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+                      Icon(Icons.info_outline, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
                           'Ada ya TZS ${_nf.format(gwFee)} ni kwa ajili ya gharama za gateway (ClickPesa). Soko Vibe inapokea TZS ${_nf.format(tierPrice)} kamili.',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: isDark
-                                ? Theme.of(context).colorScheme.onSurfaceVariant
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                          ),
+                          style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
                         ),
                       ),
                     ],
@@ -566,6 +616,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
             ? widget.product.images.first
             : '',
         productPrice: widget.product.price.toInt(),
+        paymentMethod: _selectedMethod,
       );
 
       if (result == null || result['order_id'] == null) {
@@ -676,7 +727,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
               productId: widget.product.id,
               boostPackageName: _selectedTier!.displayName,
               amountPaid: _selectedTier!.priceTzs.toDouble(),
-              paymentMethod: 'Mongike',
+              paymentMethod: _selectedMethod == 'ussd_push' ? 'USSD Push' : _selectedMethod == 'lipa_namba' ? 'Lipa Namba' : _selectedMethod == 'card' ? 'Card' : 'BillPay',
               timestamp: DateTime.now(),
               boostExpiryDate: expiry,
               paymentStatus: PaymentStatus.completed,

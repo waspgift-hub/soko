@@ -120,7 +120,7 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
 
               // ── Payout Fees ──
               _SectionHeader(
-                icon: Icons.send_money_outlined,
+                icon: Icons.payments_outlined,
                 title: isEn ? 'ClickPesa Payout Fees' : 'Ada za Kutoa za ClickPesa',
                 cs: cs,
               ),

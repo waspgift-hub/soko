@@ -26,6 +26,7 @@ class BoostService {
     String productName = '',
     String productImage = '',
     int productPrice = 0,
+    String paymentMethod = 'ussd_push',
   }) async {
     try {
       final resp = await http.post(
@@ -41,6 +42,7 @@ class BoostService {
           'productName': productName,
           'productImage': productImage,
           'productPrice': productPrice,
+          'paymentMethod': paymentMethod,
         }),
       );
 
