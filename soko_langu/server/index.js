@@ -6033,8 +6033,9 @@ app.post('/api/test/ussd-push', async (req, res) => {
     });
     res.json({ success: true, testRef, clickpesaId: result.id, message: `USSD push sent to ${phone} for TZS ${amount}` });
   } catch (e) {
-    console.error('/api/test/ussd-push error:', e);
-    res.status(500).json({ error: e.message || 'Test failed' });
+    console.error('/api/test/ussd-push error:', e.message, e.response?.data, e.response?.status);
+    const detail = e.response?.data ? JSON.stringify(e.response.data) : e.message;
+    res.status(500).json({ error: 'Test failed', detail });
   }
 });
 
