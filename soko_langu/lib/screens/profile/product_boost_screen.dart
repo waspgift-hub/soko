@@ -438,7 +438,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
                             child: Row(
                               children: [
                                 Icon(
-                                  id == 'ussd_push' ? Icons.phone_android : id == 'lipa_namba' ? Icons.qr_code_scanner : id == 'card' ? Icons.credit_card : Icons.receipt_long,
+                                  id == 'ussd_push' ? Icons.phone_android : Icons.receipt_long,
                                   size: 20,
                                   color: selected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
                                 ),
@@ -727,7 +727,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
               productId: widget.product.id,
               boostPackageName: _selectedTier!.displayName,
               amountPaid: _selectedTier!.priceTzs.toDouble(),
-              paymentMethod: _selectedMethod == 'ussd_push' ? 'USSD Push' : _selectedMethod == 'lipa_namba' ? 'Lipa Namba' : _selectedMethod == 'card' ? 'Card' : 'BillPay',
+              paymentMethod: _selectedMethod == 'ussd_push' ? 'USSD Push' : 'BillPay',
               timestamp: DateTime.now(),
               boostExpiryDate: expiry,
               paymentStatus: PaymentStatus.completed,

@@ -5919,9 +5919,6 @@ app.post('/api/payment-methods/calc-fee', (req, res) => {
 // 💰 WALLET — Deposit, balance, and history
 // ============================================================
 
-const LIPA_TILL_NUMBER = process.env.LIPA_TILL_NUMBER || '5722554';
-const LIPA_TILL_NAME = process.env.LIPA_TILL_NAME || 'Soko Vibe Marketplace';
-
 /// Get available deposit methods
 app.get('/api/wallet/deposit/methods', (req, res) => {
   res.json({
@@ -5932,14 +5929,6 @@ app.get('/api/wallet/deposit/methods', (req, res) => {
         name: 'ClickPesa USSD Push',
         description: 'Receive a USSD push on your phone to confirm payment. Works with M-Pesa, Tigo, Airtel.',
         feeDescription: 'Tiered fee (TZS 54 – 7,960)',
-      },
-      {
-        id: 'lipa_namba',
-        name: 'Lipa Namba (M-Pesa Till)',
-        description: 'Pay manually via M-Pesa Lipa Na M-Pesa using our till number.',
-        feeDescription: 'No additional fee',
-        tillNumber: LIPA_TILL_NUMBER,
-        tillName: LIPA_TILL_NAME,
       },
     ],
   });
@@ -5984,37 +5973,9 @@ app.post('/api/wallet/deposit', async (req, res) => {
     }
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-    const depositMethod = method || 'ussd';
     const depositRef = `dep_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 8)}`;
 
-    if (depositMethod === 'lipa_namba') {
-      // Lipa Namba — create pending deposit without USSD push;
-      // payment confirmed via ClickPesa webhook or manual admin verification
-      await db.collection('deposits').doc(depositRef).set({
-        userId,
-        phone: phone || '',
-        amount: Math.round(amount),
-        processingFee: 0,
-        totalCharge: Math.round(amount),
-        status: 'pending',
-        paymentMethod: 'LipaNamba',
-        tillNumber: LIPA_TILL_NUMBER,
-        tillName: LIPA_TILL_NAME,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-
-      return res.json({
-        success: true,
-        depositRef,
-        method: 'lipa_namba',
-        tillNumber: LIPA_TILL_NUMBER,
-        tillName: LIPA_TILL_NAME,
-        amount: Math.round(amount),
-        message: `Send TZS ${Math.round(amount).toLocaleString()} to till ${LIPA_TILL_NUMBER} via M-Pesa Lipa Na M-Pesa`,
-      });
-    }
-
-    // Default: USSD push
+    // USSD push
     if (!phone) {
       return res.status(400).json({ error: 'phone is required for USSD push' });
     }
