@@ -1535,7 +1535,7 @@ app.post('/api/clickpesa/webhook', verifyWebhook, async (req, res) => {
     if (!db) return res.status(200).json({ received: true });
 
     // Check if this is a deposit (wallet top-up)
-    const depDoc = orderId.startsWith('dep_')
+    const depDoc = orderId.startsWith('dep')
       ? await db.collection('deposits').doc(orderId).get()
       : null;
 
