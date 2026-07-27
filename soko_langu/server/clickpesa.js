@@ -263,6 +263,18 @@ async function clickpesaBalance() {
   return api('GET', '/account/balance');
 }
 
+async function clickpesaCreateBillPayOrder({ billAmount, billDescription, billPaymentMode, billReference }) {
+  const body = {
+    billAmount,
+    billDescription: billDescription || 'Soko Vibe payment',
+    billPaymentMode: billPaymentMode || 'EXACT',
+  };
+  if (billReference) {
+    body.billReference = billReference;
+  }
+  return api('POST', '/billpay/create-order-control-number', body);
+}
+
 module.exports = {
   // Core API
   clickpesaCollect,
@@ -270,6 +282,7 @@ module.exports = {
   clickpesaPayout,
   clickpesaPayoutPreview,
   clickpesaBalance,
+  clickpesaCreateBillPayOrder,
   // Fee tiers
   USSD_PUSH_FEE_TIERS,
   PAYOUT_FEE_TIERS,
