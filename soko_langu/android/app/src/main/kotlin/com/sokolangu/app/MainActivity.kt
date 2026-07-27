@@ -6,6 +6,7 @@ import android.content.ContentUris
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
+import android.appwidget.AppWidgetManager
 import android.util.Log
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -13,10 +14,20 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "soko_lang/video_query"
+    private var pendingRoute: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         createNotificationChannels()
+        pendingRoute = intent?.getStringExtra("route")
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        val route = intent.getStringExtra("route") ?: return
+        flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
+            MethodChannel(messenger, "soko_lang/navigate").invokeMethod("navigate", route)
+        }
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -30,6 +41,51 @@ class MainActivity : FlutterActivity() {
             } else {
                 result.notImplemented()
             }
+        }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "soko_lang/conversation_notif",
+        ).setMethodCallHandler { call, result ->
+            if (call.method == "show") {
+                val senderName = call.argument<String>("senderName") ?: "Mtumiaji"
+                val messageText = call.argument<String>("messageText") ?: ""
+                val roomId = call.argument<String>("roomId") ?: ""
+                val senderId = call.argument<String>("senderId") ?: ""
+                ConversationNotificationHelper.show(this, senderName, messageText, roomId, senderId)
+                result.success(true)
+            } else {
+                result.notImplemented()
+            }
+        }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "soko_lang/widget",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "updateWidget" -> {
+                    val sales = call.argument<String>("sales") ?: "TZS 0"
+                    val orders = call.argument<String>("orders") ?: "0"
+                    val balance = call.argument<String>("balance") ?: "TZS 0"
+                    WidgetDataStore.save(this, sales, orders, balance)
+                    val manager = AppWidgetManager.getInstance(this)
+                    val ids = manager.getAppWidgetIds(
+                        android.content.ComponentName(this, SokoVibeWidgetProvider::class.java)
+                    )
+                    val data = WidgetDataStore.load(this)
+                    ids.forEach { id ->
+                        SokoVibeWidgetProvider.updateAppWidget(this, manager, id, data)
+                    }
+                    result.success(true)
+                }
+                else -> result.notImplemented()
+            }
+        }
+        pendingRoute?.let { route ->
+            MethodChannel(
+                flutterEngine.dartExecutor.binaryMessenger,
+                "soko_lang/navigate",
+            ).invokeMethod("navigate", route)
+            pendingRoute = null
         }
     }
 

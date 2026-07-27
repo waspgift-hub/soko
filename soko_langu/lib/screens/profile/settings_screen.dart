@@ -290,6 +290,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onTap: () => context.push(AppRoutes.help),
               ),
               _buildTile(
+                icon: Icons.account_balance_wallet_outlined,
+                title: context.tr('wallet', 'Wallet'),
+                onTap: () => context.push(AppRoutes.wallet),
+              ),
+              _buildTile(
                 icon: Icons.route_outlined,
                 title: context.tr('how_it_works'),
                 onTap: () => context.push(AppRoutes.orderFlow),

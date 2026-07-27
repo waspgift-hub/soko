@@ -322,9 +322,27 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
     );
   }
 
+  int _boostGatewayFee(int price) {
+    const tiers = [
+      [500, 899, 54], [900, 1999, 92], [2000, 2999, 124], [3000, 3999, 230],
+      [4000, 4399, 380], [4400, 8999, 580], [9000, 19999, 920], [20000, 39999, 1150],
+      [40000, 49999, 1572], [50000, 95999, 2136], [96000, 199999, 3240],
+      [200000, 299999, 3660], [300000, 399999, 4080], [400000, 499999, 4340],
+      [500000, 599999, 4820], [600000, 799999, 5230], [800000, 999999, 6146],
+      [1000000, 1999999, 7210], [2000000, 3000000, 7960],
+    ];
+    for (final t in tiers) { if (price >= t[0] && price <= t[1]) return t[2] as int; }
+    return 7960;
+  }
+
   Widget _buildPaymentButton() {
     final cs2 = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Calculate gateway fee and total
+    final tierPrice = _selectedTier?.priceTzs ?? 0;
+    final gwFee = _boostGatewayFee(tierPrice);
+    final totalWithFee = tierPrice + gwFee;
 
     return Column(
       children: [
@@ -385,8 +403,14 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
                   ),
                   const SizedBox(height: 4),
                   _summaryRow(
+                    'Ada ya Gateway (ClickPesa)',
+                    'TZS ${_nf.format(gwFee)}',
+                    Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(height: 4),
+                  _summaryRow(
                     context.tr('total'),
-                    'TZS ${_nf.format(_selectedTier!.priceTzs)}',
+                    'TZS ${_nf.format(totalWithFee)}',
                     Theme.of(context).colorScheme.primary,
                   ),
                   const SizedBox(height: 8),
@@ -400,7 +424,83 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          context.tr('payment_after_continue'),
+                          'Ada ya TZS ${_nf.format(gwFee)} ni kwa ajili ya gharama za gateway (ClickPesa). Soko Vibe inapokea TZS ${_nf.format(tierPrice)} kamili.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark
+                                ? Theme.of(context).colorScheme.onSurfaceVariant
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    context.tr('order_summary'),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _summaryRow(
+                    context.tr('plan'),
+                    _selectedTier!.displayName,
+                    Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(height: 4),
+                  _summaryRow(
+                    context.tr('duration'),
+                    '${_selectedTier!.durationDays} ${context.tr('days')}',
+                    Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  final _calcGatewayFee(int price) {
+                    const tiers = [
+                      [500, 899, 54], [900, 1999, 92], [2000, 2999, 124], [3000, 3999, 230],
+                      [4000, 4399, 380], [4400, 8999, 580], [9000, 19999, 920], [20000, 39999, 1150],
+                      [40000, 49999, 1572], [50000, 95999, 2136], [96000, 199999, 3240],
+                      [200000, 299999, 3660], [300000, 399999, 4080], [400000, 499999, 4340],
+                      [500000, 599999, 4820], [600000, 799999, 5230], [800000, 999999, 6146],
+                      [1000000, 1999999, 7210], [2000000, 3000000, 7960],
+                    ];
+                    for (final t in tiers) {
+                      if (price >= t[0] && price <= t[1]) return t[2] as int;
+                    }
+                    return 7960;
+                  }
+                  final gwFee = _calcGatewayFee(_selectedTier!.priceTzs);
+                  final totalWithFee = _selectedTier!.priceTzs + gwFee;
+                  const SizedBox(height: 4),
+                  _summaryRow(
+                    'Ada ya Gateway',
+                    'TZS ${_nf.format(gwFee)}',
+                    Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(height: 4),
+                  _summaryRow(
+                    context.tr('total'),
+                    'TZS ${_nf.format(totalWithFee)}',
+                    Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 14,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Ada ya TZS ${_nf.format(gwFee)} ni kwa ajili ya gharama za gateway (ClickPesa). Soko Vibe inapokea TZS ${_nf.format(_selectedTier!.priceTzs)} kamili.',
                           style: TextStyle(
                             fontSize: 11,
                             color: isDark

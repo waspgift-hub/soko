@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/withdrawal_model.dart';
 import '../models/transaction_model.dart';
-import 'mongike_service.dart';
+import 'clickpesa_service.dart';
 
 class SellerEarningsService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -122,9 +122,9 @@ class SellerEarningsService {
     }
 
     try {
-      await MongikeService.sellerWithdraw(
+      await ClickPesaService.sellerWithdraw(
         userId: uid,
-        amount: balance.round().toDouble(),
+        amount: balance.round(),
         phone: phone,
       );
 

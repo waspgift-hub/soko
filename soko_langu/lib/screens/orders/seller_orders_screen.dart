@@ -159,7 +159,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                               _infoRow(cs, Icons.percent, context.tr('soko_vibe_commission'),
                                   'TZS ${NumberFormat('#,###').format(platformFee)}'),
                             if (processingFee > 0)
-                              _infoRow(cs, Icons.receipt_long, context.tr('mongike_fee_label'),
+                              _infoRow(cs, Icons.receipt_long, context.tr('processing_fee'),
                                   'TZS ${NumberFormat('#,###').format(processingFee)}'),
                             if (totalAmount > 0)
                               _infoRow(cs, Icons.payments, context.tr('total_payment'),

@@ -63,7 +63,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             final productDetails = d['productDetails'] as String? ?? '';
             final price = (d['productPrice'] ?? 0).toDouble();
             final shippingCost = (d['shippingCost'] as num?)?.toDouble() ?? 0;
-            final platformFee = (d['platformFee'] as num?)?.toDouble() ?? 0;
+            final platformFee = (d['platformFee'] as num?)?.toDouble() ?? (price * 0.035);
             final mongikeFee = (d['mongikeFee'] as num?)?.toDouble() ?? 180;
             final totalAmount = (d['totalAmount'] as num?)?.toDouble() ?? (price + shippingCost + platformFee + mongikeFee);
             final buyerName = d['buyerName'] as String? ?? '';
@@ -258,9 +258,8 @@ Scan QR code for full receipt
                   _infoRow(cs, _tr( 'product_price', 'Bei ya Bidhaa'), 'TSh ${nf.format(price.toInt())}'),
                   if (shippingCost > 0)
                     _infoRow(cs, _tr( 'shipping_cost', 'Nauli ya Usafirishaji'), 'TSh ${nf.format(shippingCost.toInt())}', valueColor: cs.secondary),
-                  if (platformFee > 0)
-                    _infoRow(cs, _tr( 'commission', 'Commission ya Soko Vibe'), 'TSh ${nf.format(platformFee.toInt())}', valueColor: cs.tertiary),
-                  _infoRow(cs, _tr( 'mongike_fee_label', 'Ada ya Kuchakata'), 'TSh ${nf.format(mongikeFee.toInt())}', valueColor: cs.tertiary),
+                  _infoRow(cs, _tr( 'commission', 'Commission ya Soko Vibe'), 'TSh ${nf.format(platformFee.toInt())}', valueColor: cs.tertiary),
+                  _infoRow(cs, _tr( 'processing_fee', 'Ada ya Kuchakata'), 'TSh ${nf.format(mongikeFee.toInt())}', valueColor: cs.tertiary),
                 ]),
                 const SizedBox(height: 8),
                 _divider(cs),

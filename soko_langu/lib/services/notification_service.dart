@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'api_config.dart';
+import 'local_notification_service.dart';
 
 class NotificationService {
   static const String _key = 'push_notifications_enabled';
@@ -51,7 +52,7 @@ class NotificationService {
       OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
       OneSignal.initialize(ApiConfig.oneSignalAppId);
 
-      final perm = await OneSignal.Notifications.requestPermission(false);
+      final perm = await OneSignal.Notifications.requestPermission(true);
       debugPrint('[OS] permission result: $perm');
 
       final user = _auth.currentUser;
@@ -75,6 +76,40 @@ class NotificationService {
           final type = data['type'] as String? ?? 'general';
 
           debugPrint('[OS] foreground notification: type=$type title=$title');
+
+          event.preventDefault();
+
+          final String channelId;
+          final String? payload;
+          final int id;
+          final String headsUpTitle;
+
+          if (type == 'chat' || type == 'group_chat') {
+            final roomId = data['roomId'] as String? ?? '';
+            channelId = 'chat_messages_v4';
+            id = roomId.hashCode;
+            headsUpTitle = data['senderName'] as String? ?? title;
+            payload = '/chat/$roomId';
+          } else if (type == 'payment' || type == 'order') {
+            final orderId = data['orderId'] as String?;
+            channelId = 'payments_notifications_v4';
+            id = (orderId ?? title).hashCode;
+            headsUpTitle = title;
+            payload = orderId != null ? '/order-detail/$orderId' : null;
+          } else {
+            channelId = 'general_notifications_v4';
+            id = title.hashCode;
+            headsUpTitle = title;
+            payload = null;
+          }
+
+          LocalNotificationService().showHeadsUp(
+            id: id,
+            title: headsUpTitle,
+            body: body,
+            channelId: channelId,
+            payload: payload,
+          );
 
           if (title.isNotEmpty && onForegroundMessage != null) {
             onForegroundMessage!(title, body, type, data);

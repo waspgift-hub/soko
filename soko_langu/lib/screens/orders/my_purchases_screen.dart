@@ -6,7 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import '../../services/api_config.dart';
-import '../../services/mongike_service.dart';
+import '../../services/clickpesa_service.dart';
 import '../../services/sms_notification_service.dart';
 import '../../services/rating_service.dart';
 import '../../extensions/context_tr.dart';
@@ -95,7 +95,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
       final sellerId = d['sellerId'] as String? ?? '';
       final sellerName = d['sellerName'] as String? ?? '';
 
-      final result = await MongikeService.initiateMarketplacePayment(
+      final result = await ClickPesaService.initiateMarketplacePayment(
         productPrice: productPrice,
         productName: productName,
         productId: productId,
@@ -105,9 +105,6 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
         phone: d['buyerPhone'] as String? ?? '',
         buyerId: user.uid,
         deliveryType: 'local',
-        shippingCost: shippingCost,
-        existingTransactionId: txId,
-        productImage: d['productImage'] as String?,
       );
 
       if (result['order_id'] == null) {
@@ -879,6 +876,8 @@ class _OrderGlassCard extends StatelessWidget {
     final price = (data['productPrice'] ?? 0).toDouble();
     final shippingCost = (data['shippingCost'] as num?)?.toDouble();
     final totalAmount = (data['totalAmount'] as num?)?.toDouble() ?? price;
+    final platformFee = (data['platformFee'] as num?)?.toDouble() ?? (price * 0.035);
+    final processingFee = (data['processingFee'] as num?)?.toDouble() ?? 180;
     final paymentMethod = data['paymentMethod'] as String? ?? 'Mongike';
     final sellerName = data['sellerName'] as String? ?? '';
     final sellerId = data['sellerId'] as String? ?? '';
@@ -982,6 +981,8 @@ class _OrderGlassCard extends StatelessWidget {
                     price,
                     shippingCost,
                     totalAmount,
+                    platformFee: platformFee,
+                    processingFee: processingFee,
                   ),
                   if (status == 'delivered' ||
                       status == 'delivery_confirmed' ||
@@ -1432,8 +1433,10 @@ class _OrderGlassCard extends StatelessWidget {
     double price,
     double? shipping,
     double total,
-    String method,
-  ) {
+    String method, {
+    double platformFee = 0,
+    double processingFee = 0,
+  }) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -1448,6 +1451,20 @@ class _OrderGlassCard extends StatelessWidget {
             context.tr('product_price'),
             _nf(price.toInt()),
             cs.onSurface,
+          ),
+          _summaryRow(
+            context,
+            cs,
+            context.tr('processing_fee'),
+            _nf(processingFee.toInt()),
+            cs.tertiary,
+          ),
+          _summaryRow(
+            context,
+            cs,
+            context.tr('soko_vibe_commission'),
+            _nf(platformFee.toInt()),
+            cs.tertiary,
           ),
           if (shipping != null && shipping > 0)
             _summaryRow(
@@ -1517,8 +1534,10 @@ class _OrderGlassCard extends StatelessWidget {
     String status,
     double price,
     double? shipping,
-    double total,
-  ) {
+    double total, {
+    double platformFee = 0,
+    double processingFee = 0,
+  }) {
     final canPay = status == 'awaiting_payment';
     final canConfirm = status == 'delivered' || status == 'dispatched';
     final canDispute =
@@ -1626,6 +1645,8 @@ class _OrderGlassCard extends StatelessWidget {
               shipping,
               total,
               data['paymentMethod'] as String? ?? 'Mongike',
+              platformFee: platformFee,
+              processingFee: processingFee,
             ),
             const SizedBox(height: 12),
           ],
@@ -1714,7 +1735,7 @@ class _OrderGlassCard extends StatelessWidget {
     final productPrice = (data['productPrice'] as num?)?.toDouble() ?? 0;
     final shippingCost = (data['shippingCost'] as num?)?.toDouble() ?? 0;
     final mongikeFee = (data['processingFee'] as num?)?.toDouble() ?? 0;
-    final platformFee = (data['platformFee'] as num?)?.toDouble() ?? 0;
+    final platformFee = (data['platformFee'] as num?)?.toDouble() ?? (productPrice * 0.035);
     final totalAmount =
         (data['totalAmount'] as num?)?.toDouble() ?? productPrice;
     final buyerName = data['buyerName'] as String? ?? '';
@@ -1770,20 +1791,18 @@ class _OrderGlassCard extends StatelessWidget {
                 'TZS ${_nf(shippingCost.toInt())}',
                 valueColor: cs.secondary,
               ),
-            if (platformFee > 0)
-              _receiptRow(
-                cs,
-                context.tr('soko_vibe_commission'),
-                'TZS ${_nf(platformFee.toInt())}',
-                valueColor: cs.tertiary,
-              ),
-            if (mongikeFee > 0)
-              _receiptRow(
-                cs,
-                context.tr('mongike_fee_label'),
-                'TZS ${_nf(mongikeFee.toInt())}',
-                valueColor: cs.tertiary,
-              ),
+            _receiptRow(
+              cs,
+              context.tr('soko_vibe_commission'),
+              'TZS ${_nf(platformFee.toInt())}',
+              valueColor: cs.tertiary,
+            ),
+            _receiptRow(
+              cs,
+              context.tr('processing_fee'),
+              'TZS ${_nf(mongikeFee.toInt())}',
+              valueColor: cs.tertiary,
+            ),
             Divider(
               height: 1,
               color: cs.outlineVariant.withValues(alpha: 0.15),

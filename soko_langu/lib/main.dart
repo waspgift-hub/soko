@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:ui' as ui;
+import 'package:flutter/services.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
@@ -33,6 +34,8 @@ import 'services/groq_service.dart';
 import 'services/localization_service.dart';
 import 'services/local_cache_service.dart';
 import 'services/notification_service.dart';
+import 'services/local_notification_service.dart';
+import 'services/balance_privacy_service.dart';
 import 'services/interstitial_ad_service.dart';
 import 'services/analytics_service.dart';
 import 'services/security_service.dart';
@@ -99,6 +102,15 @@ void main() async {
       await GoogleSignIn.instance.initialize();
     } catch (e) {
       debugPrint('GoogleSignIn: init failed — $e');
+    }
+  }
+
+  // --- Local notifications for heads-up display ---
+  if (!kIsWeb) {
+    try {
+      await LocalNotificationService().initialize();
+    } catch (e) {
+      debugPrint('LocalNotification: init failed — $e');
     }
   }
 
@@ -172,6 +184,7 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
   late final OnboardingService _onboardingService;
   late final AuthNotifier _authNotifier;
   MagicLinkService? _magicLinkService;
+  MethodChannel? _navigateChannel;
 
   // -----------------------------------------------------------------------
   // Lifecycle
@@ -190,6 +203,7 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     themeManager.addListener(_onThemeChange);
     _initApp();
+    _setupNavigateChannel();
   }
 
   @override
@@ -198,7 +212,23 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     themeManager.removeListener(_onThemeChange);
     _productFeedProvider.dispose();
+    _navigateChannel?.setMethodCallHandler(null);
     super.dispose();
+  }
+
+  void _setupNavigateChannel() {
+    if (kIsWeb) return;
+    _navigateChannel = const MethodChannel('soko_lang/navigate');
+    _navigateChannel!.setMethodCallHandler((call) async {
+      if (call.method == 'navigate') {
+        final route = call.arguments as String?;
+        if (route != null && route.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _pushIfNotCurrent(route);
+          });
+        }
+      }
+    });
   }
 
   // -----------------------------------------------------------------------
@@ -295,6 +325,7 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
       final navState = router_lib.rootNavigatorKey.currentState;
       if (navState == null) return;
       final overlay = navState.overlay;
+      if (overlay == null) return;
       InAppNotificationOverlay.show(
         overlay: overlay,
         title: title,
@@ -473,6 +504,7 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
       providers: [
         ChangeNotifierProvider.value(value: _productFeedProvider),
         ChangeNotifierProvider.value(value: themeManager),
+        ChangeNotifierProvider(create: (_) => BalancePrivacyService()),
         Provider.value(value: _authRepository),
         Provider.value(value: _onboardingService),
         ChangeNotifierProvider.value(value: _authNotifier),
