@@ -124,12 +124,7 @@ class _WalletScreenState extends State<WalletScreen> {
   }
 
   void _startDeposit(Map<String, dynamic> method) {
-    final id = method['id'] as String? ?? 'ussd';
-    if (id == 'lipa_namba') {
-      _showLipaNambaSheet();
-    } else {
-      _showUssdDepositDialog();
-    }
+    _showUssdDepositDialog();
   }
 
   void _showUssdDepositDialog() {
@@ -202,152 +197,6 @@ class _WalletScreenState extends State<WalletScreen> {
     });
   }
 
-  void _showLipaNambaSheet() {
-    final amtCtrl = TextEditingController();
-    final phoneCtrl = TextEditingController(text: '255');
-    final formKey = GlobalKey<FormState>();
-    final lipaMethod = _methods.firstWhere(
-      (m) => m['id'] == 'lipa_namba',
-      orElse: () => <String, dynamic>{},
-    );
-    final tillNumber = (lipaMethod['tillNumber'] as String?) ?? '5722554';
-    final tillName = (lipaMethod['tillName'] as String?) ?? 'Soko Vibe Marketplace';
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
-        child: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40, height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(context.tr('deposit_method_lipa'),
-                  style: Theme.of(ctx).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 20),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Theme.of(ctx).colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  children: [
-                    Text(context.tr('till_number'),
-                        style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(ctx).colorScheme.onPrimaryContainer.withValues(alpha: 0.7))),
-                    const SizedBox(height: 8),
-                    SelectableText(
-                      tillNumber,
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 4,
-                        color: Theme.of(ctx).colorScheme.onPrimaryContainer,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(tillName,
-                        style: TextStyle(
-                            fontSize: 13,
-                            color: Theme.of(ctx).colorScheme.onPrimaryContainer)),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.amber.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.info_outline, size: 18, color: Colors.amber.shade800),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        context.tr('lipa_instructions'),
-                        style: TextStyle(fontSize: 12, color: Colors.amber.shade900),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-              TextFormField(
-                controller: amtCtrl,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: context.tr('amount'),
-                  border: const OutlineInputBorder(),
-                  prefixText: 'TZS ',
-                ),
-                validator: (v) {
-                  if (v == null || v.isEmpty) return 'Required';
-                  final n = int.tryParse(v);
-                  if (n == null || n < 100) return 'Minimum TZS 100';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: phoneCtrl,
-                keyboardType: TextInputType.phone,
-                decoration: InputDecoration(
-                  labelText: context.tr('phone'),
-                  border: const OutlineInputBorder(),
-                  hintText: '2557XXXXXXXX',
-                ),
-                validator: (v) {
-                  if (v == null || v.isEmpty) return 'Required';
-                  if (!v.startsWith('255')) return 'Must start with 255';
-                  if (v.length < 10) return 'Too short';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () {
-                    if (formKey.currentState!.validate()) {
-                      Navigator.pop(ctx);
-                      _depositLipaNamba(int.parse(amtCtrl.text), phoneCtrl.text);
-                    }
-                  },
-                  icon: const Icon(Icons.send),
-                  label: Text(context.tr('deposit')),
-                  style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Future<void> _depositUssd(int amount, String phone) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -390,52 +239,6 @@ class _WalletScreenState extends State<WalletScreen> {
       );
     }
     if (mounted) setState(() => _loading = false);
-  }
-
-  Future<void> _depositLipaNamba(int amount, String phone) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    try {
-      final token = await user.getIdToken();
-      final resp = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/wallet/deposit'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'userId': user.uid,
-          'phone': phone,
-          'amount': amount,
-          'method': 'lipa_namba',
-        }),
-      );
-      final data = jsonDecode(resp.body) as Map<String, dynamic>;
-
-      if (!mounted) return;
-      if (resp.statusCode != 200 || data['success'] != true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(data['error'] ?? 'Deposit failed'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-
-      final depositRef = data['depositRef'] as String;
-      final tillNumber = data['tillNumber'] as String? ?? '5722554';
-
-      // Show waiting sheet with auto-detect via Firestore
-      if (!mounted) return;
-      await _showLipaWaitingSheet(depositRef, tillNumber, amount);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-      );
-    }
   }
 
   Future<void> _showLipaWaitingSheet(String depositRef, String tillNumber, int amount) async {
@@ -964,14 +767,12 @@ class _MethodCard extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: id == 'lipa_namba'
-                      ? Colors.green.withValues(alpha: 0.12)
-                      : cs.primary.withValues(alpha: 0.12),
+                  color: cs.primary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
-                  id == 'lipa_namba' ? Icons.phone_iphone : Icons.swap_vert,
-                  color: id == 'lipa_namba' ? Colors.green : cs.primary,
+                  Icons.swap_vert,
+                  color: cs.primary,
                   size: 24,
                 ),
               ),

@@ -122,8 +122,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     switch (id) {
       case 'wallet': return Icons.account_balance_wallet;
       case 'ussd_push': return Icons.phone_android;
-      case 'lipa_namba': return Icons.qr_code_scanner;
-      case 'card': return Icons.credit_card;
       case 'billpay': return Icons.receipt_long;
       default: return Icons.payment;
     }
