@@ -132,12 +132,6 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                     ),
                     const SizedBox(height: 12),
                     _FeeTiersTable(cs: cs, tiers: payoutTiers),
-                    const SizedBox(height: 16),
-                    _SubHeader(cs: cs, text: isEn ? 'TanQR / Lipa Namba Payout' : 'Malipo ya TanQR / Lipa Namba'),
-                    Text(
-                      isEn ? 'Same tiers as Mobile Money Payouts above.' : 'Viwango sawa na Malipo ya Pesa kwa Simu hapo juu.',
-                      style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.6)),
-                    ),
                     const SizedBox(height: 10),
                     _SubHeader(cs: cs, text: isEn ? 'Bank EFT / ACH' : 'Benki EFT / ACH'),
                     _PctRow(cs: cs, label: isEn ? 'Flat fee (0 – 20,000,000 TZS)' : 'Ada isiyobadilika (0 – 20,000,000 TZS)', value: 'TZS 2,360'),
@@ -176,8 +170,7 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                     _FeeRow(cs: cs, label: isEn ? 'Account Creation (100,000 TZS limit)' : 'Ufunguzi wa Akaunti (kiwango 100,000 TZS)', value: 'Free'),
                     _FeeRow(cs: cs, label: isEn ? 'KYC Search and Onboarding' : 'Utafutaji wa KYC', value: 'TZS 25,000'),
                     _FeeRow(cs: cs, label: isEn ? 'M-Pesa Channel Setup' : 'Ufunguzi wa Njia ya M-Pesa', value: 'TZS 250,000'),
-                    _FeeRow(cs: cs, label: isEn ? 'TanQR Channel Setup' : 'Ufunguzi wa Njia ya TanQR', value: 'TZS 250,000'),
-                    _FeeRow(cs: cs, label: isEn ? 'Card Channel Setup' : 'Ufunguzi wa Njia ya Kadi', value: 'TZS 250,000'),
+
                   ],
                 ),
               ),
@@ -266,8 +259,8 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                 ),
                 child: Text(
                   isEn
-                    ? 'Choose any payment method at checkout. Wallet is free (deposit via USSD or Lipa Namba first). USSD Push sends a phone prompt. Lipa Namba, Card, and BillPay are instant.'
-                    : 'Chagua njia yoyote ya malipo wakati wa checkout. Pochi ni bure (weka hela kwanza kwa USSD au Lipa Namba). USSD Push inatuma kidokezo kwenye simu. Lipa Namba, Kadi, na BillPay ni papo hapo.',
+                    ? 'Choose any payment method at checkout. Wallet is free (deposit via USSD first). USSD Push sends a phone prompt. BillPay is instant.'
+                    : 'Chagua njia yoyote ya malipo wakati wa checkout. Pochi ni bure (weka hela kwanza kwa USSD). USSD Push inatuma kidokezo kwenye simu. BillPay ni papo hapo.',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
@@ -536,7 +529,7 @@ final flowNodes = [
 final flowDetails = [
   ('Order is placed • Seller will confirm', ''),
   ('Seller sets shipping cost', ''),
-  ('Buyer pays via Wallet, USSD, Lipa Namba, Card, or BillPay', ''),
+  ('Buyer pays via Wallet, USSD Push, or BillPay', ''),
   ('Funds held securely in escrow', ''),
   ('Seller dispatches via courier', ''),
   ('Buyer confirms receipt', ''),
@@ -546,7 +539,7 @@ final flowDetails = [
 final flowDetailsSW = [
   ('Oda imewekwa • Muuzaji atathibitisha', ''),
   ('Muuzaji anaweka gharama ya usafiri', ''),
-  ('Mnunuzi analipa kwa Pochi, USSD, Lipa Namba, Kadi, au BillPay', ''),
+  ('Mnunuzi analipa kwa Pochi, USSD Push, au BillPay', ''),
   ('Fedha zinalindwa kwenye escrow', ''),
   ('Muuzaji anasafirisha bidhaa', ''),
   ('Mnunuzi anathibitisha upokeaji', ''),

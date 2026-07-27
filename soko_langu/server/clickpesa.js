@@ -126,19 +126,9 @@ function getPayoutFee(amount) {
   return 9890;
 }
 
-/// TanQR / Lipa Namba Payout fee tiers (same as mobile money payout)
-const LIPA_PAYOUT_FEE_TIERS = PAYOUT_FEE_TIERS;
-function getLipaPayoutFee(amount) { return getPayoutFee(amount); }
-
 // =================================================================
 // PERCENTAGE-BASED FEE HELPERS
 // =================================================================
-
-/// TanQR / Lipa Namba collection — 2% charged to merchant
-const LIPA_NANBA_PERCENT = 0.02;
-
-/// Card (Mastercard/Visa/UnionPay) — 4.85% charged to customer
-const CARD_PERCENT = 0.0485;
 
 /// BillPay (M-Pesa, Airtel, Tigo) — 1% charged to organization
 const BILLPAY_PERCENT = 0.01;
@@ -158,14 +148,6 @@ const CRDB_DIRECT_DEBIT_FEE = 2000;
 
 function calcUssdFee(amount) {
   return getUssdPushFee(amount);
-}
-
-function calcLipaNambaFee(amount) {
-  return Math.round(amount * LIPA_NANBA_PERCENT);
-}
-
-function calcCardFee(amount) {
-  return Math.round(amount * CARD_PERCENT);
 }
 
 function calcBillPayFee(amount) {
@@ -231,10 +213,6 @@ function calcGatewayFee(methodId, amount) {
       return 0;
     case 'ussd_push':
       return getUssdPushFee(amount);
-    case 'lipa_namba':
-      return calcLipaNambaFee(amount);
-    case 'card':
-      return calcCardFee(amount);
     case 'billpay':
       return calcBillPayFee(amount);
     default:
@@ -295,10 +273,7 @@ module.exports = {
   // Fee tiers
   USSD_PUSH_FEE_TIERS,
   PAYOUT_FEE_TIERS,
-  LIPA_PAYOUT_FEE_TIERS,
   // Percentage fees
-  LIPA_NANBA_PERCENT,
-  CARD_PERCENT,
   BILLPAY_PERCENT,
   HALOPESA_BILLPAY_PERCENT,
   CRDB_BILLPAY_PERCENT,
@@ -306,10 +281,7 @@ module.exports = {
   // Fee calculators
   getUssdPushFee,
   getPayoutFee,
-  getLipaPayoutFee,
   calcUssdFee,
-  calcLipaNambaFee,
-  calcCardFee,
   calcBillPayFee,
   calcHaloPesaBillPayFee,
   calcCrdbBillPayFee,
