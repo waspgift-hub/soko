@@ -6022,8 +6022,8 @@ app.post('/api/test/ussd-push', async (req, res) => {
   try {
     const { phone } = req.body;
     if (!phone) return res.status(400).json({ error: 'phone is required' });
-    const amount = 500;
-    const testRef = `test_${Date.now().toString(36)}`;
+    const amount = Math.round(req.body.amount) || 10000;
+    const testRef = `test_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
     const baseUrl = process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`;
     const result = await clickpesaCollect({
       amount,
