@@ -20,6 +20,7 @@ class ClickPesaService {
     String? buyerName,
     String deliveryType = 'local',
     String? existingTransactionId,
+    String paymentMethod = 'ussd_push',
   }) async {
     try {
       final url = '${ApiConfig.baseUrl}/api/create-marketplace-payment-link';
@@ -42,6 +43,7 @@ class ClickPesaService {
           'buyerId': buyerId ?? '',
           'buyerName': buyerName ?? '',
           'deliveryType': deliveryType,
+          'paymentMethod': paymentMethod,
           if (existingTransactionId != null) 'existingTransactionId': existingTransactionId,
         }),
       );

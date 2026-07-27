@@ -221,33 +221,39 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                   children: [
                     _SubHeader(cs: cs, text: isEn ? '1. Deposit to Wallet' : '1. Kuweka Hela Kwenye Pochi'),
                     _StepRow(cs: cs, step: isEn
-                      ? 'Go to Wallet → tap "Weka Pesa" → select BillPay → enter amount and phone → tap deposit.'
-                      : 'Nenda Pochi → bonyeza "Weka Pesa" → chagua BillPay → weka kiasi na namba ya simu → bonyeza weka.'),
+                      ? 'Go to Wallet → tap "Weka Pesa" → select BillPay → enter amount → tap deposit.'
+                      : 'Nenda Pochi → bonyeza "Weka Pesa" → chagua BillPay → weka kiasi → bonyeza weka.'),
                     _StepRow(cs: cs, step: isEn
-                      ? 'You will receive a payment request. Open M-Pesa/Airtel/Tigo menu → confirm payment.'
-                      : 'Utapokea ombi la malipo. Fungua menyu ya M-Pesa/Airtel/Tigo → thibitisha malipo.'),
+                      ? 'A BillPay control number (Namba ya Kumbukumbu) will appear on screen. Copy or note it down.'
+                      : 'Namba ya kumbukumbu (control number) itaonekana kwenye skrini. Nakili au iandike.'),
                     _StepRow(cs: cs, step: isEn
-                      ? 'Funds are added to your wallet instantly after confirmation.'
-                      : 'Pesa zinaongezwa kwenye pochi yako mara baada ya kuthibitisha.'),
+                      ? 'Open M-Pesa → Lipa → BillPay → enter the control number → enter amount → enter PIN → Confirm.'
+                      : 'Fungua M-Pesa → Lipa → BillPay → weka namba ya kumbukumbu → weka kiasi → weka PIN → Thibitisha.'),
+                    _StepRow(cs: cs, step: isEn
+                      ? 'Funds are added to your wallet automatically within seconds.'
+                      : 'Pesa zinaongezwa kwenye pochi yako moja kwa moja baada ya sekunde chache.'),
                     const SizedBox(height: 10),
                     _SubHeader(cs: cs, text: isEn ? '2. Pay for a Product (Checkout)' : '2. Kulipa Bidhaa (Checkout)'),
                     _StepRow(cs: cs, step: isEn
                       ? 'During checkout, select BillPay as your payment method.'
                       : 'Wakati wa checkout, chagua BillPay kama njia ya malipo.'),
                     _StepRow(cs: cs, step: isEn
-                      ? 'Enter your phone number and tap "Lipa TZS X". A BillPay request is sent to your phone.'
-                      : 'Weka namba ya simu na bonyeza "Lipa TZS X". Ombi la BillPay linatumwa kwenye simu yako.'),
+                      ? 'Enter your phone number and confirm. A control number will be displayed on screen.'
+                      : 'Weka namba ya simu na thibitisha. Namba ya kumbukumbu itaonekana kwenye skrini.'),
                     _StepRow(cs: cs, step: isEn
-                      ? 'Open M-Pesa/Airtel/Tigo → Lipa → BillPay → confirm the amount → enter PIN → done. Your order is confirmed instantly.'
-                      : 'Fungua M-Pesa/Airtel/Tigo → Lipa → BillPay → thibitisha kiasi → weka PIN → imekamilika. Oda yako inathibitishwa mara moja.'),
+                      ? 'Open M-Pesa → Lipa → BillPay → enter the control number → enter amount → enter PIN. Your order enters escrow automatically.'
+                      : 'Fungua M-Pesa → Lipa → BillPay → weka namba ya kumbukumbu → weka kiasi → weka PIN. Oda yako inaingia escrow moja kwa moja.'),
                     const SizedBox(height: 10),
                     _SubHeader(cs: cs, text: isEn ? '3. Pay for Product Boost' : '3. Kulipa Boost ya Bidhaa'),
                     _StepRow(cs: cs, step: isEn
                       ? 'Go to your product → tap "Boost" → select a tier → choose BillPay as payment method.'
                       : 'Nenda kwenye bidhaa yako → bonyeza "Boost" → chagua kiwango → chagua BillPay kama njia ya malipo.'),
                     _StepRow(cs: cs, step: isEn
-                      ? 'Enter your phone, tap pay → confirm on M-Pesa/Airtel/Tigo menu. Your boost activates immediately after payment.'
-                      : 'Weka namba ya simu, bonyeza lipa → thibitisha kwenye menyu ya M-Pesa/Airtel/Tigo. Boost yako inawashwa mara baada ya malipo.'),
+                      ? 'Enter your phone, tap pay → a BillPay control number is displayed. Pay via M-Pesa BillPay using that number.'
+                      : 'Weka namba ya simu, bonyeza lipa → namba ya kumbukumbu ya BillPay itaonekana. Lipa kwa M-Pesa BillPay ukitumia namba hiyo.'),
+                    _StepRow(cs: cs, step: isEn
+                      ? 'Your boost activates automatically after payment is confirmed.'
+                      : 'Boost yako inawashwa moja kwa moja baada ya malipo kuthibitishwa.'),
                     const SizedBox(height: 10),
                     Container(
                       padding: const EdgeInsets.all(10),
@@ -261,8 +267,8 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                           const SizedBox(width: 8),
                           Expanded(child: Text(
                             isEn
-                              ? 'BillPay fee is only 1% (charged to merchant, not you). Works with M-Pesa, Airtel Money, and Tigo Pesa.'
-                              : 'Ada ya BillPay ni 1% tu (inatozwa kwa biashara, si wewe). Inafanya kazi na M-Pesa, Airtel Money, na Tigo Pesa.',
+                              ? 'BillPay fee is only 1% (charged to merchant, not you). Works with M-Pesa, Airtel Money, and Tigo Pesa. You will receive a control number — pay it manually in M-Pesa.'
+                              : 'Ada ya BillPay ni 1% tu (inatozwa kwa biashara, si wewe). Inafanya kazi na M-Pesa, Airtel Money, na Tigo Pesa. Utapokea namba ya kumbukumbu — lipa kwa M-Pesa mwenyewe.',
                             style: TextStyle(fontSize: 11, color: cs.primary.withValues(alpha: 0.8)),
                           )),
                         ],

@@ -94,6 +94,8 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
       final productId = d['productId'] as String? ?? '';
       final sellerId = d['sellerId'] as String? ?? '';
       final sellerName = d['sellerName'] as String? ?? '';
+      final paymentMethod = d['paymentMethod'] as String? ?? 'ussd_push';
+      final isBillPay = paymentMethod == 'billpay' || paymentMethod == 'BillPay';
 
       final result = await ClickPesaService.initiateMarketplacePayment(
         productPrice: productPrice,
@@ -106,9 +108,10 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
         buyerId: user.uid,
         deliveryType: 'local',
         existingTransactionId: txId,
+        paymentMethod: paymentMethod,
       );
 
-      if (result == null || result['order_id'] == null) {
+      if (result == null || (result['order_id'] == null && result['billPayNumber'] == null)) {
         final errMsg =
             result?['error'] as String? ??
             context.tr('payment_initiation_failed');
@@ -125,34 +128,47 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
       }
 
       if (mounted) {
-        RealtimePaymentBanner.show(
-          context: context,
-          orderId: result!['order_id'] as String,
-          successStatuses: ['escrow_hold', 'paid_escrow_held'],
-          processingTitle: context.tr('processing_payment'),
-          processingSubtitle: context.tr('check_phone_enter_pin'),
-          successTitle: context.tr('payment_successful'),
-          failedTitle: context.tr('payment_failed'),
-          onSuccess: () {
-            if (mounted) {
-              PaymentBanner.show(
-                context: context,
-                type: PaymentBannerType.success,
-                title: context.tr('payment_successful'),
-              );
-              setState(() {});
-            }
-          },
-          onError: (msg) {
-            if (mounted) {
-              PaymentResult.show(
-                context: context,
-                success: false,
-                errorMessage: msg,
-              );
-            }
-          },
-        );
+        if (isBillPay) {
+          final billPayNumber = result!['billPayNumber'] as String? ?? '';
+          final totalAmount = result['totalAmount'] as int? ?? 0;
+          PaymentBanner.show(
+            context: context,
+            type: PaymentBannerType.success,
+            title: 'BillPay Control Number',
+            subtitle: 'Namba: $billPayNumber | Kiasi: TZS $totalAmount',
+            duration: const Duration(seconds: 10),
+          );
+          setState(() {});
+        } else {
+          RealtimePaymentBanner.show(
+            context: context,
+            orderId: result!['order_id'] as String,
+            successStatuses: ['escrow_hold', 'paid_escrow_held'],
+            processingTitle: context.tr('processing_payment'),
+            processingSubtitle: context.tr('check_phone_enter_pin'),
+            successTitle: context.tr('payment_successful'),
+            failedTitle: context.tr('payment_failed'),
+            onSuccess: () {
+              if (mounted) {
+                PaymentBanner.show(
+                  context: context,
+                  type: PaymentBannerType.success,
+                  title: context.tr('payment_successful'),
+                );
+                setState(() {});
+              }
+            },
+            onError: (msg) {
+              if (mounted) {
+                PaymentResult.show(
+                  context: context,
+                  success: false,
+                  errorMessage: msg,
+                );
+              }
+            },
+          );
+        }
       }
     } catch (e) {
       if (mounted) {

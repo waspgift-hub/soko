@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
@@ -619,7 +621,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
         paymentMethod: _selectedMethod,
       );
 
-      if (result == null || result['order_id'] == null) {
+      if (result == null || (result['order_id'] == null && result['billPayNumber'] == null)) {
         final errMsg =
             result?['error'] as String? ??
             context.tr('payment_initiation_failed');
@@ -634,37 +636,44 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
         return;
       }
 
+      final isBillPay = _selectedMethod == 'billpay';
       final orderId = result['order_id'] as String?;
 
-      if (mounted && orderId != null) {
-        RealtimePaymentBanner.show(
-          context: context,
-          orderId: orderId,
-          successStatuses: ['completed'],
-          processingTitle: context.tr('processing_payment'),
-          processingSubtitle: context.tr('check_phone_enter_pin'),
-          successTitle: context.tr('payment_successful'),
-          failedTitle: context.tr('payment_failed'),
-          onSuccess: () {
-            if (mounted) {
-              PaymentBanner.show(
-                context: context,
-                type: PaymentBannerType.success,
-                title: context.tr('payment_successful'),
-              );
-              _onPaymentSuccess();
-            }
-          },
-          onError: (msg) {
-            if (mounted) {
-              PaymentResult.show(
-                context: context,
-                success: false,
-                errorMessage: msg,
-              );
-            }
-          },
-        );
+      if (mounted) {
+        if (isBillPay) {
+          final billPayNumber = result['billPayNumber'] as String? ?? '';
+          final totalAmount = result['totalAmount'] as int? ?? 0;
+          _showBillPayWaitingSheet(orderId!, billPayNumber, totalAmount, _selectedTier!.displayName);
+        } else if (orderId != null) {
+          RealtimePaymentBanner.show(
+            context: context,
+            orderId: orderId,
+            successStatuses: ['completed'],
+            processingTitle: context.tr('processing_payment'),
+            processingSubtitle: context.tr('check_phone_enter_pin'),
+            successTitle: context.tr('payment_successful'),
+            failedTitle: context.tr('payment_failed'),
+            onSuccess: () {
+              if (mounted) {
+                PaymentBanner.show(
+                  context: context,
+                  type: PaymentBannerType.success,
+                  title: context.tr('payment_successful'),
+                );
+                _onPaymentSuccess();
+              }
+            },
+            onError: (msg) {
+              if (mounted) {
+                PaymentResult.show(
+                  context: context,
+                  success: false,
+                  errorMessage: msg,
+                );
+              }
+            },
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -742,6 +751,230 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
             },
             child: Text(context.tr('continue')),
           ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showBillPayWaitingSheet(String orderId, String billPayNumber, int totalAmount, String tierName) async {
+    final completer = Completer<void>();
+
+    await showModalBottomSheet(
+      context: context,
+      isDismissible: false,
+      enableDrag: false,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return PopScope(
+          canPop: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+            child: StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('transactions')
+                  .doc(orderId)
+                  .snapshots(),
+              builder: (ctx, snap) {
+                final status = snap.data?.get('status') as String? ?? 'pending';
+                final isDone = status == 'completed';
+                final isFailed = status == 'failed';
+
+                if (isDone || isFailed) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (ctx.mounted && !completer.isCompleted) {
+                      completer.complete();
+                      Navigator.of(ctx).pop();
+                    }
+                  });
+                }
+
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40, height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    if (isDone)
+                      const Icon(Icons.check_circle, color: Colors.green, size: 64)
+                    else if (isFailed)
+                      const Icon(Icons.cancel, color: Colors.red, size: 64)
+                    else
+                      Container(
+                        width: 64, height: 64,
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.receipt_long, color: Colors.amber, size: 36),
+                      ),
+                    const SizedBox(height: 20),
+                    Text(
+                      isDone
+                          ? 'Boost Payment Successful'
+                          : isFailed
+                              ? 'Payment Failed'
+                              : 'BillPay Payment',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    if (!isDone && !isFailed && billPayNumber.isNotEmpty) ...[
+                      Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 16),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                        ),
+                        child: Column(
+                          children: [
+                            const Text(
+                              'Control Number (Namba ya Kumbukumbu)',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 8),
+                            SelectableText(
+                              billPayNumber,
+                              style: const TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 4,
+                                color: Colors.green,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'TZS ${NumberFormat('#,###', 'en').format(totalAmount)}',
+                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '$tierName Boost',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.6),
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 16),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.info_outline, size: 16, color: Colors.amber),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Payment Instructions',
+                                  style: TextStyle(
+                                    fontSize: 13, fontWeight: FontWeight.w700,
+                                    color: Colors.amber.shade800,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            _bpStep('1', 'Open M-Pesa on your phone'),
+                            _bpStep('2', 'Select "Lipa" then "BillPay"'),
+                            _bpStep('3', 'Enter control number: $billPayNumber'),
+                            _bpStep('4', 'Enter amount: TZS ${NumberFormat('#,###', 'en').format(totalAmount)}'),
+                            _bpStep('5', 'Enter your M-Pesa PIN and confirm'),
+                            const SizedBox(height: 8),
+                            Text(
+                              'The boost will activate automatically after payment.',
+                              style: TextStyle(fontSize: 11, color: Colors.amber.shade700),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      const SizedBox(
+                        width: 28, height: 28,
+                        child: CircularProgressIndicator(strokeWidth: 3),
+                      ),
+                    ],
+                    if (isDone) ...[
+                      const SizedBox(height: 16),
+                      FilledButton(
+                        onPressed: () {
+                          if (!completer.isCompleted) completer.complete();
+                          Navigator.of(ctx).pop();
+                          _onPaymentSuccess();
+                        },
+                        child: const Text('Continue'),
+                      ),
+                    ],
+                    if (isFailed) ...[
+                      const SizedBox(height: 16),
+                      FilledButton(
+                        onPressed: () {
+                          if (!completer.isCompleted) completer.complete();
+                          Navigator.of(ctx).pop();
+                        },
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                    if (!isDone && !isFailed)
+                      TextButton(
+                        onPressed: () {
+                          if (!completer.isCompleted) completer.complete();
+                          Navigator.of(ctx).pop();
+                        },
+                        child: Text(context.tr('cancel')),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+
+    if (!completer.isCompleted) completer.complete();
+  }
+
+  Widget _bpStep(String number, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 20, height: 20,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.green.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Text(number, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.green)),
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text, style: const TextStyle(fontSize: 12))),
         ],
       ),
     );

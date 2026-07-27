@@ -6,6 +6,7 @@ const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
 const {
   clickpesaCollect, clickpesaPayout, clickpesaBalance, clickpesaPayoutPreview,
+  clickpesaCreateBillPayOrder,
   getUssdPushFee, calcGatewayFee, ALL_PAYMENT_METHODS,
 } = require('./clickpesa');
 
@@ -565,51 +566,102 @@ app.post('/api/boost-product', async (req, res) => {
     const gatewayFee = calcGatewayFee(paymentMethod || 'ussd_push', tierConfig.price);
     const totalToCollect = tierConfig.price + gatewayFee;
 
-    const order_id = `boost_${Date.now()}`;
-    const baseUrl = process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`;
-    const callbackUrl = `${baseUrl}/api/clickpesa/webhook`;
+    const order_id = `boost${Date.now()}`;
+    const isBillPay = (paymentMethod || 'ussd_push') === 'billpay';
 
-    const result = await clickpesaCollect({
-      amount: totalToCollect,
-      orderReference: order_id,
-      phoneNumber: phone,
-      callbackUrl,
-    });
+    if (isBillPay) {
+      // ── BillPay flow ──
+      const billResult = await clickpesaCreateBillPayOrder({
+        billAmount: totalToCollect,
+        billDescription: `Soko Vibe boost: ${tier} - ${productName || 'Product'}`,
+        billPaymentMode: 'EXACT',
+        billReference: order_id,
+      });
 
-    const ref = result.id || result.orderReference || '';
+      const billPayNumber = billResult.billPayNumber || billResult.data?.billPayNumber || billResult.billReference || '';
+      const clickpesaRef = billResult.id || billResult.data?.id || billPayNumber || '';
 
-    if (db) {
-      await db.collection('transactions').doc(order_id).set({
-        type: 'boost',
-        productId,
-        productName: productName || '',
-        productImage: productImage || '',
-        productPrice: productPrice || 0,
-        tier: tier.toLowerCase(),
+      if (db) {
+        await db.collection('transactions').doc(order_id).set({
+          type: 'boost',
+          productId,
+          productName: productName || '',
+          productImage: productImage || '',
+          productPrice: productPrice || 0,
+          tier: tier.toLowerCase(),
+          amount: tierConfig.price,
+          gatewayFee,
+          totalAmount: totalToCollect,
+          durationDays: tierConfig.days,
+          userId: userId || '',
+          buyerId: userId || '',
+          buyerName: userId || '',
+          buyerPhone: phone,
+          sellerName: 'Soko Vibe',
+          billPayNumber,
+          clickpesaReference: clickpesaRef,
+          status: 'pending',
+          paymentMethod: 'BillPay',
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+
+      res.json({
+        order_id,
         amount: tierConfig.price,
         gatewayFee,
         totalAmount: totalToCollect,
-        durationDays: tierConfig.days,
-        userId: userId || '',
-        buyerId: userId || '',
-        buyerName: userId || '',
-        buyerPhone: phone,
-        sellerName: 'Soko Vibe',
+        billPayNumber,
+        clickpesaReference: clickpesaRef,
+        message: `BillPay control number: ${billPayNumber}. Jumla TZS ${totalToCollect.toLocaleString()} (Boost TZS ${tierConfig.price.toLocaleString()} + Ada TZS ${gatewayFee.toLocaleString()}). Open M-Pesa > Lipa > BillPay > enter ${billPayNumber} > amount TZS ${totalToCollect.toLocaleString()} > PIN.`,
+      });
+    } else {
+      // ── USSD Push flow ──
+      const baseUrl = process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`;
+      const callbackUrl = `${baseUrl}/api/clickpesa/webhook`;
+
+      const result = await clickpesaCollect({
+        amount: totalToCollect,
+        orderReference: order_id,
+        phoneNumber: phone,
+        callbackUrl,
+      });
+
+      const ref = result.id || result.orderReference || '';
+
+      if (db) {
+        await db.collection('transactions').doc(order_id).set({
+          type: 'boost',
+          productId,
+          productName: productName || '',
+          productImage: productImage || '',
+          productPrice: productPrice || 0,
+          tier: tier.toLowerCase(),
+          amount: tierConfig.price,
+          gatewayFee,
+          totalAmount: totalToCollect,
+          durationDays: tierConfig.days,
+          userId: userId || '',
+          buyerId: userId || '',
+          buyerName: userId || '',
+          buyerPhone: phone,
+          sellerName: 'Soko Vibe',
+          clickpesaReference: ref,
+          status: 'pending',
+          paymentMethod: paymentMethod || 'ussd_push',
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+
+      res.json({
+        order_id,
+        amount: tierConfig.price,
+        gatewayFee,
+        totalAmount: totalToCollect,
         clickpesaReference: ref,
-        status: 'pending',
-        paymentMethod: paymentMethod || 'ussd_push',
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        message: `Jumla TZS ${totalToCollect.toLocaleString()} (Boost TZS ${tierConfig.price.toLocaleString()} + Ada TZS ${gatewayFee.toLocaleString()}). Tuma PIN yako kwenye simu.`,
       });
     }
-
-    res.json({
-      order_id,
-      amount: tierConfig.price,
-      gatewayFee,
-      totalAmount: totalToCollect,
-      clickpesaReference: ref,
-      message: `Jumla TZS ${totalToCollect.toLocaleString()} (Boost TZS ${tierConfig.price.toLocaleString()} + Ada TZS ${gatewayFee.toLocaleString()}). Tuma PIN yako kwenye simu.`,
-    });
   } catch (e) {
     console.error('/api/boost-product error:', e?.message || e);
     const msg = e?.message?.includes('ClickPesa') ? e.message : 'Internal server error';
@@ -2564,7 +2616,7 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
     try { await admin.auth().verifyIdToken(token); } catch (_) { return res.status(403).json({ error: 'Invalid token' }); }
 
-    const { productPrice, productName, productId, sellerId, sellerName, email, phone, buyerId, deliveryType, shippingCost, existingTransactionId } = req.body;
+    const { productPrice, productName, productId, sellerId, sellerName, email, phone, buyerId, deliveryType, shippingCost, existingTransactionId, paymentMethod } = req.body;
     if (!productPrice || !productId || !sellerId || !phone) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
@@ -2593,53 +2645,106 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
     // Use existing transaction ID if provided, otherwise generate new one
     const order_id = existingTransactionId || `p${Date.now().toString(36)}${buyerId ? buyerId.substring(0, 4) : 'x'}`;
 
-    // Include shipping + platform commission + transaction fee in total sent to ClickPesa
+    const isBillPay = (paymentMethod || 'ussd_push') === 'billpay';
+
+    // Include shipping + platform commission + gateway fee in total sent to ClickPesa
     const commission = Math.round(Math.round(productPrice) * PLATFORM_COMMISSION_PERCENT);
-    const processingFee = getUssdPushFee(productPrice);
-    const totalAmount = Math.round(productPrice) + Math.round(shippingCost || 0) + commission + processingFee;
-    const baseUrl = process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`;
-    const callbackUrl = `${baseUrl}/api/clickpesa/webhook`;
+    const gatewayFee = isBillPay ? calcGatewayFee('billpay', productPrice) : getUssdPushFee(productPrice);
+    const totalAmount = Math.round(productPrice) + Math.round(shippingCost || 0) + commission + gatewayFee;
 
-    const result = await clickpesaCollect({
-      amount: totalAmount,
-      orderReference: order_id,
-      phoneNumber: phone,
-      callbackUrl,
-    });
+    if (isBillPay) {
+      // ── BillPay flow: create order control number ──
+      const billResult = await clickpesaCreateBillPayOrder({
+        billAmount: totalAmount,
+        billDescription: `Soko Vibe: ${sanitize(productName || 'Product')}`,
+        billPaymentMode: 'EXACT',
+        billReference: order_id,
+      });
 
-    const ref = result.id || result.orderReference || '';
+      const billPayNumber = billResult.billPayNumber || billResult.data?.billPayNumber || billResult.billReference || '';
+      const clickpesaRef = billResult.id || billResult.data?.id || billPayNumber || '';
 
-    const productImg = req.body.productImage || '';
-    if (db) {
-      await db.collection('transactions').doc(order_id).set({
-        type: 'purchase',
-        productId,
-        productName: sanitize(productName),
-        productImage: productImg,
-        sellerId,
-        sellerName: sanitize(sellerName),
-        buyerPhone: phone,
-        buyerId: buyerId || '',
-        buyerName,
-        productPrice: Math.round(productPrice),
-        shippingCost: Math.round(shippingCost || 0),
-        platformFee: commission,
-        processingFee,
+      const productImg = req.body.productImage || '';
+      if (db) {
+        await db.collection('transactions').doc(order_id).set({
+          type: 'purchase',
+          productId,
+          productName: sanitize(productName),
+          productImage: productImg,
+          sellerId,
+          sellerName: sanitize(sellerName),
+          buyerPhone: phone,
+          buyerId: buyerId || '',
+          buyerName,
+          productPrice: Math.round(productPrice),
+          shippingCost: Math.round(shippingCost || 0),
+          platformFee: commission,
+          gatewayFee,
+          totalAmount,
+          status: 'pending',
+          paymentMethod: 'BillPay',
+          billPayNumber,
+          deliveryType: deliveryType || 'local',
+          autoReleaseDays: deliveryType === 'regional' ? ESCROW_REGIONAL_DAYS : ESCROW_LOCAL_DAYS,
+          clickpesaReference: clickpesaRef,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+
+      res.json({
+        order_id,
+        billPayNumber,
+        gatewayFee,
         totalAmount,
-        status: 'pending',
-        paymentMethod: 'ClickPesa',
-        deliveryType: deliveryType || 'local',
-        autoReleaseDays: deliveryType === 'regional' ? ESCROW_REGIONAL_DAYS : ESCROW_LOCAL_DAYS,
-        clickpesaReference: ref,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      }, { merge: true });
-    }
+        clickpesaReference: clickpesaRef,
+        message: `BillPay control number: ${billPayNumber}. Open M-Pesa > Lipa > BillPay > enter ${billPayNumber} > amount TZS ${totalAmount.toLocaleString()} > PIN.`,
+      });
+    } else {
+      // ── USSD Push flow ──
+      const baseUrl = process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`;
+      const callbackUrl = `${baseUrl}/api/clickpesa/webhook`;
 
-    res.json({
-      order_id,
-      clickpesaReference: ref,
-      message: 'Tuma PIN yako kwenye simu ili kukamilisha malipo.',
-    });
+      const result = await clickpesaCollect({
+        amount: totalAmount,
+        orderReference: order_id,
+        phoneNumber: phone,
+        callbackUrl,
+      });
+
+      const ref = result.id || result.orderReference || '';
+
+      const productImg = req.body.productImage || '';
+      if (db) {
+        await db.collection('transactions').doc(order_id).set({
+          type: 'purchase',
+          productId,
+          productName: sanitize(productName),
+          productImage: productImg,
+          sellerId,
+          sellerName: sanitize(sellerName),
+          buyerPhone: phone,
+          buyerId: buyerId || '',
+          buyerName,
+          productPrice: Math.round(productPrice),
+          shippingCost: Math.round(shippingCost || 0),
+          platformFee: commission,
+          processingFee: gatewayFee,
+          totalAmount,
+          status: 'pending',
+          paymentMethod: 'ClickPesa',
+          deliveryType: deliveryType || 'local',
+          autoReleaseDays: deliveryType === 'regional' ? ESCROW_REGIONAL_DAYS : ESCROW_LOCAL_DAYS,
+          clickpesaReference: ref,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+
+      res.json({
+        order_id,
+        clickpesaReference: ref,
+        message: 'Tuma PIN yako kwenye simu ili kukamilisha malipo.',
+      });
+    }
   } catch (e) {
     console.error('create-marketplace-payment-link error:', e.message);
     const msg = e.message && e.message.includes('payment')
@@ -5926,9 +6031,19 @@ app.get('/api/wallet/deposit/methods', (req, res) => {
     methods: [
       {
         id: 'ussd',
-        name: 'ClickPesa USSD Push',
-        description: 'Receive a USSD push on your phone to confirm payment. Works with M-Pesa, Tigo, Airtel.',
+        name: 'Mobile Money USSD Push',
+        nameSw: 'USSD Push (M-Pesa, Tigo, Airtel)',
+        description: 'Receive a USSD prompt on your phone. Works with M-Pesa, Airtel Money, Tigo, HaloPesa.',
+        descriptionSw: 'Pokea kidokezo cha USSD kwenye simu yako. Inafanya kazi na M-Pesa, Airtel, Tigo, HaloPesa.',
         feeDescription: 'Tiered fee (TZS 54 – 7,960)',
+      },
+      {
+        id: 'billpay',
+        name: 'BillPay (M-Pesa, Airtel, Tigo)',
+        nameSw: 'BillPay (M-Pesa, Airtel, Tigo)',
+        description: 'Pay directly via mobile money BillPay. 1% fee.',
+        descriptionSw: 'Lipa moja kwa moja kwa BillPay. Ada 1%.',
+        feeDescription: '1% fee',
       },
     ],
   });
@@ -5974,43 +6089,87 @@ app.post('/api/wallet/deposit', async (req, res) => {
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const depositRef = `dep${Date.now().toString(36)}${Math.random().toString(36).substring(2, 8)}`;
+    const depMethod = method || 'ussd';
 
-    // USSD push
     if (!phone) {
-      return res.status(400).json({ error: 'phone is required for USSD push' });
+      return res.status(400).json({ error: 'phone is required' });
     }
 
-    const processingFee = getUssdPushFee(amount);
-    const totalCharge = amount + processingFee;
+    if (depMethod === 'billpay') {
+      // ── BillPay flow: create order control number ──
+      const gatewayFee = calcGatewayFee('billpay', Math.round(amount));
+      const totalCharge = Math.round(amount) + gatewayFee;
 
-    await db.collection('deposits').doc(depositRef).set({
-      userId,
-      phone,
-      amount: Math.round(amount),
-      processingFee,
-      totalCharge,
-      status: 'pending',
-      paymentMethod: 'ClickPesa',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+      await db.collection('deposits').doc(depositRef).set({
+        userId,
+        phone,
+        amount: Math.round(amount),
+        gatewayFee,
+        totalCharge,
+        status: 'pending',
+        paymentMethod: 'BillPay',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
 
-    const baseUrl = process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`;
-    const callbackUrl = `${baseUrl}/api/clickpesa/webhook`;
+      const billResult = await clickpesaCreateBillPayOrder({
+        billAmount: totalCharge,
+        billDescription: `Soko Vibe wallet deposit: TZS ${Math.round(amount)}`,
+        billPaymentMode: 'EXACT',
+        billReference: depositRef,
+      });
 
-    const result = await clickpesaCollect({
-      amount: totalCharge,
-      orderReference: depositRef,
-      phoneNumber: phone,
-      callbackUrl,
-    });
+      const billPayNumber = billResult.billPayNumber || billResult.data?.billPayNumber || billResult.billReference || '';
+      const clickpesaRef = billResult.id || billResult.data?.id || billPayNumber || '';
 
-    res.json({
-      success: true,
-      depositRef,
-      method: 'ussd',
-      clickpesaId: result.id,
-      message: `USSD push sent to ${phone}. Total charge: TZS ${totalCharge.toLocaleString()} (amount TZS ${amount.toLocaleString()} + fee TZS ${processingFee.toLocaleString()})`,
-    });
+      await db.collection('deposits').doc(depositRef).update({
+        billPayNumber,
+        clickpesaReference: clickpesaRef,
+      });
+
+      res.json({
+        success: true,
+        depositRef,
+        method: 'billpay',
+        billPayNumber,
+        totalCharge,
+        gatewayFee,
+        clickpesaId: clickpesaRef,
+        message: `BillPay control number: ${billPayNumber}. Total charge: TZS ${totalCharge.toLocaleString()}. Open M-Pesa > Lipa > BillPay > enter ${billPayNumber} > amount TZS ${totalCharge.toLocaleString()} > PIN.`,
+      });
+    } else {
+      // ── USSD Push flow ──
+      const processingFee = getUssdPushFee(amount);
+      const totalCharge = amount + processingFee;
+
+      await db.collection('deposits').doc(depositRef).set({
+        userId,
+        phone,
+        amount: Math.round(amount),
+        processingFee,
+        totalCharge,
+        status: 'pending',
+        paymentMethod: 'ClickPesa',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      const baseUrl = process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`;
+      const callbackUrl = `${baseUrl}/api/clickpesa/webhook`;
+
+      const result = await clickpesaCollect({
+        amount: totalCharge,
+        orderReference: depositRef,
+        phoneNumber: phone,
+        callbackUrl,
+      });
+
+      res.json({
+        success: true,
+        depositRef,
+        method: 'ussd',
+        clickpesaId: result.id,
+        message: `USSD push sent to ${phone}. Total charge: TZS ${totalCharge.toLocaleString()} (amount TZS ${amount.toLocaleString()} + fee TZS ${processingFee.toLocaleString()})`,
+      });
+    }
   } catch (e) {
     console.error('/api/wallet/deposit error:', e);
     res.status(500).json({ error: e.message || 'Deposit failed' });
