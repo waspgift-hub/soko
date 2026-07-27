@@ -13,6 +13,9 @@ import '../../app/routes.dart';
 import '../../widgets/glass_container.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../utils/network_error.dart';
+import '../../services/clickpesa_service.dart';
+import '../../widgets/payment_banner.dart';
+import '../../widgets/payment_result_dialog.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final Product product;
@@ -532,33 +535,38 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           context.go(AppRoutes.myPurchases);
         }
       } else {
-        final orderId = 'q${DateTime.now().millisecondsSinceEpoch.toRadixString(36)}${user.uid.substring(0, 4)}';
+        final email = user.email ?? '';
+        final result = await ClickPesaService.initiateMarketplacePayment(
+          productPrice: _totalPrice.toDouble(),
+          productName: p.name,
+          productId: p.id,
+          sellerId: p.sellerId,
+          sellerName: p.sellerName,
+          email: email,
+          phone: normalizedPhone,
+          buyerId: user.uid,
+          buyerName: user.displayName ?? '',
+          deliveryType: 'local',
+        );
 
-        final totalAmt = _totalPrice + _serviceFee + _gatewayFee;
-        await FirebaseFirestore.instance.collection('transactions').doc(orderId).set({
-          'type': 'purchase',
-          'productId': p.id,
-          'productName': p.name,
-          'productImage': p.images.isNotEmpty ? p.images.first : '',
-          'sellerId': p.sellerId,
-          'sellerName': p.sellerName,
-          'buyerPhone': normalizedPhone,
-          'buyerId': user.uid,
-          'buyerName': user.displayName ?? '',
-          'productPrice': _totalPrice,
-          'processingFee': _gatewayFee,
-          'gatewayFee': _gatewayFee,
-          'serviceFeePercent': _serviceFeePercent,
-          'totalAmount': totalAmt,
-          'paymentMethod': _selectedMethod,
+        if (result == null || result['order_id'] == null) {
+          final errMsg = result?['error'] as String? ?? context.tr('payment_initiation_failed');
+          _showError(errMsg);
+          setState(() => _processing = false);
+          return;
+        }
+
+        final orderId = result['order_id'] as String;
+
+        await FirebaseFirestore.instance.collection('transactions').doc(orderId).update({
           'deliveryAddress': {
             'region': region,
             'district': district,
             'street': street,
             'landmarks': _landmarksCtrl.text.trim(),
           },
-          'status': 'awaiting_shipping_quote',
-          'createdAt': FieldValue.serverTimestamp(),
+          'paymentMethod': _selectedMethod,
+          'buyerPhone': normalizedPhone,
         });
 
         try {
@@ -574,8 +582,27 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
         if (mounted) {
           setState(() => _processing = false);
-          _showSuccess(context.tr('order_submitted_success'));
-          context.go(AppRoutes.myPurchases);
+          RealtimePaymentBanner.show(
+            context: context,
+            orderId: orderId,
+            successStatuses: ['escrow_hold', 'paid_escrow_held'],
+            processingTitle: context.tr('processing_payment'),
+            processingSubtitle: context.tr('check_phone_enter_pin'),
+            successTitle: context.tr('payment_successful'),
+            failedTitle: context.tr('payment_failed'),
+            onSuccess: () {
+              if (mounted) context.go(AppRoutes.myPurchases);
+            },
+            onError: (msg) {
+              if (mounted) {
+                PaymentResult.show(
+                  context: context,
+                  success: false,
+                  errorMessage: msg,
+                );
+              }
+            },
+          );
         }
       }
     } catch (e) {
