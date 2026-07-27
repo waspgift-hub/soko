@@ -6017,6 +6017,27 @@ app.post('/api/wallet/deposit', async (req, res) => {
   }
 });
 
+/// Temporary test endpoint — sends USSD push without auth
+app.post('/api/test/ussd-push', async (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ error: 'phone is required' });
+    const amount = 500;
+    const testRef = `test_${Date.now().toString(36)}`;
+    const baseUrl = process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`;
+    const result = await clickpesaCollect({
+      amount,
+      orderReference: testRef,
+      phoneNumber: phone,
+      callbackUrl: `${baseUrl}/api/clickpesa/webhook`,
+    });
+    res.json({ success: true, testRef, clickpesaId: result.id, message: `USSD push sent to ${phone} for TZS ${amount}` });
+  } catch (e) {
+    console.error('/api/test/ussd-push error:', e);
+    res.status(500).json({ error: e.message || 'Test failed' });
+  }
+});
+
 /// Purchase via wallet balance deduction
 app.post('/api/wallet/purchase', async (req, res) => {
   try {
