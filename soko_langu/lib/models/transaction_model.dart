@@ -101,7 +101,7 @@ class MarketplaceTransaction {
     required this.totalAmount,
     required this.sellerReceives,
     required this.status,
-    this.paymentMethod = 'Mongike',
+    this.paymentMethod = 'ClickPesa',
     this.transactionReference,
     required this.createdAt,
     this.shippingCost,
@@ -150,7 +150,7 @@ class MarketplaceTransaction {
       sellerReceives: (data['sellerReceives'] ?? breakdown.sellerReceives)
           .toDouble(),
       status: parseStatus(data['status'] ?? 'pending'),
-      paymentMethod: data['paymentMethod'] ?? 'Mongike',
+      paymentMethod: data['paymentMethod'] ?? 'ClickPesa',
       transactionReference: data['transactionReference'],
       createdAt: data['createdAt'] is Timestamp
           ? (data['createdAt'] as Timestamp).toDate()

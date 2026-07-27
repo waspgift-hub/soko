@@ -691,7 +691,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         d['transactionId'] as String? ??
         d['mpesaTransactionId'] as String? ??
         '';
-    final paymentMethod = d['paymentMethod'] as String? ?? 'Mongike';
+    final paymentMethod = d['paymentMethod'] as String? ?? 'ClickPesa';
     final sellerName = d['sellerName'] as String? ?? '';
     final sellerId = d['sellerId'] as String? ?? '';
     final buyerName = d['buyerName'] as String? ?? '';

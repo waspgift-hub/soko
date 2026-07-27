@@ -2854,7 +2854,7 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
         const productPrice = tx.productPrice || 0;
         const platformFee = Math.round(productPrice * PLATFORM_COMMISSION_PERCENT);
         const payoutFee = DEFAULT_PAYOUT_FEE;
-        const processingFee = tx.processingFee || tx.mongikeFee || 0;
+        const processingFee = tx.processingFee || tx.clickpesaFee || 0;
         const sellerReceives = productPrice;
         const deliveryType = tx.deliveryType || 'local';
         const autoReleaseDays = tx.autoReleaseDays || (deliveryType === 'regional' ? ESCROW_REGIONAL_DAYS : ESCROW_LOCAL_DAYS);
@@ -3071,7 +3071,7 @@ app.post('/api/retry-payment', async (req, res) => {
       const productPrice = tx.productPrice || 0;
       const platformFee = Math.round(productPrice * PLATFORM_COMMISSION_PERCENT);
       const payoutFee = DEFAULT_PAYOUT_FEE;
-      const processingFee = tx.processingFee || tx.mongikeFee || 0;
+      const processingFee = tx.processingFee || tx.clickpesaFee || 0;
       const sellerReceives = productPrice;
       const deliveryType = tx.deliveryType || 'local';
       const autoReleaseDays = tx.autoReleaseDays || (deliveryType === 'regional' ? ESCROW_REGIONAL_DAYS : ESCROW_LOCAL_DAYS);
