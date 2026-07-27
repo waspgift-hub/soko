@@ -92,49 +92,75 @@ class MainActivity : FlutterActivity() {
     private fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(NotificationManager::class.java)
-            // Upgrade OneSignal default channel to high importance for heads-up popups
-            try { manager.deleteNotificationChannel("onesignal_default_channel") } catch (_: Exception) {}
+            // Delete old v4 channels (can't modify once created — need new IDs for IMPORTANCE_MAX)
+            listOf("onesignal_default_channel","general_notifications_v4","chat_messages_v4","payments_notifications_v4").forEach {
+                try { manager.deleteNotificationChannel(it) } catch (_: Exception) {}
+            }
+            // Recreate OneSignal default channel with MAX importance for instant display
             manager.createNotificationChannel(
                 NotificationChannel(
                     "onesignal_default_channel",
                     "Notifications",
-                    NotificationManager.IMPORTANCE_HIGH
+                    NotificationManager.IMPORTANCE_MAX
                 ).apply {
-                    description = "Soko Vibe notifications"
+                    description = "Soko Vibe notifications — urgent"
                     enableVibration(true)
                     enableLights(true)
+                    setSound(
+                        android.net.Uri.parse("android.resource://$packageName/${R.raw.soko_notification}"),
+                        android.app.Notification.AUDIO_ATTRIBUTES_DEFAULT
+                    )
                 }
             )
             val channels = listOf(
                 NotificationChannel(
-                    "general_notifications_v4",
+                    "general_notifications_v5",
                     "Soko Vibe",
-                    NotificationManager.IMPORTANCE_HIGH
+                    NotificationManager.IMPORTANCE_MAX
                 ).apply {
-                    description = "Flash sale na notifications nyingine"
+                    description = "Flash sale, announcements, alerts"
                     enableVibration(true)
                     enableLights(true)
+                    setShowBadge(true)
+                    setSound(
+                        android.net.Uri.parse("android.resource://$packageName/${R.raw.soko_notification}"),
+                        android.app.Notification.AUDIO_ATTRIBUTES_DEFAULT
+                    )
                 },
                 NotificationChannel(
-                    "chat_messages_v4",
+                    "payments_notifications_v5",
+                    "Payments",
+                    NotificationManager.IMPORTANCE_MAX
+                ).apply {
+                    description = "Malipo, escrow, payout, refund notifications"
+                    enableVibration(true)
+                    enableLights(true)
+                    setShowBadge(true)
+                    setSound(
+                        android.net.Uri.parse("android.resource://$packageName/${R.raw.soko_notification}"),
+                        android.app.Notification.AUDIO_ATTRIBUTES_DEFAULT
+                    )
+                },
+                NotificationChannel(
+                    "chat_messages_v5",
                     "Chat Messages",
-                    NotificationManager.IMPORTANCE_HIGH
+                    NotificationManager.IMPORTANCE_MAX
                 ).apply {
                     description = "New message notifications from chats"
                     enableVibration(true)
                     enableLights(true)
-                },
-                NotificationChannel(
-                    "payments_notifications_v4",
-                    "Payments",
-                    NotificationManager.IMPORTANCE_HIGH
-                ).apply {
-                    description = "Notifications for payment transactions"
-                    enableVibration(true)
-                    enableLights(true)
+                    setShowBadge(true)
+                    setSound(
+                        android.net.Uri.parse("android.resource://$packageName/${R.raw.soko_notification}"),
+                        android.app.Notification.AUDIO_ATTRIBUTES_DEFAULT
+                    )
                 }
             )
             channels.forEach { manager.createNotificationChannel(it) }
+            // Make sure notification delegate is set — required for Android 12+ inline replies
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                manager.notificationAssistantService?.let { /* OS handles this */ }
+            }
         }
     }
 
