@@ -34,8 +34,8 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
   double _availableBalance = 0;
   double _totalProcessed = 0;
   double _totalPayouts = 0;
-  double _mongikeBalance = 0;
-  double _actualMongikeBalance = 0;
+  double _clickpesaBalance = 0;
+  double _actualClickpesaBalance = 0;
   double _totalAdminWithdrawn = 0;
 
   @override
@@ -86,9 +86,9 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
                     (result['totalProcessed'] as num?)?.toDouble() ?? 0;
                 _totalPayouts =
                     (result['totalPaidOut'] as num?)?.toDouble() ?? 0;
-                _actualMongikeBalance =
+                _actualClickpesaBalance =
                     (result['actualMongikeBalance'] as num?)?.toDouble() ?? 0;
-                _mongikeBalance = _actualMongikeBalance > 0 ? _actualMongikeBalance : _availableBalance;
+                _clickpesaBalance = _actualClickpesaBalance > 0 ? _actualClickpesaBalance : _availableBalance;
               });
             if (mounted) setState(() => _loading = false);
             return;
@@ -159,7 +159,7 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
           _availableBalance = available < 0 ? 0 : available;
           _totalProcessed = processed;
           _totalPayouts = payouts + adminPayouts;
-          _mongikeBalance = mongikeBalanceCalc;
+          _clickpesaBalance = mongikeBalanceCalc;
         });
       }
     } catch (_) {}
@@ -228,7 +228,7 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
                 const SizedBox(height: 16),
                 _buildBreakdownCard(cs, nf),
                 const SizedBox(height: 16),
-                _buildMongikeCard(cs, nf),
+                _buildClickpesaCard(cs, nf),
                 const SizedBox(height: 20),
                 _buildWithdrawCard(cs, nf),
                 const SizedBox(height: 20),
@@ -373,9 +373,9 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
     );
   }
 
-  Widget _buildMongikeCard(ColorScheme cs, NumberFormat nf) {
+  Widget _buildClickpesaCard(ColorScheme cs, NumberFormat nf) {
     final hasDiscrepancy =
-        _actualMongikeBalance > 0 && _actualMongikeBalance != _mongikeBalance;
+        _actualClickpesaBalance > 0 && _actualClickpesaBalance != _clickpesaBalance;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -394,7 +394,7 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
             ),
             const Divider(),
             _row(
-              context.tr('total_via_mongike'),
+              context.tr('total_via_clickpesa'),
               _totalProcessed,
               cs.tertiary,
               nf,
@@ -407,16 +407,16 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
             ),
             _row(
               'Salio (Kitabu)',
-              _mongikeBalance,
+              _clickpesaBalance,
               cs.primary,
               nf,
               bold: true,
             ),
-            if (_actualMongikeBalance > 0) ...[
+            if (_actualClickpesaBalance > 0) ...[
               const SizedBox(height: 4),
               _row(
-                'Salio (Mongike)',
-                _actualMongikeBalance,
+                'Salio (ClickPesa)',
+                _actualClickpesaBalance,
                 hasDiscrepancy ? Colors.orange : cs.successGreen,
                 nf,
                 bold: true,
@@ -441,8 +441,8 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          'Mongike wallet: TZS ${nf.format(_actualMongikeBalance.round())}, '
-                          'Kitabu: TZS ${nf.format(_mongikeBalance.round())}',
+                          'ClickPesa wallet: TZS ${nf.format(_actualClickpesaBalance.round())}, '
+                          'Kitabu: TZS ${nf.format(_clickpesaBalance.round())}',
                           style: TextStyle(fontSize: 11, color: Colors.orange),
                         ),
                       ),

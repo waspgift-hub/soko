@@ -18,7 +18,7 @@ class ReceiptPdfService {
     required String productImageUrl,
     required double price,
     required double shippingCost,
-    required double mongikeFee,
+    required double clickpesaFee,
     required double totalAmount,
     required String buyerName,
     required String sellerName,
@@ -68,7 +68,7 @@ class ReceiptPdfService {
       'buyer': {'name': buyerName, 'phone': buyerPhone},
       'payment': {
         'total': totalAmount, 'productPrice': price, 'shippingCost': shippingCost,
-        'commission': platformFee, 'processingFee': mongikeFee, 'sellerReceives': sellerReceives,
+        'commission': platformFee, 'processingFee': clickpesaFee, 'sellerReceives': sellerReceives,
         'method': paymentMethod, 'reference': transactionReference,
       },
       'status': status,
@@ -111,7 +111,7 @@ class ReceiptPdfService {
                 _buildInfoRow(t('Nauli ya Usafirishaji', 'Shipping Cost'), 'TZS ${nf.format(shippingCost.toInt())}', nf),
               if (platformFee > 0)
                 _buildInfoRow(t('Commission ya Soko Vibe', 'Soko Vibe Commission'), 'TZS ${nf.format(platformFee.toInt())}', nf),
-              _buildInfoRow(t('Ada ya Kuchakata', 'Processing Fee'), 'TZS ${nf.format(mongikeFee.toInt())}', nf),
+              _buildInfoRow(t('Ada ya Kuchakata', 'Processing Fee'), 'TZS ${nf.format(clickpesaFee.toInt())}', nf),
               pw.SizedBox(height: 8),
               pw.Container(height: 1, color: _greyColor),
               pw.SizedBox(height: 8),

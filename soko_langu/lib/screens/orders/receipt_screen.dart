@@ -64,8 +64,8 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             final price = (d['productPrice'] ?? 0).toDouble();
             final shippingCost = (d['shippingCost'] as num?)?.toDouble() ?? 0;
             final platformFee = (d['platformFee'] as num?)?.toDouble() ?? (price * 0.035);
-            final mongikeFee = (d['mongikeFee'] as num?)?.toDouble() ?? 180;
-            final totalAmount = (d['totalAmount'] as num?)?.toDouble() ?? (price + shippingCost + platformFee + mongikeFee);
+            final clickpesaFee = (d['clickpesaFee'] as num?)?.toDouble() ?? 180;
+            final totalAmount = (d['totalAmount'] as num?)?.toDouble() ?? (price + shippingCost + platformFee + clickpesaFee);
             final buyerName = d['buyerName'] as String? ?? '';
             final sellerName = d['sellerName'] as String? ?? '';
             final buyerPhone = d['buyerPhone'] as String? ?? '';
@@ -76,7 +76,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             final createdAt = d['createdAt'] is Timestamp ? (d['createdAt'] as Timestamp).toDate() : DateTime.now();
             final txStatus = MarketplaceTransaction.parseStatus(status);
             final productImage = d['productImage'] as String? ?? '';
-            final paymentMethod = d['paymentMethod'] as String? ?? 'Mongike';
+            final paymentMethod = d['paymentMethod'] as String? ?? 'ClickPesa';
             final transactionReference = d['transactionReference'] as String? ?? d['transactionId'] as String?;
             final courierName = d['courierName'] as String?;
             final driverPhone = d['driverPhone'] as String?;
@@ -85,7 +85,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             return SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(16, kToolbarHeight + 20, 16, 32),
               child: _buildReceiptCard(context, cs, d, status, productName, productDescription, productDetails,
-                  price, shippingCost, platformFee, mongikeFee, totalAmount,
+                  price, shippingCost, platformFee, clickpesaFee, totalAmount,
                   buyerName, sellerName, buyerPhone, sellerPhone, sellerLocation,
                   deliveryAddress, dispatchProof, createdAt, txStatus,
                   productImage, paymentMethod, transactionReference,
@@ -100,7 +100,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
   Widget _buildReceiptCard(
     BuildContext context, ColorScheme cs, Map<String, dynamic> d,
     String status, String productName, String productDescription, String productDetails,
-    double price, double shippingCost, double platformFee, double mongikeFee, double totalAmount,
+    double price, double shippingCost, double platformFee, double clickpesaFee, double totalAmount,
     String buyerName, String sellerName, String buyerPhone, String sellerPhone, String sellerLocation,
     Map<String, dynamic>? deliveryAddress, Map<String, dynamic>? dispatchProof,
     DateTime createdAt, TransactionStatus txStatus, String productImage,
@@ -142,7 +142,7 @@ Duka: $sellerLocation$addrStr
 
 MALIPO:
   Bei ya Bidhaa: TSh ${nfLocal.format(price.toInt())}${shippingCost > 0 ? '\n  Nauli: TSh ${nfLocal.format(shippingCost.toInt())}' : ''}${platformFee > 0 ? '\n  Commission ya Soko Vibe: TSh ${nfLocal.format(platformFee.toInt())}' : ''}
-  Ada ya Kuchakata: TSh ${nfLocal.format(mongikeFee.toInt())}
+  Ada ya Kuchakata: TSh ${nfLocal.format(clickpesaFee.toInt())}
   Jumla: TSh ${nfLocal.format(totalAmount.toInt())}
   Muuzaji anapata: TSh ${nfLocal.format(sellerReceives.toInt())}
 
@@ -173,7 +173,7 @@ Shop: $sellerLocation$addrStr
 
 PAYMENT:
   Product Price: TSh ${nfLocal.format(price.toInt())}${shippingCost > 0 ? '\n  Shipping: TSh ${nfLocal.format(shippingCost.toInt())}' : ''}${platformFee > 0 ? '\n  Soko Vibe Commission: TSh ${nfLocal.format(platformFee.toInt())}' : ''}
-  Processing Fee: TSh ${nfLocal.format(mongikeFee.toInt())}
+  Processing Fee: TSh ${nfLocal.format(clickpesaFee.toInt())}
   Total: TSh ${nfLocal.format(totalAmount.toInt())}
   Seller Gets: TSh ${nfLocal.format(sellerReceives.toInt())}
 
@@ -259,7 +259,7 @@ Scan QR code for full receipt
                   if (shippingCost > 0)
                     _infoRow(cs, _tr( 'shipping_cost', 'Nauli ya Usafirishaji'), 'TSh ${nf.format(shippingCost.toInt())}', valueColor: cs.secondary),
                   _infoRow(cs, _tr( 'commission', 'Commission ya Soko Vibe'), 'TSh ${nf.format(platformFee.toInt())}', valueColor: cs.tertiary),
-                  _infoRow(cs, _tr( 'processing_fee', 'Ada ya Kuchakata'), 'TSh ${nf.format(mongikeFee.toInt())}', valueColor: cs.tertiary),
+                  _infoRow(cs, _tr( 'processing_fee', 'Ada ya Kuchakata'), 'TSh ${nf.format(clickpesaFee.toInt())}', valueColor: cs.tertiary),
                 ]),
                 const SizedBox(height: 8),
                 _divider(cs),
@@ -290,7 +290,7 @@ Scan QR code for full receipt
                 _buildQrCode(context, cs, qrData),
                 const SizedBox(height: 20),
                 // Download Button
-                _buildDownloadButton(context, cs, productName, price, shippingCost, platformFee, mongikeFee, sellerReceives,
+                _buildDownloadButton(context, cs, productName, price, shippingCost, platformFee, clickpesaFee, sellerReceives,
                     totalAmount, buyerName, sellerName, buyerPhone, sellerPhone, sellerLocation,
                     deliveryAddress, createdAt, status, productImage, paymentMethod, transactionReference,
                     productDescription, productDetails),
@@ -424,7 +424,7 @@ Scan QR code for full receipt
 
   Widget _buildDownloadButton(
     BuildContext context, ColorScheme cs,
-    String productName, double price, double shippingCost, double platformFee, double mongikeFee, double sellerReceives,
+    String productName, double price, double shippingCost, double platformFee, double clickpesaFee, double sellerReceives,
     double totalAmount, String buyerName, String sellerName, String buyerPhone, String sellerPhone, String sellerLocation,
     Map<String, dynamic>? deliveryAddress, DateTime createdAt, String status, String productImage,
     String paymentMethod, String? transactionReference, String productDescription, String productDetails,
@@ -432,7 +432,7 @@ Scan QR code for full receipt
     return Center(
       child: _ReceiptDownloadButton(
         orderId: widget.orderId, productName: productName, productImageUrl: productImage,
-        price: price, shippingCost: shippingCost, platformFee: platformFee, mongikeFee: mongikeFee,
+        price: price, shippingCost: shippingCost, platformFee: platformFee, clickpesaFee: clickpesaFee,
         sellerReceives: sellerReceives, totalAmount: totalAmount,
         buyerName: buyerName, sellerName: sellerName, buyerPhone: buyerPhone, sellerPhone: sellerPhone,
         sellerLocation: sellerLocation, deliveryAddress: deliveryAddress, createdAt: createdAt,
@@ -556,7 +556,7 @@ Scan QR code for full receipt
 
 class _ReceiptDownloadButton extends StatefulWidget {
   final String orderId, productName, productImageUrl;
-  final double price, shippingCost, platformFee, mongikeFee, sellerReceives, totalAmount;
+  final double price, shippingCost, platformFee, clickpesaFee, sellerReceives, totalAmount;
   final String buyerName, sellerName, buyerPhone, sellerPhone, sellerLocation;
   final Map<String, dynamic>? deliveryAddress;
   final DateTime createdAt;
@@ -566,7 +566,7 @@ class _ReceiptDownloadButton extends StatefulWidget {
 
   const _ReceiptDownloadButton({
     required this.orderId, required this.productName, required this.productImageUrl,
-    required this.price, required this.shippingCost, required this.platformFee, required this.mongikeFee,
+    required this.price, required this.shippingCost, required this.platformFee, required this.clickpesaFee,
     required this.sellerReceives, required this.totalAmount,
     required this.buyerName, required this.sellerName, required this.buyerPhone, required this.sellerPhone,
     required this.sellerLocation, this.deliveryAddress, required this.createdAt, required this.status,
@@ -628,7 +628,7 @@ class _ReceiptDownloadButtonState extends State<_ReceiptDownloadButton> {
       final pdfBytes = await ReceiptPdfService.generate(
         orderId: widget.orderId, productName: widget.productName,
         productImageUrl: widget.productImageUrl, price: widget.price,
-        shippingCost: widget.shippingCost, mongikeFee: widget.mongikeFee,
+        shippingCost: widget.shippingCost, clickpesaFee: widget.clickpesaFee,
         totalAmount: widget.totalAmount, buyerName: widget.buyerName,
         sellerName: widget.sellerName, buyerPhone: widget.buyerPhone,
         sellerPhone: widget.sellerPhone, deliveryAddress: widget.deliveryAddress,
@@ -653,7 +653,7 @@ class _ReceiptDownloadButtonState extends State<_ReceiptDownloadButton> {
       final pdfBytes = await ReceiptPdfService.generate(
         orderId: widget.orderId, productName: widget.productName,
         productImageUrl: widget.productImageUrl, price: widget.price,
-        shippingCost: widget.shippingCost, mongikeFee: widget.mongikeFee,
+        shippingCost: widget.shippingCost, clickpesaFee: widget.clickpesaFee,
         totalAmount: widget.totalAmount, buyerName: widget.buyerName,
         sellerName: widget.sellerName, buyerPhone: widget.buyerPhone,
         sellerPhone: widget.sellerPhone, deliveryAddress: widget.deliveryAddress,

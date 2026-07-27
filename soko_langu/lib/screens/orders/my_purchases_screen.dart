@@ -895,7 +895,7 @@ class _OrderGlassCard extends StatelessWidget {
     final totalAmount = (data['totalAmount'] as num?)?.toDouble() ?? price;
     final platformFee = (data['platformFee'] as num?)?.toDouble() ?? (price * 0.035);
     final processingFee = (data['processingFee'] as num?)?.toDouble() ?? 180;
-    final paymentMethod = data['paymentMethod'] as String? ?? 'Mongike';
+    final paymentMethod = data['paymentMethod'] as String? ?? 'ClickPesa';
     final sellerName = data['sellerName'] as String? ?? '';
     final sellerId = data['sellerId'] as String? ?? '';
     final createdAt = data['createdAt'];
@@ -1661,9 +1661,9 @@ class _OrderGlassCard extends StatelessWidget {
               price,
               shipping,
               total,
-              data['paymentMethod'] as String? ?? 'Mongike',
-              platformFee: platformFee,
-              processingFee: processingFee,
+    data['paymentMethod'] as String? ?? 'ClickPesa',
+    platformFee: platformFee,
+    processingFee: processingFee,
             ),
             const SizedBox(height: 12),
           ],
@@ -1748,10 +1748,10 @@ class _OrderGlassCard extends StatelessWidget {
     String status,
     bool isDark,
   ) {
-    final paymentMethod = data['paymentMethod'] as String? ?? 'Mongike';
+    final paymentMethod = data['paymentMethod'] as String? ?? 'ClickPesa';
     final productPrice = (data['productPrice'] as num?)?.toDouble() ?? 0;
     final shippingCost = (data['shippingCost'] as num?)?.toDouble() ?? 0;
-    final mongikeFee = (data['processingFee'] as num?)?.toDouble() ?? 0;
+    final clickpesaFee = (data['processingFee'] as num?)?.toDouble() ?? 0;
     final platformFee = (data['platformFee'] as num?)?.toDouble() ?? (productPrice * 0.035);
     final totalAmount =
         (data['totalAmount'] as num?)?.toDouble() ?? productPrice;
@@ -1817,7 +1817,7 @@ class _OrderGlassCard extends StatelessWidget {
             _receiptRow(
               cs,
               context.tr('processing_fee'),
-              'TZS ${_nf(mongikeFee.toInt())}',
+              'TZS ${_nf(clickpesaFee.toInt())}',
               valueColor: cs.tertiary,
             ),
             Divider(
