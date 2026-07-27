@@ -2,7 +2,9 @@ import 'package:async/async.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../services/seller_earnings_service.dart';
+import '../../services/balance_privacy_service.dart';
 import '../../models/transaction_model.dart';
 import '../../models/withdrawal_model.dart';
 import '../../extensions/context_tr.dart';
@@ -95,21 +97,37 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                context.tr('inapatikana_kutoa'),
-                style: TextStyle(
-                  color: cs.surface.withValues(alpha: 0.78),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
+              Row(
+                children: [
+                  Text(
+                    context.tr('inapatikana_kutoa'),
+                    style: TextStyle(
+                      color: cs.surface.withValues(alpha: 0.78),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const Spacer(),
+                  Consumer<BalancePrivacyService>(
+                    builder: (ctx, privacy, _) => GestureDetector(
+                      onTap: privacy.toggle,
+                      child: Icon(
+                        privacy.hideBalances ? Icons.visibility_off : Icons.visibility,
+                        color: cs.surface.withValues(alpha: 0.7), size: 20,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 4),
-              Text(
-                'TZS ${nf.format(balance)}',
-                style: TextStyle(
-                  color: cs.surface,
-                  fontSize: 36,
-                  fontWeight: FontWeight.bold,
+              Consumer<BalancePrivacyService>(
+                builder: (ctx, privacy, _) => Text(
+                  privacy.hideBalances ? 'TZS ****' : 'TZS ${nf.format(balance)}',
+                  style: TextStyle(
+                    color: cs.surface,
+                    fontSize: 36,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
@@ -126,12 +144,14 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                             fontSize: 12,
                           ),
                         ),
-                        Text(
-                          'TZS ${nf.format(totalEarned)}',
-                          style: TextStyle(
-                            color: cs.surface,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
+                        Consumer<BalancePrivacyService>(
+                          builder: (ctx, privacy, _) => Text(
+                            privacy.hideBalances ? 'TZS ****' : 'TZS ${nf.format(totalEarned)}',
+                            style: TextStyle(
+                              color: cs.surface,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],
@@ -148,12 +168,14 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                             fontSize: 12,
                           ),
                         ),
-                        Text(
-                          'TZS ${nf.format(withdrawn)}',
-                          style: TextStyle(
-                            color: cs.surface,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
+                        Consumer<BalancePrivacyService>(
+                          builder: (ctx, privacy, _) => Text(
+                            privacy.hideBalances ? 'TZS ****' : 'TZS ${nf.format(withdrawn)}',
+                            style: TextStyle(
+                              color: cs.surface,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],
@@ -283,7 +305,7 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
           const SizedBox(height: 6),
           _feeRow(
             context.tr('processing_fee'),
-            context.tr('mongike_fee_per_transaction'),
+            context.tr('fee_per_transaction'),
             cs,
             nf,
             deduct: true,

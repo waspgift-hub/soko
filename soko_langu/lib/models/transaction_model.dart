@@ -10,12 +10,14 @@ class TransactionFeeBreakdown {
   final double totalAmount;
   final double sellerReceives;
 
+  static const double collectionFee = 180;
+
   TransactionFeeBreakdown({required this.productPrice})
-    : processingFee = 0,
+    : processingFee = collectionFee,
       platformFee = productPrice * platformCommissionPercent,
       payoutFee = 0,
-      totalFees = productPrice * platformCommissionPercent,
-      totalAmount = productPrice + (productPrice * platformCommissionPercent),
+      totalFees = (productPrice * platformCommissionPercent) + collectionFee,
+      totalAmount = productPrice + (productPrice * platformCommissionPercent) + collectionFee,
       sellerReceives = productPrice;
 
   Map<String, dynamic> toMap() => {

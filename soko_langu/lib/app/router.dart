@@ -30,6 +30,7 @@ import '../screens/profile/product_boost_screen.dart';
 import '../screens/profile/help_center_screen.dart';
 import '../screens/profile/about_app_screen.dart';
 import '../screens/profile/order_flow_screen.dart';
+import '../screens/wallet/wallet_screen.dart';
 import '../screens/notification/notification_screen.dart';
 import '../screens/onboarding/account_selection_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
@@ -260,6 +261,10 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.orderFlow,
         pageBuilder: (context, state) => _premiumPage(const OrderFlowScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.wallet,
+        pageBuilder: (context, state) => _premiumPage(const WalletScreen()),
       ),
       GoRoute(
         path: AppRoutes.addProduct,

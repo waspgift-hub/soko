@@ -51,6 +51,7 @@ class AppRoutes {
   static const String sellerAnalytics = '/seller-analytics';
   static const String orderDetail = '/order-detail';
   static const String orderFlow = '/order-flow';
+  static const String wallet = '/wallet';
   static const String sellerOrders = '/seller-orders';
   static const String adminUserDetail = '/admin/user';
   static const String sellerStatement = '/seller-statement';

@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:background="#FF1B5E20">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <TextView
+                android:id="@+id/widget_label_sales"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Sales Today"
+                android:textColor="#88FFFFFF"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/widget_value_sales"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="TZS 0"
+                android:textColor="#FFFFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:layout_marginTop="2dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <TextView
+                android:id="@+id/widget_label_orders"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Pending"
+                android:textColor="#88FFFFFF"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/widget_value_orders"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0"
+                android:textColor="#FFFFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:layout_marginTop="2dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <TextView
+                android:id="@+id/widget_label_balance"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Balance"
+                android:textColor="#88FFFFFF"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/widget_value_balance"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="TZS 0"
+                android:textColor="#FFFFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:layout_marginTop="2dp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#33FFFFFF"
+        android:layout_marginVertical="8dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center">
+
+        <Button
+            android:id="@+id/widget_action_chat"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:layout_margin="2dp"
+            android:text="Chat"
+            android:textSize="12sp"
+            android:textColor="#FFFFFFFF"
+            android:background="#4CAF50"
+            android:gravity="center"
+            android:singleLine="true" />
+
+        <Button
+            android:id="@+id/widget_action_orders"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:layout_margin="2dp"
+            android:text="Orders"
+            android:textSize="12sp"
+            android:textColor="#FFFFFFFF"
+            android:background="#4CAF50"
+            android:gravity="center"
+            android:singleLine="true" />
+
+        <Button
+            android:id="@+id/widget_action_boost"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:layout_margin="2dp"
+            android:text="Boost"
+            android:textSize="12sp"
+            android:textColor="#FFFFFFFF"
+            android:background="#4CAF50"
+            android:gravity="center"
+            android:singleLine="true" />
+    </LinearLayout>
+</LinearLayout>

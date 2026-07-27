@@ -684,8 +684,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     final platformFee =
         (d['platformFee'] as num?)?.toDouble() ??
         (d['sokoLanguCommission'] as num?)?.toDouble() ??
-        0;
-    final processingFee = (d['processingFee'] as num?)?.toDouble() ?? 0;
+        (price * 0.035);
+    final processingFee = (d['processingFee'] as num?)?.toDouble() ?? 180;
     final discount = (d['discount'] as num?)?.toDouble();
     final txId =
         d['transactionId'] as String? ??
@@ -820,18 +820,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
               context.tr('discount'),
               '-TZS ${_nf(discount.toInt())}',
             ),
-          if (platformFee > 0)
-            _tableRow(
-              cs,
-              'Soko Vibe Commission',
-              'TZS ${_nf(platformFee.toInt())}',
-            ),
-          if (processingFee > 0)
-            _tableRow(
-              cs,
-              context.tr('processing_fee'),
-              'TZS ${_nf(processingFee.toInt())}',
-            ),
+          _tableRow(
+            cs,
+            'Soko Vibe Commission',
+            'TZS ${_nf(platformFee.toInt())}',
+          ),
+          _tableRow(
+            cs,
+            context.tr('processing_fee'),
+            'TZS ${_nf(processingFee.toInt())}',
+          ),
           const Divider(height: 20),
           _tableRow(
             cs,
@@ -921,6 +919,68 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   }
 
   Widget _buildQrCode(BuildContext context, ColorScheme cs) {
+    final nf = NumberFormat('#,###', 'en');
+    final productName = d['productName'] as String? ?? '';
+    final price = (d['productPrice'] ?? 0).toDouble();
+    final totalAmount = (d['totalAmount'] as num?)?.toDouble() ?? price;
+    final processingFee = (d['processingFee'] as num?)?.toDouble() ?? 0;
+    final platformFee = (d['platformFee'] as num?)?.toDouble() ??
+        (d['sokoLanguCommission'] as num?)?.toDouble() ?? 0;
+    final sellerReceives = (d['sellerReceives'] as num?)?.toDouble() ?? 0;
+    final shippingCost = (d['shippingCost'] as num?)?.toDouble();
+    final sellerName = d['sellerName'] as String? ?? '';
+    final buyerName = d['buyerName'] as String? ?? '';
+    final buyerPhone = d['buyerPhone'] as String? ?? '';
+    final createdAt = d['createdAt'];
+    final ts = createdAt is Timestamp ? createdAt.toDate() : DateTime.now();
+    final dateStr = '${ts.day}/${ts.month}/${ts.year} ${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}';
+    final addr = d['deliveryAddress'] as Map<String, dynamic>?;
+    final addrStr = addr != null
+        ? '\nAnwani: ${addr['region']}, ${addr['district']}, ${addr['street']}${addr['landmarks'] != null ? ' (${addr['landmarks']})' : ''}'
+        : '';
+
+    final steps = [
+      context.tr('order_placed_step'),
+      context.tr('payment_confirmed_step'),
+      context.tr('seller_processes_step'),
+      context.tr('dispatched_step'),
+      context.tr('delivered_step'),
+      context.tr('completed_step'),
+    ];
+    final statusOrder = {'pending': 0, 'paid_escrow_hold': 1, 'escrow_hold': 1, 'dispatched': 2, 'delivered': 3, 'delivery_confirmed': 4, 'completed': 5};
+    final currentStep = statusOrder[status] ?? 0;
+    final stepsStr = steps.asMap().entries
+        .where((e) => e.key <= currentStep || (e.key == currentStep))
+        .map((e) => '${e.key + 1}. ${e.value}')
+        .join('\n');
+
+    final qrData = '''
+══════════════ SOKO VIBE ══════════════
+            RISITI YA UNUNUZI
+
+Agizo #${widget.docId}
+Tarehe: $dateStr
+
+BIDHAA: $productName
+
+MNUNUZI: $buyerName
+Simu: $buyerPhone
+
+MUUZAJI: $sellerName$addrStr
+
+MALIPO:
+  Bei: TSh ${nf.format(price.toInt())}${shippingCost != null && shippingCost > 0 ? '\n  Nauli: TSh ${nf.format(shippingCost.toInt())}' : ''}${platformFee > 0 ? '\n  Commission: TSh ${nf.format(platformFee.toInt())}' : ''}
+  Ada: TSh ${nf.format(processingFee.toInt())}
+  Jumla: TSh ${nf.format(totalAmount.toInt())}
+  Muuzaji anapata: TSh ${nf.format(sellerReceives.toInt())}
+
+HALI: ${_statusLabel(context)}
+
+HATUA:
+$stepsStr
+══════════════════════════════════════
+''';
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -963,7 +1023,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                 ),
               ),
               child: QrImageView(
-                data: widget.docId,
+                data: qrData,
                 version: QrVersions.auto,
                 size: 120,
                 eyeStyle: QrEyeStyle(

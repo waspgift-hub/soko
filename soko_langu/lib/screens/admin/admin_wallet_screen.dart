@@ -4,8 +4,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
-import '../../services/mongike_service.dart';
+import 'package:provider/provider.dart';
+import '../../services/clickpesa_service.dart';
 import '../../services/api_config.dart';
+import '../../services/balance_privacy_service.dart';
 import '../../utils/phone_utils.dart';
 import '../../theme/app_colors.dart';
 import '../../extensions/context_tr.dart';
@@ -177,9 +179,9 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
 
     setState(() => _withdrawing = true);
     try {
-      final result = await MongikeService.adminWithdraw(
+      final result = await ClickPesaService.adminWithdraw(
         userId: uid,
-        amount: _availableBalance.round().toDouble(),
+        amount: _availableBalance.round(),
         phone: phone,
       );
 
@@ -261,34 +263,59 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
           children: [
             Icon(Icons.account_balance_wallet, color: cs.secondary, size: 56),
             const SizedBox(height: 12),
-            Text(
-              context.tr('jumla_ya_mapato_yote'),
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  context.tr('jumla_ya_mapato_yote'),
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+                ),
+                const SizedBox(width: 8),
+                Consumer<BalancePrivacyService>(
+                  builder: (ctx, privacy, _) => GestureDetector(
+                    onTap: privacy.toggle,
+                    child: Icon(
+                      privacy.hideBalances ? Icons.visibility_off : Icons.visibility,
+                      color: cs.onSurfaceVariant, size: 18,
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 4),
-            Text(
-              '${nf.format(_availableBalance.round())} TZS',
-              style: TextStyle(
-                fontSize: 40,
-                fontWeight: FontWeight.bold,
-                color: cs.secondary,
+            Consumer<BalancePrivacyService>(
+              builder: (ctx, privacy, _) => Text(
+                privacy.hideBalances ? '**** TZS' : '${nf.format(_availableBalance.round())} TZS',
+                style: TextStyle(
+                  fontSize: 40,
+                  fontWeight: FontWeight.bold,
+                  color: cs.secondary,
+                ),
               ),
             ),
             const SizedBox(height: 4),
-            Text(
-              '${context.tr('inapatikana_kutoa')}: ${nf.format(_availableBalance.round())} TZS',
-              style: TextStyle(
-                color: cs.primary,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
+            Consumer<BalancePrivacyService>(
+              builder: (ctx, privacy, _) => Text(
+                privacy.hideBalances
+                    ? '${context.tr('inapatikana_kutoa')}: **** TZS'
+                    : '${context.tr('inapatikana_kutoa')}: ${nf.format(_availableBalance.round())} TZS',
+                style: TextStyle(
+                  color: cs.primary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
             const SizedBox(height: 2),
-            Text(
-              '${context.tr('jumla_ya_mapato_yote')}: ${nf.format(_totalAdminBalance.round())} TZS  |  ${context.tr('imetolewa')}: ${nf.format(_totalAdminWithdrawn.round())} TZS',
-              style: TextStyle(
-                color: cs.onSurfaceVariant.withValues(alpha: 0.6),
-                fontSize: 11,
+            Consumer<BalancePrivacyService>(
+              builder: (ctx, privacy, _) => Text(
+                privacy.hideBalances
+                    ? '${context.tr('jumla_ya_mapato_yote')}: **** TZS  |  ${context.tr('imetolewa')}: **** TZS'
+                    : '${context.tr('jumla_ya_mapato_yote')}: ${nf.format(_totalAdminBalance.round())} TZS  |  ${context.tr('imetolewa')}: ${nf.format(_totalAdminWithdrawn.round())} TZS',
+                style: TextStyle(
+                  color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                  fontSize: 11,
+                ),
               ),
             ),
           ],

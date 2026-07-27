@@ -4,8 +4,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../services/product_service.dart';
 import '../../services/payment_service.dart';
+import '../../services/balance_privacy_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../models/product_model.dart';
 import '../../models/transaction_model.dart';
@@ -16,6 +18,7 @@ import '../../models/flash_sale_model.dart';
 import '../../services/flash_sale_service.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/glass_container.dart';
+import '../../services/widget_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 class SellerDashboardScreen extends StatefulWidget {
@@ -45,6 +48,25 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
         _isAdmin = doc.data()?['isAdmin'] == true;
       });
     }
+  }
+
+  void _updateWidget(List<MarketplaceTransaction> transactions) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    FirebaseFirestore.instance.collection('users').doc(uid).get().then((doc) {
+      final data = doc.data() as Map<String, dynamic>?;
+      final balance = (data?['sellerBalance'] as num? ?? 0);
+      final totalSales = (data?['totalSales'] as num? ?? 0);
+      final nf = NumberFormat('#,###', 'en');
+      final pendingCount = transactions.where(
+        (t) => t.status == TransactionStatus.pending,
+      ).length;
+      WidgetService.updateWidget(
+        sales: 'TZS ${nf.format(totalSales)}',
+        orders: '$pendingCount',
+        balance: 'TZS ${nf.format(balance)}',
+      );
+    }).catchError((_) {});
   }
 
   @override
@@ -93,6 +115,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                     (t) => t.status == TransactionStatus.completed,
                   );
                   final txCount = completedTx.length;
+                  _updateWidget(transactions);
                   return RefreshIndicator(
                     onRefresh: () async => setState(() {}),
                     child: ListView(
@@ -127,15 +150,14 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                           Center(
                             child: Text(context.tr('no_transactions'),
                               style: TextStyle(color: cs.onSurfaceVariant)),
-),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(child: _actionButton(cs, Icons.flash_on, context.tr('unda_flash_sale'), () => context.push(AppRoutes.createFlashSale), cs.trendingOrange)),
-            ],
-            ),
-          ],
-        ],
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(child: _actionButton(cs, Icons.flash_on, context.tr('unda_flash_sale'), () => context.push(AppRoutes.createFlashSale), cs.trendingOrange)),
+                          ],
+                        ),
                       ],
                     ),
                   );
@@ -441,12 +463,25 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                       child: Text(context.tr('seller_earnings'),
                         style: TextStyle(color: cs.surface, fontSize: 17, fontWeight: FontWeight.bold)),
                     ),
+                    Consumer<BalancePrivacyService>(
+                      builder: (ctx, privacy, _) => GestureDetector(
+                        onTap: privacy.toggle,
+                        child: Icon(
+                          privacy.hideBalances ? Icons.visibility_off : Icons.visibility,
+                          color: cs.surface.withValues(alpha: 0.7), size: 20,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
                     Icon(Icons.arrow_forward_ios, color: cs.surface.withValues(alpha: 0.7), size: 16),
                   ],
                 ),
                 const SizedBox(height: 16),
-                Text('TZS ${nf.format(balance)}',
-                  style: TextStyle(color: cs.surface, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: -1)),
+                Consumer<BalancePrivacyService>(
+                  builder: (ctx, privacy, _) => Text(
+                    privacy.hideBalances ? 'TZS ****' : 'TZS ${nf.format(balance)}',
+                    style: TextStyle(color: cs.surface, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: -1)),
+                ),
                 const SizedBox(height: 4),
                 Text(context.tr('seller_earnings_subtitle').replaceFirst('{0}', '$totalSales'),
                   style: TextStyle(color: cs.surface.withValues(alpha: 0.8), fontSize: 13)),

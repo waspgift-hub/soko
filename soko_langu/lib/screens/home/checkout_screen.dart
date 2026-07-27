@@ -1,10 +1,13 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
 import '../../models/product_model.dart';
 import '../../services/flash_sale_service.dart';
 import '../../services/notification_service.dart';
+import '../../services/api_config.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../widgets/glass_container.dart';
@@ -28,18 +31,51 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final _landmarksCtrl = TextEditingController();
   bool _processing = false;
   double? _salePrice;
+  double _walletBalance = 0;
+  bool _walletLoading = true;
+  String _selectedMethod = 'ussd_push';
+  List<Map<String, dynamic>> _methods = [];
+  bool _methodsLoading = true;
 
-  static const double _mongikeFee = 180;
   double get _totalPrice => _salePrice ?? widget.product.price;
   double get _serviceFeePercent => 3.5;
   double get _serviceFee => _totalPrice * _serviceFeePercent / 100;
+
+  double get _gatewayFee {
+    final amt = _totalPrice.round();
+    switch (_selectedMethod) {
+      case 'wallet': return 0;
+      case 'lipa_namba': return (amt * 0.02).round().toDouble();
+      case 'card': return (amt * 0.0485).round().toDouble();
+      case 'billpay': return (amt * 0.01).round().toDouble();
+      default: // ussd_push
+        const tiers = [
+          [500, 899, 54], [900, 1999, 92], [2000, 2999, 124], [3000, 3999, 230],
+          [4000, 4399, 380], [4400, 8999, 580], [9000, 19999, 920], [20000, 39999, 1150],
+          [40000, 49999, 1572], [50000, 95999, 2136], [96000, 199999, 3240],
+          [200000, 299999, 3660], [300000, 399999, 4080], [400000, 499999, 4340],
+          [500000, 599999, 4820], [600000, 799999, 5230], [800000, 999999, 6146],
+          [1000000, 1999999, 7210], [2000000, 3000000, 7960],
+        ];
+        for (final t in tiers) {
+          if (amt >= t[0] && amt <= t[1]) return (t[2] as int).toDouble();
+        }
+        return 7960.0;
+    }
+  }
+
   double get _sellerReceives => _totalPrice;
-  double get _totalWithFee => _totalPrice + _serviceFee + _mongikeFee;
+  double get _totalWithFee => _totalPrice + _serviceFee + _gatewayFee;
+  bool get _walletSufficient => _walletBalance >= _totalWithFee;
+
+  bool get _needsPhone => _selectedMethod == 'ussd_push' || _selectedMethod == 'billpay';
 
   @override
   void initState() {
     super.initState();
     _loadFlashSale();
+    _loadWalletBalance();
+    _loadMethods();
   }
 
   Future<void> _loadFlashSale() async {
@@ -48,6 +84,50 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         .first;
     if (fs != null && mounted) {
       setState(() => _salePrice = fs.salePrice);
+    }
+  }
+
+  Future<void> _loadWalletBalance() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) { setState(() => _walletLoading = false); return; }
+    try {
+      final resp = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/api/wallet/balance/${user.uid}'),
+      );
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        _walletBalance = (data['balance'] as num?)?.toDouble() ?? 0;
+      }
+    } catch (_) {}
+    setState(() => _walletLoading = false);
+  }
+
+  Future<void> _loadMethods() async {
+    try {
+      final resp = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/api/payment-methods'),
+      );
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        _methods = (data['methods'] as List?)
+            ?.map((e) => e as Map<String, dynamic>)
+            .toList() ?? [];
+        if (_methods.isNotEmpty && _methods.any((m) => m['id'] == _selectedMethod) == false) {
+          _selectedMethod = _methods.first['id'] as String? ?? 'ussd_push';
+        }
+      }
+    } catch (_) {}
+    setState(() => _methodsLoading = false);
+  }
+
+  IconData _methodIcon(String id) {
+    switch (id) {
+      case 'wallet': return Icons.account_balance_wallet;
+      case 'ussd_push': return Icons.phone_android;
+      case 'lipa_namba': return Icons.qr_code_scanner;
+      case 'card': return Icons.credit_card;
+      case 'billpay': return Icons.receipt_long;
+      default: return Icons.payment;
     }
   }
 
@@ -127,7 +207,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 const SizedBox(height: 8),
                 Container(height: 1, color: cs.primary.withValues(alpha: 0.1)),
                 const SizedBox(height: 10),
-                _feeRow(cs, context.tr('mongike_fee'), '${_mongikeFee.toInt()} TZS', cs.secondary),
+                _feeRow(cs, context.tr('processing_fee'), '${_gatewayFee.toInt()} TZS', cs.secondary),
                 const SizedBox(height: 10),
                 Container(height: 1, color: cs.primary.withValues(alpha: 0.1)),
                 const SizedBox(height: 10),
@@ -158,7 +238,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       const SizedBox(height: 4),
                       _feeRow(cs, context.tr('service_fee_percent').replaceAll('{0}', '$_serviceFeePercent'), context.formatPrice(_serviceFee), cs.onSurfaceVariant),
                       const SizedBox(height: 4),
-                _feeRow(cs, context.tr('mongike_fee'), '${_mongikeFee.toInt()} TZS', cs.secondary),
+                      _feeRow(cs, context.tr('processing_fee'), '${_gatewayFee.toInt()} TZS', cs.secondary),
                       const SizedBox(height: 6),
                       Container(
                         padding: const EdgeInsets.all(8),
@@ -209,29 +289,91 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ),
           const SizedBox(height: 20),
 
-          // Phone
-          Text(context.tr('phone'), style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14, color: cs.onSurface)),
-          const SizedBox(height: 8),
+          // Payment method selection
+          Text(context.tr('payment_method'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: cs.onSurface)),
+          const SizedBox(height: 12),
           GlassContainer(
             blur: 16,
             opacity: isDark ? 0.08 : 0.05,
-            borderRadius: 14,
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: TextField(
-              controller: _phoneController,
-              keyboardType: TextInputType.phone,
-              decoration: InputDecoration(
-                hintText: context.tr('phone_hint'),
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                prefixIcon: Icon(Icons.phone_android, color: cs.primary, size: 20),
-              ),
-              style: TextStyle(color: cs.onSurface),
-              cursorColor: cs.primary,
-            ),
+            borderRadius: 16,
+            padding: const EdgeInsets.all(16),
+            child: _methodsLoading
+                ? const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(strokeWidth: 2)))
+                : Column(
+                    children: _methods.map((m) {
+                      final id = m['id'] as String? ?? '';
+                      final name = m['name'] as String? ?? id;
+                      final nameSw = m['nameSw'] as String? ?? name;
+                      final selected = _selectedMethod == id;
+                      final feeLabel = m['feeLabel'] as String? ?? '';
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () => setState(() => _selectedMethod = id),
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: selected ? cs.primary : Colors.transparent, width: 1.5),
+                              color: selected ? cs.primary.withValues(alpha: 0.06) : Colors.transparent,
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(_methodIcon(id), color: selected ? cs.primary : cs.onSurfaceVariant, size: 26),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(context.tr(id, nameSw),
+                                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: selected ? cs.primary : cs.onSurface)),
+                                      if (id == 'wallet' && !_walletLoading)
+                                        Text('${context.tr('wallet_balance')}: TZS ${_walletBalance.toStringAsFixed(0)}',
+                                          style: TextStyle(fontSize: 11, color: _walletSufficient ? Colors.green : cs.error)),
+                                      if (feeLabel.isNotEmpty && id != 'wallet')
+                                        Text(feeLabel,
+                                          style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+                                    ],
+                                  ),
+                                ),
+                                Text(selected ? '✓' : '',
+                                  style: TextStyle(color: cs.primary, fontWeight: FontWeight.w700, fontSize: 16)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
+
+          // Phone (only for methods that need it)
+          if (_needsPhone) ...[
+            Text(context.tr('phone'), style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14, color: cs.onSurface)),
+            const SizedBox(height: 8),
+            GlassContainer(
+              blur: 16,
+              opacity: isDark ? 0.08 : 0.05,
+              borderRadius: 14,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: TextField(
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                decoration: InputDecoration(
+                  hintText: context.tr('phone_hint'),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  prefixIcon: Icon(Icons.phone_android, color: cs.primary, size: 20),
+                ),
+                style: TextStyle(color: cs.onSurface),
+                cursorColor: cs.primary,
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
 
           // Info card
           GlassContainer(
@@ -241,11 +383,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             padding: const EdgeInsets.all(14),
             child: Row(
               children: [
-                Icon(Icons.info_outline, color: cs.secondary, size: 20),
+                Icon(_selectedMethod == 'wallet' ? Icons.account_balance_wallet : Icons.info_outline, color: cs.secondary, size: 20),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    context.tr('shipping_info_message'),
+                    _selectedMethod == 'wallet'
+                        ? context.tr('wallet_payment_info')
+                        : 'Ada ya gateway: TZS ${_gatewayFee.toInt()} + Commission ${_serviceFeePercent}% = Jumla TZS ${_totalWithFee.toInt()}',
                     style: TextStyle(color: cs.secondary, fontSize: 13),
                   ),
                 ),
@@ -262,9 +406,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               onPressed: _processing ? null : _submitOrder,
               icon: _processing
                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.send_rounded, size: 20),
-              label: Text(_processing ? context.tr('sending') : context.tr('submit_shipping_request'),
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                  : Icon(_selectedMethod == 'wallet' ? Icons.account_balance_wallet : Icons.send_rounded, size: 20),
+              label: Text(
+                _processing
+                    ? context.tr('sending')
+                    : _selectedMethod == 'wallet'
+                        ? context.tr('pay_with_wallet').replaceAll('{0}', 'TZS ${_totalWithFee.toStringAsFixed(0)}')
+                        : 'Lipa TZS ${_totalWithFee.toInt()}',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: cs.primary,
                 foregroundColor: cs.surface,
@@ -273,6 +422,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
             ),
           ),
+          if (_selectedMethod == 'wallet' && !_walletSufficient && !_walletLoading)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                context.tr('wallet_insufficient'),
+                style: TextStyle(color: cs.error, fontSize: 13),
+                textAlign: TextAlign.center,
+              ),
+            ),
           const SizedBox(height: 12),
           TextButton.icon(
             onPressed: () => context.pop(),
@@ -295,18 +453,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Future<void> _submitOrder() async {
-    final phone = _phoneController.text.trim();
     final region = _regionCtrl.text.trim();
     final district = _districtCtrl.text.trim();
     final street = _streetCtrl.text.trim();
 
-    if (phone.isEmpty) { _showError(context.tr('enter_phone_error')); return; }
-    final phoneDigits = phone.replaceAll(RegExp(r'\D'), '');
-    final normalizedPhone = phoneDigits.startsWith('0')
-        ? '255${phoneDigits.substring(1)}'
-        : phoneDigits.startsWith('255')
-            ? phoneDigits
-            : '255$phoneDigits';
+    String normalizedPhone = '';
+    if (_needsPhone) {
+      final phone = _phoneController.text.trim();
+      if (phone.isEmpty) { _showError(context.tr('enter_phone_error')); return; }
+      final phoneDigits = phone.replaceAll(RegExp(r'\D'), '');
+      normalizedPhone = phoneDigits.startsWith('0')
+          ? '255${phoneDigits.substring(1)}'
+          : phoneDigits.startsWith('255')
+              ? phoneDigits
+              : '255$phoneDigits';
+    }
     if (region.isEmpty || district.isEmpty || street.isEmpty) { _showError(context.tr('fill_full_address_error')); return; }
 
     setState(() => _processing = true);
@@ -318,49 +479,105 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       final activeFs = await FlashSaleService().streamFlashSaleByProductId(p.id).first;
       if (activeFs != null && activeFs.isExpired) { _showError(context.tr('flash_sale_expired')); setState(() => _processing = false); return; }
 
-      final orderId = 'q${DateTime.now().millisecondsSinceEpoch.toRadixString(36)}${user.uid.substring(0, 4)}';
+      if (_selectedMethod == 'wallet') {
+        if (!_walletSufficient) {
+          _showError(context.tr('wallet_insufficient'));
+          setState(() => _processing = false);
+          return;
+        }
 
-      final totalAmt = _totalPrice + _serviceFee + _mongikeFee;
-      await FirebaseFirestore.instance.collection('transactions').doc(orderId).set({
-        'type': 'purchase',
-        'productId': p.id,
-        'productName': p.name,
-        'productImage': p.images.isNotEmpty ? p.images.first : '',
-        'sellerId': p.sellerId,
-        'sellerName': p.sellerName,
-        'buyerPhone': normalizedPhone,
-        'buyerId': user.uid,
-        'buyerName': user.displayName ?? '',
-        'productPrice': _totalPrice,
-        'mongikeFee': _mongikeFee,
-        'serviceFeePercent': _serviceFeePercent,
-        'totalAmount': totalAmt,
-        'deliveryAddress': {
-          'region': region,
-          'district': district,
-          'street': street,
-          'landmarks': _landmarksCtrl.text.trim(),
-        },
-        'status': 'awaiting_shipping_quote',
-        'paymentMethod': 'Mongike',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      try {
-        NotificationService().sendNotification(
-          userId: p.sellerId,
-          title: context.tr('new_order_title'),
-          body: context.tr('new_order_body')
-              .replaceAll('{0}', user.displayName ?? context.tr('customer'))
-              .replaceAll('{1}', p.name),
-          data: {'type': 'order', 'transactionId': orderId},
+        final resp = await http.post(
+          Uri.parse('${ApiConfig.baseUrl}/api/wallet/purchase'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'buyerId': user.uid,
+            'buyerName': user.displayName ?? '',
+            'productId': p.id,
+            'productName': p.name,
+            'productImage': p.images.isNotEmpty ? p.images.first : '',
+            'productPrice': _totalPrice,
+            'sellerId': p.sellerId,
+            'sellerName': p.sellerName,
+            'processingFee': _gatewayFee,
+            'serviceFeePercent': _serviceFeePercent,
+            'totalAmount': _totalWithFee,
+            'region': region,
+            'district': district,
+            'street': street,
+            'landmarks': _landmarksCtrl.text.trim(),
+            'paymentMethod': _selectedMethod,
+          }),
         );
-      } catch (_) {}
 
-      if (mounted) {
-        setState(() => _processing = false);
-        _showSuccess(context.tr('order_submitted_success'));
-        context.go(AppRoutes.myPurchases);
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        if (resp.statusCode != 200 || data['success'] != true) {
+          _showError(data['error'] ?? context.tr('wallet_purchase_failed'));
+          setState(() => _processing = false);
+          return;
+        }
+
+        try {
+          NotificationService().sendNotification(
+            userId: p.sellerId,
+            title: context.tr('new_order_title'),
+            body: context.tr('new_order_body')
+                .replaceAll('{0}', user.displayName ?? context.tr('customer'))
+                .replaceAll('{1}', p.name),
+            data: {'type': 'order', 'transactionId': data['orderId'] ?? ''},
+          );
+        } catch (_) {}
+
+        if (mounted) {
+          setState(() => _processing = false);
+          _showSuccess(context.tr('order_submitted_success'));
+          context.go(AppRoutes.myPurchases);
+        }
+      } else {
+        final orderId = 'q${DateTime.now().millisecondsSinceEpoch.toRadixString(36)}${user.uid.substring(0, 4)}';
+
+        final totalAmt = _totalPrice + _serviceFee + _gatewayFee;
+        await FirebaseFirestore.instance.collection('transactions').doc(orderId).set({
+          'type': 'purchase',
+          'productId': p.id,
+          'productName': p.name,
+          'productImage': p.images.isNotEmpty ? p.images.first : '',
+          'sellerId': p.sellerId,
+          'sellerName': p.sellerName,
+          'buyerPhone': normalizedPhone,
+          'buyerId': user.uid,
+          'buyerName': user.displayName ?? '',
+          'productPrice': _totalPrice,
+          'processingFee': _gatewayFee,
+          'gatewayFee': _gatewayFee,
+          'serviceFeePercent': _serviceFeePercent,
+          'totalAmount': totalAmt,
+          'paymentMethod': _selectedMethod,
+          'deliveryAddress': {
+            'region': region,
+            'district': district,
+            'street': street,
+            'landmarks': _landmarksCtrl.text.trim(),
+          },
+          'status': 'awaiting_shipping_quote',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+
+        try {
+          NotificationService().sendNotification(
+            userId: p.sellerId,
+            title: context.tr('new_order_title'),
+            body: context.tr('new_order_body')
+                .replaceAll('{0}', user.displayName ?? context.tr('customer'))
+                .replaceAll('{1}', p.name),
+            data: {'type': 'order', 'transactionId': orderId},
+          );
+        } catch (_) {}
+
+        if (mounted) {
+          setState(() => _processing = false);
+          _showSuccess(context.tr('order_submitted_success'));
+          context.go(AppRoutes.myPurchases);
+        }
       }
     } catch (e) {
       final friendly = translateError(e);
