@@ -193,9 +193,7 @@ class _ChatPageState extends State<ChatPage> {
         setState(() {
           _confirmedSends.add(tempId);
           _tempToRealId[tempId] = realId;
-          _optimisticMsgs[tempId] = optimistic.copyWith(
-            isDelivered: true,
-          );
+          _optimisticMsgs[tempId] = optimistic.copyWith(isDelivered: true);
         });
       } else {
         setState(() => _failedSends.add(tempId));
@@ -267,24 +265,26 @@ class _ChatPageState extends State<ChatPage> {
 
   /// Remove optimistic messages that are now confirmed by Firestore.
   void _removeConfirmedOptimistics() {
-    _optimisticMsgs.removeWhere((tempId, msg) {
-      if (!_confirmedSends.contains(tempId)) return false;
-      final realId = _tempToRealId[tempId];
-      if (realId != null) {
-        if (_messages.any((m) => m.id == realId)) return true;
-      }
-      final matched = _messages.any((m) =>
-          m.senderId == _uid &&
-          m.content == msg.content &&
-          (m.timestamp.difference(msg.timestamp).inSeconds.abs() < 60));
-      if (matched) return true;
-      return false;
-    });
-    _failedSends.removeWhere((id) {
-      final msg = _optimisticMsgs[id];
-      return msg != null &&
-          DateTime.now().difference(msg.timestamp).inSeconds > 60;
-    });
+    if (_optimisticMsgs.isNotEmpty) {
+      _optimisticMsgs.removeWhere((tempId, msg) {
+        // Match by real ID mapping
+        final realId = _tempToRealId[tempId];
+        if (realId != null && _messages.any((m) => m.id == realId)) return true;
+        if (!_confirmedSends.contains(tempId)) return false;
+        // Match by content + timestamp proximity
+        final matched = _messages.any((m) =>
+            m.senderId == _uid &&
+            m.content == msg.content &&
+            (m.timestamp.difference(msg.timestamp).inSeconds.abs() < 60));
+        if (matched) return true;
+        return false;
+      });
+      _failedSends.removeWhere((id) {
+        final msg = _optimisticMsgs[id];
+        return msg != null &&
+            DateTime.now().difference(msg.timestamp).inSeconds > 60;
+      });
+    }
   }
 
   /// Merge Firestore messages with optimistic messages, sorted by timestamp.
