@@ -105,6 +105,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
         phone: d['buyerPhone'] as String? ?? '',
         buyerId: user.uid,
         deliveryType: 'local',
+        existingTransactionId: txId,
       );
 
       if (result == null || result['order_id'] == null) {

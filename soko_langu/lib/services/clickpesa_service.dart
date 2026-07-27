@@ -19,13 +19,18 @@ class ClickPesaService {
     String? buyerId,
     String? buyerName,
     String deliveryType = 'local',
+    String? existingTransactionId,
   }) async {
     try {
       final url = '${ApiConfig.baseUrl}/api/create-marketplace-payment-link';
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
       debugPrint('ClickPesa: POST $url');
       final resp = await http.post(
         Uri.parse(url),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
         body: jsonEncode({
           'productPrice': productPrice,
           'productName': productName,
@@ -37,6 +42,7 @@ class ClickPesaService {
           'buyerId': buyerId ?? '',
           'buyerName': buyerName ?? '',
           'deliveryType': deliveryType,
+          if (existingTransactionId != null) 'existingTransactionId': existingTransactionId,
         }),
       );
 
