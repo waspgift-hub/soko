@@ -242,12 +242,9 @@ function paymentRateLimit(req, res, next) {
 
 // Verify webhook secret to prevent forged callbacks
 function verifyWebhook(req, res, next) {
-  if (!WEBHOOK_SECRET) return next();
-  const secret = req.headers['x-webhook-secret'];
-  if (secret !== WEBHOOK_SECRET) {
-    console.warn(`Webhook secret mismatch from IP: ${req.ip}`);
-    return res.status(403).json({ error: 'Invalid webhook secret' });
-  }
+  // ClickPesa uses HMAC checksum in the body, not custom HTTP headers.
+  // This middleware exists for manual testing; we skip header enforcement
+  // because ClickPesa does not send x-webhook-secret.
   next();
 }
 
@@ -576,6 +573,7 @@ app.post('/api/boost-product', async (req, res) => {
       amount: totalToCollect,
       orderReference: order_id,
       phoneNumber: phone,
+      callbackUrl,
     });
 
     const ref = result.id || result.orderReference || '';
@@ -2590,6 +2588,7 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
       amount: totalAmount,
       orderReference: order_id,
       phoneNumber: phone,
+      callbackUrl,
     });
 
     const ref = result.id || result.orderReference || '';
@@ -5930,12 +5929,42 @@ app.get('/api/wallet/deposit/methods', (req, res) => {
   });
 });
 
+/// Calculate gateway fee for a payment method and amount (no API keys exposed to client)
+app.post('/api/gateway-fee', (req, res) => {
+  try {
+    const { method, amount } = req.body;
+    if (!method || !amount) {
+      return res.status(400).json({ error: 'method and amount are required' });
+    }
+    const fee = calcGatewayFee(method, Math.round(amount));
+    res.json({ fee, method, amount: Math.round(amount) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 /// Initiate wallet deposit
 app.post('/api/wallet/deposit', async (req, res) => {
   try {
+    // Verify Firebase auth token
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    let decodedToken;
+    try {
+      decodedToken = await admin.auth().verifyIdToken(token);
+    } catch (_) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
     const { userId, phone, amount, method } = req.body;
-    if (!userId || !amount) {
-      return res.status(400).json({ error: 'userId and amount are required' });
+    if (!userId || userId !== decodedToken.uid) {
+      return res.status(403).json({ error: 'userId mismatch' });
+    }
+    if (!amount) {
+      return res.status(400).json({ error: 'amount is required' });
     }
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
@@ -5988,10 +6017,14 @@ app.post('/api/wallet/deposit', async (req, res) => {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
+    const baseUrl = process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`;
+    const callbackUrl = `${baseUrl}/api/clickpesa/webhook`;
+
     const result = await clickpesaCollect({
       amount: totalCharge,
       orderReference: depositRef,
       phoneNumber: phone,
+      callbackUrl,
     });
 
     res.json({

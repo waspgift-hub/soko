@@ -6,37 +6,6 @@ import 'api_config.dart';
 import '../utils/network_error.dart';
 
 class ClickPesaService {
-  static const List<Map<String, int>> _ussdPushFeeTiers = [
-    { 'min': 500, 'max': 999, 'fee': 54 },
-    { 'min': 1000, 'max': 1999, 'fee': 92 },
-    { 'min': 2000, 'max': 2999, 'fee': 124 },
-    { 'min': 3000, 'max': 3999, 'fee': 230 },
-    { 'min': 4000, 'max': 4999, 'fee': 380 },
-    { 'min': 5000, 'max': 9999, 'fee': 580 },
-    { 'min': 10000, 'max': 19999, 'fee': 920 },
-    { 'min': 20000, 'max': 39999, 'fee': 1150 },
-    { 'min': 40000, 'max': 49999, 'fee': 1572 },
-    { 'min': 50000, 'max': 99999, 'fee': 2136 },
-    { 'min': 100000, 'max': 199999, 'fee': 3240 },
-    { 'min': 200000, 'max': 299999, 'fee': 3660 },
-    { 'min': 300000, 'max': 399999, 'fee': 4080 },
-    { 'min': 400000, 'max': 499999, 'fee': 4340 },
-    { 'min': 500000, 'max': 599999, 'fee': 4820 },
-    { 'min': 600000, 'max': 799999, 'fee': 5230 },
-    { 'min': 800000, 'max': 999999, 'fee': 6146 },
-    { 'min': 1000000, 'max': 1999999, 'fee': 7210 },
-    { 'min': 2000000, 'max': 3000000, 'fee': 7960 },
-  ];
-
-  static int getUssdPushFee(int amount) {
-    for (final tier in _ussdPushFeeTiers) {
-      if (amount >= tier['min']! && amount <= tier['max']!) {
-        return tier['fee']!;
-      }
-    }
-    return 7960;
-  }
-
   // ─── Payin (Collection) ───
 
   static Future<Map<String, dynamic>?> initiateMarketplacePayment({
