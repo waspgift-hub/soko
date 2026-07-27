@@ -265,19 +265,15 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
-  /// Remove optimistic messages that are now confirmed by Firestore.
   void _removeConfirmedOptimistics() {
+    if (_optimisticMsgs.isEmpty) return;
     _optimisticMsgs.removeWhere((tempId, msg) {
-      if (!_confirmedSends.contains(tempId)) return false;
       final realId = _tempToRealId[tempId];
-      if (realId != null) {
-        if (_messages.any((m) => m.id == realId)) return true;
-      }
-      final matched = _messages.any((m) =>
-          m.senderId == _uid &&
+      if (realId != null && _messages.any((m) => m.id == realId)) return true;
+      if (_messages.any((m) =>
+          m.senderId == msg.senderId &&
           m.content == msg.content &&
-          (m.timestamp.difference(msg.timestamp).inSeconds.abs() < 60));
-      if (matched) return true;
+          (m.timestamp.difference(msg.timestamp).inSeconds.abs() < 60))) return true;
       return false;
     });
     _failedSends.removeWhere((id) {

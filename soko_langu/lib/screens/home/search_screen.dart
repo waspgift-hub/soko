@@ -39,6 +39,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   StreamSubscription<List<Product>>? _liveSearchSub;
   List<Product> _liveResults = [];
+  bool _liveSearched = false;
   Timer? _debounce;
 
   @override
@@ -85,6 +86,7 @@ class _SearchScreenState extends State<SearchScreen> {
     if (query.isEmpty) {
       _liveSearchSub?.cancel();
       _liveSearchSub = null;
+      _liveSearched = false;
       if (mounted) setState(() => _liveResults = []);
       return;
     }
@@ -95,12 +97,16 @@ class _SearchScreenState extends State<SearchScreen> {
 
   void _startLiveSearch(String query) {
     _liveSearchSub?.cancel();
+    _liveSearched = false;
     _liveSearchSub = _productService.searchByNameStream(query).listen(
       (results) {
-        if (mounted) setState(() => _liveResults = results);
+        if (mounted) setState(() {
+          _liveResults = results;
+          _liveSearched = true;
+        });
       },
       onError: (_) {
-        if (mounted) setState(() {});
+        if (mounted) setState(() => _liveSearched = true);
       },
     );
   }
@@ -122,6 +128,7 @@ class _SearchScreenState extends State<SearchScreen> {
       _error = false;
       _hasSearched = true;
       _liveResults = [];
+      _liveSearched = false;
     });
 
     List<Product>? products;
@@ -151,6 +158,7 @@ class _SearchScreenState extends State<SearchScreen> {
     _liveSearchSub?.cancel();
     _liveSearchSub = null;
     _liveResults = [];
+    _liveSearched = false;
     _loadHistory();
     setState(() {
       _hasSearched = false;
@@ -236,8 +244,13 @@ class _SearchScreenState extends State<SearchScreen> {
       return _buildLiveResults();
     }
 
-    // Show "searching" indicator while debounce is pending
-    if (query.isNotEmpty && _liveResults.isEmpty && _liveSearchSub != null) {
+    // Show "no results" if live search completed with empty results
+    if (query.isNotEmpty && _liveSearched && _liveResults.isEmpty) {
+      return _buildEmptyState();
+    }
+
+    // Show "searching" indicator while query is running
+    if (query.isNotEmpty && !_liveSearched && _liveSearchSub != null) {
       return _buildSearchingState();
     }
 
