@@ -207,10 +207,10 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
               ),
               const SizedBox(height: 20),
 
-              // ── Example Calculation ──
+              // ── How to Use BillPay ──
               _SectionHeader(
-                icon: Icons.calculate_outlined,
-                title: isEn ? 'Example: TZS 100,000 via USSD Push' : 'Mfano: TZS 100,000 kwa USSD Push',
+                icon: Icons.receipt_long_outlined,
+                title: isEn ? 'How to Use BillPay' : 'Jinsi ya Kutumia BillPay',
                 cs: cs,
               ),
               const SizedBox(height: 8),
@@ -219,16 +219,84 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    _SubHeader(cs: cs, text: isEn ? '1. Deposit to Wallet' : '1. Kuweka Hela Kwenye Pochi'),
+                    _StepRow(cs: cs, step: isEn
+                      ? 'Go to Wallet → tap "Weka Pesa" → select BillPay → enter amount and phone → tap deposit.'
+                      : 'Nenda Pochi → bonyeza "Weka Pesa" → chagua BillPay → weka kiasi na namba ya simu → bonyeza weka.'),
+                    _StepRow(cs: cs, step: isEn
+                      ? 'You will receive a payment request. Open M-Pesa/Airtel/Tigo menu → confirm payment.'
+                      : 'Utapokea ombi la malipo. Fungua menyu ya M-Pesa/Airtel/Tigo → thibitisha malipo.'),
+                    _StepRow(cs: cs, step: isEn
+                      ? 'Funds are added to your wallet instantly after confirmation.'
+                      : 'Pesa zinaongezwa kwenye pochi yako mara baada ya kuthibitisha.'),
+                    const SizedBox(height: 10),
+                    _SubHeader(cs: cs, text: isEn ? '2. Pay for a Product (Checkout)' : '2. Kulipa Bidhaa (Checkout)'),
+                    _StepRow(cs: cs, step: isEn
+                      ? 'During checkout, select BillPay as your payment method.'
+                      : 'Wakati wa checkout, chagua BillPay kama njia ya malipo.'),
+                    _StepRow(cs: cs, step: isEn
+                      ? 'Enter your phone number and tap "Lipa TZS X". A BillPay request is sent to your phone.'
+                      : 'Weka namba ya simu na bonyeza "Lipa TZS X". Ombi la BillPay linatumwa kwenye simu yako.'),
+                    _StepRow(cs: cs, step: isEn
+                      ? 'Open M-Pesa/Airtel/Tigo → Lipa → BillPay → confirm the amount → enter PIN → done. Your order is confirmed instantly.'
+                      : 'Fungua M-Pesa/Airtel/Tigo → Lipa → BillPay → thibitisha kiasi → weka PIN → imekamilika. Oda yako inathibitishwa mara moja.'),
+                    const SizedBox(height: 10),
+                    _SubHeader(cs: cs, text: isEn ? '3. Pay for Product Boost' : '3. Kulipa Boost ya Bidhaa'),
+                    _StepRow(cs: cs, step: isEn
+                      ? 'Go to your product → tap "Boost" → select a tier → choose BillPay as payment method.'
+                      : 'Nenda kwenye bidhaa yako → bonyeza "Boost" → chagua kiwango → chagua BillPay kama njia ya malipo.'),
+                    _StepRow(cs: cs, step: isEn
+                      ? 'Enter your phone, tap pay → confirm on M-Pesa/Airtel/Tigo menu. Your boost activates immediately after payment.'
+                      : 'Weka namba ya simu, bonyeza lipa → thibitisha kwenye menyu ya M-Pesa/Airtel/Tigo. Boost yako inawashwa mara baada ya malipo.'),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: cs.primary.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline, size: 16, color: cs.primary),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(
+                            isEn
+                              ? 'BillPay fee is only 1% (charged to merchant, not you). Works with M-Pesa, Airtel Money, and Tigo Pesa.'
+                              : 'Ada ya BillPay ni 1% tu (inatozwa kwa biashara, si wewe). Inafanya kazi na M-Pesa, Airtel Money, na Tigo Pesa.',
+                            style: TextStyle(fontSize: 11, color: cs.primary.withValues(alpha: 0.8)),
+                          )),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // ── Example Calculation ──
+              _SectionHeader(
+                icon: Icons.calculate_outlined,
+                title: isEn ? 'Examples: TZS 100,000 via USSD Push & BillPay' : 'Mifano: TZS 100,000 kwa USSD Push na BillPay',
+                cs: cs,
+              ),
+              const SizedBox(height: 8),
+              // USSD Push example
+              _InfoCard(
+                cs: cs,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _SubHeader(cs: cs, text: isEn ? 'USSD Push' : 'USSD Push'),
                     _CalcRow(cs: cs,
                       label: isEn ? 'Product Price' : 'Bei ya Bidhaa',
                       value: 'TZS 100,000'),
                     _CalcRow(cs: cs,
-                      label: isEn ? 'ClickPesa Gateway Fee' : 'Ada ya ClickPesa',
+                      label: isEn ? 'ClickPesa Gateway Fee (tiered)' : 'Ada ya ClickPesa (kwa viwango)',
                       value: 'TZS 3,240'),
                     _CalcRow(cs: cs,
                       label: isEn ? 'Soko Vibe Commission (3.5%)' : 'Ada ya Soko Vibe (3.5%)',
                       value: 'TZS 3,500'),
-                    const Divider(height: 24),
+                    const Divider(height: 20),
                     _CalcRow(cs: cs,
                       label: isEn ? 'Total Buyer Pays' : 'Jumla Mnunuzi Analipa',
                       value: 'TZS 106,740',
@@ -240,10 +308,35 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                       value: 'TZS 96,500',
                       bold: true,
                       color: cs.tertiary),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 4),
                     _CalcRow(cs: cs,
                       label: isEn ? 'Payout Fee (estimated)' : 'Ada ya Kutoa (makadirio)',
                       value: 'TZS 1,868 – 9,890'),
+                    const SizedBox(height: 16),
+                    const Divider(height: 20),
+                    // BillPay example
+                    _SubHeader(cs: cs, text: isEn ? 'BillPay (1% fee)' : 'BillPay (ada 1%)'),
+                    _CalcRow(cs: cs,
+                      label: isEn ? 'Product Price' : 'Bei ya Bidhaa',
+                      value: 'TZS 100,000'),
+                    _CalcRow(cs: cs,
+                      label: isEn ? 'ClickPesa Gateway Fee (1%)' : 'Ada ya ClickPesa (1%)',
+                      value: 'TZS 1,000'),
+                    _CalcRow(cs: cs,
+                      label: isEn ? 'Soko Vibe Commission (3.5%)' : 'Ada ya Soko Vibe (3.5%)',
+                      value: 'TZS 3,500'),
+                    const Divider(height: 20),
+                    _CalcRow(cs: cs,
+                      label: isEn ? 'Total Buyer Pays' : 'Jumla Mnunuzi Analipa',
+                      value: 'TZS 104,500',
+                      bold: true,
+                      color: cs.primary),
+                    const SizedBox(height: 8),
+                    _CalcRow(cs: cs,
+                      label: isEn ? 'Seller Receives (before payout fee)' : 'Muuzaji Anapata (kabla ya ada ya kutoa)',
+                      value: 'TZS 96,500',
+                      bold: true,
+                      color: cs.tertiary),
                   ],
                 ),
               ),
@@ -395,6 +488,32 @@ class _FeeRow extends StatelessWidget {
             child: Text(label, style: TextStyle(fontSize: 11, color: cs.onSurface.withValues(alpha: 0.6))),
           ),
           Text(value, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.onSurface.withValues(alpha: 0.7))),
+        ],
+      ),
+    );
+  }
+}
+
+class _StepRow extends StatelessWidget {
+  final ColorScheme cs;
+  final String step;
+  const _StepRow({required this.cs, required this.step});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6, left: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Icon(Icons.arrow_forward_ios, size: 8, color: cs.primary.withValues(alpha: 0.5)),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(step, style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.75), height: 1.4)),
+          ),
         ],
       ),
     );
