@@ -245,10 +245,14 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
       AppLockService.instance.onBackground();
       _sessionTimer?.cancel();
     } else if (state == AppLifecycleState.resumed) {
-      AppLockService.instance.onResume();
-      _trackSession();
-      if (mounted) setState(() {});
+      WidgetsBinding.instance.addPostFrameCallback((_) => _onResume());
     }
+  }
+
+  Future<void> _onResume() async {
+    await AppLockService.instance.onResume();
+    _trackSession();
+    if (mounted) setState(() {});
   }
 
   void _trackSession() {
@@ -525,7 +529,7 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
   /// reused without unnecessary allocations.
   Widget _appBuilder(BuildContext context, Widget? child) {
     Responsive.init(context);
-    Widget content = child!;
+    Widget content = child ?? const SizedBox();
 
     // Web desktop constraint
     if (kIsWeb && Responsive.isDesktop) {
