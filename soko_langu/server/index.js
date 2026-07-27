@@ -525,7 +525,7 @@ app.post('/api/boost-product', async (req, res) => {
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
     try { await admin.auth().verifyIdToken(token); } catch (_) { return res.status(403).json({ error: 'Invalid token' }); }
 
-    const { productId, tier, amount, durationDays, phone, userId, productName, productImage, productPrice } = req.body;
+    const { productId, tier, amount, durationDays, phone, userId, productName, productImage, productPrice, paymentMethod } = req.body;
 
     // Cancel stale pending boosts for same user+product so they don't get stuck
     if (db && userId && productId) {
@@ -562,7 +562,7 @@ app.post('/api/boost-product', async (req, res) => {
     }
 
     // Gateway fee added on top so Soko Vibe receives the full tier price
-    const gatewayFee = calcGatewayFee('ussd_push', tierConfig.price);
+    const gatewayFee = calcGatewayFee(paymentMethod || 'ussd_push', tierConfig.price);
     const totalToCollect = tierConfig.price + gatewayFee;
 
     const order_id = `boost_${Date.now()}`;
@@ -597,7 +597,7 @@ app.post('/api/boost-product', async (req, res) => {
         sellerName: 'Soko Vibe',
         clickpesaReference: ref,
         status: 'pending',
-        paymentMethod: 'ClickPesa',
+        paymentMethod: paymentMethod || 'ussd_push',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     }
@@ -1555,12 +1555,28 @@ app.post('/api/clickpesa/webhook', verifyWebhook, async (req, res) => {
           completedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
         console.log(`Wallet deposit: TZS ${amount} credited to ${dep.userId} (ref: ${orderId})`);
+        // Send push notification
+        sendOneSignalNotification(dep.userId, 'Deposit Imethibitishwa!', `TZS ${amount.toLocaleString()} zimeongezwa kwenye pochi yako.`, { type: 'deposit', depositRef: orderId }).catch(() => {});
+        // Write in-app notification
+        try {
+          await db.collection('notifications').add({
+            userId: dep.userId,
+            title: 'Deposit Imethibitishwa!',
+            body: `TZS ${amount.toLocaleString()} zimeongezwa kwenye pochi yako.`,
+            type: 'deposit',
+            data: { depositRef: orderId, amount },
+            read: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        } catch (_) {}
       } else {
+        const failAmount = dep.amount || 0;
         await depDoc.ref.update({
           status: 'failed',
           failureReason: payload.message || 'Payment failed',
           completedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
+        sendOneSignalNotification(dep.userId, 'Deposit Imeshindikana', `Malipo ya TZS ${failAmount.toLocaleString()} hayakukamilika.`, { type: 'deposit_failed', depositRef: orderId }).catch(() => {});
       }
       return res.status(200).json({ received: true });
     }
