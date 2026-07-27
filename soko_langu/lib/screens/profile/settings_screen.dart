@@ -291,7 +291,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               _buildTile(
                 icon: Icons.account_balance_wallet_outlined,
-                title: context.tr('wallet', 'Wallet'),
+                title: context.tr('wallet'),
                 onTap: () => context.push(AppRoutes.wallet),
               ),
               _buildTile(

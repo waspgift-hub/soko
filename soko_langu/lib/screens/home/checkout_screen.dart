@@ -326,7 +326,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(context.tr(id, nameSw),
+                                      Text(name,
                                         style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: selected ? cs.primary : cs.onSurface)),
                                       if (id == 'wallet' && !_walletLoading)
                                         Text('${context.tr('wallet_balance')}: TZS ${_walletBalance.toStringAsFixed(0)}',

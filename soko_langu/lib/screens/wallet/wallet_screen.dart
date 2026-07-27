@@ -724,7 +724,7 @@ class _WalletScreenState extends State<WalletScreen> {
 
 class _BalanceCard extends StatelessWidget {
   final double balance;
-  final String Function(String, [String?]) tr;
+  final String Function(String) tr;
   final ColorScheme cs;
   final bool hideBalance;
   final VoidCallback onToggleEye;

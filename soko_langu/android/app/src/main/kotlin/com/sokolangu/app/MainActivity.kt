@@ -157,10 +157,7 @@ class MainActivity : FlutterActivity() {
                 }
             )
             channels.forEach { manager.createNotificationChannel(it) }
-            // Make sure notification delegate is set — required for Android 12+ inline replies
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                manager.notificationAssistantService?.let { /* OS handles this */ }
-            }
+            // Android 13+ inline replies use the system notification assistant by default
         }
     }
 
