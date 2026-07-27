@@ -9,6 +9,7 @@ const {
   clickpesaCreateBillPayOrder,
   getUssdPushFee, calcGatewayFee, ALL_PAYMENT_METHODS,
 } = require('./clickpesa');
+const orderEngine = require('./orders');
 
 const DEFAULT_PAYOUT_FEE = 2000; // Estimated payout fee (actual varies by amount via clickpesaPayoutPreview)
 const { groqChat, groqTranscribe } = require('./groq');
@@ -577,6 +578,11 @@ app.post('/api/boost-product', async (req, res) => {
         billPaymentMode: 'EXACT',
         billReference: order_id,
       });
+
+      if (!billResult || billResult.success === false || (!billResult.billPayNumber && !billResult.data?.billPayNumber)) {
+        const errMsg = billResult?.message || billResult?.error || 'BillPay API failed to generate control number';
+        return res.status(502).json({ error: `BillPay error: ${errMsg}` });
+      }
 
       const billPayNumber = billResult.billPayNumber || billResult.data?.billPayNumber || billResult.billReference || '';
       const clickpesaRef = billResult.id || billResult.data?.id || billPayNumber || '';
@@ -2661,8 +2667,12 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
         billReference: order_id,
       });
 
+      if (!billResult || billResult.success === false || (!billResult.billPayNumber && !billResult.data?.billPayNumber)) {
+        const errMsg = billResult?.message || billResult?.error || 'BillPay API failed to generate control number';
+        return res.status(502).json({ error: `BillPay error: ${errMsg}` });
+      }
+
       const billPayNumber = billResult.billPayNumber || billResult.data?.billPayNumber || billResult.billReference || '';
-      const clickpesaRef = billResult.id || billResult.data?.id || billPayNumber || '';
 
       const productImg = req.body.productImage || '';
       if (db) {
@@ -6118,6 +6128,11 @@ app.post('/api/wallet/deposit', async (req, res) => {
         billReference: depositRef,
       });
 
+      if (!billResult || billResult.success === false || (!billResult.billPayNumber && !billResult.data?.billPayNumber)) {
+        const errMsg = billResult?.message || billResult?.error || 'BillPay API failed to generate control number';
+        return res.status(502).json({ error: `BillPay error: ${errMsg}` });
+      }
+
       const billPayNumber = billResult.billPayNumber || billResult.data?.billPayNumber || billResult.billReference || '';
       const clickpesaRef = billResult.id || billResult.data?.id || billPayNumber || '';
 
@@ -6395,6 +6410,231 @@ if (global.gc) {
     console.log('[MEM] Garbage collection triggered');
   }, 5 * 60 * 1000);
 }
+
+// ============================================================
+// 🔧 ORDER ENGINE ROUTES — Order state machine & timeline
+// ============================================================
+
+/** Verify Firebase Auth token and return decoded uid or null */
+async function verifyAuthToken(req) {
+  const authHeader = req.headers.authorization || req.headers['Authorization'] || '';
+  const token = authHeader.replace('Bearer ', '');
+  if (!token) return null;
+  try {
+    const decoded = await admin.auth().verifyIdToken(token);
+    return decoded;
+  } catch { return null; }
+}
+
+/// Create a new order (Place Order step)
+app.post('/api/orders/create', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const decoded = await verifyAuthToken(req);
+    if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { buyerId, sellerId, productId, productName, productPrice, shippingCost, deliveryType, region, district, street, phone, paymentMethod } = req.body;
+    if (!buyerId || !sellerId || !productId || !productName || productPrice == null) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    if (decoded.uid !== buyerId) {
+      return res.status(403).json({ error: 'Buyer ID mismatch' });
+    }
+
+    const platformFee = Math.round(Number(productPrice) * PLATFORM_COMMISSION_PERCENT);
+    const totalAmount = Math.round(Number(productPrice)) + Math.round(Number(shippingCost) || 0) + platformFee;
+
+    const result = await orderEngine.createOrder(db, {
+      buyerId, sellerId, productId, productName,
+      productPrice: Math.round(Number(productPrice)),
+      shippingCost: Math.round(Number(shippingCost) || 0),
+      platformFee,
+      totalAmount,
+      deliveryType: deliveryType || 'local',
+      region: region || '', district: district || '', street: street || '',
+      phone: phone || '',
+      paymentMethod: paymentMethod || 'ussd_push',
+    });
+    res.json({ success: true, order: result });
+  } catch (e) {
+    console.error('/api/orders/create error:', e.message);
+    res.status(500).json({ error: e.message || 'Internal server error' });
+  }
+});
+
+/// Transition an order to a new status
+app.post('/api/orders/transition', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const decoded = await verifyAuthToken(req);
+    if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { orderId, newStatus, note } = req.body;
+    if (!orderId || !newStatus) {
+      return res.status(400).json({ error: 'Missing orderId or newStatus' });
+    }
+
+    const doc = await db.collection('orders').doc(orderId).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Order not found' });
+    const order = doc.data();
+
+    // Authorization: buyer, seller, or admin
+    const isBuyer = order.buyerId === decoded.uid;
+    const isSeller = order.sellerId === decoded.uid;
+    const userDoc = await db.collection('users').doc(decoded.uid).get();
+    const isAdmin = userDoc.exists && userDoc.data().isAdmin === true;
+    if (!isBuyer && !isSeller && !isAdmin) {
+      return res.status(403).json({ error: 'Not authorized to transition this order' });
+    }
+
+    const result = await orderEngine.transitionOrder(db, orderId, newStatus, decoded.uid, { note });
+    res.json({ success: true, order: result });
+  } catch (e) {
+    console.error('/api/orders/transition error:', e.message);
+    const status = e.message.startsWith('Cannot transition') ? 400 : 500;
+    res.status(status).json({ error: e.message || 'Internal server error' });
+  }
+});
+
+/// Get order timeline
+app.get('/api/orders/:id/timeline', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const decoded = await verifyAuthToken(req);
+    if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { id } = req.params;
+    const doc = await db.collection('orders').doc(id).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Order not found' });
+    const order = doc.data();
+
+    const isBuyer = order.buyerId === decoded.uid;
+    const isSeller = order.sellerId === decoded.uid;
+    const userDoc = await db.collection('users').doc(decoded.uid).get();
+    const isAdmin = userDoc.exists && userDoc.data().isAdmin === true;
+    if (!isBuyer && !isSeller && !isAdmin) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    const snap = await db.collection('orderTimeline')
+      .where('orderId', '==', id)
+      .orderBy('createdAt', 'asc')
+      .get();
+    const entries = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    res.json({ success: true, entries });
+  } catch (e) {
+    console.error('/api/orders/:id/timeline error:', e.message);
+    res.status(500).json({ error: e.message || 'Internal server error' });
+  }
+});
+
+/// Get order current status
+app.get('/api/orders/:id/status', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const decoded = await verifyAuthToken(req);
+    if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { id } = req.params;
+    const doc = await db.collection('orders').doc(id).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Order not found' });
+    const order = doc.data();
+
+    const isBuyer = order.buyerId === decoded.uid;
+    const isSeller = order.sellerId === decoded.uid;
+    const userDoc = await db.collection('users').doc(decoded.uid).get();
+    const isAdmin = userDoc.exists && userDoc.data().isAdmin === true;
+    if (!isBuyer && !isSeller && !isAdmin) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    res.json({
+      success: true,
+      status: order.status,
+      stepNumber: orderEngine.getOrderStepNumber(order.status),
+      statusColor: orderEngine.STATUS_COLORS[order.status] || '#9E9E9E',
+      statusHistory: order.statusHistory || [],
+      validTransitions: orderEngine.isValidTransition(order.status, '__') ? [] : [],
+    });
+  } catch (e) {
+    console.error('/api/orders/:id/status error:', e.message);
+    res.status(500).json({ error: e.message || 'Internal server error' });
+  }
+});
+
+/// Get full order details
+app.get('/api/orders/:id', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const decoded = await verifyAuthToken(req);
+    if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { id } = req.params;
+    const doc = await db.collection('orders').doc(id).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Order not found' });
+    const order = doc.data();
+
+    const isBuyer = order.buyerId === decoded.uid;
+    const isSeller = order.sellerId === decoded.uid;
+    const userDoc = await db.collection('users').doc(decoded.uid).get();
+    const isAdmin = userDoc.exists && userDoc.data().isAdmin === true;
+    if (!isBuyer && !isSeller && !isAdmin) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    res.json({ success: true, order: { id: doc.id, ...order } });
+  } catch (e) {
+    console.error('/api/orders/:id error:', e.message);
+    res.status(500).json({ error: e.message || 'Internal server error' });
+  }
+});
+
+/// List orders for a user (as buyer or seller)
+app.get('/api/orders/user/:userId', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const decoded = await verifyAuthToken(req);
+    if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { userId } = req.params;
+    if (decoded.uid !== userId) {
+      const userDoc = await db.collection('users').doc(decoded.uid).get();
+      const isAdmin = userDoc.exists && userDoc.data().isAdmin === true;
+      if (!isAdmin) return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const statusFilter = req.query.status || '';
+
+    let snap;
+    const role = req.query.role || 'buyer'; // 'buyer' or 'seller'
+    if (role === 'seller') {
+      let query = db.collection('orders').where('sellerId', '==', userId).orderBy('createdAt', 'desc');
+      if (statusFilter) query = query.where('status', '==', statusFilter);
+      snap = await query.limit(limit).get();
+    } else {
+      let query = db.collection('orders').where('buyerId', '==', userId).orderBy('createdAt', 'desc');
+      if (statusFilter) query = query.where('status', '==', statusFilter);
+      snap = await query.limit(limit).get();
+    }
+
+    const orders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    res.json({ success: true, orders });
+  } catch (e) {
+    console.error('/api/orders/user/:userId error:', e.message);
+    // Fallback without filter if index doesn't exist
+    try {
+      const { userId } = req.params;
+      const role = req.query.role || 'buyer';
+      const field = role === 'seller' ? 'sellerId' : 'buyerId';
+      const snap = await db.collection('orders').where(field, '==', userId).limit(50).get();
+      const orders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      return res.json({ success: true, orders });
+    } catch {
+      res.status(500).json({ error: e.message || 'Internal server error' });
+    }
+  }
+});
 
 startProductListener();
 app.listen(PORT, () => {

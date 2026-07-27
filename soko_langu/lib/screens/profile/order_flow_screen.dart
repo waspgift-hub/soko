@@ -22,10 +22,8 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
       vsync: this,
       duration: const Duration(milliseconds: 2000),
     )..repeat(reverse: true);
-    _pulse = Tween<double>(
-      begin: 0.85,
-      end: 1.0,
-    ).animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
+    _pulse = Tween<double>(begin: 0.85, end: 1.0)
+        .animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
   }
 
   @override
@@ -57,7 +55,7 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
           return ListView(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
             children: [
-              // ── Order Flow Section ──
+              // ── Order Flow Timeline ──
               _SectionHeader(
                 icon: Icons.route_outlined,
                 title: isEn ? 'Order Flow' : 'Mlolongo wa Oda',
@@ -78,7 +76,7 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
               }),
               const SizedBox(height: 32),
 
-              // ── ClickPesa Collection Fees ──
+              // ── Fee Sections (kept from original) ──
               _SectionHeader(
                 icon: Icons.payments_outlined,
                 title: isEn ? 'ClickPesa Collection Fees' : 'Ada za Kukusanya za ClickPesa',
@@ -111,8 +109,6 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                 ),
               ),
               const SizedBox(height: 20),
-
-              // ── Payout Fees ──
               _SectionHeader(
                 icon: Icons.payments_outlined,
                 title: isEn ? 'ClickPesa Payout Fees' : 'Ada za Kutoa za ClickPesa',
@@ -134,16 +130,14 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                     _FeeTiersTable(cs: cs, tiers: payoutTiers),
                     const SizedBox(height: 10),
                     _SubHeader(cs: cs, text: isEn ? 'Bank EFT / ACH' : 'Benki EFT / ACH'),
-                    _PctRow(cs: cs, label: isEn ? 'Flat fee (0 – 20,000,000 TZS)' : 'Ada isiyobadilika (0 – 20,000,000 TZS)', value: 'TZS 2,360'),
+                    _PctRow(cs: cs, label: isEn ? 'Flat fee (0 \u2013 20,000,000 TZS)' : 'Ada isiyobadilika (0 \u2013 20,000,000 TZS)', value: 'TZS 2,360'),
                     const SizedBox(height: 10),
                     _SubHeader(cs: cs, text: isEn ? 'Bank TISS (TZS)' : 'Benki TISS (TZS)'),
-                    _PctRow(cs: cs, label: isEn ? 'Flat fee (0 – 1,000,000,000 TZS)' : 'Ada isiyobadilika (0 – 1,000,000,000 TZS)', value: 'TZS 11,800'),
+                    _PctRow(cs: cs, label: isEn ? 'Flat fee (0 \u2013 1,000,000,000 TZS)' : 'Ada isiyobadilika (0 \u2013 1,000,000,000 TZS)', value: 'TZS 11,800'),
                   ],
                 ),
               ),
               const SizedBox(height: 20),
-
-              // ── Soko Vibe Fees ──
               _SectionHeader(
                 icon: Icons.store_outlined,
                 title: isEn ? 'Soko Vibe Fees' : 'Ada za Soko Vibe',
@@ -170,13 +164,10 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                     _FeeRow(cs: cs, label: isEn ? 'Account Creation (100,000 TZS limit)' : 'Ufunguzi wa Akaunti (kiwango 100,000 TZS)', value: 'Free'),
                     _FeeRow(cs: cs, label: isEn ? 'KYC Search and Onboarding' : 'Utafutaji wa KYC', value: 'TZS 25,000'),
                     _FeeRow(cs: cs, label: isEn ? 'M-Pesa Channel Setup' : 'Ufunguzi wa Njia ya M-Pesa', value: 'TZS 250,000'),
-
                   ],
                 ),
               ),
               const SizedBox(height: 20),
-
-              // ── Fee Breakdown ──
               _SectionHeader(
                 icon: Icons.receipt_long_outlined,
                 title: isEn ? 'Fee Breakdown by Method' : 'Mgawanyo wa Ada kwa Njia',
@@ -190,10 +181,10 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                   children: [
                     _SubHeader(cs: cs, text: isEn ? 'Wallet (deposit first)' : 'Pochi (weka hela kwanza)'),
                     _PctRow(cs: cs, label: isEn ? 'Gateway fee' : 'Ada ya malipo', value: 'Free'),
-                    _PctRow(cs: cs, label: isEn ? 'Deposit via USSD' : 'Kuweka kwa USSD', value: 'TZS 54 – 7,960'),
+                    _PctRow(cs: cs, label: isEn ? 'Deposit via USSD' : 'Kuweka kwa USSD', value: 'TZS 54 \u2013 7,960'),
                     const SizedBox(height: 10),
                     _SubHeader(cs: cs, text: isEn ? 'USSD Push' : 'USSD Push'),
-                    _PctRow(cs: cs, label: isEn ? 'Gateway fee (tiered)' : 'Ada ya malipo (kwa viwango)', value: 'TZS 54 – 7,960'),
+                    _PctRow(cs: cs, label: isEn ? 'Gateway fee (tiered)' : 'Ada ya malipo (kwa viwango)', value: 'TZS 54 \u2013 7,960'),
                     _PctRow(cs: cs, label: isEn ? 'Soko Vibe commission' : 'Ada ya Soko Vibe', value: '3.5%'),
                     const SizedBox(height: 10),
                     _SubHeader(cs: cs, text: isEn ? 'BillPay' : 'BillPay'),
@@ -201,13 +192,11 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                     _PctRow(cs: cs, label: isEn ? 'Soko Vibe commission' : 'Ada ya Soko Vibe', value: '3.5%'),
                     const SizedBox(height: 16),
                     _SubHeader(cs: cs, text: isEn ? 'Seller Withdrawal (payout)' : 'Muuzaji Kutoa Pesa'),
-                    _PctRow(cs: cs, label: isEn ? 'Payout fee (tiered)' : 'Ada ya kutoa (kwa viwango)', value: 'TZS 52 – 9,890'),
+                    _PctRow(cs: cs, label: isEn ? 'Payout fee (tiered)' : 'Ada ya kutoa (kwa viwango)', value: 'TZS 52 \u2013 9,890'),
                   ],
                 ),
               ),
               const SizedBox(height: 20),
-
-              // ── How to Use BillPay ──
               _SectionHeader(
                 icon: Icons.receipt_long_outlined,
                 title: isEn ? 'How to Use BillPay' : 'Jinsi ya Kutumia BillPay',
@@ -221,14 +210,14 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                   children: [
                     _SubHeader(cs: cs, text: isEn ? '1. Deposit to Wallet' : '1. Kuweka Hela Kwenye Pochi'),
                     _StepRow(cs: cs, step: isEn
-                      ? 'Go to Wallet → tap "Weka Pesa" → select BillPay → enter amount → tap deposit.'
-                      : 'Nenda Pochi → bonyeza "Weka Pesa" → chagua BillPay → weka kiasi → bonyeza weka.'),
+                      ? 'Go to Wallet \u2192 tap "Weka Pesa" \u2192 select BillPay \u2192 enter amount \u2192 tap deposit.'
+                      : 'Nenda Pochi \u2192 bonyeza "Weka Pesa" \u2192 chagua BillPay \u2192 weka kiasi \u2192 bonyeza weka.'),
                     _StepRow(cs: cs, step: isEn
                       ? 'A BillPay control number (Namba ya Kumbukumbu) will appear on screen. Copy or note it down.'
                       : 'Namba ya kumbukumbu (control number) itaonekana kwenye skrini. Nakili au iandike.'),
                     _StepRow(cs: cs, step: isEn
-                      ? 'Open M-Pesa → Lipa → BillPay → enter the control number → enter amount → enter PIN → Confirm.'
-                      : 'Fungua M-Pesa → Lipa → BillPay → weka namba ya kumbukumbu → weka kiasi → weka PIN → Thibitisha.'),
+                      ? 'Open M-Pesa \u2192 Lipa \u2192 BillPay \u2192 enter the control number \u2192 enter amount \u2192 enter PIN \u2192 Confirm.'
+                      : 'Fungua M-Pesa \u2192 Lipa \u2192 BillPay \u2192 weka namba ya kumbukumbu \u2192 weka kiasi \u2192 weka PIN \u2192 Thibitisha.'),
                     _StepRow(cs: cs, step: isEn
                       ? 'Funds are added to your wallet automatically within seconds.'
                       : 'Pesa zinaongezwa kwenye pochi yako moja kwa moja baada ya sekunde chache.'),
@@ -241,16 +230,16 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                       ? 'Enter your phone number and confirm. A control number will be displayed on screen.'
                       : 'Weka namba ya simu na thibitisha. Namba ya kumbukumbu itaonekana kwenye skrini.'),
                     _StepRow(cs: cs, step: isEn
-                      ? 'Open M-Pesa → Lipa → BillPay → enter the control number → enter amount → enter PIN. Your order enters escrow automatically.'
-                      : 'Fungua M-Pesa → Lipa → BillPay → weka namba ya kumbukumbu → weka kiasi → weka PIN. Oda yako inaingia escrow moja kwa moja.'),
+                      ? 'Open M-Pesa \u2192 Lipa \u2192 BillPay \u2192 enter the control number \u2192 enter amount \u2192 enter PIN. Your order enters escrow automatically.'
+                      : 'Fungua M-Pesa \u2192 Lipa \u2192 BillPay \u2192 weka namba ya kumbukumbu \u2192 weka kiasi \u2192 weka PIN. Oda yako inaingia escrow moja kwa moja.'),
                     const SizedBox(height: 10),
                     _SubHeader(cs: cs, text: isEn ? '3. Pay for Product Boost' : '3. Kulipa Boost ya Bidhaa'),
                     _StepRow(cs: cs, step: isEn
-                      ? 'Go to your product → tap "Boost" → select a tier → choose BillPay as payment method.'
-                      : 'Nenda kwenye bidhaa yako → bonyeza "Boost" → chagua kiwango → chagua BillPay kama njia ya malipo.'),
+                      ? 'Go to your product \u2192 tap "Boost" \u2192 select a tier \u2192 choose BillPay as payment method.'
+                      : 'Nenda kwenye bidhaa yako \u2192 bonyeza "Boost" \u2192 chagua kiwango \u2192 chagua BillPay kama njia ya malipo.'),
                     _StepRow(cs: cs, step: isEn
-                      ? 'Enter your phone, tap pay → a BillPay control number is displayed. Pay via M-Pesa BillPay using that number.'
-                      : 'Weka namba ya simu, bonyeza lipa → namba ya kumbukumbu ya BillPay itaonekana. Lipa kwa M-Pesa BillPay ukitumia namba hiyo.'),
+                      ? 'Enter your phone, tap pay \u2192 a BillPay control number is displayed. Pay via M-Pesa BillPay using that number.'
+                      : 'Weka namba ya simu, bonyeza lipa \u2192 namba ya kumbukumbu ya BillPay itaonekana. Lipa kwa M-Pesa BillPay ukitumia namba hiyo.'),
                     _StepRow(cs: cs, step: isEn
                       ? 'Your boost activates automatically after payment is confirmed.'
                       : 'Boost yako inawashwa moja kwa moja baada ya malipo kuthibitishwa.'),
@@ -267,8 +256,8 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                           const SizedBox(width: 8),
                           Expanded(child: Text(
                             isEn
-                              ? 'BillPay fee is only 1% (charged to merchant, not you). Works with M-Pesa, Airtel Money, and Tigo Pesa. You will receive a control number — pay it manually in M-Pesa.'
-                              : 'Ada ya BillPay ni 1% tu (inatozwa kwa biashara, si wewe). Inafanya kazi na M-Pesa, Airtel Money, na Tigo Pesa. Utapokea namba ya kumbukumbu — lipa kwa M-Pesa mwenyewe.',
+                              ? 'BillPay fee is only 1% (charged to merchant, not you). Works with M-Pesa, Airtel Money, and Tigo Pesa. You will receive a control number \u2014 pay it manually in M-Pesa.'
+                              : 'Ada ya BillPay ni 1% tu (inatozwa kwa biashara, si wewe). Inafanya kazi na M-Pesa, Airtel Money, na Tigo Pesa. Utapokea namba ya kumbukumbu \u2014 lipa kwa M-Pesa mwenyewe.',
                             style: TextStyle(fontSize: 11, color: cs.primary.withValues(alpha: 0.8)),
                           )),
                         ],
@@ -278,77 +267,41 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                 ),
               ),
               const SizedBox(height: 20),
-
-              // ── Example Calculation ──
               _SectionHeader(
                 icon: Icons.calculate_outlined,
                 title: isEn ? 'Examples: TZS 100,000 via USSD Push & BillPay' : 'Mifano: TZS 100,000 kwa USSD Push na BillPay',
                 cs: cs,
               ),
               const SizedBox(height: 8),
-              // USSD Push example
               _InfoCard(
                 cs: cs,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _SubHeader(cs: cs, text: isEn ? 'USSD Push' : 'USSD Push'),
-                    _CalcRow(cs: cs,
-                      label: isEn ? 'Product Price' : 'Bei ya Bidhaa',
-                      value: 'TZS 100,000'),
-                    _CalcRow(cs: cs,
-                      label: isEn ? 'ClickPesa Gateway Fee (tiered)' : 'Ada ya ClickPesa (kwa viwango)',
-                      value: 'TZS 3,240'),
-                    _CalcRow(cs: cs,
-                      label: isEn ? 'Soko Vibe Commission (3.5%)' : 'Ada ya Soko Vibe (3.5%)',
-                      value: 'TZS 3,500'),
+                    _CalcRow(cs: cs, label: isEn ? 'Product Price' : 'Bei ya Bidhaa', value: 'TZS 100,000'),
+                    _CalcRow(cs: cs, label: isEn ? 'ClickPesa Gateway Fee (tiered)' : 'Ada ya ClickPesa (kwa viwango)', value: 'TZS 3,240'),
+                    _CalcRow(cs: cs, label: isEn ? 'Soko Vibe Commission (3.5%)' : 'Ada ya Soko Vibe (3.5%)', value: 'TZS 3,500'),
                     const Divider(height: 20),
-                    _CalcRow(cs: cs,
-                      label: isEn ? 'Total Buyer Pays' : 'Jumla Mnunuzi Analipa',
-                      value: 'TZS 106,740',
-                      bold: true,
-                      color: cs.primary),
+                    _CalcRow(cs: cs, label: isEn ? 'Total Buyer Pays' : 'Jumla Mnunuzi Analipa', value: 'TZS 106,740', bold: true, color: cs.primary),
                     const SizedBox(height: 8),
-                    _CalcRow(cs: cs,
-                      label: isEn ? 'Seller Receives (before payout fee)' : 'Muuzaji Anapata (kabla ya ada ya kutoa)',
-                      value: 'TZS 96,500',
-                      bold: true,
-                      color: cs.tertiary),
+                    _CalcRow(cs: cs, label: isEn ? 'Seller Receives (before payout fee)' : 'Muuzaji Anapata (kabla ya ada ya kutoa)', value: 'TZS 96,500', bold: true, color: cs.tertiary),
                     const SizedBox(height: 4),
-                    _CalcRow(cs: cs,
-                      label: isEn ? 'Payout Fee (estimated)' : 'Ada ya Kutoa (makadirio)',
-                      value: 'TZS 1,868 – 9,890'),
+                    _CalcRow(cs: cs, label: isEn ? 'Payout Fee (estimated)' : 'Ada ya Kutoa (makadirio)', value: 'TZS 1,868 \u2013 9,890'),
                     const SizedBox(height: 16),
                     const Divider(height: 20),
-                    // BillPay example
                     _SubHeader(cs: cs, text: isEn ? 'BillPay (1% fee)' : 'BillPay (ada 1%)'),
-                    _CalcRow(cs: cs,
-                      label: isEn ? 'Product Price' : 'Bei ya Bidhaa',
-                      value: 'TZS 100,000'),
-                    _CalcRow(cs: cs,
-                      label: isEn ? 'ClickPesa Gateway Fee (1%)' : 'Ada ya ClickPesa (1%)',
-                      value: 'TZS 1,000'),
-                    _CalcRow(cs: cs,
-                      label: isEn ? 'Soko Vibe Commission (3.5%)' : 'Ada ya Soko Vibe (3.5%)',
-                      value: 'TZS 3,500'),
+                    _CalcRow(cs: cs, label: isEn ? 'Product Price' : 'Bei ya Bidhaa', value: 'TZS 100,000'),
+                    _CalcRow(cs: cs, label: isEn ? 'ClickPesa Gateway Fee (1%)' : 'Ada ya ClickPesa (1%)', value: 'TZS 1,000'),
+                    _CalcRow(cs: cs, label: isEn ? 'Soko Vibe Commission (3.5%)' : 'Ada ya Soko Vibe (3.5%)', value: 'TZS 3,500'),
                     const Divider(height: 20),
-                    _CalcRow(cs: cs,
-                      label: isEn ? 'Total Buyer Pays' : 'Jumla Mnunuzi Analipa',
-                      value: 'TZS 104,500',
-                      bold: true,
-                      color: cs.primary),
+                    _CalcRow(cs: cs, label: isEn ? 'Total Buyer Pays' : 'Jumla Mnunuzi Analipa', value: 'TZS 104,500', bold: true, color: cs.primary),
                     const SizedBox(height: 8),
-                    _CalcRow(cs: cs,
-                      label: isEn ? 'Seller Receives (before payout fee)' : 'Muuzaji Anapata (kabla ya ada ya kutoa)',
-                      value: 'TZS 96,500',
-                      bold: true,
-                      color: cs.tertiary),
+                    _CalcRow(cs: cs, label: isEn ? 'Seller Receives (before payout fee)' : 'Muuzaji Anapata (kabla ya ada ya kutoa)', value: 'TZS 96,500', bold: true, color: cs.tertiary),
                   ],
                 ),
               ),
               const SizedBox(height: 20),
-
-              // ── Tip ──
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
@@ -616,7 +569,7 @@ class _FeeTiersTable extends StatelessWidget {
           child: Row(
             children: [
               const Spacer(),
-              Text('Above 3,000,000 → 7,960 / 9,890',
+              Text('Above 3,000,000 \u2192 7,960 / 9,890',
                 style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: cs.primary.withValues(alpha: 0.8))),
             ],
           ),
@@ -652,7 +605,7 @@ final flowNodes = [
 ];
 
 final flowDetails = [
-  ('Order is placed • Seller will confirm', ''),
+  ('Order is placed', 'Seller will confirm'),
   ('Seller sets shipping cost', ''),
   ('Buyer pays via Wallet, USSD Push, or BillPay', ''),
   ('Funds held securely in escrow', ''),
@@ -662,7 +615,7 @@ final flowDetails = [
 ];
 
 final flowDetailsSW = [
-  ('Oda imewekwa • Muuzaji atathibitisha', ''),
+  ('Oda imewekwa', 'Muuzaji atathibitisha'),
   ('Muuzaji anaweka gharama ya usafiri', ''),
   ('Mnunuzi analipa kwa Pochi, USSD Push, au BillPay', ''),
   ('Fedha zinalindwa kwenye escrow', ''),
@@ -674,59 +627,27 @@ final flowDetailsSW = [
 final flowLabels = ['ORDER', 'QUOTE', 'PAYMENT', 'ESCROW', 'DISPATCH', 'CONFIRM', 'COMPLETE'];
 final phaseLabels = ['INITIATION', 'PRICING', 'TRANSACTION', 'HOLD', 'LOGISTICS', 'VERIFICATION', 'SETTLEMENT'];
 
-// ClickPesa USSD Push collection fee tiers (from clickpesa.com/pricing)
 final ussdPushTiers = <(int, int, int)>[
-  (500, 899, 54),
-  (900, 1999, 92),
-  (2000, 2999, 124),
-  (3000, 3999, 230),
-  (4000, 4399, 380),
-  (4400, 8999, 580),
-  (9000, 19999, 920),
-  (20000, 39999, 1150),
-  (40000, 49999, 1572),
-  (50000, 95999, 2136),
-  (96000, 199999, 3240),
-  (200000, 299999, 3660),
-  (300000, 399999, 4080),
-  (400000, 499999, 4340),
-  (500000, 599999, 4820),
-  (600000, 799999, 5230),
-  (800000, 999999, 6146),
-  (1000000, 1999999, 7210),
-  (2000000, 3000000, 7960),
+  (500, 899, 54), (900, 1999, 92), (2000, 2999, 124), (3000, 3999, 230),
+  (4000, 4399, 380), (4400, 8999, 580), (9000, 19999, 920), (20000, 39999, 1150),
+  (40000, 49999, 1572), (50000, 95999, 2136), (96000, 199999, 3240),
+  (200000, 299999, 3660), (300000, 399999, 4080), (400000, 499999, 4340),
+  (500000, 599999, 4820), (600000, 799999, 5230), (800000, 999999, 6146),
+  (1000000, 1999999, 7210), (2000000, 3000000, 7960),
 ];
 
-// ClickPesa Mobile Money payout fee tiers (from clickpesa.com/pricing)
 final payoutTiers = <(int, int, int)>[
-  (100, 999, 52),
-  (1000, 1999, 72),
-  (2000, 2999, 104),
-  (3000, 3999, 116),
-  (4000, 4999, 168),
-  (5000, 6999, 234),
-  (7000, 7999, 360),
-  (8000, 9999, 430),
-  (10000, 14999, 642),
-  (15000, 19999, 680),
-  (20000, 29999, 700),
-  (30000, 39999, 980),
-  (40000, 49999, 1038),
-  (50000, 99999, 1460),
-  (100000, 199999, 1868),
-  (200000, 299999, 2220),
-  (300000, 399999, 3180),
-  (400000, 499999, 3764),
-  (500000, 599999, 4672),
-  (600000, 699999, 5712),
-  (700000, 799999, 6560),
-  (800000, 899999, 7800),
-  (900000, 1000000, 8508),
-  (1000001, 3000000, 9346),
+  (100, 999, 52), (1000, 1999, 72), (2000, 2999, 104), (3000, 3999, 116),
+  (4000, 4999, 168), (5000, 6999, 234), (7000, 7999, 360), (8000, 9999, 430),
+  (10000, 14999, 642), (15000, 19999, 680), (20000, 29999, 700), (30000, 39999, 980),
+  (40000, 49999, 1038), (50000, 99999, 1460), (100000, 199999, 1868),
+  (200000, 299999, 2220), (300000, 399999, 3180), (400000, 499999, 3764),
+  (500000, 599999, 4672), (600000, 699999, 5712), (700000, 799999, 6560),
+  (800000, 899999, 7800), (900000, 1000000, 8508), (1000001, 3000000, 9346),
   (3000001, 5000000, 9890),
 ];
 
-// ─── Flow Node Card (from original) ───
+// ─── Flow Node Card ───
 
 class _FlowNodeCard extends StatelessWidget {
   final _FlowNode node;
@@ -763,8 +684,7 @@ class _FlowNodeCard extends StatelessWidget {
                     shape: BoxShape.circle,
                     gradient: LinearGradient(
                       colors: [node.color.withValues(alpha: 0.85), node.color],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+                      begin: Alignment.topLeft, end: Alignment.bottomRight,
                     ),
                     boxShadow: [BoxShadow(color: node.color.withValues(alpha: 0.35), blurRadius: 14, offset: const Offset(0, 4))],
                   ),

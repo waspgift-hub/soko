@@ -36,7 +36,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   double? _salePrice;
   double _walletBalance = 0;
   bool _walletLoading = true;
-  String _selectedMethod = 'ussd_push';
+  String _selectedMethod = 'wallet';
   List<Map<String, dynamic>> _methods = [];
   bool _methodsLoading = true;
   double _gatewayFee = 0;
@@ -47,8 +47,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   double get _serviceFee => _totalPrice * _serviceFeePercent / 100;
 
   double get _sellerReceives => _totalPrice;
-  double get _totalWithFee => _totalPrice + _serviceFee + _gatewayFee;
-  bool get _walletSufficient => _walletBalance >= _totalWithFee;
+  double get _totalWithFee => _selectedMethod == 'wallet'
+      ? _totalPrice + _serviceFee
+      : _totalPrice + _serviceFee + _gatewayFee;
+  bool get _walletSufficient => _walletBalance >= (_totalPrice + _serviceFee);
 
   bool get _needsPhone => _selectedMethod == 'ussd_push' || _selectedMethod == 'billpay';
 
@@ -82,7 +84,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         _walletBalance = (data['balance'] as num?)?.toDouble() ?? 0;
       }
     } catch (_) {}
-    setState(() => _walletLoading = false);
+    if (mounted) {
+      setState(() => _walletLoading = false);
+      if (!_walletSufficient && _selectedMethod == 'wallet') {
+        _selectedMethod = 'ussd_push';
+        _fetchGatewayFee();
+      }
+    }
   }
 
   Future<void> _loadMethods() async {
@@ -105,6 +113,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Future<void> _fetchGatewayFee() async {
+    if (_selectedMethod == 'wallet') {
+      if (mounted) setState(() => _gatewayFee = 0);
+      return;
+    }
     try {
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/gateway-fee'),
@@ -206,7 +218,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 const SizedBox(height: 8),
                 Container(height: 1, color: cs.primary.withValues(alpha: 0.1)),
                 const SizedBox(height: 10),
-                _feeRow(cs, context.tr('processing_fee'), '${_gatewayFee.toInt()} TZS', cs.secondary),
+                if (_selectedMethod != 'wallet')
+                  _feeRow(cs, context.tr('processing_fee'), '${_gatewayFee.toInt()} TZS', cs.secondary),
                 const SizedBox(height: 10),
                 Container(height: 1, color: cs.primary.withValues(alpha: 0.1)),
                 const SizedBox(height: 10),
@@ -236,8 +249,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       _feeRow(cs, context.tr('seller_receives_full'), context.formatPrice(_sellerReceives), cs.primary),
                       const SizedBox(height: 4),
                       _feeRow(cs, context.tr('service_fee_percent').replaceAll('{0}', '$_serviceFeePercent'), context.formatPrice(_serviceFee), cs.onSurfaceVariant),
-                      const SizedBox(height: 4),
-                      _feeRow(cs, context.tr('processing_fee'), '${_gatewayFee.toInt()} TZS', cs.secondary),
+                      if (_selectedMethod != 'wallet') ...[
+                        const SizedBox(height: 4),
+                        _feeRow(cs, context.tr('processing_fee'), '${_gatewayFee.toInt()} TZS', cs.secondary),
+                      ],
                       const SizedBox(height: 6),
                       Container(
                         padding: const EdgeInsets.all(8),
@@ -288,94 +303,113 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ),
           const SizedBox(height: 20),
 
-          // Payment method selection
-          Text(context.tr('payment_method'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: cs.onSurface)),
-          const SizedBox(height: 12),
-          GlassContainer(
-            blur: 16,
-            opacity: isDark ? 0.08 : 0.05,
-            borderRadius: 16,
-            padding: const EdgeInsets.all(16),
-            child: _methodsLoading
-                ? const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(strokeWidth: 2)))
-                : Column(
-                    children: _methods.map((m) {
-                      final id = m['id'] as String? ?? '';
-                      final name = m['name'] as String? ?? id;
-                      final nameSw = m['nameSw'] as String? ?? name;
-                      final selected = _selectedMethod == id;
-                      final feeLabel = m['feeLabel'] as String? ?? '';
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () {
-                            setState(() => _selectedMethod = id);
-                            _fetchGatewayFee();
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: selected ? cs.primary : Colors.transparent, width: 1.5),
-                              color: selected ? cs.primary.withValues(alpha: 0.06) : Colors.transparent,
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(_methodIcon(id), color: selected ? cs.primary : cs.onSurfaceVariant, size: 26),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(name,
-                                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: selected ? cs.primary : cs.onSurface)),
-                                      if (id == 'wallet' && !_walletLoading)
-                                        Text('${context.tr('wallet_balance')}: TZS ${_walletBalance.toStringAsFixed(0)}',
-                                          style: TextStyle(fontSize: 11, color: _walletSufficient ? Colors.green : cs.error)),
-                                      if (feeLabel.isNotEmpty && id != 'wallet')
-                                        Text(feeLabel,
-                                          style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-                                    ],
-                                  ),
-                                ),
-                                Text(selected ? '✓' : '',
-                                  style: TextStyle(color: cs.primary, fontWeight: FontWeight.w700, fontSize: 16)),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-          ),
-          const SizedBox(height: 20),
-
-          // Phone (only for methods that need it)
-          if (_needsPhone) ...[
-            Text(context.tr('phone'), style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14, color: cs.onSurface)),
-            const SizedBox(height: 8),
+          // ── Wallet status & payment method ──
+          if (_walletLoading)
+            const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(strokeWidth: 2)))
+          else ...[
+            // Wallet balance card
             GlassContainer(
               blur: 16,
               opacity: isDark ? 0.08 : 0.05,
-              borderRadius: 14,
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: TextField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: InputDecoration(
-                  hintText: context.tr('phone_hint'),
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  prefixIcon: Icon(Icons.phone_android, color: cs.primary, size: 20),
-                ),
-                style: TextStyle(color: cs.onSurface),
-                cursorColor: cs.primary,
+              borderRadius: 16,
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Icon(Icons.account_balance_wallet, color: _walletSufficient ? Colors.green : cs.error, size: 28),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(context.tr('wallet_balance'), style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: cs.onSurface)),
+                        Text('TZS ${_walletBalance.toStringAsFixed(0)}',
+                          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: _walletSufficient ? Colors.green : cs.error)),
+                      ],
+                    ),
+                  ),
+                  if (_walletSufficient)
+                    Icon(Icons.check_circle, color: Colors.green, size: 24),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
+
+            if (!_walletSufficient) ...[
+              // Payment method selector (only non-wallet methods)
+              Text(context.tr('payment_method'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: cs.onSurface)),
+              const SizedBox(height: 12),
+              GlassContainer(
+                blur: 16,
+                opacity: isDark ? 0.08 : 0.05,
+                borderRadius: 16,
+                padding: const EdgeInsets.all(16),
+                child: _methodsLoading
+                    ? const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(strokeWidth: 2)))
+                    : Column(
+                        children: _methods.where((m) => m['id'] != 'wallet').map((m) {
+                          final id = m['id'] as String? ?? '';
+                          final name = m['name'] as String? ?? id;
+                          final selected = _selectedMethod == id;
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () {
+                                setState(() => _selectedMethod = id);
+                                _fetchGatewayFee();
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: selected ? cs.primary : Colors.transparent, width: 1.5),
+                                  color: selected ? cs.primary.withValues(alpha: 0.06) : Colors.transparent,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(_methodIcon(id), color: selected ? cs.primary : cs.onSurfaceVariant, size: 26),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(name,
+                                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: selected ? cs.primary : cs.onSurface)),
+                                    ),
+                                    Text(selected ? '✓' : '',
+                                      style: TextStyle(color: cs.primary, fontWeight: FontWeight.w700, fontSize: 16)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+              ),
+              const SizedBox(height: 12),
+
+              // Phone field (only for non-wallet methods)
+              Text(context.tr('phone'), style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14, color: cs.onSurface)),
+              const SizedBox(height: 8),
+              GlassContainer(
+                blur: 16,
+                opacity: isDark ? 0.08 : 0.05,
+                borderRadius: 14,
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: TextField(
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: InputDecoration(
+                    hintText: context.tr('phone_hint'),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    prefixIcon: Icon(Icons.phone_android, color: cs.primary, size: 20),
+                  ),
+                  style: TextStyle(color: cs.onSurface),
+                  cursorColor: cs.primary,
+                ),
+              ),
+            ],
           ],
+          const SizedBox(height: 16),
 
           // Info card
           GlassContainer(
@@ -481,7 +515,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       final activeFs = await FlashSaleService().streamFlashSaleByProductId(p.id).first;
       if (activeFs != null && activeFs.isExpired) { _showError(context.tr('flash_sale_expired')); setState(() => _processing = false); return; }
 
-      if (_selectedMethod == 'wallet') {
+      if (_selectedMethod == 'wallet' || _selectedMethod == 'Wallet') {
         if (!_walletSufficient) {
           _showError(context.tr('wallet_insufficient'));
           setState(() => _processing = false);
@@ -500,14 +534,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             'productPrice': _totalPrice,
             'sellerId': p.sellerId,
             'sellerName': p.sellerName,
-            'processingFee': _gatewayFee,
             'serviceFeePercent': _serviceFeePercent,
             'totalAmount': _totalWithFee,
             'region': region,
             'district': district,
             'street': street,
             'landmarks': _landmarksCtrl.text.trim(),
-            'paymentMethod': _selectedMethod,
+            'paymentMethod': 'wallet',
           }),
         );
 
@@ -588,17 +621,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           setState(() => _processing = false);
           if (isBillPay) {
             final billPayNumber = result['billPayNumber'] as String? ?? '';
-            Navigator.of(context).pop();
-            PaymentBanner.show(
-              context: context,
-              type: PaymentBannerType.success,
-              title: 'BillPay Control Number',
-              subtitle: _selectedMethod == 'billpay'
-                  ? 'Namba: $billPayNumber | Kiasi: TZS ${_totalWithFee.toInt()}'
-                  : null,
-              duration: const Duration(seconds: 8),
-            );
-            // Navigate to purchases screen
+            if (billPayNumber.isNotEmpty) {
+              PaymentBanner.show(
+                context: context,
+                type: PaymentBannerType.success,
+                title: 'Namba ya BillPay',
+                subtitle: 'Namba: $billPayNumber | Kiasi: TZS ${_totalWithFee.toInt()}',
+                duration: const Duration(seconds: 8),
+              );
+            }
             context.go(AppRoutes.myPurchases);
           } else {
             RealtimePaymentBanner.show(

@@ -441,6 +441,7 @@ class _WalletScreenState extends State<WalletScreen> {
   Future<void> _showBillPayWaitingSheet(String depositRef, String billPayNumber, int amount, int totalCharge) async {
     final tr = context.tr;
     final completer = Completer<void>();
+    StreamSubscription<DocumentSnapshot>? sub;
 
     await showModalBottomSheet(
       context: context,
@@ -452,6 +453,9 @@ class _WalletScreenState extends State<WalletScreen> {
       builder: (ctx) {
         return PopScope(
           canPop: false,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop && sub != null) sub!.cancel();
+          },
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
             child: StreamBuilder<DocumentSnapshot>(
@@ -471,9 +475,6 @@ class _WalletScreenState extends State<WalletScreen> {
                   });
                 }
 
-                final isDone = status == 'completed';
-                final isFailed = status == 'failed';
-
                 return Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -487,122 +488,49 @@ class _WalletScreenState extends State<WalletScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    if (isDone)
+                    if (status == 'completed')
                       const Icon(Icons.check_circle, color: Colors.green, size: 64)
-                    else if (isFailed)
+                    else if (status == 'failed')
                       const Icon(Icons.cancel, color: Colors.red, size: 64)
                     else
-                      Container(
+                      const SizedBox(
                         width: 64, height: 64,
-                        decoration: BoxDecoration(
-                          color: Colors.green.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.receipt_long, color: Colors.green, size: 36),
+                        child: CircularProgressIndicator(strokeWidth: 4),
                       ),
                     const SizedBox(height: 20),
                     Text(
-                      isDone
+                      status == 'completed'
                           ? 'Deposit successful'
-                          : isFailed
+                          : status == 'failed'
                               ? 'Deposit failed'
                               : 'BillPay Payment',
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 12),
-                    if (!isDone && !isFailed && billPayNumber.isNotEmpty) ...[
-                      Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 16),
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
-                        ),
-                        child: Column(
-                          children: [
-                            const Text(
-                              'Control Number (Namba ya Kumbukumbu)',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 8),
-                            SelectableText(
-                              billPayNumber,
-                              style: const TextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 4,
-                                color: Colors.green,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'TZS ${NumberFormat('#,###', 'en').format(totalCharge)}',
-                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
+                    const SizedBox(height: 8),
+                    if (status == 'pending')
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          billPayNumber.isNotEmpty
+                              ? 'Namba: $billPayNumber | Kiasi: TZS ${NumberFormat('#,###', 'en').format(totalCharge)}'
+                              : 'Tumia njia ya BillPay na ufuate hatua kwenye M-Pesa yako.',
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.6)),
+                          textAlign: TextAlign.center,
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 16),
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: Colors.amber.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.info_outline, size: 16, color: Colors.amber),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'Payment Instructions',
-                                  style: TextStyle(
-                                    fontSize: 13, fontWeight: FontWeight.w700,
-                                    color: Colors.amber.shade800,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            _instructionStep('1', 'Open M-Pesa on your phone'),
-                            _instructionStep('2', 'Select "Lipa"'),
-                            _instructionStep('3', 'Select "BillPay" (or "Kulipa Bili")'),
-                            _instructionStep('4', 'Enter control number: $billPayNumber'),
-                            _instructionStep('5', 'Enter amount: TZS ${NumberFormat('#,###', 'en').format(totalCharge)}'),
-                            _instructionStep('6', 'Enter your M-Pesa PIN and confirm'),
-                            const SizedBox(height: 8),
-                            Text(
-                              'The deposit will be credited automatically after payment.',
-                              style: TextStyle(fontSize: 11, color: Colors.amber.shade700),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      if (!isDone && !isFailed)
-                        const SizedBox(
-                          width: 32, height: 32,
-                          child: CircularProgressIndicator(strokeWidth: 3),
-                        ),
-                    ],
-                    if (isDone || isFailed)
+                    const SizedBox(height: 24),
+                    if (status == 'completed' || status == 'failed')
                       FilledButton(
                         onPressed: () {
                           if (!completer.isCompleted) completer.complete();
                           Navigator.of(ctx).pop();
                         },
-                        child: Text(isDone ? tr('continue') : tr('retry')),
+                        child: Text(status == 'completed' ? tr('continue') : tr('retry')),
                       ),
-                    if (!isDone && !isFailed)
+                    if (status == 'pending')
                       TextButton(
                         onPressed: () {
                           if (!completer.isCompleted) completer.complete();
@@ -619,30 +547,11 @@ class _WalletScreenState extends State<WalletScreen> {
       },
     );
 
-    if (!completer.isCompleted) completer.complete();
+    if (!completer.isCompleted) {
+      completer.complete();
+      sub?.cancel();
+    }
     _load();
-  }
-
-  Widget _instructionStep(String number, String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 20, height: 20,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: Colors.green.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-            ),
-            child: Text(number, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.green)),
-          ),
-          const SizedBox(width: 8),
-          Expanded(child: Text(text, style: const TextStyle(fontSize: 12))),
-        ],
-      ),
-    );
   }
 
   @override
