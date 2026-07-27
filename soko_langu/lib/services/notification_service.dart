@@ -86,18 +86,18 @@ class NotificationService {
 
           if (type == 'chat' || type == 'group_chat') {
             final roomId = data['roomId'] as String? ?? '';
-            channelId = 'chat_messages_v4';
+            channelId = 'chat_messages_v5';
             id = roomId.hashCode;
             headsUpTitle = data['senderName'] as String? ?? title;
             payload = '/chat/$roomId';
           } else if (type == 'payment' || type == 'order') {
             final orderId = data['orderId'] as String?;
-            channelId = 'payments_notifications_v4';
+            channelId = 'payments_notifications_v5';
             id = (orderId ?? title).hashCode;
             headsUpTitle = title;
             payload = orderId != null ? '/order-detail/$orderId' : null;
           } else {
-            channelId = 'general_notifications_v4';
+            channelId = 'general_notifications_v5';
             id = title.hashCode;
             headsUpTitle = title;
             payload = null;

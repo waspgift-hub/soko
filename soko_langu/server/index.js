@@ -85,11 +85,23 @@ function osHeaders() {
   return { 'Content-Type': 'application/json', 'Authorization': OS_AUTH };
 }
 
+// Map notification type → Android notification channel ID (v5 = IMPORTANCE_MAX for heads-up)
+function notifTypeToChannel(type) {
+  if (!type) return 'general_notifications_v5';
+  if (type === 'chat' || type === 'group_chat') return 'chat_messages_v5';
+  if (['payment','order','payout','dispute','refund','withdrawal',
+       'escrow_release','auto_payout','escrow_auto_release',
+       'dispute_resolved','cancelled','auto_withdrawal',
+       'delivery_confirmed','payment_failed','kyc'].includes(type)) return 'payments_notifications_v5';
+  return 'general_notifications_v5';
+}
+
 async function sendOneSignalNotification(userId, title, body, data = {}) {
   if (!userId) { console.log('[OS] No userId'); return null; }
   if (!ONE_SIGNAL_APP_ID || !ONE_SIGNAL_REST_API_KEY) {
     console.error('[OS] Missing ONE_SIGNAL_APP_ID or ONE_SIGNAL_REST_API_KEY'); return null;
   }
+  const notifType = (data && data.type) || 'general';
   try {
     const resp = await fetch(OS_URL, {
       method: 'POST',
@@ -100,8 +112,9 @@ async function sendOneSignalNotification(userId, title, body, data = {}) {
         include_external_user_ids: [userId],
         headings: { en: title || '' },
         contents: { en: body || '' },
-        data: { ...(data || {}), type: (data && data.type) || 'general' },
+        data: { ...(data || {}), type: notifType },
         priority: 10, android_priority: 'high', android_visibility: 1,
+        existing_android_channel_id: notifTypeToChannel(notifType),
         android_sound: 'soko_notification',
         android_icon: 'ic_notification',
         small_icon: 'ic_notification', large_icon: 'ic_notification', android_accent_color: 'FF40916C',
@@ -113,7 +126,6 @@ async function sendOneSignalNotification(userId, title, body, data = {}) {
 
     // Also send email if this is a critical notification type
     const criticalTypes = ['order', 'payment', 'dispute', 'refund', 'boost', 'kyc', 'withdrawal'];
-    const notifType = (data && data.type) || 'general';
     if (criticalTypes.includes(notifType)) {
       sendEmailSmtp(userId, title, body).catch(() => {});
     }
@@ -151,6 +163,7 @@ async function sendEmailSmtp(userId, subject, bodyText) {
 async function sendOneSignalBulk(userIds, title, body, data = {}) {
   if (!userIds || userIds.length === 0) return { successCount: 0 };
   if (!ONE_SIGNAL_APP_ID || !ONE_SIGNAL_REST_API_KEY) { console.error('[OS] Missing config'); return { successCount: 0 }; }
+  const notifType = (data && data.type) || 'general';
   let successCount = 0;
   for (let i = 0; i < userIds.length; i += 2000) {
     const batch = userIds.slice(i, i + 2000);
@@ -161,8 +174,9 @@ async function sendOneSignalBulk(userIds, title, body, data = {}) {
         body: JSON.stringify({
           app_id: ONE_SIGNAL_APP_ID, idempotency_key: randomUUID(), include_external_user_ids: batch,
           headings: { en: title || '' }, contents: { en: body || '' },
-          data: { ...(data || {}), type: (data && data.type) || 'general' },
+          data: { ...(data || {}), type: notifType },
           priority: 10, android_priority: 'high', android_visibility: 1,
+          existing_android_channel_id: notifTypeToChannel(notifType),
           android_sound: 'soko_notification',
           android_icon: 'ic_notification',
         }),
