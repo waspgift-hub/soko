@@ -61,6 +61,9 @@
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-3796499857968162~1098626149"/>
         <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyDpjlFFyFlNYu-sRUtMJouJR7a6RfDb6RY"/>
+        <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="general_notifications_v5" />
         <meta-data
