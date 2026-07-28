@@ -306,6 +306,20 @@ function startChatListener() {
                     })
                     .catch((err) => {
                       console.error('[LISTENER] Chat push error:', err.message);
+                    })
+                    .then(() => {
+                      // Create in-app notification doc
+                      return db.collection('notifications').add({
+                        userId: receiverId,
+                        title: senderName,
+                        body: text,
+                        type: 'chat',
+                        data: { senderId, senderName, roomId },
+                        isRead: false,
+                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                      }).catch((err) => {
+                        console.error('[LISTENER] Chat in-app notification error:', err.message);
+                      });
                     });
                 });
             })

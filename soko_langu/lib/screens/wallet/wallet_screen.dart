@@ -23,6 +23,8 @@ class _WalletScreenState extends State<WalletScreen> {
   bool _loading = true;
   List<Map<String, dynamic>> _methods = [];
   bool _methodsLoading = true;
+  bool _selectMode = false;
+  final Set<String> _selectedIds = {};
 
   @override
   void initState() {
@@ -55,6 +57,232 @@ class _WalletScreenState extends State<WalletScreen> {
     } catch (_) {}
     _loadMethods();
     setState(() => _loading = false);
+  }
+
+  void _showWithdrawDialog() {
+    final amtCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController(text: '255');
+    final formKey = GlobalKey<FormState>();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('withdraw')),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: amtCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: context.tr('amount'),
+                  border: const OutlineInputBorder(),
+                  prefixText: 'TZS ',
+                ),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Required';
+                  final n = int.tryParse(v);
+                  if (n == null || n < 1000) return 'Minimum TZS 1,000';
+                  if (n > _balance) return 'Insufficient balance';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: phoneCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: InputDecoration(
+                  labelText: context.tr('phone'),
+                  border: const OutlineInputBorder(),
+                  hintText: '2557XXXXXXXX',
+                ),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Required';
+                  if (!v.startsWith('255')) return 'Must start with 255';
+                  if (v.length < 10) return 'Too short';
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.tr('cancel'))),
+          FilledButton(onPressed: () {
+            if (formKey.currentState!.validate()) Navigator.pop(ctx, {
+              'amount': int.parse(amtCtrl.text),
+              'phone': phoneCtrl.text,
+            });
+          }, child: Text(context.tr('withdraw'))),
+        ],
+      ),
+    ).then((result) {
+      if (result != null) {
+        _processWithdraw(result['amount'] as int, result['phone'] as String);
+      }
+    });
+  }
+
+  Future<void> _processWithdraw(int amount, String phone) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    setState(() => _loading = true);
+    try {
+      final token = await user.getIdToken();
+      final resp = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/seller/withdraw'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'userId': user.uid,
+          'amount': amount,
+          'phone': phone,
+        }),
+      );
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      if (resp.statusCode == 200 && data['success'] == true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(context.tr('withdraw_successful')), backgroundColor: Colors.green),
+          );
+          _load();
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(data['error'] ?? 'Withdrawal failed'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  void _showDeleteHistoryDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('delete_history')),
+        content: Text(context.tr('delete_history_confirm')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.tr('cancel'))),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _deleteAllHistory();
+            },
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            child: Text(context.tr('delete'), style: TextStyle(color: Theme.of(context).colorScheme.onError)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deleteAllHistory() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || _history.isEmpty) return;
+    setState(() => _loading = true);
+    try {
+      final token = await user.getIdToken();
+      await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/wallet/delete-history'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'userId': user.uid, 'ids': _history.map((e) => e['id'] ?? '').toList()}),
+      );
+      if (mounted) {
+        setState(() => _history = []);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('history_deleted'))),
+        );
+      }
+    } catch (_) {
+      if (mounted) setState(() => _history = []);
+    }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  void _showSelectHistoryDialog() {
+    setState(() {
+      _selectMode = true;
+      _selectedIds.clear();
+    });
+  }
+
+  void _exitSelectMode() {
+    setState(() {
+      _selectMode = false;
+      _selectedIds.clear();
+    });
+  }
+
+  void _toggleSelectAll() {
+    setState(() {
+      if (_selectedIds.length == _history.length) {
+        _selectedIds.clear();
+      } else {
+        _selectedIds.addAll(_history.map((e) => e['id'] as String? ?? ''));
+      }
+    });
+  }
+
+  void _toggleSelection(String id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+      } else {
+        _selectedIds.add(id);
+      }
+    });
+  }
+
+  Future<void> _deleteSelected() async {
+    if (_selectedIds.isEmpty) return;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    setState(() => _loading = true);
+    try {
+      final token = await user.getIdToken();
+      await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/wallet/delete-history'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'userId': user.uid, 'ids': _selectedIds.toList()}),
+      );
+      if (mounted) {
+        setState(() {
+          _history.removeWhere((e) => _selectedIds.contains(e['id']));
+          _selectedIds.clear();
+          _selectMode = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('history_deleted'))),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _history.removeWhere((e) => _selectedIds.contains(e['id']));
+          _selectedIds.clear();
+          _selectMode = false;
+        });
+      }
+    }
+    if (mounted) setState(() => _loading = false);
   }
 
   Future<void> _loadMethods() async {
@@ -190,19 +418,57 @@ class _WalletScreenState extends State<WalletScreen> {
           ),
           FilledButton(
             onPressed: () {
-              if (formKey.currentState!.validate()) Navigator.pop(ctx, true);
+              if (formKey.currentState!.validate()) {
+                final amount = int.parse(amtCtrl.text);
+                final phone = phoneCtrl.text;
+                Navigator.pop(ctx);
+                _showUssdConfirmDialog(amount, phone);
+              }
             },
             child: Text(context.tr('deposit')),
           ),
         ],
       ),
-    ).then((confirmed) {
-      if (confirmed == true) {
-        final amount = int.parse(amtCtrl.text);
-        final phone = phoneCtrl.text;
-        _depositWithMethod('ussd', amount, phone);
-      }
-    });
+    );
+  }
+
+  void _showUssdConfirmDialog(int amount, String phone) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Icon(Icons.info_outline, color: Theme.of(context).colorScheme.primary, size: 32),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(context.tr('confirm_deposit'), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            const SizedBox(height: 16),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Text(context.tr('amount')),
+              Text('TZS ${NumberFormat('#,###', 'en').format(amount)}', style: TextStyle(fontWeight: FontWeight.w700)),
+            ]),
+            const SizedBox(height: 8),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Text(context.tr('phone')),
+              Text(phone, style: TextStyle(fontWeight: FontWeight.w500)),
+            ]),
+            const SizedBox(height: 8),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Text(context.tr('method')),
+              Text(context.tr('deposit_method_ussd'), style: TextStyle(fontWeight: FontWeight.w500)),
+            ]),
+            const SizedBox(height: 16),
+            Text(context.tr('ussd_push_notice'), style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.tr('cancel'))),
+          FilledButton(onPressed: () {
+            Navigator.pop(ctx);
+            _depositWithMethod('ussd', amount, phone);
+          }, child: Text(context.tr('confirm'))),
+        ],
+      ),
+    );
   }
 
   // ── BillPay Deposit ──
@@ -323,7 +589,6 @@ class _WalletScreenState extends State<WalletScreen> {
   Future<void> _showUssdWaitingSheet(String depositRef) async {
     final tr = context.tr;
     final completer = Completer<void>();
-    StreamSubscription<DocumentSnapshot>? sub;
 
     await showModalBottomSheet(
       context: context,
@@ -335,9 +600,6 @@ class _WalletScreenState extends State<WalletScreen> {
       builder: (ctx) {
         return PopScope(
           canPop: false,
-          onPopInvokedWithResult: (didPop, _) {
-            if (!didPop && sub != null) sub!.cancel();
-          },
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
             child: StreamBuilder<DocumentSnapshot>(
@@ -433,7 +695,6 @@ class _WalletScreenState extends State<WalletScreen> {
 
     if (!completer.isCompleted) {
       completer.complete();
-      sub?.cancel();
     }
     _load();
   }
@@ -441,7 +702,6 @@ class _WalletScreenState extends State<WalletScreen> {
   Future<void> _showBillPayWaitingSheet(String depositRef, String billPayNumber, int amount, int totalCharge) async {
     final tr = context.tr;
     final completer = Completer<void>();
-    StreamSubscription<DocumentSnapshot>? sub;
 
     await showModalBottomSheet(
       context: context,
@@ -453,9 +713,6 @@ class _WalletScreenState extends State<WalletScreen> {
       builder: (ctx) {
         return PopScope(
           canPop: false,
-          onPopInvokedWithResult: (didPop, _) {
-            if (!didPop && sub != null) sub!.cancel();
-          },
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
             child: StreamBuilder<DocumentSnapshot>(
@@ -549,7 +806,6 @@ class _WalletScreenState extends State<WalletScreen> {
 
     if (!completer.isCompleted) {
       completer.complete();
-      sub?.cancel();
     }
     _load();
   }
@@ -561,8 +817,68 @@ class _WalletScreenState extends State<WalletScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(tr('wallet')),
+        title: Text(_selectMode ? '${_selectedIds.length} imechaguliwa' : tr('wallet')),
         centerTitle: true,
+        actions: _selectMode
+            ? [
+                IconButton(
+                  icon: Icon(Icons.select_all, color: cs.onSurface),
+                  onPressed: _toggleSelectAll,
+                  tooltip: tr('select_all'),
+                ),
+                IconButton(
+                  icon: Icon(Icons.close, color: cs.error),
+                  onPressed: _exitSelectMode,
+                  tooltip: tr('cancel'),
+                ),
+              ]
+            : [
+                PopupMenuButton<String>(
+                  icon: Icon(Icons.more_vert),
+                  onSelected: (value) {
+                    switch (value) {
+                      case 'withdraw':
+                        _showWithdrawDialog();
+                        break;
+                      case 'delete_history':
+                        _showDeleteHistoryDialog();
+                        break;
+                      case 'select':
+                        _showSelectHistoryDialog();
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem(
+                      value: 'withdraw',
+                      child: ListTile(
+                        leading: Icon(Icons.arrow_upward, color: cs.primary),
+                        title: Text(tr('withdraw')),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'delete_history',
+                      child: ListTile(
+                        leading: Icon(Icons.delete_sweep, color: cs.error),
+                        title: Text(tr('delete_history')),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'select',
+                      child: ListTile(
+                        leading: Icon(Icons.checklist, color: cs.onSurface),
+                        title: Text(tr('select_transactions')),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
       ),
       body: RefreshIndicator(
         onRefresh: _load,
@@ -640,8 +956,29 @@ class _WalletScreenState extends State<WalletScreen> {
                         ),
                       ),
                     )
-                  else
+                  else ...[
                     ..._history.map((tx) => _buildTxCard(tx, cs)),
+                    if (_selectMode && _selectedIds.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: _deleteSelected,
+                            icon: const Icon(Icons.delete_outline, size: 20),
+                            label: Text('${tr('delete_selected')} (${_selectedIds.length})'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: cs.error,
+                              foregroundColor: cs.surface,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ],
               ),
       ),
@@ -654,43 +991,57 @@ class _WalletScreenState extends State<WalletScreen> {
     final pm = tx['paymentMethod'] as String? ?? '';
     final isCompleted = status == 'completed';
     final isFailed = status == 'failed';
+    final txId = tx['id'] as String? ?? '';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ListTile(
-        leading: Icon(
-          isCompleted
-              ? Icons.check_circle
-              : isFailed
-                  ? Icons.cancel
-                  : Icons.hourglass_top,
-          color: isCompleted
-              ? Colors.green
-              : isFailed
-                  ? Colors.red
-                  : Colors.orange,
-        ),
-        title: Text(
-          isCompleted
-              ? 'Deposit Completed'
-              : isFailed
-                  ? 'Deposit Failed'
-                  : 'Processing...',
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        subtitle: Text('TZS ${amount.toStringAsFixed(0)}  ·  $pm'),
-        trailing: Text(
-          status.toUpperCase(),
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: isCompleted
-                ? Colors.green
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: _selectMode && txId.isNotEmpty
+            ? () => _toggleSelection(txId)
+            : null,
+        child: ListTile(
+          leading: _selectMode
+              ? Checkbox(
+                  value: txId.isNotEmpty && _selectedIds.contains(txId),
+                  onChanged: txId.isNotEmpty ? (_) => _toggleSelection(txId) : null,
+                )
+              : Icon(
+                  isCompleted
+                      ? Icons.check_circle
+                      : isFailed
+                          ? Icons.cancel
+                          : Icons.hourglass_top,
+                  color: isCompleted
+                      ? Colors.green
+                      : isFailed
+                          ? Colors.red
+                          : Colors.orange,
+                ),
+          title: Text(
+            isCompleted
+                ? 'Deposit Completed'
                 : isFailed
-                    ? Colors.red
-                    : Colors.orange,
+                    ? 'Deposit Failed'
+                    : 'Processing...',
+            style: const TextStyle(fontWeight: FontWeight.w600),
           ),
+          subtitle: Text('TZS ${amount.toStringAsFixed(0)}  ·  $pm'),
+          trailing: _selectMode
+              ? null
+              : Text(
+                  status.toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: isCompleted
+                        ? Colors.green
+                        : isFailed
+                            ? Colors.red
+                            : Colors.orange,
+                  ),
+                ),
         ),
       ),
     );
@@ -799,7 +1150,6 @@ class _MethodCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final id = method['id'] as String? ?? '';
     final name = method['name'] as String? ?? '';
     final description = method['description'] as String? ?? '';
     final cs = Theme.of(context).colorScheme;

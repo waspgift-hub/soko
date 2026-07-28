@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'google_loading.dart';
 import '../services/api_config.dart';
+import '../theme/app_colors.dart';
 
 enum PaymentBannerType { success, failed }
 
@@ -79,9 +80,9 @@ class _PaymentBannerContentState extends State<_PaymentBannerContent>
       duration: const Duration(milliseconds: 400),
     );
     _slide = Tween<Offset>(
-      begin: const Offset(0, 0.6),
+      begin: const Offset(0, 0.8),
       end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutBack));
     _fade = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _ctrl, curve: Curves.easeOut),
     );
@@ -95,8 +96,8 @@ class _PaymentBannerContentState extends State<_PaymentBannerContent>
   }
 
   Color get _accent => widget.type == PaymentBannerType.success
-      ? const Color(0xFF2D9F4E)
-      : const Color(0xFFE53935);
+      ? Theme.of(context).colorScheme.successGreen
+      : Theme.of(context).colorScheme.error;
 
   IconData get _icon => widget.type == PaymentBannerType.success
       ? Icons.check_circle_rounded
@@ -376,9 +377,10 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
   }
 
   Color _accent(bool ok, bool fail) {
-    if (ok) return const Color(0xFF2D9F4E);
-    if (fail) return const Color(0xFFE53935);
-    return const Color(0xFF2D6A4F);
+    final cs = Theme.of(context).colorScheme;
+    if (ok) return cs.successGreen;
+    if (fail) return cs.error;
+    return cs.flashSaleMidGreen;
   }
 
   IconData _icon(bool ok, bool fail) {

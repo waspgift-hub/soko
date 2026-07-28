@@ -152,12 +152,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                               style: TextStyle(color: cs.onSurfaceVariant)),
                           ),
                         ],
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(child: _actionButton(cs, Icons.flash_on, context.tr('unda_flash_sale'), () => context.push(AppRoutes.createFlashSale), cs.trendingOrange)),
-                          ],
-                        ),
                       ],
                     ),
                   );
