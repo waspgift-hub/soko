@@ -1,11 +1,14 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
 import '../../theme/app_colors.dart';
 import '../../extensions/context_tr.dart';
+import '../../services/api_config.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/glass_container.dart';
 import '../../utils/network_error.dart';
@@ -20,6 +23,7 @@ class SellerOrdersScreen extends StatefulWidget {
 
 class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
   String _filter = 'all';
+  String? _quotingOrderId;
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +47,8 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
       body: Column(
         children: [
           _buildFilterBar(cs, isDark),
+          // Pending orders from the orders collection needing quotes
+          _buildPendingOrdersSection(cs, isDark, user),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -350,6 +356,256 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
         );
       }
     }
+  }
+
+  Widget _buildPendingOrdersSection(ColorScheme cs, bool isDark, User user) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('orders')
+          .where('sellerId', isEqualTo: user.uid)
+          .snapshots(),
+      builder: (context, snap) {
+        if (!snap.hasData) return const SizedBox.shrink();
+        final pending = snap.data!.docs.where((doc) {
+          final s = (doc.data() as Map)['status'] as String? ?? '';
+          return s == 'pending';
+        }).toList();
+        if (pending.isEmpty) return const SizedBox.shrink();
+
+        pending.sort((a, b) {
+          final ta = (a.data() as Map)['createdAt'];
+          final tb = (b.data() as Map)['createdAt'];
+          if (ta is Timestamp && tb is Timestamp) return tb.compareTo(ta);
+          return 0;
+        });
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Row(
+                children: [
+                  Icon(Icons.price_check, size: 16, color: cs.tertiary),
+                  const SizedBox(width: 6),
+                  Text('Maagizo yanayohitaji nukuu',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: cs.tertiary)),
+                ],
+              ),
+            ),
+            SizedBox(
+              height: 120,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: pending.length,
+                itemBuilder: (_, i) {
+                  final d = pending[i].data() as Map<String, dynamic>;
+                  final orderId = pending[i].id;
+                  final productName = d['productName'] ?? 'Product';
+                  final productImage = d['productImage'] as String? ?? '';
+                  final buyerName = d['buyerName'] ?? '';
+                  final region = d['region'] as String? ?? '';
+                  final district = d['district'] as String? ?? '';
+
+                  return Container(
+                    width: 220,
+                    margin: const EdgeInsets.only(right: 12),
+                    child: GlassContainer(
+                      blur: 20,
+                      opacity: isDark ? 0.12 : 0.08,
+                      borderRadius: 16,
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  width: 36, height: 36,
+                                  color: cs.surfaceContainerHighest,
+                                  child: productImage.isNotEmpty
+                                      ? CachedNetworkImage(imageUrl: productImage, fit: BoxFit.cover, width: 36, height: 36)
+                                      : Icon(Icons.image, size: 16, color: cs.onSurfaceVariant),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(productName,
+                                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: cs.onSurface),
+                                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          if (buyerName.isNotEmpty)
+                            Text('$buyerName', style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
+                          if (region.isNotEmpty)
+                            Text('$region, $district', style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
+                          const Spacer(),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 32,
+                            child: ElevatedButton.icon(
+                              onPressed: _quotingOrderId == orderId ? null : () => _showQuoteDialog(orderId, d),
+                              icon: _quotingOrderId == orderId
+                                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                                  : const Icon(Icons.send_rounded, size: 14),
+                              label: Text('Weka Nukuu', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: cs.primary,
+                                foregroundColor: cs.surface,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _showQuoteDialog(String orderId, Map<String, dynamic> orderData) async {
+    final shippingCtrl = TextEditingController();
+    final busCtrl = TextEditingController();
+    final plateCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Weka Gharama ya Usafirishaji'),
+        content: Form(
+          key: formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: shippingCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Gharama ya usafirishaji (TZS)',
+                    prefixText: 'TZS ',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: busCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Jina la basi/gari',
+                    hintText: 'Mf: Scandinavia, Kilimanjaro',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: plateCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Namba ya namba',
+                    hintText: 'Mf: T 123 ABC',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(context.tr('cancel')),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final costText = shippingCtrl.text.trim();
+              final cost = double.tryParse(costText);
+              if (cost == null || cost <= 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(context.tr('enter_valid_shipping_cost'))),
+                );
+                return;
+              }
+              Navigator.pop(ctx, true);
+            },
+            child: Text(context.tr('send_shipping_to_buyer')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final cost = double.tryParse(shippingCtrl.text.trim()) ?? 0;
+    if (cost <= 0) return;
+    _submitQuote(orderId, orderData, cost, busCtrl.text.trim(), plateCtrl.text.trim());
+  }
+
+  Future<void> _submitQuote(String orderId, Map<String, dynamic> orderData, double cost, String busName, String plateNumber) async {
+    setState(() => _quotingOrderId = orderId);
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      final token = await user.getIdToken();
+      final resp = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/orders/transition'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'orderId': orderId,
+          'newStatus': 'quoted',
+          'note': jsonEncode({
+            'shippingCost': cost,
+            'busName': busName,
+            'plateNumber': plateNumber,
+          }),
+        }),
+      );
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      if (resp.statusCode != 200 || data['success'] != true) {
+        if (mounted) _showError(data['error'] ?? 'Failed to submit quote');
+      } else {
+        // Also save shipping details directly on the order doc
+        final orderRef = FirebaseFirestore.instance.collection('orders').doc(orderId);
+        await orderRef.update({
+          'shippingCost': cost,
+          'busName': busName,
+          'plateNumber': plateNumber,
+        });
+
+        if (mounted) _showSuccess('Nukuu imetumwa kwa mnunuzi');
+      }
+    } catch (e) {
+      if (mounted) _showError(translateError(e));
+    }
+    setState(() => _quotingOrderId = null);
+  }
+
+  void _showError(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.error),
+    );
+  }
+
+  void _showSuccess(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.primary),
+    );
   }
 
   void _viewBuyerProfile(String buyerId) {

@@ -558,6 +558,14 @@ app.post('/api/boost-product', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields (productId, tier, phone)' });
     }
 
+    // Normalize phone to 255 format
+    const phoneDigits = phone.replace(/\D/g, '');
+    const normalizedPhone = phoneDigits.startsWith('0')
+      ? '255' + phoneDigits.substring(1)
+      : phoneDigits.startsWith('255')
+        ? phoneDigits
+        : '255' + phoneDigits;
+
     const tierConfig = BOOST_TIERS[tier];
     if (!tierConfig) {
       return res.status(400).json({ error: 'Invalid boost tier' });
@@ -602,7 +610,7 @@ app.post('/api/boost-product', async (req, res) => {
           userId: userId || '',
           buyerId: userId || '',
           buyerName: userId || '',
-          buyerPhone: phone,
+          buyerPhone: normalizedPhone,
           sellerName: 'Soko Vibe',
           billPayNumber,
           clickpesaReference: clickpesaRef,
@@ -629,11 +637,21 @@ app.post('/api/boost-product', async (req, res) => {
       const result = await clickpesaCollect({
         amount: totalToCollect,
         orderReference: order_id,
-        phoneNumber: phone,
+        phoneNumber: normalizedPhone,
         callbackUrl,
       });
 
+      // Check if ClickPesa returned an error
+      if (result.error || result.success === false) {
+        const errMsg = result.message || result.error || 'ClickPesa USSD push initiation failed';
+        console.error('/api/boost-product ClickPesa error:', errMsg);
+        return res.status(502).json({ error: `ClickPesa error: ${errMsg}` });
+      }
+
       const ref = result.id || result.orderReference || '';
+      if (!ref) {
+        return res.status(502).json({ error: 'ClickPesa did not return a reference. USSD push might not have been sent.' });
+      }
 
       if (db) {
         await db.collection('transactions').doc(order_id).set({
@@ -650,7 +668,7 @@ app.post('/api/boost-product', async (req, res) => {
           userId: userId || '',
           buyerId: userId || '',
           buyerName: userId || '',
-          buyerPhone: phone,
+          buyerPhone: normalizedPhone,
           sellerName: 'Soko Vibe',
           clickpesaReference: ref,
           status: 'pending',
@@ -1933,6 +1951,24 @@ app.post('/api/escrow/admin-release', async (req, res) => {
         description: `Sale (admin release): ${productName} - TZS ${sellerReceives}`,
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
       });
+
+      // Notify seller of admin release
+      try {
+        await db.collection('notifications').add({
+          userId: sellerId,
+          title: 'Admin Amefungua Escrow!',
+          body: `${productName} — TZS ${sellerReceives.toLocaleString()} zimewekwa salio lako.`,
+          type: 'escrow_release',
+          data: { orderId, adminRelease: true },
+          isRead: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        await sendOneSignalNotification(sellerId,
+          'Admin Amefungua Escrow!',
+          `${productName} — TZS ${sellerReceives.toLocaleString()} zimewekwa salio lako.`,
+          { type: 'escrow_release', orderId, adminRelease: true }
+        );
+      } catch (_) {}
     }
 
     res.json({ success: true, message: 'Escrow force-released by admin' });
@@ -2711,17 +2747,35 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
       });
     } else {
       // ── USSD Push flow ──
+      // Normalize phone to 255 format
+      const phoneDigits = phone.replace(/\D/g, '');
+      const normalizedPhone = phoneDigits.startsWith('0')
+        ? '255' + phoneDigits.substring(1)
+        : phoneDigits.startsWith('255')
+          ? phoneDigits
+          : '255' + phoneDigits;
+
       const baseUrl = process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`;
       const callbackUrl = `${baseUrl}/api/clickpesa/webhook`;
 
       const result = await clickpesaCollect({
         amount: totalAmount,
         orderReference: order_id,
-        phoneNumber: phone,
+        phoneNumber: normalizedPhone,
         callbackUrl,
       });
 
+      // Check if ClickPesa returned an error
+      if (result.error || result.success === false) {
+        const errMsg = result.message || result.error || 'ClickPesa USSD push initiation failed';
+        console.error('/api/create-marketplace-payment-link ClickPesa error:', errMsg);
+        return res.status(502).json({ error: `ClickPesa error: ${errMsg}` });
+      }
+
       const ref = result.id || result.orderReference || '';
+      if (!ref) {
+        return res.status(502).json({ error: 'ClickPesa did not return a reference. USSD push might not have been sent.' });
+      }
 
       const productImg = req.body.productImage || '';
       if (db) {
@@ -2732,7 +2786,7 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
           productImage: productImg,
           sellerId,
           sellerName: sanitize(sellerName),
-          buyerPhone: phone,
+          buyerPhone: normalizedPhone,
           buyerId: buyerId || '',
           buyerName,
           productPrice: Math.round(productPrice),
@@ -5996,6 +6050,19 @@ app.post('/api/chat/send', async (req, res) => {
       await sendOneSignalNotification(receiverId, senderName, text, { type: 'chat', senderId, senderName, roomId });
     } catch (_) {}
 
+    // Create in-app notification doc for receiver
+    try {
+      await db.collection('notifications').add({
+        userId: receiverId,
+        title: senderName,
+        body: text,
+        type: 'chat',
+        data: { senderId, senderName, roomId },
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } catch (_) {}
+
     res.json({ success: true, messageId: msgRef.id });
   } catch (e) {
     console.error('/api/chat/send error:', e);
@@ -6156,9 +6223,16 @@ app.post('/api/wallet/deposit', async (req, res) => {
       const processingFee = getUssdPushFee(amount);
       const totalCharge = amount + processingFee;
 
+      const phoneDigits = phone.replace(/\D/g, '');
+      const normalizedPhone = phoneDigits.startsWith('0')
+        ? '255' + phoneDigits.substring(1)
+        : phoneDigits.startsWith('255')
+          ? phoneDigits
+          : '255' + phoneDigits;
+
       await db.collection('deposits').doc(depositRef).set({
         userId,
-        phone,
+        phone: normalizedPhone,
         amount: Math.round(amount),
         processingFee,
         totalCharge,
@@ -6173,16 +6247,22 @@ app.post('/api/wallet/deposit', async (req, res) => {
       const result = await clickpesaCollect({
         amount: totalCharge,
         orderReference: depositRef,
-        phoneNumber: phone,
+        phoneNumber: normalizedPhone,
         callbackUrl,
       });
+
+      if (result.error || result.success === false) {
+        const errMsg = result.message || result.error || 'ClickPesa USSD push initiation failed';
+        console.error('/api/wallet/deposit ClickPesa error:', errMsg);
+        return res.status(502).json({ error: `ClickPesa error: ${errMsg}` });
+      }
 
       res.json({
         success: true,
         depositRef,
         method: 'ussd',
         clickpesaId: result.id,
-        message: `USSD push sent to ${phone}. Total charge: TZS ${totalCharge.toLocaleString()} (amount TZS ${amount.toLocaleString()} + fee TZS ${processingFee.toLocaleString()})`,
+        message: `USSD push sent to ${normalizedPhone}. Total charge: TZS ${totalCharge.toLocaleString()} (amount TZS ${amount.toLocaleString()} + fee TZS ${processingFee.toLocaleString()})`,
       });
     }
   } catch (e) {
@@ -6327,6 +6407,41 @@ app.get('/api/wallet/history/:userId', async (req, res) => {
   }
 });
 
+app.post('/api/wallet/delete-history', async (req, res) => {
+  try {
+    const { userId, ids } = req.body;
+    if (!userId || !ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Missing userId or ids array' });
+    }
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
+    if (decoded.uid !== userId) {
+      return res.status(403).json({ error: 'User ID mismatch' });
+    }
+
+    const batch = db.batch();
+    for (const id of ids) {
+      const ref = db.collection('deposits').doc(id);
+      // Only delete if the document belongs to this user
+      const doc = await ref.get();
+      if (doc.exists && doc.data().userId === userId) {
+        batch.delete(ref);
+      }
+    }
+    await batch.commit();
+
+    res.json({ success: true, deleted: ids.length });
+  } catch (e) {
+    console.error('/api/wallet/delete-history error:', e);
+    res.json({ success: true, deleted: 0 });
+  }
+});
+
 // ============================================================
 // ⏰ AUTO-RELEASE ESCROW — Check and release expired escrows
 //     Can be called by a cron job (e.g., GitHub Actions, Render cron)
@@ -6433,7 +6548,7 @@ app.post('/api/orders/create', async (req, res) => {
     const decoded = await verifyAuthToken(req);
     if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
 
-    const { buyerId, sellerId, productId, productName, productPrice, shippingCost, deliveryType, region, district, street, phone, paymentMethod } = req.body;
+    const { buyerId, buyerName, buyerPhone, sellerId, sellerName, productId, productName, productImage, productPrice, shippingCost, deliveryType, region, district, street, landmarks, phone, paymentMethod } = req.body;
     if (!buyerId || !sellerId || !productId || !productName || productPrice == null) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
@@ -6445,16 +6560,38 @@ app.post('/api/orders/create', async (req, res) => {
     const totalAmount = Math.round(Number(productPrice)) + Math.round(Number(shippingCost) || 0) + platformFee;
 
     const result = await orderEngine.createOrder(db, {
-      buyerId, sellerId, productId, productName,
+      buyerId, buyerName: buyerName || '', buyerPhone: buyerPhone || '',
+      sellerId, sellerName: sellerName || '',
+      productId, productName, productImage: productImage || '',
       productPrice: Math.round(Number(productPrice)),
       shippingCost: Math.round(Number(shippingCost) || 0),
       platformFee,
       totalAmount,
       deliveryType: deliveryType || 'local',
       region: region || '', district: district || '', street: street || '',
+      landmarks: landmarks || '',
       phone: phone || '',
       paymentMethod: paymentMethod || 'ussd_push',
     });
+
+    // Notify seller that a new order is pending
+    try {
+      await db.collection('notifications').add({
+        userId: sellerId,
+        title: 'Agizo Jipya Limewasilishwa!',
+        body: `${buyerName || 'Mnunuzi'} ametuma agizo la ${productName}. Toa gharama ya usafirishaji sasa.`,
+        type: 'order',
+        data: { orderId: result.orderId, buyerId, productId },
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      await sendOneSignalNotification(sellerId,
+        'Agizo Jipya Limewasilishwa!',
+        `${buyerName || 'Mnunuzi'} ametuma agizo la ${productName}. Toa gharama ya usafirishaji sasa.`,
+        { type: 'order', orderId: result.orderId, buyerId, productId }
+      );
+    } catch (_) {}
+
     res.json({ success: true, order: result });
   } catch (e) {
     console.error('/api/orders/create error:', e.message);

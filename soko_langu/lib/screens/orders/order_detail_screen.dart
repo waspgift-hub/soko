@@ -12,10 +12,13 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/api_config.dart';
 import '../../services/sms_notification_service.dart';
+import '../../services/clickpesa_service.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../chat/chat_navigation.dart';
 import '../../widgets/google_loading.dart';
+import '../../widgets/payment_banner.dart';
+import '../../widgets/payment_result_dialog.dart';
 import '../../utils/network_error.dart';
 
 class OrderDetailScreen extends StatefulWidget {
@@ -39,6 +42,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   String? _disputingTxId;
   bool _showAllDetails = false;
 
+  // Payment state (used when status is "quoted")
+  double _walletBalance = 0;
+  bool _walletLoading = true;
+  bool _paying = false;
+  String _selectedMethod = 'wallet';
+  List<Map<String, dynamic>> _methods = [];
+  bool _methodsLoading = true;
+  double _gatewayFee = 0;
+
   @override
   void initState() {
     super.initState();
@@ -53,6 +65,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     Future.delayed(const Duration(milliseconds: 200), () {
       if (mounted) setState(() => _isLoading = false);
     });
+    if (status == 'quoted') {
+      _loadWalletBalance();
+      _loadPaymentMethods();
+    }
   }
 
   void _startCountdown() {
@@ -90,7 +106,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         return 0;
       case 'awaiting_shipping_quote':
         return 1;
+      case 'quoted':
       case 'awaiting_payment':
+      case 'paid':
         return 2;
       case 'paid_escrow_hold':
       case 'escrow_hold':
@@ -99,6 +117,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         return 4;
       case 'delivered':
       case 'delivery_confirmed':
+      case 'confirmed':
         return 5;
       case 'completed':
         return 6;
@@ -119,6 +138,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         return Colors.purple;
       case 'dispatched':
         return Colors.orange;
+      case 'quoted':
+        return Colors.teal;
+      case 'paid':
+        return Colors.indigo;
+      case 'confirmed':
+        return Colors.blueGrey;
       case 'failed':
       case 'cancelled':
       case 'refunded':
@@ -139,6 +164,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       case 'delivery_confirmed':
       case 'completed':
         return context.tr('delivered_and_completed');
+      case 'quoted':
+        return 'Nukuu Imetolewa';
+      case 'paid':
+        return 'Imelipwa';
+      case 'confirmed':
+        return 'Imethibitishwa';
       case 'failed':
         return context.tr('failed');
       case 'refunded':
@@ -1297,6 +1328,8 @@ $stepsStr
   }
 
   Widget _buildActions(BuildContext context, ColorScheme cs) {
+    final user = FirebaseAuth.instance.currentUser;
+    final isBuyer = user != null && d['buyerId'] == user.uid;
     final canConfirm = status == 'delivered' || status == 'dispatched';
     final canDispute =
         status == 'paid_escrow_hold' ||
@@ -1304,6 +1337,164 @@ $stepsStr
         status == 'dispatched' ||
         status == 'delivered';
     final canCancel = status == 'paid_escrow_hold' || status == 'escrow_hold';
+
+    if (status == 'pending' && isBuyer) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: cs.surface.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.08)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.hourglass_top, color: cs.primary, size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Agizo limewasilishwa kwa muuzaji. Subiri muuzaji kutoa gharama ya usafirishaji.',
+                style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (status == 'quoted' && isBuyer) {
+      final shipping = _quotedShippingCost;
+      final price = _quotedProductPrice;
+      final platformFee = _quotedPlatformFee;
+      final total = _quotedTotal;
+
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: cs.surface.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.08)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.payments_outlined, color: cs.primary, size: 20),
+                const SizedBox(width: 8),
+                Text('Malipo', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: cs.onSurface)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _feeRow2(cs, 'Bei ya bidhaa', 'TZS ${_nf(price.toInt())}', cs.onSurface),
+            if (shipping > 0) ...[
+              const SizedBox(height: 6),
+              _feeRow2(cs, 'Gharama ya usafirishaji', 'TZS ${_nf(shipping.toInt())}', cs.tertiary),
+            ],
+            const SizedBox(height: 6),
+            _feeRow2(cs, 'Commission (3.5%)', 'TZS ${_nf(platformFee.toInt())}', cs.onSurfaceVariant),
+            if (_selectedMethod != 'wallet' && _gatewayFee > 0) ...[
+              const SizedBox(height: 6),
+              _feeRow2(cs, 'Ada ya malipo', 'TZS ${_nf(_gatewayFee.toInt())}', cs.secondary),
+            ],
+            const SizedBox(height: 6),
+            Container(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)),
+            const SizedBox(height: 8),
+            _feeRow2(cs, 'Jumla', 'TZS ${_nf(total.toInt())}', cs.primary, bold: true),
+            const SizedBox(height: 16),
+
+            // Wallet balance
+            if (_walletLoading)
+              const Center(child: Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator(strokeWidth: 2)))
+            else ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: cs.surface.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.account_balance_wallet, color: _walletSufficient ? Colors.green : cs.error, size: 22),
+                    const SizedBox(width: 10),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Salio la pochi', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                        Text('TZS ${_nf(_walletBalance.toInt())}',
+                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: _walletSufficient ? Colors.green : cs.error)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+
+            // Payment method selector (show non-wallet if insufficient)
+            if (_walletLoading == false && !_walletSufficient) ...[
+              Text('Njia ya malipo', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: cs.onSurface)),
+              const SizedBox(height: 8),
+              if (_methodsLoading)
+                const Center(child: Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator(strokeWidth: 2)))
+              else
+                ...(_methods.where((m) => m['id'] != 'wallet').map((m) {
+                  final id = m['id'] as String? ?? '';
+                  final name = m['name'] as String? ?? id;
+                  final selected = _selectedMethod == id;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () {
+                        setState(() => _selectedMethod = id);
+                        _fetchGatewayFee();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: selected ? cs.primary : Colors.transparent, width: 1.5),
+                          color: selected ? cs.primary.withValues(alpha: 0.06) : Colors.transparent,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(_methodIcon(id), color: selected ? cs.primary : cs.onSurfaceVariant, size: 24),
+                            const SizedBox(width: 10),
+                            Expanded(child: Text(name, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: selected ? cs.primary : cs.onSurface))),
+                            Text(selected ? '✓' : '', style: TextStyle(color: cs.primary, fontWeight: FontWeight.w700, fontSize: 16)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                })),
+              const SizedBox(height: 12),
+            ],
+
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton.icon(
+                onPressed: _paying ? null : _payQuotedOrder,
+                icon: _paying
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.payment, size: 20),
+                label: Text(
+                  _paying ? 'Inachakata...' : 'Lipa TZS ${_nf(total.toInt())}',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: cs.primary,
+                  foregroundColor: cs.surface,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  elevation: 0,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     if (!canConfirm && !canDispute && !canCancel)
       return const SizedBox.shrink();
@@ -1401,9 +1592,21 @@ $stepsStr
     );
   }
 
+  Widget _feeRow2(ColorScheme cs, String label, String value, Color valueColor, {bool bold = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant, fontWeight: bold ? FontWeight.w600 : FontWeight.w400)),
+        Text(value, style: TextStyle(fontSize: 15, fontWeight: bold ? FontWeight.w800 : FontWeight.w600, color: valueColor)),
+      ],
+    );
+  }
+
   Widget _buildBottomBar(BuildContext context, ColorScheme cs) {
     final sellerId = d['sellerId'] as String? ?? '';
     final sellerName = d['sellerName'] as String? ?? '';
+    final showTracking = status == 'dispatched';
+    final showReceipt = status != 'pending' && status != 'quoted';
 
     return Container(
       padding: EdgeInsets.only(
@@ -1449,7 +1652,7 @@ $stepsStr
                 ),
               ),
             ),
-            if (status == 'dispatched') ...[
+            if (showTracking) ...[
               const SizedBox(width: 8),
               Expanded(
                 child: SizedBox(
@@ -1479,26 +1682,28 @@ $stepsStr
                 ),
               ),
             ],
-            const SizedBox(width: 8),
-            SizedBox(
-              height: 46,
-              child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: cs.primary,
-                  side: BorderSide(color: cs.primary.withValues(alpha: 0.3)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
+            if (showReceipt) ...[
+              const SizedBox(width: 8),
+              SizedBox(
+                height: 46,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: cs.primary,
+                    side: BorderSide(color: cs.primary.withValues(alpha: 0.3)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  icon: const Icon(Icons.receipt_outlined, size: 17),
+                  onPressed: () =>
+                      context.push('${AppRoutes.receipt}/${widget.docId}'),
+                  label: Text(
+                    context.tr('receipt'),
+                    style: const TextStyle(fontSize: 12),
                   ),
                 ),
-                icon: const Icon(Icons.receipt_outlined, size: 17),
-                onPressed: () =>
-                    context.push('${AppRoutes.receipt}/${widget.docId}'),
-                label: Text(
-                  context.tr('receipt'),
-                  style: const TextStyle(fontSize: 12),
-                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
@@ -1690,6 +1895,222 @@ $stepsStr
           ),
         );
     }
+  }
+
+  // ─── Payment helpers for quoted state ───
+
+  Future<void> _loadWalletBalance() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) { setState(() => _walletLoading = false); return; }
+    try {
+      final resp = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/api/wallet/balance/${user.uid}'),
+      );
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        _walletBalance = (data['balance'] as num?)?.toDouble() ?? 0;
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _walletLoading = false);
+  }
+
+  Future<void> _loadPaymentMethods() async {
+    try {
+      final resp = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/api/payment-methods'),
+      );
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        _methods = (data['methods'] as List?)
+            ?.map((e) => e as Map<String, dynamic>)
+            .toList() ?? [];
+        if (_methods.isNotEmpty && _methods.any((m) => m['id'] == _selectedMethod) == false) {
+          _selectedMethod = _methods.first['id'] as String? ?? 'ussd_push';
+        }
+      }
+    } catch (_) {}
+    setState(() => _methodsLoading = false);
+    _fetchGatewayFee();
+  }
+
+  Future<void> _fetchGatewayFee() async {
+    if (_selectedMethod == 'wallet') {
+      if (mounted) setState(() => _gatewayFee = 0);
+      return;
+    }
+    try {
+      final price = (d['productPrice'] ?? 0).toDouble();
+      final resp = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/gateway-fee'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'method': _selectedMethod, 'amount': price.round()}),
+      );
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        if (mounted) setState(() => _gatewayFee = (data['fee'] as num).toDouble());
+      }
+    } catch (_) {}
+  }
+
+  double get _quotedShippingCost =>
+      (d['shippingCost'] as num?)?.toDouble() ?? 0;
+  double get _quotedProductPrice =>
+      (d['productPrice'] ?? 0).toDouble();
+  double get _quotedPlatformFee => _quotedProductPrice * 0.035;
+  double get _quotedTotal => _selectedMethod == 'wallet'
+      ? _quotedProductPrice + _quotedShippingCost + _quotedPlatformFee
+      : _quotedProductPrice + _quotedShippingCost + _quotedPlatformFee + _gatewayFee;
+  bool get _walletSufficient => _walletBalance >= _quotedTotal;
+
+  Future<void> _payQuotedOrder() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    setState(() => _paying = true);
+    try {
+      if (_selectedMethod == 'wallet') {
+        final resp = await http.post(
+          Uri.parse('${ApiConfig.baseUrl}/api/wallet/purchase'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'buyerId': user.uid,
+            'buyerName': user.displayName ?? '',
+            'productId': d['productId'] ?? '',
+            'productName': d['productName'] ?? '',
+            'productImage': d['productImage'] ?? '',
+            'productPrice': _quotedProductPrice,
+            'sellerId': d['sellerId'] ?? '',
+            'sellerName': d['sellerName'] ?? '',
+            'shippingCost': _quotedShippingCost,
+            'serviceFeePercent': 3.5,
+            'totalAmount': _quotedTotal,
+            'region': _addrField('region'),
+            'district': _addrField('district'),
+            'street': _addrField('street'),
+            'paymentMethod': 'wallet',
+            'orderId': widget.docId,
+          }),
+        );
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        if (resp.statusCode != 200 || data['success'] != true) {
+          if (mounted) _showError(data['error'] ?? 'Payment failed');
+          setState(() => _paying = false);
+          return;
+        }
+        // Transition order to paid
+        await _transitionOrder('paid');
+        if (mounted) {
+          setState(() => _paying = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(context.tr('payment_successful')), behavior: SnackBarBehavior.floating),
+          );
+        }
+      } else {
+        final phone = user.phoneNumber ?? '';
+        final phoneDigits = phone.replaceAll(RegExp(r'\D'), '');
+        final normalizedPhone = phoneDigits.startsWith('0')
+            ? '255${phoneDigits.substring(1)}'
+            : phoneDigits.startsWith('255')
+                ? phoneDigits
+                : '255$phoneDigits';
+
+        final result = await ClickPesaService.initiateMarketplacePayment(
+          productPrice: _quotedProductPrice,
+          productName: d['productName'] ?? '',
+          productId: d['productId'] ?? '',
+          sellerId: d['sellerId'] ?? '',
+          sellerName: d['sellerName'] ?? '',
+          email: user.email ?? '',
+          phone: normalizedPhone,
+          buyerId: user.uid,
+          buyerName: user.displayName ?? '',
+          deliveryType: 'local',
+          paymentMethod: _selectedMethod,
+          existingTransactionId: widget.docId,
+        );
+
+        if (result == null || (result['order_id'] == null && result['billPayNumber'] == null)) {
+          final errMsg = result?['error'] as String? ?? 'Payment initiation failed';
+          if (mounted) _showError(errMsg);
+          setState(() => _paying = false);
+          return;
+        }
+
+        // Transition order to paid
+        await _transitionOrder('paid');
+
+        if (mounted) {
+          setState(() => _paying = false);
+          final isBillPay = _selectedMethod == 'billpay';
+          if (isBillPay) {
+            final billPayNumber = result['billPayNumber'] as String? ?? '';
+            if (billPayNumber.isNotEmpty) {
+              PaymentBanner.show(
+                context: context,
+                type: PaymentBannerType.success,
+                title: 'Namba ya BillPay',
+                subtitle: 'Namba: $billPayNumber | Kiasi: TZS ${_quotedTotal.toInt()}',
+                duration: const Duration(seconds: 8),
+              );
+            }
+          } else {
+            RealtimePaymentBanner.show(
+              context: context,
+              orderId: result['order_id'] as String? ?? '',
+              successStatuses: ['escrow_hold', 'paid_escrow_held'],
+              processingTitle: context.tr('processing_payment'),
+              processingSubtitle: context.tr('check_phone_enter_pin'),
+              successTitle: context.tr('payment_successful'),
+              failedTitle: context.tr('payment_failed'),
+              onSuccess: () {},
+              onError: (msg) {
+                if (mounted) PaymentResult.show(context: context, success: false, errorMessage: msg);
+              },
+            );
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) _showError(translateError(e));
+      setState(() => _paying = false);
+    }
+  }
+
+  Future<void> _transitionOrder(String newStatus) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      final token = await user.getIdToken();
+      await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/orders/transition'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'orderId': widget.docId, 'newStatus': newStatus}),
+      );
+    } catch (_) {}
+  }
+
+  String _addrField(String key) {
+    final addr = d['deliveryAddress'] as Map<String, dynamic>?;
+    if (addr != null) return addr[key] as String? ?? '';
+    return d[key] as String? ?? '';
+  }
+
+  IconData _methodIcon(String id) {
+    switch (id) {
+      case 'wallet': return Icons.account_balance_wallet;
+      case 'ussd_push': return Icons.phone_android;
+      case 'billpay': return Icons.receipt_long;
+      default: return Icons.payment;
+    }
+  }
+
+  void _showError(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.error, behavior: SnackBarBehavior.floating),
+    );
   }
 }
 

@@ -20,9 +20,11 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       return Scaffold(
+        backgroundColor: cs.surface,
         appBar: AppBar(title: Text(context.tr('notifications'))),
         body: Center(child: Text(context.tr('login_required'))),
       );
@@ -35,13 +37,14 @@ class _NotificationScreenState extends State<NotificationScreen> {
           .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snap) {
-        if (snap.hasError) return _buildErrorScaffold();
-        if (!snap.hasData) return _buildLoadingScaffold();
+        if (snap.hasError) return _buildErrorScaffold(cs);
+        if (!snap.hasData) return _buildLoadingScaffold(cs);
 
         final docs = snap.data!.docs;
         final unreadCount = docs.where((d) => !(d['isRead'] as bool)).length;
 
         return Scaffold(
+          backgroundColor: cs.surface,
           appBar: AppBar(
             title: Text(context.tr('notifications')),
             actions: [
@@ -52,28 +55,32 @@ class _NotificationScreenState extends State<NotificationScreen> {
                 ),
             ],
           ),
-          body: docs.isEmpty
-              ? _emptyState(context)
-              : _buildNotificationList(docs),
+          body: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [cs.surface, cs.surfaceContainerLow.withValues(alpha: 0.3)],
+              ),
+            ),
+            child: docs.isEmpty
+                ? _emptyState(context, cs)
+                : _buildNotificationList(cs, docs),
+          ),
           bottomNavigationBar: const AdBanner(),
         );
       },
     );
   }
 
-  Widget _emptyState(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+  Widget _emptyState(BuildContext context, ColorScheme cs) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.notifications_none, size: 64,
-              color: cs.onSurfaceVariant),
+          Icon(Icons.notifications_none, size: 64, color: cs.onSurfaceVariant),
           const SizedBox(height: 16),
-          Text(
-            context.tr('no_notifications'),
-            style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant),
-          ),
+          Text(context.tr('no_notifications'), style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant)),
         ],
       ),
     );
@@ -88,11 +95,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
     }
   }
 
-  Widget _buildNotificationList(List<QueryDocumentSnapshot> docs) {
+  Widget _buildNotificationList(ColorScheme cs, List<QueryDocumentSnapshot> docs) {
     return ListView.separated(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).padding.bottom + 20,
-      ),
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 20),
       itemCount: docs.length,
       separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, index) {
@@ -102,69 +107,81 @@ class _NotificationScreenState extends State<NotificationScreen> {
           key: ValueKey(doc.id),
           direction: DismissDirection.endToStart,
           background: Container(
-            color: Theme.of(context).colorScheme.error,
+            color: cs.error,
             alignment: Alignment.centerRight,
             padding: const EdgeInsets.only(right: 20),
-            child: Icon(Icons.delete_outline,
-                color: Theme.of(context).colorScheme.surface),
+            child: Icon(Icons.delete_outline, color: cs.surface),
           ),
           confirmDismiss: (_) async {
             final deleted = await _notifService.deleteNotification(doc.id);
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text(deleted
-                      ? context.tr('notification_deleted')
-                      : context.tr('something_wrong')),
+                  content: Text(deleted ? context.tr('notification_deleted') : context.tr('something_wrong')),
                   duration: const Duration(seconds: 2),
                 ),
               );
             }
             return deleted;
           },
-          child: _buildTile(doc.id, data),
+          child: _buildTile(cs, doc.id, data),
         );
       },
     );
   }
 
-  Scaffold _buildLoadingScaffold() {
+  Scaffold _buildLoadingScaffold(ColorScheme cs) {
     return Scaffold(
+      backgroundColor: cs.surface,
       appBar: AppBar(title: Text(context.tr('notifications'))),
-      body: const GoogleLoadingPage(),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [cs.surface, cs.surfaceContainerLow.withValues(alpha: 0.3)],
+          ),
+        ),
+        child: const GoogleLoadingPage(),
+      ),
       bottomNavigationBar: const AdBanner(),
     );
   }
 
-  Scaffold _buildErrorScaffold() {
+  Scaffold _buildErrorScaffold(ColorScheme cs) {
     return Scaffold(
+      backgroundColor: cs.surface,
       appBar: AppBar(title: Text(context.tr('notifications'))),
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.cloud_off, size: 64, color: Theme.of(context).colorScheme.error),
-            const SizedBox(height: 16),
-            Text(
-              context.tr('trouble_connecting'),
-              style: const TextStyle(fontSize: 16),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () => setState(() {}),
-              icon: const Icon(Icons.refresh),
-              label: Text(context.tr('try_again')),
-            ),
-          ],
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [cs.surface, cs.surfaceContainerLow.withValues(alpha: 0.3)],
+          ),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.cloud_off, size: 64, color: cs.error),
+              const SizedBox(height: 16),
+              Text(context.tr('trouble_connecting'), style: const TextStyle(fontSize: 16), textAlign: TextAlign.center),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () => setState(() {}),
+                icon: const Icon(Icons.refresh),
+                label: Text(context.tr('try_again')),
+              ),
+            ],
+          ),
         ),
       ),
       bottomNavigationBar: const AdBanner(),
     );
   }
 
-  Widget _buildTile(String docId, Map<String, dynamic> data) {
-    final cs = Theme.of(context).colorScheme;
+  Widget _buildTile(ColorScheme cs, String docId, Map<String, dynamic> data) {
     final title = data['title'] as String? ?? '';
     final body = data['body'] as String? ?? '';
     final isRead = data['isRead'] as bool? ?? false;
@@ -212,25 +229,13 @@ class _NotificationScreenState extends State<NotificationScreen> {
         backgroundColor: color.withValues(alpha: 0.1),
         child: Icon(icon, color: color, size: 22),
       ),
-      title: Text(
-        title,
-        style: TextStyle(fontWeight: isRead ? FontWeight.normal : FontWeight.bold),
-      ),
-      subtitle: Text(
-        body,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-      ),
+      title: Text(title, style: TextStyle(fontWeight: isRead ? FontWeight.normal : FontWeight.bold)),
+      subtitle: Text(body, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
       trailing: isRead
           ? null
           : Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                color: cs.primary,
-                shape: BoxShape.circle,
-              ),
+              width: 10, height: 10,
+              decoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle),
             ),
       onTap: () {
         if (!isRead) _notifService.markAsRead(docId);

@@ -11,7 +11,6 @@ import '../../services/api_config.dart';
 import '../../services/localization_service.dart';
 import '../../widgets/google_loading.dart';
 import '../../theme/app_colors.dart';
-import '../../extensions/context_tr.dart';
 
 class SellerStatementScreen extends StatefulWidget {
   final String sellerId;
@@ -154,7 +153,7 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
   Widget _buildHeader(ColorScheme cs) {
     return Column(
       children: [
-        Image.asset('assets/soko_vibe_logo.png', height: 56, errorBuilder: (_, __, ___) =>
+        Image.asset('assets/soko_vibe_logo.png', height: 56, errorBuilder: (_, _, _) =>
           Icon(Icons.store, size: 48, color: cs.primary)),
         const SizedBox(height: 8),
         Text(
@@ -297,7 +296,7 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
                         style: TextStyle(fontSize: 9, color: cs.onSurfaceVariant))),
                   Expanded(
                     flex: 2,
-                    child: Text(e['description']?.toString()?.substring(0, (e['description']?.toString()?.length ?? 20).clamp(0, 20)) ?? '',
+                    child: Text((e['description']?.toString() ?? '').substring(0, ((e['description']?.toString() ?? '').length).clamp(0, 20)),
                         style: TextStyle(fontSize: 9, color: cs.onSurface), maxLines: 1, overflow: TextOverflow.ellipsis)),
                   SizedBox(
                     width: 55,

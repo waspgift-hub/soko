@@ -42,7 +42,15 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _loadProfile();
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      _loadProfile();
+    } else {
+      // Wait for Firebase Auth to initialize on cold start
+      FirebaseAuth.instance.authStateChanges().first.then((_) {
+        if (mounted) _loadProfile();
+      });
+    }
   }
 
   @override
@@ -148,6 +156,7 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
     return KeyedSubtree(
       key: ValueKey('profile_$_refreshKey'),
       child: Scaffold(
+        backgroundColor: cs.surface,
       body: PremiumScaffold(
         child: Container(
           decoration: BoxDecoration(
