@@ -23,6 +23,7 @@ import 'app/router.dart' as router_lib;
 import 'firebase_options.dart';
 import 'notifiers/auth_notifier.dart';
 import 'providers/product_feed_provider.dart';
+import 'providers/ride_provider.dart';
 import 'repositories/auth_repository.dart';
 import 'services/ai/ai_service.dart';
 import 'services/app_lock_service.dart';
@@ -512,6 +513,7 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
         Provider.value(value: _authRepository),
         Provider.value(value: _onboardingService),
         ChangeNotifierProvider.value(value: _authNotifier),
+        ChangeNotifierProvider(create: (_) => RideProvider()),
       ],
       child: MaterialApp.router(
         routerConfig: appRouter,
