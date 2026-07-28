@@ -58,6 +58,13 @@ import '../screens/seller/seller_statement_screen.dart';
 
 import '../screens/legal/privacy_policy_screen.dart';
 import '../screens/legal/terms_of_service_screen.dart';
+import '../screens/ride/ride_home_screen.dart';
+import '../screens/ride/ride_booking_screen.dart';
+import '../screens/ride/ride_tracking_screen.dart';
+import '../screens/ride/driver_home_screen.dart';
+import '../screens/ride/driver_register_screen.dart';
+import '../screens/ride/driver_earnings_screen.dart';
+import '../screens/ride/ride_history_screen.dart';
 import 'routes.dart';
 import 'app_state.dart' as app_state;
 
@@ -109,6 +116,14 @@ final List<String> _authRequiredRoutes = [
   AppRoutes.receipt,
   AppRoutes.orderDetail,
   AppRoutes.report,
+  // Ride-hailing routes
+  AppRoutes.rideHome,
+  AppRoutes.rideBooking,
+  AppRoutes.rideTracking,
+  AppRoutes.driverHome,
+  AppRoutes.driverRegister,
+  AppRoutes.driverEarnings,
+  AppRoutes.rideHistory,
 ];
 
 final List<String> _adminOnlyRoutes = [
@@ -406,6 +421,39 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.termsOfService,
         pageBuilder: (context, state) => _premiumPage(const TermsOfServiceScreen()),
+      ),
+
+      // 🚗 Ride-hailing routes
+      GoRoute(
+        path: AppRoutes.rideHome,
+        pageBuilder: (context, state) => _premiumPage(const RideHomeScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.rideBooking,
+        pageBuilder: (context, state) => _premiumPage(const RideBookingScreen()),
+      ),
+      GoRoute(
+        path: '${AppRoutes.rideTracking}/:rideId',
+        pageBuilder: (context, state) {
+          final rideId = state.pathParameters['rideId']!;
+          return _premiumPage(RideTrackingScreen(rideId: rideId));
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.driverHome,
+        pageBuilder: (context, state) => _premiumPage(const DriverHomeScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.driverRegister,
+        pageBuilder: (context, state) => _premiumPage(const DriverRegisterScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.driverEarnings,
+        pageBuilder: (context, state) => _premiumPage(const DriverEarningsScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.rideHistory,
+        pageBuilder: (context, state) => _premiumPage(const RideHistoryScreen()),
       ),
     ],
   );

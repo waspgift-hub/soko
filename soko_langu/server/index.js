@@ -6870,6 +6870,805 @@ function startProductListener() {
 }
 
 // ============================================================
+// 🚗 RIDE-HAILING — Full ride-sharing system
+// ============================================================
+
+const RIDE_STATUSES = {
+  REQUESTED: 'REQUESTED',
+  ACCEPTED: 'ACCEPTED',
+  DRIVER_ARRIVED: 'DRIVER_ARRIVED',
+  IN_PROGRESS: 'IN_PROGRESS',
+  COMPLETED: 'COMPLETED',
+  PAID: 'PAID',
+  CANCELLED: 'CANCELLED',
+};
+
+const RIDE_AUTO_CANCEL_MS = 60000; // 60s timeout if no driver accepts
+
+// --- Fare calculation helper ---
+function calculateFare(distanceKm, durationMin) {
+  const baseFare = 2000;
+  const perKm = 1000;
+  const perMin = 200;
+  const minFare = 3000;
+  const distance = Math.max(0.5, distanceKm);
+  const duration = Math.max(2, durationMin);
+  const fare = baseFare + Math.round(distance * perKm) + Math.round(duration * perMin);
+  return Math.max(minFare, fare);
+}
+
+// --- Haversine distance (km) ---
+function haversineDistance(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// --- Create in-app notification helper ---
+async function createRideNotification(db, userId, title, body, data = {}) {
+  try {
+    await db.collection('notifications').add({
+      userId,
+      title,
+      body,
+      type: 'ride',
+      rideId: data.rideId || null,
+      read: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...data,
+    });
+  } catch (e) {
+    console.error('[RIDE] Failed to create notification:', e.message);
+  }
+}
+
+// --- Send OneSignal push ---
+async function sendRidePush(userId, title, message, data = {}) {
+  try {
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) return;
+    const onesignalId = userDoc.data().onesignalId;
+    if (!onesignalId) return;
+    const appId = process.env.ONESIGNAL_APP_ID;
+    const apiKey = process.env.ONESIGNAL_API_KEY;
+    if (!appId || !apiKey) return;
+    await fetch('https://onesignal.com/api/v1/notifications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Basic ${apiKey}` },
+      body: JSON.stringify({
+        app_id: appId,
+        include_player_ids: [onesignalId],
+        headings: { en: title, sw: title },
+        contents: { en: message, sw: message },
+        data,
+        small_icon: 'ic_notification',
+        android_sound: 'notification',
+      }),
+    });
+  } catch (e) {
+    console.error('[RIDE] OneSignal error:', e.message);
+  }
+}
+
+// --- POST /api/rides/estimate ---
+app.post('/api/rides/estimate', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const { pickupLat, pickupLng, dropoffLat, dropoffLng } = req.body;
+    if (pickupLat == null || pickupLng == null || dropoffLat == null || dropoffLng == null) {
+      return res.status(400).json({ error: 'Missing pickup or dropoff coordinates' });
+    }
+    const distanceKm = haversineDistance(pickupLat, pickupLng, dropoffLat, dropoffLng);
+    const durationMin = Math.round(distanceKm * 3 + 5); // rough estimate: 3 min per km + 5 min buffer
+    const fare = calculateFare(distanceKm, durationMin);
+    res.json({
+      distanceKm: Math.round(distanceKm * 100) / 100,
+      durationMin,
+      fare,
+      currency: 'TZS',
+      breakdown: {
+        baseFare: 2000,
+        distanceFare: Math.round(Math.max(0.5, distanceKm) * 1000),
+        timeFare: Math.round(Math.max(2, durationMin) * 200),
+      },
+    });
+  } catch (e) {
+    console.error('[RIDE] Estimate error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- POST /api/rides/request ---
+app.post('/api/rides/request', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const { riderId, riderName, riderPhone, pickupLat, pickupLng, pickupAddress, dropoffLat, dropoffLng, dropoffAddress, distanceKm, durationMin, fare } = req.body;
+    if (!riderId || pickupLat == null || pickupLng == null || dropoffLat == null || dropoffLng == null || !fare) {
+      return res.status(400).json({ error: 'Missing required fields: riderId, pickup, dropoff, fare' });
+    }
+    const rideData = {
+      riderId,
+      riderName: riderName || '',
+      riderPhone: riderPhone || '',
+      pickup: { lat: pickupLat, lng: pickupLng, address: pickupAddress || '' },
+      dropoff: { lat: dropoffLat, lng: dropoffLng, address: dropoffAddress || '' },
+      distanceKm: distanceKm || haversineDistance(pickupLat, pickupLng, dropoffLat, dropoffLng),
+      durationMin: durationMin || Math.round(distanceKm * 3 + 5),
+      fare: Math.round(fare),
+      status: RIDE_STATUSES.REQUESTED,
+      driverId: null,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      acceptedAt: null,
+      startedAt: null,
+      completedAt: null,
+      cancelledAt: null,
+      cancelReason: null,
+      rating: null,
+      paymentMethod: 'wallet',
+      paidAt: null,
+    };
+    const ref = await db.collection('rides').add(rideData);
+    const rideId = ref.id;
+
+    // Notify nearby drivers via Firestore (drivers listen to rides collection)
+    // Also send push to all online drivers within ~10km
+    const onlineDrivers = await db.collection('driver_locations')
+      .where('online', '==', true)
+      .get();
+
+    let notifiedCount = 0;
+    for (const doc of onlineDrivers.docs) {
+      const dl = doc.data();
+      if (dl.lat && dl.lng) {
+        const dist = haversineDistance(pickupLat, pickupLng, dl.lat, dl.lng);
+        if (dist <= 10) {
+          await sendRidePush(doc.id, 'Ombi la Usafiri', `${riderName || 'Mteja'} anaomba usafiri.`, { rideId, type: 'ride_request' });
+          notifiedCount++;
+        }
+      }
+    }
+    console.log(`[RIDE] Ride ${rideId} created, notified ${notifiedCount} nearby drivers`);
+
+    // Auto-cancel if no driver accepts within 60s
+    setTimeout(async () => {
+      try {
+        const snap = await db.collection('rides').doc(rideId).get();
+        if (!snap.exists) return;
+        if (snap.data().status === RIDE_STATUSES.REQUESTED) {
+          await db.collection('rides').doc(rideId).update({
+            status: RIDE_STATUSES.CANCELLED,
+            cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+            cancelReason: 'Hakuna dereva aliyekubali',
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          await createRideNotification(db, riderId, 'Usafiri Umeghairiwa', 'Hakuna dereva aliyekubali ombi lako la usafiri. Tafadhali jaribu tena.', { rideId });
+        }
+      } catch (e) {
+        console.error('[RIDE] Auto-cancel error:', e.message);
+      }
+    }, RIDE_AUTO_CANCEL_MS);
+
+    res.json({ rideId, status: RIDE_STATUSES.REQUESTED });
+  } catch (e) {
+    console.error('[RIDE] Request error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- POST /api/rides/accept ---
+app.post('/api/rides/accept', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const { rideId, driverId } = req.body;
+    if (!rideId || !driverId) return res.status(400).json({ error: 'Missing rideId or driverId' });
+
+    const snap = await db.collection('rides').doc(rideId).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Ride not found' });
+    if (snap.data().status !== RIDE_STATUSES.REQUESTED) {
+      return res.status(400).json({ error: 'Ride is no longer available' });
+    }
+
+    await db.collection('rides').doc(rideId).update({
+      driverId,
+      status: RIDE_STATUSES.ACCEPTED,
+      acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    const ride = snap.data();
+    await createRideNotification(db, ride.riderId, 'Dereva Amekubali', 'Dereva anakuja kukuchukua.', { rideId, driverId });
+    await sendRidePush(ride.riderId, 'Dereva Amekubali', 'Dereva amekubali ombi lako. Anakaribia mahali pako.', { rideId, driverId });
+
+    // Fetch driver info for response
+    const driverDoc = await db.collection('users').doc(driverId).get();
+    const driverData = driverDoc.data() || {};
+    const vehicleDoc = await db.collection('driver_vehicles').doc(driverId).get();
+    const vehicle = vehicleDoc.data() || {};
+
+    res.json({
+      rideId,
+      status: RIDE_STATUSES.ACCEPTED,
+      driver: {
+        name: driverData.name || driverData.displayName || driverData.fullName || 'Dereva',
+        phone: driverData.phone || '',
+        photo: driverData.photoURL || driverData.photoUrl || '',
+        rating: driverData.rating || 0,
+      },
+      vehicle: {
+        type: vehicle.type || 'Sedan',
+        model: vehicle.model || '',
+        color: vehicle.color || '',
+        regNumber: vehicle.regNumber || '',
+      },
+    });
+  } catch (e) {
+    console.error('[RIDE] Accept error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- POST /api/rides/arrived ---
+app.post('/api/rides/arrived', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const { rideId, driverId } = req.body;
+    if (!rideId || !driverId) return res.status(400).json({ error: 'Missing rideId or driverId' });
+
+    const snap = await db.collection('rides').doc(rideId).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Ride not found' });
+    if (snap.data().status !== RIDE_STATUSES.ACCEPTED) {
+      return res.status(400).json({ error: 'Ride must be in ACCEPTED status' });
+    }
+    if (snap.data().driverId !== driverId) {
+      return res.status(403).json({ error: 'Not your ride' });
+    }
+
+    await db.collection('rides').doc(rideId).update({
+      status: RIDE_STATUSES.DRIVER_ARRIVED,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    const ride = snap.data();
+    await createRideNotification(db, ride.riderId, 'Dereva Amefika', 'Dereva amefika mahali pa kuokota.', { rideId });
+
+    res.json({ rideId, status: RIDE_STATUSES.DRIVER_ARRIVED });
+  } catch (e) {
+    console.error('[RIDE] Arrived error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- POST /api/rides/start ---
+app.post('/api/rides/start', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const { rideId, driverId } = req.body;
+    if (!rideId || !driverId) return res.status(400).json({ error: 'Missing rideId or driverId' });
+
+    const snap = await db.collection('rides').doc(rideId).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Ride not found' });
+    if (snap.data().status !== RIDE_STATUSES.DRIVER_ARRIVED && snap.data().status !== RIDE_STATUSES.ACCEPTED) {
+      return res.status(400).json({ error: 'Ride must be DRIVER_ARRIVED or ACCEPTED' });
+    }
+    if (snap.data().driverId !== driverId) {
+      return res.status(403).json({ error: 'Not your ride' });
+    }
+
+    await db.collection('rides').doc(rideId).update({
+      status: RIDE_STATUSES.IN_PROGRESS,
+      startedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.json({ rideId, status: RIDE_STATUSES.IN_PROGRESS });
+  } catch (e) {
+    console.error('[RIDE] Start error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- POST /api/rides/complete ---
+app.post('/api/rides/complete', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const { rideId, driverId, actualDistanceKm, actualDurationMin } = req.body;
+    if (!rideId || !driverId) return res.status(400).json({ error: 'Missing rideId or driverId' });
+
+    const snap = await db.collection('rides').doc(rideId).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Ride not found' });
+    if (snap.data().status !== RIDE_STATUSES.IN_PROGRESS) {
+      return res.status(400).json({ error: 'Ride must be IN_PROGRESS' });
+    }
+    if (snap.data().driverId !== driverId) {
+      return res.status(403).json({ error: 'Not your ride' });
+    }
+
+    const ride = snap.data();
+    const finalFare = calculateFare(
+      actualDistanceKm || ride.distanceKm || 1,
+      actualDurationMin || ride.durationMin || 5
+    );
+
+    await db.collection('rides').doc(rideId).update({
+      status: RIDE_STATUSES.COMPLETED,
+      completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      actualDistanceKm: actualDistanceKm || ride.distanceKm,
+      actualDurationMin: actualDurationMin || ride.durationMin,
+      finalFare,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await createRideNotification(db, ride.riderId, 'Safari Imekamilika', 'Safari yako imekamilika. Tafadhali lipia na ukadirie dereva.', { rideId, fare: finalFare });
+
+    res.json({ rideId, status: RIDE_STATUSES.COMPLETED, finalFare });
+  } catch (e) {
+    console.error('[RIDE] Complete error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- POST /api/rides/pay ---
+app.post('/api/rides/pay', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const { rideId, riderId } = req.body;
+    if (!rideId || !riderId) return res.status(400).json({ error: 'Missing rideId or riderId' });
+
+    const snap = await db.collection('rides').doc(rideId).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Ride not found' });
+    const ride = snap.data();
+    if (ride.status !== RIDE_STATUSES.COMPLETED) {
+      return res.status(400).json({ error: 'Ride must be COMPLETED' });
+    }
+    if (ride.riderId !== riderId) {
+      return res.status(403).json({ error: 'Not your ride' });
+    }
+
+    const amount = ride.finalFare || ride.fare;
+    const driverShare = Math.round(amount * 0.85); // 85% to driver, 15% platform
+
+    // Deduct from rider wallet
+    const walletRef = db.collection('wallets').doc(riderId);
+    const walletSnap = await walletRef.get();
+    if (!walletSnap.exists || (walletSnap.data().balance || 0) < amount) {
+      return res.status(400).json({ error: 'Insufficient wallet balance' });
+    }
+
+    await db.runTransaction(async (tx) => {
+      const wDoc = await tx.get(walletRef);
+      const newBalance = (wDoc.data().balance || 0) - amount;
+      tx.update(walletRef, { balance: newBalance, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    });
+
+    // Credit driver wallet
+    const driverWalletRef = db.collection('wallets').doc(ride.driverId);
+    await db.runTransaction(async (tx) => {
+      const wDoc = await tx.get(driverWalletRef);
+      const currentBalance = wDoc.exists ? (wDoc.data().balance || 0) : 0;
+      if (wDoc.exists) {
+        tx.update(driverWalletRef, { balance: currentBalance + driverShare, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      } else {
+        tx.set(driverWalletRef, { balance: driverShare, createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      }
+    });
+
+    // Transaction records
+    await db.collection('transactions').add({
+      userId: riderId,
+      type: 'ride_payment',
+      amount: -amount,
+      description: `Malipo ya usafiri #${rideId}`,
+      rideId,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    await db.collection('transactions').add({
+      userId: ride.driverId,
+      type: 'ride_earning',
+      amount: driverShare,
+      description: `Mapato ya usafiri #${rideId}`,
+      rideId,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await db.collection('rides').doc(rideId).update({
+      status: RIDE_STATUSES.PAID,
+      paidAt: admin.firestore.FieldValue.serverTimestamp(),
+      driverPayout: driverShare,
+      platformFee: amount - driverShare,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await createRideNotification(db, ride.driverId, 'Malipo Yamekamilika', `Umepokea TSh ${driverShare.toLocaleString()} kwa usafiri #${rideId}.`, { rideId, amount: driverShare });
+    await sendRidePush(ride.driverId, 'Malipo Yamekamilika', `Umepokea TSh ${driverShare.toLocaleString()} kwa usafiri #${rideId}.`, { rideId });
+
+    res.json({ rideId, status: RIDE_STATUSES.PAID, amount, driverShare, platformFee: amount - driverShare });
+  } catch (e) {
+    console.error('[RIDE] Pay error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- POST /api/rides/cancel ---
+app.post('/api/rides/cancel', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const { rideId, userId, reason } = req.body;
+    if (!rideId || !userId) return res.status(400).json({ error: 'Missing rideId or userId' });
+
+    const snap = await db.collection('rides').doc(rideId).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Ride not found' });
+    const ride = snap.data();
+    if (ride.status !== RIDE_STATUSES.REQUESTED && ride.status !== RIDE_STATUSES.ACCEPTED) {
+      return res.status(400).json({ error: 'Can only cancel REQUESTED or ACCEPTED rides' });
+    }
+    if (ride.riderId !== userId && ride.driverId !== userId) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    await db.collection('rides').doc(rideId).update({
+      status: RIDE_STATUSES.CANCELLED,
+      cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+      cancelReason: reason || 'Imeghairiwa na mtumiaji',
+      cancelledBy: userId,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // Notify the other party
+    const otherId = ride.riderId === userId ? ride.driverId : ride.riderId;
+    if (otherId) {
+      await createRideNotification(db, otherId, 'Usafiri Umeghairiwa', `Usafiri #${rideId} umeg hairiwa.`, { rideId });
+    }
+
+    res.json({ rideId, status: RIDE_STATUSES.CANCELLED });
+  } catch (e) {
+    console.error('[RIDE] Cancel error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- POST /api/rides/rate ---
+app.post('/api/rides/rate', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const { rideId, userId, rating, comment } = req.body;
+    if (!rideId || !userId || rating == null) return res.status(400).json({ error: 'Missing rideId, userId, or rating' });
+
+    const snap = await db.collection('rides').doc(rideId).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Ride not found' });
+    const ride = snap.data();
+    if (ride.riderId !== userId) return res.status(403).json({ error: 'Only rider can rate' });
+
+    await db.collection('rides').doc(rideId).update({
+      rating: Math.min(5, Math.max(1, Math.round(rating))),
+      ratingComment: comment || '',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // Update driver's average rating
+    if (ride.driverId) {
+      const driverRides = await db.collection('rides')
+        .where('driverId', '==', ride.driverId)
+        .where('rating', '>', 0)
+        .get();
+      let totalRating = 0;
+      let count = 0;
+      driverRides.forEach(d => { totalRating += d.data().rating || 0; count++; });
+      const avgRating = count > 0 ? Math.round((totalRating / count) * 10) / 10 : rating;
+      await db.collection('users').doc(ride.driverId).update({ rating: avgRating });
+    }
+
+    res.json({ rideId, rating });
+  } catch (e) {
+    console.error('[RIDE] Rate error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- GET /api/rides/nearby-drivers ---
+app.get('/api/rides/nearby-drivers', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const { lat, lng, radius } = req.query;
+    if (!lat || !lng) return res.status(400).json({ error: 'Missing lat/lng' });
+
+    const maxRadius = parseFloat(radius) || 10;
+    const onlineDrivers = await db.collection('driver_locations')
+      .where('online', '==', true)
+      .get();
+
+    const nearby = [];
+    for (const doc of onlineDrivers.docs) {
+      const dl = doc.data();
+      if (dl.lat && dl.lng) {
+        const dist = haversineDistance(parseFloat(lat), parseFloat(lng), dl.lat, dl.lng);
+        if (dist <= maxRadius) {
+          // Get driver name from users collection (lazy — batch read would be better for scale)
+          let userName = '';
+          try {
+            const uDoc = await db.collection('users').doc(doc.id).get();
+            userName = uDoc.data()?.name || uDoc.data()?.displayName || '';
+          } catch (_) {}
+          nearby.push({
+            driverId: doc.id,
+            lat: dl.lat,
+            lng: dl.lng,
+            name: userName,
+            distanceKm: Math.round(dist * 100) / 100,
+            heading: dl.heading || 0,
+          });
+        }
+      }
+    }
+
+    res.json({ drivers: nearby, count: nearby.length });
+  } catch (e) {
+    console.error('[RIDE] Nearby drivers error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- POST /api/driver/location ---
+app.post('/api/driver/location', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const { driverId, lat, lng, heading } = req.body;
+    if (!driverId || lat == null || lng == null) {
+      return res.status(400).json({ error: 'Missing driverId, lat, or lng' });
+    }
+
+    await db.collection('driver_locations').doc(driverId).set({
+      lat,
+      lng,
+      heading: heading || 0,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    res.json({ updated: true });
+  } catch (e) {
+    console.error('[RIDE] Driver location error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- POST /api/driver/online ---
+app.post('/api/driver/online', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const { driverId, online } = req.body;
+    if (!driverId || online == null) return res.status(400).json({ error: 'Missing driverId or online' });
+
+    await db.collection('driver_locations').doc(driverId).set({
+      online: !!online,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    res.json({ online: !!online });
+  } catch (e) {
+    console.error('[RIDE] Driver online error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- POST /api/driver/register ---
+app.post('/api/driver/register', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const { driverId, type, model, color, regNumber, licenseNumber } = req.body;
+    if (!driverId || !type) return res.status(400).json({ error: 'Missing driverId or vehicle type' });
+
+    await db.collection('driver_vehicles').doc(driverId).set({
+      type,
+      model: model || '',
+      color: color || '',
+      regNumber: regNumber || '',
+      licenseNumber: licenseNumber || '',
+      registeredAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    await db.collection('users').doc(driverId).update({
+      isDriver: true,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.json({ registered: true, driverId });
+  } catch (e) {
+    console.error('[RIDE] Driver register error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- GET /api/driver/rides ---
+app.get('/api/driver/rides/:driverId', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const { driverId } = req.params;
+    const limit = parseInt(req.query.limit) || 50;
+
+    const snap = await db.collection('rides')
+      .where('driverId', '==', driverId)
+      .orderBy('createdAt', 'desc')
+      .limit(limit)
+      .get();
+
+    const rides = [];
+    snap.forEach(d => rides.push({ rideId: d.id, ...d.data(), createdAt: d.data().createdAt?.toMillis() || 0 }));
+    res.json({ rides });
+  } catch (e) {
+    console.error('[RIDE] Driver rides error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- GET /api/rider/rides ---
+app.get('/api/rider/rides/:riderId', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const { riderId } = req.params;
+    const limit = parseInt(req.query.limit) || 50;
+
+    const snap = await db.collection('rides')
+      .where('riderId', '==', riderId)
+      .orderBy('createdAt', 'desc')
+      .limit(limit)
+      .get();
+
+    const rides = [];
+    snap.forEach(d => rides.push({ rideId: d.id, ...d.data(), createdAt: d.data().createdAt?.toMillis() || 0 }));
+    res.json({ rides });
+  } catch (e) {
+    console.error('[RIDE] Rider rides error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- GET /api/driver/earnings/:driverId ---
+app.get('/api/driver/earnings/:driverId', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const { driverId } = req.params;
+
+    const snap = await db.collection('rides')
+      .where('driverId', '==', driverId)
+      .where('status', '==', RIDE_STATUSES.PAID)
+      .get();
+
+    let totalEarnings = 0;
+    let completedRides = 0;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let todayEarnings = 0;
+    const weekStart = new Date(today);
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    let weekEarnings = 0;
+
+    snap.forEach(d => {
+      const ride = d.data();
+      const payout = ride.driverPayout || 0;
+      totalEarnings += payout;
+      completedRides++;
+      const createdAt = ride.paidAt?.toMillis ? new Date(ride.paidAt.toMillis()) : null;
+      if (createdAt) {
+        if (createdAt >= today) todayEarnings += payout;
+        if (createdAt >= weekStart) weekEarnings += payout;
+      }
+    });
+
+    res.json({
+      totalEarnings,
+      todayEarnings,
+      weekEarnings,
+      completedRides,
+    });
+  } catch (e) {
+    console.error('[RIDE] Driver earnings error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- GET /api/rides/directions ---
+app.get('/api/rides/directions', async (req, res) => {
+  try {
+    const { origin, destination } = req.query;
+    if (!origin || !destination) return res.status(400).json({ error: 'Missing origin or destination' });
+
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyDpjlFFyFlNYu-sRUtMJouJR7a6RfDb6RY';
+    const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&key=${apiKey}`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+
+    if (data.status !== 'OK') {
+      return res.status(502).json({ error: 'Directions API error', googleStatus: data.status });
+    }
+
+    const route = data.routes[0];
+    const leg = route.legs[0];
+    const polyline = route.overview_polyline?.points || '';
+    const points = [];
+    if (polyline) {
+      // Decode polyline
+      let index = 0, lat = 0, lng = 0;
+      while (index < polyline.length) {
+        let b, shift = 0, result = 0;
+        do { b = polyline.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+        const dlat = (result & 1) !== 0 ? ~(result >> 1) : (result >> 1);
+        lat += dlat;
+        shift = 0; result = 0;
+        do { b = polyline.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+        const dlng = (result & 1) !== 0 ? ~(result >> 1) : (result >> 1);
+        lng += dlng;
+        points.push({ lat: lat / 1e5, lng: lng / 1e5 });
+      }
+    }
+
+    res.json({
+      distanceKm: Math.round(leg.distance.value / 10) / 100,
+      durationMin: Math.round(leg.duration.value / 60),
+      polyline: points,
+      startAddress: leg.start_address,
+      endAddress: leg.end_address,
+    });
+  } catch (e) {
+    console.error('[RIDE] Directions error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- GET /api/rides/geocode ---
+app.get('/api/rides/geocode', async (req, res) => {
+  try {
+    const { query } = req.query;
+    if (!query) return res.status(400).json({ error: 'Missing query' });
+
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyDpjlFFyFlNYu-sRUtMJouJR7a6RfDb6RY';
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+
+    if (data.status !== 'OK') {
+      return res.status(502).json({ error: 'Geocode API error' });
+    }
+
+    const results = data.results.slice(0, 5).map(r => ({
+      address: r.formatted_address,
+      lat: r.geometry.location.lat,
+      lng: r.geometry.location.lng,
+    }));
+
+    res.json({ results });
+  } catch (e) {
+    console.error('[RIDE] Geocode error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- GET /api/rides/reverse-geocode ---
+app.get('/api/rides/reverse-geocode', async (req, res) => {
+  try {
+    const { latlng } = req.query;
+    if (!latlng) return res.status(400).json({ error: 'Missing latlng' });
+
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyDpjlFFyFlNYu-sRUtMJouJR7a6RfDb6RY';
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${encodeURIComponent(latlng)}&key=${apiKey}`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+
+    if (data.status !== 'OK') {
+      return res.status(502).json({ error: 'Reverse geocode API error' });
+    }
+
+    const address = data.results[0]?.formatted_address || '';
+    res.json({ address });
+  } catch (e) {
+    console.error('[RIDE] Reverse geocode error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
 // 🔍 DIAGNOSTIC — Check legacy FCM token in user doc
 app.get('/api/diag/fcm-token/:userId', async (req, res) => {
   try {
