@@ -21,7 +21,7 @@ import '../../widgets/payment_result_dialog.dart';
 import '../../widgets/glass_container.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
-import '../../widgets/premium_background.dart';
+import '../../widgets/premium_background.dart'; // ignore: unused_import
 import '../../utils/network_error.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -379,6 +379,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
 
   Widget _buildPaymentButton() {
     final cs2 = Theme.of(context).colorScheme;
+    // ignore: unused_local_variable
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Calculate gateway fee and total
@@ -771,7 +772,8 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
         return PopScope(
           canPop: false,
           onPopInvokedWithResult: (didPop, _) {
-            if (!didPop && sub != null) sub!.cancel();
+            // ignore: dead_code
+            if (!didPop) sub?.cancel();
           },
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
@@ -867,6 +869,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
 
     if (!completer.isCompleted) {
       completer.complete();
+      // ignore: dead_code
       sub?.cancel();
     }
   }

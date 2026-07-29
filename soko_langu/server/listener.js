@@ -25,9 +25,10 @@ const ONE_SIGNAL_REST_API_KEY = process.env.ONE_SIGNAL_REST_API_KEY;
 
 function getChannelId(data = {}) {
   const type = (data && data.type) || 'general';
-  if (type === 'chat' || type === 'group_chat') return 'chat_messages_v4';
-  if (type === 'payment' || type === 'order' || type === 'withdrawal') return 'payments_notifications_v4';
-  return 'general_notifications_v4';
+  if (type === 'chat' || type === 'group_chat') return 'chat_messages_v5';
+  if (type === 'payment' || type === 'order' || type === 'withdrawal' || type === 'kyc') return 'payments_notifications_v5';
+  if (type === 'ride' || type === 'ride_request' || type === 'ride_accepted' || type === 'ride_completed') return 'ride_notifications_v5';
+  return 'general_notifications_v5';
 }
 
 async function sendOsNotification(userId, title, body, data = {}) {

@@ -2502,9 +2502,8 @@ app.post('/api/kyc/submit', async (req, res) => {
         break;
     }
 
-    const autoApproved = errors.length === 0;
-    const status = autoApproved ? 'approved' : 'pending';
-    const reason = autoApproved ? '' : errors.join('; ');
+    const status = 'pending';
+    const reason = errors.length > 0 ? errors.join('; ') : 'Inahitaji ukaguzi wa admin';
 
     await db.collection('users').doc(userId).update({
       kyc: {
@@ -2514,48 +2513,48 @@ app.post('/api/kyc/submit', async (req, res) => {
         idImageUrl: idImageUrl || '',
         selfieUrl: selfieUrl || '',
         status,
-        approved: autoApproved,
+        approved: false,
         reviewNotes: reason,
         submittedAt: admin.firestore.FieldValue.serverTimestamp(),
-        reviewedAt: autoApproved ? admin.firestore.FieldValue.serverTimestamp() : null,
+        reviewedAt: null,
       },
     });
 
-    // Update sellerKycApproved on all products if auto-approved
-    if (autoApproved && userId) {
-      await updateSellerKycOnProducts(userId, true);
-    }
-
     await auditLog({
       userId,
-      type: `kyc_${status}`,
+      type: 'kyc_pending',
       amount: 0,
-      reason: `KYC ${status}: ${idType} ${cleanId}${reason ? ' — ' + reason : ''}`,
+      reason: `KYC submitted: ${idType} ${cleanId}${reason ? ' — ' + reason : ''}`,
     });
+
+    // Notify admin about new KYC submission
+    const adminSnap = await db.collection('users').where('isAdmin', '==', true).limit(5).get();
+    for (const adminDoc of adminSnap.docs) {
+      await db.collection('notifications').add({
+        userId: adminDoc.id,
+        title: 'KYC Mpya Imewasilishwa',
+        body: `${fullName} ametuma KYC yake. Tafadhali kagua.`,
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        data: { type: 'kyc_review', userId },
+      });
+      await sendOneSignalNotification(adminDoc.id, 'KYC Mpya Imewasilishwa', `${fullName} ametuma KYC yake. Tafadhali kagua.`, { type: 'kyc', userId }).catch(() => {});
+    }
 
     // Notify user
     await db.collection('notifications').add({
       userId,
-      title: autoApproved ? 'KYC Imekubaliwa!' : 'KYC Inahitaji Ukaguzi',
-      body: autoApproved
-        ? 'Umekubaliwa kuuza bidhaa. Sasa unaweza kuongeza bidhaa zako.'
-        : `KYC yako inahitaji marekebisho: ${reason}. Tuma tena baada ya kusahihisha.`,
+      title: 'KYC Imewasilishwa',
+      body: 'KYC yako imewasilishwa. Subiri ukaguzi wa admin. Utapata taarifa ikikubaliwa.',
       isRead: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-    try {
-      const kycTitle = autoApproved ? 'KYC Imekubaliwa!' : 'KYC Inahitaji Ukaguzi';
-      const kycBody = autoApproved
-        ? 'Umekubaliwa kuuza bidhaa. Sasa unaweza kuongeza bidhaa zako.'
-        : `KYC yako inahitaji marekebisho: ${reason}. Tuma tena baada ya kusahihisha.`;
-      await sendOneSignalNotification(userId, kycTitle, kycBody, { type: 'kyc', status: autoApproved ? 'approved' : 'pending' });
-    } catch (_) {}
 
     res.json({
       success: true,
-      approved: autoApproved,
+      approved: false,
       reason,
-      message: autoApproved ? 'KYC imekubaliwa moja kwa moja' : `KYC imetumwa lakini: ${reason}`,
+      message: 'KYC imewasilishwa. Subiri ukaguzi wa admin.',
     });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
@@ -2631,6 +2630,83 @@ app.post('/api/admin/kyc/review', async (req, res) => {
   }
 });
 
+app.post('/api/admin/kyc/revoke', async (req, res) => {
+  try {
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const { userId, reason } = req.body;
+    if (!userId) return res.status(400).json({ error: 'Missing userId' });
+
+    await db.collection('users').doc(userId).update({
+      'kyc.status': 'revoked',
+      'kyc.approved': false,
+      'kyc.revokedAt': admin.firestore.FieldValue.serverTimestamp(),
+      'kyc.reviewNotes': reason || 'KYC imefutwa na admin.',
+    });
+
+    await updateSellerKycOnProducts(userId, false);
+
+    await auditLog({
+      userId,
+      type: 'kyc_revoked',
+      amount: 0,
+      reason: `KYC revoked by admin. Reason: ${reason || ''}`,
+    });
+
+    await db.collection('notifications').add({
+      userId,
+      title: 'KYC Imefutwa',
+      body: `KYC yako imefutwa na admin. Sababu: ${reason || 'Wasiliana na msaada'}. Tuma tena KYC yako.`,
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.json({ success: true, message: 'KYC revoked' });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/admin/kyc/delete', async (req, res) => {
+  try {
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'Missing userId' });
+
+    await db.collection('users').doc(userId).update({
+      'kyc.status': 'none',
+      'kyc.approved': false,
+      'kyc.fullName': admin.firestore.FieldValue.delete(),
+      'kyc.idType': admin.firestore.FieldValue.delete(),
+      'kyc.idNumber': admin.firestore.FieldValue.delete(),
+      'kyc.idImageUrl': admin.firestore.FieldValue.delete(),
+      'kyc.selfieUrl': admin.firestore.FieldValue.delete(),
+      'kyc.submittedAt': admin.firestore.FieldValue.delete(),
+      'kyc.reviewedAt': admin.firestore.FieldValue.delete(),
+      'kyc.reviewNotes': admin.firestore.FieldValue.delete(),
+      'kyc.revokedAt': admin.firestore.FieldValue.delete(),
+    });
+
+    await updateSellerKycOnProducts(userId, false);
+
+    await auditLog({
+      userId,
+      type: 'kyc_deleted',
+      amount: 0,
+      reason: 'KYC data permanently deleted by admin.',
+    });
+
+    res.json({ success: true, message: 'KYC data permanently deleted' });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.get('/api/admin/kyc/pending', async (req, res) => {
   try {
     const auth = await requireAdmin(req, res);
@@ -2652,6 +2728,92 @@ app.get('/api/admin/kyc/pending', async (req, res) => {
 
     res.json({ pending });
   } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/admin/kyc/all', async (req, res) => {
+  try {
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const snap = await db.collection('users')
+      .where('kyc.status', 'in', ['approved', 'pending', 'rejected', 'revoked'])
+      .orderBy('kyc.submittedAt', 'desc')
+      .limit(100)
+      .get();
+
+    const all = snap.docs.map(doc => ({
+      uid: doc.id,
+      displayName: doc.data().displayName || '',
+      email: doc.data().email || '',
+      phone: doc.data().phone || '',
+      kyc: doc.data().kyc || {},
+    }));
+
+    res.json({ all });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── Broadcast notification to ALL users ────────────────────
+app.post('/api/admin/broadcast-notification', async (req, res) => {
+  try {
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const { title, body } = req.body;
+    if (!title) return res.status(400).json({ error: 'Title is required' });
+
+    // Get all active user IDs
+    const usersSnap = await db.collection('users').get();
+    const userIds = usersSnap.docs.map(doc => doc.id).filter(Boolean);
+
+    if (userIds.length === 0) {
+      return res.json({ success: true, message: 'No users to notify', sentCount: 0 });
+    }
+
+    // Send push via OneSignal to all users
+    const pushResult = await sendOneSignalBulk(userIds, title, body || '', {
+      type: 'system',
+      broadcast: 'true',
+    });
+
+    // Save in-app notification for each user (batch of 500)
+    let notifCount = 0;
+    const BATCH_SIZE = 500;
+    for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
+      const batch = db.batch();
+      const chunk = userIds.slice(i, i + BATCH_SIZE);
+      for (const uid of chunk) {
+        const notifRef = db.collection('notifications').doc();
+        batch.set(notifRef, {
+          userId: uid,
+          title: title,
+          body: body || '',
+          data: { type: 'system', broadcast: 'true' },
+          isRead: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        notifCount++;
+      }
+      await batch.commit();
+    }
+
+    console.log(`[Broadcast] Sent to ${userIds.length} users, notifications saved: ${notifCount}`);
+
+    res.json({
+      success: true,
+      message: `Notification sent to ${userIds.length} users`,
+      totalUsers: userIds.length,
+      pushNotifications: pushResult.successCount || 0,
+      inAppNotifications: notifCount,
+    });
+  } catch (e) {
+    console.error('[Broadcast] Error:', e);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

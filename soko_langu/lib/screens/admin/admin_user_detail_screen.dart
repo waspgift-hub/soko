@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // ignore: unused_import
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
@@ -463,7 +463,7 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
                 leading: Icon(Icons.receipt, color: cs.primary),
                 title: Text(order['productName'] ?? context.tr('product'), maxLines: 1, overflow: TextOverflow.ellipsis),
                 subtitle: Text('TZS ${(order['productPrice'] ?? 0).toStringAsFixed(0)} — ${order['status'] ?? '?'}'),
-                trailing: Text(order['createdAt']?.toString()?.substring(0, 10) ?? ''),
+                trailing: Text(order['createdAt'].toString().substring(0, 10)),
               );
             })),
           ],

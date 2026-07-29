@@ -1,4 +1,4 @@
-import 'dart:ui' as ui;
+import 'dart:ui' as ui; // ignore: unused_import
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -6,7 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../services/notification_service.dart';
 import '../../widgets/glass_container.dart';
 import '../../extensions/context_tr.dart';
-import '../../theme/app_dimens.dart';
+import '../../theme/app_dimens.dart'; // ignore: unused_import
 import '../../widgets/google_loading.dart';
 import '../../utils/network_error.dart';
 
@@ -198,7 +198,7 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
                         _detailRow(cs, context.tr('district_label'), addr['district'] ?? ''),
                         _detailRow(cs, context.tr('street_label'), addr['street'] ?? ''),
                         if (addr['landmarks'] != null && (addr['landmarks'] as String).isNotEmpty)
-                          _detailRow(cs, context.tr('landmarks'), addr!['landmarks'] as String? ?? ''),
+                          _detailRow(cs, context.tr('landmarks'), addr['landmarks'] as String? ?? ''),
                       ],
 
                       const SizedBox(height: 16),

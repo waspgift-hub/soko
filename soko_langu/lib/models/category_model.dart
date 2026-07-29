@@ -172,6 +172,11 @@ List<Category> getDefaultCategories() {
       icon: '🚗',
       subcategories: [
         SubCategory(
+          id: 'magari',
+          name: 'All Cars',
+          nameSw: 'Magari Yote',
+        ),
+        SubCategory(
           id: 'car_parts',
           name: 'Car Parts',
           nameSw: 'Viwango vya Gari',

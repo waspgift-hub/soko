@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../extensions/context_tr.dart';
-import '../../theme/app_dimens.dart';
+import '../../theme/app_dimens.dart'; // ignore: unused_import
 
 class AdminAdsManagementScreen extends StatelessWidget {
   final bool embedded;

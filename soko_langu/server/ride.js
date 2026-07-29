@@ -617,6 +617,125 @@ router.post('/admin-stats', wrapAdmin(async (data) => {
 }));
 
 // ════════════════════════════════════════════════════════════
+// DRIVER RIDES
+// ════════════════════════════════════════════════════════════
+router.post('/get-driver-rides', wrap(async (data, ctx) => {
+  const { driverId, limit: limitVal = 50 } = data;
+  const uid = driverId || ctx.auth.uid;
+  const snap = await db.collection(RIDE_COLLECTIONS.requests)
+    .where('assignedDriverId', '==', uid)
+    .orderBy('createdAt', 'desc')
+    .limit(limitVal).get();
+  const rides = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  return { rides };
+}));
+
+// ════════════════════════════════════════════════════════════
+// PAY RIDE
+// ════════════════════════════════════════════════════════════
+router.post('/pay-ride', wrap(async (data, ctx) => {
+  const { rideId } = data;
+  if (!rideId) throw new Error('rideId required');
+  await db.collection(RIDE_COLLECTIONS.requests).doc(rideId).update({
+    status: RIDE_STATUS.PAYMENT_COMPLETED, paidAt: FieldValue.serverTimestamp(),
+  });
+  return { success: true, status: RIDE_STATUS.PAYMENT_COMPLETED };
+}));
+
+// ════════════════════════════════════════════════════════════
+// DIRECTIONS
+// ════════════════════════════════════════════════════════════
+router.get('/directions', async (req, res) => {
+  try {
+    const { origin, destination } = req.query;
+    if (!origin || !destination) return res.status(400).json({ error: 'Missing origin or destination' });
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyDpjlFFyFlNYu-sRUtMJouJR7a6RfDb6RY';
+    const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&key=${apiKey}`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (data.status !== 'OK') {
+      return res.status(502).json({ error: 'Directions API error', googleStatus: data.status });
+    }
+    const route = data.routes[0];
+    const leg = route.legs[0];
+    const polyline = route.overview_polyline?.points || '';
+    const points = [];
+    if (polyline) {
+      let index = 0, lat = 0, lng = 0;
+      while (index < polyline.length) {
+        let b, shift = 0, result = 0;
+        do { b = polyline.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+        const dlat = (result & 1) !== 0 ? ~(result >> 1) : (result >> 1);
+        lat += dlat;
+        shift = 0; result = 0;
+        do { b = polyline.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+        const dlng = (result & 1) !== 0 ? ~(result >> 1) : (result >> 1);
+        lng += dlng;
+        points.push({ lat: lat / 1e5, lng: lng / 1e5 });
+      }
+    }
+    res.json({
+      distanceKm: Math.round(leg.distance.value / 10) / 100,
+      durationMin: Math.round(leg.duration.value / 60),
+      polyline: points,
+      startAddress: leg.start_address,
+      endAddress: leg.end_address,
+    });
+  } catch (e) {
+    console.error('[RIDE] Directions error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════
+// GEOCODE
+// ════════════════════════════════════════════════════════════
+router.get('/geocode', async (req, res) => {
+  try {
+    const { query } = req.query;
+    if (!query) return res.status(400).json({ error: 'Missing query' });
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyDpjlFFyFlNYu-sRUtMJouJR7a6RfDb6RY';
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (data.status !== 'OK') {
+      return res.status(502).json({ error: 'Geocode API error' });
+    }
+    const results = data.results.slice(0, 5).map(r => ({
+      address: r.formatted_address,
+      lat: r.geometry.location.lat,
+      lng: r.geometry.location.lng,
+    }));
+    res.json({ results });
+  } catch (e) {
+    console.error('[RIDE] Geocode error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════
+// REVERSE GEOCODE
+// ════════════════════════════════════════════════════════════
+router.get('/reverse-geocode', async (req, res) => {
+  try {
+    const { latlng } = req.query;
+    if (!latlng) return res.status(400).json({ error: 'Missing latlng' });
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyDpjlFFyFlNYu-sRUtMJouJR7a6RfDb6RY';
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${encodeURIComponent(latlng)}&key=${apiKey}`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (data.status !== 'OK') {
+      return res.status(502).json({ error: 'Reverse geocode API error' });
+    }
+    const address = data.results[0]?.formatted_address || '';
+    res.json({ address });
+  } catch (e) {
+    console.error('[RIDE] Reverse geocode error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════
 // MATCHING TRIGGER — auto-match drivers
 // ════════════════════════════════════════════════════════════
 async function matchDrivers(requestId) {

@@ -37,6 +37,8 @@ class AppRoutes {
   static const String myPurchases = '/my-purchases';
   static const String kyc = '/kyc';
   static const String report = '/report';
+  static const String adminKyc = '/admin/kyc';
+  static const String adminBroadcast = '/admin/broadcast';
   static const String adminWallet = '/admin/wallet';
   static const String adminReports = '/admin/reports';
   static const String flashSale = '/flash-sale';

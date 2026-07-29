@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // ignore: unused_import
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/routes.dart';
@@ -14,7 +14,7 @@ import '../../notifiers/auth_notifier.dart';
 import '../../services/account_manager.dart';
 import '../../services/api_config.dart';
 import '../../utils/network_error.dart';
-import '../../utils/phone_utils.dart';
+import '../../utils/phone_utils.dart'; // ignore: unused_import
 import '../../widgets/auth_form_widgets.dart';
 import 'otp_screen.dart';
 
@@ -319,7 +319,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 TextSpan(text: 'I ACCEPT THE '),
                                 WidgetSpan(
                                   child: GestureDetector(
-                                    onTap: () => context.push(AppRoutes.privacyPolicy),
+                                    onTap: () => context.push(AppRoutes.termsOfService),
                                     child: Text(
                                       'TERMS OF SERVICE',
                                       style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600),

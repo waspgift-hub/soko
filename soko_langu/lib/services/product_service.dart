@@ -97,11 +97,19 @@ class ProductService {
       final userData = userDoc.data();
       final kycApproved = userData?['kyc']?['approved'] == true;
       if (!kycApproved) {
-        throw NetworkError(
-          message: "KYC not approved",
-          userMessage: "KYC: Tafadhali kamilisha KYC verification kabla ya kuuza bidhaa",
-          originalError: Exception("KYC not approved"),
-        );
+        final productCount = await _db
+            .collection('products')
+            .where('sellerId', isEqualTo: user.uid)
+            .where('isActive', isEqualTo: true)
+            .count()
+            .get();
+        if ((productCount.count ?? 0) >= 5) {
+          throw NetworkError(
+            message: "KYC required - product limit reached",
+            userMessage: "Umefikia kikomo cha bidhaa 5 bila KYC. Tafadhali kamilisha KYC verification kuweza kuongeza bidhaa zaidi.",
+            originalError: Exception("KYC required - product limit reached"),
+          );
+        }
       }
 
       List<String> imageUrls = [];

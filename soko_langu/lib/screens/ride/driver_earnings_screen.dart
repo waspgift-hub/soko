@@ -109,7 +109,7 @@ class _DriverEarningsScreenState extends State<DriverEarningsScreen> {
   }
 
   Widget _buildRideCard(BuildContext context, ColorScheme cs, Ride ride, NumberFormat nf) {
-    final completed = ride.status == 'PAID' || ride.status == 'COMPLETED';
+    final completed = ride.status == 'PAYMENT_COMPLETED' || ride.status == 'COMPLETED';
     final cancelled = ride.status == 'CANCELLED';
 
     return Card(
