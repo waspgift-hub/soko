@@ -207,8 +207,8 @@ async function sendOneSignalBulk(userIds, title, body, data = {}) {
       }, { headers: osHeaders() });
       const result = resp.data;
       if (result.id) {
-        successCount += result.recipients || 0;
-        console.log(`[OS] bulk sent — id=${result.id} recipients=${result.recipients || 0}`);
+        successCount += result.recipients || userIds.length;
+        console.log(`[OS] bulk sent — id=${result.id} recipients=${result.recipients ?? userIds.length}`);
       } else {
         console.error(`[OS] bulk send failed:`, JSON.stringify(result));
       }
