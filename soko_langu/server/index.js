@@ -194,11 +194,13 @@ async function sendOneSignalBulk(userIds, title, body, data = {}) {
   for (let i = 0; i < userIds.length; i += 2000) {
     const batch = userIds.slice(i, i + 2000);
     try {
+      // Send to ALL subscribed devices via segment (reaches users regardless of OneSignal.login())
       const resp = await fetch(OS_URL, {
         method: 'POST',
         headers: osHeaders(),
         body: JSON.stringify({
-          app_id: ONE_SIGNAL_APP_ID, idempotency_key: randomUUID(), include_external_user_ids: batch,
+          app_id: ONE_SIGNAL_APP_ID, idempotency_key: randomUUID(),
+          included_segments: ['Total Subscriptions'],
           headings: { en: title || '' }, contents: { en: body || '' },
           data: { ...(data || {}), type: notifType },
           priority: 10, android_priority: 'high', android_visibility: 1,
@@ -208,7 +210,7 @@ async function sendOneSignalBulk(userIds, title, body, data = {}) {
         }),
       });
       const result = await resp.json();
-      if (result.id) { successCount += batch.length; console.log(`[OS] bulk sent to ${batch.length} users`); }
+      if (result.id) { successCount += result.recipients || 0; console.log(`[OS] bulk sent to ${result.recipients || 0} devices`); }
       else console.error(`[OS] bulk send failed:`, JSON.stringify(result));
     } catch (e) { console.error(`[OS] bulk error: ${e.message}`); }
   }
