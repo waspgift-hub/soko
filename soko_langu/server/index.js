@@ -4,6 +4,19 @@ const cors = require('cors');
 const crypto = require('crypto');
 const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
+
+// Firebase init — MUST be before any module that calls admin.firestore() at require time
+let db;
+if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+  try {
+    const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+    admin.initializeApp({ credential: admin.credential.cert(sa) });
+    db = admin.firestore();
+  } catch (e) {
+    console.error('[FIREBASE] Init failed:', e.message);
+  }
+}
+
 const {
   clickpesaCollect, clickpesaPayout, clickpesaBalance, clickpesaPayoutPreview,
   clickpesaCreateBillPayOrder,
@@ -391,13 +404,6 @@ async function requireAdmin(req, res) {
   }
   res.status(401).json({ error: 'Unauthorized' });
   return { ok: false };
-}
-
-let db;
-if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-  const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
-  admin.initializeApp({ credential: admin.credential.cert(sa) });
-  db = admin.firestore();
 }
 
 // ============================================================
