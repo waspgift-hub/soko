@@ -19,6 +19,7 @@ import '../chat/chat_navigation.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/payment_banner.dart';
 import '../../widgets/payment_result_dialog.dart';
+import '../../widgets/location_map_widget.dart';
 import '../../utils/network_error.dart';
 
 class OrderDetailScreen extends StatefulWidget {
@@ -1164,6 +1165,17 @@ $stepsStr
                   cs,
                   context.tr('landmarks'),
                   address['landmarks'] as String,
+                ),
+              if (address['latitude'] != null && address['longitude'] != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: LocationMapWidget(
+                    targetLat: (address['latitude'] as num).toDouble(),
+                    targetLng: (address['longitude'] as num).toDouble(),
+                    height: 160,
+                    showDistance: true,
+                    interactive: false,
+                  ),
                 ),
               const SizedBox(height: 12),
             ],

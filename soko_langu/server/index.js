@@ -10,6 +10,9 @@ const {
   getUssdPushFee, calcGatewayFee, ALL_PAYMENT_METHODS,
 } = require('./clickpesa');
 const orderEngine = require('./orders');
+const rideRouter = require('./ride').router;
+const searchRouter = require('./search').router;
+const notificationRouter = require('./notification').router;
 
 const DEFAULT_PAYOUT_FEE = 2000; // Estimated payout fee (actual varies by amount via clickpesaPayoutPreview)
 const { groqChat, groqTranscribe } = require('./groq');
@@ -68,6 +71,11 @@ app.use((req, res, next) => {
 });
 
 app.use('/api/', rateLimit);
+
+// ─── Mount routers ──────────────────────────────────────────
+app.use('/api/ride', rideRouter);
+app.use('/api/search', searchRouter);
+app.use('/api/notification', notificationRouter);
 
 function asyncHandler(fn) {
   return (req, res, next) => {

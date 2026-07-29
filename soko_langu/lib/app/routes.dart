@@ -12,6 +12,7 @@ class AppRoutes {
   static const String admin = '/admin';
   static const String sellerDashboard = '/seller';
   static const String notifications = '/notifications';
+  static const String notificationPreferences = '/notification-preferences';
   static const String settings = '/settings';
   static const String publicProfile = '/public-profile';
   static const String search = '/search';

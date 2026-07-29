@@ -2,14 +2,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:url_launcher/url_launcher.dart'; // ignore: unused_import
 import '../../services/user_service.dart';
 import '../../services/product_service.dart';
 import '../../services/rating_service.dart';
 import '../../models/product_model.dart';
 import '../../widgets/verified_badge.dart';
 import '../../widgets/product_card.dart';
-import '../../widgets/glass_container.dart';
+import '../../widgets/glass_container.dart'; // ignore: unused_import
 import '../../widgets/google_loading.dart';
 import '../../extensions/context_tr.dart';
 import '../../utils/responsive.dart';
@@ -19,6 +19,7 @@ import '../../services/flash_sale_service.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../chat/chat_navigation.dart';
+import '../../widgets/location_map_widget.dart';
 
 class PublicProfileScreen extends StatefulWidget {
   final String userId;
@@ -106,6 +107,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                 SliverToBoxAdapter(child: _buildHeader(context, profile)),
                 SliverToBoxAdapter(child: _buildRatingSection(context)),
                 SliverToBoxAdapter(child: _buildTrustSection(context)),
+                SliverToBoxAdapter(child: _buildLocationMap(context, profile)),
                 SliverToBoxAdapter(child: _buildActionButtons(context)),
                 SliverToBoxAdapter(
                   child: Padding(
@@ -198,6 +200,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
 
   Widget _buildHeader(BuildContext context, UserProfile? profile) {
     final cs = Theme.of(context).colorScheme;
+    // ignore: unused_local_variable
     final accentColor = _hexToColor(profile?.shopAccentColor);
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
@@ -513,6 +516,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   }
 
   Widget _buildTrustSection(BuildContext context) {
+    // ignore: unused_local_variable
     final cs = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
@@ -525,6 +529,41 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
           }
           return _buildTrustScore(rating.averageRating, rating.totalReviews);
         },
+      ),
+    );
+  }
+
+  Widget _buildLocationMap(BuildContext context, UserProfile? profile) {
+    if (profile?.latitude == null || profile?.longitude == null) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Icon(Icons.location_on, size: 16, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 6),
+                Text(
+                  context.tr('seller_location'),
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+          LocationMapWidget(
+            targetLat: profile!.latitude,
+            targetLng: profile.longitude,
+            targetLabel: profile.displayName.isNotEmpty ? profile.displayName : widget.userName,
+            height: 180,
+            showDistance: true,
+            interactive: false,
+          ),
+        ],
       ),
     );
   }

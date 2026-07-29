@@ -4,11 +4,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../models/product_model.dart';
 import '../../services/api_config.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../widgets/glass_container.dart';
+import '../../widgets/location_map_widget.dart';
 import '../../utils/network_error.dart';
 
 class CheckoutScreen extends StatefulWidget {
@@ -26,6 +28,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final _streetCtrl = TextEditingController();
   final _landmarksCtrl = TextEditingController();
   bool _processing = false;
+  bool _detecting = false;
+  double? _latitude;
+  double? _longitude;
 
   @override
   void dispose() {
@@ -34,6 +39,58 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     _streetCtrl.dispose();
     _landmarksCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _detectLocation() async {
+    setState(() => _detecting = true);
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+      if (!mounted) return;
+      _latitude = pos.latitude;
+      _longitude = pos.longitude;
+      await _reverseGeocode(pos.latitude, pos.longitude);
+      setState(() => _detecting = false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _detecting = false);
+      _showError(context.tr('imeshindwa'));
+    }
+  }
+
+  Future<void> _reverseGeocode(double lat, double lng) async {
+    try {
+      final uri = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse?lat=$lat&lon=$lng&format=json&addressdetails=1',
+      );
+      final resp = await http.get(uri, headers: {'User-Agent': 'SokoVibe/1.0'});
+      if (resp.statusCode != 200) return;
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      final address = data['address'] as Map<String, dynamic>?;
+      if (address == null) return;
+      if (!mounted) return;
+      setState(() {
+        _regionCtrl.text = (address['state'] as String?) ?? _regionCtrl.text;
+        _districtCtrl.text = (address['city_district'] as String?)
+            ?? (address['municipality'] as String?)
+            ?? (address['county'] as String?)
+            ?? (address['state_district'] as String?)
+            ?? _districtCtrl.text;
+        _streetCtrl.text = (address['road'] as String?) ?? _streetCtrl.text;
+        _landmarksCtrl.text = (address['suburb'] as String?)
+            ?? (address['neighbourhood'] as String?)
+            ?? _landmarksCtrl.text;
+      });
+    } catch (_) {}
+  }
+
+  void _onPinChanged(double lat, double lng) {
+    setState(() {
+      _latitude = lat;
+      _longitude = lng;
+    });
+    _reverseGeocode(lat, lng);
   }
 
   @override
@@ -107,6 +164,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
           Text(context.tr('shipping_address'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: cs.onSurface)),
           const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _detecting ? null : _detectLocation,
+            icon: _detecting
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.my_location, size: 18),
+            label: Text(context.tr('get_location')),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              side: BorderSide(color: cs.primary.withValues(alpha: 0.3)),
+            ),
+          ),
+          const SizedBox(height: 12),
           GlassContainer(
             blur: 16,
             opacity: isDark ? 0.08 : 0.05,
@@ -124,6 +194,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ],
             ),
           ),
+          if (_latitude != null && _longitude != null) ...[
+            const SizedBox(height: 16),
+            Text(context.tr('view_map'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: cs.onSurface)),
+            const SizedBox(height: 8),
+            LocationMapWidget(
+              targetLat: _latitude,
+              targetLng: _longitude,
+              height: 200,
+              showDistance: true,
+              interactive: true,
+              draggablePin: true,
+              onLocationChanged: _onPinChanged,
+            ),
+          ],
           const SizedBox(height: 24),
 
           SizedBox(
@@ -192,6 +276,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           'district': district,
           'street': street,
           'landmarks': _landmarksCtrl.text.trim(),
+          'latitude': _latitude,
+          'longitude': _longitude,
           'deliveryType': 'local',
         }),
       );

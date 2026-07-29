@@ -209,6 +209,43 @@ exports.mongikeWebhook = functions.https.onRequest(async (req, res) => {
   }
 });
 
+// ─── RIDE-HAILING MODULE ───
+// All ride-hailing functions are in ride_functions.js and ride/ directory.
+// Ride data is stored in isolated ride_* collections in Firestore.
+// No cross-collection reads from marketplace data.
+const rideFunctions = require('./ride_functions');
+Object.keys(rideFunctions).forEach((key) => {
+  if (!exports[key]) {
+    exports[key] = rideFunctions[key];
+  }
+});
+
+// ─── GLOBAL SEARCH MODULE ───
+// Search indexers run via Firestore triggers in search/indexer.js.
+// Query functions are in search_functions.js.
+const searchFunctions = require('./search_functions');
+Object.keys(searchFunctions).forEach((key) => {
+  if (!exports[key]) {
+    exports[key] = searchFunctions[key];
+  }
+});
+
+// ─── NOTIFICATION MODULE ───
+// Callable functions for notification preferences.
+// Triggers for escrow release and dispute notifications.
+const notificationFunctions = require('./notification_functions');
+Object.keys(notificationFunctions).forEach((key) => {
+  if (!exports[key]) {
+    exports[key] = notificationFunctions[key];
+  }
+});
+const notificationTriggers = require('./notification/triggers');
+Object.keys(notificationTriggers).forEach((key) => {
+  if (!exports[key]) {
+    exports[key] = notificationTriggers[key];
+  }
+});
+
 exports.mongikePayoutWebhook = functions.https.onRequest(async (req, res) => {
   if (req.method !== 'POST') {
     res.status(405).send('Method Not Allowed');

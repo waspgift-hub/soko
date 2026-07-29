@@ -24,6 +24,7 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
   StreamSubscription? _driverLocSub;
   final Set<Marker> _markers = {};
   final Set<Polyline> _polylines = {};
+  MapType _mapType = MapType.normal;
 
   @override
   void initState() {
@@ -79,6 +80,12 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
     ));
   }
 
+  void _toggleMapType() {
+    setState(() {
+      _mapType = _mapType == MapType.normal ? MapType.satellite : MapType.normal;
+    });
+  }
+
   void _updateDriverMarker(LatLng loc) {
     _markers.removeWhere((m) => m.markerId.value == 'driver');
     _markers.add(Marker(
@@ -87,6 +94,7 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
       icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
       infoWindow: const InfoWindow(title: 'Driver'),
     ));
+    _mapController?.animateCamera(CameraUpdate.newLatLng(loc));
     setState(() {});
   }
 
@@ -137,6 +145,7 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
       body: Stack(
         children: [
           GoogleMap(
+            mapType: _mapType,
             initialCameraPosition: CameraPosition(
               target: _ride != null
                   ? LatLng(_ride!.pickup.lat, _ride!.pickup.lng)
@@ -169,6 +178,22 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> {
                         context.read<RideProvider>().clearCurrentRide();
                         context.pop();
                       },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: cs.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 8),
+                      ],
+                    ),
+                    child: IconButton(
+                      icon: Icon(_mapType == MapType.normal ? Icons.satellite : Icons.map,
+                          color: cs.onSurface),
+                      onPressed: _toggleMapType,
+                      tooltip: _mapType == MapType.normal ? 'Satellite' : 'Map',
                     ),
                   ),
                 ],
