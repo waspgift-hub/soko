@@ -116,6 +116,8 @@ function osHeaders() {
 function notifTypeToChannel(type) {
   if (!type) return 'general_notifications_v5';
   if (type === 'chat' || type === 'group_chat') return 'chat_messages_v5';
+  if (type === 'system' || type === 'admin' || type === 'alert') return 'system_alerts_v5';
+  if (type.startsWith('ride')) return 'ride_notifications_v5';
   if (['payment','order','payout','dispute','refund','withdrawal',
        'escrow_release','auto_payout','escrow_auto_release',
        'dispute_resolved','cancelled','auto_withdrawal',
@@ -138,7 +140,7 @@ async function sendOneSignalNotification(userId, title, body, data = {}) {
       contents: { en: body || '' },
       data: { ...(data || {}), type: notifType },
       priority: 10, android_priority: 'high', android_visibility: 1,
-      existing_android_channel_id: notifTypeToChannel(notifType),
+      android_channel_id: notifTypeToChannel(notifType),
       android_sound: 'soko_notification',
       android_icon: 'ic_notification',
     }, { headers: osHeaders() });
@@ -201,7 +203,7 @@ async function sendOneSignalBulk(userIds, title, body, data = {}) {
         contents: { en: body || '' },
         data: { ...(data || {}), type: notifType },
         priority: 10, android_priority: 'high', android_visibility: 1,
-        existing_android_channel_id: notifTypeToChannel(notifType),
+        android_channel_id: notifTypeToChannel(notifType),
         android_sound: 'soko_notification',
         android_icon: 'ic_notification',
       }, { headers: osHeaders() });
