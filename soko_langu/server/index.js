@@ -4,6 +4,7 @@ const cors = require('cors');
 const crypto = require('crypto');
 const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
+const axios = require('axios');
 
 // Firebase init — MUST be before any module that calls admin.firestore() at require time
 let db;
@@ -129,35 +130,33 @@ async function sendOneSignalNotification(userId, title, body, data = {}) {
   }
   const notifType = (data && data.type) || 'general';
   try {
-    const resp = await fetch(OS_URL, {
-      method: 'POST',
-      headers: osHeaders(),
-      body: JSON.stringify({
-        app_id: ONE_SIGNAL_APP_ID,
-        idempotency_key: randomUUID(),
-        include_external_user_ids: [userId],
-        headings: { en: title || '' },
-        contents: { en: body || '' },
-        data: { ...(data || {}), type: notifType },
-        priority: 10, android_priority: 'high', android_visibility: 1,
-        existing_android_channel_id: notifTypeToChannel(notifType),
-        android_sound: 'soko_notification',
-        android_icon: 'ic_notification',
-        small_icon: 'ic_notification', large_icon: 'ic_notification', android_accent_color: 'FF40916C',
-      }),
-    });
-    const result = await resp.json();
+    const resp = await axios.post(OS_URL, {
+      app_id: ONE_SIGNAL_APP_ID,
+      idempotency_key: randomUUID(),
+      include_external_user_ids: [userId],
+      headings: { en: title || '' },
+      contents: { en: body || '' },
+      data: { ...(data || {}), type: notifType },
+      priority: 10, android_priority: 'high', android_visibility: 1,
+      existing_android_channel_id: notifTypeToChannel(notifType),
+      android_sound: 'soko_notification',
+      android_icon: 'ic_notification',
+    }, { headers: osHeaders() });
+    const result = resp.data;
     if (result.id) console.log(`[OS] sent push to ${userId} type=${(data && data.type) || 'general'} id=${result.id}`);
     else console.error(`[OS] push send failed:`, JSON.stringify(result));
 
-    // Also send email if this is a critical notification type
     const criticalTypes = ['order', 'payment', 'dispute', 'refund', 'boost', 'kyc', 'withdrawal'];
     if (criticalTypes.includes(notifType)) {
       sendEmailSmtp(userId, title, body).catch(() => {});
     }
 
     return result;
-  } catch (e) { console.error(`[OS] FAILED user=${userId}: ${e.message}`); return null; }
+  } catch (e) {
+    const errBody = e.response?.data ? JSON.stringify(e.response.data) : e.message;
+    console.error(`[OS] FAILED user=${userId}: ${errBody}`);
+    return null;
+  }
 }
 
 // ─── SMTP Email (free via Gmail — no domain needed) ─────
@@ -191,28 +190,32 @@ async function sendOneSignalBulk(userIds, title, body, data = {}) {
   if (!ONE_SIGNAL_APP_ID || !ONE_SIGNAL_REST_API_KEY) { console.error('[OS] Missing config'); return { successCount: 0 }; }
   const notifType = (data && data.type) || 'general';
   let successCount = 0;
-  for (let i = 0; i < userIds.length; i += 2000) {
-    const batch = userIds.slice(i, i + 2000);
+  const batchSize = 2000;
+  for (let i = 0; i < userIds.length; i += batchSize) {
     try {
-      // Send to ALL subscribed devices via segment (reaches users regardless of OneSignal.login())
-      const resp = await fetch(OS_URL, {
-        method: 'POST',
-        headers: osHeaders(),
-        body: JSON.stringify({
-          app_id: ONE_SIGNAL_APP_ID, idempotency_key: randomUUID(),
-          included_segments: ['Total Subscriptions'],
-          headings: { en: title || '' }, contents: { en: body || '' },
-          data: { ...(data || {}), type: notifType },
-          priority: 10, android_priority: 'high', android_visibility: 1,
-          existing_android_channel_id: notifTypeToChannel(notifType),
-          android_sound: 'soko_notification',
-          android_icon: 'ic_notification',
-        }),
-      });
-      const result = await resp.json();
-      if (result.id) { successCount += result.recipients || 0; console.log(`[OS] bulk sent to ${result.recipients || 0} devices`); }
-      else console.error(`[OS] bulk send failed:`, JSON.stringify(result));
-    } catch (e) { console.error(`[OS] bulk error: ${e.message}`); }
+      const resp = await axios.post(OS_URL, {
+        app_id: ONE_SIGNAL_APP_ID,
+        idempotency_key: randomUUID(),
+        included_segments: ['Total Subscriptions'],
+        headings: { en: title || '' },
+        contents: { en: body || '' },
+        data: { ...(data || {}), type: notifType },
+        priority: 10, android_priority: 'high', android_visibility: 1,
+        existing_android_channel_id: notifTypeToChannel(notifType),
+        android_sound: 'soko_notification',
+        android_icon: 'ic_notification',
+      }, { headers: osHeaders() });
+      const result = resp.data;
+      if (result.id) {
+        successCount += result.recipients || 0;
+        console.log(`[OS] bulk sent — id=${result.id} recipients=${result.recipients || 0}`);
+      } else {
+        console.error(`[OS] bulk send failed:`, JSON.stringify(result));
+      }
+    } catch (e) {
+      const errBody = e.response?.data ? JSON.stringify(e.response.data) : e.message;
+      console.error(`[OS] bulk error: ${errBody}`);
+    }
   }
   return { successCount };
 }
