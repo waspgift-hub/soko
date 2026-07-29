@@ -383,7 +383,7 @@ function isFlashSaleStillActive(data, now = new Date()) {
 /** Accept x-admin-secret OR Firebase Bearer token from an admin user. */
 async function requireAdmin(req, res) {
   const secret = req.headers['x-admin-secret'];
-  if (secret && ((process.env.ADMIN_SECRET && secret === process.env.ADMIN_SECRET) || secret === 'sokovibe-temp-2026')) {
+  if (secret && process.env.ADMIN_SECRET && secret === process.env.ADMIN_SECRET) {
     return { ok: true, uid: 'admin-secret' };
   }
   const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
