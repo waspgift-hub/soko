@@ -216,7 +216,7 @@ class SearchService {
       });
       return SearchResponse.fromMap(data as Map<String, dynamic>);
     } catch (e) {
-      debugPrint('[SearchService] Server search failed, using Firestore fallback: $e');
+      print('[SearchService] Server search failed, using Firestore fallback: $e');
       return _firestoreSearch(query: query, type: type, pageSize: pageSize);
     }
   }
@@ -257,7 +257,7 @@ class SearchService {
 
       return SearchResponse.fromProducts(products, query);
     } catch (e) {
-      debugPrint('[SearchService] Firestore search fallback also failed: $e');
+      print('[SearchService] Firestore search fallback also failed: $e');
       return SearchResponse(results: [], sources: {}, total: 0, page: 0, hasMore: false, query: query);
     }
   }
@@ -268,7 +268,7 @@ class SearchService {
       final list = (data as Map<String, dynamic>)['suggestions'] as List<dynamic>? ?? [];
       return list.map((e) => SearchSuggestion.fromMap(e as Map<String, dynamic>)).toList();
     } catch (e) {
-      debugPrint('[SearchService] Autocomplete server failed: $e');
+      print('[SearchService] Autocomplete server failed: $e');
       return _firestoreAutocomplete(query);
     }
   }
@@ -296,7 +296,7 @@ class SearchService {
         );
       }).toList();
     } catch (e) {
-      debugPrint('[SearchService] Firestore autocomplete failed: $e');
+      print('[SearchService] Firestore autocomplete failed: $e');
       return [];
     }
   }
@@ -307,7 +307,7 @@ class SearchService {
       final list = (data as Map<String, dynamic>)['trending'] as List<dynamic>? ?? [];
       return list.cast<Map<String, dynamic>>();
     } catch (e) {
-      debugPrint('[SearchService] Trending server failed, returning empty: $e');
+      print('[SearchService] Trending server failed, returning empty: $e');
       return [];
     }
   }

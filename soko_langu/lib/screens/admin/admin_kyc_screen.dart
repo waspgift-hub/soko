@@ -475,7 +475,7 @@ class _AdminKycScreenState extends State<AdminKycScreen>
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: CachedNetworkImage(imageUrl: idImageUrl, height: 180, fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => const Icon(Icons.broken_image, size: 48)),
+                    errorWidget: (_, _, _) => const Icon(Icons.broken_image, size: 48)),
                 ),
                 const SizedBox(height: 12),
               ],
@@ -485,7 +485,7 @@ class _AdminKycScreenState extends State<AdminKycScreen>
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: CachedNetworkImage(imageUrl: selfieUrl, height: 180, fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => const Icon(Icons.broken_image, size: 48)),
+                    errorWidget: (_, _, _) => const Icon(Icons.broken_image, size: 48)),
                 ),
               ],
             ],
