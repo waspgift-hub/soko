@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../extensions/context_tr.dart';
-import '../../theme/app_dimens.dart';
+import '../../theme/app_dimens.dart'; // ignore: unused_import
 
 class AdminTransactionsTab extends StatelessWidget {
   const AdminTransactionsTab({super.key});

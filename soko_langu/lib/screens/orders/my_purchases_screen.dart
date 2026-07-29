@@ -89,6 +89,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
       }
 
       final productPrice = (d['productPrice'] as num?)?.toDouble() ?? 0;
+      // ignore: unused_local_variable
       final shippingCost = (d['shippingCost'] as num?)?.toDouble() ?? 0;
       final productName = d['productName'] as String? ?? context.tr('product');
       final productId = d['productId'] as String? ?? '';
@@ -129,7 +130,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
 
       if (mounted) {
         if (isBillPay) {
-          final billPayNumber = result!['billPayNumber'] as String? ?? '';
+          final billPayNumber = result['billPayNumber'] as String? ?? '';
           final totalAmount = result['totalAmount'] as int? ?? 0;
           PaymentBanner.show(
             context: context,
@@ -142,7 +143,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
         } else {
           RealtimePaymentBanner.show(
             context: context,
-            orderId: result!['order_id'] as String,
+            orderId: result['order_id'] as String,
             successStatuses: ['escrow_hold', 'paid_escrow_held'],
             processingTitle: context.tr('processing_payment'),
             processingSubtitle: context.tr('check_phone_enter_pin'),

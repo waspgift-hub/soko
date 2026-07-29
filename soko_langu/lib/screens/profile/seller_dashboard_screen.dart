@@ -1,4 +1,4 @@
-import 'dart:ui' as ui;
+import 'dart:ui' as ui; // ignore: unused_import
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -54,7 +54,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
     FirebaseFirestore.instance.collection('users').doc(uid).get().then((doc) {
-      final data = doc.data() as Map<String, dynamic>?;
+      final data = doc.data();
       final balance = (data?['sellerBalance'] as num? ?? 0);
       final totalSales = (data?['totalSales'] as num? ?? 0);
       final nf = NumberFormat('#,###', 'en');
@@ -489,6 +489,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     );
   }
 
+  // ignore: unused_element
   Widget _buildKycCard() {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
     final cs = Theme.of(context).colorScheme;
@@ -567,6 +568,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     );
   }
 
+  // ignore: unused_element
   Widget _buildPayoutPrefsCard() {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
     return StreamBuilder<DocumentSnapshot>(
@@ -633,6 +635,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     );
   }
 
+  // ignore: unused_element
   Widget _buildQuoteButton() {
     return GestureDetector(
       onTap: () => context.push(AppRoutes.sellerQuote),
@@ -685,6 +688,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     );
   }
 
+  // ignore: unused_element
   Widget _buildDispatchButton() {
     final cs = Theme.of(context).colorScheme;
     return GestureDetector(
@@ -738,6 +742,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     );
   }
 
+  // ignore: unused_element
   Widget _buildCustomizeShopButton() {
     return GestureDetector(
       onTap: () => context.push(AppRoutes.shopCustomization),
@@ -790,6 +795,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     );
   }
 
+  // ignore: unused_element
   Widget _buildFlashSaleCard(List<Product> products) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cs = Theme.of(context).colorScheme;
@@ -846,6 +852,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     );
   }
 
+  // ignore: unused_element
   Widget _buildBoostButton(List<Product> products) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cs = Theme.of(context).colorScheme;

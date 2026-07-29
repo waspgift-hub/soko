@@ -71,7 +71,7 @@ class _RideHistoryScreenState extends State<RideHistoryScreen> {
   Widget _buildRideCard(BuildContext context, ColorScheme cs, Ride ride, NumberFormat nf) {
     final isActive = ride.isActive;
     final isCancelled = ride.status == 'CANCELLED';
-    final isPaid = ride.status == 'PAID';
+    final isPaid = ride.status == 'PAYMENT_COMPLETED' || ride.status == 'COMPLETED';
 
     Color statusColor;
     String statusLabel;

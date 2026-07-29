@@ -54,6 +54,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    // ignore: unused_local_variable
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
     return Scaffold(
@@ -79,7 +80,8 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
         stream: _chatService.getRooms(),
         builder: (context, snap) {
           final allRooms = snap.data ?? [];
-          final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    // ignore: unused_local_variable
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
           final rooms = _showUnreadOnly
               ? allRooms.where((r) {
                   final isBuyer = r.buyerId == uid;

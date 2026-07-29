@@ -61,12 +61,12 @@ class RideProvider extends ChangeNotifier {
   Future<void> checkDriverStatus() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    final doc = await _firestore.collection('driver_locations').doc(user.uid).get();
+    final doc = await _firestore.collection('ride_driver_locations').doc(user.uid).get();
     if (doc.exists) {
-      _driverOnline = doc.data()?['online'] == true;
+      _driverOnline = doc.data()?['status'] == 'online';
     }
-    final userDoc = await _firestore.collection('users').doc(user.uid).get();
-    _isDriver = userDoc.data()?['isDriver'] == true;
+    final driverDoc = await _firestore.collection('ride_drivers').doc(user.uid).get();
+    _isDriver = driverDoc.exists;
     notifyListeners();
   }
 
@@ -178,11 +178,53 @@ class RideProvider extends ChangeNotifier {
     }
   }
 
+  Ride _rideFromFirestore(Map<String, dynamic> map, String id) {
+    return Ride(
+      rideId: id,
+      riderId: map['riderId'] as String? ?? '',
+      riderName: map['riderName'] as String?,
+      riderPhone: map['riderPhone'] as String?,
+      pickup: RideLocation(
+        lat: (map['pickupLat'] as num?)?.toDouble() ?? 0,
+        lng: (map['pickupLng'] as num?)?.toDouble() ?? 0,
+        address: map['pickupName'] as String? ?? '',
+      ),
+      dropoff: RideLocation(
+        lat: (map['dropoffLat'] as num?)?.toDouble() ?? 0,
+        lng: (map['dropoffLng'] as num?)?.toDouble() ?? 0,
+        address: map['dropoffName'] as String? ?? '',
+      ),
+      distanceKm: (map['distance'] as num?)?.toDouble() ?? 0,
+      durationMin: (map['durationMin'] as num?)?.toInt() ?? 0,
+      fare: (map['fare'] as num?)?.toInt() ?? 0,
+      finalFare: (map['finalFare'] as num?)?.toInt(),
+      status: _normalizeStatus(map['status'] as String? ?? 'REQUESTED'),
+      driverId: map['assignedDriverId'] as String?,
+      driverPayout: (map['driverPayout'] as num?)?.toInt(),
+      rating: (map['rating'] as num?)?.toInt(),
+      ratingComment: map['ratingComment'] as String?,
+      cancelReason: map['cancelReason'] as String?,
+      cancelledBy: map['cancelBy'] as String?,
+      paymentMethod: map['paymentMethod'] as String?,
+    );
+  }
+
+  String _normalizeStatus(String s) {
+    if (s == 'requested') return 'REQUESTED';
+    if (s == 'driver_accepted') return 'ACCEPTED';
+    if (s == 'driver_arrived') return 'DRIVER_ARRIVED';
+    if (s == 'trip_started' || s == 'in_progress') return 'IN_PROGRESS';
+    if (s == 'trip_completed') return 'COMPLETED';
+    if (s == 'payment_completed') return 'PAYMENT_COMPLETED';
+    if (s == 'cancelled') return 'CANCELLED';
+    return s.toUpperCase();
+  }
+
   void _listenToRide(String rideId) {
     _rideSub?.cancel();
-    _rideSub = _firestore.collection('rides').doc(rideId).snapshots().listen((snap) {
+    _rideSub = _firestore.collection('ride_requests').doc(rideId).snapshots().listen((snap) {
       if (snap.exists) {
-        _currentRide = Ride.fromMap(snap.data()!, snap.id);
+        _currentRide = _rideFromFirestore(snap.data()!, snap.id);
         notifyListeners();
       }
     });
@@ -372,8 +414,8 @@ class RideProvider extends ChangeNotifier {
   void listenToRideRequests() {
     _driverRidesSub?.cancel();
     _driverRidesSub = _firestore
-        .collection('rides')
-        .where('status', isEqualTo: 'REQUESTED')
+        .collection('ride_requests')
+        .where('status', isEqualTo: 'requested')
         .snapshots()
         .listen((snap) {
       if (snap.docs.isNotEmpty) {

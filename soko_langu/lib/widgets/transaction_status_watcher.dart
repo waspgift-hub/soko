@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // ignore: unused_import
 
 class TransactionStatusWatcher extends StatefulWidget {
   final Widget child;

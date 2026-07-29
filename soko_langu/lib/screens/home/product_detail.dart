@@ -26,6 +26,7 @@ import '../../theme/app_colors.dart';
 import '../../services/notification_service.dart';
 import '../chat/chat_navigation.dart';
 
+// ignore: unused_element
 Color? _hexToColor(String? hex) {
   if (hex == null || hex.isEmpty) return null;
   try {

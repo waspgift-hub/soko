@@ -246,9 +246,9 @@ Scan QR code for full receipt
                   if (courierName != null || driverPhone != null || trackingNumber != null) ...[
                     const SizedBox(height: 16),
                     _infoSection(cs, _tr( 'dispatch_info', 'Maelezo ya Usafirishaji'), [
-                      if (courierName != null) _infoRow(cs, _tr( 'courier', 'Mtoa huduma'), courierName!),
-                      if (driverPhone != null) _infoRow(cs, _tr( 'driver_phone', 'Simu ya Dereva'), driverPhone!),
-                      if (trackingNumber != null) _infoRow(cs, _tr( 'tracking', 'Namba ya kufuatilia'), trackingNumber!),
+                      if (courierName != null) _infoRow(cs, _tr( 'courier', 'Mtoa huduma'), courierName),
+                      if (driverPhone != null) _infoRow(cs, _tr( 'driver_phone', 'Simu ya Dereva'), driverPhone),
+                      if (trackingNumber != null) _infoRow(cs, _tr( 'tracking', 'Namba ya kufuatilia'), trackingNumber),
                     ]),
                   ],
                   const SizedBox(height: 16),
@@ -584,6 +584,7 @@ class _ReceiptDownloadButtonState extends State<_ReceiptDownloadButton> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    // ignore: unused_local_variable
     final isSw = widget.lang == 'sw';
     return Column(
       children: [

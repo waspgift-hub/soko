@@ -40,6 +40,8 @@ import '../screens/auth/magic_link_screen.dart';
 import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_user_detail_screen.dart';
 import '../screens/admin/admin_wallet_screen.dart';
+import '../screens/admin/admin_kyc_screen.dart';
+import '../screens/admin/admin_broadcast_screen.dart';
 import '../screens/seller/seller_earnings_screen.dart';
 import '../screens/boost/boost_receipt_screen.dart';
 import '../screens/orders/my_purchases_screen.dart';
@@ -66,6 +68,8 @@ import '../screens/ride/driver_home_screen.dart';
 import '../screens/ride/driver_register_screen.dart';
 import '../screens/ride/driver_earnings_screen.dart';
 import '../screens/ride/ride_history_screen.dart';
+import '../screens/ride/ride_payment_screen.dart';
+import '../screens/ride/driver_ride_request_screen.dart';
 import 'routes.dart';
 import 'app_state.dart' as app_state;
 
@@ -125,6 +129,8 @@ final List<String> _authRequiredRoutes = [
   AppRoutes.driverRegister,
   AppRoutes.driverEarnings,
   AppRoutes.rideHistory,
+  AppRoutes.ridePayment,
+  AppRoutes.driverRideRequest,
 ];
 
 final List<String> _adminOnlyRoutes = [
@@ -304,6 +310,14 @@ GoRouter buildRouter() {
         },
       ),
       GoRoute(
+        path: AppRoutes.adminKyc,
+        pageBuilder: (context, state) => _premiumPage(const AdminKycScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.adminBroadcast,
+        pageBuilder: (context, state) => _premiumPage(const AdminBroadcastScreen()),
+      ),
+      GoRoute(
         path: AppRoutes.adminWallet,
         pageBuilder: (context, state) => _premiumPage(const AdminWalletScreen()),
       ),
@@ -459,6 +473,14 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.rideHistory,
         pageBuilder: (context, state) => _premiumPage(const RideHistoryScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.ridePayment,
+        pageBuilder: (context, state) => _premiumPage(const RidePaymentScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.driverRideRequest,
+        pageBuilder: (context, state) => _premiumPage(const DriverRideRequestScreen()),
       ),
     ],
   );

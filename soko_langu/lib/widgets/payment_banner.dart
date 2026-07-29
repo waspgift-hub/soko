@@ -131,7 +131,7 @@ class _PaymentBannerContentState extends State<_PaymentBannerContent>
                   child: GestureDetector(
                     onTap: widget.onDismiss,
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(24),
                       child: BackdropFilter(
                         filter: ui.ImageFilter.blur(sigmaX: 30, sigmaY: 30),
                         child: Container(
@@ -139,12 +139,8 @@ class _PaymentBannerContentState extends State<_PaymentBannerContent>
                           decoration: BoxDecoration(
                             color: isDark
                                 ? cs.surface.withValues(alpha: 0.5)
-                                : Colors.white.withValues(alpha: 0.85),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: _accent.withValues(alpha: isDark ? 0.5 : 0.25),
-                              width: 1,
-                            ),
+                                : Colors.white.withValues(alpha: 0.9),
+                            borderRadius: BorderRadius.circular(24),
                           ),
                           child: IntrinsicHeight(
                             child: Row(
@@ -380,7 +376,7 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
     final cs = Theme.of(context).colorScheme;
     if (ok) return cs.successGreen;
     if (fail) return cs.error;
-    return cs.flashSaleMidGreen;
+    return cs.primary;
   }
 
   IconData _icon(bool ok, bool fail) {
@@ -459,7 +455,7 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
                         if (isOk || isFail) RealtimePaymentBanner.dismiss();
                       },
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(24),
                         child: BackdropFilter(
                           filter: ui.ImageFilter.blur(sigmaX: 30, sigmaY: 30),
                           child: Container(
@@ -467,12 +463,8 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
                             decoration: BoxDecoration(
                               color: isDark
                                   ? cs.surface.withValues(alpha: 0.5)
-                                  : Colors.white.withValues(alpha: 0.85),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: accent.withValues(alpha: isDark ? 0.5 : 0.25),
-                                width: 1,
-                              ),
+                                  : Colors.white.withValues(alpha: 0.9),
+                              borderRadius: BorderRadius.circular(24),
                             ),
                             child: IntrinsicHeight(
                               child: Row(

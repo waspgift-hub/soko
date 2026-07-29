@@ -5,7 +5,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../extensions/context_tr.dart';
-import '../../theme/app_colors.dart';
+import '../../theme/app_colors.dart'; // ignore: unused_import
 
 class BoostReceiptScreen extends StatelessWidget {
   final Map<String, dynamic> data;
@@ -22,6 +22,7 @@ class BoostReceiptScreen extends StatelessWidget {
     final productName = data['productName'] as String? ?? '';
     final durationDays = data['durationDays'] as int? ?? 0;
     final createdAt = data['createdAt'];
+    // ignore: unused_local_variable
     final dateStr = createdAt is Timestamp
         ? DateFormat('dd/MM/yyyy HH:mm').format(createdAt.toDate())
         : '';

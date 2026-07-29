@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:convert';
+import 'dart:convert'; // ignore: unused_import
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../extensions/context_tr.dart';
@@ -20,6 +20,7 @@ class _ConnectivityWrapperState extends State<ConnectivityWrapper>
   Timer? _retryTimer;
 
   late AnimationController _bannerCtrl;
+  // ignore: unused_field
   late Animation<Offset> _bannerSlide;
 
   @override

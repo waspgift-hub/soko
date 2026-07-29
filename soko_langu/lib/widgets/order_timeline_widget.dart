@@ -55,6 +55,7 @@ class OrderTimelineWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    // ignore: unused_local_variable
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Column(

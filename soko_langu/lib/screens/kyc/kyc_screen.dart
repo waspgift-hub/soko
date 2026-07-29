@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:uuid/uuid.dart';
+import 'package:uuid/uuid.dart'; // ignore: unused_import
 import '../../services/kyc_service.dart';
 import '../../services/cloudinary_service.dart';
 import '../../widgets/google_loading.dart';

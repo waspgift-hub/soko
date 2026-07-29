@@ -53,6 +53,9 @@ class NotificationService {
 
       if (_initialized) return;
 
+      // Initialize local notifications first for heads-up display
+      await LocalNotificationService().initialize();
+
       OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
       OneSignal.initialize(ApiConfig.oneSignalAppId);
 
@@ -72,10 +75,11 @@ class NotificationService {
       if (!_listenersRegistered) {
         _listenersRegistered = true;
 
+        // Handle notifications received while app is in foreground
         OneSignal.Notifications.addForegroundWillDisplayListener((event) {
           final notif = event.notification;
           final data = notif.additionalData ?? {};
-          final title = notif.title ?? '';
+          final title = notif.title ?? 'Soko Vibe';
           final body = notif.body ?? '';
           final type = data['type'] as String? ?? 'general';
 
@@ -83,49 +87,17 @@ class NotificationService {
 
           event.preventDefault();
 
-          final String channelId;
-          final String? payload;
-          final int id;
-          final String headsUpTitle;
-
-          if (type == 'chat' || type == 'group_chat') {
-            final roomId = data['roomId'] as String? ?? '';
-            channelId = 'chat_messages_v5';
-            id = roomId.hashCode;
-            headsUpTitle = data['senderName'] as String? ?? title;
-            payload = '/chat/$roomId';
-          } else if (type == 'payment' || type == 'order') {
-            final orderId = data['orderId'] as String?;
-            channelId = 'payments_notifications_v5';
-            id = (orderId ?? title).hashCode;
-            headsUpTitle = title;
-            payload = orderId != null ? '/order-detail/$orderId' : null;
-          } else {
-            channelId = 'general_notifications_v5';
-            id = title.hashCode;
-            headsUpTitle = title;
-            payload = null;
-          }
-
-          LocalNotificationService().showHeadsUp(
-            id: id,
-            title: headsUpTitle,
-            body: body,
-            channelId: channelId,
-            payload: payload,
-          );
-
-          if (title.isNotEmpty && onForegroundMessage != null) {
-            onForegroundMessage!(title, body, type, data);
-          }
+          _showHeadsUpNotification(title, body, type, data);
         });
 
+        // Handle notification tap (app opened from notification)
         OneSignal.Notifications.addClickListener((event) {
           final data = event.notification.additionalData ?? {};
           debugPrint('[OS] notification tapped: type=${data['type']}');
           _onNotificationTapped(data);
         });
 
+        // Re-login when auth state changes
         _auth.authStateChanges().listen((user) async {
           if (user != null) {
             OneSignal.login(user.uid);
@@ -148,6 +120,78 @@ class NotificationService {
     } catch (e) {
       _initialized = false;
       debugPrint('[OS] Notification init error: $e');
+    }
+  }
+
+  void _showHeadsUpNotification(String title, String body, String type, Map<String, dynamic> data) {
+    final String channelId;
+    final String? payload;
+    final int id;
+    final String headsUpTitle;
+
+    switch (type) {
+      case 'chat':
+      case 'group_chat':
+        final roomId = data['roomId'] as String? ?? '';
+        channelId = 'chat_messages_v5';
+        id = roomId.hashCode;
+        headsUpTitle = data['senderName'] as String? ?? title;
+        payload = '/chat/$roomId';
+        break;
+      case 'payment':
+      case 'order':
+      case 'kyc':
+      case 'kyc_approved':
+      case 'kyc_rejected':
+      case 'kyc_revoked':
+        final orderId = data['orderId'] as String?;
+        channelId = 'payments_notifications_v5';
+        id = (orderId ?? title).hashCode;
+        headsUpTitle = title;
+        payload = orderId != null ? '/order-detail/$orderId' : null;
+        break;
+      case 'ride':
+      case 'ride_request':
+      case 'ride_accepted':
+      case 'ride_completed':
+        channelId = 'general_notifications_v5';
+        id = title.hashCode;
+        headsUpTitle = title;
+        payload = '/ride';
+        break;
+      case 'boost':
+      case 'promotion':
+        channelId = 'general_notifications_v5';
+        id = title.hashCode;
+        headsUpTitle = title;
+        payload = '/my-ads';
+        break;
+      case 'system':
+      case 'admin':
+      case 'alert':
+        channelId = 'general_notifications_v5';
+        id = title.hashCode;
+        headsUpTitle = title;
+        payload = null;
+        break;
+      default:
+        channelId = 'general_notifications_v5';
+        id = title.hashCode;
+        headsUpTitle = title;
+        payload = null;
+    }
+
+    LocalNotificationService().showHeadsUp(
+      id: id,
+      title: headsUpTitle,
+      body: body,
+      channelId: channelId,
+      payload: payload,
+      fullScreen: type == 'payment' || type == 'order' || type == 'chat' || type == 'ride_request',
+    );
+
+    if (title.isNotEmpty && onForegroundMessage != null) {
+      onForegroundMessage!(title, body, type, data);
     }
   }
 
@@ -184,7 +228,6 @@ class NotificationService {
     }
   }
 
-  /// Register user's email with OneSignal for email notifications
   Future<void> registerEmail(String email) async {
     try {
       OneSignal.User.addEmail(email);
@@ -194,7 +237,6 @@ class NotificationService {
     }
   }
 
-  /// Remove email subscription from OneSignal
   Future<void> unregisterEmail(String email) async {
     try {
       OneSignal.User.removeEmail(email);

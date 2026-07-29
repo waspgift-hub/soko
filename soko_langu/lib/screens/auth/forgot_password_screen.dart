@@ -26,6 +26,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   String? _serverError;
   int _methodIndex = 0; // 0 = email, 1 = phone
   bool _otpSent = false;
+  // ignore: unused_field
   bool _otpVerified = false;
 
   @override

@@ -144,10 +144,47 @@ async function searchIndex(collection, query, options = {}) {
       }
     }
   }
+  if (results.size === 0) {
+    await fallbackSearchDirect(results, collection, queryLower, limit);
+  }
   const sorted = Array.from(results.values())
     .sort((a, b) => b._score - a._score)
     .slice(0, limit);
   return { results: sorted, total: results.size };
+}
+
+async function fallbackSearchDirect(results, indexCollection, queryLower, limit) {
+  const prefixEnd = queryLower + '\uf8ff';
+  const sourceMap = {
+    'search_index_products': { coll: 'products', type: 'product', nameField: 'name', extraFields: ['description', 'price', 'images', 'category', 'sellerName', 'sellerId', 'stock', 'rating', 'reviewCount', 'isActive', 'condition', 'sellerKycApproved'] },
+    'search_index_users': { coll: 'users', type: 'seller', nameField: 'displayName', extraFields: ['username', 'bio', 'profileImage', 'location', 'latitude', 'longitude'] },
+    'search_index_categories': { coll: 'categories', type: 'category', nameField: 'name', extraFields: ['nameSw', 'icon', 'image'] },
+  };
+  const source = sourceMap[indexCollection];
+  if (!source) return;
+  const snap = await db.collection(source.coll)
+    .where(source.nameField, '>=', queryLower)
+    .where(source.nameField, '<=', prefixEnd)
+    .limit(limit)
+    .get();
+  for (const doc of snap.docs) {
+    const d = doc.data();
+    const name = d[source.nameField] || '';
+    if (name.toLowerCase().includes(queryLower)) {
+      const mapped = {
+        id: doc.id, name, displayName: name, type: source.type,
+        ...source.extraFields.reduce((acc, f) => { acc[f] = d[f]; return acc; }, {}),
+        isBoosted: d.isBoosted === true || d.boostTier != null,
+        kycApproved: d.kycApproved === true || d.sellerKycApproved === true,
+        popularity: d.popularity || d.viewCount || 0,
+        stock: d.stock ?? 0,
+      };
+      if (source.type === 'product' && d.images && d.images.length > 0) mapped.image = d.images[0];
+      if (source.type === 'seller') mapped.profileImage = d.profileImage || d.photoURL || '';
+      mapped._score = relevanceScore(mapped, queryLower, queryLower);
+      results.set(doc.id, mapped);
+    }
+  }
 }
 
 async function authenticate(req) {
