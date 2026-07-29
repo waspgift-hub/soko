@@ -140,7 +140,7 @@ async function sendOneSignalNotification(userId, title, body, data = {}) {
       contents: { en: body || '' },
       data: { ...(data || {}), type: notifType },
       priority: 10, android_priority: 'high', android_visibility: 1,
-      android_channel_id: notifTypeToChannel(notifType),
+      existing_android_channel_id: notifTypeToChannel(notifType),
       android_sound: 'soko_notification',
       android_icon: 'ic_notification',
     }, { headers: osHeaders() });
@@ -203,7 +203,7 @@ async function sendOneSignalBulk(userIds, title, body, data = {}) {
         contents: { en: body || '' },
         data: { ...(data || {}), type: notifType },
         priority: 10, android_priority: 'high', android_visibility: 1,
-        android_channel_id: notifTypeToChannel(notifType),
+        existing_android_channel_id: notifTypeToChannel(notifType),
         android_sound: 'soko_notification',
         android_icon: 'ic_notification',
       }, { headers: osHeaders() });
