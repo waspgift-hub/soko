@@ -24,6 +24,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
   Ride? _pendingRequest;
   Timer? _locationTimer;
   bool _showRequest = false;
+  MapType _mapType = MapType.normal;
 
   @override
   void initState() {
@@ -31,6 +32,18 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     _checkRegistration();
     _listenToPendingRides();
     _startLocationUpdates();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _centerOnMyLocation());
+  }
+
+  Future<void> _centerOnMyLocation() async {
+    try {
+      final pos = await Geolocator.getCurrentPosition();
+      if (mounted) {
+        _mapController?.animateCamera(
+          CameraUpdate.newLatLngZoom(LatLng(pos.latitude, pos.longitude), 15),
+        );
+      }
+    } catch (_) {}
   }
 
   Future<void> _checkRegistration() async {
@@ -78,6 +91,12 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
         });
   }
 
+  void _toggleMapType() {
+    setState(() {
+      _mapType = _mapType == MapType.normal ? MapType.satellite : MapType.normal;
+    });
+  }
+
   void _startLocationUpdates() {
     _locationTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
       final provider = context.read<RideProvider>();
@@ -85,6 +104,11 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
       try {
         final pos = await Geolocator.getCurrentPosition();
         await provider.updateLocation(pos.latitude, pos.longitude);
+        if (mounted) {
+          _mapController?.animateCamera(
+            CameraUpdate.newLatLng(LatLng(pos.latitude, pos.longitude)),
+          );
+        }
       } catch (_) {}
     });
   }
@@ -123,9 +147,10 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
       body: Stack(
         children: [
           GoogleMap(
+            mapType: _mapType,
             initialCameraPosition: const CameraPosition(
               target: LatLng(-6.7924, 39.2083),
-              zoom: 13,
+              zoom: 14,
             ),
             onMapCreated: (ctl) => _mapController = ctl,
             myLocationEnabled: true,
@@ -157,6 +182,22 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                             }
                             if (mounted) context.pop();
                           },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: cs.surface,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 8),
+                          ],
+                        ),
+                        child: IconButton(
+                          icon: Icon(_mapType == MapType.normal ? Icons.satellite : Icons.map,
+                              color: cs.onSurface),
+                          onPressed: _toggleMapType,
+                          tooltip: _mapType == MapType.normal ? 'Satellite' : 'Map',
                         ),
                       ),
                       const Spacer(),

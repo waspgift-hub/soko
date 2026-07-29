@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../providers/ride_provider.dart';
 import '../../models/ride_models.dart';
 import '../../app/routes.dart';
@@ -26,12 +28,40 @@ class _RideBookingScreenState extends State<RideBookingScreen> {
   FareEstimate? _estimate;
   bool _loadingFare = false;
   bool _requesting = false;
+  MapType _mapType = MapType.normal;
   final RideApiService _apiService = RideApiService();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _autoDetectPickup());
+  }
 
   @override
   void dispose() {
     _mapController?.dispose();
     super.dispose();
+  }
+
+  Future<void> _autoDetectPickup() async {
+    try {
+      final pos = await Geolocator.getCurrentPosition();
+      if (mounted) {
+        final loc = LatLng(pos.latitude, pos.longitude);
+        setState(() => _pickup = loc);
+        _updateMarkers();
+        _reverseGeocode(loc, isPickup: true);
+        _mapController?.animateCamera(
+          CameraUpdate.newLatLngZoom(loc, 15),
+        );
+      }
+    } catch (_) {}
+  }
+
+  void _toggleMapType() {
+    setState(() {
+      _mapType = _mapType == MapType.normal ? MapType.satellite : MapType.normal;
+    });
   }
 
   void _onMapCreated(GoogleMapController ctl) {
@@ -179,9 +209,10 @@ class _RideBookingScreenState extends State<RideBookingScreen> {
       body: Stack(
         children: [
           GoogleMap(
-            initialCameraPosition: const CameraPosition(
-              target: LatLng(-6.7924, 39.2083),
-              zoom: 13,
+            mapType: _mapType,
+            initialCameraPosition: CameraPosition(
+              target: _pickup ?? const LatLng(-6.7924, 39.2083),
+              zoom: 15,
             ),
             onMapCreated: _onMapCreated,
             onTap: _onMapTap,
@@ -214,6 +245,26 @@ class _RideBookingScreenState extends State<RideBookingScreen> {
                         child: IconButton(
                           icon: Icon(Icons.arrow_back, color: cs.onSurface),
                           onPressed: () => context.pop(),
+                        ),
+                      ),
+                      Container(
+                        margin: const EdgeInsets.only(left: 8),
+                        decoration: BoxDecoration(
+                          color: cs.surface,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.1),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: IconButton(
+                          icon: Icon(_mapType == MapType.normal ? Icons.satellite : Icons.map,
+                              color: cs.onSurface),
+                          onPressed: _toggleMapType,
+                          tooltip: _mapType == MapType.normal ? 'Satellite' : 'Map',
                         ),
                       ),
                       const SizedBox(width: 12),

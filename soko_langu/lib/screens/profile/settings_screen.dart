@@ -209,19 +209,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               const SizedBox(height: 20),
               _buildSectionTitle(context.tr('notifications')),
-              _buildTile(
-                icon: Icons.notifications,
-                title: context.tr('push_notifications'),
-                trailing: Switch(
-                  value: _notificationsEnabled,
-                  activeThumbColor: Theme.of(context).colorScheme.primary,
-                  onChanged: (value) async {
-                    final notif = NotificationService();
-                    await notif.setEnabled(value);
-                    if (mounted) setState(() => _notificationsEnabled = value);
-                  },
-                ),
-              ),
+            _buildTile(
+                 icon: Icons.notifications,
+                 title: context.tr('push_notifications'),
+                 trailing: Switch(
+                   value: _notificationsEnabled,
+                   activeThumbColor: Theme.of(context).colorScheme.primary,
+                   onChanged: (value) async {
+                     final notif = NotificationService();
+                     await notif.setEnabled(value);
+                     if (mounted) setState(() => _notificationsEnabled = value);
+                   },
+                 ),
+               ),
+               _buildTile(
+                 icon: Icons.tune,
+                 title: context.tr('notification_preferences'),
+                 onTap: () => context.push(AppRoutes.notificationPreferences),
+               ),
               const Divider(),
               _buildSectionTitle(
                 '${context.tr('language')} & ${context.tr('currency')}',

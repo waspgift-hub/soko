@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:ui' as ui;
+import 'dart:ui' as ui; // ignore: unused_import
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -9,6 +9,7 @@ import '../../services/sms_notification_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/glass_container.dart';
+import '../../widgets/location_map_widget.dart';
 import '../../utils/network_error.dart';
 import 'package:flutter/foundation.dart';
 
@@ -200,6 +201,18 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
                           _detailRow(cs, context.tr('phone'), buyerPhone.toString()),
                         if (addr != null)
                           _detailRow(cs, context.tr('address'), '${addr['region'] ?? ''}, ${addr['district'] ?? ''}, ${addr['street'] ?? ''}'),
+                        if (addr != null && addr['latitude'] != null && addr['longitude'] != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: LocationMapWidget(
+                              targetLat: (addr['latitude'] as num).toDouble(),
+                              targetLng: (addr['longitude'] as num).toDouble(),
+                              targetLabel: buyerName,
+                              height: 130,
+                              showDistance: true,
+                              interactive: false,
+                            ),
+                          ),
                         if (shippingCost > 0)
                           _detailRow(cs, context.tr('shipping_cost'), context.formatPrice(shippingCost)),
 

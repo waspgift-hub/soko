@@ -48,6 +48,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
           appBar: AppBar(
             title: Text(context.tr('notifications')),
             actions: [
+              IconButton(
+                icon: const Icon(Icons.settings_outlined),
+                onPressed: () => context.push(AppRoutes.notificationPreferences),
+              ),
               if (unreadCount > 0)
                 TextButton(
                   onPressed: () => _markAllRead(),

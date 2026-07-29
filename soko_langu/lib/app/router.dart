@@ -32,6 +32,7 @@ import '../screens/profile/about_app_screen.dart';
 import '../screens/profile/order_flow_screen.dart';
 import '../screens/wallet/wallet_screen.dart';
 import '../screens/notification/notification_screen.dart';
+import '../screens/notification/notification_preferences_screen.dart';
 import '../screens/onboarding/account_selection_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
 import '../screens/auth/magic_link_screen.dart';
@@ -218,6 +219,10 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.notifications,
         pageBuilder: (context, state) => _premiumPage(const NotificationScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.notificationPreferences,
+        pageBuilder: (context, state) => _premiumPage(const NotificationPreferencesScreen()),
       ),
       GoRoute(
         path: '${AppRoutes.publicProfile}/:userId',

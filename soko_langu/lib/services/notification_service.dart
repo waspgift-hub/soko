@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -15,6 +16,9 @@ class NotificationService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   bool _initialized = false;
   bool _listenersRegistered = false;
+
+  final StreamController<int> _unreadController = StreamController<int>.broadcast();
+  Stream<int> get unreadCountStream => _unreadController.stream;
 
   static final GlobalKey<ScaffoldMessengerState> messengerKey =
       GlobalKey<ScaffoldMessengerState>();
@@ -140,6 +144,7 @@ class NotificationService {
 
       _initialized = true;
       debugPrint('[OS] initialized');
+      _syncBadge();
     } catch (e) {
       _initialized = false;
       debugPrint('[OS] Notification init error: $e');
@@ -207,14 +212,36 @@ class NotificationService {
         .where('userId', isEqualTo: user.uid)
         .snapshots()
         .map(
-          (snap) => snap.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList()
-            ..sort((a, b) {
-              final ta = a['createdAt'];
-              final tb = b['createdAt'];
-              if (ta is Timestamp && tb is Timestamp) return tb.compareTo(ta);
-              return 0;
-            }),
+          (snap) {
+            final list = snap.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList()
+              ..sort((a, b) {
+                final ta = a['createdAt'];
+                final tb = b['createdAt'];
+                if (ta is Timestamp && tb is Timestamp) return tb.compareTo(ta);
+                return 0;
+              });
+            final unread = list.where((n) => n['isRead'] != true).length;
+            _unreadController.add(unread);
+            return list;
+          },
         );
+  }
+
+  Future<void> _syncBadge() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+    try {
+      final snap = await _db
+          .collection('notifications')
+          .where('userId', isEqualTo: user.uid)
+          .where('isRead', isEqualTo: false)
+          .count()
+          .get();
+      final count = snap.count ?? 0;
+      _unreadController.add(count);
+    } catch (_) {
+      // non-critical
+    }
   }
 
   Future<void> markAsRead(String notifId) async {
