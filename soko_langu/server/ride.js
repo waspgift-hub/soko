@@ -644,43 +644,30 @@ router.post('/pay-ride', wrap(async (data, ctx) => {
 }));
 
 // ════════════════════════════════════════════════════════════
-// DIRECTIONS
+// DIRECTIONS — uses free OSRM (OpenStreetMap)
 // ════════════════════════════════════════════════════════════
 router.get('/directions', async (req, res) => {
   try {
     const { origin, destination } = req.query;
     if (!origin || !destination) return res.status(400).json({ error: 'Missing origin or destination' });
-    const apiKey = process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyDpjlFFyFlNYu-sRUtMJouJR7a6RfDb6RY';
-    const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&key=${apiKey}`;
-    const resp = await axios.get(url);
+    const [olat, olng] = origin.split(',').map(Number);
+    const [dlat, dlng] = destination.split(',').map(Number);
+    if (isNaN(olat) || isNaN(olng) || isNaN(dlat) || isNaN(dlng))
+      return res.status(400).json({ error: 'Invalid coordinates' });
+    const url = `https://router.project-osrm.org/route/v1/driving/${olng},${olat};${dlng},${dlat}?overview=full&geometries=geojson`;
+    const resp = await axios.get(url, { headers: { 'User-Agent': 'SokoLangu/1.0' }, timeout: 15000 });
     const data = resp.data;
-    if (data.status !== 'OK') {
-      return res.status(502).json({ error: 'Directions API error', googleStatus: data.status, msg: data.error_message || '' });
+    if (data.code !== 'Ok') {
+      return res.status(502).json({ error: 'OSRM route error', message: data.message || data.code });
     }
     const route = data.routes[0];
-    const leg = route.legs[0];
-    const polyline = route.overview_polyline?.points || '';
-    const points = [];
-    if (polyline) {
-      let index = 0, lat = 0, lng = 0;
-      while (index < polyline.length) {
-        let b, shift = 0, result = 0;
-        do { b = polyline.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
-        const dlat = (result & 1) !== 0 ? ~(result >> 1) : (result >> 1);
-        lat += dlat;
-        shift = 0; result = 0;
-        do { b = polyline.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
-        const dlng = (result & 1) !== 0 ? ~(result >> 1) : (result >> 1);
-        lng += dlng;
-        points.push({ lat: lat / 1e5, lng: lng / 1e5 });
-      }
-    }
+    const coords = (route.geometry?.coordinates || []).map(c => ({ lat: c[1], lng: c[0] }));
     res.json({
-      distanceKm: Math.round(leg.distance.value / 10) / 100,
-      durationMin: Math.round(leg.duration.value / 60),
-      polyline: points,
-      startAddress: leg.start_address,
-      endAddress: leg.end_address,
+      distanceKm: Math.round(route.distance / 10) / 100,
+      durationMin: Math.round(route.duration / 60),
+      polyline: coords,
+      startAddress: origin,
+      endAddress: destination,
     });
   } catch (e) {
     console.error('[RIDE] Directions error:', e.message);
@@ -689,23 +676,19 @@ router.get('/directions', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════
-// GEOCODE
+// GEOCODE — uses free Nominatim (OpenStreetMap)
 // ════════════════════════════════════════════════════════════
 router.get('/geocode', async (req, res) => {
   try {
     const { query } = req.query;
     if (!query) return res.status(400).json({ error: 'Missing query' });
-    const apiKey = process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyDpjlFFyFlNYu-sRUtMJouJR7a6RfDb6RY';
-    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`;
-    const resp = await axios.get(url);
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`;
+    const resp = await axios.get(url, { headers: { 'User-Agent': 'SokoLangu/1.0' }, timeout: 10000 });
     const data = resp.data;
-    if (data.status !== 'OK') {
-      return res.status(502).json({ error: 'Geocode API error', msg: data.error_message || '' });
-    }
-    const results = data.results.slice(0, 5).map(r => ({
-      address: r.formatted_address,
-      lat: r.geometry.location.lat,
-      lng: r.geometry.location.lng,
+    const results = (data || []).map(r => ({
+      address: r.display_name,
+      lat: parseFloat(r.lat),
+      lng: parseFloat(r.lon),
     }));
     res.json({ results });
   } catch (e) {
@@ -715,21 +698,18 @@ router.get('/geocode', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════
-// REVERSE GEOCODE
+// REVERSE GEOCODE — uses free Nominatim (OpenStreetMap)
 // ════════════════════════════════════════════════════════════
 router.get('/reverse-geocode', async (req, res) => {
   try {
     const { latlng } = req.query;
     if (!latlng) return res.status(400).json({ error: 'Missing latlng' });
-    const apiKey = process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyDpjlFFyFlNYu-sRUtMJouJR7a6RfDb6RY';
-    const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${encodeURIComponent(latlng)}&key=${apiKey}`;
-    const resp = await axios.get(url);
+    const [lat, lng] = latlng.split(',').map(Number);
+    if (isNaN(lat) || isNaN(lng)) return res.status(400).json({ error: 'Invalid latlng' });
+    const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`;
+    const resp = await axios.get(url, { headers: { 'User-Agent': 'SokoLangu/1.0' }, timeout: 10000 });
     const data = resp.data;
-    if (data.status !== 'OK') {
-      return res.status(502).json({ error: 'Reverse geocode API error', msg: data.error_message || '' });
-    }
-    const address = data.results[0]?.formatted_address || '';
-    res.json({ address });
+    res.json({ address: data.display_name || '' });
   } catch (e) {
     console.error('[RIDE] Reverse geocode error:', e.message);
     res.status(500).json({ error: e.message });
