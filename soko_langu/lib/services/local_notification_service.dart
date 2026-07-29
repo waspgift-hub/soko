@@ -91,33 +91,34 @@ class LocalNotificationService {
     String? payload,
     bool fullScreen = false,
   }) async {
-    AndroidNotificationCategory? category;
-    if (fullScreen) {
-      category = AndroidNotificationCategory.alarm;
-    }
+    final category = fullScreen
+        ? AndroidNotificationCategory.alarm
+        : AndroidNotificationCategory.alert;
+
+    final androidDetails = AndroidNotificationDetails(
+      channelId,
+      _channelName(channelId),
+      importance: Importance.max,
+      priority: Priority.max,
+      fullScreenIntent: fullScreen,
+      playSound: true,
+      enableVibration: true,
+      category: category,
+      visibility: NotificationVisibility.public,
+      showWhen: true,
+      enableLights: true,
+      ledColor: 0xFF2196F3,
+      ledOnMs: 1000,
+      ledOffMs: 500,
+      additionalFlags: AndroidNotificationFlags.flagHighPriority,
+      channelShowBadge: true,
+    );
 
     await _plugin.show(
       id: id,
       title: title,
       body: body,
-      notificationDetails: NotificationDetails(
-        android: AndroidNotificationDetails(
-          channelId,
-          _channelName(channelId),
-          importance: Importance.max,
-          priority: Priority.max,
-          fullScreenIntent: fullScreen,
-          playSound: true,
-          enableVibration: true,
-          category: category,
-          visibility: NotificationVisibility.public,
-          showWhen: true,
-          enableLights: true,
-          ledColor: 0xFF2196F3,
-          ledOnMs: 1000,
-          ledOffMs: 500,
-        ),
-      ),
+      notificationDetails: NotificationDetails(android: androidDetails),
       payload: payload,
     );
   }

@@ -126,7 +126,6 @@ class NotificationService {
   void _showHeadsUpNotification(String title, String body, String type, Map<String, dynamic> data) {
     final String channelId;
     final String? payload;
-    final int id;
     final String headsUpTitle;
 
     switch (type) {
@@ -134,7 +133,6 @@ class NotificationService {
       case 'group_chat':
         final roomId = data['roomId'] as String? ?? '';
         channelId = 'chat_messages_v5';
-        id = roomId.hashCode;
         headsUpTitle = data['senderName'] as String? ?? title;
         payload = '/chat/$roomId';
         break;
@@ -146,7 +144,6 @@ class NotificationService {
       case 'kyc_revoked':
         final orderId = data['orderId'] as String?;
         channelId = 'payments_notifications_v5';
-        id = (orderId ?? title).hashCode;
         headsUpTitle = title;
         payload = orderId != null ? '/order-detail/$orderId' : null;
         break;
@@ -155,39 +152,38 @@ class NotificationService {
       case 'ride_accepted':
       case 'ride_completed':
         channelId = 'general_notifications_v5';
-        id = title.hashCode;
         headsUpTitle = title;
         payload = '/ride';
         break;
       case 'boost':
       case 'promotion':
         channelId = 'general_notifications_v5';
-        id = title.hashCode;
         headsUpTitle = title;
         payload = '/my-ads';
         break;
       case 'system':
       case 'admin':
       case 'alert':
-        channelId = 'general_notifications_v5';
-        id = title.hashCode;
+        channelId = 'system_alerts_v5';
         headsUpTitle = title;
         payload = null;
         break;
       default:
         channelId = 'general_notifications_v5';
-        id = title.hashCode;
         headsUpTitle = title;
         payload = null;
     }
 
+    final bool isCritical = type == 'system' || type == 'admin' || type == 'alert' ||
+        type == 'payment' || type == 'order' || type == 'chat' || type == 'ride_request';
+
     LocalNotificationService().showHeadsUp(
-      id: id,
+      id: DateTime.now().millisecondsSinceEpoch % 2147483647,
       title: headsUpTitle,
       body: body,
       channelId: channelId,
       payload: payload,
-      fullScreen: type == 'payment' || type == 'order' || type == 'chat' || type == 'ride_request',
+      fullScreen: isCritical,
     );
 
     if (title.isNotEmpty && onForegroundMessage != null) {
