@@ -19,7 +19,10 @@ const { groqChat, groqTranscribe } = require('./groq');
 
 const ADMIN_EMAILS = ["admin@soko-langu.com", "admin@soko-vibe.com"];
 
-// Catch unhandled promise rejections to prevent hanging promises leaking memory
+// Catch uncaught exceptions & rejections — log but don't exit
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] Uncaught Exception:', err?.stack || err?.message || err);
+});
 process.on('unhandledRejection', (reason) => {
   console.error('[MEM] Unhandled Rejection:', reason?.message || reason);
 });
