@@ -1,3 +1,4 @@
+import 'dart:ui' show Color;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class LocalNotificationService {
@@ -91,9 +92,7 @@ class LocalNotificationService {
     String? payload,
     bool fullScreen = false,
   }) async {
-    final category = fullScreen
-        ? AndroidNotificationCategory.alarm
-        : AndroidNotificationCategory.alert;
+    final category = fullScreen ? AndroidNotificationCategory.alarm : null;
 
     final androidDetails = AndroidNotificationDetails(
       channelId,
@@ -107,10 +106,9 @@ class LocalNotificationService {
       visibility: NotificationVisibility.public,
       showWhen: true,
       enableLights: true,
-      ledColor: 0xFF2196F3,
+      ledColor: Color(0xFF2196F3),
       ledOnMs: 1000,
       ledOffMs: 500,
-      additionalFlags: AndroidNotificationFlags.flagHighPriority,
       channelShowBadge: true,
     );
 

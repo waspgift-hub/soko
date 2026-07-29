@@ -1,5 +1,6 @@
 const express = require('express');
 const admin = require('firebase-admin');
+const axios = require('axios');
 
 const router = express.Router();
 const db = admin.firestore();
@@ -651,10 +652,10 @@ router.get('/directions', async (req, res) => {
     if (!origin || !destination) return res.status(400).json({ error: 'Missing origin or destination' });
     const apiKey = process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyDpjlFFyFlNYu-sRUtMJouJR7a6RfDb6RY';
     const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&key=${apiKey}`;
-    const resp = await fetch(url);
-    const data = await resp.json();
+    const resp = await axios.get(url);
+    const data = resp.data;
     if (data.status !== 'OK') {
-      return res.status(502).json({ error: 'Directions API error', googleStatus: data.status });
+      return res.status(502).json({ error: 'Directions API error', googleStatus: data.status, msg: data.error_message || '' });
     }
     const route = data.routes[0];
     const leg = route.legs[0];
@@ -696,10 +697,10 @@ router.get('/geocode', async (req, res) => {
     if (!query) return res.status(400).json({ error: 'Missing query' });
     const apiKey = process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyDpjlFFyFlNYu-sRUtMJouJR7a6RfDb6RY';
     const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`;
-    const resp = await fetch(url);
-    const data = await resp.json();
+    const resp = await axios.get(url);
+    const data = resp.data;
     if (data.status !== 'OK') {
-      return res.status(502).json({ error: 'Geocode API error' });
+      return res.status(502).json({ error: 'Geocode API error', msg: data.error_message || '' });
     }
     const results = data.results.slice(0, 5).map(r => ({
       address: r.formatted_address,
@@ -722,10 +723,10 @@ router.get('/reverse-geocode', async (req, res) => {
     if (!latlng) return res.status(400).json({ error: 'Missing latlng' });
     const apiKey = process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyDpjlFFyFlNYu-sRUtMJouJR7a6RfDb6RY';
     const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${encodeURIComponent(latlng)}&key=${apiKey}`;
-    const resp = await fetch(url);
-    const data = await resp.json();
+    const resp = await axios.get(url);
+    const data = resp.data;
     if (data.status !== 'OK') {
-      return res.status(502).json({ error: 'Reverse geocode API error' });
+      return res.status(502).json({ error: 'Reverse geocode API error', msg: data.error_message || '' });
     }
     const address = data.results[0]?.formatted_address || '';
     res.json({ address });

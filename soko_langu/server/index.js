@@ -733,22 +733,16 @@ app.post('/api/sms/send', async (req, res) => {
     }
     const digits = phone.replace(/\D/g, '');
     const normalized = digits.startsWith('0') ? '255' + digits.slice(1) : !digits.startsWith('255') ? '255' + digits : digits;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-    const resp = await fetch('https://meseji.co.tz/api/v1/sms/send', {
-      method: 'POST',
-      signal: controller.signal,
+    const resp = await axios.post('https://meseji.co.tz/api/v1/sms/send', {
+      sender_id: process.env.MESEJI_SENDER_ID || 'MESEJI',
+      message,
+      contacts: normalized,
+    }, {
       headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sender_id: process.env.MESEJI_SENDER_ID || 'MESEJI',
-        message,
-        contacts: normalized,
-      }),
+      timeout: 15000,
     });
-    clearTimeout(timeout);
-    if (!resp.ok) {
-      const err = await resp.text();
-      console.error(`/api/sms/send: Meseji returned ${resp.status}: ${err}`);
+    if (resp.status >= 400) {
+      console.error(`Meseji returned ${resp.status}: ${JSON.stringify(resp.data)}`);
       return res.status(502).json({ error: 'SMS provider error' });
     }
     res.json({ sent: true });
@@ -765,22 +759,16 @@ async function sendSms(phone, message) {
     if (!apiKey) { console.error('sendSms: MESEJI_API_KEY not configured'); return false; }
     const digits = phone.replace(/\D/g, '');
     const normalized = digits.startsWith('0') ? '255' + digits.slice(1) : !digits.startsWith('255') ? '255' + digits : digits;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-    const resp = await fetch('https://meseji.co.tz/api/v1/sms/send', {
-      method: 'POST',
-      signal: controller.signal,
+    const resp = await axios.post('https://meseji.co.tz/api/v1/sms/send', {
+      sender_id: process.env.MESEJI_SENDER_ID || 'MESEJI',
+      message,
+      contacts: normalized,
+    }, {
       headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sender_id: process.env.MESEJI_SENDER_ID || 'MESEJI',
-        message,
-        contacts: normalized,
-      }),
+      timeout: 15000,
     });
-    clearTimeout(timeout);
-    if (!resp.ok) {
-      const err = await resp.text();
-      console.error(`sendSms: Meseji returned ${resp.status}: ${err}`);
+    if (resp.status >= 400) {
+      console.error(`sendSms: Meseji returned ${resp.status}`);
       return false;
     }
     return true;
@@ -6969,11 +6957,8 @@ app.listen(PORT, () => {
     console.log(`[SELF-PING] Auto-ping enabled for ${publicUrl}/ping every 10 minutes`);
     setInterval(async () => {
       try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 10000);
-        const resp = await fetch(`${publicUrl}/ping`, { signal: controller.signal });
-        clearTimeout(timeout);
-        if (resp.ok) {
+        const resp = await axios.get(`${publicUrl}/ping`, { timeout: 10000 });
+        if (resp.status === 200) {
           console.log(`[SELF-PING] OK at ${new Date().toISOString()}`);
         }
       } catch (e) {
@@ -7120,18 +7105,17 @@ async function sendRidePush(userId, title, message, data = {}) {
     const appId = process.env.ONESIGNAL_APP_ID;
     const apiKey = process.env.ONESIGNAL_API_KEY;
     if (!appId || !apiKey) return;
-    await fetch('https://onesignal.com/api/v1/notifications', {
-      method: 'POST',
+    await axios.post('https://onesignal.com/api/v1/notifications', {
+      app_id: appId,
+      include_player_ids: [onesignalId],
+      headings: { en: title, sw: title },
+      contents: { en: message, sw: message },
+      data,
+      small_icon: 'ic_notification',
+      android_sound: 'notification',
+    }, {
       headers: { 'Content-Type': 'application/json', Authorization: `Basic ${apiKey}` },
-      body: JSON.stringify({
-        app_id: appId,
-        include_player_ids: [onesignalId],
-        headings: { en: title, sw: title },
-        contents: { en: message, sw: message },
-        data,
-        small_icon: 'ic_notification',
-        android_sound: 'notification',
-      }),
+      timeout: 10000,
     });
   } catch (e) {
     console.error('[RIDE] OneSignal error:', e.message);
@@ -7763,11 +7747,11 @@ app.get('/api/rides/directions', async (req, res) => {
 
     const apiKey = process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyDpjlFFyFlNYu-sRUtMJouJR7a6RfDb6RY';
     const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&key=${apiKey}`;
-    const resp = await fetch(url);
-    const data = await resp.json();
+    const resp = await axios.get(url);
+    const data = resp.data;
 
     if (data.status !== 'OK') {
-      return res.status(502).json({ error: 'Directions API error', googleStatus: data.status });
+      return res.status(502).json({ error: 'Directions API error', googleStatus: data.status, msg: data.error_message || '' });
     }
 
     const route = data.routes[0];
@@ -7811,11 +7795,11 @@ app.get('/api/rides/geocode', async (req, res) => {
 
     const apiKey = process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyDpjlFFyFlNYu-sRUtMJouJR7a6RfDb6RY';
     const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`;
-    const resp = await fetch(url);
-    const data = await resp.json();
+    const resp = await axios.get(url);
+    const data = resp.data;
 
     if (data.status !== 'OK') {
-      return res.status(502).json({ error: 'Geocode API error' });
+      return res.status(502).json({ error: 'Geocode API error', msg: data.error_message || '' });
     }
 
     const results = data.results.slice(0, 5).map(r => ({
@@ -7839,11 +7823,11 @@ app.get('/api/rides/reverse-geocode', async (req, res) => {
 
     const apiKey = process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyDpjlFFyFlNYu-sRUtMJouJR7a6RfDb6RY';
     const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${encodeURIComponent(latlng)}&key=${apiKey}`;
-    const resp = await fetch(url);
-    const data = await resp.json();
+    const resp = await axios.get(url);
+    const data = resp.data;
 
     if (data.status !== 'OK') {
-      return res.status(502).json({ error: 'Reverse geocode API error' });
+      return res.status(502).json({ error: 'Reverse geocode API error', msg: data.error_message || '' });
     }
 
     const address = data.results[0]?.formatted_address || '';
