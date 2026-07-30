@@ -8,6 +8,7 @@ import '../../services/category_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
 import '../../utils/network_error.dart';
+import '../../widgets/barcode_scanner_widget.dart';
 
 class _VariantEntry {
   final TextEditingController nameCtrl = TextEditingController();
@@ -39,6 +40,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   final _stockController = TextEditingController(text: '1');
   final _brandController = TextEditingController();
   final _locationController = TextEditingController();
+  final _barcodeController = TextEditingController();
 
   String _selectedCategory = 'Electronics';
   String _selectedSubcategory = '';
@@ -95,6 +97,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     _existingImages = List.from(p.images);
     if (p.brand != null) _brandController.text = p.brand!;
     if (p.location.isNotEmpty) _locationController.text = p.location;
+    if (p.barcode != null) _barcodeController.text = p.barcode!;
     for (var v in p.variants) {
       final entry = _VariantEntry();
       entry.nameCtrl.text = v.name;
@@ -113,6 +116,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     _stockController.dispose();
     _brandController.dispose();
     _locationController.dispose();
+    _barcodeController.dispose();
     for (var v in _variants) {
       v.dispose();
     }
@@ -167,6 +171,16 @@ class _AddProductScreenState extends State<AddProductScreen> {
     setState(() => _newImages.removeAt(index));
   }
 
+  Future<void> _scanBarcode() async {
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const BarcodeScannerWidget()),
+    );
+    if (result != null && result.isNotEmpty && mounted) {
+      _barcodeController.text = result;
+    }
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -215,6 +229,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
           location: _locationController.text.isNotEmpty
               ? _locationController.text
               : null,
+          barcode: _barcodeController.text.isNotEmpty
+              ? _barcodeController.text.trim()
+              : null,
           existingImages: _existingImages.isNotEmpty ? _existingImages : null,
           newImages: _newImages.isNotEmpty ? _newImages : null,
         );
@@ -237,6 +254,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
               ? _normalizeBrand(_brandController.text)
               : null,
           condition: _selectedCondition,
+          barcode: _barcodeController.text.isNotEmpty
+              ? _barcodeController.text.trim()
+              : null,
         );
       }
 
@@ -493,6 +513,20 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     labelText: context.tr('brand'),
                     border: const OutlineInputBorder(),
                     labelStyle: TextStyle(color: Theme.of(context).colorScheme.primary),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _barcodeController,
+                  decoration: InputDecoration(
+                    labelText: 'Barcode (ISBN, UPC, EAN)',
+                    hintText: 'Scan or type barcode',
+                    border: const OutlineInputBorder(),
+                    labelStyle: TextStyle(color: Theme.of(context).colorScheme.primary),
+                    suffixIcon: IconButton(
+                      icon: Icon(Icons.qr_code_scanner, color: Theme.of(context).colorScheme.primary),
+                      onPressed: () => _scanBarcode(),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
