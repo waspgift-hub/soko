@@ -1,5 +1,22 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+// Clickpesa USSD Push fee tiers (source: clickpesa.com/pricing)
+const List<(int, int, int)> ussdPushFeeTiers = [
+  (500, 899, 54), (900, 1999, 92), (2000, 2999, 124), (3000, 3999, 230),
+  (4000, 4399, 380), (4400, 8999, 580), (9000, 19999, 920), (20000, 39999, 1150),
+  (40000, 49999, 1572), (50000, 95999, 2136), (96000, 199999, 3240),
+  (200000, 299999, 3660), (300000, 399999, 4080), (400000, 499999, 4340),
+  (500000, 599999, 4820), (600000, 799999, 5230), (800000, 999999, 6146),
+  (1000000, 1999999, 7210), (2000000, 3000000, 7960),
+];
+
+double getUssdPushFee(double amount) {
+  for (final tier in ussdPushFeeTiers) {
+    if (amount >= tier.$1 && amount <= tier.$2) return tier.$3.toDouble();
+  }
+  return 7960.0;
+}
+
 class TransactionFeeBreakdown {
   final double productPrice;
   static const double platformCommissionPercent = 0.035;
@@ -10,14 +27,12 @@ class TransactionFeeBreakdown {
   final double totalAmount;
   final double sellerReceives;
 
-  static const double collectionFee = 180;
-
   TransactionFeeBreakdown({required this.productPrice})
-    : processingFee = collectionFee,
+    : processingFee = getUssdPushFee(productPrice),
       platformFee = productPrice * platformCommissionPercent,
       payoutFee = 0,
-      totalFees = (productPrice * platformCommissionPercent) + collectionFee,
-      totalAmount = productPrice + (productPrice * platformCommissionPercent) + collectionFee,
+      totalFees = (productPrice * platformCommissionPercent) + getUssdPushFee(productPrice),
+      totalAmount = productPrice + (productPrice * platformCommissionPercent) + getUssdPushFee(productPrice),
       sellerReceives = productPrice;
 
   Map<String, dynamic> toMap() => {

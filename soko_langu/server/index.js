@@ -5907,7 +5907,7 @@ app.post('/api/transactions/create', asyncHandler(async (req, res) => {
   }
 
   const price = Number(productPrice);
-  const processingFee = price * 0.02;
+  const processingFee = getUssdPushFee(price);
   const platformFee = price * 0.03;
   const totalAmount = price + processingFee + platformFee;
   const sellerReceives = price - platformFee;

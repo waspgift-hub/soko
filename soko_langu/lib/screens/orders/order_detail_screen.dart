@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../extensions/context_tr.dart';
+import '../../models/transaction_model.dart';
 import '../../services/api_config.dart';
 import '../../services/sms_notification_service.dart';
 import '../../services/clickpesa_service.dart';
@@ -717,7 +718,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         (d['platformFee'] as num?)?.toDouble() ??
         (d['sokoLanguCommission'] as num?)?.toDouble() ??
         (price * 0.035);
-    final processingFee = (d['processingFee'] as num?)?.toDouble() ?? 180;
+    final processingFee = (d['processingFee'] as num?)?.toDouble() ?? getUssdPushFee(price);
     final discount = (d['discount'] as num?)?.toDouble();
     final txId =
         d['transactionId'] as String? ??

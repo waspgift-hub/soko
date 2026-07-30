@@ -64,7 +64,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             final price = (d['productPrice'] ?? 0).toDouble();
             final shippingCost = (d['shippingCost'] as num?)?.toDouble() ?? 0;
             final platformFee = (d['platformFee'] as num?)?.toDouble() ?? (price * 0.035);
-            final clickpesaFee = (d['clickpesaFee'] as num?)?.toDouble() ?? 180;
+            final clickpesaFee = (d['clickpesaFee'] as num?)?.toDouble() ?? getUssdPushFee(price);
             final totalAmount = (d['totalAmount'] as num?)?.toDouble() ?? (price + shippingCost + platformFee + clickpesaFee);
             final buyerName = d['buyerName'] as String? ?? '';
             final sellerName = d['sellerName'] as String? ?? '';
