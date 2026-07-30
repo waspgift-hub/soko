@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../extensions/context_tr.dart';
 
 class RidePaymentScreen extends StatelessWidget {
   const RidePaymentScreen({super.key});
@@ -6,8 +7,8 @@ class RidePaymentScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Payment')),
-      body: const Center(child: Text('Payment screen - coming soon')),
+      appBar: AppBar(title: Text(context.tr('payment_title'))),
+      body: Center(child: Text(context.tr('coming_soon_placeholder'))),
     );
   }
 }

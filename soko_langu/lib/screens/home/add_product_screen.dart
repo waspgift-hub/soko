@@ -519,8 +519,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 TextFormField(
                   controller: _barcodeController,
                   decoration: InputDecoration(
-                    labelText: 'Barcode (ISBN, UPC, EAN)',
-                    hintText: 'Scan or type barcode',
+                  labelText: context.tr('barcode_label'),
+                  hintText: context.tr('barcode_hint'),
                     border: const OutlineInputBorder(),
                     labelStyle: TextStyle(color: Theme.of(context).colorScheme.primary),
                     suffixIcon: IconButton(

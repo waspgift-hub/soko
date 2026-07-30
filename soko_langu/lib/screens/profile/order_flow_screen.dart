@@ -535,9 +535,9 @@ class _FeeTiersTable extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Expanded(child: Text('Min (TZS)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: cs.primary))),
-              Expanded(child: Text('Max (TZS)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: cs.primary))),
-              Expanded(child: Text('Fee (TZS)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: cs.primary), textAlign: TextAlign.end)),
+              Expanded(child: Text(context.tr('min_tzs_header'), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: cs.primary))),
+              Expanded(child: Text(context.tr('max_tzs_header'), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: cs.primary))),
+              Expanded(child: Text(context.tr('fee_tzs_header'), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: cs.primary), textAlign: TextAlign.end)),
             ],
           ),
         ),
@@ -569,7 +569,7 @@ class _FeeTiersTable extends StatelessWidget {
           child: Row(
             children: [
               const Spacer(),
-              Text('Above 3,000,000 \u2192 7,960 / 9,890',
+              Text(context.tr('above_fee_info'),
                 style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: cs.primary.withValues(alpha: 0.8))),
             ],
           ),

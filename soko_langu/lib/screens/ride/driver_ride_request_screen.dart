@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../extensions/context_tr.dart';
 
 class DriverRideRequestScreen extends StatelessWidget {
   const DriverRideRequestScreen({super.key});
@@ -6,8 +7,8 @@ class DriverRideRequestScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Ride Request')),
-      body: const Center(child: Text('Ride request - coming soon')),
+      appBar: AppBar(title: Text(context.tr('ride_request_title'))),
+      body: Center(child: Text(context.tr('coming_soon_placeholder'))),
     );
   }
 }

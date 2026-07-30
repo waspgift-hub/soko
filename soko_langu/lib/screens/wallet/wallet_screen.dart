@@ -81,10 +81,10 @@ class _WalletScreenState extends State<WalletScreen> {
                   prefixText: 'TZS ',
                 ),
                 validator: (v) {
-                  if (v == null || v.isEmpty) return 'Required';
+                  if (v == null || v.isEmpty) return context.tr('required_field');
                   final n = int.tryParse(v);
-                  if (n == null || n < 1000) return 'Minimum TZS 1,000';
-                  if (n > _balance) return 'Insufficient balance';
+                  if (n == null || n < 1000) return context.trParams('minimum_tzs', {'amount': '1,000'});
+                  if (n > _balance) return context.tr('insufficient_balance');
                   return null;
                 },
               ),
@@ -153,14 +153,14 @@ class _WalletScreenState extends State<WalletScreen> {
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(data['error'] ?? 'Withdrawal failed'), backgroundColor: Colors.red),
+            SnackBar(content: Text(data['error'] ?? context.tr('withdrawal_failed')), backgroundColor: Colors.red),
           );
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(context.trParams('error_message', {'message': '$e'})), backgroundColor: Colors.red),
         );
       }
     }
@@ -381,14 +381,14 @@ class _WalletScreenState extends State<WalletScreen> {
                 controller: amtCtrl,
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
-                  labelText: context.tr('amount'),
+                  labelText: context.tr('phone'),
                   border: const OutlineInputBorder(),
-                  prefixText: 'TZS ',
+                  hintText: '2557XXXXXXXX',
                 ),
                 validator: (v) {
-                  if (v == null || v.isEmpty) return 'Required';
-                  final n = int.tryParse(v);
-                  if (n == null || n < 1000) return 'Minimum TZS 1,000';
+                  if (v == null || v.isEmpty) return context.tr('required_field');
+                  if (!v.startsWith('255')) return context.tr('must_start_255');
+                  if (v.length < 10) return context.tr('too_short_input');
                   return null;
                 },
               ),
@@ -481,7 +481,7 @@ class _WalletScreenState extends State<WalletScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('BillPay Deposit'),
+        title: Text(context.tr('billpay_deposit')),
         content: Form(
           key: formKey,
           child: Column(
@@ -490,15 +490,15 @@ class _WalletScreenState extends State<WalletScreen> {
               TextFormField(
                 controller: amtCtrl,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Amount',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: context.tr('amount'),
+                  border: const OutlineInputBorder(),
                   prefixText: 'TZS ',
                 ),
                 validator: (v) {
-                  if (v == null || v.isEmpty) return 'Required';
+                  if (v == null || v.isEmpty) return context.tr('required_field');
                   final n = int.tryParse(v);
-                  if (n == null || n < 1000) return 'Minimum TZS 1,000';
+                  if (n == null || n < 1000) return context.trParams('minimum_tzs', {'amount': '1,000'});
                   return null;
                 },
               ),
@@ -506,8 +506,8 @@ class _WalletScreenState extends State<WalletScreen> {
               TextFormField(
                 controller: phoneCtrl,
                 keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: 'Phone (optional)',
+                decoration: InputDecoration(
+                  labelText: context.tr('phone_optional'),
                   border: OutlineInputBorder(),
                   hintText: '2557XXXXXXXX',
                 ),
@@ -571,8 +571,8 @@ class _WalletScreenState extends State<WalletScreen> {
         }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(data['error'] ?? 'Deposit failed'),
+        SnackBar(
+          content: Text(data['error'] ?? context.tr('deposit_failed')),
             backgroundColor: Colors.red,
           ),
         );
@@ -580,7 +580,7 @@ class _WalletScreenState extends State<WalletScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        SnackBar(content: Text(context.trParams('error_message', {'message': '$e'})), backgroundColor: Colors.red),
       );
     }
     if (mounted) setState(() => _loading = false);
@@ -1021,10 +1021,10 @@ class _WalletScreenState extends State<WalletScreen> {
                 ),
           title: Text(
             isCompleted
-                ? 'Deposit Completed'
+                ? context.tr('deposit_completed')
                 : isFailed
-                    ? 'Deposit Failed'
-                    : 'Processing...',
+                    ? context.tr('deposit_failed_status')
+                    : context.tr('processing_status'),
             style: const TextStyle(fontWeight: FontWeight.w600),
           ),
           subtitle: Text('TZS ${amount.toStringAsFixed(0)}  ·  $pm'),

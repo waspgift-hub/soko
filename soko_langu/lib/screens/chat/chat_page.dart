@@ -639,7 +639,7 @@ class _ChatPageState extends State<ChatPage> {
   Widget _buildMicButton(ColorScheme cs) {
     return GestureDetector(
       onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: const Text('Coming soon')),
+        SnackBar(content: Text(context.tr('coming_soon'))),
       ),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),

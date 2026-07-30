@@ -129,11 +129,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   Future<void> _verifyOtpAndReset() async {
     if (_newPasswordController.text != _confirmPasswordController.text) {
-      setState(() => _serverError = 'Nyuzi hazilingani');
+      setState(() => _serverError = context.tr('passwords_mismatch'));
       return;
     }
     if (_newPasswordController.text.length < 8) {
-      setState(() => _serverError = 'Nenosiri linatakiwa kuwa na angalau herufi 8');
+      setState(() => _serverError = context.tr('password_min_length'));
       return;
     }
     setState(() { _isLoading = true; _serverError = null; });

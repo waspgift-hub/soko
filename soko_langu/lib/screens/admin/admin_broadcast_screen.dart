@@ -31,7 +31,7 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
 
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Title is required'), backgroundColor: Colors.red),
+        SnackBar(content: Text(context.tr('title_is_required')), backgroundColor: Colors.red),
       );
       return;
     }
@@ -39,13 +39,13 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Confirm Broadcast'),
-        content: Text('Tuma notification hii kwa watumiaji WOTE?\n\nTitle: $title\nBody: ${body.isNotEmpty ? body : '(empty)'}'),
+        title: Text(context.tr('confirm_broadcast')),
+        content: Text(context.trParams('broadcast_confirm_body', {'title': title, 'body': body.isNotEmpty ? body : '(empty)'})),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
           ElevatedButton.icon(
             icon: const Icon(Icons.send_rounded, size: 18),
-            label: const Text('Send to All'),
+            label: Text(context.tr('send_to_all')),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(ctx, true),
           ),
@@ -72,23 +72,23 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
 
       if (resp.statusCode == 200 && data['success'] == true) {
         setState(() {
-          _result = 'Sent to ${data['totalUsers']} users\nPush: ${data['pushNotifications']} delivered\nIn-app: ${data['inAppNotifications']} saved';
+          _result = context.trParams('broadcast_result', {'totalUsers': '${data['totalUsers']}', 'pushNotifications': '${data['pushNotifications']}', 'inAppNotifications': '${data['inAppNotifications']}'});
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(data['message'] ?? 'Broadcast sent!'), backgroundColor: Colors.green),
+            SnackBar(content: Text(data['message'] ?? context.tr('broadcast_sent')), backgroundColor: Colors.green),
           );
         }
         _titleCtrl.clear();
         _bodyCtrl.clear();
       } else {
-        throw Exception(data['error'] ?? 'Failed to send');
+        throw Exception(data['error'] ?? context.tr('failed_text'));
       }
     } catch (e) {
-      setState(() => _result = 'Error: $e');
+      setState(() => _result = '${context.tr('error_occurred')}: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('${context.tr('error_occurred')}: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -102,7 +102,7 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Broadcast Notification'),
+        title: Text(context.tr('broadcast_notification')),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
@@ -137,8 +137,8 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
                 controller: _titleCtrl,
                 style: TextStyle(fontSize: 15, color: cs.onSurface),
                 decoration: InputDecoration(
-                  labelText: 'Notification Title *',
-                  hintText: 'e.g. App Update v2.0',
+                  labelText: context.tr('notification_title_field'),
+                  hintText: context.tr('notification_title_hint'),
                   labelStyle: TextStyle(color: cs.primary),
                   filled: true,
                   fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.3),
@@ -155,8 +155,8 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
                 maxLines: 5,
                 style: TextStyle(fontSize: 15, color: cs.onSurface),
                 decoration: InputDecoration(
-                  labelText: 'Notification Body',
-                  hintText: 'Describe the update or announcement...',
+                  labelText: context.tr('notification_body_field'),
+                  hintText: context.tr('notification_body_hint'),
                   alignLabelWithHint: true,
                   labelStyle: TextStyle(color: cs.onSurfaceVariant),
                   filled: true,

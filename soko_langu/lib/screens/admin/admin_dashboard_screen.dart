@@ -2045,7 +2045,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             width: double.infinity,
             child: ElevatedButton.icon(
               icon: const Icon(Icons.verified_user, size: 18),
-              label: const Text('Open Full KYC Management'),
+              label: Text(context.tr('open_full_kyc_management')),
               style: ElevatedButton.styleFrom(
                 backgroundColor: cs.primary,
                 foregroundColor: cs.onPrimary,
@@ -2060,7 +2060,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             width: double.infinity,
             child: ElevatedButton.icon(
               icon: const Icon(Icons.send_rounded, size: 18),
-              label: const Text('Send Broadcast to All Users'),
+              label: Text(context.tr('send_broadcast')),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,
                 foregroundColor: Colors.white,

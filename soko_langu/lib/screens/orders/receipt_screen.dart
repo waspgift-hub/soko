@@ -218,55 +218,55 @@ Scan QR code for full receipt
                 _divider(cs),
                 const SizedBox(height: 20),
                 // Product + Seller Details
-                _infoSection(cs, _tr( 'order_details', 'Maelezo ya Agizo'), [
-                  _infoRow(cs, _tr( 'product', 'Bidhaa'), productName),
+                _infoSection(cs, context.tr( 'order_details', 'Maelezo ya Agizo'), [
+                  _infoRow(cs, context.tr( 'product', 'Bidhaa'), productName),
                   if (productDescription.isNotEmpty)
-                    _infoRow(cs, _tr( 'description', 'Maelezo'), productDescription),
+                    _infoRow(cs, context.tr( 'description', 'Maelezo'), productDescription),
                   if (productDetails.isNotEmpty)
-                    _infoRow(cs, _tr( 'details', 'Kinachouzwa'), productDetails),
-                  _infoRow(cs, _tr( 'buyer_label', 'Mnunuzi'), buyerName),
-                  _infoRow(cs, _tr( 'seller', 'Muuzaji'), sellerName),
+                    _infoRow(cs, context.tr( 'details', 'Kinachouzwa'), productDetails),
+                  _infoRow(cs, context.tr( 'buyer_label', 'Mnunuzi'), buyerName),
+                  _infoRow(cs, context.tr( 'seller', 'Muuzaji'), sellerName),
                   if (sellerPhone.isNotEmpty)
-                    _infoRow(cs, _tr( 'seller_phone', 'Simu ya Muuzaji'), sellerPhone),
+                    _infoRow(cs, context.tr( 'seller_phone', 'Simu ya Muuzaji'), sellerPhone),
                   if (sellerLocation.isNotEmpty)
-                    _infoRow(cs, _tr( 'seller_location', 'Duka lipo'), sellerLocation),
+                    _infoRow(cs, context.tr( 'seller_location', 'Duka lipo'), sellerLocation),
                   if (buyerPhone.isNotEmpty)
-                    _infoRow(cs, _tr( 'buyer_phone', 'Simu ya Mnunuzi'), buyerPhone),
+                    _infoRow(cs, context.tr( 'buyer_phone', 'Simu ya Mnunuzi'), buyerPhone),
                 ]),
                 const SizedBox(height: 16),
                 // Delivery Address
                 if (deliveryAddress != null) ...[
-                  _infoSection(cs, _tr( 'shipping_address', 'Anwani ya Usafirishaji'), [
-                    _infoRow(cs, _tr( 'region', 'Mkoa'), deliveryAddress['region'] as String? ?? ''),
-                    _infoRow(cs, _tr( 'district', 'Wilaya'), deliveryAddress['district'] as String? ?? ''),
-                    _infoRow(cs, _tr( 'street', 'Mtaa'), deliveryAddress['street'] as String? ?? ''),
+                  _infoSection(cs, context.tr( 'shipping_address', 'Anwani ya Usafirishaji'), [
+                    _infoRow(cs, context.tr( 'region', 'Mkoa'), deliveryAddress['region'] as String? ?? ''),
+                    _infoRow(cs, context.tr( 'district', 'Wilaya'), deliveryAddress['district'] as String? ?? ''),
+                    _infoRow(cs, context.tr( 'street', 'Mtaa'), deliveryAddress['street'] as String? ?? ''),
                     if (deliveryAddress['landmarks'] != null)
-                      _infoRow(cs, _tr( 'landmarks', 'Alama'), deliveryAddress['landmarks'] as String),
+                      _infoRow(cs, context.tr( 'landmarks', 'Alama'), deliveryAddress['landmarks'] as String),
                   ]),
                   if (courierName != null || driverPhone != null || trackingNumber != null) ...[
                     const SizedBox(height: 16),
-                    _infoSection(cs, _tr( 'dispatch_info', 'Maelezo ya Usafirishaji'), [
-                      if (courierName != null) _infoRow(cs, _tr( 'courier', 'Mtoa huduma'), courierName),
-                      if (driverPhone != null) _infoRow(cs, _tr( 'driver_phone', 'Simu ya Dereva'), driverPhone),
-                      if (trackingNumber != null) _infoRow(cs, _tr( 'tracking', 'Namba ya kufuatilia'), trackingNumber),
+                    _infoSection(cs, context.tr( 'dispatch_info', 'Maelezo ya Usafirishaji'), [
+                      if (courierName != null) _infoRow(cs, context.tr( 'courier', 'Mtoa huduma'), courierName),
+                      if (driverPhone != null) _infoRow(cs, context.tr( 'driver_phone', 'Simu ya Dereva'), driverPhone),
+                      if (trackingNumber != null) _infoRow(cs, context.tr( 'tracking', 'Namba ya kufuatilia'), trackingNumber),
                     ]),
                   ],
                   const SizedBox(height: 16),
                 ],
                 // Payment Breakdown
-                _infoSection(cs, _tr( 'payment_breakdown', 'Mgawanyo wa Malipo'), [
-                  _infoRow(cs, _tr( 'product_price', 'Bei ya Bidhaa'), 'TSh ${nf.format(price.toInt())}'),
+                _infoSection(cs, context.tr( 'payment_breakdown', 'Mgawanyo wa Malipo'), [
+                  _infoRow(cs, context.tr( 'product_price', 'Bei ya Bidhaa'), 'TSh ${nf.format(price.toInt())}'),
                   if (shippingCost > 0)
-                    _infoRow(cs, _tr( 'shipping_cost', 'Nauli ya Usafirishaji'), 'TSh ${nf.format(shippingCost.toInt())}', valueColor: cs.secondary),
-                  _infoRow(cs, _tr( 'commission', 'Commission ya Soko Vibe'), 'TSh ${nf.format(platformFee.toInt())}', valueColor: cs.tertiary),
-                  _infoRow(cs, _tr( 'processing_fee', 'Ada ya Kuchakata'), 'TSh ${nf.format(clickpesaFee.toInt())}', valueColor: cs.tertiary),
+                    _infoRow(cs, context.tr( 'shipping_cost', 'Nauli ya Usafirishaji'), 'TSh ${nf.format(shippingCost.toInt())}', valueColor: cs.secondary),
+                  _infoRow(cs, context.tr( 'commission', 'Commission ya Soko Vibe'), 'TSh ${nf.format(platformFee.toInt())}', valueColor: cs.tertiary),
+                  _infoRow(cs, context.tr( 'processing_fee', 'Ada ya Kuchakata'), 'TSh ${nf.format(clickpesaFee.toInt())}', valueColor: cs.tertiary),
                 ]),
                 const SizedBox(height: 8),
                 _divider(cs),
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Text(_tr( 'total', 'Jumla'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: cs.onSurface)),
+                    Text(context.tr( 'total', 'Jumla'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: cs.onSurface)),
                     const Spacer(),
                     Text('TSh ${nf.format(totalAmount.toInt())}',
                       style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: cs.primary,
@@ -278,7 +278,7 @@ Scan QR code for full receipt
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      Text(_tr( 'seller_gets', 'Muuzaji anapata'), style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                      Text(context.tr( 'seller_gets', 'Muuzaji anapata'), style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
                       const Spacer(),
                       Text('TSh ${nf.format(sellerReceives.toInt())}',
                         style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.successGreen)),
@@ -296,7 +296,7 @@ Scan QR code for full receipt
                     productDescription, productDetails),
                 const SizedBox(height: 24),
                 // Order Timeline
-                Text(_tr( 'order_status', 'Hatua za Agizo'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: cs.onSurface)),
+                Text(context.tr( 'order_status', 'Hatua za Agizo'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: cs.onSurface)),
                 const SizedBox(height: 12),
                 OrderTimeline(
                   status: txStatus,
@@ -340,7 +340,7 @@ Scan QR code for full receipt
               Image.asset('assets/soko_vibe_logo.png', height: 32, errorBuilder: (_, __, ___) =>
                 Icon(Icons.store, size: 28, color: cs.primary)),
               const SizedBox(width: 8),
-              Text('SOKO VIBE', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 2, color: cs.primary)),
+              Text(context.tr('soko_vibe_brand'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 2, color: cs.primary)),
             ],
           ),
           const SizedBox(height: 8),
@@ -354,7 +354,7 @@ Scan QR code for full receipt
             child: Icon(Icons.receipt_long, color: cs.primary, size: 28),
           ),
           const SizedBox(height: 10),
-          Text(_tr( 'receipt_title', 'RISITI YA UNUNUZI'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: cs.onSurface, letterSpacing: 1)),
+          Text(context.tr( 'receipt_title', 'RISITI YA UNUNUZI'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: cs.onSurface, letterSpacing: 1)),
           const SizedBox(height: 6),
           Text('#$orderId', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
           const SizedBox(height: 2),
@@ -402,7 +402,7 @@ Scan QR code for full receipt
               children: [
                 Image.asset('assets/soko_vibe_logo.png', height: 16, errorBuilder: (_, __, ___) => const SizedBox()),
                 const SizedBox(width: 4),
-                Text('SOKO VIBE', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w700, color: cs.primary, letterSpacing: 1)),
+                Text(context.tr('soko_vibe_brand'), style: TextStyle(fontSize: 8, fontWeight: FontWeight.w700, color: cs.primary, letterSpacing: 1)),
               ],
             ),
             const SizedBox(height: 8),
@@ -414,7 +414,7 @@ Scan QR code for full receipt
               dataModuleStyle: QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: Colors.black),
             ),
             const SizedBox(height: 8),
-            Text(_tr( 'scan_to_verify', 'Scan QR kupata taarifa zote'),
+            Text(context.tr( 'scan_to_verify', 'Scan QR kupata taarifa zote'),
                 style: TextStyle(fontSize: 9, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
           ],
         ),
@@ -443,19 +443,14 @@ Scan QR code for full receipt
     );
   }
 
-  String _tr(String key, [String? fallback]) {
-    final result = LocalizationService.translate(key, _lang);
-    return result == key ? (fallback ?? key) : result;
-  }
-
   List<String> _getTimelineSteps(String status) {
     final allSteps = [
-      _tr('order_placed', 'Order placed'),
-      _tr('payment_received', 'Payment received'),
-      _tr('processing', 'Processing'),
-      _tr('dispatched_label', 'Dispatched'),
-      _tr('delivered', 'Delivered'),
-      _tr('confirmed', 'Confirmed'),
+      context.tr('order_placed', 'Order placed'),
+      context.tr('payment_received', 'Payment received'),
+      context.tr('processing', 'Processing'),
+      context.tr('dispatched_label', 'Dispatched'),
+      context.tr('delivered', 'Delivered'),
+      context.tr('confirmed', 'Confirmed'),
     ];
     switch (status) {
       case 'pending': return allSteps.take(1).toList();
@@ -464,8 +459,8 @@ Scan QR code for full receipt
       case 'dispatched': return allSteps.take(4).toList();
       case 'delivered': return allSteps.take(5).toList();
       case 'delivery_confirmed': case 'completed': return allSteps;
-      case 'failed': return [_tr('order_placed', 'Order placed'), _tr('payment_failed_short', 'Payment failed')];
-      case 'refunded': return [_tr('order_placed', 'Order placed'), _tr('payment_received', 'Payment received'), _tr('refunded', 'Refunded')];
+      case 'failed': return [context.tr('order_placed', 'Order placed'), context.tr('payment_failed_short', 'Payment failed')];
+      case 'refunded': return [context.tr('order_placed', 'Order placed'), context.tr('payment_received', 'Payment received'), context.tr('refunded', 'Refunded')];
       default: return [status];
     }
   }
@@ -595,7 +590,7 @@ class _ReceiptDownloadButtonState extends State<_ReceiptDownloadButton> {
             icon: _isGenerating
                 ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary))
                 : const Icon(Icons.download_rounded, size: 18),
-            label: Text(_isGenerating ? _tr('generating', 'Generating...') : _tr('download_receipt', 'Download Receipt')),
+            label: Text(_isGenerating ? context.tr('generating', 'Generating...') : context.tr('download_receipt', 'Download Receipt')),
             style: OutlinedButton.styleFrom(
               foregroundColor: cs.primary,
               side: BorderSide(color: cs.primary.withValues(alpha: 0.3)),
@@ -610,7 +605,7 @@ class _ReceiptDownloadButtonState extends State<_ReceiptDownloadButton> {
           child: OutlinedButton.icon(
             onPressed: _isGenerating ? null : _onShare,
             icon: const Icon(Icons.share, size: 18),
-            label: Text(_tr('share_receipt', 'Share Receipt')),
+            label: Text(context.tr('share_receipt', 'Share Receipt')),
             style: OutlinedButton.styleFrom(
               foregroundColor: cs.secondary,
               side: BorderSide(color: cs.secondary.withValues(alpha: 0.3)),
@@ -642,7 +637,7 @@ class _ReceiptDownloadButtonState extends State<_ReceiptDownloadButton> {
       await _saveToDownloads(pdfBytes);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${_tr('error_label', 'Error')}: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${context.tr('error_label', 'Error')}: $e')));
       }
     }
     if (mounted) setState(() => _isGenerating = false);
@@ -670,7 +665,7 @@ class _ReceiptDownloadButtonState extends State<_ReceiptDownloadButton> {
       await Share.shareXFiles([XFile(file.path)], text: 'Soko Vibe Receipt #${widget.orderId}');
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${_tr('error_label', 'Error')}: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${context.tr('error_label', 'Error')}: $e')));
       }
     }
     if (mounted) setState(() => _isGenerating = false);
@@ -688,7 +683,7 @@ class _ReceiptDownloadButtonState extends State<_ReceiptDownloadButton> {
       await OpenFile.open(file.path);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_tr('receipt_saved', 'Receipt saved')), duration: const Duration(seconds: 3)),
+          SnackBar(content: Text(context.tr('receipt_saved', 'Receipt saved')), duration: const Duration(seconds: 3)),
         );
       }
     } else {
@@ -697,10 +692,5 @@ class _ReceiptDownloadButtonState extends State<_ReceiptDownloadButton> {
       await file.writeAsBytes(pdfBytes);
       await Share.shareXFiles([XFile(file.path)], text: 'Soko Vibe Receipt #${widget.orderId}');
     }
-  }
-
-  String _tr(String key, [String? fallback]) {
-    final result = LocalizationService.translate(key, widget.lang);
-    return result == key ? (fallback ?? key) : result;
   }
 }

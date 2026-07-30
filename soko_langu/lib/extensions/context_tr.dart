@@ -5,9 +5,14 @@ import '../services/localization_service.dart';
 import '../services/exchange_rate_service.dart';
 
 extension ContextTr on BuildContext {
-  String tr(String key) {
+  String tr(String key, [String? _]) {
     final config = AppConfig.of(this);
     return LocalizationService.translate(key, config.langCode);
+  }
+
+  String trParams(String key, Map<String, String> params) {
+    final config = AppConfig.of(this);
+    return LocalizationService.trParams(key, config.langCode, params);
   }
 
   String currencySymbol() {
