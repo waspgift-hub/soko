@@ -214,7 +214,13 @@ class SearchService {
         'pageSize': pageSize,
         if (filters != null) 'filters': filters,
       });
-      return SearchResponse.fromMap(data as Map<String, dynamic>);
+      final serverResp = SearchResponse.fromMap(data as Map<String, dynamic>);
+      // If server returned 0 results (search_index empty), use Firestore fallback
+      if (serverResp.total == 0) {
+        print('[SearchService] Server returned 0 results, using Firestore fallback');
+        return _firestoreSearch(query: query, type: type, pageSize: pageSize);
+      }
+      return serverResp;
     } catch (e) {
       print('[SearchService] Server search failed, using Firestore fallback: $e');
       return _firestoreSearch(query: query, type: type, pageSize: pageSize);
