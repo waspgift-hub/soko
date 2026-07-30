@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import '../../models/transaction_model.dart';
 import '../../services/api_config.dart';
 import '../../services/clickpesa_service.dart';
 import '../../services/sms_notification_service.dart';
@@ -895,7 +896,7 @@ class _OrderGlassCard extends StatelessWidget {
     final shippingCost = (data['shippingCost'] as num?)?.toDouble();
     final totalAmount = (data['totalAmount'] as num?)?.toDouble() ?? price;
     final platformFee = (data['platformFee'] as num?)?.toDouble() ?? (price * 0.035);
-    final processingFee = (data['processingFee'] as num?)?.toDouble() ?? 180;
+    final processingFee = (data['processingFee'] as num?)?.toDouble() ?? getUssdPushFee(price);
     final paymentMethod = data['paymentMethod'] as String? ?? 'ClickPesa';
     final sellerName = data['sellerName'] as String? ?? '';
     final sellerId = data['sellerId'] as String? ?? '';
