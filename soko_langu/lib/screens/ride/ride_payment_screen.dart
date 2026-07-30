@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../extensions/context_tr.dart';
+import '../../extensions/context_tr.dart';
 
 class RidePaymentScreen extends StatelessWidget {
   const RidePaymentScreen({super.key});

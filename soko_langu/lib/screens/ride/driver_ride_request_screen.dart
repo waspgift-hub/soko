@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../extensions/context_tr.dart';
+import '../../extensions/context_tr.dart';
 
 class DriverRideRequestScreen extends StatelessWidget {
   const DriverRideRequestScreen({super.key});
