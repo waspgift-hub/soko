@@ -654,59 +654,36 @@ app.post('/api/boost-product', async (req, res) => {
         message: `BillPay control number: ${billPayNumber}. Jumla TZS ${totalToCollect.toLocaleString()} (Boost TZS ${tierConfig.price.toLocaleString()} + Ada TZS ${gatewayFee.toLocaleString()}). Open M-Pesa > Lipa > BillPay > enter ${billPayNumber} > amount TZS ${totalToCollect.toLocaleString()} > PIN.`,
       });
     } else {
-      // ── USSD Push flow ──
-      const baseUrl = process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`;
-      const callbackUrl = `${baseUrl}/api/clickpesa/webhook`;
-
-      const result = await clickpesaCollect({
-        amount: totalToCollect,
-        orderReference: order_id,
-        phoneNumber: normalizedPhone,
-        callbackUrl,
-      });
-
-      // Check if ClickPesa returned an error
-      if (result.error || result.success === false) {
-        const errMsg = result.message || result.error || 'ClickPesa USSD push initiation failed';
-        console.error('/api/boost-product ClickPesa error:', errMsg);
-        return res.status(502).json({ error: `ClickPesa error: ${errMsg}` });
-      }
-
-      const ref = result.id || result.orderReference || '';
-      if (!ref) {
-        return res.status(502).json({ error: 'ClickPesa did not return a reference. USSD push might not have been sent.' });
-      }
-
+      // ── USSD Push flow (async — return immediately) ──
       if (db) {
         await db.collection('transactions').doc(order_id).set({
-          type: 'boost',
-          productId,
-          productName: productName || '',
-          productImage: productImage || '',
-          productPrice: productPrice || 0,
-          tier: tier.toLowerCase(),
-          amount: tierConfig.price,
-          gatewayFee,
-          totalAmount: totalToCollect,
-          durationDays: tierConfig.days,
-          userId: userId || '',
-          buyerId: userId || '',
-          buyerName: userId || '',
-          buyerPhone: normalizedPhone,
-          sellerName: 'Soko Vibe',
-          clickpesaReference: ref,
-          status: 'pending',
-          paymentMethod: paymentMethod || 'ussd_push',
+          type: 'boost', productId, productName: productName || '',
+          productImage: productImage || '', productPrice: productPrice || 0,
+          tier: tier.toLowerCase(), amount: tierConfig.price, gatewayFee,
+          totalAmount: totalToCollect, durationDays: tierConfig.days,
+          userId: userId || '', buyerId: userId || '', buyerName: userId || '',
+          buyerPhone: normalizedPhone, sellerName: 'Soko Vibe',
+          status: 'pending', paymentMethod: paymentMethod || 'ussd_push',
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
       }
 
+      // Fire ClickPesa async
+      const baseUrl2 = process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`;
+      clickpesaCollect({ amount: totalToCollect, orderReference: order_id, phoneNumber: normalizedPhone, callbackUrl: `${baseUrl2}/api/clickpesa/webhook` })
+        .then((result) => {
+          const ref = result?.id || result?.orderReference || '';
+          if (!ref) { console.error(`[USSD] Boost ClickPesa no ref for ${order_id}`); return; }
+          return db.collection('transactions').doc(order_id).update({ clickpesaReference: ref, ussdSent: true });
+        })
+        .then(() => console.log(`[USSD] Boost push sent for ${order_id}`))
+        .catch((err) => {
+          console.error(`[USSD] Boost ClickPesa error:`, err?.response?.data || err.message);
+          db.collection('transactions').doc(order_id).update({ ussdFailed: true }).catch(() => {});
+        });
+
       res.json({
-        order_id,
-        amount: tierConfig.price,
-        gatewayFee,
-        totalAmount: totalToCollect,
-        clickpesaReference: ref,
+        order_id, amount: tierConfig.price, gatewayFee, totalAmount: totalToCollect,
         message: `Jumla TZS ${totalToCollect.toLocaleString()} (Boost TZS ${tierConfig.price.toLocaleString()} + Ada TZS ${gatewayFee.toLocaleString()}). Tuma PIN yako kwenye simu.`,
       });
     }
@@ -2920,8 +2897,7 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
         message: `BillPay control number: ${billPayNumber}. Open M-Pesa > Lipa > BillPay > enter ${billPayNumber} > amount TZS ${totalAmount.toLocaleString()} > PIN.`,
       });
     } else {
-      // ── USSD Push flow ──
-      // Normalize phone to 255 format
+      // ── USSD Push flow (async — return immediately, ClickPesa fires in background) ──
       const phoneDigits = phone.replace(/\D/g, '');
       const normalizedPhone = phoneDigits.startsWith('0')
         ? '255' + phoneDigits.substring(1)
@@ -2929,57 +2905,41 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
           ? phoneDigits
           : '255' + phoneDigits;
 
+      const productImg = req.body.productImage || '';
+      const txData = {
+        type: 'purchase',
+        productId, productName: sanitize(productName), productImage: productImg,
+        sellerId, sellerName: sanitize(sellerName), buyerPhone: normalizedPhone,
+        buyerId: buyerId || '', buyerName,
+        productPrice: Math.round(productPrice), shippingCost: Math.round(shippingCost || 0),
+        platformFee: commission, processingFee: gatewayFee,
+        totalAmount, status: 'pending', paymentMethod: 'ClickPesa',
+        deliveryType: deliveryType || 'local',
+        autoReleaseDays: deliveryType === 'regional' ? ESCROW_REGIONAL_DAYS : ESCROW_LOCAL_DAYS,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      await db.collection('transactions').doc(order_id).set(txData, { merge: true });
+
+      // Fire ClickPesa async — don't wait for it
       const baseUrl = process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`;
       const callbackUrl = `${baseUrl}/api/clickpesa/webhook`;
-
-      const result = await clickpesaCollect({
-        amount: totalAmount,
-        orderReference: order_id,
-        phoneNumber: normalizedPhone,
-        callbackUrl,
-      });
-
-      // Check if ClickPesa returned an error
-      if (result.error || result.success === false) {
-        const errMsg = result.message || result.error || 'ClickPesa USSD push initiation failed';
-        console.error('/api/create-marketplace-payment-link ClickPesa error:', errMsg);
-        return res.status(502).json({ error: `ClickPesa error: ${errMsg}` });
-      }
-
-      const ref = result.id || result.orderReference || '';
-      if (!ref) {
-        return res.status(502).json({ error: 'ClickPesa did not return a reference. USSD push might not have been sent.' });
-      }
-
-      const productImg = req.body.productImage || '';
-      if (db) {
-        await db.collection('transactions').doc(order_id).set({
-          type: 'purchase',
-          productId,
-          productName: sanitize(productName),
-          productImage: productImg,
-          sellerId,
-          sellerName: sanitize(sellerName),
-          buyerPhone: normalizedPhone,
-          buyerId: buyerId || '',
-          buyerName,
-          productPrice: Math.round(productPrice),
-          shippingCost: Math.round(shippingCost || 0),
-          platformFee: commission,
-          processingFee: gatewayFee,
-          totalAmount,
-          status: 'pending',
-          paymentMethod: 'ClickPesa',
-          deliveryType: deliveryType || 'local',
-          autoReleaseDays: deliveryType === 'regional' ? ESCROW_REGIONAL_DAYS : ESCROW_LOCAL_DAYS,
-          clickpesaReference: ref,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        }, { merge: true });
-      }
+      clickpesaCollect({ amount: totalAmount, orderReference: order_id, phoneNumber: normalizedPhone, callbackUrl })
+        .then((result) => {
+          const ref = result?.id || result?.orderReference || '';
+          if (!ref) {
+            console.error(`[USSD] ClickPesa no ref for ${order_id}`);
+            return;
+          }
+          return db.collection('transactions').doc(order_id).update({ clickpesaReference: ref, ussdSent: true });
+        })
+        .then(() => console.log(`[USSD] Push sent for ${order_id}`))
+        .catch((err) => {
+          console.error(`[USSD] ClickPesa error for ${order_id}:`, err?.response?.data || err.message);
+          db.collection('transactions').doc(order_id).update({ ussdFailed: true, ussdError: err?.message || 'ClickPesa error' }).catch(() => {});
+        });
 
       res.json({
-        order_id,
-        clickpesaReference: ref,
+        order_id, gatewayFee, totalAmount,
         message: 'Tuma PIN yako kwenye simu ili kukamilisha malipo.',
       });
     }
@@ -6415,27 +6375,22 @@ app.post('/api/wallet/deposit', async (req, res) => {
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      const baseUrl = process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`;
-      const callbackUrl = `${baseUrl}/api/clickpesa/webhook`;
-
-      const result = await clickpesaCollect({
-        amount: totalCharge,
-        orderReference: depositRef,
-        phoneNumber: normalizedPhone,
-        callbackUrl,
-      });
-
-      if (result.error || result.success === false) {
-        const errMsg = result.message || result.error || 'ClickPesa USSD push initiation failed';
-        console.error('/api/wallet/deposit ClickPesa error:', errMsg);
-        return res.status(502).json({ error: `ClickPesa error: ${errMsg}` });
-      }
+      // Fire ClickPesa async — return immediately
+      const baseUrl3 = process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`;
+      clickpesaCollect({ amount: totalCharge, orderReference: depositRef, phoneNumber: normalizedPhone, callbackUrl: `${baseUrl3}/api/clickpesa/webhook` })
+        .then((result) => {
+          const ref = result?.id || '';
+          if (!ref) { console.error(`[USSD] Deposit ClickPesa no ref for ${depositRef}`); return; }
+          return db.collection('deposits').doc(depositRef).update({ clickpesaReference: ref, ussdSent: true });
+        })
+        .then(() => console.log(`[USSD] Deposit push sent for ${depositRef}`))
+        .catch((err) => {
+          console.error(`[USSD] Deposit ClickPesa error:`, err?.response?.data || err.message);
+          db.collection('deposits').doc(depositRef).update({ ussdFailed: true }).catch(() => {});
+        });
 
       res.json({
-        success: true,
-        depositRef,
-        method: 'ussd',
-        clickpesaId: result.id,
+        success: true, depositRef, method: 'ussd',
         message: `USSD push sent to ${normalizedPhone}. Total charge: TZS ${totalCharge.toLocaleString()} (amount TZS ${amount.toLocaleString()} + fee TZS ${processingFee.toLocaleString()})`,
       });
     }

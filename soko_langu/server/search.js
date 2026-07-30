@@ -162,12 +162,43 @@ async function fallbackSearchDirect(results, indexCollection, queryLower, limit)
   };
   const source = sourceMap[indexCollection];
   if (!source) return;
+
+  // First try case-insensitive searchKeywords array (products only)
+  if (source.type === 'product') {
+    const keywords = extractKeywords(queryLower);
+    if (keywords.length > 0) {
+      const keywordSnap = await db.collection(source.coll)
+        .where('searchKeywords', 'array-contains-any', keywords.slice(0, 10))
+        .where('isActive', '==', true)
+        .limit(limit)
+        .get();
+      for (const doc of keywordSnap.docs) {
+        const d = doc.data();
+        const name = d[source.nameField] || '';
+        const mapped = {
+          id: doc.id, name, displayName: name, type: source.type,
+          ...source.extraFields.reduce((acc, f) => { acc[f] = d[f]; return acc; }, {}),
+          isBoosted: d.isBoosted === true || d.boostTier != null,
+          kycApproved: d.kycApproved === true || d.sellerKycApproved === true,
+          popularity: d.popularity || d.viewCount || 0,
+          stock: d.stock ?? 0,
+        };
+        if (d.images && d.images.length > 0) mapped.image = d.images[0];
+        mapped._score = relevanceScore(mapped, queryLower, queryLower) + 30;
+        results.set(doc.id, mapped);
+      }
+      if (results.size >= limit) return;
+    }
+  }
+
+  // Fallback: prefix match on name field
   const snap = await db.collection(source.coll)
     .where(source.nameField, '>=', queryLower)
     .where(source.nameField, '<=', prefixEnd)
     .limit(limit)
     .get();
   for (const doc of snap.docs) {
+    if (results.has(doc.id)) continue;
     const d = doc.data();
     const name = d[source.nameField] || '';
     if (name.toLowerCase().includes(queryLower)) {
