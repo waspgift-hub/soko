@@ -806,7 +806,7 @@ class LocalizationService {
       'pending_kyc': 'KYC Inasubiri',
       'no_pending_kyc': 'Hakuna KYC inayosubiri',
       'phone_not_found': 'Namba ya Simu Haikupatikana',
-      'pp_last_updated': 'Sera ya Faragha Ilisasishwa Mwisho',
+      // 'pp_last_updated' defined in the Privacy Policy section below
       'price_drop': 'Kushuka kwa Bei',
       'refund_to_buyer': 'Rejesha Kwa Mnunuzi',
       'release_to_seller': 'Toa Kwa Muuzaji',
@@ -2414,7 +2414,7 @@ class LocalizationService {
       'pending_kyc': 'Pending KYC',
       'no_pending_kyc': 'No pending KYC',
       'phone_not_found': 'Phone Not Found',
-      'pp_last_updated': 'Privacy Policy Last Updated',
+      // 'pp_last_updated' defined in the Privacy Policy section below
       'price_drop': 'Price Drop',
       'refund_to_buyer': 'Refund to Buyer',
       'release_to_seller': 'Release to Seller',
