@@ -26,8 +26,12 @@ const ONE_SIGNAL_REST_API_KEY = process.env.ONE_SIGNAL_REST_API_KEY;
 function getChannelId(data = {}) {
   const type = (data && data.type) || 'general';
   if (type === 'chat' || type === 'group_chat') return 'chat_messages_v5';
-  if (type === 'payment' || type === 'order' || type === 'withdrawal' || type === 'kyc') return 'payments_notifications_v5';
-  if (type === 'ride' || type === 'ride_request' || type === 'ride_accepted' || type === 'ride_completed') return 'ride_notifications_v5';
+  if (type.startsWith('ride')) return 'ride_notifications_v5';
+  if (type === 'system' || type === 'admin' || type === 'alert') return 'system_alerts_v5';
+  if (['payment','order','payout','dispute','refund','withdrawal',
+       'escrow_release','auto_payout','escrow_auto_release',
+       'dispute_resolved','cancelled','auto_withdrawal',
+       'delivery_confirmed','payment_failed','kyc'].includes(type)) return 'payments_notifications_v5';
   return 'general_notifications_v5';
 }
 
@@ -38,28 +42,24 @@ async function sendOsNotification(userId, title, body, data = {}) {
     return null;
   }
   try {
-    const resp = await fetch('https://onesignal.com/api/v1/notifications', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Basic ${ONE_SIGNAL_REST_API_KEY}`,
-      },
-      body: JSON.stringify({
-        app_id: ONE_SIGNAL_APP_ID,
-        include_external_user_ids: [userId],
-        headings: { en: title || '' },
-        contents: { en: body || '' },
-        data: { ...(data || {}), type: (data && data.type) || 'general' },
-        android_channel_id: getChannelId(data),
-        android_sound: 'soko_notification',
-        android_icon: 'ic_notification',
-        priority: 10,
-        small_icon: 'ic_notification',
-        large_icon: 'ic_notification',
-        android_accent_color: 'FF40916C',
-      }),
-    });
-    const result = await resp.json();
+    const axios = require('axios');
+    const resp = await axios.post('https://onesignal.com/api/v1/notifications', {
+      app_id: ONE_SIGNAL_APP_ID,
+      include_external_user_ids: [userId],
+      headings: { en: title || '' },
+      contents: { en: body || '' },
+      data: { ...(data || {}), type: (data && data.type) || 'general' },
+      existing_android_channel_id: getChannelId(data),
+      android_sound: 'soko_notification',
+      android_icon: 'ic_notification',
+      priority: 10,
+      android_priority: 'high',
+      android_visibility: 1,
+      small_icon: 'ic_notification',
+      large_icon: 'ic_notification',
+      android_accent_color: 'FF40916C',
+    }, { headers: { 'Authorization': `Basic ${ONE_SIGNAL_REST_API_KEY}` } });
+    const result = resp.data;
     if (result.id) {
       console.log(`[LISTENER][OS] sent to ${userId} type=${(data && data.type) || 'general'} id=${result.id}`);
     } else {
@@ -67,7 +67,8 @@ async function sendOsNotification(userId, title, body, data = {}) {
     }
     return result;
   } catch (e) {
-    console.error(`[LISTENER][OS] FAILED user=${userId}: ${e.message}`);
+    const errBody = e.response?.data ? JSON.stringify(e.response.data) : e.message;
+    console.error(`[LISTENER][OS] FAILED user=${userId}: ${errBody}`);
     return null;
   }
 }
@@ -82,25 +83,21 @@ async function sendSms(phone, message) {
   const digits = phone.replace(/\D/g, '');
   const normalized = digits.startsWith('0') ? '255' + digits.slice(1) : !digits.startsWith('255') ? '255' + digits : digits;
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-    const resp = await fetch('https://meseji.co.tz/api/v1/sms/send', {
-      method: 'POST',
-      signal: controller.signal,
+    const axios = require('axios');
+    const resp = await axios.post('https://meseji.co.tz/api/v1/sms/send', {
+      sender_id: process.env.MESEJI_SENDER_ID || 'MESEJI',
+      message,
+      contacts: normalized,
+    }, {
       headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sender_id: process.env.MESEJI_SENDER_ID || 'MESEJI',
-        message,
-        contacts: normalized,
-      }),
+      timeout: 15000,
     });
-    clearTimeout(timeout);
-    if (!resp.ok) {
-      const err = await resp.text();
-      console.error(`[LISTENER] SMS failed (${resp.status}): ${err}`);
+    if (resp.status !== 200) {
+      console.error(`[LISTENER] SMS failed (${resp.status}): ${JSON.stringify(resp.data)}`);
     }
   } catch (e) {
-    console.error(`[LISTENER] SMS error: ${e.message}`);
+    const errBody = e.response?.data ? JSON.stringify(e.response.data) : e.message;
+    console.error(`[LISTENER] SMS error: ${errBody}`);
   }
 }
 

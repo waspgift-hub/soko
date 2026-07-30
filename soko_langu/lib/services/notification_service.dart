@@ -75,21 +75,6 @@ class NotificationService {
       if (!_listenersRegistered) {
         _listenersRegistered = true;
 
-        // Handle notifications received while app is in foreground
-        OneSignal.Notifications.addForegroundWillDisplayListener((event) {
-          final notif = event.notification;
-          final data = notif.additionalData ?? {};
-          final title = notif.title ?? 'Soko Vibe';
-          final body = notif.body ?? '';
-          final type = data['type'] as String? ?? 'general';
-
-          debugPrint('[OS] foreground notification: type=$type title=$title');
-
-          event.preventDefault();
-
-          _showHeadsUpNotification(title, body, type, data);
-        });
-
         // Handle notification tap (app opened from notification)
         OneSignal.Notifications.addClickListener((event) {
           final data = event.notification.additionalData ?? {};
