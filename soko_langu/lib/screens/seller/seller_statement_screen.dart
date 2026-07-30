@@ -32,11 +32,6 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
     _load();
   }
 
-  String _tr(String key, [String? fallback]) {
-    final result = LocalizationService.translate(key, _lang);
-    return result == key ? (fallback ?? key) : result;
-  }
-
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; });
     try {
@@ -63,7 +58,7 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: AppBar(
-        title: Text(_tr('seller_statement', 'Seller Statement')),
+        title: Text(context.tr('seller_statement', 'Seller Statement')),
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
@@ -87,7 +82,7 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
                       const SizedBox(height: 16),
                       Text(_error!, style: TextStyle(color: cs.error)),
                       const SizedBox(height: 16),
-                      ElevatedButton(onPressed: _load, child: Text(_tr('retry', 'Retry'))),
+                      ElevatedButton(onPressed: _load, child: Text(context.tr('retry', 'Retry'))),
                     ],
                   ),
                 )
@@ -141,7 +136,7 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
 
           // Footer
           Text(
-            _tr('seller_statement_footer', 'Soko Vibe © {year} — This is an official financial statement').replaceAll('{year}', DateTime.now().year.toString()),
+            context.tr('seller_statement_footer', 'Soko Vibe © {year} — This is an official financial statement').replaceAll('{year}', DateTime.now().year.toString()),
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.6)),
             textAlign: TextAlign.center,
           ),
@@ -157,12 +152,12 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
           Icon(Icons.store, size: 48, color: cs.primary)),
         const SizedBox(height: 8),
         Text(
-          _tr('app_name', 'SOKO VIBE'),
+          context.tr('app_name', 'SOKO VIBE'),
           style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 2, color: cs.primary),
         ),
         const SizedBox(height: 4),
         Text(
-          _tr('seller_statement_subtitle', 'SELLER STATEMENT'),
+          context.tr('seller_statement_subtitle', 'SELLER STATEMENT'),
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: 3, color: cs.onSurface),
         ),
       ],
@@ -181,16 +176,16 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('${_tr('info_name', 'NAME')}: ${seller['name'] ?? ''}', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: cs.onSurface)),
+          Text('${context.tr('info_name', 'NAME')}: ${seller['name'] ?? ''}', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: cs.onSurface)),
           const SizedBox(height: 4),
           if ((seller['phone'] ?? '').isNotEmpty)
-            Padding(padding: const EdgeInsets.only(bottom: 2), child: Text('${_tr('info_phone', 'PHONE')}: ${seller['phone']}', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant))),
+            Padding(padding: const EdgeInsets.only(bottom: 2), child: Text('${context.tr('info_phone', 'PHONE')}: ${seller['phone']}', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant))),
           if ((seller['email'] ?? '').isNotEmpty)
-            Padding(padding: const EdgeInsets.only(bottom: 2), child: Text('${_tr('info_email', 'EMAIL')}: ${seller['email']}', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant))),
+            Padding(padding: const EdgeInsets.only(bottom: 2), child: Text('${context.tr('info_email', 'EMAIL')}: ${seller['email']}', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant))),
           if ((seller['location'] ?? '').isNotEmpty)
-            Text('${_tr('info_location', 'LOCATION')}: ${seller['location']}', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+            Text('${context.tr('info_location', 'LOCATION')}: ${seller['location']}', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
           const Divider(height: 16),
-          Text('${_tr('info_generated_at', 'GENERATED ON')}: ${df.format(generatedAt)}', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+          Text('${context.tr('info_generated_at', 'GENERATED ON')}: ${df.format(generatedAt)}', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
         ],
       ),
     );
@@ -211,9 +206,9 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
         children: [
           Row(
             children: [
-              _summaryItem(cs, _tr('total_income', 'Total Income'), 'TSh ${cf.format(credits)}', cs.successGreen),
+              _summaryItem(cs, context.tr('total_income', 'Total Income'), 'TSh ${cf.format(credits)}', cs.successGreen),
               const SizedBox(width: 12),
-              _summaryItem(cs, _tr('total_expenses', 'Total Expenses'), 'TSh ${cf.format(debits)}', cs.error),
+              _summaryItem(cs, context.tr('total_expenses', 'Total Expenses'), 'TSh ${cf.format(debits)}', cs.error),
             ],
           ),
           const SizedBox(height: 12),
@@ -227,7 +222,7 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(_tr('current_balance', 'CURRENT BALANCE'), style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: balance >= 0 ? cs.successGreen : cs.error)),
+                Text(context.tr('current_balance', 'CURRENT BALANCE'), style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: balance >= 0 ? cs.successGreen : cs.error)),
                 Text('TSh ${cf.format(balance)}', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: balance >= 0 ? cs.successGreen : cs.error)),
               ],
             ),
@@ -262,7 +257,7 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(_tr('payment_history', 'PAYMENT HISTORY'), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: cs.onSurface)),
+          Text(context.tr('payment_history', 'PAYMENT HISTORY'), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: cs.onSurface)),
           const SizedBox(height: 12),
           // Table header
           Container(
@@ -270,11 +265,11 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
             decoration: BoxDecoration(color: cs.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
             child: Row(
               children: [
-                SizedBox(width: 60, child: Text(_tr('date_column', 'Date'), style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: cs.primary))),
-                Expanded(flex: 2, child: Text(_tr('description_column', 'Description'), style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: cs.primary))),
-                SizedBox(width: 55, child: Text(_tr('income_column', 'Income'), style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: cs.primary), textAlign: TextAlign.right)),
-                SizedBox(width: 55, child: Text(_tr('expenses_column', 'Expenses'), style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: cs.primary), textAlign: TextAlign.right)),
-                SizedBox(width: 60, child: Text(_tr('balance_column', 'Balance'), style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: cs.primary), textAlign: TextAlign.right)),
+                SizedBox(width: 60, child: Text(context.tr('date_column', 'Date'), style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: cs.primary))),
+                Expanded(flex: 2, child: Text(context.tr('description_column', 'Description'), style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: cs.primary))),
+                SizedBox(width: 55, child: Text(context.tr('income_column', 'Income'), style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: cs.primary), textAlign: TextAlign.right)),
+                SizedBox(width: 55, child: Text(context.tr('expenses_column', 'Expenses'), style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: cs.primary), textAlign: TextAlign.right)),
+                SizedBox(width: 60, child: Text(context.tr('balance_column', 'Balance'), style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: cs.primary), textAlign: TextAlign.right)),
               ],
             ),
           ),
@@ -331,9 +326,9 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
         children: [
           Icon(Icons.receipt_long_outlined, size: 48, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
           const SizedBox(height: 12),
-          Text(_tr('no_payments_yet', 'No payments yet'), style: TextStyle(color: cs.onSurfaceVariant)),
+          Text(context.tr('no_payments_yet', 'No payments yet'), style: TextStyle(color: cs.onSurfaceVariant)),
           const SizedBox(height: 4),
-          Text(_tr('no_payments_subtitle', 'Financial details will appear once you start selling'), style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant.withValues(alpha: 0.7))),
+          Text(context.tr('no_payments_subtitle', 'Financial details will appear once you start selling'), style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant.withValues(alpha: 0.7))),
         ],
       ),
     );
@@ -350,7 +345,7 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
       ),
       child: Column(
         children: [
-          Text(_tr('scan_qr_full_info', 'SCAN QR CODE FOR FULL DETAILS'),
+          Text(context.tr('scan_qr_full_info', 'SCAN QR CODE FOR FULL DETAILS'),
               style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: cs.onSurfaceVariant, letterSpacing: 1)),
           const SizedBox(height: 12),
           QrImageView(
@@ -362,7 +357,7 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
             dataModuleStyle: QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: Colors.black),
           ),
           const SizedBox(height: 8),
-          Text(_tr('scan_qr_hint', 'Scan this QR code for all statement details'),
+          Text(context.tr('scan_qr_hint', 'Scan this QR code for all statement details'),
               style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
         ],
       ),
@@ -377,14 +372,14 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
         headers: { 'Content-Type': 'application/json' },
         body: jsonEncode({
           'userId': widget.sellerId,
-          'title': _tr('your_statement', 'Your Statement'),
-          'body': _tr('statement_ready_body', 'Your financial statement is ready. Check the app.'),
+          'title': context.tr('your_statement', 'Your Statement'),
+          'body': context.tr('statement_ready_body', 'Your financial statement is ready. Check the app.'),
           'data': { 'type': 'statement' },
         }),
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_tr('statement_sent_notification', 'Statement sent via notification'))),
+          SnackBar(content: Text(context.tr('statement_sent_notification', 'Statement sent via notification'))),
         );
       }
     } catch (_) {}
@@ -409,12 +404,12 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
       await OpenFile.open(file.path);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_tr('statement_saved', 'Statement saved')), duration: const Duration(seconds: 3)),
+          SnackBar(content: Text(context.tr('statement_saved', 'Statement saved')), duration: const Duration(seconds: 3)),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${_tr('error_label', 'Error')}: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${context.tr('error_label', 'Error')}: $e')));
       }
     }
   }

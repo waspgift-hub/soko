@@ -253,7 +253,7 @@ class _RideBookingScreenState extends State<RideBookingScreen> with TickerProvid
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed: $e'),
+          SnackBar(content: Text('${context.tr('failed_text')}: $e'),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),

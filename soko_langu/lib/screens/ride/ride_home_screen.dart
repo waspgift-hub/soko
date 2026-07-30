@@ -376,7 +376,7 @@ class _RideHomeScreenState extends State<RideHomeScreen> with TickerProviderStat
                         children: [
                           Icon(Icons.edit_rounded, size: 14, color: cs.primary),
                           const SizedBox(width: 4),
-                          Text('Search', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.primary)),
+                          Text(context.tr('search_button'), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.primary)),
                         ],
                       ),
                     ),
@@ -663,7 +663,7 @@ class _DestinationSearchSheetState extends State<_DestinationSearchSheet> {
                               children: [
                                 Icon(Icons.search_rounded, size: 48, color: cs.onSurfaceVariant.withValues(alpha: 0.3)),
                                 const SizedBox(height: 12),
-                                Text('Search for a destination', style: TextStyle(color: cs.onSurfaceVariant)),
+                                Text(context.tr('search_destination'), style: TextStyle(color: cs.onSurfaceVariant)),
                               ],
                             ),
                           )

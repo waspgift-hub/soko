@@ -93,7 +93,7 @@ class _AdminKycScreenState extends State<AdminKycScreen>
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('KYC Management'),
+        title: Text(context.tr('kyc_management')),
         backgroundColor: Colors.transparent,
         elevation: 0,
         bottom: TabBar(
@@ -228,29 +228,29 @@ class _AdminKycScreenState extends State<AdminKycScreen>
             _infoRow(Icons.phone_outlined, phone, cs),
             _infoRow(Icons.badge_outlined, '$idType: $idNumber', cs),
             if (submittedAt.isNotEmpty)
-              _infoRow(Icons.calendar_today, 'Submitted: $submittedAt', cs),
+              _infoRow(Icons.calendar_today, context.trParams('submitted_at', {'date': submittedAt}), cs),
             if (reviewedAt.isNotEmpty)
-              _infoRow(Icons.done_all, 'Reviewed: $reviewedAt', cs),
+              _infoRow(Icons.done_all, context.trParams('reviewed_at', {'date': reviewedAt}), cs),
             if (reviewNotes.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: Text('Notes: $reviewNotes',
+                child: Text(context.trParams('review_notes', {'notes': reviewNotes}),
                   style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontStyle: FontStyle.italic)),
               ),
             const SizedBox(height: 12),
             Row(
               children: [
                 if (status == 'pending') ...[
-                  _actionButton(cs, 'Approve', Icons.check, Colors.green, () => _submitReview(uid, true, '')),
+                  _actionButton(cs, context.tr('approve_action'), Icons.check, Colors.green, () => _submitReview(uid, true, '')),
                   const SizedBox(width: 8),
-                  _actionButton(cs, 'Reject', Icons.close, Colors.red, () => _showRejectDialog(uid)),
+                  _actionButton(cs, context.tr('reject_action'), Icons.close, Colors.red, () => _showRejectDialog(uid)),
                   const SizedBox(width: 8),
                 ],
                 if (status == 'approved')
-                  _actionButton(cs, 'Revoke', Icons.block, Colors.orange, () => _confirmRevoke(uid)),
-                _actionButton(cs, 'View', Icons.visibility, Colors.blue, () => _showKycDetail(user)),
+                  _actionButton(cs, context.tr('revoke'), Icons.block, Colors.orange, () => _confirmRevoke(uid)),
+                _actionButton(cs, context.tr('view_label'), Icons.visibility, Colors.blue, () => _showKycDetail(user)),
                 const SizedBox(width: 8),
-                _actionButton(cs, 'Delete', Icons.delete_forever, Colors.red.shade700, () => _confirmDelete(uid)),
+                _actionButton(cs, context.tr('delete'), Icons.delete_forever, Colors.red.shade700, () => _confirmDelete(uid)),
               ],
             ),
           ],
@@ -298,20 +298,20 @@ class _AdminKycScreenState extends State<AdminKycScreen>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Reject KYC'),
+        title: Text(context.tr('reject_kyc_title')),
         content: TextField(
           controller: notesCtrl,
           maxLines: 3,
-          decoration: const InputDecoration(
-            labelText: 'Rejection reason (optional)',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: context.tr('rejection_reason'),
+            border: const OutlineInputBorder(),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.tr('cancel'))),
           ElevatedButton.icon(
             icon: const Icon(Icons.close, size: 16),
-            label: const Text('Reject'),
+            label: Text(context.tr('reject')),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
             onPressed: () {
               Navigator.pop(ctx);
@@ -339,17 +339,17 @@ class _AdminKycScreenState extends State<AdminKycScreen>
       if (resp.statusCode == 200) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(result['message'] ?? 'KYC ${approve ? "approved" : "rejected"} successfully')),
+            SnackBar(content: Text(result['message'] ?? context.tr('kyc_review_complete'))),
           );
           loadKycData();
         }
       } else {
-        throw Exception(result['error'] ?? 'Review failed');
+        throw Exception(result['error'] ?? context.tr('failed_text'));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text('${context.tr('error_occurred')}: $e')),
         );
       }
     }
@@ -359,13 +359,13 @@ class _AdminKycScreenState extends State<AdminKycScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Revoke KYC'),
-        content: const Text('Are you sure you want to revoke this KYC approval? The user will lose KYC benefits.'),
+        title: Text(context.tr('revoke_kyc')),
+        content: Text(context.tr('revoke_kyc_confirm')),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
           ElevatedButton.icon(
             icon: const Icon(Icons.block, size: 16),
-            label: const Text('Revoke'),
+            label: Text(context.tr('revoke')),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(ctx, true),
           ),
@@ -389,17 +389,17 @@ class _AdminKycScreenState extends State<AdminKycScreen>
       if (resp.statusCode == 200) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(result['message'] ?? 'KYC revoked successfully')),
+            SnackBar(content: Text(result['message'] ?? context.tr('kyc_revoked'))),
           );
           loadKycData();
         }
       } else {
-        throw Exception(result['error'] ?? 'Revoke failed');
+        throw Exception(result['error'] ?? context.tr('failed_text'));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text('${context.tr('error_occurred')}: $e')),
         );
       }
     }
@@ -409,13 +409,13 @@ class _AdminKycScreenState extends State<AdminKycScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete KYC'),
-        content: const Text('Are you sure you want to permanently delete this KYC data? This action cannot be undone.'),
+        title: Text(context.tr('delete_kyc')),
+        content: Text(context.tr('delete_kyc_confirm')),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
           ElevatedButton.icon(
             icon: const Icon(Icons.delete_forever, size: 16),
-            label: const Text('Delete Permanently'),
+            label: Text(context.tr('delete_permanently')),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(ctx, true),
           ),
@@ -439,17 +439,17 @@ class _AdminKycScreenState extends State<AdminKycScreen>
       if (resp.statusCode == 200) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(result['message'] ?? 'KYC data deleted successfully')),
+            SnackBar(content: Text(result['message'] ?? context.tr('kyc_deleted'))),
           );
           loadKycData();
         }
       } else {
-        throw Exception(result['error'] ?? 'Delete failed');
+        throw Exception(result['error'] ?? context.tr('failed_text'));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text('${context.tr('error_occurred')}: $e')),
         );
       }
     }
@@ -459,40 +459,41 @@ class _AdminKycScreenState extends State<AdminKycScreen>
     final kyc = user['kyc'] as Map<String, dynamic>? ?? {};
     final idImageUrl = kyc['idImageUrl'] as String?;
     final selfieUrl = kyc['selfieUrl'] as String?;
+    final cs = Theme.of(context).colorScheme;
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('KYC Details'),
+        title: Text(context.tr('kyc_details')),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (idImageUrl != null && idImageUrl.isNotEmpty) ...[
-                const Text('ID Document:', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text('${context.tr('id_document')}:', style: TextStyle(fontWeight: FontWeight.bold, color: cs.onSurface)),
                 const SizedBox(height: 4),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: CachedNetworkImage(imageUrl: idImageUrl, height: 180, fit: BoxFit.cover,
-                    errorWidget: (_, _, _) => const Icon(Icons.broken_image, size: 48)),
+                    errorWidget: (_, _, _) => Icon(Icons.broken_image, size: 48, color: cs.onSurfaceVariant)),
                 ),
                 const SizedBox(height: 12),
               ],
               if (selfieUrl != null && selfieUrl.isNotEmpty) ...[
-                const Text('Selfie:', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text('${context.tr('selfie')}:', style: TextStyle(fontWeight: FontWeight.bold, color: cs.onSurface)),
                 const SizedBox(height: 4),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: CachedNetworkImage(imageUrl: selfieUrl, height: 180, fit: BoxFit.cover,
-                    errorWidget: (_, _, _) => const Icon(Icons.broken_image, size: 48)),
+                    errorWidget: (_, _, _) => Icon(Icons.broken_image, size: 48, color: cs.onSurfaceVariant)),
                 ),
               ],
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.tr('close'))),
         ],
       ),
     );

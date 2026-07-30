@@ -209,13 +209,13 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> with TickerProv
       markerId: const MarkerId('pickup'),
       position: LatLng(ride.pickup.lat, ride.pickup.lng),
       icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-      infoWindow: InfoWindow(title: 'Pickup', snippet: ride.pickup.address),
+      infoWindow: InfoWindow(title: context.tr('pickup_label'), snippet: ride.pickup.address),
     ));
     _markers.add(Marker(
       markerId: const MarkerId('dropoff'),
       position: LatLng(ride.dropoff.lat, ride.dropoff.lng),
       icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-      infoWindow: InfoWindow(title: 'Dropoff', snippet: ride.dropoff.address),
+      infoWindow: InfoWindow(title: context.tr('dropoff_label'), snippet: ride.dropoff.address),
     ));
     _fitBounds();
   }
@@ -293,7 +293,7 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> with TickerProv
 
   Future<void> _callDriver() async {
     if (_driverPhone == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No phone number available')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('no_phone_number'))));
       return;
     }
     final uri = Uri.parse('tel:$_driverPhone');
@@ -305,21 +305,21 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> with TickerProv
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('SOS Emergency'),
-        content: const Text('Send emergency alert to your emergency contacts and share your live location?'),
+        title: Text(context.tr('sos_emergency')),
+        content: Text(context.tr('sos_alert_message')),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Send SOS'),
+            child: Text(context.tr('send_sos')),
           ),
         ],
       ),
     );
     if (confirmed == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('SOS alert sent to your emergency contacts'),
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(context.tr('sos_alert_sent')),
         behavior: SnackBarBehavior.floating,
         backgroundColor: Colors.red,
       ));
@@ -470,7 +470,7 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> with TickerProv
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text('SOS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: cs.error)),
+                  Text(context.tr('sos_button'), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: cs.error)),
                 ],
               ),
             ),
@@ -502,10 +502,10 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> with TickerProv
     switch (status) {
       case 'REQUESTED': return context.tr('waiting_driver');
       case 'ACCEPTED': return context.tr('driver_on_way');
-      case 'DRIVER_ARRIVED': return 'Driver arrived';
+      case 'DRIVER_ARRIVED': return context.tr('driver_arrived_label');
       case 'IN_PROGRESS': return context.tr('trip_in_progress');
       case 'COMPLETED': return context.tr('trip_completed');
-      case 'PAYMENT_COMPLETED': return 'Paid';
+      case 'PAYMENT_COMPLETED': return context.tr('paid_status');
       case 'CANCELLED': return context.tr('ride_cancelled');
       default: return status;
     }
@@ -603,7 +603,7 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> with TickerProv
                     child: OutlinedButton.icon(
                       onPressed: _callDriver,
                       icon: const Icon(Icons.phone_rounded, size: 18),
-                      label: Text('Call ${_driverName ?? "Driver"}'),
+                      label: Text(context.trParams('call_driver', {'name': _driverName ?? context.tr('unknown_driver')})),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.green,
                         side: BorderSide(color: Colors.green.withValues(alpha: 0.3)),

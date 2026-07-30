@@ -82,6 +82,18 @@ class NotificationService {
           _onNotificationTapped(data);
         });
 
+        // Handle notification received while app is in foreground — show heads-up
+        OneSignal.Notifications.addForegroundWillDisplayListener((event) {
+          event.preventDefault();
+          final notif = event.notification;
+          final data = notif.additionalData ?? {};
+          final title = notif.title ?? '';
+          final body = notif.body ?? '';
+          final type = data['type'] as String? ?? 'general';
+          debugPrint('[OS] foreground notification: type=$type title=$title');
+          _showHeadsUpNotification(title, body, type, data);
+        });
+
         // Re-login when auth state changes
         _auth.authStateChanges().listen((user) async {
           if (user != null) {

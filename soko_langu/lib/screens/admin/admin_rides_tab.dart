@@ -146,7 +146,7 @@ class _AdminRidesTabState extends State<AdminRidesTab>
                 children: [
                   Icon(Icons.person_off, size: 64, color: cs.onSurfaceVariant),
                   const SizedBox(height: 16),
-                  Text('No online drivers', style: TextStyle(color: cs.onSurfaceVariant)),
+                  Text(context.tr('no_online_drivers'), style: TextStyle(color: cs.onSurfaceVariant)),
                 ],
               ),
             )
@@ -191,7 +191,7 @@ class _AdminRidesTabState extends State<AdminRidesTab>
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _buildSectionTitle(cs, 'Cancellation Reasons'),
+          _buildSectionTitle(cs, context.tr('cancellation_reasons')),
           const SizedBox(height: 8),
           ...cancelByReason.entries.map((e) => Card(
                 child: ListTile(
@@ -201,18 +201,18 @@ class _AdminRidesTabState extends State<AdminRidesTab>
                 ),
               )),
           const SizedBox(height: 20),
-          _buildSectionTitle(cs, 'Top Drivers (Rating >= 4.5)'),
+          _buildSectionTitle(cs, context.tr('top_drivers')),
           const SizedBox(height: 8),
           if (topDrivers.isEmpty)
             Padding(
               padding: const EdgeInsets.all(16),
-              child: Text('No drivers with 4.5+ rating yet', style: TextStyle(color: cs.onSurfaceVariant)),
+              child: Text(context.tr('no_top_drivers'), style: TextStyle(color: cs.onSurfaceVariant)),
             )
           else
             ...topDrivers.map((d) => Card(
                   child: ListTile(
                     leading: const CircleAvatar(child: Icon(Icons.star, color: Colors.amber)),
-                    title: Text('Driver ${d['driverId']}'),
+                    title: Text(context.trParams('driver_id_label', {'id': '${d['driverId']}'})),
                     trailing: Text('⭐ ${d['rating']}', style: const TextStyle(fontSize: 18)),
                   ),
                 )),
@@ -228,12 +228,12 @@ class _AdminRidesTabState extends State<AdminRidesTab>
         children: [
           Icon(Icons.error_outline, size: 64, color: cs.error),
           const SizedBox(height: 16),
-          Text('Failed to load ride stats', style: TextStyle(color: cs.onSurfaceVariant)),
+          Text(context.tr('failed_load_ride_stats'), style: TextStyle(color: cs.onSurfaceVariant)),
           const SizedBox(height: 16),
           ElevatedButton.icon(
             onPressed: _load,
             icon: const Icon(Icons.refresh),
-            label: const Text('Retry'),
+            label: Text(context.tr('retry')),
           ),
         ],
       ),
@@ -283,7 +283,7 @@ class _AdminRidesTabState extends State<AdminRidesTab>
       return [
         Padding(
           padding: const EdgeInsets.all(16),
-          child: Text('No active trips', style: TextStyle(color: cs.onSurfaceVariant)),
+          child: Text(context.tr('no_active_trips'), style: TextStyle(color: cs.onSurfaceVariant)),
         ),
       ];
     }
@@ -296,7 +296,7 @@ class _AdminRidesTabState extends State<AdminRidesTab>
             backgroundColor: Colors.blue.withValues(alpha: 0.2),
             child: const Icon(Icons.directions_car, color: Colors.blue, size: 20),
           ),
-          title: Text('Trip ${d['id'].toString().substring(0, 8)}...'),
+          title: Text(context.trParams('trip_id_label', {'id': d['id'].toString().substring(0, 8)})),
           subtitle: Text('${d['pickupName'] ?? '?'} → ${d['dropoffName'] ?? '?'}\nStatus: ${d['status']}'),
           isThreeLine: true,
         ),
@@ -309,7 +309,7 @@ class _AdminRidesTabState extends State<AdminRidesTab>
       return [
         Padding(
           padding: const EdgeInsets.all(16),
-          child: Text('No recent trips', style: TextStyle(color: cs.onSurfaceVariant)),
+          child: Text(context.tr('no_recent_trips'), style: TextStyle(color: cs.onSurfaceVariant)),
         ),
       ];
     }
@@ -321,7 +321,7 @@ class _AdminRidesTabState extends State<AdminRidesTab>
           dense: true,
           leading: Icon(d['status'] == 'trip_completed' ? Icons.check_circle : Icons.schedule, color: d['status'] == 'trip_completed' ? Colors.green : Colors.orange, size: 20),
           title: Text('${d['pickupName'] ?? '?'} → ${d['dropoffName'] ?? '?'}', style: const TextStyle(fontSize: 13)),
-          subtitle: Text('Status: ${d['status']} | Fare: TSh ${_fmt(d['fare'] ?? 0)}', style: const TextStyle(fontSize: 11)),
+          subtitle: Text(context.trParams('status_fare_label', {'status': '${d['status']}', 'fare': _fmt(d['fare'] ?? 0)}), style: const TextStyle(fontSize: 11)),
         ),
       );
     }).toList();

@@ -61,7 +61,7 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('Takwimu'),
+        title: Text(context.tr('statistics')),
         centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,

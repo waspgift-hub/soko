@@ -86,7 +86,7 @@ class _DriverRegisterScreenState extends State<DriverRegisterScreen> {
                 controller: _modelCtrl,
                 decoration: InputDecoration(
                   labelText: context.tr('vehicle_model'),
-                  hintText: 'e.g. Toyota Corolla',
+                  hintText: context.tr('vehicle_model_hint'),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
@@ -103,7 +103,7 @@ class _DriverRegisterScreenState extends State<DriverRegisterScreen> {
                 controller: _regCtrl,
                 decoration: InputDecoration(
                   labelText: context.tr('vehicle_reg'),
-                  hintText: 'e.g. T xxx ABC',
+                  hintText: context.tr('vehicle_reg_hint'),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 validator: (v) => v == null || v.isEmpty ? context.tr('required') : null,

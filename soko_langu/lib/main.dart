@@ -12,6 +12,7 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_performance/firebase_performance.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:provider/provider.dart';
@@ -519,6 +520,13 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
         routerConfig: appRouter,
         debugShowCheckedModeBanner: false,
         title: 'Soko Vibe',
+        locale: Locale(_langCode),
+        supportedLocales: const [Locale('en'), Locale('sw')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
         theme: themeManager.lightTheme,
         darkTheme: themeManager.darkTheme,
         themeMode: themeManager.isDark ? ThemeMode.dark : ThemeMode.light,

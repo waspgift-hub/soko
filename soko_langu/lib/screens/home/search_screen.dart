@@ -256,7 +256,7 @@ class _SearchScreenState extends State<SearchScreen>
                             child: CircularProgressIndicator(strokeWidth: 2, color: cs.error),
                           ),
                           const SizedBox(width: 8),
-                          Text('Listening...', style: TextStyle(color: cs.error, fontSize: 13)),
+                          Text(context.tr('listening'), style: TextStyle(color: cs.error, fontSize: 13)),
                         ],
                       ),
                     ),
@@ -354,7 +354,7 @@ class _SearchScreenState extends State<SearchScreen>
                 ),
           title: Text(s.text, style: const TextStyle(fontSize: 14)),
           subtitle: s.price != null
-              ? Text('TSh ${s.price!.toStringAsFixed(0)}',
+              ? Text('${context.currencySymbol()} ${s.price!.toStringAsFixed(0)}',
                   style: TextStyle(fontSize: 12, color: cs.primary))
               : Text(context.tr(s.type),
                   style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
@@ -458,7 +458,7 @@ class _SearchScreenState extends State<SearchScreen>
                               color: cs.primary.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(6),
                             ),
-                            child: Text('Ad', style: TextStyle(fontSize: 10, color: cs.primary)),
+                            child: Text(context.tr('ad_label'), style: TextStyle(fontSize: 10, color: cs.primary)),
                           ),
                       ],
                     ),
@@ -468,7 +468,7 @@ class _SearchScreenState extends State<SearchScreen>
                           style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                           maxLines: 2, overflow: TextOverflow.ellipsis),
                     if (isProduct && r.price != null)
-                      Text('TSh ${r.price!.toStringAsFixed(0)}',
+                      Text('${context.currencySymbol()} ${r.price!.toStringAsFixed(0)}',
                           style: TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 15,
                             color: cs.primary,
