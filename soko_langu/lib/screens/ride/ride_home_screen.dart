@@ -10,6 +10,8 @@ import '../../providers/ride_provider.dart';
 import '../../app/routes.dart';
 import '../../extensions/context_tr.dart';
 import '../../theme/app_colors.dart';
+import '../../models/ride_models.dart';
+import '../../services/ride_api_service.dart';
 
 class RideHomeScreen extends StatefulWidget {
   const RideHomeScreen({super.key});
@@ -21,11 +23,16 @@ class RideHomeScreen extends StatefulWidget {
 class _RideHomeScreenState extends State<RideHomeScreen> with TickerProviderStateMixin {
   GoogleMapController? _mapController;
   final Set<Marker> _markers = {};
+  final Set<Marker> _driverMarkers = {};
   LatLng? _currentLocation;
   MapType _mapType = MapType.normal;
   late AnimationController _bottomSheetCtrl;
   late Animation<Offset> _bottomSheetAnim;
   late AnimationController _pulseCtrl;
+
+  final RideApiService _apiService = RideApiService();
+  Timer? _nearbyDriversTimer;
+  bool _searching = false;
 
   final List<RideOption> _rideOptions = [
     RideOption(icon: Icons.directions_car_rounded, name: 'Boda Bod', nameSw: 'Boda Bod', price: 'TSh 3,500', time: '2 min', color: 0xFF2196F3),
@@ -49,6 +56,7 @@ class _RideHomeScreenState extends State<RideHomeScreen> with TickerProviderStat
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _bottomSheetCtrl.forward();
       context.read<RideProvider>().clearCurrentRide();
+      context.read<RideProvider>().checkDriverStatus();
       _detectLocation();
     });
   }
@@ -58,6 +66,7 @@ class _RideHomeScreenState extends State<RideHomeScreen> with TickerProviderStat
     _mapController?.dispose();
     _bottomSheetCtrl.dispose();
     _pulseCtrl.dispose();
+    _nearbyDriversTimer?.cancel();
     super.dispose();
   }
 
@@ -69,8 +78,31 @@ class _RideHomeScreenState extends State<RideHomeScreen> with TickerProviderStat
         _mapController?.animateCamera(
           CameraUpdate.newLatLngZoom(LatLng(pos.latitude, pos.longitude), 15),
         );
+        _fetchNearbyDrivers(pos.latitude, pos.longitude);
       }
     } catch (_) {}
+  }
+
+  Future<void> _fetchNearbyDrivers(double lat, double lng) async {
+    try {
+      final drivers = await _apiService.getNearbyDrivers(lat: lat, lng: lng);
+      if (!mounted) return;
+      _driverMarkers.clear();
+      for (final d in drivers) {
+        _driverMarkers.add(Marker(
+          markerId: MarkerId('driver_${d.driverId}'),
+          position: LatLng(d.lat, d.lng),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+          infoWindow: InfoWindow(title: d.name, snippet: '${d.distanceKm.toStringAsFixed(1)} km away'),
+        ));
+      }
+      setState(() {});
+    } catch (_) {}
+    _nearbyDriversTimer = Timer(const Duration(seconds: 15), () {
+      if (_currentLocation != null) {
+        _fetchNearbyDrivers(_currentLocation!.latitude, _currentLocation!.longitude);
+      }
+    });
   }
 
   void _onMapCreated(GoogleMapController ctl) {
@@ -82,6 +114,25 @@ class _RideHomeScreenState extends State<RideHomeScreen> with TickerProviderStat
 
   void _openBooking() => context.push(AppRoutes.rideBooking);
   void _openRideHistory() => context.push(AppRoutes.rideHistory);
+
+  void _showDestinationSearch() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _DestinationSearchSheet(
+        apiService: _apiService,
+        onSelect: (lat, lng, address) {
+          Navigator.pop(ctx);
+          context.push(AppRoutes.rideBooking, extra: {
+            'destLat': lat,
+            'destLng': lng,
+            'destAddress': address,
+          });
+        },
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -102,7 +153,7 @@ class _RideHomeScreenState extends State<RideHomeScreen> with TickerProviderStat
             zoomControlsEnabled: false,
             mapToolbarEnabled: false,
             compassEnabled: false,
-            markers: _markers,
+            markers: {..._markers, ..._driverMarkers},
             padding: EdgeInsets.only(bottom: MediaQuery.of(context).size.height * 0.45),
           ),
           // Gradient overlay at top for readability
@@ -154,7 +205,7 @@ class _RideHomeScreenState extends State<RideHomeScreen> with TickerProviderStat
                           const SizedBox(width: 4),
                           Expanded(
                             child: GestureDetector(
-                              onTap: _openBooking,
+                              onTap: _showDestinationSearch,
                               child: Container(
                                 padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
                                 decoration: BoxDecoration(
@@ -312,19 +363,22 @@ class _RideHomeScreenState extends State<RideHomeScreen> with TickerProviderStat
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: cs.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.local_fire_department, size: 14, color: cs.primary),
-                        const SizedBox(width: 4),
-                        Text('Live', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.primary)),
-                      ],
+                  GestureDetector(
+                    onTap: _showDestinationSearch,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: cs.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.edit_rounded, size: 14, color: cs.primary),
+                          const SizedBox(width: 4),
+                          Text('Search', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.primary)),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -346,7 +400,7 @@ class _RideHomeScreenState extends State<RideHomeScreen> with TickerProviderStat
                       Icons.home_work_rounded,
                       context.tr('save_place'),
                       Colors.blue,
-                      () {},
+                      _showDestinationSearch,
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -356,7 +410,7 @@ class _RideHomeScreenState extends State<RideHomeScreen> with TickerProviderStat
                       Icons.schedule_rounded,
                       context.tr('schedule'),
                       Colors.orange,
-                      () {},
+                      _showDestinationSearch,
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -366,7 +420,7 @@ class _RideHomeScreenState extends State<RideHomeScreen> with TickerProviderStat
                       Icons.favorite_rounded,
                       context.tr('favorites'),
                       Colors.red,
-                      () {},
+                      _showDestinationSearch,
                     ),
                   ),
                 ],
@@ -375,6 +429,18 @@ class _RideHomeScreenState extends State<RideHomeScreen> with TickerProviderStat
               if (provider.isDriver) ...[
                 const SizedBox(height: 16),
                 _buildDriverSection(context, cs, provider),
+              ],
+              // Nearby drivers count
+              if (_driverMarkers.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(Icons.person_pin_circle, size: 16, color: Colors.green),
+                    const SizedBox(width: 6),
+                    Text('${_driverMarkers.length} ${context.tr('nearby_drivers')}',
+                      style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                  ],
+                ),
               ],
             ],
           ),
@@ -385,7 +451,7 @@ class _RideHomeScreenState extends State<RideHomeScreen> with TickerProviderStat
 
   Widget _buildRideOptionCard(ColorScheme cs, RideOption option) {
     return GestureDetector(
-      onTap: _openBooking,
+      onTap: _showDestinationSearch,
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 3),
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
@@ -436,43 +502,201 @@ class _RideHomeScreenState extends State<RideHomeScreen> with TickerProviderStat
   }
 
   Widget _buildDriverSection(BuildContext context, ColorScheme cs, RideProvider provider) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(18),
+    return GestureDetector(
+      onTap: () => context.push(AppRoutes.driverHome),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: provider.driverOnline
+                ? [Colors.green.withValues(alpha: 0.08), Colors.green.withValues(alpha: 0.02)]
+                : [cs.error.withValues(alpha: 0.05), cs.surfaceContainerHighest.withValues(alpha: 0.2)],
+          ),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: provider.driverOnline ? Colors.green.withValues(alpha: 0.2) : cs.outlineVariant.withValues(alpha: 0.2),
+          ),
+        ),
+        child: Row(
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: provider.driverOnline ? Colors.green.withValues(alpha: 0.15) : cs.error.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child: Icon(
+                  provider.driverOnline ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                  key: ValueKey(provider.driverOnline),
+                  color: provider.driverOnline ? Colors.green : cs.error, size: 28,
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(provider.driverOnline ? context.tr('you_are_online') : context.tr('you_are_offline'),
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: cs.onSurface)),
+                  Text(provider.driverOnline ? 'Tap to view driver dashboard' : 'Go online to receive ride requests',
+                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                ],
+              ),
+            ),
+            Switch.adaptive(
+              value: provider.driverOnline,
+              activeColor: Colors.green,
+              onChanged: (val) => val ? provider.goOnline() : provider.goOffline(),
+            ),
+          ],
+        ),
       ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: provider.driverOnline ? Colors.green.withValues(alpha: 0.15) : cs.error.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(
-              provider.driverOnline ? Icons.check_circle_rounded : Icons.cancel_rounded,
-              color: provider.driverOnline ? Colors.green : cs.error, size: 28,
-            ),
+    );
+  }
+}
+
+// ──────────────────────────────────────────────────────
+// Destination Search Bottom Sheet
+// ──────────────────────────────────────────────────────
+class _DestinationSearchSheet extends StatefulWidget {
+  final RideApiService apiService;
+  final void Function(double lat, double lng, String address) onSelect;
+
+  const _DestinationSearchSheet({required this.apiService, required this.onSelect});
+
+  @override
+  State<_DestinationSearchSheet> createState() => _DestinationSearchSheetState();
+}
+
+class _DestinationSearchSheetState extends State<_DestinationSearchSheet> {
+  final TextEditingController _searchCtrl = TextEditingController();
+  List<Map<String, dynamic>> _results = [];
+  bool _loading = false;
+  Timer? _debounce;
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String query) {
+    _debounce?.cancel();
+    if (query.length < 3) {
+      setState(() => _results = []);
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 500), () => _search(query));
+  }
+
+  Future<void> _search(String query) async {
+    setState(() => _loading = true);
+    try {
+      final results = await widget.apiService.geocode(query);
+      if (mounted) setState(() => _results = results);
+    } catch (_) {
+      if (mounted) setState(() => _results = []);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.65,
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(20, 12, 20, bottom + 16),
+          child: Column(
+            children: [
+              Container(width: 40, height: 4, decoration: BoxDecoration(
+                color: cs.outlineVariant, borderRadius: BorderRadius.circular(2),
+              )),
+              const SizedBox(height: 20),
+              // Search field
+              Container(
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.3)),
+                ),
+                child: TextField(
+                  controller: _searchCtrl,
+                  autofocus: true,
+                  onChanged: _onSearchChanged,
+                  decoration: InputDecoration(
+                    hintText: 'Search destination...',
+                    prefixIcon: Icon(Icons.search, color: cs.onSurfaceVariant),
+                    suffixIcon: _searchCtrl.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 18),
+                            onPressed: () { _searchCtrl.clear(); setState(() => _results = []); },
+                          )
+                        : null,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Results
+              Expanded(
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _results.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.search_rounded, size: 48, color: cs.onSurfaceVariant.withValues(alpha: 0.3)),
+                                const SizedBox(height: 12),
+                                Text('Search for a destination', style: TextStyle(color: cs.onSurfaceVariant)),
+                              ],
+                            ),
+                          )
+                        : ListView.separated(
+                            itemCount: _results.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemBuilder: (ctx, i) {
+                              final r = _results[i];
+                              return ListTile(
+                                leading: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: cs.primary.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Icon(Icons.location_on_rounded, color: cs.primary, size: 20),
+                                ),
+                                title: Text(r['address'] as String? ?? '', maxLines: 1, overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14, color: cs.onSurface)),
+                                trailing: Icon(Icons.arrow_forward_ios, size: 14, color: cs.onSurfaceVariant),
+                                onTap: () {
+                                  final lat = (r['lat'] as num).toDouble();
+                                  final lng = (r['lng'] as num).toDouble();
+                                  final addr = r['address'] as String? ?? '';
+                                  widget.onSelect(lat, lng, addr);
+                                },
+                              );
+                            },
+                          ),
+              ),
+            ],
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(provider.driverOnline ? context.tr('you_are_online') : context.tr('you_are_offline'),
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: cs.onSurface)),
-                Text(provider.driverOnline ? context.tr('drivers_online_subtitle') : context.tr('drivers_offline_subtitle'),
-                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-              ],
-            ),
-          ),
-          Switch.adaptive(
-            value: provider.driverOnline,
-            activeColor: Colors.green,
-            onChanged: (val) => val ? provider.goOnline() : provider.goOffline(),
-          ),
-        ],
+        ),
       ),
     );
   }
