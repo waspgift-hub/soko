@@ -84,6 +84,7 @@ class Product {
   final String? sellerPhone;
   final String condition;
   final bool sellerKycApproved;
+  final String? barcode;
 
   Product({
     required this.id,
@@ -117,6 +118,7 @@ class Product {
     this.sellerPhone,
     this.condition = 'new',
     this.sellerKycApproved = false,
+    this.barcode,
   });
 
   bool get isFeaturedValid =>
@@ -192,6 +194,7 @@ class Product {
       sellerPhone: data['sellerPhone'] as String?,
       condition: data['condition'] ?? 'new',
       sellerKycApproved: data['sellerKycApproved'] ?? false,
+      barcode: data['barcode'] as String?,
     );
   }
 
@@ -230,6 +233,7 @@ class Product {
     'sellerPhone': sellerPhone,
     'condition': condition,
     'sellerKycApproved': sellerKycApproved,
+    'barcode': barcode,
   };
 
   double getWholesalePrice(int quantity) {

@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/search_service.dart';
 import '../../services/search_history_service.dart';
 import '../../app/routes.dart';
+import '../../models/product_model.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/barcode_scanner_widget.dart';
 
@@ -131,6 +133,48 @@ class _SearchScreenState extends State<SearchScreen>
     }
   }
 
+  Future<void> _navigateToProduct(String productId) async {
+    try {
+      final doc = await FirebaseFirestore.instance.collection('products').doc(productId).get();
+      if (doc.exists && mounted) {
+        final product = Product.fromFirestore(doc);
+        context.push('${AppRoutes.productDetail}/$productId', extra: product);
+      }
+    } catch (_) {
+      if (mounted) {
+        context.push('${AppRoutes.productDetail}/$productId');
+      }
+    }
+  }
+
+  Future<void> _barcodeSearch(String code) async {
+    final trimmed = code.trim();
+    if (trimmed.isEmpty) return;
+    _focusNode.unfocus();
+    setState(() {
+      _loading = true;
+      _hasSearched = true;
+      _suggestions = [];
+    });
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('products')
+          .where('barcode', isEqualTo: trimmed)
+          .where('isActive', isEqualTo: true)
+          .limit(1)
+          .get();
+      if (snap.docs.isNotEmpty && mounted) {
+        final product = Product.fromFirestore(snap.docs.first);
+        context.push('${AppRoutes.productDetail}/${snap.docs.first.id}', extra: product);
+        setState(() => _loading = false);
+        return;
+      }
+    } catch (_) {}
+    if (mounted) {
+      _performSearch(query: trimmed);
+    }
+  }
+
   void _clearField() {
     _searchCtrl.clear();
     setState(() {
@@ -180,7 +224,7 @@ class _SearchScreenState extends State<SearchScreen>
     );
     if (result != null && result.isNotEmpty && mounted) {
       _searchCtrl.text = result;
-      _performSearch();
+      _barcodeSearch(result);
     }
   }
 
@@ -368,7 +412,7 @@ class _SearchScreenState extends State<SearchScreen>
             query: _response?.query,
           );
           if (isProduct) {
-            context.push('${AppRoutes.productDetail}/${r.id}');
+            _navigateToProduct(r.id);
           } else if (isSeller) {
             context.push('${AppRoutes.publicProfile}/${r.id}', extra: r.displayName);
           }

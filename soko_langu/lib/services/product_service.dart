@@ -24,12 +24,15 @@ String _normalizeBrand(String? brand) {
   }).join(' ');
 }
 
-List<String> _generateSearchKeywords(String name, String description, String category, String? brand) {
+List<String> _generateSearchKeywords(String name, String description, String category, String? brand, String? barcode) {
   final words = <String>{};
   final text = '$name $description $category ${brand ?? ''}';
   for (final part in text.split(RegExp(r'[\s,.-]+'))) {
     final w = part.trim().toLowerCase();
     if (w.length >= 2) words.add(w);
+  }
+  if (barcode != null && barcode.trim().isNotEmpty) {
+    words.add(barcode.trim().toLowerCase());
   }
   return words.toList();
 }
@@ -84,6 +87,7 @@ class ProductService {
     Map<String, dynamic>? attributes,
     String? brand,
     String condition = 'new',
+    String? barcode,
   }) async {
     try {
       final user = _auth.currentUser;
@@ -131,7 +135,7 @@ class ProductService {
         user.uid, name, description, price, currency, imageUrls,
         category, subcategory, stock, sellerName, sellerPhone,
         sellerKycApproved, isWholesale, wholesaleTiers, variants,
-        attributes, brand, condition, location,
+        attributes, brand, condition, location, barcode,
       );
     } catch (e) {
       throw NetworkError(
@@ -162,8 +166,9 @@ class ProductService {
     String? brand,
     String condition,
     String location,
+    String? barcode,
   ) async {
-    final searchKeywords = _generateSearchKeywords(name, description, category, brand);
+    final searchKeywords = _generateSearchKeywords(name, description, category, brand, barcode);
 
     final docRef = await _db.collection("products").add({
       "name": name,
@@ -193,6 +198,7 @@ class ProductService {
       "featuredUntil": null,
       "sellerKycApproved": sellerKycApproved,
       "searchKeywords": searchKeywords,
+      "barcode": barcode,
       "createdAt": FieldValue.serverTimestamp(),
     });
 
@@ -514,6 +520,7 @@ class ProductService {
     List<String>? existingImages,
     List<XFile>? newImages,
     String? location,
+    String? barcode,
   }) async {
     try {
       final user = _auth.currentUser;
@@ -539,6 +546,7 @@ class ProductService {
       if (variants != null) data["variants"] = variants;
       if (condition != null) data["condition"] = condition;
       if (location != null) data["location"] = location;
+      if (barcode != null) { data["barcode"] = barcode; needsKeywordUpdate = true; }
 
       if (existingImages != null || newImages != null) {
         List<String> allImages = existingImages ?? [];
@@ -559,6 +567,7 @@ class ProductService {
           description ?? cur["description"] as String? ?? '',
           category ?? cur["category"] as String? ?? '',
           brand ?? cur["brand"] as String?,
+          barcode ?? cur["barcode"] as String?,
         );
       }
 
