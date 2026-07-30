@@ -25,6 +25,7 @@ class _RideBookingScreenState extends State<RideBookingScreen> with TickerProvid
   String? _pickupAddress;
   String? _dropoffAddress;
   final Set<Marker> _markers = {};
+  final Set<Marker> _driverMarkers = {};
   final Set<Polyline> _polylines = {};
   FareEstimate? _estimate;
   bool _loadingFare = false;
@@ -34,6 +35,13 @@ class _RideBookingScreenState extends State<RideBookingScreen> with TickerProvid
   String _selectedVehicle = 'car';
   late AnimationController _fareSheetCtrl;
   late Animation<Offset> _fareSheetAnim;
+
+  // Search state
+  final TextEditingController _searchCtrl = TextEditingController();
+  List<Map<String, dynamic>> _searchResults = [];
+  bool _searchLoading = false;
+  Timer? _searchDebounce;
+  bool _showSearch = false;
 
   @override
   void initState() {
@@ -49,6 +57,8 @@ class _RideBookingScreenState extends State<RideBookingScreen> with TickerProvid
   void dispose() {
     _mapController?.dispose();
     _fareSheetCtrl.dispose();
+    _searchCtrl.dispose();
+    _searchDebounce?.cancel();
     super.dispose();
   }
 
@@ -61,7 +71,25 @@ class _RideBookingScreenState extends State<RideBookingScreen> with TickerProvid
         _updateMarkers();
         _reverseGeocode(loc, isPickup: true);
         _mapController?.animateCamera(CameraUpdate.newLatLngZoom(loc, 15));
+        _fetchNearbyDrivers(pos.latitude, pos.longitude);
       }
+    } catch (_) {}
+  }
+
+  Future<void> _fetchNearbyDrivers(double lat, double lng) async {
+    try {
+      final drivers = await _apiService.getNearbyDrivers(lat: lat, lng: lng);
+      if (!mounted) return;
+      _driverMarkers.clear();
+      for (final d in drivers) {
+        _driverMarkers.add(Marker(
+          markerId: MarkerId('driver_${d.driverId}'),
+          position: LatLng(d.lat, d.lng),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+          infoWindow: InfoWindow(title: d.name, snippet: '${d.distanceKm.toStringAsFixed(1)} km'),
+        ));
+      }
+      setState(() {});
     } catch (_) {}
   }
 
@@ -81,6 +109,55 @@ class _RideBookingScreenState extends State<RideBookingScreen> with TickerProvid
       setState(() => _dropoff = pos);
       _updateMarkers();
       _reverseGeocode(pos, isPickup: false);
+      _fetchEstimate();
+    }
+  }
+
+  // ─── Search ───
+  void _onSearchChanged(String query) {
+    _searchDebounce?.cancel();
+    if (query.length < 3) {
+      setState(() => _searchResults = []);
+      return;
+    }
+    _searchDebounce = Timer(const Duration(milliseconds: 500), () => _searchPlaces(query));
+  }
+
+  Future<void> _searchPlaces(String query) async {
+    setState(() => _searchLoading = true);
+    try {
+      final results = await _apiService.geocode(query);
+      if (mounted) setState(() => _searchResults = results);
+    } catch (_) {
+      if (mounted) setState(() => _searchResults = []);
+    } finally {
+      if (mounted) setState(() => _searchLoading = false);
+    }
+  }
+
+  void _selectSearchResult(Map<String, dynamic> r) {
+    final lat = (r['lat'] as num).toDouble();
+    final lng = (r['lng'] as num).toDouble();
+    final addr = r['address'] as String? ?? '';
+    if (_pickup == null) {
+      setState(() {
+        _pickup = LatLng(lat, lng);
+        _pickupAddress = addr;
+        _showSearch = false;
+        _searchCtrl.clear();
+        _searchResults = [];
+      });
+      _updateMarkers();
+      _mapController?.animateCamera(CameraUpdate.newLatLngZoom(LatLng(lat, lng), 15));
+    } else {
+      setState(() {
+        _dropoff = LatLng(lat, lng);
+        _dropoffAddress = addr;
+        _showSearch = false;
+        _searchCtrl.clear();
+        _searchResults = [];
+      });
+      _updateMarkers();
       _fetchEstimate();
     }
   }
@@ -154,6 +231,7 @@ class _RideBookingScreenState extends State<RideBookingScreen> with TickerProvid
       _pickup = null; _dropoff = null;
       _pickupAddress = null; _dropoffAddress = null;
       _markers.clear(); _polylines.clear(); _estimate = null;
+      _driverMarkers.clear();
     });
   }
 
@@ -200,8 +278,10 @@ class _RideBookingScreenState extends State<RideBookingScreen> with TickerProvid
             onMapCreated: _onMapCreated, onTap: _onMapTap,
             myLocationEnabled: true, myLocationButtonEnabled: false,
             zoomControlsEnabled: false, mapToolbarEnabled: false,
-            markers: _markers, polylines: _polylines,
+            markers: {..._markers, ..._driverMarkers},
+            polylines: _polylines,
           ),
+          // Top bar with search
           Positioned(
             top: MediaQuery.of(context).padding.top + 8,
             left: 16, right: 16,
@@ -233,14 +313,44 @@ class _RideBookingScreenState extends State<RideBookingScreen> with TickerProvid
                               ),
                             ),
                             const SizedBox(width: 4),
-                            IconButton(
-                              icon: Icon(_mapType == MapType.normal ? Icons.satellite_alt : Icons.map,
-                                  color: cs.onSurfaceVariant),
-                              onPressed: _toggleMapType,
-                              tooltip: _mapType == MapType.normal ? 'Satellite' : 'Map',
+                            Container(
+                              decoration: BoxDecoration(
+                                color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: IconButton(
+                                icon: Icon(_mapType == MapType.normal ? Icons.satellite_alt : Icons.map,
+                                    color: cs.onSurfaceVariant),
+                                onPressed: _toggleMapType,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => setState(() => _showSearch = !_showSearch),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+                                  decoration: BoxDecoration(
+                                    color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.search, size: 16, color: cs.onSurfaceVariant),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          _pickupAddress ?? context.tr('tap_map_dest'),
+                                          style: TextStyle(fontSize: 12, color: cs.onSurface),
+                                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             ),
                             const SizedBox(width: 4),
-                            Expanded(child: _buildLocationChip(cs, Icons.circle, _pickupAddress ?? context.tr('tap_map_dest'), Colors.green)),
                           ],
                         ),
                         if (_dropoffAddress != null || _dropoff != null)
@@ -277,6 +387,69 @@ class _RideBookingScreenState extends State<RideBookingScreen> with TickerProvid
               ),
             ),
           ),
+          // Search overlay
+          if (_showSearch)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 80,
+              left: 16, right: 16,
+              child: Material(
+                elevation: 12,
+                borderRadius: BorderRadius.circular(16),
+                color: cs.surface,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: TextField(
+                        controller: _searchCtrl,
+                        autofocus: true,
+                        onChanged: _onSearchChanged,
+                        decoration: InputDecoration(
+                          hintText: _pickup == null ? 'Search pickup...' : 'Search destination...',
+                          prefixIcon: Icon(Icons.search, color: cs.onSurfaceVariant),
+                          suffixIcon: _searchCtrl.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, size: 18),
+                                  onPressed: () { _searchCtrl.clear(); setState(() => _searchResults = []); },
+                                )
+                              : null,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          filled: true,
+                          fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.3),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                    if (_searchLoading)
+                      const Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())
+                    else if (_searchResults.isNotEmpty)
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 250),
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: _searchResults.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1, indent: 16, endIndent: 16),
+                          itemBuilder: (ctx, i) {
+                            final r = _searchResults[i];
+                            return ListTile(
+                              dense: true,
+                              leading: Icon(Icons.location_on_rounded, color: cs.primary, size: 20),
+                              title: Text(r['address'] as String? ?? '', maxLines: 1, overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 13, color: cs.onSurface)),
+                              onTap: () => _selectSearchResult(r),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          // Fare sheet
           if (_estimate != null || _loadingFare)
             SlideTransition(
               position: _fareSheetAnim,
@@ -287,20 +460,7 @@ class _RideBookingScreenState extends State<RideBookingScreen> with TickerProvid
     );
   }
 
-  Widget _buildLocationChip(ColorScheme cs, IconData icon, String text, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(
-        children: [
-          Icon(icon, size: 10, color: color),
-          const SizedBox(width: 8),
-          Expanded(child: Text(text, style: TextStyle(fontSize: 13, color: cs.onSurface),
-              maxLines: 1, overflow: TextOverflow.ellipsis)),
-        ],
-      ),
-    );
-  }
-
+  // ─── Fare Sheet ───
   Widget _buildFareSheet(BuildContext context, ColorScheme cs) {
     if (_loadingFare) {
       return Container(
@@ -354,7 +514,7 @@ class _RideBookingScreenState extends State<RideBookingScreen> with TickerProvid
               ),
               const SizedBox(height: 16),
               SizedBox(
-                height: 80,
+                height: 85,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: vehicleTypes.length,
@@ -367,7 +527,7 @@ class _RideBookingScreenState extends State<RideBookingScreen> with TickerProvid
                       onTap: () => setState(() => _selectedVehicle = v['id'] as String),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
-                        width: 90,
+                        width: 95,
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           color: isSelected ? cs.primary.withValues(alpha: 0.1) : cs.surfaceContainerHighest.withValues(alpha: 0.3),
