@@ -107,6 +107,7 @@ class RideProvider extends ChangeNotifier {
     double? distanceKm,
     int? durationMin,
     required int fare,
+    String vehicleType = 'car',
   }) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return null;
@@ -127,6 +128,7 @@ class RideProvider extends ChangeNotifier {
         distanceKm: distanceKm,
         durationMin: durationMin,
         fare: fare,
+        vehicleType: vehicleType,
       );
       _listenToRide(rideId);
       return rideId;

@@ -50,6 +50,7 @@ const RIDE_STATUS = {
 
 const DRIVER_STATUS = { OFFLINE: 'offline', ONLINE: 'online', BUSY: 'busy', LOCKED: 'locked' };
 const FieldValue = admin.firestore.FieldValue;
+const DRIVER_PAYOUT_PERCENT = 0.85;
 
 async function addTripEvent(tripId, event, data = {}) {
   await db.collection(RIDE_COLLECTIONS.tripEvents).add({
@@ -209,22 +210,31 @@ router.post('/get-driver-profile', wrap(async (data, ctx) => {
 
 router.post('/get-driver-earnings', wrap(async (data, ctx) => {
   const uid = ctx.auth.uid;
-  const { period } = data;
-  let query = db.collection(RIDE_COLLECTIONS.earnings).where('driverId', '==', uid);
-  if (period === 'weekly') {
-    const weekStart = new Date();
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-    weekStart.setHours(0, 0, 0, 0);
-    query = query.where('createdAt', '>=', admin.firestore.Timestamp.fromDate(weekStart));
-  } else if (period === 'monthly') {
-    const monthStart = new Date();
-    monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
-    query = query.where('createdAt', '>=', admin.firestore.Timestamp.fromDate(monthStart));
+  // single-field filter only, to avoid requiring a composite index; totals computed in JS
+  const snap = await db.collection(RIDE_COLLECTIONS.earnings)
+    .where('driverId', '==', uid)
+    .limit(1000).get();
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfWeek = new Date(startOfToday);
+  startOfWeek.setDate(startOfToday.getDate() - startOfToday.getDay());
+  const earnings = [];
+  let total = 0, today = 0, week = 0;
+  for (const d of snap.docs) {
+    const e = d.data();
+    const amt = e.amount || 0;
+    total += amt;
+    const ts = e.createdAt && typeof e.createdAt.toDate === 'function' ? e.createdAt.toDate() : null;
+    if (ts && ts >= startOfToday) today += amt;
+    if (ts && ts >= startOfWeek) week += amt;
+    earnings.push({ id: d.id, ...e });
   }
-  const snap = await query.orderBy('createdAt', 'desc').limit(100).get();
-  const earnings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  const total = earnings.reduce((s, e) => s + (e.amount || 0), 0);
-  return { earnings, total, count: earnings.length };
+  earnings.sort((a, b) => {
+    const ta = a.createdAt && typeof a.createdAt.toMillis === 'function' ? a.createdAt.toMillis() : 0;
+    const tb = b.createdAt && typeof b.createdAt.toMillis === 'function' ? b.createdAt.toMillis() : 0;
+    return tb - ta;
+  });
+  return { earnings, total, today, week, count: earnings.length };
 }));
 
 // ════════════════════════════════════════════════════════════
@@ -269,9 +279,18 @@ router.post('/create-ride-request', wrap(async (data, ctx) => {
     createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
 
+  // Match a nearby driver before responding so the rider sees driver_found immediately
+  let matchedStatus = RIDE_STATUS.SEARCHING;
+  try {
+    const matched = await matchDrivers(reqRef.id);
+    if (matched) matchedStatus = RIDE_STATUS.DRIVER_FOUND;
+  } catch (e) {
+    console.error('[RIDE] match after create failed:', e.message);
+  }
+
   return {
     requestId: reqRef.id, fare, fareBreakdown, distance,
-    durationMin, surge, isPeak,
+    durationMin, surge, isPeak, status: matchedStatus,
   };
 }));
 
@@ -352,6 +371,16 @@ router.post('/reject-ride', wrap(async (data, ctx) => {
   const { requestId } = data;
   if (!requestId) throw new Error('requestId required');
   await db.collection(RIDE_COLLECTIONS.drivers).doc(driverId).update({ status: DRIVER_STATUS.ONLINE, lockedAt: null, lockedForRequest: null });
+  const request = await db.collection(RIDE_COLLECTIONS.requests).doc(requestId).get();
+  if (request.exists) {
+    const r = request.data();
+    if (r.status === RIDE_STATUS.DRIVER_FOUND && r.assignedDriverId === driverId) {
+      await db.collection(RIDE_COLLECTIONS.requests).doc(requestId).update({
+        status: RIDE_STATUS.SEARCHING, assignedDriverId: FieldValue.delete(), matchedAt: FieldValue.delete(),
+      });
+      await matchDrivers(requestId, [driverId]).catch(() => {});
+    }
+  }
   await notifyUser(data.riderId || '', 'Driver Rejected', 'A driver rejected your request.', { type: 'ride', requestId });
   return { success: true };
 }));
@@ -436,17 +465,19 @@ router.post('/complete-trip', wrap(async (data, ctx) => {
     if (t.status !== RIDE_STATUS.TRIP_STARTED && t.status !== RIDE_STATUS.IN_PROGRESS) {
       throw new Error(`Trip is in ${t.status} state`);
     }
+    const driverPayout = Math.round((r.fare || 0) * DRIVER_PAYOUT_PERCENT);
     tx.update(tripRef, { status: RIDE_STATUS.TRIP_COMPLETED, completedAt: FieldValue.serverTimestamp() });
     tx.update(request.ref, { status: RIDE_STATUS.TRIP_COMPLETED, completedAt: FieldValue.serverTimestamp() });
     tx.update(db.collection(RIDE_COLLECTIONS.drivers).doc(driverId), {
       status: DRIVER_STATUS.ONLINE, currentTripId: null, currentRequestId: null,
-      totalRides: FieldValue.increment(1), totalEarnings: FieldValue.increment(r.fare || 0),
+      totalRides: FieldValue.increment(1), totalEarnings: FieldValue.increment(driverPayout),
     });
     await db.collection(RIDE_COLLECTIONS.driverLocations).doc(driverId).update({ status: DRIVER_STATUS.ONLINE }).catch(() => {});
     const earningRef = db.collection(RIDE_COLLECTIONS.earnings).doc();
     tx.set(earningRef, {
-      driverId, tripId: tId, requestId: request.id, amount: r.fare || 0,
-      type: 'trip_earning', createdAt: FieldValue.serverTimestamp(),
+      driverId, tripId: tId, requestId: request.id, amount: driverPayout,
+      platformFee: (r.fare || 0) - driverPayout, type: 'trip_earning',
+      status: 'pending', createdAt: FieldValue.serverTimestamp(),
     });
   });
 
@@ -546,8 +577,12 @@ router.post('/update-driver-location', wrap(async (data) => {
   const uid = data._uid || data.driverId;
   const { latitude, longitude } = data;
   if (latitude == null || longitude == null) throw new Error('latitude and longitude required');
+  // keep busy/locked drivers marked as such; the 10s ping from the app must not flip them back to online
+  const driverDoc = await db.collection(RIDE_COLLECTIONS.drivers).doc(uid).get();
+  const driverStatus = driverDoc.exists ? driverDoc.data().status : DRIVER_STATUS.ONLINE;
+  const locationStatus = driverStatus === DRIVER_STATUS.ONLINE ? DRIVER_STATUS.ONLINE : driverStatus;
   await db.collection(RIDE_COLLECTIONS.driverLocations).doc(uid).set({
-    latitude, longitude, status: DRIVER_STATUS.ONLINE,
+    latitude, longitude, status: locationStatus,
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
   return { success: true };
@@ -635,12 +670,63 @@ router.post('/get-driver-rides', wrap(async (data, ctx) => {
 // PAY RIDE
 // ════════════════════════════════════════════════════════════
 router.post('/pay-ride', wrap(async (data, ctx) => {
+  const riderId = ctx.auth.uid;
   const { rideId } = data;
   if (!rideId) throw new Error('rideId required');
-  await db.collection(RIDE_COLLECTIONS.requests).doc(rideId).update({
-    status: RIDE_STATUS.PAYMENT_COMPLETED, paidAt: FieldValue.serverTimestamp(),
+  const request = await db.collection(RIDE_COLLECTIONS.requests).doc(rideId).get();
+  if (!request.exists) throw new Error('Request not found');
+  const r = request.data();
+  if (r.riderId !== riderId) throw new Error('Only the rider can pay for this ride');
+  if (r.status === RIDE_STATUS.PAYMENT_COMPLETED) {
+    return { success: true, status: RIDE_STATUS.PAYMENT_COMPLETED, alreadyPaid: true };
+  }
+  if (r.status !== RIDE_STATUS.TRIP_COMPLETED && r.status !== RIDE_STATUS.RECEIPT_GENERATED) {
+    throw new Error(`Cannot pay from ${r.status} state`);
+  }
+
+  const fare = r.fare || 0;
+  const driverPayout = Math.round(fare * DRIVER_PAYOUT_PERCENT);
+  const platformFee = fare - driverPayout;
+  const tId = r.tripId;
+  if (!tId) throw new Error('No trip found for this ride');
+
+  await db.runTransaction(async (tx) => {
+    const riderSnap = await tx.get(db.collection('users').doc(riderId));
+    if (!riderSnap.exists) throw new Error('Wallet not found');
+    if ((riderSnap.data().walletBalance || 0) < fare) throw new Error('Insufficient wallet balance');
+
+    tx.update(request.ref, {
+      status: RIDE_STATUS.PAYMENT_COMPLETED, paidAt: FieldValue.serverTimestamp(),
+      paymentMethod: 'Wallet', driverPayout, platformFee,
+    });
+    tx.update(db.collection('users').doc(riderId), {
+      walletBalance: FieldValue.increment(-fare),
+    });
+    tx.set(db.collection('transactions').doc(), {
+      type: 'ride_payment', rideId, tripId: tId,
+      riderId, driverId: r.assignedDriverId || '',
+      amount: fare, driverPayout, platformFee,
+      status: 'completed', paymentMethod: 'Wallet',
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    if (r.assignedDriverId) {
+      tx.set(db.collection('users').doc(r.assignedDriverId), {
+        walletBalance: FieldValue.increment(driverPayout),
+      }, { merge: true });
+    }
   });
-  return { success: true, status: RIDE_STATUS.PAYMENT_COMPLETED };
+
+  const earnSnap = await db.collection(RIDE_COLLECTIONS.earnings).where('tripId', '==', tId).limit(5).get();
+  for (const doc of earnSnap.docs) {
+    await doc.ref.update({
+      amount: driverPayout, platformFee,
+      status: 'paid', paidAt: FieldValue.serverTimestamp(),
+    });
+  }
+
+  await addTripEvent(tId, 'payment_completed', { rideId, riderId, amount: fare, driverPayout });
+  await notifyUser(r.assignedDriverId || '', 'Payment Received', `You received TZS ${driverPayout.toLocaleString()} for the ride.`, { type: 'ride', rideId, amount: driverPayout });
+  return { success: true, status: RIDE_STATUS.PAYMENT_COMPLETED, driverPayout, platformFee };
 }));
 
 // ════════════════════════════════════════════════════════════
@@ -719,11 +805,11 @@ router.get('/reverse-geocode', async (req, res) => {
 // ════════════════════════════════════════════════════════════
 // MATCHING TRIGGER — auto-match drivers
 // ════════════════════════════════════════════════════════════
-async function matchDrivers(requestId) {
+async function matchDrivers(requestId, excludeDriverIds = []) {
   const request = await db.collection(RIDE_COLLECTIONS.requests).doc(requestId).get();
-  if (!request.exists) return;
+  if (!request.exists) return false;
   const r = request.data();
-  if (r.status !== RIDE_STATUS.REQUESTED && r.status !== RIDE_STATUS.SEARCHING) return;
+  if (r.status !== RIDE_STATUS.REQUESTED && r.status !== RIDE_STATUS.SEARCHING) return false;
 
   await db.collection(RIDE_COLLECTIONS.requests).doc(requestId).update({ status: RIDE_STATUS.SEARCHING });
 
@@ -748,10 +834,11 @@ async function matchDrivers(requestId) {
       status: RIDE_STATUS.CANCELLED, cancelReason: 'no_drivers_available',
     });
     await notifyUser(r.riderId, 'No Drivers Available', 'Sorry, no drivers nearby. Please try again.', { type: 'ride', requestId });
-    return;
+    return false;
   }
 
   for (const driver of drivers.slice(0, 5)) {
+    if (excludeDriverIds.includes(driver.driverId)) continue;
     try {
       await db.runTransaction(async (tx) => {
         const snap = await tx.get(request.ref);
@@ -763,7 +850,7 @@ async function matchDrivers(requestId) {
         tx.update(request.ref, { status: RIDE_STATUS.DRIVER_FOUND, assignedDriverId: driver.driverId, matchedAt: FieldValue.serverTimestamp() });
         tx.update(db.collection(RIDE_COLLECTIONS.drivers).doc(driver.driverId), { status: DRIVER_STATUS.LOCKED, lockedAt: FieldValue.serverTimestamp(), lockedForRequest: requestId });
       });
-      return;
+      return true;
     } catch { /* try next driver */ }
   }
 
@@ -771,6 +858,7 @@ async function matchDrivers(requestId) {
     status: RIDE_STATUS.CANCELLED, cancelReason: 'drivers_unavailable',
   });
   await notifyUser(r.riderId, 'No Drivers Available', 'Could not find a driver. Please try again.', { type: 'ride', requestId });
+  return false;
 }
 
 module.exports = { router, matchDrivers };
