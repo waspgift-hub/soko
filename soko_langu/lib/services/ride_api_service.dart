@@ -144,6 +144,7 @@ class RideApiService {
     double? distanceKm,
     int? durationMin,
     required int fare,
+    String vehicleType = 'car',
   }) async {
     final data = await _post('/create-ride-request', {
       'pickupLat': pickupLat,
@@ -152,7 +153,7 @@ class RideApiService {
       'dropoffLat': dropoffLat,
       'dropoffLng': dropoffLng,
       'dropoffName': dropoffAddress ?? 'Dropoff',
-      'vehicleType': 'car',
+      'vehicleType': vehicleType,
     });
     return data['requestId'] as String? ?? '';
   }
@@ -315,8 +316,8 @@ class RideApiService {
     final data = await _post('/get-driver-earnings', {'period': 'all'});
     return DriverEarnings(
       totalEarnings: (data['total'] as num?)?.toDouble() ?? 0,
-      todayEarnings: 0,
-      weekEarnings: 0,
+      todayEarnings: (data['today'] as num?)?.toDouble() ?? 0,
+      weekEarnings: (data['week'] as num?)?.toDouble() ?? 0,
       completedRides: (data['count'] as num?)?.toInt() ?? 0,
     );
   }

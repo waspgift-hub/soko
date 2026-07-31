@@ -188,7 +188,7 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> with TickerProv
 
   void _updateEta() {
     if (_ride == null || _driverPosition == null) return;
-    final target = _ride!.status == 'ACCEPTED' || _ride!.status == 'DRIVER_ARRIVED'
+    final target = _ride!.status == 'ACCEPTED' || _ride!.status == 'DRIVER_FOUND' || _ride!.status == 'DRIVER_ARRIVED'
         ? LatLng(_ride!.pickup.lat, _ride!.pickup.lng)
         : LatLng(_ride!.dropoff.lat, _ride!.dropoff.lng);
     final dist = _haversine(
@@ -282,13 +282,12 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> with TickerProv
 
   Future<void> _payRide() async {
     final ok = await context.read<RideProvider>().payRide(widget.rideId);
-    if (ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(context.tr('payment_successful')),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ));
-    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(ok ? context.tr('payment_successful') : context.tr('payment_failed')),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ));
   }
 
   Future<void> _callDriver() async {
@@ -318,6 +317,29 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> with TickerProv
       ),
     );
     if (confirmed == true && mounted) {
+      try { await launchUrl(Uri.parse('tel:112')); } catch (_) {}
+      try {
+        final user = FirebaseAuth.instance.currentUser;
+        await FirebaseFirestore.instance.collection('sos_alerts').add({
+          'userId': user?.uid ?? '',
+          'rideId': widget.rideId,
+          'pickupLat': _ride?.pickup.lat,
+          'pickupLng': _ride?.pickup.lng,
+          'dropoffLat': _ride?.dropoff.lat,
+          'dropoffLng': _ride?.dropoff.lng,
+          'driverId': _ride?.driverId ?? '',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        await FirebaseFirestore.instance.collection('notifications').add({
+          'userId': 'admin',
+          'title': 'SOS Alert',
+          'body': 'Rider ${user?.uid ?? ''} needs help on ride ${widget.rideId}',
+          'type': 'sos',
+          'read': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      } catch (_) {}
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(context.tr('sos_alert_sent')),
         behavior: SnackBarBehavior.floating,
@@ -422,7 +444,7 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> with TickerProv
             ),
           ),
           // ETA badge on map
-          if (_etaSeconds > 0 && _ride != null && (_ride!.status == 'ACCEPTED' || _ride!.status == 'DRIVER_ARRIVED' || _ride!.status == 'IN_PROGRESS'))
+          if (_etaSeconds > 0 && _ride != null && (_ride!.status == 'ACCEPTED' || _ride!.status == 'DRIVER_FOUND' || _ride!.status == 'DRIVER_ARRIVED' || _ride!.status == 'IN_PROGRESS'))
             Positioned(
               top: MediaQuery.of(context).padding.top + 80,
               left: 16,
@@ -488,6 +510,8 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> with TickerProv
   Color _statusColor(String status, ColorScheme cs) {
     switch (status) {
       case 'REQUESTED': return Colors.orange;
+      case 'SEARCHING': return Colors.orange;
+      case 'DRIVER_FOUND': return cs.primary;
       case 'ACCEPTED': return cs.primary;
       case 'DRIVER_ARRIVED': return Colors.green;
       case 'IN_PROGRESS': return Colors.blue;
@@ -501,6 +525,8 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> with TickerProv
   String _statusLabel(String status, BuildContext context) {
     switch (status) {
       case 'REQUESTED': return context.tr('waiting_driver');
+      case 'SEARCHING': return context.tr('waiting_driver');
+      case 'DRIVER_FOUND': return context.tr('driver_on_way');
       case 'ACCEPTED': return context.tr('driver_on_way');
       case 'DRIVER_ARRIVED': return context.tr('driver_arrived_label');
       case 'IN_PROGRESS': return context.tr('trip_in_progress');
@@ -516,7 +542,7 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> with TickerProv
   Widget _buildStatusSheet(BuildContext context, ColorScheme cs, Ride ride, User? user) {
     final isRider = ride.riderId == user?.uid;
     final statusColor = _statusColor(ride.status, cs);
-    final showEta = _etaSeconds > 0 && (ride.status == 'ACCEPTED' || ride.status == 'DRIVER_ARRIVED' || ride.status == 'IN_PROGRESS');
+    final showEta = _etaSeconds > 0 && (ride.status == 'ACCEPTED' || ride.status == 'DRIVER_FOUND' || ride.status == 'DRIVER_ARRIVED' || ride.status == 'IN_PROGRESS');
 
     return Container(
       decoration: BoxDecoration(
@@ -571,7 +597,7 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> with TickerProv
                         if (ride.status == 'IN_PROGRESS')
                           Text('${ride.distanceKm} km · ${ride.durationMin} min',
                             style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-                        if (_driverName != null && (ride.status == 'ACCEPTED' || ride.status == 'DRIVER_ARRIVED' || ride.status == 'IN_PROGRESS'))
+                        if (_driverName != null && (ride.status == 'ACCEPTED' || ride.status == 'DRIVER_FOUND' || ride.status == 'DRIVER_ARRIVED' || ride.status == 'IN_PROGRESS'))
                           Padding(
                             padding: const EdgeInsets.only(top: 4),
                             child: Row(
@@ -595,7 +621,7 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> with TickerProv
               ),
               const SizedBox(height: 20),
               // Driver call button if driver assigned
-              if (_driverPhone != null && (ride.status == 'ACCEPTED' || ride.status == 'DRIVER_ARRIVED' || ride.status == 'IN_PROGRESS'))
+              if (_driverPhone != null && (ride.status == 'ACCEPTED' || ride.status == 'DRIVER_FOUND' || ride.status == 'DRIVER_ARRIVED' || ride.status == 'IN_PROGRESS'))
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: SizedBox(
@@ -619,7 +645,7 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> with TickerProv
               _locationTile(cs, Icons.square, ride.dropoff.address, Colors.red),
               const SizedBox(height: 20),
               // Action buttons
-              if (ride.status == 'REQUESTED' && isRider)
+              if ((ride.status == 'REQUESTED' || ride.status == 'SEARCHING' || ride.status == 'DRIVER_FOUND' || ride.status == 'ACCEPTED') && isRider)
                 SizedBox(width: double.infinity, child: OutlinedButton.icon(
                   onPressed: _cancelRide,
                   icon: const Icon(Icons.cancel_outlined),
@@ -653,6 +679,8 @@ class _RideTrackingScreenState extends State<RideTrackingScreen> with TickerProv
   IconData _statusIcon(String status) {
     switch (status) {
       case 'REQUESTED': return Icons.hourglass_empty;
+      case 'SEARCHING': return Icons.hourglass_empty;
+      case 'DRIVER_FOUND': return Icons.directions_car_rounded;
       case 'ACCEPTED': return Icons.directions_car_rounded;
       case 'DRIVER_ARRIVED': return Icons.check_circle;
       case 'IN_PROGRESS': return Icons.navigation;

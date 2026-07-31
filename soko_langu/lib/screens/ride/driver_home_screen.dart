@@ -93,10 +93,21 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> with TickerProvider
   }
 
   void _listenToPendingRides() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    // single-field filter to avoid a composite index; status filtered client-side
     _pendingRideSub = FirebaseFirestore.instance.collection('ride_requests')
-        .where('status', isEqualTo: 'requested')
+        .where('assignedDriverId', isEqualTo: uid)
         .snapshots()
-        .map((snap) => snap.docs.isNotEmpty ? _rideFromFirestore(snap.docs.first.data(), snap.docs.first.id) : null)
+        .map((snap) {
+          for (final doc in snap.docs) {
+            final status = doc.data()['status'] as String? ?? '';
+            if (status == 'driver_found') {
+              return _rideFromFirestore(doc.data(), doc.id);
+            }
+          }
+          return null;
+        })
         .where((r) => r != null).cast<Ride>()
         .listen((ride) {
           if (mounted && context.read<RideProvider>().driverOnline) {

@@ -245,7 +245,7 @@ class _RideBookingScreenState extends State<RideBookingScreen> with TickerProvid
         pickupAddress: _pickupAddress, dropoffLat: _dropoff!.latitude,
         dropoffLng: _dropoff!.longitude, dropoffAddress: _dropoffAddress,
         distanceKm: _estimate!.distanceKm, durationMin: _estimate!.durationMin,
-        fare: _estimate!.fare,
+        fare: _estimate!.fare, vehicleType: _selectedVehicle,
       );
       if (rideId != null && mounted) {
         context.pushReplacement('${AppRoutes.rideTracking}/$rideId');
