@@ -31,7 +31,7 @@ function getChannelId(data = {}) {
   if (['payment','order','payout','dispute','refund','withdrawal',
        'escrow_release','auto_payout','escrow_auto_release',
        'dispute_resolved','cancelled','auto_withdrawal',
-       'delivery_confirmed','payment_failed','kyc'].includes(type)) return 'payments_notifications_v5';
+       'delivery_confirmed','payment_failed','kyc','deposit','deposit_failed'].includes(type)) return 'payments_notifications_v5';
   return 'general_notifications_v5';
 }
 
