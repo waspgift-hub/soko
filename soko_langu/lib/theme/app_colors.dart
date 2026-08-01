@@ -1,6 +1,38 @@
 import 'package:flutter/material.dart';
 
 extension AppColorScheme on ColorScheme {
+  Color get brandPrimary => brightness == Brightness.dark
+      ? const Color(0xFF52B788)
+      : const Color(0xFF1B4332);
+
+  Color get brandAccent => brightness == Brightness.dark
+      ? const Color(0xFFFFB74D)
+      : const Color(0xFFFF6F00);
+
+  Color get brandSuccess => brightness == Brightness.dark
+      ? const Color(0xFF34D399)
+      : const Color(0xFF065535);
+
+  Color get brandWarning => brightness == Brightness.dark
+      ? const Color(0xFFFBBF24)
+      : const Color(0xFFB45309);
+
+  Color get brandInfo => brightness == Brightness.dark
+      ? const Color(0xFF60A5FA)
+      : const Color(0xFF1E5FA8);
+
+  Color get brandBorder => brightness == Brightness.dark
+      ? const Color(0xFF2A3357)
+      : const Color(0xFFE4E7EF);
+
+  Color get brandTextPrimary => brightness == Brightness.dark
+      ? const Color(0xFFF2F4FA)
+      : const Color(0xFF10131F);
+
+  Color get brandTextSecondary => brightness == Brightness.dark
+      ? const Color(0xFF9AA3BB)
+      : const Color(0xFF5A6172);
+
   Color get surfaceDark => brightness == Brightness.dark
       ? const Color(0xFF0A0E1A)
       : const Color(0xFFF8F9FE);
