@@ -152,21 +152,38 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     LocationPermission perm = await Geolocator.checkPermission();
     if (perm == LocationPermission.denied) {
       perm = await Geolocator.requestPermission();
-      if (perm == LocationPermission.denied) return;
     }
-    if (perm == LocationPermission.deniedForever) {
+    if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(context.tr('location_denied'))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              perm == LocationPermission.deniedForever
+                  ? context.tr('location_denied')
+                  : context.tr('location_permission_denied'),
+            ),
+          ),
+        );
       }
       return;
     }
 
-    final pos = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-    );
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+      await _applyPosition(pos);
+    } catch (e) {
+      debugPrint('EditProfile getCurrentPosition: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('imeshindwa').replaceAll('{0}', 'location'))),
+        );
+      }
+    }
+  }
 
+  Future<void> _applyPosition(Position pos) async {
     try {
       final placemarks = await placemarkFromCoordinates(
         pos.latitude,
@@ -181,14 +198,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           p.administrativeArea,
           p.country,
         ].where((s) => s != null && s.isNotEmpty).join(', ');
-        setState(() {
-          _locationController.text = addr;
-          _latitude = pos.latitude;
-          _longitude = pos.longitude;
-        });
+        if (mounted) {
+          setState(() {
+            _locationController.text = addr;
+            _latitude = pos.latitude;
+            _longitude = pos.longitude;
+          });
+        }
+        return;
       }
     } catch (e) {
       debugPrint('EditProfile reverse geocode: $e');
+    }
+    if (mounted) {
       setState(() {
         _locationController.text = '${pos.latitude}, ${pos.longitude}';
         _latitude = pos.latitude;
