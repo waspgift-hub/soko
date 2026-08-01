@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'google_loading.dart';
 import '../services/api_config.dart';
 import '../theme/app_colors.dart';
+import 'ds/ds.dart';
 
 enum PaymentBannerType { success, failed }
 
@@ -111,6 +112,8 @@ class _PaymentBannerContentState extends State<_PaymentBannerContent>
 
     return Stack(
       children: [
+        if (widget.type == PaymentBannerType.success)
+          Positioned.fill(child: DsConfetti()),
         GestureDetector(
           onTap: widget.onDismiss,
           child: FadeTransition(

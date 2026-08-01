@@ -16,7 +16,7 @@ import '../../widgets/ad_banner.dart';
 import '../../widgets/banner_rotator.dart';
 import '../../widgets/premium_widgets.dart';
 import '../../widgets/animated_gradient_line.dart';
-import '../../widgets/google_loading.dart';
+import '../../widgets/ds/ds.dart';
 
 import '../../extensions/context_tr.dart';
 import '../../utils/responsive.dart';
@@ -218,11 +218,30 @@ class _HomeScreenState extends State<HomeScreen>
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: false,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: Row(
           children: [
-            Text(context.tr('soko'), style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: cs.primary, letterSpacing: -0.5)),
-            Text(context.tr('vibe'), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.onSurfaceVariant, letterSpacing: 2)),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.asset(
+                'assets/app_icon.png',
+                height: 40,
+                width: 40,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Icon(
+                  Icons.storefront_rounded,
+                  size: 32,
+                  color: cs.primary,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(context.tr('soko'), style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: cs.primary, letterSpacing: -0.5)),
+                Text(context.tr('vibe'), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.onSurfaceVariant, letterSpacing: 2)),
+              ],
+            ),
           ],
         ),
         actions: [
@@ -401,6 +420,35 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  Widget _buildSkeletonGrid(ColorScheme cs) {
+    return GridView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: Responsive.gridColumns(context),
+        crossAxisSpacing: AppInsets.md,
+        mainAxisSpacing: AppInsets.md,
+        childAspectRatio: Responsive.cardAspectRatio(context),
+      ),
+      itemCount: 6,
+      itemBuilder: (context, index) {
+        return RepaintBoundary(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Expanded(child: DsSkeleton()),
+              const SizedBox(height: 8),
+              const DsSkeleton(width: 140, height: 12),
+              const SizedBox(height: 6),
+              DsSkeleton(width: 90, height: 10),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildProductsArea() {
     final cs = Theme.of(context).colorScheme;
     final provider = context.watch<ProductFeedProvider>();
@@ -440,7 +488,7 @@ class _HomeScreenState extends State<HomeScreen>
             );
           }
           if (provider.isLoading && provider.products.isEmpty) {
-            return const Center(child: Padding(padding: EdgeInsets.all(48), child: GoogleLoading()));
+            return _buildSkeletonGrid(cs);
           }
           if (provider.products.isEmpty) {
             return EmptyStateWidget(icon: Icons.inventory_2_outlined, title: context.tr('no_products'));

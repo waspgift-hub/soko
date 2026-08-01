@@ -31,7 +31,7 @@ class AboutAppScreen extends StatelessWidget {
               ClipRRect(
                 borderRadius: BorderRadius.circular(25),
                 child: Image.asset(
-                  'assets/soko_vibe_logo.png',
+                  'assets/app_icon.png',
                   width: 100,
                   height: 100,
                   fit: BoxFit.cover,

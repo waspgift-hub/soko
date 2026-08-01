@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../../services/api_config.dart';
 import '../../services/balance_privacy_service.dart';
 import '../../extensions/context_tr.dart';
+import '../../widgets/ds/ds.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -883,7 +884,33 @@ class _WalletScreenState extends State<WalletScreen> {
       body: RefreshIndicator(
         onRefresh: _load,
         child: _loading
-            ? const Center(child: CircularProgressIndicator())
+            ? ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(20),
+                children: [
+                  DsSkeleton(height: 150, width: double.infinity),
+                  const SizedBox(height: 28),
+                  DsSkeleton(width: 140, height: 16),
+                  const SizedBox(height: 12),
+                  ...List.generate(5, (_) => const Padding(
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: Row(
+                      children: [
+                        DsSkeleton(shape: DsSkeletonShape.circle, width: 42, height: 42),
+                        SizedBox(width: 12),
+                        Expanded(child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            DsSkeleton(width: 160, height: 12),
+                            SizedBox(height: 6),
+                            DsSkeleton(width: 100, height: 10),
+                          ],
+                        )),
+                      ],
+                    ),
+                  )),
+                ],
+              )
             : ListView(
                 padding: const EdgeInsets.all(20),
                 children: [

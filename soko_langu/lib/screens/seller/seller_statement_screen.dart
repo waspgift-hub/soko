@@ -9,7 +9,6 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import '../../services/api_config.dart';
-import '../../services/localization_service.dart';
 import '../../widgets/google_loading.dart';
 import '../../theme/app_colors.dart';
 
@@ -149,7 +148,7 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
   Widget _buildHeader(ColorScheme cs) {
     return Column(
       children: [
-        Image.asset('assets/soko_vibe_logo.png', height: 56, errorBuilder: (_, _, _) =>
+        Image.asset('assets/app_icon.png', height: 56, errorBuilder: (_, _, _) =>
           Icon(Icons.store, size: 48, color: cs.primary)),
         const SizedBox(height: 8),
         Text(

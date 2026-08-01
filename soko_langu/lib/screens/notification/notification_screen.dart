@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../services/notification_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
-import '../../widgets/google_loading.dart';
+import '../../widgets/ds/ds.dart';
 import '../../widgets/ad_banner.dart';
 
 class NotificationScreen extends StatefulWidget {
@@ -146,7 +146,28 @@ class _NotificationScreenState extends State<NotificationScreen> {
             colors: [cs.surface, cs.surfaceContainerLow.withValues(alpha: 0.3)],
           ),
         ),
-        child: const GoogleLoadingPage(),
+        child: ListView.separated(
+          padding: EdgeInsets.only(top: 16, bottom: MediaQuery.of(context).padding.bottom + 20),
+          itemCount: 8,
+          separatorBuilder: (_, _) => const SizedBox(height: 12),
+          itemBuilder: (context, _) => const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                DsSkeleton(shape: DsSkeletonShape.circle, width: 40, height: 40),
+                SizedBox(width: 14),
+                Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    DsSkeleton(width: 180, height: 12),
+                    SizedBox(height: 8),
+                    DsSkeleton(width: double.infinity, height: 10),
+                  ],
+                )),
+              ],
+            ),
+          ),
+        ),
       ),
       bottomNavigationBar: const AdBanner(),
     );

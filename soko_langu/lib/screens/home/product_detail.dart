@@ -25,6 +25,7 @@ import '../../models/flash_sale_model.dart';
 import '../../theme/app_colors.dart';
 import '../../services/notification_service.dart';
 import '../chat/chat_navigation.dart';
+import '../../widgets/ds/ds.dart';
 
 // ignore: unused_element
 Color? _hexToColor(String? hex) {
@@ -837,60 +838,49 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         ),
       ),
       bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.all(16),
+        minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
         child: Row(
           children: [
             Expanded(
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: cs.whatsappGreen,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                height: 52,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: cs.whatsappGreen,
+                    side: BorderSide(color: cs.whatsappGreen.withValues(alpha: 0.4), width: 1.5),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
-                ),
-                icon: Icon(Icons.chat, color: cs.surface, size: 18),
-                onPressed: _chatWithSeller,
-                label: Text(
-                  context.tr('chat'),
-                  style: TextStyle(color: cs.surface, fontSize: 13),
+                  icon: Icon(Icons.chat, size: 18),
+                  onPressed: _chatWithSeller,
+                  label: Text(
+                    context.tr('chat'),
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
                 ),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 10),
             Expanded(
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: cs.successGreen,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                icon: Icon(
-                  Icons.shopping_cart_checkout,
-                  color: cs.surface,
-                  size: 18,
-                ),
-                onPressed: _processing
-                    ? null
-                    : () async {
-                        if (currentUser == null) {
-                          context.push(AppRoutes.login);
-                        } else if (currentUser.uid == sellerId) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(context.tr('cannot_buy_own')),
-                            ),
-                          );
-                        } else {
-                          await _processBuyNow();
-                        }
-                      },
-                label: Text(
-                  context.tr('buy_now'),
-                  style: TextStyle(color: cs.surface, fontSize: 14),
-                ),
+              flex: 2,
+              child: DsButton(
+                label: context.tr('buy_now'),
+                icon: Icons.shopping_cart_checkout,
+                loading: _processing,
+                onPressed: () async {
+                  if (currentUser == null) {
+                    context.push(AppRoutes.login);
+                  } else if (currentUser.uid == sellerId) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(context.tr('cannot_buy_own')),
+                      ),
+                    );
+                  } else {
+                    await _processBuyNow();
+                  }
+                },
               ),
             ),
           ],

@@ -169,7 +169,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               width: 1.5,
                             ),
                           ),
-                          child: Icon(p.icon, size: 56, color: p.color),
+                          child: i == 0
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(24),
+                                  child: Image.asset(
+                                    'assets/app_icon.png',
+                                    width: 56,
+                                    height: 56,
+                                    fit: BoxFit.cover,
+                                  ),
+                                )
+                              : Icon(p.icon, size: 56, color: p.color),
                         ),
                         const SizedBox(height: 40),
                         Text(
