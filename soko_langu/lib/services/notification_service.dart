@@ -146,14 +146,6 @@ class NotificationService {
         headsUpTitle = title;
         payload = orderId != null ? '/order-detail/$orderId' : null;
         break;
-      case 'ride':
-      case 'ride_request':
-      case 'ride_accepted':
-      case 'ride_completed':
-        channelId = 'ride_notifications_v5';
-        headsUpTitle = title;
-        payload = '/ride';
-        break;
       case 'boost':
       case 'promotion':
         channelId = 'general_notifications_v5';
@@ -175,7 +167,7 @@ class NotificationService {
 
     final bool isCritical = type == 'system' || type == 'admin' || type == 'alert' ||
         type == 'payment' || type == 'order' || type == 'deposit' || type == 'deposit_failed' ||
-        type == 'chat' || type == 'ride_request';
+        type == 'chat';
 
     LocalNotificationService().showHeadsUp(
       id: DateTime.now().millisecondsSinceEpoch % 2147483647,

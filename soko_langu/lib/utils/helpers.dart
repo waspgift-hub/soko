@@ -5,7 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:file_picker/file_picker.dart';
 import '../extensions/context_tr.dart';
 import '../services/cloudinary_service.dart';
-import '../widgets/google_loading.dart';
+import '../widgets/soko_vibe_loading.dart';
 
 Future<bool> requestPermissionWithDialog(
   BuildContext context,
@@ -109,7 +109,7 @@ Future<String?> pickAndUploadImage(BuildContext context) async {
   showDialog(
     context: context,
     barrierDismissible: false,
-    builder: (_) => const GoogleLoadingPage(),
+    builder: (_) => const SokoVibeDotLoadingPage(),
   );
 
   try {

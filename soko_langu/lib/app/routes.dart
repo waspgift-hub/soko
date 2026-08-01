@@ -59,15 +59,4 @@ class AppRoutes {
   static const String adminUserDetail = '/admin/user';
   static const String sellerStatement = '/seller-statement';
   static const String boostReceipt = '/boost-receipt';
-
-  // Ride-hailing routes
-  static const String rideHome = '/ride';
-  static const String rideBooking = '/ride/booking';
-  static const String rideTracking = '/ride/tracking';
-  static const String ridePayment = '/ride/payment';
-  static const String driverHome = '/driver';
-  static const String driverRegister = '/driver/register';
-  static const String driverEarnings = '/driver/earnings';
-  static const String driverRideRequest = '/driver/ride-request';
-  static const String rideHistory = '/ride/history';
 }

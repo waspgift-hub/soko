@@ -156,3 +156,97 @@ class SokoVibeLoadingPage extends StatelessWidget {
     return Center(child: SokoVibeLoading(size: size));
   }
 }
+
+/// Branded Soko Vibe dot loader built from Google's four brand colors.
+///
+/// Four dots pulse in a staggered rhythm so the brand reads at a glance
+/// wherever full-page loading states are shown.
+class SokoVibeDotLoader extends StatefulWidget {
+  final double size;
+
+  const SokoVibeDotLoader({super.key, this.size = 48});
+
+  @override
+  State<SokoVibeDotLoader> createState() => _SokoVibeDotLoaderState();
+}
+
+class _SokoVibeDotLoaderState extends State<SokoVibeDotLoader>
+    with SingleTickerProviderStateMixin {
+  static const _googleColors = [
+    Color(0xFF4285F4),
+    Color(0xFFEA4335),
+    Color(0xFFFBBC05),
+    Color(0xFF34A853),
+  ];
+
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dotSize = widget.size * 0.4;
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        return SizedBox(
+          width: widget.size,
+          height: widget.size,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(4, (i) {
+              final phase = (_controller.value + i * 0.25) % 1.0;
+              // Pulse scale: 0.4 -> 1.0 -> 0.4, offset per dot.
+              final scale = 0.4 + 0.6 * (0.5 - 0.5 * cos(2 * pi * phase));
+              return Padding(
+                padding: EdgeInsets.symmetric(horizontal: widget.size * 0.045),
+                child: Transform.scale(
+                  scale: scale,
+                  child: Container(
+                    width: dotSize,
+                    height: dotSize,
+                    decoration: BoxDecoration(
+                      color: _googleColors[i],
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: _googleColors[i].withValues(alpha: 0.35),
+                          blurRadius: dotSize * 0.5,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Full-page centered variant of [SokoVibeDotLoader].
+class SokoVibeDotLoadingPage extends StatelessWidget {
+  final double size;
+
+  const SokoVibeDotLoadingPage({super.key, this.size = 48});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(child: SokoVibeDotLoader(size: size));
+  }
+}

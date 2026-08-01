@@ -23,12 +23,6 @@ const NOTIFICATION_CHANNELS = {
     description: 'New orders, dispatch, delivery',
     importance: 'max',
   },
-  rides: {
-    id: 'ride_notifications_v5',
-    name: 'Rides',
-    description: 'Ride booking, driver matching, trip updates',
-    importance: 'max',
-  },
   marketing: {
     id: 'marketing_notifications_v5',
     name: 'Marketing',
@@ -55,15 +49,6 @@ const NOTIFICATION_TYPES = {
   order_disputed: { channel: 'orders', icon: 'gavel' },
   dispute_resolved: { channel: 'orders', icon: 'balance' },
   delivery_confirmed: { channel: 'orders', icon: 'check_circle' },
-
-  // Rides
-  ride_driver_found: { channel: 'rides', icon: 'directions_car' },
-  ride_driver_accepted: { channel: 'rides', icon: 'directions_car' },
-  ride_driver_arrived: { channel: 'rides', icon: 'location_on' },
-  ride_trip_started: { channel: 'rides', icon: 'play_arrow' },
-  ride_trip_completed: { channel: 'rides', icon: 'stop' },
-  ride_cancelled: { channel: 'rides', icon: 'cancel' },
-  ride_no_drivers: { channel: 'rides', icon: 'error_outline' },
 
   // Chat
   chat_message: { channel: 'chat', icon: 'chat' },
