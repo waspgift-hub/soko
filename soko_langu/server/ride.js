@@ -65,7 +65,36 @@ async function notifyUser(uid, title, body, data = {}) {
       createdAt: FieldValue.serverTimestamp(),
     });
   } catch { /* non-critical */ }
-  // FCM push via OneSignal handled by listener.js
+  sendPushNotification(uid, title, body, data).catch(() => {});
+}
+
+async function sendPushNotification(userId, title, body, data = {}) {
+  try {
+    const appId = process.env.ONE_SIGNAL_APP_ID;
+    const apiKey = process.env.ONE_SIGNAL_REST_API_KEY;
+    if (!userId || !appId || !apiKey) return null;
+    const type = data.type || 'ride';
+    let channelId = 'ride_notifications_v5';
+    if (['payment', 'order', 'deposit', 'deposit_failed', 'refund', 'withdrawal', 'payout'].includes(type)) {
+      channelId = 'payments_notifications_v5';
+    }
+    const resp = await axios.post('https://api.onesignal.com/notifications', {
+      app_id: appId,
+      include_external_user_ids: [userId],
+      headings: { en: title || '' },
+      contents: { en: body || '' },
+      data: { ...(data || {}), type },
+      priority: 10, android_priority: 'high', android_visibility: 1,
+      existing_android_channel_id: channelId,
+      android_sound: 'soko_notification',
+      android_icon: 'ic_notification',
+    }, { headers: { 'Content-Type': 'application/json', 'Authorization': `Key ${apiKey}` } });
+    if (resp.data && resp.data.id) console.log(`[RIDE][OS] push sent to ${userId} type=${type} id=${resp.data.id}`);
+    return resp.data;
+  } catch (e) {
+    console.error(`[RIDE][OS] push failed user=${userId}:`, e.response?.data ? JSON.stringify(e.response.data) : e.message);
+    return null;
+  }
 }
 
 function calculateDistance(lat1, lng1, lat2, lng2) {

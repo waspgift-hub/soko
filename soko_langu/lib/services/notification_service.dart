@@ -139,6 +139,8 @@ class NotificationService {
       case 'kyc_approved':
       case 'kyc_rejected':
       case 'kyc_revoked':
+      case 'deposit':
+      case 'deposit_failed':
         final orderId = data['orderId'] as String?;
         channelId = 'payments_notifications_v5';
         headsUpTitle = title;
@@ -148,7 +150,7 @@ class NotificationService {
       case 'ride_request':
       case 'ride_accepted':
       case 'ride_completed':
-        channelId = 'general_notifications_v5';
+        channelId = 'ride_notifications_v5';
         headsUpTitle = title;
         payload = '/ride';
         break;
@@ -172,7 +174,8 @@ class NotificationService {
     }
 
     final bool isCritical = type == 'system' || type == 'admin' || type == 'alert' ||
-        type == 'payment' || type == 'order' || type == 'chat' || type == 'ride_request';
+        type == 'payment' || type == 'order' || type == 'deposit' || type == 'deposit_failed' ||
+        type == 'chat' || type == 'ride_request';
 
     LocalNotificationService().showHeadsUp(
       id: DateTime.now().millisecondsSinceEpoch % 2147483647,
