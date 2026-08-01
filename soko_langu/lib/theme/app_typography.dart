@@ -123,4 +123,12 @@ class AppTypography {
         letterSpacing: 0.5,
         color: color,
       );
+
+  /// Monetary values — JetBrains Mono for optical-width consistency.
+  static TextStyle amount(Color color) => GoogleFonts.jetBrainsMono(
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.3,
+        color: color,
+      );
 }
