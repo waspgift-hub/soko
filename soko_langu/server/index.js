@@ -676,7 +676,17 @@ app.post('/api/boost-product', async (req, res) => {
         .then(() => console.log(`[USSD] Boost push sent for ${order_id}`))
         .catch((err) => {
           console.error(`[USSD] Boost ClickPesa error:`, err?.response?.data || err.message);
-          db.collection('transactions').doc(order_id).update({ ussdFailed: true }).catch(() => {});
+          const reason = err?.response?.data?.message || err?.message || 'USSD push haikufika';
+          db.collection('transactions').doc(order_id).get().then(txSnap => {
+            if (!txSnap.exists) return;
+            const txData = txSnap.data();
+            return txSnap.ref.update({
+              status: 'failed',
+              ussdFailed: true,
+              failureReason: reason,
+              completedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }).then(() => notifyBoostPaymentFailed(txData, reason));
+          }).catch(() => {});
         });
 
       res.json({
@@ -753,6 +763,35 @@ async function sendSms(phone, message) {
       console.error('sendSms error:', e.message);
     }
     return false;
+  }
+}
+
+// ─── Boost payment failure — SMS + OneSignal push + in-app notification ───
+async function notifyBoostPaymentFailed(tx, reason = '') {
+  try {
+    if (!tx || !tx.userId) return;
+    const title = 'Malipo ya Boost Yameshindikana';
+    const reasonText = reason ? `. Sababu: ${reason}` : '';
+    const body = `Boost ya ${tx.productName || 'bidhaa yako'} haikukamilika${reasonText}. Jaribu tena kwenye app.`;
+    await db.collection('notifications').add({
+      userId: tx.userId,
+      title,
+      body,
+      isRead: false,
+      type: 'boost',
+      data: { type: 'boost', status: 'failed', productId: tx.productId || '' },
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    await sendOneSignalNotification(tx.userId, title, body, { type: 'boost', status: 'failed', productId: tx.productId || '' });
+    const userSnap = await db.collection('users').doc(tx.userId).get();
+    const phone = userSnap.data()?.phone;
+    if (phone) {
+      const amount = tx.totalAmount || tx.amount || 0;
+      const msg = `Soko Vibe: Malipo ya Boost ya TZS ${amount.toLocaleString()} hayakukamilika${reasonText}. Jaribu tena kwenye app.`;
+      await sendSms(phone, msg);
+    }
+  } catch (e) {
+    console.error('notifyBoostPaymentFailed error:', e.message);
   }
 }
 
@@ -1848,8 +1887,10 @@ app.post('/api/clickpesa/webhook', verifyWebhook, async (req, res) => {
         completedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      // Notify buyer of failed payment
-      if (tx.buyerId) {
+      // Boost failure — SMS + push + in-app to the boost user (buyerId === userId)
+      if (tx.type === 'boost') {
+        await notifyBoostPaymentFailed(tx, payload.message || payload.error || 'payment failed');
+      } else if (tx.buyerId) {
         await db.collection('notifications').add({
           userId: tx.buyerId,
           title: 'Malipo Yameshindikana',
@@ -3158,7 +3199,9 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
       }
     } else if (paymentStatus === 'failed' || paymentStatus === 'cancelled') {
       await txDoc.ref.update({ status: 'failed', failureReason: 'Payment failed via webhook' });
-      if (tx.buyerId) {
+      if (tx.type === 'boost') {
+        await notifyBoostPaymentFailed(tx, 'payment failed via webhook');
+      } else if (tx.buyerId) {
         await db.collection('notifications').add({
           userId: tx.buyerId,
           title: 'Malipo Yameshindikana',
@@ -5100,6 +5143,7 @@ app.post('/api/cron/release-escrows', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     await releaseExpiredEscrows();
+    await failStalePendingBoosts();
     res.json({ success: true, message: 'Escrow release triggered' });
   } catch (e) {
     console.error('Cron release-escrows error:', e);
@@ -5691,12 +5735,43 @@ async function releaseExpiredEscrows() {
   }
 }
 
+// ─── Fail stale pending boost payments (USSD push ignored/declined/expired) ───
+async function failStalePendingBoosts() {
+  if (!db) return;
+  try {
+    const cutoff = new Date(Date.now() - 10 * 60 * 1000);
+    const snap = await db.collection('transactions')
+      .where('type', '==', 'boost')
+      .where('status', '==', 'pending')
+      .where('paymentMethod', '==', 'ussd_push')
+      .limit(50)
+      .get();
+    for (const doc of snap.docs) {
+      const tx = doc.data();
+      const createdAt = tx.createdAt?.toDate?.() || new Date(0);
+      if (createdAt.getTime() > cutoff.getTime()) continue;
+      if (tx.status !== 'pending') continue;
+      const reason = 'muda wa malipo umeisha';
+      await doc.ref.update({
+        status: 'failed',
+        failureReason: reason,
+        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      await notifyBoostPaymentFailed(tx, reason);
+    }
+  } catch (e) {
+    console.error('failStalePendingBoosts error:', e.message);
+  }
+}
+
 // Run every hour as fallback (cron-job.org can also call the endpoint)
 setInterval(releaseExpiredEscrows, 60 * 60 * 1000);
 setInterval(deactivateExpiredFlashSales, 60 * 60 * 1000);
+setInterval(failStalePendingBoosts, 5 * 60 * 1000);
 // Also run once on startup
 setTimeout(releaseExpiredEscrows, 60 * 1000);
 setTimeout(deactivateExpiredFlashSales, 60 * 1000);
+setTimeout(failStalePendingBoosts, 60 * 1000);
 
 // ============================================================
 // 💰 CLICKPESA BALANCE — Check ClickPesa wallet balance
