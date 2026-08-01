@@ -44,6 +44,31 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   Future<void> _detectLocation() async {
     setState(() => _detecting = true);
     try {
+      // Location service must be on and permission granted BEFORE positioning,
+      // otherwise geolocator throws PERMISSION_DENIED without any system dialog.
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (!mounted) return;
+        setState(() => _detecting = false);
+        _showError(context.tr('location_disabled'));
+        return;
+      }
+
+      LocationPermission perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
+        if (!mounted) return;
+        setState(() => _detecting = false);
+        _showError(
+          perm == LocationPermission.deniedForever
+              ? context.tr('location_denied')
+              : context.tr('location_permission_denied'),
+        );
+        return;
+      }
+
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );
@@ -55,7 +80,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _detecting = false);
-      _showError(context.tr('imeshindwa'));
+      _showError(context.tr('imeshindwa').replaceAll('{0}', 'location'));
     }
   }
 
