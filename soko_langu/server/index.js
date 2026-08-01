@@ -6792,7 +6792,8 @@ app.post('/api/orders/create', async (req, res) => {
       paymentMethod: paymentMethod || 'ussd_push',
     });
 
-    // Notify seller that a new order is pending
+    // Notify seller that a new order is pending — push + in-app + SMS so the
+    // seller always hears about it even with the app closed
     try {
       await db.collection('notifications').add({
         userId: sellerId,
@@ -6808,7 +6809,16 @@ app.post('/api/orders/create', async (req, res) => {
         `${buyerName || 'Mnunuzi'} ametuma agizo la ${productName}. Toa gharama ya usafirishaji sasa.`,
         { type: 'order', orderId: result.orderId, buyerId, productId }
       );
-    } catch (_) {}
+      const sellerSnap = await db.collection('users').doc(sellerId).get();
+      const sellerPhone = sellerSnap.data()?.phone;
+      if (sellerPhone) {
+        await sendSms(sellerPhone,
+          `SOKO VIBE: Agizo JIPYA #${result.orderId}\n${buyerName || 'Mnunuzi'} ametuma agizo la ${productName} (TSh ${result.totalAmount || productPrice}). Fungua app na utoe gharama ya usafirishaji.`
+        );
+      }
+    } catch (e) {
+      console.error('order create notify error:', e.message);
+    }
 
     res.json({ success: true, order: result });
   } catch (e) {
@@ -6843,6 +6853,44 @@ app.post('/api/orders/transition', async (req, res) => {
     }
 
     const result = await orderEngine.transitionOrder(db, orderId, newStatus, decoded.uid, { note });
+
+    // Real-time status notifications: seller hears on payment, buyer on dispatch
+    try {
+      if (newStatus === 'paid' || newStatus === 'escrow_hold') {
+        await db.collection('notifications').add({
+          userId: order.sellerId,
+          title: 'Malipo Yamekamilika!',
+          body: `${order.buyerName || 'Mnunuzi'} amelipia agizo la ${order.productName || ''}. Escrow imeshikilia fedha.`,
+          type: 'payment',
+          data: { type: 'order', orderId, buyerId: order.buyerId },
+          isRead: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        await sendOneSignalNotification(order.sellerId,
+          'Malipo Yamekamilika!',
+          `${order.buyerName || 'Mnunuzi'} amelipia agizo la ${order.productName || ''}. Escrow imeshikilia fedha.`,
+          { type: 'order', orderId, buyerId: order.buyerId }
+        );
+      } else if (newStatus === 'dispatched') {
+        await db.collection('notifications').add({
+          userId: order.buyerId,
+          title: 'Agizo Limetumwa!',
+          body: `${order.productName || ''} limetumwa — fuatilia usafirishaji kwenye app.`,
+          type: 'order',
+          data: { type: 'order', orderId, sellerId: order.sellerId },
+          isRead: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        await sendOneSignalNotification(order.buyerId,
+          'Agizo Limetumwa!',
+          `${order.productName || ''} limetumwa — fuatilia usafirishaji kwenye app.`,
+          { type: 'order', orderId, sellerId: order.sellerId }
+        );
+      }
+    } catch (e) {
+      console.error('order transition notify error:', e.message);
+    }
+
     res.json({ success: true, order: result });
   } catch (e) {
     console.error('/api/orders/transition error:', e.message);

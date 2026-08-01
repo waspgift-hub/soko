@@ -8,14 +8,14 @@ enum DsSkeletonShape { box, circle, line }
 /// same geometry as the content it stands in for.
 class DsSkeleton extends StatefulWidget {
   final DsSkeletonShape shape;
-  final double width;
-  final double height;
+  final double? width;
+  final double? height;
 
   const DsSkeleton({
     super.key,
     this.shape = DsSkeletonShape.box,
-    this.width = double.infinity,
-    this.height = 16,
+    this.width,
+    this.height,
   });
 
   @override

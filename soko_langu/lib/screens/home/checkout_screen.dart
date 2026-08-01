@@ -11,6 +11,7 @@ import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../widgets/glass_container.dart';
 import '../../widgets/location_map_widget.dart';
+import '../../widgets/ds/ds.dart';
 import '../../utils/network_error.dart';
 
 class CheckoutScreen extends StatefulWidget {
@@ -235,24 +236,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ],
           const SizedBox(height: 24),
 
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: ElevatedButton.icon(
-              onPressed: _processing ? null : _submitOrder,
-              icon: _processing
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.send_rounded, size: 20),
-              label: Text(
-                _processing ? context.tr('sending') : context.tr('flow_place_order'),
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: cs.primary,
-                foregroundColor: cs.surface,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                elevation: 0,
-              ),
-            ),
+          DsButton(
+            label: _processing ? context.tr('sending') : context.tr('flow_place_order'),
+            icon: Icons.send_rounded,
+            loading: _processing,
+            onPressed: _submitOrder,
           ),
           const SizedBox(height: 12),
           TextButton.icon(

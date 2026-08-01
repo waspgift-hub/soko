@@ -190,14 +190,23 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 48),
                 // Brand
                 Container(
-                  width: 72,
-                  height: 72,
+                  width: 84,
+                  height: 84,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(colors: [cs.primary, cs.primary.withValues(alpha: 0.7)]),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [BoxShadow(color: cs.primary.withValues(alpha: 0.3), blurRadius: 24, offset: const Offset(0, 8))],
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [BoxShadow(color: cs.primary.withValues(alpha: 0.35), blurRadius: 32, offset: const Offset(0, 10))],
                   ),
-                  child: Icon(Icons.store_rounded, color: cs.onPrimary, size: 36),
+                  padding: const EdgeInsets.all(10),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.asset(
+                      'assets/app_icon.png',
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          Icon(Icons.store_rounded, color: cs.onPrimary, size: 36),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 20),
                 Text(context.tr('app_name'), style: TextStyle(fontSize: AppFontSize.display, fontWeight: FontWeight.w800, color: cs.onSurface, letterSpacing: -1)),

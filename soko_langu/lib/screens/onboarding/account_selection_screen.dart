@@ -26,7 +26,15 @@ class AccountSelectionScreen extends StatelessWidget {
           child: Column(
             children: [
               const Spacer(flex: 2),
-              Icon(Icons.storefront_rounded, size: 72, color: cs.primary),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: Image.asset(
+                  'assets/app_icon.png',
+                  width: 72,
+                  height: 72,
+                  fit: BoxFit.cover,
+                ),
+              ),
               const SizedBox(height: 16),
               Text(
                 context.tr('onboarding_welcome_title'),

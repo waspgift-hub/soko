@@ -9,7 +9,6 @@ import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
 import 'package:open_file/open_file.dart';
 import '../../services/receipt_pdf_service.dart';
-import '../../services/localization_service.dart';
 import '../../widgets/order_timeline.dart';
 import '../../models/transaction_model.dart';
 import '../../extensions/context_tr.dart';
@@ -26,6 +25,25 @@ class ReceiptScreen extends StatefulWidget {
 
 class _ReceiptScreenState extends State<ReceiptScreen> {
   String _lang = 'sw'; // sw or en
+
+  /// Receipts resolve from `transactions` (legacy) or `orders` (current flow).
+  ///
+  /// New orders are created under `orders` by `/api/orders/create` and only
+  /// get a `transactions` twin after payment — so a single stream must cover
+  /// both, otherwise the receipt shows "order not found".
+  Stream<DocumentSnapshot<Map<String, dynamic>>> _orderStream() {
+    final fs = FirebaseFirestore.instance;
+    return fs
+        .collection('transactions')
+        .doc(widget.orderId)
+        .snapshots()
+        .asyncMap((tx) async {
+      if (tx.exists) return tx;
+      final order = await fs.collection('orders').doc(widget.orderId).get();
+      if (order.exists) return order;
+      return tx;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,7 +69,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
           ),
         ),
         child: StreamBuilder<DocumentSnapshot>(
-          stream: FirebaseFirestore.instance.collection('transactions').doc(widget.orderId).snapshots(),
+          stream: _orderStream(),
           builder: (context, snap) {
             if (!snap.hasData) return const Center(child: GoogleLoading());
             final d = snap.data!.data() as Map<String, dynamic>?;
@@ -71,7 +89,16 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             final buyerPhone = d['buyerPhone'] as String? ?? '';
             final sellerPhone = d['sellerPhone'] as String? ?? '';
             final sellerLocation = d['sellerLocation'] as String? ?? d['sellerShopLocation'] as String? ?? '';
-            final deliveryAddress = d['deliveryAddress'] as Map<String, dynamic>?;
+            final deliveryAddress = d['deliveryAddress'] as Map<String, dynamic>?
+                // orders-format docs keep address at top level
+                ?? (d['region'] != null
+                    ? {
+                        'region': d['region'],
+                        'district': d['district'],
+                        'street': d['street'],
+                        'landmarks': d['landmarks'],
+                      }
+                    : null);
             final dispatchProof = d['dispatchProof'] as Map<String, dynamic>?;
             final createdAt = d['createdAt'] is Timestamp ? (d['createdAt'] as Timestamp).toDate() : DateTime.now();
             final txStatus = MarketplaceTransaction.parseStatus(status);
@@ -337,7 +364,7 @@ Scan QR code for full receipt
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Image.asset('assets/soko_vibe_logo.png', height: 32, errorBuilder: (_, __, ___) =>
+              Image.asset('assets/app_icon.png', height: 32, errorBuilder: (_, __, ___) =>
                 Icon(Icons.store, size: 28, color: cs.primary)),
               const SizedBox(width: 8),
               Text(context.tr('soko_vibe_brand'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 2, color: cs.primary)),
@@ -400,7 +427,7 @@ Scan QR code for full receipt
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Image.asset('assets/soko_vibe_logo.png', height: 16, errorBuilder: (_, __, ___) => const SizedBox()),
+                Image.asset('assets/app_icon.png', height: 16, errorBuilder: (_, __, ___) => const SizedBox()),
                 const SizedBox(width: 4),
                 Text(context.tr('soko_vibe_brand'), style: TextStyle(fontSize: 8, fontWeight: FontWeight.w700, color: cs.primary, letterSpacing: 1)),
               ],
@@ -455,10 +482,13 @@ Scan QR code for full receipt
     switch (status) {
       case 'pending': return allSteps.take(1).toList();
       case 'awaiting_shipping_quote': return allSteps.take(2).toList();
+      case 'quoted': return allSteps.take(3).toList();
+      case 'paid': return allSteps.take(3).toList();
       case 'paid_escrow_held': case 'escrow_hold': return allSteps.take(3).toList();
       case 'dispatched': return allSteps.take(4).toList();
-      case 'delivered': return allSteps.take(5).toList();
+      case 'delivered': case 'confirmed': return allSteps.take(5).toList();
       case 'delivery_confirmed': case 'completed': return allSteps;
+      case 'cancelled': return [context.tr('order_placed', 'Order placed'), context.tr('cancelled_label', 'Imeghairiwa')];
       case 'failed': return [context.tr('order_placed', 'Order placed'), context.tr('payment_failed_short', 'Payment failed')];
       case 'refunded': return [context.tr('order_placed', 'Order placed'), context.tr('payment_received', 'Payment received'), context.tr('refunded', 'Refunded')];
       default: return [status];
@@ -514,19 +544,24 @@ Scan QR code for full receipt
 
   Color _statusColor(String status, ColorScheme cs) {
     switch (status) {
+      case 'quoted': return Colors.teal;
+      case 'paid': return Colors.indigo;
       case 'paid_escrow_held': case 'escrow_hold': return cs.tertiary;
       case 'dispatched': return Colors.orange;
-      case 'delivered': case 'delivery_confirmed': case 'completed': return cs.primary;
-      case 'failed': case 'refunded': return cs.error;
+      case 'delivered': case 'delivery_confirmed': case 'completed': case 'confirmed': return cs.primary;
+      case 'cancelled': case 'failed': case 'refunded': return cs.error;
       default: return cs.onSurfaceVariant;
     }
   }
 
   IconData _statusIcon(String status) {
     switch (status) {
+      case 'quoted': return Icons.request_quote;
+      case 'paid': return Icons.payments;
       case 'paid_escrow_held': case 'escrow_hold': return Icons.lock;
       case 'dispatched': return Icons.local_shipping;
-      case 'delivered': case 'delivery_confirmed': case 'completed': return Icons.check_circle;
+      case 'delivered': case 'delivery_confirmed': case 'completed': case 'confirmed': return Icons.check_circle;
+      case 'cancelled': return Icons.cancel;
       case 'failed': return Icons.cancel;
       case 'refunded': return Icons.money_off;
       default: return Icons.hourglass_empty;
@@ -537,10 +572,13 @@ Scan QR code for full receipt
     switch (status) {
       case 'awaiting_shipping_quote': return context.tr('awaiting_shipping_quote_label');
       case 'awaiting_payment': return context.tr('awaiting_payment_label');
+      case 'quoted': return context.tr('quoted_label', 'Nukuu Imepeanwa');
+      case 'paid': return context.tr('paid_label', 'Imelipwa');
       case 'paid_escrow_held': case 'escrow_hold': return context.tr('paid_escrow_label');
       case 'dispatched': return context.tr('shipped');
-      case 'delivery_confirmed': return context.tr('confirmed');
+      case 'delivery_confirmed': case 'confirmed': return context.tr('confirmed');
       case 'delivered': case 'completed': return context.tr('completed');
+      case 'cancelled': return context.tr('cancelled_label', 'Imeghairiwa');
       case 'disputed': return context.tr('disputed_label');
       case 'refunded': return context.tr('refunded');
       case 'failed': return context.tr('failed');

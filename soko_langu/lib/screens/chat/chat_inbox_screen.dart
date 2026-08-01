@@ -7,6 +7,7 @@ import '../../services/local_cache_service.dart';
 import '../../models/chat_room.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/verified_badge.dart';
+import '../../widgets/ds/ds.dart';
 
 class ChatInboxScreen extends StatefulWidget {
   const ChatInboxScreen({super.key});
@@ -88,6 +89,29 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                   return isBuyer ? r.unreadCountBuyer > 0 : r.unreadCountSeller > 0;
                 }).toList()
               : allRooms;
+          if (!snap.hasData) {
+            return ListView.builder(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
+              itemCount: 8,
+              itemBuilder: (context, _) => const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Row(
+                  children: [
+                    DsSkeleton(shape: DsSkeletonShape.circle, width: 52, height: 52),
+                    SizedBox(width: 14),
+                    Expanded(child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        DsSkeleton(width: 140, height: 14),
+                        SizedBox(height: 8),
+                        DsSkeleton(width: double.infinity, height: 12),
+                      ],
+                    )),
+                  ],
+                ),
+              ),
+            );
+          }
           if (rooms.isEmpty) {
             return Center(
               child: Column(
