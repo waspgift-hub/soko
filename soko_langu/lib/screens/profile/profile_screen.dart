@@ -130,7 +130,7 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
       return Scaffold(
         backgroundColor: cs.surface,
         body: _isLoading
-            ? const Center(child: GoogleLoading())
+            ? const _ProfileSkeleton()
             : Center(
                 child: Padding(
                   padding: const EdgeInsets.all(32),
@@ -384,7 +384,6 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
       _ActionItem(Icons.explore_rounded, context.tr('discovery'), () => context.push(AppRoutes.discovery)),
       _ActionItem(Icons.receipt_long_rounded, context.tr('my_purchases'), () => context.push(AppRoutes.myPurchases)),
       _ActionItem(Icons.verified_rounded, context.tr('kyc'), () => context.push(AppRoutes.kyc)),
-      _ActionItem(Icons.directions_car_rounded, context.tr('ride'), () => context.push(AppRoutes.rideHome)),
     ];
     if (isAdmin) {
       actions.add(_ActionItem(Icons.admin_panel_settings_rounded, context.tr('admin_dashboard'), () => context.push(AppRoutes.admin)));
@@ -686,6 +685,96 @@ class _AiChatBoxState extends State<_AiChatBox> with TickerProviderStateMixin {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ProfileSkeleton extends StatefulWidget {
+  const _ProfileSkeleton();
+
+  @override
+  State<_ProfileSkeleton> createState() => _ProfileSkeletonState();
+}
+
+class _ProfileSkeletonState extends State<_ProfileSkeleton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _shimmer;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500));
+    _shimmer = Tween<double>(begin: -1.5, end: 2.5).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOutSine),
+    );
+    _ctrl.repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final base = isDark ? Colors.grey[850]! : Colors.grey[300]!;
+    final highlight = isDark ? Colors.grey[700]! : Colors.grey[100]!;
+
+    Widget block(double w, double h, [double radius = 8]) {
+      return Container(
+        width: w,
+        height: h,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(radius),
+          gradient: LinearGradient(
+            colors: [base, highlight, base],
+            stops: [
+              (_shimmer.value - 0.35).clamp(0.0, 1.0),
+              _shimmer.value.clamp(0.0, 1.0),
+              (_shimmer.value + 0.35).clamp(0.0, 1.0),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+      );
+    }
+
+    return AnimatedBuilder(
+      animation: _shimmer,
+      builder: (context, _) {
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          physics: const NeverScrollableScrollPhysics(),
+          child: Column(
+            children: [
+              block(96, 96, 48),
+              const SizedBox(height: 16),
+              block(180, 16),
+              const SizedBox(height: 8),
+              block(120, 12),
+              const SizedBox(height: 28),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [block(70, 14), block(70, 14), block(70, 14)],
+              ),
+              const SizedBox(height: 28),
+              GridView.count(
+                crossAxisCount: 3,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                childAspectRatio: 1.0,
+                children: List.generate(6, (_) => block(double.infinity, double.infinity, 16)),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

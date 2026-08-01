@@ -209,17 +209,6 @@ exports.mongikeWebhook = functions.https.onRequest(async (req, res) => {
   }
 });
 
-// ─── RIDE-HAILING MODULE ───
-// All ride-hailing functions are in ride_functions.js and ride/ directory.
-// Ride data is stored in isolated ride_* collections in Firestore.
-// No cross-collection reads from marketplace data.
-const rideFunctions = require('./ride_functions');
-Object.keys(rideFunctions).forEach((key) => {
-  if (!exports[key]) {
-    exports[key] = rideFunctions[key];
-  }
-});
-
 // ─── GLOBAL SEARCH MODULE ───
 // Search indexers run via Firestore triggers in search/indexer.js.
 // Query functions are in search_functions.js.

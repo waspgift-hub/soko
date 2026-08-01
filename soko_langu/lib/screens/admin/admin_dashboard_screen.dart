@@ -19,7 +19,6 @@ import 'admin_ads_management_screen.dart';
 import 'admin_transactions_tab.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
-import 'admin_rides_tab.dart';
 
 class BarEntry {
   final DateTime date;
@@ -292,7 +291,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               text: context.tr('transactions'),
             ),
             Tab(icon: const Icon(Icons.chat_bubble_outline), text: context.tr('chats')),
-            Tab(icon: const Icon(Icons.directions_car), text: context.tr('rides')),
           ],
         ),
       ),
@@ -311,7 +309,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             _buildPayoutTab(),
             _buildTransactionsTab(),
             _buildChatsTab(),
-            _buildRidesTab(),
           ],
         ),
       ),
@@ -2318,10 +2315,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   Widget _buildPayoutTab() {
     return const AdminWalletScreen(embedded: true);
-  }
-
-  Widget _buildRidesTab() {
-    return const AdminRidesTab();
   }
 
   Widget _buildChatsTab() {

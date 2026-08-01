@@ -226,8 +226,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           Row(
             children: [
               Expanded(child: _actionButton(cs, Icons.flash_on, context.tr('unda_flash_sale'), () => context.push(AppRoutes.createFlashSale), cs.trendingOrange)),
-              const SizedBox(width: 8),
-              Expanded(child: _actionButton(cs, Icons.directions_car_rounded, context.tr('ride'), () => context.push(AppRoutes.rideHome), cs.premiumTeal)),
             ],
           ),
         ],

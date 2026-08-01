@@ -24,6 +24,7 @@ class SellerOrdersScreen extends StatefulWidget {
 class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
   String _filter = 'all';
   String? _quotingOrderId;
+  String? _dispatchingOrderId;
 
   @override
   Widget build(BuildContext context) {
@@ -171,6 +172,27 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                               _infoRow(cs, Icons.payments, context.tr('total_payment'),
                                   'TZS ${NumberFormat('#,###').format(totalAmount)}',
                                   bold: true),
+                            if (status == 'escrow_hold') ...[
+                              SizedBox(
+                                width: double.infinity,
+                                height: 40,
+                                child: FilledButton.icon(
+                                  onPressed: _dispatchingOrderId == txId
+                                      ? null
+                                      : () => _showDispatchDialog(txId, d),
+                                  icon: _dispatchingOrderId == txId
+                                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                                      : const Icon(Icons.local_shipping_outlined, size: 16),
+                                  label: Text(context.tr('mark_shipped')),
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: cs.primary,
+                                    foregroundColor: cs.surface,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                            ],
                             const SizedBox(height: 12),
                             Row(
                               children: [
@@ -592,6 +614,154 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
       if (mounted) _showError(translateError(e));
     }
     setState(() => _quotingOrderId = null);
+  }
+
+  Future<void> _showDispatchDialog(String txId, Map<String, dynamic> d) async {
+    final busCtrl = TextEditingController();
+    final plateCtrl = TextEditingController();
+    final trackCtrl = TextEditingController();
+    final noteCtrl = TextEditingController();
+    final existingCost = (d['shippingCost'] as num?)?.toDouble() ?? 0;
+    final costCtrl = TextEditingController(
+      text: existingCost > 0 ? existingCost.toStringAsFixed(0) : '',
+    );
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('dispatch_title')),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: busCtrl,
+                decoration: InputDecoration(
+                  labelText: context.tr('bus_name'),
+                  hintText: 'Mf: Scandinavia, Kilimanjaro',
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: plateCtrl,
+                decoration: InputDecoration(
+                  labelText: context.tr('plate_number'),
+                  hintText: 'Mf: T 123 ABC',
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: trackCtrl,
+                decoration: InputDecoration(
+                  labelText: context.tr('tracking_number'),
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: noteCtrl,
+                decoration: InputDecoration(
+                  labelText: context.tr('dispatch_note'),
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              if (existingCost <= 0) ...[
+                const SizedBox(height: 12),
+                TextField(
+                  controller: costCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: context.tr('shipping_cost'),
+                    prefixText: 'TZS ',
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(context.tr('cancel')),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (busCtrl.text.trim().isEmpty || plateCtrl.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(context.tr('dispatch_required_fields'))),
+                );
+                return;
+              }
+              Navigator.pop(ctx, true);
+            },
+            child: Text(context.tr('mark_shipped')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final parsedCost = existingCost > 0 ? null : double.tryParse(costCtrl.text.trim());
+    await _submitDispatch(
+      txId,
+      busCtrl.text.trim(),
+      plateCtrl.text.trim(),
+      trackCtrl.text.trim(),
+      noteCtrl.text.trim(),
+      parsedCost,
+    );
+  }
+
+  Future<void> _submitDispatch(
+    String txId,
+    String busName,
+    String plateNumber,
+    String trackingNumber,
+    String note,
+    double? cost,
+  ) async {
+    setState(() => _dispatchingOrderId = txId);
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      final token = await user.getIdToken();
+
+      // Persist a previously missing delivery cost before dispatching.
+      if (cost != null && cost > 0) {
+        await FirebaseFirestore.instance
+            .collection('transactions')
+            .doc(txId)
+            .update({'shippingCost': cost});
+      }
+
+      final resp = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/escrow/dispatch'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'orderId': txId,
+          'userId': user.uid,
+          'busName': busName,
+          'plateNumber': plateNumber,
+          'trackingNumber': trackingNumber,
+          'note': note,
+        }),
+      );
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      if (resp.statusCode != 200 || data['success'] != true) {
+        if (mounted) _showError(data['error'] ?? 'Failed to mark shipped');
+      } else {
+        if (mounted) _showSuccess(context.tr('order_shipped_success'));
+      }
+    } catch (e) {
+      if (mounted) _showError(translateError(e));
+    }
+    if (mounted) setState(() => _dispatchingOrderId = null);
   }
 
   void _showError(String msg) {

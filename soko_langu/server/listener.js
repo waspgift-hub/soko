@@ -26,7 +26,6 @@ const ONE_SIGNAL_REST_API_KEY = process.env.ONE_SIGNAL_REST_API_KEY;
 function getChannelId(data = {}) {
   const type = (data && data.type) || 'general';
   if (type === 'chat' || type === 'group_chat') return 'chat_messages_v5';
-  if (type.startsWith('ride')) return 'ride_notifications_v5';
   if (type === 'system' || type === 'admin' || type === 'alert') return 'system_alerts_v5';
   if (['payment','order','payout','dispute','refund','withdrawal',
        'escrow_release','auto_payout','escrow_auto_release',
