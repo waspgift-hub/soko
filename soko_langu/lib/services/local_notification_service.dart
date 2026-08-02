@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:ui' show Color;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
@@ -8,6 +9,9 @@ class LocalNotificationService {
 
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
   bool _initialized = false;
+
+  /// Routes local heads-up taps to the same handlers OneSignal uses.
+  static void Function(Map<String, dynamic> data)? onTap;
 
   Future<void> initialize() async {
     if (_initialized) return;
@@ -30,7 +34,15 @@ class LocalNotificationService {
   }
 
   void _onNotificationTap(NotificationResponse response) {
-    // payload is handled by OneSignal click listener
+    final payload = response.payload;
+    if (payload == null || payload.isEmpty) return;
+    try {
+      final data = jsonDecode(payload) as Map<String, dynamic>;
+      if (response.actionId != null) data['action'] = response.actionId;
+      onTap?.call(data);
+    } catch (_) {
+      // malformed payload — ignore
+    }
   }
 
   @pragma('vm:entry-point')
@@ -91,6 +103,7 @@ class LocalNotificationService {
     String channelId = 'general_notifications_v5',
     String? payload,
     bool fullScreen = false,
+    List<AndroidNotificationAction> actions = const [],
   }) async {
     final category = fullScreen ? AndroidNotificationCategory.alarm : null;
 
@@ -110,6 +123,7 @@ class LocalNotificationService {
       ledOnMs: 1000,
       ledOffMs: 500,
       channelShowBadge: true,
+      actions: actions,
     );
 
     await _plugin.show(

@@ -166,6 +166,19 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ─── BUYER REQUESTS (Natafuta Bidhaa) ───────────────────
+    // Sellers read all requests; contact stays locked until they unlock it.
+    // Unlock only ever mutates unlockedBy (arrayUnion of the seller uid).
+    match /BuyerRequests/{requestId} {
+      allow read: if isSignedIn() && notSuspended();
+      allow create: if isSignedIn() && notSuspended() && request.resource.data.buyerUid == request.auth.uid;
+      allow update: if isAdmin() || (
+        isSignedIn() && notSuspended()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unlockedBy'])
+      );
+      allow delete: if isAdmin();
+    }
+
     // ─── NOTIFICATIONS ──────────────────────────────────────
     match /notifications/{notifId} {
       allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());

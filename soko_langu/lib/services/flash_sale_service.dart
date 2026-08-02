@@ -24,18 +24,15 @@ class FlashSaleService {
     return _db
         .collection('flash_sales')
         .where('isActive', isEqualTo: true)
-        .where(
-          'endTime',
-          isGreaterThanOrEqualTo: now.subtract(
-            const Duration(hours: 1),
-          ),
-        )
         .snapshots()
         .map((snap) {
           try {
             return snap.docs
                 .map((doc) => FlashSale.fromFirestore(doc))
-                .where((s) => !s.isExpired && !s.isUpcoming)
+                .where((s) =>
+                    !s.isExpired &&
+                    !s.isUpcoming &&
+                    s.endTime.isAfter(now.subtract(const Duration(hours: 1))))
                 .toList()
               ..sort((a, b) => a.endTime.compareTo(b.endTime));
           } catch (e) {
@@ -67,13 +64,12 @@ class FlashSaleService {
     return _db
         .collection('flash_sales')
         .where('productId', isEqualTo: productId)
-        .where('isActive', isEqualTo: true)
         .snapshots()
         .map((snap) {
       if (snap.docs.isEmpty) return null;
       final sales = snap.docs
           .map((doc) => FlashSale.fromFirestore(doc))
-          .where((s) => !s.isExpired)
+          .where((s) => s.isActive && !s.isExpired)
           .toList();
       if (sales.isEmpty) return null;
       return sales.first;
@@ -182,12 +178,11 @@ class FlashSaleService {
     final snap = await _db
         .collection('flash_sales')
         .where('productId', isEqualTo: productId)
-        .where('isActive', isEqualTo: true)
         .get();
     final now = DateTime.now();
     return snap.docs.any((doc) {
       final sale = FlashSale.fromFirestore(doc);
-      return sale.endTime.isAfter(now);
+      return sale.isActive && sale.endTime.isAfter(now);
     });
   }
 
