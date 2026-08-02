@@ -338,7 +338,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     setState(() => _disputingTxId = txId);
     try {
       final resp = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/dispute/create'),
+        Uri.parse('${ApiConfig.baseUrl}/api/escrow/dispute'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'orderId': txId, 'userId': user.uid}),
       );

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -382,14 +383,14 @@ class _WalletScreenState extends State<WalletScreen> {
                 controller: amtCtrl,
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
-                  labelText: context.tr('phone'),
+                  labelText: context.tr('amount'),
                   border: const OutlineInputBorder(),
-                  hintText: '2557XXXXXXXX',
+                  prefixText: 'TZS ',
                 ),
                 validator: (v) {
                   if (v == null || v.isEmpty) return context.tr('required_field');
-                  if (!v.startsWith('255')) return context.tr('must_start_255');
-                  if (v.length < 10) return context.tr('too_short_input');
+                  final n = int.tryParse(v);
+                  if (n == null || n < 500) return context.trParams('minimum_tzs', {'amount': '500'});
                   return null;
                 },
               ),
@@ -769,14 +770,54 @@ class _WalletScreenState extends State<WalletScreen> {
                     if (status == 'pending')
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Text(
-                          billPayNumber.isNotEmpty
-                              ? 'Namba: $billPayNumber | Kiasi: TZS ${NumberFormat('#,###', 'en').format(totalCharge)}'
-                              : 'Tumia njia ya BillPay na ufuate hatua kwenye M-Pesa yako.',
-                          style: TextStyle(
-                              fontSize: 13,
-                              color: Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.6)),
-                          textAlign: TextAlign.center,
+                        child: Column(
+                          children: [
+                            if (billPayNumber.isNotEmpty) ...[
+                              Text(
+                                'Namba ya BillPay',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.6)),
+                              ),
+                              const SizedBox(height: 6),
+                              InkWell(
+                                onTap: () {
+                                  Clipboard.setData(ClipboardData(text: billPayNumber));
+                                  ScaffoldMessenger.of(ctx).showSnackBar(
+                                    SnackBar(content: Text(tr('copied_to_clipboard'))),
+                                  );
+                                },
+                                borderRadius: BorderRadius.circular(8),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        billPayNumber,
+                                        style: const TextStyle(
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: 1.5),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Icon(Icons.copy, size: 18, color: Theme.of(ctx).colorScheme.primary),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                            ],
+                            Text(
+                              billPayNumber.isNotEmpty
+                                  ? 'Kiasi: TZS ${NumberFormat('#,###', 'en').format(totalCharge)}'
+                                  : 'Tumia njia ya BillPay na ufuate hatua kwenye M-Pesa yako.',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  color: Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.6)),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
                         ),
                       ),
                     const SizedBox(height: 24),

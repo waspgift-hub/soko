@@ -941,6 +941,82 @@ app.post('/api/auth/verify-otp', async (req, res) => {
 });
 
 // ============================================================
+// 🔐 EMAIL OTP — SEND (6-digit code sent to the email address)
+// ============================================================
+app.post('/api/auth/send-email-otp', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const cleanEmail = email.trim().toLowerCase();
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashed = crypto.createHash('sha256').update(otp).digest('hex');
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+    // Same otp_codes collection as phone OTP, keyed by the email address
+    await db.collection('otp_codes').doc(cleanEmail).set({
+      otpHash: hashed,
+      expiresAt,
+      used: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // SMTP directly to the address (unlike sendEmailSmtp, the email may
+    // not be a registered Firebase user yet at this stage)
+    const subject = 'Soko Vibe — OTP yako';
+    const html = `<html><body style="font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto"><h2 style="color:#40916C">Soko Vibe — Uthibitisho wa Barua Pepe</h2><p>OTP yako ni:</p><p style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#40916C">${otp}</p><p>Inaisha kwa dakika 10. Usimshiriki mtu yeyote.</p><hr style="border:none;border-top:1px solid #e0e0e0;margin:20px 0"/><p style="color:#999;font-size:12px">Soko Vibe</p></body></html>`;
+
+    try {
+      await smtpTransporter.sendMail({
+        from: process.env.SMTP_FROM || 'Soko Vibe <waspgift@gmail.com>',
+        to: cleanEmail,
+        subject,
+        html,
+      });
+      console.log(`[SMTP] email OTP sent to ${cleanEmail}`);
+    } catch (e) {
+      console.error('/api/auth/send-email-otp SMTP error:', e.message);
+      return res.status(502).json({ error: 'Imeshindwa kutuma OTP kwa barua pepe. Jaribu tena.' });
+    }
+
+    res.json({ sent: true, message: 'OTP imetumwa kwa barua pepe yako' });
+  } catch (e) {
+    console.error('/api/auth/send-email-otp error:', e.message);
+    res.status(500).json({ error: 'Imeshindwa kutuma OTP. Jaribu tena.' });
+  }
+});
+
+// ============================================================
+// 🔐 EMAIL OTP — VERIFY
+// ============================================================
+app.post('/api/auth/verify-email-otp', async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) return res.status(400).json({ error: 'Email and OTP are required' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const cleanEmail = email.trim().toLowerCase();
+    const doc = await db.collection('otp_codes').doc(cleanEmail).get();
+    if (!doc.exists) return res.status(400).json({ error: 'Hakuna OTP. Tuma mpya.' });
+
+    const data = doc.data();
+    if (data.used) return res.status(400).json({ error: 'OTP tayari imetumika' });
+    if (Date.now() > data.expiresAt) return res.status(400).json({ error: 'OTP imeisha muda. Tuma mpya.' });
+
+    const hashed = crypto.createHash('sha256').update(otp).digest('hex');
+    if (hashed !== data.otpHash) return res.status(400).json({ error: 'OTP si sahihi' });
+
+    await doc.ref.update({ used: true });
+
+    res.json({ valid: true });
+  } catch (e) {
+    console.error('/api/auth/verify-email-otp error:', e.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================================
 // 🔐 AUTH — Check if phone already registered
 // ============================================================
 app.post('/api/auth/check-phone', async (req, res) => {
@@ -6573,6 +6649,15 @@ app.post('/api/wallet/purchase', async (req, res) => {
       return res.status(400).json({ error: 'Insufficient wallet balance' });
     }
 
+    // Guard against paying the same order twice — only awaiting_payment orders
+    // can still be paid (post-quote); anything already escrowed is a duplicate.
+    if (orderId) {
+      const existingTx = await db.collection('transactions').doc(orderId).get();
+      if (existingTx.exists && !['awaiting_payment', 'pending', 'quoted'].includes(existingTx.data().status)) {
+        return res.status(400).json({ error: 'Order already paid' });
+      }
+    }
+
     // Check seller is not suspended
     const sellerDoc = await db.collection('users').doc(sellerId).get();
     if (sellerDoc.exists && sellerDoc.data().isSuspended === true) {
@@ -6597,8 +6682,12 @@ app.post('/api/wallet/purchase', async (req, res) => {
     const autoReleaseDays = escrowDeliveryType === 'regional' ? ESCROW_REGIONAL_DAYS : ESCROW_LOCAL_DAYS;
     const escrowExpiry = new Date(Date.now() + autoReleaseDays * 24 * 60 * 60 * 1000);
 
-    // Create transaction record — money goes to escrow, not straight to seller
-    const txRef = db.collection('transactions').doc();
+    // Create transaction record — money goes to escrow, not straight to seller.
+    // Reuse the mirrored order doc (from /api/orders/create) when an orderId is
+    // supplied, so a wallet purchase doesn't create a duplicate transaction.
+    const txRef = orderId
+      ? db.collection('transactions').doc(orderId)
+      : db.collection('transactions').doc();
     await txRef.set({
       type: 'purchase',
       buyerId, buyerName: buyerName || '',
@@ -6624,7 +6713,7 @@ app.post('/api/wallet/purchase', async (req, res) => {
       escrowExpiresAt: admin.firestore.Timestamp.fromDate(escrowExpiry),
       orderId: orderId || '',
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    }, orderId ? { merge: true } : undefined);
 
     // Hold the money in seller's escrow until delivery is confirmed
     await db.collection('users').doc(sellerId).set({

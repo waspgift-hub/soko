@@ -87,7 +87,7 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
                 _totalPayouts =
                     (result['totalPaidOut'] as num?)?.toDouble() ?? 0;
                 _actualClickpesaBalance =
-                    (result['actualMongikeBalance'] as num?)?.toDouble() ?? 0;
+                    (result['actualClickPesaBalance'] as num?)?.toDouble() ?? 0;
                 _clickpesaBalance = _actualClickpesaBalance > 0 ? _actualClickpesaBalance : _availableBalance;
               });
             if (mounted) setState(() => _loading = false);

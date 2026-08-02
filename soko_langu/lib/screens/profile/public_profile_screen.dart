@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart'; // ignore: unused_import
 import '../../services/user_service.dart';
 import '../../services/product_service.dart';
 import '../../services/rating_service.dart';
@@ -20,6 +19,7 @@ import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../chat/chat_navigation.dart';
 import '../../widgets/location_map_widget.dart';
+import '../../widgets/call_seller_button.dart';
 
 class PublicProfileScreen extends StatefulWidget {
   final String userId;
@@ -333,6 +333,13 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                       ),
                     ),
                   ],
+                ),
+              ],
+              if (profile?.phone.isNotEmpty == true) ...[
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: 220,
+                  child: CallSellerButton(phone: profile!.phone, height: 46),
                 ),
               ],
               const SizedBox(height: 12),
