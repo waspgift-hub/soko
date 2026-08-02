@@ -636,11 +636,12 @@ NOTE: functions/notification/sender.js inatuma contacts kama SINGLE string
    fallback bado haijumuishi AdMob.
 5. functions/notification/sender.js sasa inatuma contacts kama ARRAY ya
    namba za local 07 + sender fallback SOKOVIBE→MESEJI — FIXED.
-6. Music/streaming (playlists, gifts, coins, streamer earnings): STRINGS
-   tu kwenye localization — HAIJATEKELEZWA (no code).
-7. Cart: localization strings zipo, feature HAIPO (Buy Now moja kwa moja).
-8. Minimum withdrawal haipo kwenye UI — payout ya kiasi kidogo ina percent
-   kubwa (tazama 8.8).
+6. Music/streaming (playlists, gifts, coins, streamer earnings): HAIJATEKELEZWA
+   (no code) — localization strings zimeondolewa.
+7. Cart: feature HAIPO (Buy Now moja kwa moja) — localization strings
+   zimeondolewa.
+8. Minimum withdrawal TZS 2,000 sasa ina-enforced kwenye UI validator
+   (wallet_screen _showWithdrawDialog).
 9. Meseji outage (2026-07/08): SMS zote 500 hata manual — provider side.
 10. ClickPesa pre-KYC limit: TZS 100,000 total (payouts zinasimama) —
     KYC TZS 25,000 inahitajika kabla ya biashara halisi.

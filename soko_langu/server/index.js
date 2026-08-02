@@ -2157,6 +2157,7 @@ app.post('/api/escrow/cancel', async (req, res) => {
 
     const buyerPhone = tx.buyerPhone || '';
     const productPrice = tx.productPrice || 0;
+    const shippingCost = tx.shippingCost || 0;
     const sellerId = tx.sellerId;
     const sellerReceives = tx.sellerReceives || 0;
     const productName = tx.productName || 'Product';
@@ -2165,11 +2166,12 @@ app.post('/api/escrow/cancel', async (req, res) => {
       return res.status(400).json({ error: 'Buyer phone not found for refund' });
     }
 
-    if (productPrice <= DEFAULT_PAYOUT_FEE) {
+    if (productPrice + shippingCost <= DEFAULT_PAYOUT_FEE) {
       return res.status(400).json({ error: `Refund amount must exceed fee of TZS ${DEFAULT_PAYOUT_FEE.toLocaleString()}` });
     }
 
-    const refundAmount = productPrice - DEFAULT_PAYOUT_FEE;
+    // Refund includes the shipping cost the buyer paid, minus the payout fee
+    const refundAmount = productPrice + shippingCost - DEFAULT_PAYOUT_FEE;
 
     // Refund minus payout fee to buyer via ClickPesa
     try {

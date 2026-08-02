@@ -113,6 +113,19 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
         }
       }
 
+      // AdMob revenue — mirror server finance-summary: latest manually entered
+      // monthly amount from admob_earnings (actualAdRevenue)
+      double adRevenue = 0;
+      final admobSnap = await FirebaseFirestore.instance
+          .collection('admob_earnings')
+          .orderBy('month', descending: true)
+          .limit(1)
+          .get();
+      if (admobSnap.docs.isNotEmpty) {
+        adRevenue =
+            (admobSnap.docs.first.data()['amount'] as num?)?.toDouble() ?? 0;
+      }
+
       double processed = 0;
       final txSnap = await FirebaseFirestore.instance
           .collection('transactions')
@@ -145,7 +158,7 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
         }
       }
 
-      final totalBalance = commissions + boostRevenue;
+      final totalBalance = commissions + boostRevenue + adRevenue;
       double mongikeBalanceCalc = processed - (payouts + adminPayouts);
       if (mongikeBalanceCalc < 0) mongikeBalanceCalc = 0;
       final available = totalBalance - adminWithdrawn;
