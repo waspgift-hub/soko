@@ -21,17 +21,38 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
+  int _maxVisitedIndex = 0;
   Timer? _adTimer;
   final UserService _userService = UserService();
   String? _profilePhotoUrl;
 
-  final List<Widget> _screens = [
-    const HomeScreen(),
-    const DiscoveryScreen(),
-    const SizedBox.shrink(),
-    const ChatInboxScreen(),
-    const ProfilePage(),
-  ];
+  // Tabs are built lazily on first visit (IndexedStack keeps them alive
+  // afterwards). Building all of them at app start means offstage subtrees
+  // (BackdropFilter-heavy, e.g. ProfilePage) get composited before they are
+  // ever visible, which can leave a stale/grey frame when first selected.
+  Widget _buildTabScreen(int index) {
+    switch (index) {
+      case 0:
+        return const HomeScreen();
+      case 1:
+        return const DiscoveryScreen();
+      case 2:
+        return const SizedBox.shrink();
+      case 3:
+        return const ChatInboxScreen();
+      case 4:
+        return const ProfilePage();
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  void _selectTab(int index) {
+    setState(() {
+      _currentIndex = index;
+      if (index > _maxVisitedIndex) _maxVisitedIndex = index;
+    });
+  }
 
   @override
   void initState() {
@@ -78,7 +99,15 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         children: [
           if (isDesktop) _buildSidebar(cs),
           Expanded(
-            child: IndexedStack(index: _currentIndex, children: _screens),
+            child: IndexedStack(
+              index: _currentIndex,
+              // RepaintBoundary isolates each tab's compositor layer so a
+              // BackdropFilter in one tab cannot stall another tab's paint
+              children: [
+                for (var i = 0; i <= _maxVisitedIndex; i++)
+                  RepaintBoundary(key: ValueKey('tab_$i'), child: _buildTabScreen(i)),
+              ],
+            ),
           ),
         ],
       ),
@@ -172,7 +201,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final isSelected = _currentIndex == index;
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _currentIndex = index),
+        onTap: () => _selectTab(index),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
@@ -215,7 +244,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final isSelected = _currentIndex == 4;
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _currentIndex = 4),
+        onTap: () => _selectTab(4),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
@@ -383,7 +412,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                       color: Colors.transparent,
                       child: InkWell(
                         borderRadius: BorderRadius.circular(12),
-                        onTap: () => setState(() => _currentIndex = item.index),
+                        onTap: () => _selectTab(item.index),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 14,
