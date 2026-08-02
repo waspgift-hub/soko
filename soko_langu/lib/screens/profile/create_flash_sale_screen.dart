@@ -9,6 +9,7 @@ import '../../services/product_service.dart';
 import '../../services/flash_sale_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
+import '../../widgets/rewarded_ad_gate.dart';
 
 class CreateFlashSaleScreen extends StatefulWidget {
   const CreateFlashSaleScreen({super.key});
@@ -302,6 +303,15 @@ class _CreateFlashSaleScreenState extends State<CreateFlashSaleScreen> {
       );
       return;
     }
+
+    // Mandatory rewarded ad before the product can be featured as a Flash Sale.
+    final earned = await RewardedAdGate.require(
+      context,
+      'create_flash_sale_${_selectedProduct!.id}',
+      title: context.tr('unda_flash_sale'),
+      message: context.tr('flash_sale_ad_msg'),
+    );
+    if (!earned || !mounted) return;
 
     setState(() => _isCreating = true);
 
