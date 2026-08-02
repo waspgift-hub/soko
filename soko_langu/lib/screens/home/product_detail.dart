@@ -26,6 +26,7 @@ import '../../theme/app_colors.dart';
 import '../../services/notification_service.dart';
 import '../chat/chat_navigation.dart';
 import '../../widgets/ds/ds.dart';
+import '../../widgets/call_seller_button.dart';
 
 // ignore: unused_element
 Color? _hexToColor(String? hex) {
@@ -743,7 +744,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                         ),
                                         const SizedBox(height: 6),
                                         if (currentUser == null)
-                                          Row(
+                                          Wrap(
+                                            spacing: 8,
+                                            runSpacing: 8,
+                                            crossAxisAlignment:
+                                                WrapCrossAlignment.center,
                                             children: [
                                               TextButton(
                                                 onPressed: () => context.push(
@@ -753,7 +758,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                                   context.tr('view_store'),
                                                 ),
                                               ),
-                                              const SizedBox(width: 8),
+                                              CallSellerButton(
+                                                phone:
+                                                    _sellerProfile?.phone ??
+                                                        '',
+                                                height: 40,
+                                                fontSize: 13,
+                                              ),
                                               ElevatedButton.icon(
                                                 style: ElevatedButton.styleFrom(
                                                   backgroundColor:
@@ -775,7 +786,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                             ],
                                           )
                                         else if (currentUser.uid != sellerId)
-                                          Row(
+                                          Wrap(
+                                            spacing: 8,
+                                            runSpacing: 8,
+                                            crossAxisAlignment:
+                                                WrapCrossAlignment.center,
                                             children: [
                                               TextButton(
                                                 onPressed: () {
@@ -794,7 +809,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                                   context.tr('view_store'),
                                                 ),
                                               ),
-                                              const SizedBox(width: 8),
+                                              CallSellerButton(
+                                                phone:
+                                                    _sellerProfile?.phone ??
+                                                        '',
+                                                height: 40,
+                                                fontSize: 13,
+                                              ),
                                               ElevatedButton.icon(
                                                 style: ElevatedButton.styleFrom(
                                                   backgroundColor:

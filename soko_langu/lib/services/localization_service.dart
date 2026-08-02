@@ -837,6 +837,8 @@ class LocalizationService {
       'pending_kyc': 'KYC Inasubiri',
       'no_pending_kyc': 'Hakuna KYC inayosubiri',
       'phone_not_found': 'Namba ya Simu Haikupatikana',
+      'call_seller': 'Mpigie Muuzaji',
+      'no_dialer_app': 'Hakuna app ya kupiga simu kwenye kifaa hiki',
       // 'pp_last_updated' defined in the Privacy Policy section below
       'price_drop': 'Kushuka kwa Bei',
       'refund_to_buyer': 'Rejesha Kwa Mnunuzi',
@@ -2486,6 +2488,8 @@ class LocalizationService {
       'pending_kyc': 'Pending KYC',
       'no_pending_kyc': 'No pending KYC',
       'phone_not_found': 'Phone Not Found',
+      'call_seller': 'Call Seller',
+      'no_dialer_app': 'No dialer app found on this device',
       // 'pp_last_updated' defined in the Privacy Policy section below
       'price_drop': 'Price Drop',
       'refund_to_buyer': 'Refund to Buyer',

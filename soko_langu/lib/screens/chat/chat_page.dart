@@ -10,6 +10,7 @@ import '../../models/message_model.dart';
 import '../../extensions/context_tr.dart';
 
 import '../../app/routes.dart';
+import '../../widgets/call_seller_button.dart';
 
 class ChatPage extends StatefulWidget {
   final String receiverId;
@@ -370,6 +371,7 @@ class _ChatPageState extends State<ChatPage> {
           ),
         ),
         actions: [
+          CallSellerButton(phone: _receiverPhone ?? '', iconOnly: true),
           IconButton(
             icon: const Icon(Icons.chat, color: Color(0xFF25D366)),
             tooltip: context.tr('whatsapp'),

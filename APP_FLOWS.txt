@@ -1,0 +1,724 @@
+====================================================================
+ SOKO VIBE (Soko Langu) — FULL APP FLOW DOCUMENTATION
+====================================================================
+App:     Soko Vibe (soko_langu) — E-commerce / Soko la mtandaoni (Tanzania)
+Stack:   Flutter (Android + iOS) | Node.js Express (server/index.js, Render)
+         Firebase (Auth, Firestore) | OneSignal (push) | ClickPesa (malipo)
+         Meseji/SOKOVIBE (SMS) | AdMob (ads) | Groq (AI) | Google Maps
+Server:  https://soko-langu-server.onrender.com
+Doc ver: 2026-08-02 (inayofuata mabadiliko ya hivi karibuni: Mpigie Muuzaji,
+         wallet USSD fix, BillPay copy control number)
+
+====================================================================
+1. APP ARCHITECTURE OVERVIEW
+====================================================================
+- Flutter app in soko_langu/lib/; server in soko_langu/server/.
+- Auth: Firebase Auth (email/password, magic link, Google, PHONE OTP via
+  server /api/auth/* — custom, NOT Firebase Phone Auth).
+- Data: Firestore (collections list katika sehemu ya 24).
+- Payments: ClickPesa (escrow, USSD Push, BillPay, payouts, webhooks).
+- Push: OneSignal + Firebase Cloud Messaging fallback topic user_{uid}.
+- SMS: Meseji.co.tz (sender SOKOVIBE default, fallback MESEJI).
+- Server modules: index.js (Express, ~7300 lines), clickpesa.js, orders.js,
+  listener.js (Firestore listeners), notification.js, groq.js, search.js.
+
+====================================================================
+2. APP SHELL & NAVIGATION
+====================================================================
+2.1 App startup (lib/main.dart):
+  1. Firebase.initializeApp → Hive cache init → Crashlytics + error handlers
+     → GoogleSignIn init → LocalNotificationService init.
+  2. _initApp: load theme/lang/currency prefs → AuthNotifier.initialize()
+     → magic-link init → phone sync to Firestore → PIN load →
+     notification callbacks → background services.
+  3. _initBackgroundServices: Crashlytics, Performance, App Check, AdMob,
+     SecurityService, NotificationService.initialize(), ExchangeRate,
+     AI (Groq) service.
+  4. _appBuilder overlay stack (in order):
+     ConnectivityWrapper → MaintenanceGate → AppLockOverlay →
+     TransactionStatusWatcher → AgeGateOverlay; AppConfig InheritedWidget.
+     - AgeGate: one-time confirmation, stored `age_gate_confirmed`.
+     - AppLock: PIN overlay inaonekana when app returns to foreground.
+     - TransactionStatusWatcher: hufuatilia malipo yaliyo pending.
+  5. AuthGate (lib/screens/auth/auth_gate.dart) huamua screen:
+     splash → OnboardingScreen → LoginScreen → suspended page →
+     ProfileSetupScreen → MainScreen.
+
+2.2 Routing (lib/app/router.dart + routes.dart):
+  - GoRouter, redirect guards: _authRequiredRoutes (21 routes), _adminOnlyRoutes.
+  - Routes muhimu (path → screen):
+    /                     MainScreen (5 tabs)
+    /login, /register, /onboarding, /profile-setup
+    /home, /discovery, /chat, /chat/:receiverId, /chat-inbox
+    /product/:id, /search, /category/:id, /flash-sale
+    /checkout/:productId, /orders/:docId (order detail)
+    /my-purchases, /seller-orders, /seller-statement
+    /wallet, /receipt/:orderId, /public-profile/:userId
+    /notifications, /settings, /kyc, /profile
+    /admin, /admin/wallet, /ai-assistant, /buyer-requests, /post-request
+
+2.3 Bottom navigation (lib/widgets/bottom_nav_bar.dart):
+  Tabs 5: Home | Discovery | Sell (+ ku-add product) | Chat | Profile.
+  - Interstitial ad timer: inaonyesha interstitial kila dakika 1.
+  - Tab ya Chat ina notification badge (unread count).
+
+2.4 Notification tap routing (main.dart):
+  type 'order'        → /order-detail/:id
+  type 'boost'        → /product/:id
+  type 'payment'      → /receipt/:orderId
+  type 'chat'         → /chat/:receiverId
+  type 'flash_sale'   → /flash-sale
+  type 'product'      → /product/:id
+
+====================================================================
+3. AUTHENTICATION FLOWS
+====================================================================
+3.1 Email/password login: LoginScreen → Firebase signInWithEmailAndPassword.
+
+3.2 Register (email): check-email → createUser → kuweka jina/profaili.
+
+3.3 Phone register (OTP):
+  1. User anaweka namba → server POST /api/auth/check-phone (kuona kama ipo).
+  2. POST /api/auth/send-otp → server inatuma SMS OTP kwa Meseji
+     (fomu ya local 07XXXXXXXX).
+  3. User anaweka OTP → POST /api/auth/verify-otp → Firebase createUser
+     → phone imeandikwa kwenye users/{uid}.
+  - Server storage: otp_codes/{cleanPhone} = sha256 hash, expiry dakika 10,
+    `used` flag, rate limit 3/15min.
+
+3.4 Phone login (new account auto-created):
+  send-otp → POST /api/phone-login → server inarudisha Firebase CUSTOM TOKEN
+  → app ina-sign in; server inaunda users/phone_XXXXXXXXXX@soko-vibe.com
+  (deterministic email/password) kwa namba mpya.
+
+3.5 Magic link: Firebase passwordless email + AppLinks (deep link
+  sokonimoko-8c171-a8d14.web.app/magic-link).
+
+3.6 Forgot password:
+  - Email: sendPasswordResetEmail.
+  - Phone: send-otp → POST /api/auth/reset-password-by-phone.
+
+3.7 Google sign-in: GoogleSignIn + Firebase credential.
+
+3.8 Logout: Firebase signOut + OneSignal logout + Hive cleanup.
+
+3.9 Delete account: reauth → reauthenticateAndDelete / deleteMyAccount.
+
+3.10 Account switching: SharedPreferences `saved_accounts`; switch/add/remove
+  (Google au email).
+
+NOTE (discrepancy): verify_email_screen inaitia POST /api/auth/send-email-otp
+na /api/auth/verify-email-otp — HIZI HAZIPO server side (email OTP flow
+haifanyi kazi dhidi ya server ya sasa).
+
+====================================================================
+4. PROFILE & SETTINGS FLOWS
+====================================================================
+4.1 Edit profile (ProfileEditScreen → UserService.saveProfile):
+  - Firestore merge kwenye users/{uid}: displayName, username (unique check),
+    bio, location (geocoding reverse), shopAccentColor, payment numbers.
+  - Avatar: Cloudinary upload (POST /api/cloudinary/sign — sha256 signature,
+    cloudName dgbsohnl4, folder soko_langu).
+
+4.2 Settings:
+  - PIN set/remove: sha256 → SecureStorage `app_lock_pin`; app lock
+    lifecycle-driven.
+  - Language (EN/SW), currency, SMS language pickers; dark mode;
+    notification preferences (notification_preferences/{uid}).
+
+4.3 Onboarding: kurasa 5 + account tier selection.
+
+4.4 Profile screen: stats (mauzo, ratings), avatar, action grid (KYC, admin
+  entries, wallet, seller statement, n.k.).
+
+====================================================================
+5. KYC FLOW
+====================================================================
+5.1 Submit: POST /api/kyc/submit (Bearer token):
+  - Validation server: ≥2 names, ID image, selfie, ID format
+    (National ID: tarakimu 20; nyingine ≥6) → status 'pending'.
+  - TODO server: NIDA verification + face matching (bado).
+
+5.2 Status: GET /api/kyc/status/:userId → approved | pending | rejected.
+
+5.3 Admin review: POST /api/admin/kyc/review (approved/rejected) →
+  - approved → updateSellerKycOnProducts: inaweka sellerKycApproved=true
+    kwenye PRODUCTS zote za seller; notification inatumwa.
+  - revoke: POST /api/admin/kyc/revoke → sellerKycApproved=false kwenye products.
+  - delete: POST /api/admin/kyc/delete.
+  - Lists: GET /api/admin/kyc/pending, GET /api/admin/kyc/all.
+
+5.4 Listing gated: AddProduct inakataa seller asiye na KYC approved
+  (inakamata "KYC" errors kutoka server).
+
+====================================================================
+6. COMMERCE FLOWS (Product, Search, Detail, Checkout)
+====================================================================
+6.1 Browsing: HomeScreen (featured, categories, flash sales), DiscoveryScreen
+  (search + filters + sort + currency picker), CategoryScreen,
+  SearchScreen (ProductSearchService: products where isActive==true,
+  prefix match name/brand/category, sort exact-name kwanza, soldCount desc).
+
+6.2 Product detail (lib/screens/home/product_detail.dart):
+  - _loadSellerProfile: inapakia users/{sellerId}.
+  - Seller card: Avatar, jina, VerifiedBadge (sellerKycApproved),
+    "Angalia Duka" (public profile), "Mpigie Muuzaji" (CallSellerButton,
+    tel: scheme — simu ya kawaida, bila internet), "Chat" (chat na seller).
+  - Buttons: Wishlist (wishlist_service; ikiwa logged out → /login),
+    Share (share_plus), Buy Now (DsButton) → _processBuyNow → checkout.
+  - Like: inanotify seller (notification + push).
+  - Report: inaweka report kwenye Firestore.
+  - ReviewSection (reviews: products/{id}/reviews), CommentSection
+    (products/{id}/comments), AdBanner chini.
+  - Kuna fallback kwenye buttons za buy/chat: logged out → /login;
+    sellerId tupu → snackbar seller_unknown_error; bidhaa yako mwenyewe →
+    cannot_buy_own.
+
+6.3 HAKUNA CART: App inatumia Buy Now moja kwa moja (localization strings za
+  cart zipo lakini hakuna feature).
+
+6.4 Checkout (checkout_screen.dart):
+  1. Address: "Get My Location" (geolocator) au kuingiza manually.
+  2. Payment method radio: Wallet | M-Pesa USSD | BillPay.
+  3. Submit → inaunda order kwenye Firestore:
+     - orders/{orderId} (server inaweza kuunda kupitia POST /api/orders/create
+       — ina-mirror order kwenye transactions/{orderId} status
+       'awaiting_payment').
+     - Fields: buyerId, buyerName, sellerId, sellerName, sellerPhone,
+       productId, productName, productImage, productPrice, shippingCost,
+       totalAmount, paymentMethod, status, address, createdAt...
+  4. Payment inafuata flow ya 7 (USSD push / BillPay / wallet).
+
+6.5 Fees (transaction_model.dart + server/clickpesa.js):
+  - USSD Push fee: tiers TZS 54–7,960 (kwa mteja, inategemea kiasi).
+  - BillPay: 1% (M-Pesa/Airtel/Mixx), 2% HaloPesa, 1% CRDB, 2% TanQR,
+    4.85% cards.
+  - Platform commission: 3.5% ya productPrice (platformCommissionPercent).
+
+====================================================================
+7. ORDER LIFECYCLE (STATE MACHINE)
+====================================================================
+Statuses (server/orders.js ORDER_STATUS):
+  pending → awaiting_shipping_quote → quoted → paid → paid_escrow_hold
+  → escrow_hold → dispatched → delivered → delivery_confirmed → completed
+  → failed → refunded → disputed (na invalid/nafuu za transition).
+
+7.1 Buyer flow:
+  1. pending: order imeundwa.
+  2. awaiting_shipping_quote: mnunuzi anangoja seller aweke gharama ya
+     usafirishaji.
+  3. quoted: seller ameweka shippingCost (totalAmount += shippingCost);
+     mnunuzi ana options: pay (wallet/ussd/billpay), cancel.
+  4. paid/escrow_hold: malipo yametumwa kwenye escrow ya ClickPesa.
+  5. dispatched: seller amesafirisha (proof: tracking, receipt, photo,
+     busName, plateNumber) → mnunuzi anaona RealtimePaymentBanner +
+     countdown ya estimatedDelivery.
+  6. delivery_confirmed: mnunuzi anathibitisha kupokea (Thibitisha
+     Upokeaji) → escrow release.
+  7. completed: escrow imetolewa kwa seller (sellerBalance += sellerReceives).
+
+7.2 Seller flow (seller_orders_screen.dart, seller_quote_screen.dart):
+  1. Inapokea order → seller_quote_screen: _submitQuote inaandika DIRECT
+     kwenye Firestore (status 'awaiting_payment' au 'quoted', totalAmount
+     += shippingCost). HAKUNA server endpoint ya quote.
+  2. Dispatch: server POST /api/escrow/dispatch (transactions/{orderId};
+     status lazima escrow_hold; inaweka dispatchProof, busName,
+     plateNumber) → SMS + push kwa buyer.
+
+7.3 Escrow release: POST /api/escrow/release (buyer, status dispatched):
+  - transactions doc: status delivered, escrowReleased=true,
+    sellerBalance += sellerReceives, pendingEscrow -=, revenue_transactions
+    + auditLog; SMS + push.
+  - optional auto-payout kama seller.autoPayout === true.
+
+7.4 Cancel (buyer, kutoka escrow_hold/paid_escrow_held):
+  - Refund = productPrice − DEFAULT_PAYOUT_FEE (TZS 2,000) kupitia ClickPesa
+    payout kwa namba ya buyer; status refunded; seller pendingEscrow/
+    totalSales/grossSalesVolume zina-punguzwa.
+
+7.5 Dispute: mtumiaji anaweka dispute → server POST /api/escrow/dispute
+  (status disputed) → admin: POST /api/escrow/admin-resolve-dispute
+  (resolution 'release' → delivered + sellerBalance; au 'refund' →
+  ClickPesa payout productPrice + penalties kwa seller + revenue_transactions).
+
+7.6 Auto-release: POST /api/release-expired-escrows (admin/cron tu) —
+  escrow_hold + escrowExpiresAt ≤ now. Pia POST /api/cron/release-escrows
+  (x-cron-secret).
+
+7.7 Payment status watcher: TransactionStatusWatcher (overlay) +
+  RealtimePaymentBanner ina-poll GET /api/transaction-status/:orderId kila
+  sekunde 7 + StreamBuilder kwenye transactions doc.
+
+7.8 FAILED: status failed → mnunuzi anaweza retry
+  (server /api/retry-payment au legacy webhook handling).
+
+NOTE (discrepancy): my_purchases_screen inaita POST /api/dispute/create
+(l.341) lakini server ina /api/escrow/dispute tu — dispute kutoka client
+inge-404.
+
+NOTE: wallet purchase inaunda transactions doc MPYA (auto-id) na field
+`orderId` ikirejelea order doc; client pia inaita _transitionOrder('paid')
+kwenye orders/{orderId} — inaweza kuleta duplicate kwenye My Purchases
+(streams transactions where buyerId==uid).
+
+====================================================================
+8. PAYMENTS (ClickPesa) — FLOWS ZA MALIPO
+====================================================================
+8.1 USSD Push collect (malipo ya order / deposit / boost):
+  1. Client inapiga endpoint (mf. POST /api/orders/create,
+     /api/wallet/deposit, boost) na paymentMethod 'ussd_push'.
+  2. Server inahesabu processingFee = getUssdPushFee(amount) (tiers) →
+     totalCharge = amount + fee.
+  3. clickpesaCollect({amount, orderReference, phoneNumber (255...),
+     callbackUrl: /api/clickpesa/webhook}) → ClickPesa inatuma USSD prompt
+     kwenye simu ya mteja; server inarudi mapema (async).
+  4. Mteja anapiga PIN → ClickPesa inapiga webhook.
+  5. transactions doc: clickpesaReference, ussdSent:true; webhook
+     ina-update status (escrow_hold etc.).
+  6. Failures: ussdFailed:true + ussdError; buyer anaweza retry; stale
+     pending boost payments zina-fail baada ya muda (cron).
+
+8.2 BillPay (control number):
+  1. Server inaunda BillPay order (clickpesaCreateBillPayOrder,
+     billPaymentMode EXACT, billReference=orderId).
+  2. Inarudisha billPayNumber → app inaonyesha kwenye waiting sheet pamoja
+     na button ya COPY (Icons.copy → Clipboard, snackbar 'Imenakiliwa').
+  3. Mteja anaenda M-Pesa > Lipa > BillPay, anaingiza namba na kiasi
+     (totalCharge = amount + 1%).
+  4. Webhook ina-confirm → status escrow_hold/completed.
+
+8.3 Wallet purchase: order_detail method='wallet' → kuna balance check →
+  transactions doc mpya escrow_hold + order transition 'paid'.
+
+8.4 Webhook (POST /api/clickpesa/webhook) inashughulikia:
+  - deposits (orderReference prefix 'dep') → users.walletBalance += .
+  - purchases → escrow_hold + platformFee (3.5% ya price) + processingFee
+    (USSD tier) + sellerReceives = price + shipping.
+  - flash_sale → stock/soldCount decrement.
+  - boost → activation ya boost.
+
+8.5 Transaction status: GET /api/transaction-status/:orderId (fallback
+  ikitokea webhook kukosa).
+
+8.6 Payment methods: GET /api/payment-methods, POST /api/payment-methods/calc-fee
+  (wallet/ussd_push/billpay).
+
+8.7 Fraud/prevention: paymentRateLimit, checkSuspended, checkDuplicatePayment,
+  checkDailyLimit (MAX_DAILY_SALE_AMOUNT) kwenye create-marketplace-payment-link.
+
+8.8 Fees za ClickPesa (rasmi, clickpesa.com/payment-gateway/pricing):
+  - Collection BillPay: M-Pesa/Airtel/Mixx 1% (min 500–max 5,000,000),
+    HaloPesa 2%, CRDB 1%, TanQR 2%, Cards 4.85%.
+  - USSD Push (kwa mteja, fixed tiers): 500-899→54, 900-1999→92,
+    2000-2999→124, 3000-3999→230, 4000-4399→380, 4400-8999→580,
+    9000-19999→920, 20k-39,999→1150, 40k-49,999→1572, 50k-95,999→2136,
+    96k-199,999→3240, 200k-299,999→3660, 300k-399,999→4080,
+    400k-499,999→4340, 500k-599,999→4820, 600k-799,999→5230,
+    800k-999,999→6146, 1M-1,999,999→7210, 2M-3M→7960.
+  - Payouts mobile money (fixed): 100-999→52, 1k-1,999→72, 2k-2,999→104,
+    3k-3,999→116, 4k-4,999→168, 5k-6,999→234, 7k-7,999→360, 8k-9,999→430,
+    10k-14,999→642, 15k-19,999→680, 20k-29,999→700, 30k-39,999→980,
+    40k-49,999→1038, 50k-99,999→1460, 100k-199,999→1868, 200k-299,999→2220,
+    300k-399,999→3180, 400k-499,999→3764, 500k-599,999→4672,
+    600k-699,999→5712, 700k-799,999→6560, 800k-899,999→7800,
+    900k-1M→8508, 1M-3M→9346, 3M-5M→9890.
+  - Bank EFT: 2,360 flat. Bank TISS: 11,800 flat (TZS), $7.5 (USD).
+  - Setup: account FREE (limit TZS 100,000 kabla ya KYC), KYC TZS 25,000,
+    M-Pesa channel TZS 250,000.
+
+====================================================================
+9. WALLET FLOWS (lib/screens/wallet/wallet_screen.dart)
+====================================================================
+9.1 Balance + history: users/{uid}.walletBalance; wallet_history stream.
+
+9.2 Deposit (weka hela):
+  - Njia 2: USSD Push au BillPay (method card selection).
+  - USSD dialog: Amount (TZS, min 500 — FIXED bug la awali: field la amount
+    lilikuwa cloned ya phone; sasa sahihi) + Phone (2557XXXXXXXX) →
+    confirm (inaonyesha amount + fee) → POST /api/wallet/deposit.
+  - Server (index.js L6443+): phone required; billpay flow → control number +
+    totalCharge = amount + calcGatewayFee('billpay'); ussd flow →
+    processingFee = getUssdPushFee(amount), totalCharge = amount + fee,
+    clickpesaCollect async → deposits/{depositRef} doc
+    (status pending → completed/failed kupitia webhook).
+  - Waiting sheet (USSD): StreamBuilder kwenye deposits/{ref}; pending →
+    "Complete payment on your phone via USSD push"; completed/failed →
+    button Continue/Retry; cancel inawezekana (PopScope canPop:false).
+  - BillPay sheet: "Namba ya BillPay" kubwa + COPY button (clipboard) +
+    "Kiasi: TZS ..."; stream ina-subscribe deposits/{ref}.
+  - Response ya server ina message na totalCharge breakdown.
+
+9.3 Withdraw (utoa hela):
+  - _showWithdrawDialog: anaingiza amount + phone → server payout endpoint
+    (seller balance → /api/... withdraw; inatumia payout tiers za ClickPesa).
+  - Server: GET seller-balance/withdraw/admin-withdraw (L3524-3879);
+    withdrawals collection (status processing/completed/failed).
+
+9.4 Seller statement (seller_statement_screen.dart):
+  - GET /api/seller-statement/:sellerId — single-field queries +
+    in-memory 12-month filter (index-free; composite queries zilikua 500).
+  - paidStatuses = {completed, delivered, delivery_confirmed}; withdrawals
+    by userId.
+
+9.5 Admin wallet (admin_wallet_screen.dart): finance-summary API +
+  ClickPesa balance; withdrawal inahitaji balance ≥ TZS 2,001.
+
+9.6 Minimum withdrawal: haipo rasmi kwenye UI (pending user decision) —
+  vidokezo: TZS 20,000+ hupunguza percent ya fee.
+
+====================================================================
+10. FLASH SALES & PRODUCT BOOST
+====================================================================
+10.1 Flash sale create (create_flash_sale_screen.dart):
+  - POST /api/flash-sale/create (Bearer, sellerId match): checks suspended,
+    duplicate active sale kwa product (deactivates expired), writes
+    flash_sales doc (productId, sellerPhone, salePrice, discountPercent,
+    stock, startTime/endTime, isActive:true).
+  - Flash sale buy: flash_sale_screen → payment (USSDBillPay/wallet) →
+    webhook ina-decrement stock/soldCount.
+  - Notify: POST /api/flash-sale/notify — 24h cooldown
+    (app_settings/flash_sale_push_cooldown.lastSentAt); inaandika in-app
+    notifications kwa users WOTE (paginated batches 500) + OneSignal bulk
+    (title "⚡ Flash Sale! -{discountPercent}%", type flash_sale);
+    response {pushSent, inAppNotified, pushSkipped}.
+
+10.2 Product boost (product_boost_screen.dart):
+  - Boosts: featured days (3/7/30), boost tier config, payment USSD
+    push/BillPay → POST (boost-product endpoint L560-722) → webhook
+    ina-activate boost; analytics boost_analytics/{pid}/impressions.
+  - Boost receipt: boost_receipt_screen + boost_receipt_card.
+  - Stale pending boosts zina-fail (cron L5800).
+
+====================================================================
+11. CHAT FLOWS
+====================================================================
+11.1 Rooms: roomIdFor = sorted uids joined by '_'; chat_rooms/{roomId}
+  (participants, last_message, last_timestamp, unread_count_buyer,
+  unread_count_seller, product_id/product_title). getOrCreateRoom.
+
+11.2 Sending: POST /api/chat/send (Bearer; checks: suspended, room
+  participant) → messages subcollection (snake_case: sender_id, receiver_id,
+  text, timestamp, is_read, is_delivered, product_id/product_name,
+  reply_to...) → room last_message update → unread count increment →
+  OneSignal push type 'chat' + notifications doc.
+
+11.3 Receiving: StreamBuilder kwenye chat_rooms/{id}/messages (orderBy
+  timestamp, limit 100, Hive cache first); loadOlderMessages (before, 50).
+
+11.4 Optimistic UI: tempId messages, _confirmedSends/_failedSends,
+  dedup cleanup (same sender+content within 60s), failed → retry icon
+  (re-send with new tempId).
+
+11.5 Typing: conversations/{convId} doc typing_{otherUid} serverTimestamp/null.
+
+11.6 Presence: users/{uid}.lastActive stream + update kila 30s.
+
+11.7 Mark read: markMessagesAsRead (batch), markAsRead (zero unread count
+  za upande wa self).
+
+11.8 Actions:
+  - Reactions: long-press → 6 emojis → transaction ina-toggle uid kwenye
+    reactions[emoji].
+  - Reply: swipe right au long-press.
+  - Call Seller: CallSellerButton appbar (tel: scheme, cellular, bila
+    internet) — phone kutoka users/{receiverId}.phone.
+  - WhatsApp: wa.me link (whatsapp://send?phone=255...).
+  - Block: users/{uid}.blockedUsers arrayUnion.
+  - Delete conversation: deletes kwenye 'conversations' collection.
+  - Options: view profile, block, delete conversation.
+
+11.9 Inbox: ChatInboxScreen — cached rooms + live stream, All/Unread
+  filters, unread badges (buyerId==uid ? unreadCountBuyer : unreadCountSeller),
+  tap → /chat/{otherId} with extra {name, productId, productTitle}.
+
+11.10 Legacy path: ChatRepository + ChatRoomScreen ('chats' collection,
+  arrayContains) — bado upo.
+
+====================================================================
+12. NOTIFICATIONS FLOWS
+====================================================================
+12.1 Channels (OneSignal + Android local channels, IDs _v5):
+  - chat_messages_v5 (chat/group_chat), system_alerts_v5 (system/admin/alert),
+    payments_notifications_v5 (payment family: payment_failed/refund/
+    cancelled/withdrawal/escrow_auto_release/auto_payout/order/dispatched/
+    delivery_confirmed/kyc*/deposit*), general_notifications_v5
+    (boost/promotion/flash_sale/general). Importances max + sound + vibration;
+    critical types use fullScreenIntent.
+
+12.2 In-app notifications: collection 'notifications' (userId, title, body,
+  isRead, data{type,...}, createdAt). NotificationScreen: stream
+  (where userId==uid orderBy createdAt desc), unread dots, mark all read
+  (batches 500), swipe-delete (ownership check), per-type icons + routes.
+
+12.3 Push send (server): postOneSignalWithRetry (3 attempts, 1s/2s/4s),
+  sendOneSignalNotification(userId, title, body, data). Channel mapping
+  centralized: notifTypeToChannel.
+
+12.4 Client heads-up (NotificationService._showHeadsUpNotification):
+  - Foreground will-display → preventDefault → local heads-up na action
+    buttons: chat → 'Jibu'; payment/order+orderId → 'Lipa Sasa' (pay);
+    dispatched/delivery_confirmed → 'Thibitisha Upokeaji' (confirm).
+  - Payload JSON {type, ...data}; tap → _handleLocalTap →
+    onPaymentNotificationTap / onNotificationTap + markRelatedAsRead
+    (batch update isRead kwa orderId/transactionId/productId/roomId/
+    payoutId/depositRef).
+
+12.5 Firestore fallback (_startFirestoreFallback): kama push imekataliwa
+  (_pushDenied), inalistener kwenye notifications za user (unread, <2min)
+  na kuonyesha heads-up sawa.
+
+12.6 Broadcast: POST /api/notifications/broadcast (admin) — doc kwa KILA
+  user (batch) + sendOneSignalBulk; POST /api/admin/broadcast-notification —
+  sendOneSignalBulk type 'system' + in-app rows batched 500.
+
+12.7 Preferences: notification_preferences/{uid} (functions/notification/
+  preferences.js + server/notification.js); shouldSend checks channel+type
+  flags (default true).
+
+12.8 FCM fallback: sendFcm → topic user_{uid} → fallback users/{uid}.fcmToken.
+
+====================================================================
+13. SMS FLOWS
+====================================================================
+13.1 Provider: Meseji.co.tz (POST https://meseji.co.tz/api/v1/sms/send),
+  header x-api-key, body {sender_id, message, contacts: [local 07...]}.
+  - Empirically: contacts ARRAY + local 07 → HTTP 200
+    {"status":"success","batch_id":...}; string au 255... → 500.
+  - Sender: SOKOVIBE (default), fallback MESEJI.
+
+13.2 Server: POST /api/sms/send + sendSms(phone, message) helper:
+  normalizes namba → 07..., inajaribu SOKOVIBE → MESEJI.
+
+13.3 Events (SmsNotificationService — templates SW/EN per SmsLanguagePreference):
+  boost paid, escrow released, dispatched (bus/plate), order placed,
+  shipping quote, order confirmed, delivery confirmed, payment failed,
+  refunded, KYC approved/rejected, withdrawal, welcome.
+
+13.4 OTP SMS: MesejiService.sendOtp → /api/auth/send-otp (30s timeout).
+
+NOTE: functions/notification/sender.js inatuma contacts kama SINGLE string
+(discrepancy vs server array) — function-based SMS inaweza kushindwa.
+
+====================================================================
+14. AI ASSISTANT (AI DALALI)
+====================================================================
+14.1 Entry: /ai-assistant (AiAssistantScreen) — Swahili-first "Soko Vibe AI
+  Dalali". KeepAlive. Input: text au voice (VoiceSearchService — WAV 16k
+  mono; transcribe → /api/ai/transcribe, model whisper-large-v3-turbo, lang sw).
+
+14.2 Flow: sendMessage → ProductSearchService.searchProducts (in-app)
+  → _buildRichContext (hadi comments 3 + reviews 3 kwa product) →
+  AiService.sendMessage → server POST /api/ai/chat (proxy Groq; model
+  llama-3.2-90b-vision-preview → fallback llama-3.3-70b-versatile →
+  mixtral-8x7b-32768; temperature 0.35 in-app / 0.5 not-found / 0.7 general;
+  maxTokens 2000; chat history capped 40).
+
+14.3 Output: AI bubble + product cards (in_soko_langu chip) au
+  notFoundInApp context (external guidance, "Hii taarifa HAITOKEI kwenye
+  Soko Vibe"); contact_seller → showChatOptions (WhatsApp/seller phone).
+
+14.4 Server: groq.js — groqChat/groqTranscribe; 503 kama GROQ_API_KEY haipo;
+  API key kamwe haifiki client.
+
+====================================================================
+15. BUYER REQUESTS
+====================================================================
+- Collection: BuyerRequests. PostRequest: buyerUid, buyerName, title,
+  budget, description, whatsapp wa.me link (0→255 normalization), isLocked:true,
+  unlockedBy:[].
+- List: BuyerRequestsScreen (stream createdAt desc); unlockContact →
+  arrayUnion(uid) kwenye unlockedBy (permanent unlock).
+
+====================================================================
+16. ADMIN FLOWS
+====================================================================
+16.1 Dashboard (admin_dashboard_screen.dart, tabs 12): dashboard, analytics,
+  users, verification, products, ads, reports, fraud, payout, transactions,
+  chats. _checkAdmin: isAdmin field AU email admin@soko-langu.com /
+  admin@soko-vibe.com (auto-fix isAdmin).
+16.2 Quick actions: wallet, send notification to all (AnalyticsService
+  .sendPushToAll → /api/notifications/broadcast), export users CSV
+  (admin_exports), maintenance toggle (app_settings/maintenance), analytics.
+16.3 Users tab: search, toggle_admin, suspend/unsuspend
+  (POST /api/admin/users/:uid/unsuspend), full delete
+  (DELETE /api/admin/users/:uid/full-delete — user + orders/withdrawals/
+  notifications/products/reviews batch), PATCH /api/admin/users/:uid
+  (arbitrary updates).
+16.4 Verification tab: pending KYC list (GET /api/admin/kyc/pending) →
+  review/revoke; admin KYC route; broadcast route.
+16.5 Products tab: activate/deactivate (direct Firestore), feature
+  3/7/30d (isFeatured + featuredUntil), delete
+  (DELETE /api/admin/products/:id — pia flash_sales za product).
+16.6 Fraud tab: FraudAlert stream; dismiss → markResolved.
+16.7 Finance (AdminWalletScreen — 16.5 chini): GET /api/admin/finance-summary
+  (x-admin-secret AU Bearer+isAdmin): totalCommissions, totalBoostRevenue,
+  totalAdminBalance (incl. AdMob actualAdRevenue), totalProcessed,
+  totalPaidOut, availableBalance, actualClickPesaBalance (clickpesaBalance());
+  fallback Firestore recompute (revenue_transactions + transactions +
+  withdrawals + admin_withdrawals).
+  - Withdraw: balance ≥ 2001 → ClickPesaService.adminWithdraw →
+    admin_withdrawals doc (processing/completed/failed).
+  - NOTE: client inasoma result['actualMongikeBalance'] lakini server
+    inatuma 'actualClickPesaBalance' — client fallback haijumuishi AdMob
+    revenue (discrepancy).
+16.8 Analytics: GET /api/admin/analytics (users/products/revenue/last-7-day
+  series/active counts from user_sessions); seller analytics
+  GET /api/seller-analytics/:sellerId (uid match au admin).
+16.9 Escrow admin: admin-release, admin-resolve-dispute, retry-payout
+  (POST /api/escrow/retry-payout — payoutStatus must be 'failed_retry'),
+  cancel; auditLog helper.
+16.10 Server misc admin: DELETE /api/admin/orders/:id, POST /api/admin/
+  delete-doc (whitelist collections), GET /api/stats, POST /api/reports,
+  POST /api/setup-admin, POST /api/admin/admob-revenue.
+
+====================================================================
+17. ADS & MONETIZATION
+====================================================================
+17.1 Banner (ad_banner.dart): AdMob banner
+  ca-app-pub-3796499857968162/6300978111 (test: .../6300978111 test ID),
+  retry 15s, placeholder.
+17.2 Rewarded ads (rewarded_ad_service.dart + rewarded_ad_gate.dart):
+  unit ca-app-pub-3796499857968162/5224354917; RewardedAdGate.require(action)
+  — skip kama AdGateService.hasPassedGate (SharedPreferences ad_gate_{action});
+  onUserEarned → ad_views doc {buyerId, processed:false}; gate pass recorded.
+17.3 Revenue: admin ina-estimate ad_views count ×15 TZS (admob_earnings
+  month doc = actual).
+
+====================================================================
+18. MAPS & LOCATION
+====================================================================
+- location_map_widget.dart: google_maps_flutter + geolocator; red target
+  marker (draggable kama draggablePin), blue 'me' marker, distance chip
+  (Geolocator.distanceBetween), default Dar es Salaam (-6.7924, 39.2083),
+  satellite toggle, _fitBoth camera bounds.
+- Matumizi: kuweka location kwenye product listing na shipping address
+  (reverse geocode → location string).
+
+====================================================================
+19. RECEIPTS & DOCUMENTS
+====================================================================
+- receipt_pdf_service.dart: A4 PDF (pdf + printing): product/seller/buyer
+  info, payment breakdown (price, shipping, commission, processing fee,
+  total, seller receives), status chip, delivery address, payment method,
+  QR code (JSON payload type soko_vibe_receipt); saveAndShare/saveToDevice.
+- receipt_screen.dart: inasoma orders/{orderId}; sellerPhone kutoka
+  d['sellerPhone']; receipt ya boost (boost_receipt_screen.dart).
+- Seller statement PDF: seller_statement_screen (taarifa ya kifedha ya
+  miezi 12, footer "Soko Vibe © {year} — Hati hii ni taarifa rasmi ya kifedha").
+
+====================================================================
+20. PRICE DROP
+====================================================================
+- price_drop_service.dart: createPriceDrop → price_drops doc (productId,
+  original/new price, discountPercent, currency, aiReason, isActive);
+  broadcastToAllUsers → notifications doc type 'price_drop' kwa ≤500 users
+  + POST /api/send-bulk-notification (fcmTokens); getActivePriceDrops stream;
+  PriceDropBanner kwenye search/home.
+
+====================================================================
+21. ANDROID HOME SCREEN WIDGET
+====================================================================
+- SokoVibeWidgetProvider.kt + WidgetDataStore.kt (SharedPreferences):
+  widget inaonyesha data ya app (widget_service.dart ina-update data);
+  APPWIDGET_UPDATE receiver kwenye AndroidManifest.
+
+====================================================================
+22. MVUNJA-BUG / KNOWN ISSUES / DISCREPANCIES (IMPORTANT)
+====================================================================
+1. Email OTP: /api/auth/send-email-otp na /verify-email-otp ZIMEPO kwenye
+   server (baada ya verify-otp) — FIXED (client verification bado inahitaji
+   test kamili).
+2. Dispute: client sasa inaita POST /api/escrow/dispute (my_purchases +
+   order_detail) — FIXED.
+3. Wallet purchase sasa ina-reuse transactions/{orderId} (merge) badala ya
+   kufungua doc mpya; pia guard ya "Order already paid" — FIXED.
+4. Admin finance: client inasoma actualClickPesaBalance sasa — FIXED;
+   fallback bado haijumuishi AdMob.
+5. functions/notification/sender.js sasa inatuma contacts kama ARRAY ya
+   namba za local 07 + sender fallback SOKOVIBE→MESEJI — FIXED.
+6. Music/streaming (playlists, gifts, coins, streamer earnings): STRINGS
+   tu kwenye localization — HAIJATEKELEZWA (no code).
+7. Cart: localization strings zipo, feature HAIPO (Buy Now moja kwa moja).
+8. Minimum withdrawal haipo kwenye UI — payout ya kiasi kidogo ina percent
+   kubwa (tazama 8.8).
+9. Meseji outage (2026-07/08): SMS zote 500 hata manual — provider side.
+10. ClickPesa pre-KYC limit: TZS 100,000 total (payouts zinasimama) —
+    KYC TZS 25,000 inahitajika kabla ya biashara halisi.
+
+====================================================================
+23. SERVER ENDPOINT REFERENCE (server/index.js — muhimu zaidi)
+====================================================================
+AUTH/OTP:       POST /api/auth/send-otp | verify-otp | check-phone |
+                check-email | reset-password-by-phone | phone-login
+SMS:            POST /api/sms/send
+CHAT:           POST /api/chat/send
+PAYMENTS:       POST /api/wallet/deposit | /api/wallet/purchase |
+                /api/payment-methods | /api/payment-methods/calc-fee |
+                POST /api/create-marketplace-payment-link |
+                GET /api/transaction-status/:orderId |
+                POST /api/clickpesa/webhook | legacy webhook |
+                POST /api/retry-payment
+ESCROW:         POST /api/escrow/release | dispatch | dispute |
+                admin-release | admin-resolve-dispute | retry-payout |
+                POST /api/release-expired-escrows (admin) |
+                POST /api/cron/release-escrows (x-cron-secret)
+ORDERS:         POST /api/orders/create | /api/orders/transition |
+                GET /api/orders/:id | /api/orders/timeline |
+                /api/orders/status | user list endpoints |
+                DELETE /api/admin/orders/:id
+SELLER:         GET /api/seller-balance | withdraw | admin-withdraw |
+                GET /api/seller-statement/:sellerId |
+                GET /api/seller-analytics/:sellerId | payouts
+KYC:            POST /api/kyc/submit | GET /api/kyc/status/:userId |
+                POST /api/admin/kyc/review | revoke | delete |
+                GET /api/admin/kyc/pending | all
+FLASH SALE:     POST /api/flash-sale/create | scan | notify
+BOOST:          POST boost endpoints (L560-722) | retry boost
+NOTIFICATIONS:  POST /api/send-notification |
+                POST /api/notifications/broadcast |
+                POST /api/admin/broadcast-notification |
+                POST /api/send-bulk-notification | GET/POST prefs
+AI:             POST /api/ai/chat | POST /api/ai/transcribe
+ADMIN:          GET /api/admin/analytics | /api/admin/finance-summary |
+                PATCH/DELETE /api/admin/users/:uid |
+                POST /api/admin/users/:uid/unsuspend |
+                DELETE /api/admin/users/:uid/full-delete |
+                DELETE /api/admin/products/:id | DELETE /api/products/:id |
+                POST /api/admin/delete-doc | POST /api/cloudinary/sign |
+                POST /api/reports | GET /api/stats | POST /api/setup-admin
+AUTH PATTERNS:  Firebase ID token Bearer; admin: x-admin-secret AU Bearer+isAdmin;
+                cron: x-cron-secret.
+
+====================================================================
+24. FIRESTORE COLLECTIONS REFERENCE
+====================================================================
+users                   profaili, walletBalance, phone, sellerKycApproved,
+                        isSuspended, isAdmin, blockedUsers, lastActive,
+                        autoPayout, notification_preferences sub
+products                bidhaa (sellerId, sellerPhone, price, stock,
+                        isActive, isFeatured, featuredUntil, sellerKycApproved)
+orders                  maagizo (status lifecycle, sellerPhone, shippingCost,
+                        totalAmount, estimatedDelivery)
+transactions            malipo/escrow (status, escrowReleased, escrowExpiresAt,
+                        paymentMethod, processingFee, platformFee,
+                        sellerReceives, clickpesaReference, payoutStatus)
+deposits                wallet deposits (status, billPayNumber, totalCharge)
+withdrawals             seller payouts (status, netAmount)
+admin_withdrawals       admin payouts
+revenue_transactions    commissions + boost revenue + refunds
+notifications           in-app notifications (isRead, data.type)
+notification_preferences  channel/type flags
+chat_rooms/{id}/messages  chat (snake_case fields)
+conversations           typing indicators
+chats                   legacy chat rooms
+flash_sales             flash sale docs (isActive, stock, soldCount)
+price_drops             price drop docs
+BuyerRequests           buyer requests (isLocked, unlockedBy)
+reviews, comments       products/{id}/subcollections
+product_analytics, boost_analytics, user_sessions, ad_views, admob_earnings
+admin_notifications, admin_exports, audit_log, otp_codes
+app_settings            docs: flash_sale_push_cooldown, maintenance
+
+====================================================================
+MWISHO — Soko Vibe Full Flow Documentation
+====================================================================

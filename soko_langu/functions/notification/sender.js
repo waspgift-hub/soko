@@ -54,31 +54,36 @@ async function sendSms(phone, message) {
   const apiKey = process.env.MESEJI_API_KEY;
   if (!apiKey) return;
   const digits = phone.replace(/\D/g, '');
-  const normalized = digits.startsWith('0')
-    ? '255' + digits.slice(1)
-    : !digits.startsWith('255')
-      ? '255' + digits
+  // Meseji only accepts local-format numbers (07XXXXXXXX) inside a contacts
+  // ARRAY — string or +255 format both come back HTTP 500 from the provider.
+  const local = digits.startsWith('255')
+    ? '0' + digits.slice(3)
+    : !digits.startsWith('0')
+      ? '0' + digits
       : digits;
-  try {
-    const url = process.env.MESEJI_API_URL || 'https://meseji.co.tz/api/v1/sms/send';
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        sender_id: process.env.MESEJI_SENDER_ID || 'SOKOVIBE',
-        message,
-        contacts: normalized,
-      }),
-    });
-    if (!resp.ok) {
+  const configured = process.env.MESEJI_SENDER_ID || 'MESEJI';
+  const senders = configured === 'MESEJI' ? ['MESEJI'] : [configured, 'MESEJI'];
+  for (const sender of senders) {
+    try {
+      const url = process.env.MESEJI_API_URL || 'https://meseji.co.tz/api/v1/sms/send';
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'x-api-key': apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sender_id: sender,
+          message,
+          contacts: [local],
+        }),
+      });
+      if (resp.ok) return;
       const err = await resp.text();
       console.error(`[NOTIFY] SMS failed (${resp.status}): ${err}`);
+    } catch (e) {
+      console.error(`[NOTIFY] SMS error: ${e.message}`);
     }
-  } catch (e) {
-    console.error(`[NOTIFY] SMS error: ${e.message}`);
   }
 }
 

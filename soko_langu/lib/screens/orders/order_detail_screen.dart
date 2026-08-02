@@ -21,6 +21,7 @@ import '../../widgets/google_loading.dart';
 import '../../widgets/payment_banner.dart';
 import '../../widgets/payment_result_dialog.dart';
 import '../../widgets/location_map_widget.dart';
+import '../../widgets/call_seller_button.dart';
 import '../../utils/network_error.dart';
 
 class OrderDetailScreen extends StatefulWidget {
@@ -1685,6 +1686,17 @@ $stepsStr
             Expanded(
               child: SizedBox(
                 height: 46,
+                child: CallSellerButton(
+                  phone: d['sellerPhone'] as String? ?? '',
+                  height: 46,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: SizedBox(
+                height: 46,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: cs.whatsappGreen,
@@ -1858,7 +1870,7 @@ $stepsStr
     setState(() => _disputingTxId = txId);
     try {
       final resp = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/dispute/create'),
+        Uri.parse('${ApiConfig.baseUrl}/api/escrow/dispute'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'orderId': txId, 'userId': user.uid}),
       );
