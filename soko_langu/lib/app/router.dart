@@ -54,6 +54,8 @@ import '../screens/kyc/kyc_screen.dart';
 import '../screens/home/flash_sale_screen.dart';
 import '../screens/profile/create_flash_sale_screen.dart';
 import '../screens/report/report_screen.dart';
+import '../screens/requests/buyer_requests_screen.dart';
+import '../screens/requests/post_buyer_request_screen.dart';
 import '../screens/report/admin_reports_screen.dart';
 import '../screens/ai/ai_assistant_screen.dart';
 import '../screens/seller/seller_analytics_screen.dart';
@@ -413,6 +415,14 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.createFlashSale,
         pageBuilder: (context, state) => _premiumPage(const CreateFlashSaleScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.buyerRequests,
+        pageBuilder: (context, state) => _premiumPage(const BuyerRequestsScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.postBuyerRequest,
+        pageBuilder: (context, state) => _premiumPage(const PostBuyerRequestScreen()),
       ),
       GoRoute(
         path: AppRoutes.privacyPolicy,

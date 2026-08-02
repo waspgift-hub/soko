@@ -59,4 +59,6 @@ class AppRoutes {
   static const String adminUserDetail = '/admin/user';
   static const String sellerStatement = '/seller-statement';
   static const String boostReceipt = '/boost-receipt';
+  static const String buyerRequests = '/buyer-requests';
+  static const String postBuyerRequest = '/post-buyer-request';
 }
