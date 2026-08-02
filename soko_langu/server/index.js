@@ -122,40 +122,60 @@ function notifTypeToChannel(type) {
   return 'general_notifications_v5';
 }
 
+// Retry with exponential backoff so transient OneSignal failures don't drop
+// money-critical pushes — every call site inherits this via the helpers below.
+async function postOneSignalWithRetry(payload, attempts = 3) {
+  let delayMs = 1000;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await axios.post(OS_URL, payload, { headers: osHeaders() });
+    } catch (e) {
+      const errBody = e.response?.data ? JSON.stringify(e.response.data) : e.message;
+      if (attempt === attempts) {
+        console.error(`[OS] FAILED after ${attempts} attempts: ${errBody}`);
+        return null;
+      }
+      console.warn(`[OS] attempt ${attempt}/${attempts} failed, retrying in ${delayMs}ms: ${errBody}`);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      delayMs *= 2;
+    }
+  }
+  return null;
+}
+
 async function sendOneSignalNotification(userId, title, body, data = {}) {
   if (!userId) { console.log('[OS] No userId'); return null; }
   if (!ONE_SIGNAL_APP_ID || !ONE_SIGNAL_REST_API_KEY) {
     console.error('[OS] Missing ONE_SIGNAL_APP_ID or ONE_SIGNAL_REST_API_KEY'); return null;
   }
   const notifType = (data && data.type) || 'general';
-  try {
-    const resp = await axios.post(OS_URL, {
-      app_id: ONE_SIGNAL_APP_ID,
-      idempotency_key: randomUUID(),
-      include_external_user_ids: [userId],
-      headings: { en: title || '' },
-      contents: { en: body || '' },
-      data: { ...(data || {}), type: notifType },
-      priority: 10, android_priority: 'high', android_visibility: 1,
-      existing_android_channel_id: notifTypeToChannel(notifType),
-      android_sound: 'soko_notification',
-      android_icon: 'ic_notification',
-    }, { headers: osHeaders() });
-    const result = resp.data;
-    if (result.id) console.log(`[OS] sent push to ${userId} type=${(data && data.type) || 'general'} id=${result.id}`);
-    else console.error(`[OS] push send failed:`, JSON.stringify(result));
+  // Server copy is already Swahili, so both language keys carry the same text —
+  // sw ensures Swahili-locale devices resolve it explicitly instead of en-only.
+  const headings = { en: title || '', sw: title || '' };
+  const contents = { en: body || '', sw: body || '' };
+  const resp = await postOneSignalWithRetry({
+    app_id: ONE_SIGNAL_APP_ID,
+    idempotency_key: randomUUID(),
+    include_external_user_ids: [userId],
+    headings,
+    contents,
+    data: { ...(data || {}), type: notifType },
+    priority: 10, android_priority: 'high', android_visibility: 1,
+    existing_android_channel_id: notifTypeToChannel(notifType),
+    android_sound: 'soko_notification',
+    android_icon: 'ic_notification',
+  });
+  if (!resp) return null;
+  const result = resp.data;
+  if (result.id) console.log(`[OS] sent push to ${userId} type=${(data && data.type) || 'general'} id=${result.id}`);
+  else console.error(`[OS] push send failed:`, JSON.stringify(result));
 
-    const criticalTypes = ['order', 'payment', 'dispute', 'refund', 'boost', 'kyc', 'withdrawal'];
-    if (criticalTypes.includes(notifType)) {
-      sendEmailSmtp(userId, title, body).catch(() => {});
-    }
-
-    return result;
-  } catch (e) {
-    const errBody = e.response?.data ? JSON.stringify(e.response.data) : e.message;
-    console.error(`[OS] FAILED user=${userId}: ${errBody}`);
-    return null;
+  const criticalTypes = ['order', 'payment', 'dispute', 'refund', 'boost', 'kyc', 'withdrawal'];
+  if (criticalTypes.includes(notifType)) {
+    sendEmailSmtp(userId, title, body).catch(() => {});
   }
+
+  return result;
 }
 
 // ─── SMTP Email (free via Gmail — no domain needed) ─────
@@ -191,29 +211,25 @@ async function sendOneSignalBulk(userIds, title, body, data = {}) {
   let successCount = 0;
   const batchSize = 2000;
   for (let i = 0; i < userIds.length; i += batchSize) {
-    try {
-      const resp = await axios.post(OS_URL, {
-        app_id: ONE_SIGNAL_APP_ID,
-        idempotency_key: randomUUID(),
-        included_segments: ['Total Subscriptions'],
-        headings: { en: title || '' },
-        contents: { en: body || '' },
-        data: { ...(data || {}), type: notifType },
-        priority: 10, android_priority: 'high', android_visibility: 1,
-        existing_android_channel_id: notifTypeToChannel(notifType),
-        android_sound: 'soko_notification',
-        android_icon: 'ic_notification',
-      }, { headers: osHeaders() });
-      const result = resp.data;
-      if (result.id) {
-        successCount += result.recipients || userIds.length;
-        console.log(`[OS] bulk sent — id=${result.id} recipients=${result.recipients ?? userIds.length}`);
-      } else {
-        console.error(`[OS] bulk send failed:`, JSON.stringify(result));
-      }
-    } catch (e) {
-      const errBody = e.response?.data ? JSON.stringify(e.response.data) : e.message;
-      console.error(`[OS] bulk error: ${errBody}`);
+    const resp = await postOneSignalWithRetry({
+      app_id: ONE_SIGNAL_APP_ID,
+      idempotency_key: randomUUID(),
+      included_segments: ['Total Subscriptions'],
+      headings: { en: title || '', sw: title || '' },
+      contents: { en: body || '', sw: body || '' },
+      data: { ...(data || {}), type: notifType },
+      priority: 10, android_priority: 'high', android_visibility: 1,
+      existing_android_channel_id: notifTypeToChannel(notifType),
+      android_sound: 'soko_notification',
+      android_icon: 'ic_notification',
+    });
+    if (!resp) continue;
+    const result = resp.data;
+    if (result.id) {
+      successCount += result.recipients || userIds.length;
+      console.log(`[OS] bulk sent — id=${result.id} recipients=${result.recipients ?? userIds.length}`);
+    } else {
+      console.error(`[OS] bulk send failed:`, JSON.stringify(result));
     }
   }
   return { successCount };
@@ -716,20 +732,29 @@ app.post('/api/sms/send', async (req, res) => {
       return res.status(500).json({ error: 'SMS not configured' });
     }
     const digits = phone.replace(/\D/g, '');
-    const normalized = digits.startsWith('0') ? '255' + digits.slice(1) : !digits.startsWith('255') ? '255' + digits : digits;
-    const resp = await axios.post('https://meseji.co.tz/api/v1/sms/send', {
-      sender_id: process.env.MESEJI_SENDER_ID || 'MESEJI',
-      message,
-      contacts: normalized,
-    }, {
-      headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
-      timeout: 15000,
-    });
-    if (resp.status >= 400) {
-      console.error(`Meseji returned ${resp.status}: ${JSON.stringify(resp.data)}`);
-      return res.status(502).json({ error: 'SMS provider error' });
+    // Meseji only accepts local-format numbers (07XXXXXXXX) inside a contacts
+    // ARRAY — string or +255 format both come back HTTP 500 from the provider.
+    const local = digits.startsWith('255') ? '0' + digits.slice(3) : !digits.startsWith('0') ? '0' + digits : digits;
+    const configured = process.env.MESEJI_SENDER_ID || 'MESEJI';
+    const senders = configured === 'MESEJI' ? ['MESEJI'] : [configured, 'MESEJI'];
+    for (const sender of senders) {
+      try {
+        const resp = await axios.post('https://meseji.co.tz/api/v1/sms/send', {
+          sender_id: sender,
+          message,
+          contacts: [local],
+        }, {
+          headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+          timeout: 15000,
+        });
+        console.log(`/api/sms/send: ok sender=${sender} to ${local} batch=${resp.data?.batch_id || ''}`);
+        return res.json({ sent: true, sender, batchId: resp.data?.batch_id || null });
+      } catch (e) {
+        const errBody = e.response?.data ? JSON.stringify(e.response.data) : e.message;
+        console.error(`/api/sms/send: sender ${sender} error: ${errBody}`);
+      }
     }
-    res.json({ sent: true });
+    return res.status(502).json({ error: 'SMS provider error' });
   } catch (e) {
     console.error('/api/sms/send error:', e.message);
     res.status(500).json({ error: 'Internal server error' });
@@ -742,26 +767,31 @@ async function sendSms(phone, message) {
     const apiKey = process.env.MESEJI_API_KEY;
     if (!apiKey) { console.error('sendSms: MESEJI_API_KEY not configured'); return false; }
     const digits = phone.replace(/\D/g, '');
-    const normalized = digits.startsWith('0') ? '255' + digits.slice(1) : !digits.startsWith('255') ? '255' + digits : digits;
-    const resp = await axios.post('https://meseji.co.tz/api/v1/sms/send', {
-      sender_id: process.env.MESEJI_SENDER_ID || 'MESEJI',
-      message,
-      contacts: normalized,
-    }, {
-      headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
-      timeout: 15000,
-    });
-    if (resp.status >= 400) {
-      console.error(`sendSms: Meseji returned ${resp.status}`);
-      return false;
+    // Meseji only accepts local-format numbers (07XXXXXXXX) inside a contacts
+    // ARRAY — string or +255 format both come back HTTP 500 from the provider.
+    const local = digits.startsWith('255') ? '0' + digits.slice(3) : !digits.startsWith('0') ? '0' + digits : digits;
+    const configured = process.env.MESEJI_SENDER_ID || 'MESEJI';
+    const senders = configured === 'MESEJI' ? ['MESEJI'] : [configured, 'MESEJI'];
+    for (const sender of senders) {
+      try {
+        const resp = await axios.post('https://meseji.co.tz/api/v1/sms/send', {
+          sender_id: sender,
+          message,
+          contacts: [local],
+        }, {
+          headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+          timeout: 15000,
+        });
+        console.log(`sendSms: ok sender=${sender} to ${local} batch=${resp.data?.batch_id || ''}`);
+        return true;
+      } catch (e) {
+        const errBody = e.response?.data ? JSON.stringify(e.response.data) : e.message;
+        console.error(`sendSms: sender ${sender} error: ${errBody}`);
+      }
     }
-    return true;
+    return false;
   } catch (e) {
-    if (e.name === 'AbortError') {
-      console.error('sendSms: request timed out after 15s for', phone);
-    } else {
-      console.error('sendSms error:', e.message);
-    }
+    console.error('sendSms error:', e.message);
     return false;
   }
 }
@@ -4267,20 +4297,25 @@ app.get('/api/seller-statement/:sellerId', async (req, res) => {
     const sellerEmail = sellerData.email || '';
     const sellerLocation = sellerData.location || '';
 
-    // All transactions for this seller (completed/paid only, last 12 months)
+    // Single-field queries only — composite (sellerId, createdAt) index is not
+    // guaranteed on production, so filter + sort in memory instead.
     const twelveMonthsAgo = new Date();
     twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+
     const txSnap = await db.collection('transactions')
       .where('sellerId', '==', sellerId)
-      .where('createdAt', '>=', twelveMonthsAgo)
-      .orderBy('createdAt', 'asc')
       .get();
+    const txDocs = txSnap.docs.filter((doc) => {
+      const createdAt = doc.data().createdAt;
+      const t = createdAt ? (createdAt.toDate ? createdAt.toDate() : new Date(createdAt)) : null;
+      return t != null && t >= twelveMonthsAgo;
+    });
 
     const paidStatuses = new Set(['completed', 'delivered', 'delivery_confirmed']);
     const entries = [];
     let runningBalance = 0;
 
-    for (const doc of txSnap.docs) {
+    for (const doc of txDocs) {
       const d = doc.data();
       const status = d.status || '';
       const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
@@ -4308,11 +4343,14 @@ app.get('/api/seller-statement/:sellerId', async (req, res) => {
     // Payouts/withdrawals for this seller (last 12 months)
     const withdrawSnap = await db.collection('withdrawals')
       .where('userId', '==', sellerId)
-      .where('createdAt', '>=', twelveMonthsAgo)
-      .orderBy('createdAt', 'asc')
       .get();
+    const withdrawDocs = withdrawSnap.docs.filter((doc) => {
+      const createdAt = doc.data().createdAt;
+      const t = createdAt ? (createdAt.toDate ? createdAt.toDate() : new Date(createdAt)) : null;
+      return t != null && t >= twelveMonthsAgo;
+    });
 
-    for (const doc of withdrawSnap.docs) {
+    for (const doc of withdrawDocs) {
       const d = doc.data();
       const status = d.status || '';
       const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
@@ -4335,7 +4373,7 @@ app.get('/api/seller-statement/:sellerId', async (req, res) => {
     }
 
     // Refunds (money taken back from seller for failed orders)
-    for (const doc of txSnap.docs) {
+    for (const doc of txDocs) {
       const d = doc.data();
       const status = d.status || '';
       const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
@@ -5505,27 +5543,42 @@ app.post('/api/flash-sale/notify', asyncHandler(async (req, res) => {
 
     // Get all users (paginated by document ID)
     let sentCount = 0;
-    let lastPushId = null;
     const PAGE_SIZE = 500;
 
-    try {
-      const userIds = [];
-      let lastPushId = null;
-      while (true) {
-        let query = db.collection('users');
-        if (lastPushId) query = query.startAfter(lastPushId);
-        query = query.limit(PAGE_SIZE);
-        const usersSnap = await query.get();
-        if (usersSnap.empty) break;
-        for (const doc of usersSnap.docs) {
-          if (doc.id) userIds.push(doc.id);
+    // Dedup: full-audience push at most once per 24h — each flash sale
+    // creation would otherwise spam every device. In-app rows still go out.
+    const cooldownRef = db.collection('app_settings').doc('flash_sale_push_cooldown');
+    const cooldownSnap = await cooldownRef.get();
+    const lastSentAt = cooldownSnap.exists && cooldownSnap.data()?.lastSentAt
+      ? cooldownSnap.data().lastSentAt.toDate()
+      : null;
+    const cooldownMs = 24 * 60 * 60 * 1000;
+    const pushSkipped = lastSentAt != null && Date.now() - lastSentAt.getTime() < cooldownMs;
+
+    if (!pushSkipped) {
+      try {
+        const userIds = [];
+        let lastPushId = null;
+        while (true) {
+          let query = db.collection('users');
+          if (lastPushId) query = query.startAfter(lastPushId);
+          query = query.limit(PAGE_SIZE);
+          const usersSnap = await query.get();
+          if (usersSnap.empty) break;
+          for (const doc of usersSnap.docs) {
+            if (doc.id) userIds.push(doc.id);
+          }
+          lastPushId = usersSnap.docs[usersSnap.docs.length - 1].id;
         }
-        lastPushId = usersSnap.docs[usersSnap.docs.length - 1].id;
+        const osResult = await sendOneSignalBulk(userIds, `⚡ Flash Sale! -${discountPercent}%`, `${productName} sasa TSh ${salePrice} pekee!`, { type: 'flash_sale', productName: productName || '', image: productImage || '' });
+        sentCount = osResult.successCount;
+        await cooldownRef.set({ lastSentAt: admin.firestore.Timestamp.now() }, { merge: true });
+        console.log(`[flash-sale] bulk push sent (sentCount=${sentCount})`);
+      } catch (pushErr) {
+        console.error('OneSignal push skipped for flash sale:', pushErr.message);
       }
-      const osResult = await sendOneSignalBulk(userIds, `⚡ Flash Sale! -${discountPercent}%`, `${productName} sasa TSh ${salePrice} pekee!`, { type: 'flash_sale', productName: productName || '', image: productImage || '' });
-      sentCount = osResult.successCount;
-    } catch (pushErr) {
-      console.error('OneSignal push skipped for flash sale:', pushErr.message);
+    } else {
+      console.log(`[flash-sale] push skipped — cooldown active (last sent ${lastSentAt.toISOString()})`);
     }
 
     // Write in-app notification for all users
@@ -5542,11 +5595,11 @@ app.post('/api/flash-sale/notify', asyncHandler(async (req, res) => {
       const batch = db.batch();
       let batched = 0;
       for (const doc of usersForNotif.docs) {
-        if (doc.id === sellerId) continue;
         batch.set(db.collection('notifications').doc(), {
           userId: doc.id,
           title: `⚡ Flash Sale! -${discountPercent}%`,
           body: `${productName} sasa TSh ${salePrice} pekee!`,
+          type: 'flash_sale',
           data: { type: 'flash_sale', image: productImage || '' },
           isRead: false,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -5558,7 +5611,7 @@ app.post('/api/flash-sale/notify', asyncHandler(async (req, res) => {
       lastNotifId = usersForNotif.docs[usersForNotif.docs.length - 1].id;
     }
 
-    res.json({ success: true, pushSent: sentCount, inAppNotified });
+    res.json({ success: true, pushSent: sentCount, inAppNotified, pushSkipped });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -6829,6 +6882,31 @@ app.post('/api/orders/create', async (req, res) => {
       phone: phone || '',
       paymentMethod: paymentMethod || 'ussd_push',
     });
+
+    // Mirror the order into transactions/{orderId} so it appears immediately in
+    // the buyer's My Purchases. 'awaiting_payment' keeps it out of the payment
+    // duplicate-check (which only scans pending/escrow_hold); the payment-link
+    // and webhook updates reuse the same doc via merge.
+    try {
+      await db.collection('transactions').doc(result.orderId).set({
+        type: 'purchase',
+        productId, productName, productImage: productImage || '',
+        sellerId, sellerName: sellerName || '',
+        buyerId, buyerName: buyerName || '', buyerPhone: buyerPhone || '',
+        productPrice: Math.round(Number(productPrice)),
+        shippingCost: Math.round(Number(shippingCost) || 0),
+        platformFee,
+        totalAmount,
+        deliveryType: deliveryType || 'local',
+        region: region || '', district: district || '', street: street || '',
+        landmarks: landmarks || '',
+        status: 'awaiting_payment',
+        paymentMethod: paymentMethod || 'ussd_push',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    } catch (e) {
+      console.error('order create tx mirror error:', e.message);
+    }
 
     // Notify seller that a new order is pending — push + in-app + SMS so the
     // seller always hears about it even with the app closed

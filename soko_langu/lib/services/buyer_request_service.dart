@@ -32,11 +32,22 @@ class BuyerRequestService {
       'title': title,
       'budget': budget,
       'description': description,
-      'whatsapp': whatsapp,
+      'whatsapp': _toWaMeLink(whatsapp),
       'isLocked': true,
       'unlockedBy': <String>[],
       'createdAt': FieldValue.serverTimestamp(),
     });
+  }
+
+  /// Normalizes a local phone number like 0712345678 into a wa.me link.
+  String _toWaMeLink(String raw) {
+    var digits = raw.replaceAll(RegExp(r'\D'), '');
+    if (digits.startsWith('0')) {
+      digits = '255${digits.substring(1)}';
+    } else if (!digits.startsWith('255')) {
+      digits = '255$digits';
+    }
+    return 'https://wa.me/$digits';
   }
 
   /// Permanently unlocks the buyer's contact for the signed-in seller.

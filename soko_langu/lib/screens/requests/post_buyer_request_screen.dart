@@ -81,10 +81,10 @@ class _PostBuyerRequestScreenState extends State<PostBuyerRequestScreen> {
                     hintText: context.tr('request_whatsapp_hint'),
                     border: const OutlineInputBorder(),
                   ),
-                  keyboardType: TextInputType.url,
+                  keyboardType: TextInputType.phone,
                   validator: (v) {
-                    final val = v?.trim() ?? '';
-                    return (!val.contains('wa.me')) ? context.tr('invalid_whatsapp') : null;
+                    final digits = (v ?? '').replaceAll(RegExp(r'\D'), '');
+                    return (digits.length < 9) ? context.tr('invalid_whatsapp') : null;
                   },
                 ),
                 const SizedBox(height: 24),

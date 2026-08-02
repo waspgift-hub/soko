@@ -36,16 +36,25 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
     setState(() { _loading = true; _error = null; });
     try {
       final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-      if (token == null) { _error = 'Unauthenticated'; return; }
+      if (token == null) {
+        if (mounted) setState(() { _loading = false; _error = 'Unauthenticated'; });
+        return;
+      }
       final resp = await http
           .get(
             Uri.parse('${ApiConfig.baseUrl}/api/seller-statement/${widget.sellerId}'),
             headers: { 'Authorization': 'Bearer $token', 'Content-Type': 'application/json' },
           )
           .timeout(const Duration(seconds: 20));
-      if (resp.statusCode != 200) { _error = 'Server error: ${resp.statusCode}'; return; }
+      if (resp.statusCode != 200) {
+        if (mounted) setState(() { _loading = false; _error = 'Server error: ${resp.statusCode}'; });
+        return;
+      }
       final result = jsonDecode(resp.body);
-      if (result['success'] != true) { _error = 'Failed to load statement'; return; }
+      if (result['success'] != true) {
+        if (mounted) setState(() { _loading = false; _error = 'Failed to load statement'; });
+        return;
+      }
       if (mounted) setState(() { _data = result; _loading = false; });
     } catch (e) {
       if (mounted) setState(() { _error = 'Network error'; _loading = false; });

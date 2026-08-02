@@ -6,6 +6,7 @@ import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'api_config.dart';
 import 'local_notification_service.dart';
 
@@ -16,6 +17,9 @@ class NotificationService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   bool _initialized = false;
   bool _listenersRegistered = false;
+  bool _pushDenied = false;
+  StreamSubscription<QuerySnapshot>? _fallbackSub;
+  final Set<String> _seenFallbackIds = {};
 
   final StreamController<int> _unreadController = StreamController<int>.broadcast();
   Stream<int> get unreadCountStream => _unreadController.stream;
@@ -40,6 +44,10 @@ class NotificationService {
     } else {
       OneSignal.Notifications.clearAll();
       await OneSignal.logout();
+      _fallbackSub?.cancel();
+      _fallbackSub = null;
+      _seenFallbackIds.clear();
+      _pushDenied = false;
       _initialized = false;
     }
   }
@@ -55,12 +63,22 @@ class NotificationService {
 
       // Initialize local notifications first for heads-up display
       await LocalNotificationService().initialize();
+      LocalNotificationService.onTap = _handleLocalTap;
 
       OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
       OneSignal.initialize(ApiConfig.oneSignalAppId);
 
       final perm = await OneSignal.Notifications.requestPermission(true);
       debugPrint('[OS] permission result: $perm');
+      _pushDenied = !perm;
+      if (_pushDenied) {
+        // Push denied — mirror in-app notifications as heads-up via Firestore
+        // so critical events are still visible without push permission.
+        _startFirestoreFallback();
+      } else {
+        _fallbackSub?.cancel();
+        _fallbackSub = null;
+      }
 
       final user = _auth.currentUser;
       if (user != null) {
@@ -102,8 +120,12 @@ class NotificationService {
             if (user.email != null && user.email!.isNotEmpty) {
               OneSignal.User.addEmail(user.email!);
             }
+            if (_pushDenied) _startFirestoreFallback();
           } else {
             await OneSignal.logout();
+            _fallbackSub?.cancel();
+            _fallbackSub = null;
+            _seenFallbackIds.clear();
             debugPrint('[OS] auth change — logged out');
           }
         });
@@ -122,52 +144,75 @@ class NotificationService {
 
   void _showHeadsUpNotification(String title, String body, String type, Map<String, dynamic> data) {
     final String channelId;
-    final String? payload;
     final String headsUpTitle;
+    final List<AndroidNotificationAction> actions = [];
 
     switch (type) {
       case 'chat':
       case 'group_chat':
-        final roomId = data['roomId'] as String? ?? '';
         channelId = 'chat_messages_v5';
         headsUpTitle = data['senderName'] as String? ?? title;
-        payload = '/chat/$roomId';
+        actions.add(const AndroidNotificationAction('reply', 'Jibu', showsUserInterface: true));
         break;
       case 'payment':
+      case 'payment_failed':
+      case 'refund':
+      case 'cancelled':
+      case 'withdrawal':
+      case 'escrow_auto_release':
+      case 'auto_payout':
       case 'order':
+      case 'dispatched':
+      case 'delivery_confirmed':
       case 'kyc':
       case 'kyc_approved':
       case 'kyc_rejected':
       case 'kyc_revoked':
       case 'deposit':
       case 'deposit_failed':
-        final orderId = data['orderId'] as String?;
         channelId = 'payments_notifications_v5';
         headsUpTitle = title;
-        payload = orderId != null ? '/order-detail/$orderId' : null;
+        final hasOrder = data['orderId'] != null || data['transactionId'] != null;
+        // sellerId marks the shipping-quote push to the buyer — pay button
+        if (type == 'payment' || (type == 'order' && data['sellerId'] != null)) {
+          if (hasOrder) {
+            actions.add(const AndroidNotificationAction('pay', 'Lipa Sasa', showsUserInterface: true));
+          }
+        }
+        if (type == 'dispatched' || type == 'delivery_confirmed') {
+          if (hasOrder) {
+            actions.add(const AndroidNotificationAction('confirm', 'Thibitisha Upokeaji', showsUserInterface: true));
+          }
+        }
         break;
       case 'boost':
       case 'promotion':
         channelId = 'general_notifications_v5';
         headsUpTitle = title;
-        payload = '/my-ads';
+        break;
+      case 'flash_sale':
+        channelId = 'general_notifications_v5';
+        headsUpTitle = title;
         break;
       case 'system':
       case 'admin':
       case 'alert':
         channelId = 'system_alerts_v5';
         headsUpTitle = title;
-        payload = null;
         break;
       default:
         channelId = 'general_notifications_v5';
         headsUpTitle = title;
-        payload = null;
     }
 
     final bool isCritical = type == 'system' || type == 'admin' || type == 'alert' ||
-        type == 'payment' || type == 'order' || type == 'deposit' || type == 'deposit_failed' ||
-        type == 'chat';
+        type == 'payment' || type == 'payment_failed' || type == 'refund' ||
+        type == 'cancelled' || type == 'withdrawal' || type == 'escrow_auto_release' ||
+        type == 'auto_payout' || type == 'order' || type == 'deposit' ||
+        type == 'deposit_failed' || type == 'chat' || type == 'flash_sale';
+
+    // payload carries type + data so a local tap routes like a OneSignal tap
+    final payload = jsonEncode({'type': type, ...data});
 
     LocalNotificationService().showHeadsUp(
       id: DateTime.now().millisecondsSinceEpoch % 2147483647,
@@ -176,10 +221,22 @@ class NotificationService {
       channelId: channelId,
       payload: payload,
       fullScreen: isCritical,
+      actions: actions,
     );
 
     if (title.isNotEmpty && onForegroundMessage != null) {
       onForegroundMessage!(title, body, type, data);
+    }
+  }
+
+  static void _handleLocalTap(Map<String, dynamic> data) {
+    final type = data['type'] as String?;
+    final action = data['action'] as String?;
+    debugPrint('[OS] local notification tapped: type=$type action=$action');
+    if ((type == 'payment' || action == 'pay') && onPaymentNotificationTap != null) {
+      onPaymentNotificationTap!(data);
+    } else if (onNotificationTap != null) {
+      onNotificationTap!(data);
     }
   }
 
@@ -306,6 +363,84 @@ class NotificationService {
     } catch (e) {
       debugPrint('markAllAsRead: $e');
     }
+  }
+
+  /// Marks unread in-app notifications matching this tap as read so the badge
+  /// clears even when the user opened the app via a push instead of the list.
+  Future<void> markRelatedAsRead(String? type, Map<String, dynamic>? data) async {
+    final user = _auth.currentUser;
+    if (user == null || type == null || type.isEmpty) return;
+    try {
+      final snap = await _db
+          .collection('notifications')
+          .where('userId', isEqualTo: user.uid)
+          .limit(500)
+          .get();
+      final candidates = snap.docs.where((doc) {
+        final d = doc.data();
+        return d['isRead'] != true && d['type'] == type;
+      }).toList();
+      if (candidates.isEmpty) return;
+
+      final idKeys = ['orderId', 'transactionId', 'productId', 'roomId', 'payoutId', 'depositRef'];
+      final expected = <String, String>{};
+      for (final key in idKeys) {
+        final value = data?[key];
+        if (value != null) expected[key] = value.toString();
+      }
+
+      final batch = _db.batch();
+      for (final doc in candidates) {
+        final docData = doc.data();
+        final matches = expected.entries.every((entry) {
+          final dataMap = docData['data'];
+          if (dataMap is! Map) return false;
+          return dataMap[entry.key]?.toString() == entry.value;
+        });
+        if (expected.isEmpty || matches) {
+          batch.update(doc.reference, {'isRead': true});
+        }
+      }
+      await batch.commit();
+      _syncBadge();
+    } catch (e) {
+      debugPrint('markRelatedAsRead: $e');
+    }
+  }
+
+  /// Firestore fallback for users who denied push — new in-app rows become
+  /// heads-up notifications so critical events are never missed.
+  void _startFirestoreFallback() {
+    final user = _auth.currentUser;
+    if (user == null || _fallbackSub != null) return;
+    _seenFallbackIds.clear();
+    _fallbackSub = _db
+        .collection('notifications')
+        .where('userId', isEqualTo: user.uid)
+        .snapshots()
+        .listen((snap) {
+      for (final change in snap.docChanges) {
+        if (change.type != DocumentChangeType.added) continue;
+        final doc = change.doc;
+        if (_seenFallbackIds.contains(doc.id)) continue;
+        _seenFallbackIds.add(doc.id);
+        final d = doc.data();
+        if (d == null) continue;
+        if (d['isRead'] == true) continue;
+        final createdAt = d['createdAt'];
+        if (createdAt is Timestamp &&
+            DateTime.now().difference(createdAt.toDate()).inMinutes > 2) {
+          continue;
+        }
+        _showHeadsUpNotification(
+          d['title']?.toString() ?? '',
+          d['body']?.toString() ?? '',
+          d['type']?.toString() ?? 'general',
+          Map<String, dynamic>.from(d['data'] as Map? ?? const {}),
+        );
+      }
+    });
+    debugPrint('[OS] firestore fallback active (push denied)');
   }
 
   Future<bool> deleteNotification(String notifId) async {

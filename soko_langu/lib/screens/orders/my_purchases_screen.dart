@@ -501,12 +501,15 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     ColorScheme cs,
     List<QueryDocumentSnapshot> allDocs,
   ) {
+    final visible = allDocs
+        .where((d) => (d.data() as Map)['deletedForBuyer'] != true)
+        .toList();
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
       child: Row(
         children: _filters.map((f) {
           final selected = _selectedFilter == f;
-          final count = f == 'all' ? allDocs.length : _filterCount(allDocs, f);
+          final count = f == 'all' ? visible.length : _filterCount(visible, f);
           return Padding(
             padding: const EdgeInsets.only(right: 8),
             child: FilterChip(

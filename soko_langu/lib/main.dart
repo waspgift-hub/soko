@@ -357,6 +357,8 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
         if (orderId != null) {
           _pushIfNotCurrent('/receipt/$orderId', context);
         }
+        unawaited(notificationService.markRelatedAsRead(
+            (data['type'] as String?) ?? 'payment', data));
       });
     };
   }
@@ -406,6 +408,7 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
           _pushIfNotCurrent('/notifications', ctx);
         }
     }
+    unawaited(notificationService.markRelatedAsRead(type, data));
   }
 
   void _pushIfNotCurrent(String location, [BuildContext? context, Object? extra]) {

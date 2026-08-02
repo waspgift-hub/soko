@@ -19,6 +19,7 @@ class BuyerRequestsScreen extends StatefulWidget {
 
 class _BuyerRequestsScreenState extends State<BuyerRequestsScreen> {
   final BuyerRequestService _service = BuyerRequestService();
+  int _refreshKey = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -31,8 +32,30 @@ class _BuyerRequestsScreenState extends State<BuyerRequestsScreen> {
         label: Text(context.tr('post_request')),
       ),
       body: StreamBuilder<List<BuyerRequest>>(
+        key: ValueKey('buyer_requests_$_refreshKey'),
         stream: _service.getRequests(),
         builder: (context, snap) {
+          if (snap.hasError) {
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.error_outline, size: 48, color: cs.error),
+                  const SizedBox(height: 12),
+                  Text(
+                    context.tr('requests_error'),
+                    style: TextStyle(color: cs.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 12),
+                  TextButton.icon(
+                    onPressed: () => setState(() => _refreshKey++),
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: Text(context.tr('retry')),
+                  ),
+                ],
+              ),
+            );
+          }
           if (!snap.hasData) {
             return const Center(child: GoogleLoading(size: 32));
           }
