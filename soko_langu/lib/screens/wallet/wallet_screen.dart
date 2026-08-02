@@ -85,7 +85,7 @@ class _WalletScreenState extends State<WalletScreen> {
                 validator: (v) {
                   if (v == null || v.isEmpty) return context.tr('required_field');
                   final n = int.tryParse(v);
-                  if (n == null || n < 1000) return context.trParams('minimum_tzs', {'amount': '1,000'});
+                  if (n == null || n < 2000) return context.trParams('minimum_tzs', {'amount': '2,000'});
                   if (n > _balance) return context.tr('insufficient_balance');
                   return null;
                 },
