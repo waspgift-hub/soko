@@ -32,6 +32,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   bool _detecting = false;
   double? _latitude;
   double? _longitude;
+  String _deliveryType = 'local';
+  String? _selectedRegion;
+
+  static const List<String> _regions = [
+    'Arusha', 'Dar es Salaam', 'Dodoma', 'Geita', 'Iringa', 'Kagera',
+    'Katavi', 'Kigoma', 'Kilimanjaro', 'Lindi', 'Manyara', 'Mara',
+    'Mbeya', 'Mjini Magharibi', 'Morogoro', 'Mtwara', 'Mwanza',
+    'Njombe', 'Pwani', 'Rukwa', 'Ruvuma', 'Shinyanga', 'Simiyu',
+    'Singida', 'Songwe', 'Tabora', 'Tanga',
+  ];
 
   @override
   void dispose() {
@@ -40,6 +50,23 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     _streetCtrl.dispose();
     _landmarksCtrl.dispose();
     super.dispose();
+  }
+
+  void _matchRegion(String raw) {
+    if (raw.isEmpty) return;
+    final normalized = raw.toLowerCase().replaceAll(RegExp(r'\s*(mkoa|region)\s*$'), '').trim();
+    for (final r in _regions) {
+      if (r.toLowerCase() == normalized) {
+        _selectedRegion = r;
+        return;
+      }
+    }
+    for (final r in _regions) {
+      if (r.toLowerCase().contains(normalized) || normalized.contains(r.toLowerCase())) {
+        _selectedRegion = r;
+        return;
+      }
+    }
   }
 
   Future<void> _detectLocation() async {
@@ -77,7 +104,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       _latitude = pos.latitude;
       _longitude = pos.longitude;
       await _reverseGeocode(pos.latitude, pos.longitude);
+      if (!mounted) return;
       setState(() => _detecting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('address_filled_confirm')), behavior: SnackBarBehavior.floating),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _detecting = false);
@@ -96,8 +127,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       final address = data['address'] as Map<String, dynamic>?;
       if (address == null) return;
       if (!mounted) return;
+      final state = (address['state'] as String?) ?? '';
       setState(() {
-        _regionCtrl.text = (address['state'] as String?) ?? _regionCtrl.text;
+        _regionCtrl.text = state;
+        _matchRegion(state);
         _districtCtrl.text = (address['city_district'] as String?)
             ?? (address['municipality'] as String?)
             ?? (address['county'] as String?)
@@ -188,6 +221,33 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ),
           const SizedBox(height: 20),
 
+          Text(context.tr('delivery_type'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: cs.onSurface)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _DeliveryTypeChip(
+                  label: context.tr('delivery_within_region'),
+                  icon: Icons.location_city,
+                  selected: _deliveryType == 'local',
+                  color: cs.primary,
+                  onTap: () => setState(() => _deliveryType = 'local'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _DeliveryTypeChip(
+                  label: context.tr('delivery_outside_region'),
+                  icon: Icons.local_shipping,
+                  selected: _deliveryType == 'regional',
+                  color: cs.tertiary,
+                  onTap: () => setState(() => _deliveryType = 'regional'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
           Text(context.tr('shipping_address'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: cs.onSurface)),
           const SizedBox(height: 12),
           OutlinedButton.icon(
@@ -210,7 +270,27 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
-                TextField(controller: _regionCtrl, decoration: InputDecoration(hintText: context.tr('region_hint'), border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: true, fillColor: cs.surface.withValues(alpha: 0.5), isDense: true), textCapitalization: TextCapitalization.words, cursorColor: cs.primary),
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedRegion,
+                  decoration: InputDecoration(
+                    hintText: context.tr('select_region'),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    filled: true,
+                    fillColor: cs.surface.withValues(alpha: 0.5),
+                    isDense: true,
+                  ),
+                  items: _regions
+                      .map((r) => DropdownMenuItem(value: r, child: Text(r)))
+                      .toList(),
+                  onChanged: (v) {
+                    setState(() {
+                      _selectedRegion = v;
+                      if (v != null) _regionCtrl.text = v;
+                    });
+                  },
+                ),
                 const SizedBox(height: 10),
                 TextField(controller: _districtCtrl, decoration: InputDecoration(hintText: context.tr('district_hint'), border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: true, fillColor: cs.surface.withValues(alpha: 0.5), isDense: true), textCapitalization: TextCapitalization.words, cursorColor: cs.primary),
                 const SizedBox(height: 10),
@@ -254,7 +334,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Future<void> _submitOrder() async {
-    final region = _regionCtrl.text.trim();
+    final region = _selectedRegion ?? _regionCtrl.text.trim();
     final district = _districtCtrl.text.trim();
     final street = _streetCtrl.text.trim();
     if (region.isEmpty || district.isEmpty || street.isEmpty) {
@@ -291,7 +371,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           'landmarks': _landmarksCtrl.text.trim(),
           'latitude': _latitude,
           'longitude': _longitude,
-          'deliveryType': 'local',
+          'deliveryType': _deliveryType,
         }),
       );
 
@@ -317,5 +397,61 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   void _showError(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.error));
+  }
+}
+
+class _DeliveryTypeChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _DeliveryTypeChip({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: selected ? color.withValues(alpha: 0.12) : cs.surfaceContainerHighest.withValues(alpha: 0.4),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected ? color : cs.outline.withValues(alpha: 0.2),
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 20, color: selected ? color : cs.onSurfaceVariant),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected ? color : cs.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

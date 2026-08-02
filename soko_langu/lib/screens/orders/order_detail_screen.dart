@@ -1999,6 +1999,8 @@ $stepsStr
             'region': _addrField('region'),
             'district': _addrField('district'),
             'street': _addrField('street'),
+            'landmarks': _addrField('landmarks'),
+            'deliveryType': (d['deliveryType'] as String?) ?? 'local',
             'paymentMethod': 'wallet',
             'orderId': widget.docId,
           }),
@@ -2036,7 +2038,7 @@ $stepsStr
           phone: normalizedPhone,
           buyerId: user.uid,
           buyerName: user.displayName ?? '',
-          deliveryType: 'local',
+          deliveryType: (d['deliveryType'] as String?) ?? 'local',
           paymentMethod: _selectedMethod,
           existingTransactionId: widget.docId,
         );
