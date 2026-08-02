@@ -21,7 +21,7 @@ if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
 const {
   clickpesaCollect, clickpesaPayout, clickpesaBalance, clickpesaPayoutPreview,
   clickpesaCreateBillPayOrder,
-  getUssdPushFee, calcGatewayFee, ALL_PAYMENT_METHODS,
+  getUssdPushFee, getPayoutFee, calcGatewayFee, ALL_PAYMENT_METHODS,
 } = require('./clickpesa');
 const orderEngine = require('./orders');
 const searchRouter = require('./search').router;
@@ -1537,8 +1537,9 @@ app.post('/api/escrow/release', async (req, res) => {
       const sellerData = sellerDoc.data();
       if (sellerData?.autoPayout === true && !payoutMethod) {
         const sellerPhone = sellerData?.phone;
-        if (sellerPhone && sellerReceives > DEFAULT_PAYOUT_FEE) {
-          const netPayout = sellerReceives - DEFAULT_PAYOUT_FEE;
+        const payoutFee = getPayoutFee(sellerReceives);
+        if (sellerPhone && sellerReceives > payoutFee) {
+          const netPayout = sellerReceives - payoutFee;
           const payoutRef = generatePayoutReference('ap');
           await db.collection('users').doc(sellerId).update({
             sellerBalance: admin.firestore.FieldValue.increment(-sellerReceives),
@@ -1550,7 +1551,7 @@ app.post('/api/escrow/release', async (req, res) => {
           });
           await db.collection('payouts').doc(payoutRef).set({
             userId: sellerId, userPhone: sellerPhone,
-            type: 'auto_payout', amount: sellerReceives, fee: DEFAULT_PAYOUT_FEE,
+            type: 'auto_payout', amount: sellerReceives, fee: payoutFee,
             netAmount: netPayout, clickpesaReference: mRef.id || '',
             status: 'completed', transactionId: orderId,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1563,15 +1564,17 @@ app.post('/api/escrow/release', async (req, res) => {
 
     // Notify seller
     if (autoPaidOut) {
+      const payoutFee = getPayoutFee(sellerReceives);
+      const netPayout = sellerReceives - payoutFee;
       await db.collection('notifications').add({
         userId: sellerId,
         title: 'Pesa Zimetumwa Moja kwa Moja!',
-        body: `${productName} — TZS ${(sellerReceives - DEFAULT_PAYOUT_FEE).toLocaleString()} zimetumwa kwa simu yako. Fee ya TZS ${DEFAULT_PAYOUT_FEE.toLocaleString()} imekatwa.`,
+        body: `${productName} — TZS ${netPayout.toLocaleString()} zimetumwa kwa simu yako. Fee ya TZS ${payoutFee.toLocaleString()} imekatwa.`,
         isRead: false,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       try {
-        sendOneSignalNotification(sellerId, 'Pesa Zimetumwa Moja kwa Moja!', `TZS ${(sellerReceives - DEFAULT_PAYOUT_FEE).toLocaleString()} zimetumwa kwa simu yako (fee TZS ${DEFAULT_PAYOUT_FEE.toLocaleString()}).`, { type: 'auto_payout', transactionId: orderId }).catch(() => {});
+        sendOneSignalNotification(sellerId, 'Pesa Zimetumwa Moja kwa Moja!', `TZS ${netPayout.toLocaleString()} zimetumwa kwa simu yako (fee TZS ${payoutFee.toLocaleString()}).`, { type: 'auto_payout', transactionId: orderId }).catch(() => {});
       } catch (_) {}
     } else {
       await db.collection('notifications').add({
@@ -1605,7 +1608,7 @@ app.post('/api/escrow/release', async (req, res) => {
       const sellerPhone = sellerUser.data()?.phone;
       if (sellerPhone) {
         const sellerMsg = autoPaidOut
-          ? `Soko Vibe: TZS ${(sellerReceives - DEFAULT_PAYOUT_FEE).toLocaleString()} zimetumwa kwa simu yako kwa mauzo ya ${productName} (fee TZS ${DEFAULT_PAYOUT_FEE.toLocaleString()}).`
+          ? `Soko Vibe: TZS ${(sellerReceives - getPayoutFee(sellerReceives)).toLocaleString()} zimetumwa kwa simu yako kwa mauzo ya ${productName} (fee TZS ${getPayoutFee(sellerReceives).toLocaleString()}).`
           : `Soko Vibe: Mteja amethibitisha kupokea mzigo #${orderId}. TZS ${sellerReceives.toLocaleString()} zimetolewa Escrow na kuwekwa kwenye pochi yako.`;
         sendSms(sellerPhone, sellerMsg);
       }
@@ -1614,7 +1617,7 @@ app.post('/api/escrow/release', async (req, res) => {
     res.json({
       success: true,
       message: autoPaidOut
-        ? `Auto payout: TZS ${(sellerReceives - DEFAULT_PAYOUT_FEE).toLocaleString()} sent to seller phone`
+        ? `Auto payout: TZS ${(sellerReceives - getPayoutFee(sellerReceives)).toLocaleString()} sent to seller phone`
         : 'Escrow released. Seller balance credited.',
       autoPaidOut,
     });
@@ -3526,7 +3529,9 @@ app.post('/api/seller/withdraw', async (req, res) => {
       return res.status(400).json({ error: `Minimum withdrawal is TZS ${MIN_WITHDRAWAL.toLocaleString()}` });
     }
 
-    const totalCost = withdrawAmount + DEFAULT_PAYOUT_FEE;
+    // Real ClickPesa payout fee tier — not the old flat 2000 estimate
+    const payoutFee = getPayoutFee(withdrawAmount);
+    const totalCost = withdrawAmount + payoutFee;
 
     // Atomic transaction: read balance, validate, deduct
     let sellerName = '';
@@ -3545,7 +3550,7 @@ app.post('/api/seller/withdraw', async (req, res) => {
         balanceSnapshot = currentBalance;
 
         if (currentBalance < totalCost) {
-          throw new Error(`Insufficient balance. You need TZS ${totalCost.toLocaleString()} (${withdrawAmount.toLocaleString()} withdrawal + ${DEFAULT_PAYOUT_FEE.toLocaleString()} fee). Available: TZS ${currentBalance.toLocaleString()}`);
+          throw new Error(`Insufficient balance. You need TZS ${totalCost.toLocaleString()} (${withdrawAmount.toLocaleString()} withdrawal + ${payoutFee.toLocaleString()} fee). Available: TZS ${currentBalance.toLocaleString()}`);
         }
 
         tx.update(userRef, {
@@ -3564,7 +3569,7 @@ app.post('/api/seller/withdraw', async (req, res) => {
         userId,
         phone,
         amount: totalCost,       // total deducted from seller
-        fee: DEFAULT_PAYOUT_FEE,
+        fee: payoutFee,
         netAmount,               // what seller actually receives
         source: `seller_withdraw_${Date.now()}`,
         type: 'seller_withdrawal',
@@ -3585,9 +3590,9 @@ app.post('/api/seller/withdraw', async (req, res) => {
     await auditLog({
       userId, type: 'seller_withdraw', amount: -totalCost,
       balanceBefore: balanceSnapshot, balanceAfter: balanceSnapshot - totalCost,
-      reason: `Seller withdrawal: TZS ${netAmount.toLocaleString()} to ${phone} (fee: TZS ${DEFAULT_PAYOUT_FEE.toLocaleString()})`,
+      reason: `Seller withdrawal: TZS ${netAmount.toLocaleString()} to ${phone} (fee: TZS ${payoutFee.toLocaleString()})`,
       relatedId: payoutResult.payoutId,
-      metadata: { phone, netAmount, fee: DEFAULT_PAYOUT_FEE, payoutId: payoutResult.payoutId },
+      metadata: { phone, netAmount, fee: payoutFee, payoutId: payoutResult.payoutId },
     });
 
     // Notify seller about withdrawal initiation
@@ -3606,7 +3611,7 @@ app.post('/api/seller/withdraw', async (req, res) => {
     res.json({
       success: true,
       netAmount,
-      fee: DEFAULT_PAYOUT_FEE,
+      fee: payoutFee,
       payoutId: payoutResult.payoutId,
       message: `TZS ${netAmount.toLocaleString()} zimetumwa kwa ${phone}`,
     });
@@ -3666,15 +3671,16 @@ app.post('/api/admin/withdraw', async (req, res) => {
       return res.status(400).json({ error: `Insufficient admin balance. Available: TZS ${availableBalance.toLocaleString()}` });
     }
 
-    const netAmount = amount - DEFAULT_PAYOUT_FEE;
+    const payoutFee = getPayoutFee(amount);
+    const netAmount = amount - payoutFee;
     if (netAmount <= 0) {
-      return res.status(400).json({ error: `Amount too small after fee (min TZS ${DEFAULT_PAYOUT_FEE + 1})` });
+      return res.status(400).json({ error: `Amount too small after fee (min TZS ${payoutFee + 1})` });
     }
 
     let payoutId;
     try {
       const payout = await processPayout({
-        userId, phone, amount, fee: DEFAULT_PAYOUT_FEE, netAmount,
+        userId, phone, amount, fee: payoutFee, netAmount,
         source: `admin_withdraw_${Date.now()}`,
         type: 'admin_withdrawal',
       });
@@ -3686,7 +3692,7 @@ app.post('/api/admin/withdraw', async (req, res) => {
     await db.collection('admin_withdrawals').add({
       userId,
       amount,
-      fee: DEFAULT_PAYOUT_FEE,
+      fee: payoutFee,
       netAmount,
       phone,
       payoutId,
@@ -3699,13 +3705,13 @@ app.post('/api/admin/withdraw', async (req, res) => {
       userId, type: 'admin_withdraw', amount: -amount,
       reason: `Admin ad revenue withdrawal: TZS ${netAmount} to ${phone}`,
       relatedId: payoutId,
-      metadata: { phone, netAmount, fee: DEFAULT_PAYOUT_FEE, payoutId },
+      metadata: { phone, netAmount, fee: payoutFee, payoutId },
     });
 
     res.json({
       success: true,
       netAmount,
-      fee: DEFAULT_PAYOUT_FEE,
+      fee: payoutFee,
       payoutId,
       message: `TZS ${netAmount.toLocaleString()} zimetumwa kwa ${phone}`,
     });
@@ -3743,13 +3749,14 @@ app.post('/api/create-payout', async (req, res) => {
       }
     }
 
-    const netAmount = amount - DEFAULT_PAYOUT_FEE;
+    const payoutFee = getPayoutFee(amount);
+    const netAmount = amount - payoutFee;
     if (netAmount <= 0) {
-      return res.status(400).json({ error: `Amount too small after fee (min TZS ${DEFAULT_PAYOUT_FEE + 1})` });
+      return res.status(400).json({ error: `Amount too small after fee (min TZS ${payoutFee + 1})` });
     }
 
     const payoutResult = await processPayout({
-      userId, phone, amount, fee: DEFAULT_PAYOUT_FEE, netAmount,
+      userId, phone, amount, fee: payoutFee, netAmount,
       source: source || generatePayoutReference('src'),
       type: type || 'manual',
     });
@@ -3758,7 +3765,7 @@ app.post('/api/create-payout', async (req, res) => {
       userId, type: 'admin_create_payout', amount: -amount,
       reason: `Admin-created payout: TZS ${netAmount} to ${phone}`,
       relatedId: payoutResult.payoutId,
-      metadata: { phone, netAmount, fee: DEFAULT_PAYOUT_FEE, source },
+      metadata: { phone, netAmount, fee: payoutFee, source },
     });
 
     res.json({ success: true, ...payoutResult });
@@ -5792,10 +5799,11 @@ app.post('/api/clickpesa/payout-preview', async (req, res) => {
   try {
     const { amount, phone } = req.body;
     if (!amount || !phone) return res.status(400).json({ error: 'Missing amount or phone' });
+    const payoutFee = getPayoutFee(Math.round(amount));
     const preview = {
       amount: Math.round(amount),
-      fee: DEFAULT_PAYOUT_FEE,
-      netAmount: Math.round(amount) - DEFAULT_PAYOUT_FEE,
+      fee: payoutFee,
+      netAmount: Math.round(amount) - payoutFee,
       recipientPhone: phone,
     };
     res.json({ success: true, preview });
@@ -6494,7 +6502,7 @@ app.post('/api/wallet/purchase', async (req, res) => {
     const {
       buyerId, buyerName, productId, productName, productImage,
       productPrice, sellerId, sellerName, processingFee, serviceFeePercent,
-      totalAmount, region, district, street, landmarks,
+      totalAmount, region, district, street, landmarks, deliveryType, orderId,
     } = req.body;
 
     if (!buyerId || !sellerId || !productId || !productName || productPrice == null) {
@@ -6529,7 +6537,11 @@ app.post('/api/wallet/purchase', async (req, res) => {
       walletBalance: admin.firestore.FieldValue.increment(-totalAmount),
     }, { merge: true });
 
-    // Create transaction record
+    const escrowDeliveryType = deliveryType || 'local';
+    const autoReleaseDays = escrowDeliveryType === 'regional' ? ESCROW_REGIONAL_DAYS : ESCROW_LOCAL_DAYS;
+    const escrowExpiry = new Date(Date.now() + autoReleaseDays * 24 * 60 * 60 * 1000);
+
+    // Create transaction record — money goes to escrow, not straight to seller
     const txRef = db.collection('transactions').doc();
     await txRef.set({
       type: 'purchase',
@@ -6546,14 +6558,20 @@ app.post('/api/wallet/purchase', async (req, res) => {
       sellerReceives,
       region, district, street,
       landmarks: landmarks || '',
-      status: 'completed',
+      deliveryType: escrowDeliveryType,
+      autoReleaseDays,
+      status: 'escrow_hold',
       paymentMethod: 'Wallet',
+      escrowStatus: 'held',
+      escrowHeldAt: admin.firestore.FieldValue.serverTimestamp(),
+      escrowExpiresAt: admin.firestore.Timestamp.fromDate(escrowExpiry),
+      orderId: orderId || '',
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    // Credit seller balance
+    // Hold the money in seller's escrow until delivery is confirmed
     await db.collection('users').doc(sellerId).set({
-      sellerBalance: admin.firestore.FieldValue.increment(sellerReceives),
+      pendingEscrow: admin.firestore.FieldValue.increment(sellerReceives),
       totalSales: admin.firestore.FieldValue.increment(1),
       grossSalesVolume: admin.firestore.FieldValue.increment(price),
       lastSaleAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -6572,6 +6590,22 @@ app.post('/api/wallet/purchase', async (req, res) => {
       buyerName: buyerName || '',
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
     });
+
+    // In-app + push notification: buyer's money is safe in escrow
+    db.collection('notifications').add({
+      userId: buyerId,
+      title: 'Malipo Yamekamilika!',
+      body: `Malipo ya ${productName} yamepokelewa na kuwekwa escrow salama. Thibitisha upokeaji ili muuzaji apate hela zake.`,
+      isRead: false,
+      type: 'escrow_confirm',
+      transactionId: txRef.id,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    }).catch(() => {});
+    sendOneSignalNotification(buyerId,
+      'Malipo Yamekamilika!',
+      `Malipo ya ${productName} yamepokelewa na kuwekwa escrow salama.`,
+      { type: 'order', productId, transactionId: txRef.id }
+    ).catch(() => {});
 
     res.json({ success: true, orderId: txRef.id });
   } catch (e) {
@@ -6818,6 +6852,26 @@ app.post('/api/orders/create', async (req, res) => {
       }
     } catch (e) {
       console.error('order create notify error:', e.message);
+    }
+
+    // Confirm to the buyer that their order was received — in-app + push
+    try {
+      await db.collection('notifications').add({
+        userId: buyerId,
+        title: 'Agizo Limewasilishwa!',
+        body: `Agizo lako la ${productName} limewasilishwa kwa muuzaji. Utapokea taarifa ya gharama ya usafirishaji hivi karibuni.`,
+        type: 'order',
+        data: { orderId: result.orderId, sellerId, productId },
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      await sendOneSignalNotification(buyerId,
+        'Agizo Limewasilishwa!',
+        `Agizo lako la ${productName} limewasilishwa kwa muuzaji.`,
+        { type: 'order', orderId: result.orderId, sellerId, productId }
+      );
+    } catch (e) {
+      console.error('order create buyer notify error:', e.message);
     }
 
     res.json({ success: true, order: result });
