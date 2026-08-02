@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'dart:io';
@@ -35,8 +36,8 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
   String? _localImagePath;
   int _wishlistCount = 0;
   double _avgRating = 0;
-  int _refreshKey = 0;
   bool _isLoading = true;
+  StreamSubscription<User?>? _authSub;
 
   @override
   void initState() {
@@ -45,24 +46,36 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       _loadProfile();
-    } else {
-      // Wait for Firebase Auth to initialize on cold start
-      FirebaseAuth.instance.authStateChanges().first.then((_) {
-        if (mounted) _loadProfile();
-      });
     }
+    // Reactive auth: covers the cold-start race where currentUser is still
+    // null in initState, and handles sign-in/sign-out without one-shot
+    // subscriptions that can miss the emission
+    _authSub = FirebaseAuth.instance.authStateChanges().listen((u) {
+      if (!mounted) return;
+      if (u != null) {
+        if (!_isLoading && _profile == null) _loadProfile();
+      } else {
+        setState(() {
+          _profile = null;
+          _localImagePath = null;
+          _wishlistCount = 0;
+          _avgRating = 0;
+          _isLoading = false;
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _authSub?.cancel();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      if (mounted) setState(() => _refreshKey++);
       _refreshProfile();
     }
   }
@@ -153,10 +166,8 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
       );
     }
 
-    return KeyedSubtree(
-      key: ValueKey('profile_$_refreshKey'),
-      child: Scaffold(
-        backgroundColor: cs.surface,
+    return Scaffold(
+      backgroundColor: cs.surface,
       body: PremiumScaffold(
         child: Container(
           decoration: BoxDecoration(
@@ -341,9 +352,8 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
           ),
         ),
       ),
-    ),
-  ),
-);
+      ),
+    );
   }
 
   Widget _statCard(IconData icon, String label, String value, ColorScheme cs) {
