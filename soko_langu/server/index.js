@@ -1782,7 +1782,8 @@ app.post('/api/clickpesa/webhook', verifyWebhook, async (req, res) => {
         const productPrice = tx.productPrice || 0;
         const platformFee = Math.round(productPrice * PLATFORM_COMMISSION_PERCENT);
         const processingFee = getUssdPushFee(productPrice);
-        const sellerReceives = productPrice;
+        // Seller is reimbursed the shipping cost from escrow on delivery
+        const sellerReceives = productPrice + Math.round(tx.shippingCost || 0);
         const deliveryType = tx.deliveryType || 'local';
         const autoReleaseDays = tx.autoReleaseDays || (deliveryType === 'regional' ? ESCROW_REGIONAL_DAYS : ESCROW_LOCAL_DAYS);
         const escrowExpiry = new Date(Date.now() + autoReleaseDays * 24 * 60 * 60 * 1000);
@@ -1791,7 +1792,7 @@ app.post('/api/clickpesa/webhook', verifyWebhook, async (req, res) => {
           processingFee,
           platformFee,
           sokoLanguCommission: platformFee,
-          totalAmount: productPrice + platformFee + processingFee,
+          totalAmount: tx.totalAmount || (productPrice + Math.round(tx.shippingCost || 0) + platformFee + processingFee),
           sellerReceives,
           status: 'escrow_hold',
           paymentMethod: 'ClickPesa',
@@ -3099,7 +3100,8 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
         const platformFee = Math.round(productPrice * PLATFORM_COMMISSION_PERCENT);
         const payoutFee = DEFAULT_PAYOUT_FEE;
         const processingFee = tx.processingFee || tx.clickpesaFee || 0;
-        const sellerReceives = productPrice;
+        // Seller is reimbursed the shipping cost from escrow on delivery
+        const sellerReceives = productPrice + Math.round(tx.shippingCost || 0);
         const deliveryType = tx.deliveryType || 'local';
         const autoReleaseDays = tx.autoReleaseDays || (deliveryType === 'regional' ? ESCROW_REGIONAL_DAYS : ESCROW_LOCAL_DAYS);
         const escrowExpiry = new Date(Date.now() + autoReleaseDays * 24 * 60 * 60 * 1000);
@@ -3110,7 +3112,7 @@ app.post('/api/webhook', verifyWebhook, async (req, res) => {
           platformFee,
           payoutFee,
           sokoLanguCommission: platformFee,
-          totalAmount: productPrice + platformFee,
+          totalAmount: tx.totalAmount || (productPrice + Math.round(tx.shippingCost || 0) + platformFee + processingFee),
           sellerReceives,
           status: 'escrow_hold',
           paymentMethod: 'ClickPesa',
@@ -6502,7 +6504,7 @@ app.post('/api/wallet/purchase', async (req, res) => {
     const {
       buyerId, buyerName, productId, productName, productImage,
       productPrice, sellerId, sellerName, processingFee, serviceFeePercent,
-      totalAmount, region, district, street, landmarks, deliveryType, orderId,
+      totalAmount, region, district, street, landmarks, deliveryType, orderId, shippingCost,
     } = req.body;
 
     if (!buyerId || !sellerId || !productId || !productName || productPrice == null) {
@@ -6528,9 +6530,10 @@ app.post('/api/wallet/purchase', async (req, res) => {
     const fee = Number(processingFee) || 0;
     const commissionPercent = Number(serviceFeePercent) || 0.035;
     const commission = Math.round(price * commissionPercent);
+    const shipping = Math.round(Number(shippingCost) || 0);
     // Buyer already pays commission in totalAmount (see order_detail_screen).
-    // Matching the ClickPesa escrow flow, seller receives the full product price.
-    const sellerReceives = price;
+    // Seller receives the full product price + shipping reimbursement from escrow.
+    const sellerReceives = price + shipping;
 
     // Deduct from buyer wallet
     await db.collection('users').doc(buyerId).set({
@@ -6556,6 +6559,7 @@ app.post('/api/wallet/purchase', async (req, res) => {
       serviceFeePercent: commissionPercent,
       totalAmount: Number(totalAmount),
       sellerReceives,
+      shippingCost: shipping,
       region, district, street,
       landmarks: landmarks || '',
       deliveryType: escrowDeliveryType,
@@ -6924,6 +6928,28 @@ app.post('/api/orders/transition', async (req, res) => {
           'Malipo Yamekamilika!',
           `${order.buyerName || 'Mnunuzi'} amelipia agizo la ${order.productName || ''}. Escrow imeshikilia fedha.`,
           { type: 'order', orderId, buyerId: order.buyerId }
+        );
+      } else if (newStatus === 'quoted') {
+        // Seller set the shipping cost — buyer must pay the updated bill
+        let costLabel = '';
+        try {
+          const parsed = JSON.parse(note || '{}');
+          const cost = Number(parsed.shippingCost || 0);
+          if (cost > 0) costLabel = ` la TZS ${cost.toLocaleString()}`;
+        } catch (_) {}
+        await db.collection('notifications').add({
+          userId: order.buyerId,
+          title: 'Gharama ya Usafirishaji Imewekwa!',
+          body: `Muuzaji ameweka gharama ya usafirishaji${costLabel}. Lipa sasa ili agizo litumwe.`,
+          type: 'payment',
+          data: { type: 'order', orderId, sellerId: order.sellerId },
+          isRead: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        await sendOneSignalNotification(order.buyerId,
+          'Gharama ya Usafirishaji Imewekwa!',
+          `Muuzaji ameweka gharama ya usafirishaji${costLabel}. Lipa sasa.`,
+          { type: 'order', orderId, sellerId: order.sellerId }
         );
       } else if (newStatus === 'dispatched') {
         await db.collection('notifications').add({

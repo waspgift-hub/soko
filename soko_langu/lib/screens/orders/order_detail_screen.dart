@@ -43,6 +43,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   String? _releasingTxId;
   String? _disputingTxId;
   bool _showAllDetails = false;
+  Map<String, dynamic> _liveData = const {};
+  StreamSubscription? _orderSub;
+  StreamSubscription? _txSub;
 
   // Payment state (used when status is "quoted")
   double _walletBalance = 0;
@@ -64,6 +67,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
     _startCountdown();
+    _initRealtimeListeners();
     Future.delayed(const Duration(milliseconds: 200), () {
       if (mounted) setState(() => _isLoading = false);
     });
@@ -71,6 +75,44 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       _loadWalletBalance();
       _loadPaymentMethods();
     }
+  }
+
+  /// Real-time: live-stream the orders doc and the transactions doc (same ID —
+  /// payment txs are created with the orderId). Every quote/payment/dispatch/
+  /// release change on either doc reflects instantly on this screen.
+  void _initRealtimeListeners() {
+    final orderRef = FirebaseFirestore.instance.collection('orders').doc(widget.docId);
+    final txRef = FirebaseFirestore.instance.collection('transactions').doc(widget.docId);
+
+    _orderSub = orderRef.snapshots().listen((snap) {
+      if (!mounted) return;
+      final orderData = snap.exists ? snap.data() : null;
+      final txSnap = _txData;
+      setState(() => _liveData = _mergeDocs(orderData, txSnap));
+    });
+
+    _txSub = txRef.snapshots().listen((snap) {
+      if (!mounted) return;
+      _txData = snap.exists ? snap.data() : null;
+      setState(() => _liveData = _mergeDocs(_orderData, _txData));
+    });
+  }
+
+  Map<String, dynamic>? _orderData;
+  Map<String, dynamic>? _txData;
+
+  Map<String, dynamic> _mergeDocs(Map<String, dynamic>? order, Map<String, dynamic>? tx) {
+    _orderData = order;
+    final merged = {...?order};
+    if (tx != null) {
+      merged.addAll(tx);
+      // The transactions doc is the payment source of truth once it exists;
+      // its 'pending' status only means the payment prompt was sent.
+      if (tx['status'] is String && tx['status'] != 'pending') {
+        merged['status'] = tx['status'];
+      }
+    }
+    return merged;
   }
 
   void _startCountdown() {
@@ -94,10 +136,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   void dispose() {
     _pulseController.dispose();
     _countdownTimer?.cancel();
+    _orderSub?.cancel();
+    _txSub?.cancel();
     super.dispose();
   }
 
-  Map<String, dynamic> get d => widget.data;
+  Map<String, dynamic> get d => _liveData.isNotEmpty ? _liveData : widget.data;
   String get status => d['status'] as String? ?? 'pending';
 
   String _nf(num n) => NumberFormat('#,###', 'en').format(n);
