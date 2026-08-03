@@ -1,8 +1,11 @@
 import 'dart:ui' as ui; // ignore: unused_import
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:http/http.dart' as http;
+import '../../services/api_config.dart';
 import '../../services/notification_service.dart';
 import '../../widgets/glass_container.dart';
 import '../../extensions/context_tr.dart';
@@ -41,8 +44,28 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
       await FirebaseFirestore.instance.collection('transactions').doc(txId).update({
         'shippingCost': cost,
         'totalAmount': FieldValue.increment(cost),
-        'status': 'awaiting_payment',
+        'status': 'quoted',
       });
+
+      // Sync the orders doc + timeline and notify the buyer via the server,
+      // so the buyer's pay section (status 'quoted') unlocks on both docs.
+      try {
+        final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+        if (token != null) {
+          await http.post(
+            Uri.parse('${ApiConfig.baseUrl}/api/orders/transition'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({
+              'orderId': txId,
+              'newStatus': 'quoted',
+              'note': jsonEncode({'shippingCost': cost}),
+            }),
+          );
+        }
+      } catch (_) {}
 
       NotificationService().sendNotification(
         userId: buyerId,

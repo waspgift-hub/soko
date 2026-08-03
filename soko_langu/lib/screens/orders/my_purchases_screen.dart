@@ -1560,7 +1560,7 @@ class _OrderGlassCard extends StatelessWidget {
     double platformFee = 0,
     double processingFee = 0,
   }) {
-    final canPay = status == 'awaiting_payment';
+    final canPay = status == 'awaiting_payment' || status == 'quoted';
     final canConfirm = status == 'delivered' || status == 'dispatched';
     final canDispute =
         status == 'paid_escrow_held' ||
