@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:geolocator/geolocator.dart';
+import '../../constants/tanzania_districts.dart';
 import '../../models/product_model.dart';
 import '../../services/api_config.dart';
 import '../../extensions/context_tr.dart';
@@ -25,7 +26,6 @@ class CheckoutScreen extends StatefulWidget {
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
   final _regionCtrl = TextEditingController();
-  final _districtCtrl = TextEditingController();
   final _streetCtrl = TextEditingController();
   final _landmarksCtrl = TextEditingController();
   bool _processing = false;
@@ -34,6 +34,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   double? _longitude;
   String _deliveryType = 'local';
   String? _selectedRegion;
+  String? _selectedDistrict;
 
   static const List<String> _regions = [
     'Arusha', 'Dar es Salaam', 'Dodoma', 'Geita', 'Iringa', 'Kagera',
@@ -46,7 +47,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   void dispose() {
     _regionCtrl.dispose();
-    _districtCtrl.dispose();
     _streetCtrl.dispose();
     _landmarksCtrl.dispose();
     super.dispose();
@@ -67,6 +67,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         return;
       }
     }
+  }
+
+  /// Matches a geocoded district name against the current region's council
+  /// list; returns null when there is no match so the user picks from the list.
+  String? _matchDistrict(String raw) {
+    if (raw.isEmpty || _selectedRegion == null) return null;
+    final list = kRegionDistricts[_selectedRegion] ?? const <String>[];
+    final normalized = raw.toLowerCase().trim();
+    for (final d in list) {
+      if (d.toLowerCase() == normalized) return d;
+    }
+    for (final d in list) {
+      if (d.toLowerCase().contains(normalized) || normalized.contains(d.toLowerCase())) return d;
+    }
+    return null;
   }
 
   Future<void> _detectLocation() async {
@@ -131,11 +146,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       setState(() {
         _regionCtrl.text = state;
         _matchRegion(state);
-        _districtCtrl.text = (address['city_district'] as String?)
+        _selectedDistrict = _matchDistrict((address['city_district'] as String?)
             ?? (address['municipality'] as String?)
             ?? (address['county'] as String?)
             ?? (address['state_district'] as String?)
-            ?? _districtCtrl.text;
+            ?? '');
         _streetCtrl.text = (address['road'] as String?) ?? _streetCtrl.text;
         _landmarksCtrl.text = (address['suburb'] as String?)
             ?? (address['neighbourhood'] as String?)
@@ -287,12 +302,30 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   onChanged: (v) {
                     setState(() {
                       _selectedRegion = v;
+                      _selectedDistrict = null;
                       if (v != null) _regionCtrl.text = v;
                     });
                   },
                 ),
                 const SizedBox(height: 10),
-                TextField(controller: _districtCtrl, decoration: InputDecoration(hintText: context.tr('district_hint'), border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: true, fillColor: cs.surface.withValues(alpha: 0.5), isDense: true), textCapitalization: TextCapitalization.words, cursorColor: cs.primary),
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedDistrict,
+                  decoration: InputDecoration(
+                    hintText: context.tr('district_hint'),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    filled: true,
+                    fillColor: cs.surface.withValues(alpha: 0.5),
+                    isDense: true,
+                  ),
+                  items: (_selectedRegion == null
+                          ? const <String>[]
+                          : (kRegionDistricts[_selectedRegion] ?? const <String>[]))
+                      .map((d) => DropdownMenuItem(value: d, child: Text(d)))
+                      .toList(),
+                  onChanged: (v) => setState(() => _selectedDistrict = v),
+                ),
                 const SizedBox(height: 10),
                 TextField(controller: _streetCtrl, decoration: InputDecoration(hintText: context.tr('street_hint'), border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: true, fillColor: cs.surface.withValues(alpha: 0.5), isDense: true), textCapitalization: TextCapitalization.words, cursorColor: cs.primary),
                 const SizedBox(height: 10),
@@ -335,7 +368,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   Future<void> _submitOrder() async {
     final region = _selectedRegion ?? _regionCtrl.text.trim();
-    final district = _districtCtrl.text.trim();
+    final district = _selectedDistrict ?? '';
     final street = _streetCtrl.text.trim();
     if (region.isEmpty || district.isEmpty || street.isEmpty) {
       _showError(context.tr('fill_full_address_error'));

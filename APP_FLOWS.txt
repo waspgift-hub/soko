@@ -204,9 +204,12 @@ Statuses (server/orders.js ORDER_STATUS):
   → failed → refunded → disputed (na invalid/nafuu za transition).
 
 7.1 Buyer flow:
-  1. pending: order imeundwa.
+  1. pending: order imeundwa. /api/orders/create pia inamirror transactions/
+     {orderId} na status 'awaiting_shipping_quote' — mnunuzi HANA kitufe cha
+     kulipa hadi seller aweke gharama (pay button inatokea tu kwenye 'quoted').
   2. awaiting_shipping_quote: mnunuzi anangoja seller aweke gharama ya
-     usafirishaji.
+     usafirishaji (order detail: "Subiri muuzaji kutoa gharama ya usafirishaji";
+     My Purchases: kitufe "Inasuburi Gharama ya Usafirishaji" disabled).
   3. quoted: seller ameweka shippingCost (totalAmount += shippingCost);
      mnunuzi ana options: pay (wallet/ussd/billpay), cancel.
   4. paid/escrow_hold: malipo yametumwa kwenye escrow ya ClickPesa.
@@ -218,9 +221,15 @@ Statuses (server/orders.js ORDER_STATUS):
   7. completed: escrow imetolewa kwa seller (sellerBalance += sellerReceives).
 
 7.2 Seller flow (seller_orders_screen.dart, seller_quote_screen.dart):
-  1. Inapokea order → seller_quote_screen: _submitQuote inaandika DIRECT
-     kwenye Firestore (status 'awaiting_payment' au 'quoted', totalAmount
-     += shippingCost). HAKUNA server endpoint ya quote.
+  1. Inapokea order (tx doc status 'awaiting_shipping_quote') → quote inaweka
+     status 'quoted' kwenye DOCUMENTS ZOTE MBILI:
+     - transactions/{orderId}: shippingCost + totalAmount += shippingCost +
+       status 'quoted' (seller_quote_screen inaandika moja kwa moja Firestore;
+       seller_orders_screen quote dialog inafanya set(merge) baada ya
+       transition).
+     - orders/{orderId}: POST /api/orders/transition {newStatus:'quoted',
+       note:{shippingCost}} — inaandika timeline + inamjulisha mnunuzi
+       ("Gharama ya Usafirishaji Imewekwa! Lipa sasa").
   2. Dispatch: server POST /api/escrow/dispatch (transactions/{orderId};
      status lazima escrow_hold; inaweka dispatchProof, busName,
      plateNumber) → SMS + push kwa buyer.
@@ -645,6 +654,29 @@ NOTE: functions/notification/sender.js inatuma contacts kama SINGLE string
 9. Meseji outage (2026-07/08): SMS zote 500 hata manual — provider side.
 10. ClickPesa pre-KYC limit: TZS 100,000 total (payouts zinasimama) —
     KYC TZS 25,000 inahitajika kabla ya biashara halisi.
+11. SELLER QUOTE FLOW — FIXED (2026-08-03): awali /api/orders/create
+    ili-mirror transactions/{orderId} na status 'awaiting_payment' + shipping
+    0 → mnunuzi aliona kitufe cha kulipa mara moja (pay kabla ya shipping fee)
+    NA seller_quote_screen haikuonyesha chochote (inauliza status
+    'awaiting_shipping_quote' ambayo haikuwepo). Sasa:
+    - Mirror status = 'awaiting_shipping_quote' → mnunuzi HANA pay button
+      hadi quote (My Purchases: kitufe disabled "Inasuburi Gharama ya
+      Usafirishaji"; order detail: wait message).
+    - seller_quote_screen._submitQuote: status 'quoted' (si 'awaiting_payment')
+      + inaita /api/orders/transition (pending→quoted) kwa timeline +
+      arifa ya mnunuzi.
+    - seller_orders_screen quote dialog: baada ya transition pia ina-sync
+      transactions doc (set merge: shippingCost, totalAmount += shipping,
+      status 'quoted') — kwani tx doc ndiyo source of truth ya mnunuzi
+      (_mergeDocs ina-override status ya orders doc).
+    - my_purchases canPay = awaiting_payment AU quoted.
+    - order_detail: wait message pia kwa 'awaiting_shipping_quote',
+      _statusLabel anayotambua huo status, na wallet/methods zina-load
+      pia wakati status inakuwa 'quoted' akiwa kwenye screen (_maybeInitQuotedPayment).
+12. CHECKOUT ADDRESS — district sasa ni DROPDOWN (select) filtered na
+    region (lib/constants/tanzania_districts.dart); street + landmarks
+    bado free text (hakuna national dataset ya mitaa). Geo-detect ina-
+    match district ikiwa iko kwenye list ya region.
 
 ====================================================================
 23. SERVER ENDPOINT REFERENCE (server/index.js — muhimu zaidi)

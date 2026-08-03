@@ -51,6 +51,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   // Payment state (used when status is "quoted")
   double _walletBalance = 0;
   bool _walletLoading = true;
+  bool _walletInitiated = false;
   bool _paying = false;
   String _selectedMethod = 'wallet';
   List<Map<String, dynamic>> _methods = [];
@@ -73,6 +74,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       if (mounted) setState(() => _isLoading = false);
     });
     if (status == 'quoted') {
+      _walletInitiated = true;
       _loadWalletBalance();
       _loadPaymentMethods();
     }
@@ -90,13 +92,26 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       final orderData = snap.exists ? snap.data() : null;
       final txSnap = _txData;
       setState(() => _liveData = _mergeDocs(orderData, txSnap));
+      _maybeInitQuotedPayment();
     });
 
     _txSub = txRef.snapshots().listen((snap) {
       if (!mounted) return;
       _txData = snap.exists ? snap.data() : null;
       setState(() => _liveData = _mergeDocs(_orderData, _txData));
+      _maybeInitQuotedPayment();
     });
+  }
+
+  /// Loads wallet balance and payment methods when the order becomes 'quoted'
+  /// while this screen is already open (e.g. the seller quotes while the buyer
+  /// watches the order).
+  void _maybeInitQuotedPayment() {
+    if (status == 'quoted' && !_walletInitiated) {
+      _walletInitiated = true;
+      _loadWalletBalance();
+      _loadPaymentMethods();
+    }
   }
 
   Map<String, dynamic>? _orderData;
@@ -213,6 +228,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         return context.tr('delivered_and_completed');
       case 'quoted':
         return 'Nukuu Imetolewa';
+      case 'awaiting_shipping_quote':
+        return context.tr('awaiting_shipping_quote_label');
       case 'paid':
         return 'Imelipwa';
       case 'confirmed':
@@ -1396,7 +1413,7 @@ $stepsStr
         status == 'delivered';
     final canCancel = status == 'paid_escrow_hold' || status == 'escrow_hold';
 
-    if (status == 'pending' && isBuyer) {
+    if ((status == 'pending' || status == 'awaiting_shipping_quote') && isBuyer) {
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(

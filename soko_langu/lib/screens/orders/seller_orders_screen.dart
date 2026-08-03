@@ -608,6 +608,14 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
           'plateNumber': plateNumber,
         });
 
+        // Keep the transactions mirror doc (the buyer's payment source of
+        // truth) in sync, otherwise the buyer still sees the old status.
+        await FirebaseFirestore.instance.collection('transactions').doc(orderId).set({
+          'shippingCost': cost,
+          'totalAmount': FieldValue.increment(cost),
+          'status': 'quoted',
+        }, SetOptions(merge: true));
+
         if (mounted) _showSuccess('Nukuu imetumwa kwa mnunuzi');
       }
     } catch (e) {

@@ -6975,9 +6975,10 @@ app.post('/api/orders/create', async (req, res) => {
     });
 
     // Mirror the order into transactions/{orderId} so it appears immediately in
-    // the buyer's My Purchases. 'awaiting_payment' keeps it out of the payment
-    // duplicate-check (which only scans pending/escrow_hold); the payment-link
-    // and webhook updates reuse the same doc via merge.
+    // the buyer's My Purchases. 'awaiting_shipping_quote' blocks the buyer from
+    // paying until the seller sets the shipping cost (the pay button only
+    // shows for 'quoted'); the payment-link and webhook updates reuse the same
+    // doc via merge.
     try {
       await db.collection('transactions').doc(result.orderId).set({
         type: 'purchase',
@@ -6991,7 +6992,7 @@ app.post('/api/orders/create', async (req, res) => {
         deliveryType: deliveryType || 'local',
         region: region || '', district: district || '', street: street || '',
         landmarks: landmarks || '',
-        status: 'awaiting_payment',
+        status: 'awaiting_shipping_quote',
         paymentMethod: paymentMethod || 'ussd_push',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
