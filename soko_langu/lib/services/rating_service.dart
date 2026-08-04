@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/review_model.dart';
+import 'notification_service.dart';
 
 class SellerRating {
   final double averageRating;
@@ -152,6 +153,22 @@ class RatingService {
       await _db.collection('reviews').doc(existing.docs.first.id).update(data);
     } else {
       await _db.collection('reviews').add(data);
+    }
+
+    try {
+      if (user?.uid != sellerId) {
+        await NotificationService().sendNotification(
+          userId: sellerId,
+          title: 'New Rating!',
+          body: '$userName rated you $rating stars',
+          data: {
+            'type': 'review',
+            'rating': rating.toString(),
+          },
+        );
+      }
+    } catch (e) {
+      // non-critical
     }
   }
 }

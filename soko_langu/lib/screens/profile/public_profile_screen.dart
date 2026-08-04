@@ -15,6 +15,7 @@ import '../../utils/responsive.dart';
 import '../../utils/phone_utils.dart';
 import '../../models/flash_sale_model.dart';
 import '../../services/flash_sale_service.dart';
+import '../../services/profile_view_service.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../chat/chat_navigation.dart';
@@ -45,6 +46,9 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   void initState() {
     super.initState();
     _isMyProfile = FirebaseAuth.instance.currentUser?.uid == widget.userId;
+    if (!_isMyProfile) {
+      ProfileViewService().trackView(widget.userId, widget.userName);
+    }
     _flashSub = _flashSaleService.getActiveFlashSalesMap().listen((map) {
       if (mounted) setState(() => _flashSales = map);
     });
@@ -717,7 +721,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
           const SizedBox(width: 6),
           Text(
             trustPct > 0
-                ? '${context.tr('trust_score')}: $trustPct% (${totalReviews} ${context.tr('reviews').toLowerCase()})'
+                ? '${context.tr('trust_score')}: $trustPct% ($totalReviews ${context.tr('reviews').toLowerCase()})'
                 : context.tr('no_ratings_yet'),
             style: TextStyle(fontSize: 12, color: trustColor, fontWeight: FontWeight.w500),
           ),
