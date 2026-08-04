@@ -22,6 +22,7 @@ import '../../widgets/glass_container.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/premium_background.dart'; // ignore: unused_import
+import '../../widgets/soko_vibe_loading.dart';
 import '../../utils/network_error.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -814,7 +815,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
                     else
                       const SizedBox(
                         width: 64, height: 64,
-                        child: CircularProgressIndicator(strokeWidth: 4),
+                        child: SokoVibeThreeDotLoader(size: 48, dotSize: 10),
                       ),
                     const SizedBox(height: 20),
                     Text(

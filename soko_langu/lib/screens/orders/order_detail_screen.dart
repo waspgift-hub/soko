@@ -18,6 +18,7 @@ import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../chat/chat_navigation.dart';
 import '../../widgets/google_loading.dart';
+import '../../widgets/soko_vibe_loading.dart';
 import '../../widgets/payment_banner.dart';
 import '../../widgets/payment_result_dialog.dart';
 import '../../widgets/location_map_widget.dart';
@@ -1479,7 +1480,7 @@ $stepsStr
 
             // Wallet balance
             if (_walletLoading)
-              const Center(child: Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator(strokeWidth: 2)))
+              const Center(child: Padding(padding: EdgeInsets.all(8), child: SokoVibeThreeDotLoader(size: 28, dotSize: 6)))
             else ...[
               Container(
                 padding: const EdgeInsets.all(12),
@@ -1511,7 +1512,7 @@ $stepsStr
               Text('Njia ya malipo', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: cs.onSurface)),
               const SizedBox(height: 8),
               if (_methodsLoading)
-                const Center(child: Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator(strokeWidth: 2)))
+                const Center(child: Padding(padding: EdgeInsets.all(8), child: SokoVibeThreeDotLoader(size: 28, dotSize: 6)))
               else
                 ...(_methods.where((m) => m['id'] != 'wallet').map((m) {
                   final id = m['id'] as String? ?? '';

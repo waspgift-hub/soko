@@ -3,17 +3,17 @@ import 'app_typography.dart';
 
 ThemeData buildLightTheme(Color seed) {
   final scheme = ColorScheme.fromSeed(
-    seedColor: seed,
+    seedColor: const Color(0xFF000000),
     brightness: Brightness.light,
   ).copyWith(
-    surface: const Color(0xFFF8F9FE),
-    surfaceContainerLow: const Color(0xFFF0F1F8),
-    surfaceContainer: const Color(0xFFE8E9F0),
-    surfaceContainerHigh: const Color(0xFFDEDFE8),
-    surfaceContainerHighest: const Color(0xFFD0D1DC),
-    onSurface: const Color(0xFF0A0E1A),
-    onSurfaceVariant: const Color(0xFF494D5E),
-    outlineVariant: const Color(0xFFE0E1EC),
+    surface: const Color(0xFFFAFAFA),
+    surfaceContainerLow: const Color(0xFFF4F4F5),
+    surfaceContainer: const Color(0xFFECECEE),
+    surfaceContainerHigh: const Color(0xFFE4E4E7),
+    surfaceContainerHighest: const Color(0xFFD4D4D8),
+    onSurface: const Color(0xFF09090B),
+    onSurfaceVariant: const Color(0xFF52525B),
+    outlineVariant: const Color(0xFFE4E4E7),
   );
 
   return _buildTheme(scheme);
@@ -21,17 +21,17 @@ ThemeData buildLightTheme(Color seed) {
 
 ThemeData buildDarkTheme(Color seed) {
   final scheme = ColorScheme.fromSeed(
-    seedColor: seed,
+    seedColor: const Color(0xFFFFFFFF),
     brightness: Brightness.dark,
   ).copyWith(
-    surface: const Color(0xFF0A0E1A),
-    surfaceContainerLow: const Color(0xFF121729),
-    surfaceContainer: const Color(0xFF1A2040),
-    surfaceContainerHigh: const Color(0xFF222952),
-    surfaceContainerHighest: const Color(0xFF2A3360),
-    onSurface: const Color(0xFFF0F1F8),
-    onSurfaceVariant: const Color(0xFFB0B5C8),
-    outlineVariant: const Color(0xFF2A2E4A),
+    surface: const Color(0xFF000000),
+    surfaceContainerLow: const Color(0xFF121212),
+    surfaceContainer: const Color(0xFF171717),
+    surfaceContainerHigh: const Color(0xFF1E1E1E),
+    surfaceContainerHighest: const Color(0xFF27272A),
+    onSurface: const Color(0xFFF4F4F5),
+    onSurfaceVariant: const Color(0xFFA1A1AA),
+    outlineVariant: const Color(0xFF2E2E32),
   );
 
   return _buildTheme(scheme);
@@ -44,11 +44,11 @@ ThemeData _buildTheme(ColorScheme scheme) {
       : const Color(0x08000000);
 
   final glassCard = isDark
-      ? const Color(0xFF1A2040).withValues(alpha: 0.65)
+      ? const Color(0xFF171717).withValues(alpha: 0.65)
       : const Color(0xFFFFFFFF).withValues(alpha: 0.82);
 
   final glassSheet = isDark
-      ? const Color(0xFF121729).withValues(alpha: 0.75)
+      ? const Color(0xFF121212).withValues(alpha: 0.75)
       : const Color(0xFFFFFFFF).withValues(alpha: 0.88);
 
   final base = ThemeData(
@@ -82,7 +82,7 @@ ThemeData _buildTheme(ColorScheme scheme) {
 
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: isDark
-          ? const Color(0xFF121729).withValues(alpha: 0.75)
+          ? const Color(0xFF121212).withValues(alpha: 0.75)
           : const Color(0xFFFFFFFF).withValues(alpha: 0.82),
       indicatorColor: scheme.primary.withValues(alpha: 0.15),
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
@@ -115,7 +115,7 @@ ThemeData _buildTheme(ColorScheme scheme) {
 
     bottomNavigationBarTheme: BottomNavigationBarThemeData(
       backgroundColor: isDark
-          ? const Color(0xFF121729).withValues(alpha: 0.75)
+          ? const Color(0xFF121212).withValues(alpha: 0.75)
           : const Color(0xFFFFFFFF).withValues(alpha: 0.82),
       selectedItemColor: scheme.primary,
       unselectedItemColor: scheme.onSurface.withValues(alpha: 0.45),
@@ -193,8 +193,8 @@ ThemeData _buildTheme(ColorScheme scheme) {
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: isDark
-          ? const Color(0xFF1A2040).withValues(alpha: 0.55)
-          : const Color(0xFFF0F1F8).withValues(alpha: 0.7),
+          ? const Color(0xFF171717).withValues(alpha: 0.55)
+          : const Color(0xFFF4F4F5).withValues(alpha: 0.7),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide.none,
@@ -232,8 +232,8 @@ ThemeData _buildTheme(ColorScheme scheme) {
 
     chipTheme: ChipThemeData(
       backgroundColor: isDark
-          ? const Color(0xFF1A2040).withValues(alpha: 0.55)
-          : const Color(0xFFF0F1F8).withValues(alpha: 0.7),
+          ? const Color(0xFF171717).withValues(alpha: 0.55)
+          : const Color(0xFFF4F4F5).withValues(alpha: 0.7),
       selectedColor: scheme.primary.withValues(alpha: 0.12),
       labelStyle: TextStyle(color: scheme.onSurface),
       secondaryLabelStyle: const TextStyle(
@@ -250,15 +250,15 @@ ThemeData _buildTheme(ColorScheme scheme) {
 
     dividerTheme: DividerThemeData(
       color: isDark
-          ? const Color(0xFF2A2E4A)
-          : const Color(0xFFE0E1EC),
+          ? const Color(0xFF2E2E32)
+          : const Color(0xFFE4E4E7),
       thickness: 0.5,
       space: 1,
     ),
 
     snackBarTheme: SnackBarThemeData(
       backgroundColor: isDark
-          ? const Color(0xFF222952).withValues(alpha: 0.75)
+          ? const Color(0xFF1E1E1E).withValues(alpha: 0.75)
           : const Color(0xFFFFFFFF).withValues(alpha: 0.88),
       contentTextStyle: TextStyle(color: scheme.onSurface),
       behavior: SnackBarBehavior.floating,
@@ -436,8 +436,8 @@ ThemeData _buildTheme(ColorScheme scheme) {
     tooltipTheme: TooltipThemeData(
       decoration: BoxDecoration(
         color: isDark
-            ? const Color(0xFF222952).withValues(alpha: 0.85)
-            : const Color(0xFF1A1A2E).withValues(alpha: 0.85),
+            ? const Color(0xFF1E1E1E).withValues(alpha: 0.85)
+            : const Color(0xFF1A1A1A).withValues(alpha: 0.85),
         borderRadius: BorderRadius.circular(8),
       ),
       textStyle: TextStyle(

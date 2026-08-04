@@ -12,6 +12,7 @@ import '../../services/balance_privacy_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/ds/ds.dart';
 import '../../widgets/soko_vibe_states.dart';
+import '../../widgets/soko_vibe_loading.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -336,7 +337,7 @@ class _WalletScreenState extends State<WalletScreen> {
             if (_methodsLoading)
               const Center(child: Padding(
                 padding: EdgeInsets.all(24),
-                child: CircularProgressIndicator(),
+                child: SokoVibeThreeDotLoader(),
               ))
             else
               ..._methods.map((m) => Padding(
@@ -642,7 +643,7 @@ class _WalletScreenState extends State<WalletScreen> {
                     else
                       const SizedBox(
                         width: 64, height: 64,
-                        child: CircularProgressIndicator(strokeWidth: 4),
+                        child: SokoVibeThreeDotLoader(size: 48, dotSize: 10),
                       ),
                     const SizedBox(height: 20),
                     Text(
@@ -755,7 +756,7 @@ class _WalletScreenState extends State<WalletScreen> {
                     else
                       const SizedBox(
                         width: 64, height: 64,
-                        child: CircularProgressIndicator(strokeWidth: 4),
+                        child: SokoVibeThreeDotLoader(size: 48, dotSize: 10),
                       ),
                     const SizedBox(height: 20),
                     Text(
@@ -985,7 +986,7 @@ class _WalletScreenState extends State<WalletScreen> {
                   if (_methodsLoading)
                     const Center(child: Padding(
                       padding: EdgeInsets.all(16),
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: SokoVibeThreeDotLoader(size: 32, dotSize: 8),
                     ))
                   else
                     ..._methods.map((m) => Padding(

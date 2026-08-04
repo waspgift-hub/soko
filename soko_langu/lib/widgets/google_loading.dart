@@ -1,6 +1,8 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 
+import 'soko_vibe_loading.dart';
+
 class GoogleLoading extends StatefulWidget {
   final double size;
   final Color? color;
@@ -158,11 +160,7 @@ class GoogleLoadingPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: SizedBox(
-        width: size + 32,
-        height: size + 32,
-        child: GoogleLoading(size: size, strokeWidth: 3),
-      ),
+      child: SokoVibeThreeDotLoader(size: size * 0.82, dotSize: size * 0.22),
     );
   }
 }

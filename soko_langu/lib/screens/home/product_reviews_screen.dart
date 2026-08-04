@@ -5,6 +5,7 @@ import '../../models/review_model.dart';
 import '../../extensions/context_tr.dart';
 import '../../utils/network_error.dart';
 import '../../widgets/soko_vibe_states.dart';
+import '../../widgets/soko_vibe_loading.dart';
 
 class ProductReviewsScreen extends StatefulWidget {
   final String productId;
@@ -113,7 +114,7 @@ class _ProductReviewsScreenState extends State<ProductReviewsScreen> {
           }
           final reviews = snapshot.data;
           if (reviews == null) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: SokoVibeThreeDotLoader());
           }
 
           if (reviews.isEmpty) {

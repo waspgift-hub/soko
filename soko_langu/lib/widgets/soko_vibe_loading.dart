@@ -250,3 +250,102 @@ class SokoVibeDotLoadingPage extends StatelessWidget {
     return Center(child: SokoVibeDotLoader(size: size));
   }
 }
+
+/// Minimal monochrome three-dot loader that matches the app's black/white
+/// identity. Dots bounce in sequence — reads instantly and feels native
+/// (Material/Apple style) rather than a spinner.
+class SokoVibeThreeDotLoader extends StatefulWidget {
+  final double size;
+  final double dotSize;
+
+  const SokoVibeThreeDotLoader({
+    super.key,
+    this.size = 40,
+    this.dotSize = 10,
+  });
+
+  @override
+  State<SokoVibeThreeDotLoader> createState() => _SokoVibeThreeDotLoaderState();
+}
+
+class _SokoVibeThreeDotLoaderState extends State<SokoVibeThreeDotLoader>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).brightness == Brightness.dark
+        ? Colors.white
+        : Colors.black;
+    final dimColor = color.withValues(alpha: 0.25);
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        return SizedBox(
+          width: widget.size,
+          height: widget.size,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(3, (i) {
+              final t = (_controller.value - i * 0.18) % 1.0;
+              // Bounce: fast rise, gentle fall, resting pause.
+              final scale = t < 0.3
+                  ? (t / 0.3).clamp(0.0, 1.0)
+                  : 1.0 - ((t - 0.3) / 0.7).clamp(0.0, 1.0) * 0.45;
+              final isActive = t < 0.45;
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Transform.translate(
+                  offset: Offset(0, -8 * (scale - 0.55)),
+                  child: Opacity(
+                    opacity: isActive ? 1.0 : 0.35,
+                    child: Container(
+                      width: widget.dotSize,
+                      height: widget.dotSize,
+                      decoration: BoxDecoration(
+                        color: isActive ? color : dimColor,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Full-page centered [SokoVibeThreeDotLoader].
+class SokoVibeThreeDotLoadingPage extends StatelessWidget {
+  final double size;
+  final double dotSize;
+
+  const SokoVibeThreeDotLoadingPage({
+    super.key,
+    this.size = 40,
+    this.dotSize = 10,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(child: SokoVibeThreeDotLoader(size: size, dotSize: dotSize));
+  }
+}
