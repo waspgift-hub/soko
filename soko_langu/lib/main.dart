@@ -48,7 +48,6 @@ import 'widgets/connectivity_wrapper.dart';
 import 'widgets/transaction_status_watcher.dart';
 import 'widgets/age_gate_dialog.dart';
 import 'widgets/premium_background.dart';
-import 'widgets/in_app_notification_overlay.dart';
 
 // ---------------------------------------------------------------------------
 // Global singletons — scoped to app lifetime, lazily resolved where possible.
@@ -326,24 +325,6 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
   // -----------------------------------------------------------------------
 
   void _setupNotificationCallbacks() {
-    NotificationService.onForegroundMessage = (title, body, type, data) {
-      final navState = router_lib.rootNavigatorKey.currentState;
-      if (navState == null) return;
-      final overlay = navState.overlay;
-      if (overlay == null) return;
-      InAppNotificationOverlay.show(
-        overlay: overlay,
-        title: title,
-        body: body,
-        type: type,
-        data: data,
-        onTap: () {
-          final ctx = router_lib.rootNavigatorKey.currentContext;
-          if (ctx != null) _onNotificationTap(type, data, ctx);
-        },
-      );
-    };
-
     NotificationService.onNotificationTap = (Map<String, dynamic> data) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final type = data['type'] as String?;

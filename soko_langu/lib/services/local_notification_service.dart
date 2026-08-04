@@ -102,20 +102,15 @@ class LocalNotificationService {
     required String body,
     String channelId = 'general_notifications_v5',
     String? payload,
-    bool fullScreen = false,
     List<AndroidNotificationAction> actions = const [],
   }) async {
-    final category = fullScreen ? AndroidNotificationCategory.alarm : null;
-
     final androidDetails = AndroidNotificationDetails(
       channelId,
       _channelName(channelId),
       importance: Importance.max,
       priority: Priority.max,
-      fullScreenIntent: fullScreen,
       playSound: true,
       enableVibration: true,
-      category: category,
       visibility: NotificationVisibility.public,
       showWhen: true,
       enableLights: true,

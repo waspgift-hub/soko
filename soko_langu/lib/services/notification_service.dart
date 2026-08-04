@@ -28,7 +28,6 @@ class NotificationService {
       GlobalKey<ScaffoldMessengerState>();
   static void Function(Map<String, dynamic> data)? onNotificationTap;
   static void Function(Map<String, dynamic> data)? onPaymentNotificationTap;
-  static void Function(String title, String body, String type, Map<String, dynamic>? data)? onForegroundMessage;
 
   Future<bool> isEnabled() async {
     final prefs = await SharedPreferences.getInstance();
@@ -205,12 +204,6 @@ class NotificationService {
         headsUpTitle = title;
     }
 
-    final bool isCritical = type == 'system' || type == 'admin' || type == 'alert' ||
-        type == 'payment' || type == 'payment_failed' || type == 'refund' ||
-        type == 'cancelled' || type == 'withdrawal' || type == 'escrow_auto_release' ||
-        type == 'auto_payout' || type == 'order' || type == 'deposit' ||
-        type == 'deposit_failed' || type == 'chat' || type == 'flash_sale';
-
     // payload carries type + data so a local tap routes like a OneSignal tap
     final payload = jsonEncode({'type': type, ...data});
 
@@ -220,13 +213,8 @@ class NotificationService {
       body: body,
       channelId: channelId,
       payload: payload,
-      fullScreen: isCritical,
       actions: actions,
     );
-
-    if (title.isNotEmpty && onForegroundMessage != null) {
-      onForegroundMessage!(title, body, type, data);
-    }
   }
 
   static void _handleLocalTap(Map<String, dynamic> data) {
