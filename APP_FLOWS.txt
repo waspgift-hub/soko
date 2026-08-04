@@ -753,5 +753,27 @@ admin_notifications, admin_exports, audit_log, otp_codes
 app_settings            docs: flash_sale_push_cooldown, maintenance
 
 ====================================================================
+24.1 REQUIRED FIRESTORE COMPOSITE INDEXES (weka Console → Firestore →
+     Indexes) — vingine vimefanya queries kushindwa na "index missing"
+--------------------------------------------------------------------
+- transactions: sellerId ASC, createdAt DESC          (seller orders list)
+- transactions: buyerId ASC, createdAt DESC           (my purchases)
+- transactions: buyerId ASC, status ASC, createdAt DESC (filtered purchases)
+- transactions: type ASC, productId ASC, userId ASC, status ASC
+- transactions: type ASC, productId ASC, userId ASC, paymentMethod ASC
+- transactions: status ASC, escrowExpiresAt ASC       (auto-release)
+- transactions: status ASC, escrowReleased ASC, escrowExpiresAt ASC
+- transactions: source ASC, status ASC                (boost payments)
+- kyc: status ASC, submittedAt DESC                   (admin KYC list)
+- products: isActive ASC, createdAt DESC              (home feed — app inafanya
+                                                       pagination, index
+                                                       inahitajika kwa speed)
+- products: sellerId ASC, isActive ASC, createdAt DESC
+- notifications: userId ASC, isRead ASC, createdAt DESC
+- orders: sellerId ASC, status ASC, createdAt DESC    (seller dashboard)
+- orders: buyerId ASC, status ASC, createdAt DESC
+- chat_rooms: participants (array-contains), updatedAt DESC
+
+====================================================================
 MWISHO — Soko Vibe Full Flow Documentation
 ====================================================================

@@ -1,12 +1,14 @@
 import 'dart:ui' as ui; // ignore: unused_import
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
 import '../../services/api_config.dart';
 import '../../services/notification_service.dart';
+import '../../widgets/soko_vibe_states.dart';
 import '../../widgets/glass_container.dart';
 import '../../extensions/context_tr.dart';
 import '../../theme/app_dimens.dart'; // ignore: unused_import
@@ -39,6 +41,7 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
     }
 
     setState(() => _quotingTxId = txId);
+    HapticFeedback.lightImpact();
 
     try {
       await FirebaseFirestore.instance.collection('transactions').doc(txId).update({
@@ -125,16 +128,9 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
           });
 
           if (docs.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.inbox_outlined, size: 72, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
-                  const SizedBox(height: 16),
-                  Text(context.tr('no_shipping_requests'),
-                      style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant)),
-                ],
-              ),
+            return SokoVibeEmptyState(
+              icon: Icons.inbox_outlined,
+              title: context.tr('no_shipping_requests'),
             );
           }
 

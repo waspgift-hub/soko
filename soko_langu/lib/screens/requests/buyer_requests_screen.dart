@@ -9,6 +9,7 @@ import '../../widgets/google_loading.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/soko_vibe_states.dart';
 
 class BuyerRequestsScreen extends StatefulWidget {
   const BuyerRequestsScreen({super.key});
@@ -61,23 +62,10 @@ class _BuyerRequestsScreenState extends State<BuyerRequestsScreen> {
           }
           final requests = snap.data!;
           if (requests.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.search_off, size: 64, color: cs.outline),
-                  const SizedBox(height: 16),
-                  Text(
-                    context.tr('requests_empty'),
-                    style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    context.tr('requests_empty_hint'),
-                    style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
-                  ),
-                ],
-              ),
+            return SokoVibeEmptyState(
+              icon: Icons.search_off,
+              title: context.tr('requests_empty'),
+              subtitle: context.tr('requests_empty_hint'),
             );
           }
           return ListView.builder(

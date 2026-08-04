@@ -7,6 +7,7 @@ import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../widgets/ds/ds.dart';
 import '../../widgets/ad_banner.dart';
+import '../../widgets/soko_vibe_states.dart';
 
 class NotificationScreen extends StatefulWidget {
   const NotificationScreen({super.key});
@@ -68,7 +69,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
               ),
             ),
             child: docs.isEmpty
-                ? _emptyState(context, cs)
+                ? _emptyState(context)
                 : _buildNotificationList(cs, docs),
           ),
           bottomNavigationBar: const AdBanner(),
@@ -77,16 +78,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
     );
   }
 
-  Widget _emptyState(BuildContext context, ColorScheme cs) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.notifications_none, size: 64, color: cs.onSurfaceVariant),
-          const SizedBox(height: 16),
-          Text(context.tr('no_notifications'), style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant)),
-        ],
-      ),
+  Widget _emptyState(BuildContext context) {
+    return SokoVibeEmptyState(
+      icon: Icons.notifications_none,
+      title: context.tr('no_notifications'),
     );
   }
 

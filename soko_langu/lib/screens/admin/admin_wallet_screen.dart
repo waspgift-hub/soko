@@ -12,6 +12,7 @@ import '../../utils/phone_utils.dart';
 import '../../theme/app_colors.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
+import '../../widgets/soko_vibe_states.dart';
 
 class AdminWalletScreen extends StatefulWidget {
   final bool embedded;
@@ -557,18 +558,9 @@ class _AdminWalletScreenState extends State<AdminWalletScreen> {
               );
             final docs = snap.data!.docs;
             if (docs.isEmpty) {
-              return Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Center(
-                    child: Text(
-                      context.tr('no_withdrawals'),
-                      style: TextStyle(
-                        color: cs.onSurfaceVariant.withValues(alpha: 0.6),
-                      ),
-                    ),
-                  ),
-                ),
+              return SokoVibeEmptyState(
+                icon: Icons.account_balance_wallet_outlined,
+                title: context.tr('no_withdrawals'),
               );
             }
             return Column(

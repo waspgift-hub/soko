@@ -7,3 +7,4 @@ server.err
 server.log
 server_push.log
 server_push_err.log
+mpesa_sandbox_key.txt

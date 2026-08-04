@@ -21,6 +21,7 @@ import '../../services/product_service.dart';
 import '../../services/user_service.dart';
 import '../../services/analytics_service.dart';
 import '../../services/flash_sale_service.dart';
+import '../../services/recently_viewed_service.dart';
 import '../../models/flash_sale_model.dart';
 import '../../theme/app_colors.dart';
 import '../../services/notification_service.dart';
@@ -76,6 +77,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       ProductService().incrementViewCount(widget.product.id);
       AnalyticsService().trackProductView(widget.product.id);
     }
+    RecentlyViewedService.instance.add(widget.product.id);
   }
 
   String _lastDisplay = '';
@@ -224,44 +226,47 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   height: MediaQuery.of(context).size.width * 0.75,
                   child: Stack(
                     children: [
-                      PageView.builder(
-                        controller: _imageController,
-                        itemCount: product.images.length,
-                        onPageChanged: (index) {
-                          setState(() => _currentImageIndex = index);
-                        },
-                        itemBuilder: (context, index) {
-                          return GestureDetector(
-                            onTap: () => _showFullScreenImage(
-                              context,
-                              product.images,
-                              index,
-                            ),
-                            child: CachedNetworkImage(
-                              imageUrl: product.images[index],
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => Container(
-                                color: cs.surfaceContainerLow,
-                                child: const Center(
-                                  child: GoogleLoading(
-                                    size: 24,
-                                    strokeWidth: 2,
+                      Hero(
+                        tag: 'product-img-${product.id}',
+                        child: PageView.builder(
+                          controller: _imageController,
+                          itemCount: product.images.length,
+                          onPageChanged: (index) {
+                            setState(() => _currentImageIndex = index);
+                          },
+                          itemBuilder: (context, index) {
+                            return GestureDetector(
+                              onTap: () => _showFullScreenImage(
+                                context,
+                                product.images,
+                                index,
+                              ),
+                              child: CachedNetworkImage(
+                                imageUrl: product.images[index],
+                                fit: BoxFit.cover,
+                                placeholder: (context, url) => Container(
+                                  color: cs.surfaceContainerLow,
+                                  child: const Center(
+                                    child: GoogleLoading(
+                                      size: 24,
+                                      strokeWidth: 2,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              errorWidget:
-                                  (context, error, stackTrace) =>
-                                      Container(
-                                        color:
-                                            cs.surfaceContainerHighest,
-                                        child: const Icon(
-                                          Icons.image,
-                                          size: 50,
+                                errorWidget:
+                                    (context, error, stackTrace) =>
+                                        Container(
+                                          color:
+                                              cs.surfaceContainerHighest,
+                                          child: const Icon(
+                                            Icons.image,
+                                            size: 50,
+                                          ),
                                         ),
-                                      ),
-                            ),
-                          );
-                        },
+                              ),
+                            );
+                          },
+                        ),
                       ),
                       // Bottom gradient overlay
                       Positioned(

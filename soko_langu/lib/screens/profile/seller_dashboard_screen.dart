@@ -20,6 +20,7 @@ import '../../widgets/google_loading.dart';
 import '../../widgets/glass_container.dart';
 import '../../services/widget_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/soko_vibe_states.dart';
 
 class SellerDashboardScreen extends StatefulWidget {
   const SellerDashboardScreen({super.key});
@@ -918,43 +919,48 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
               const SizedBox(height: 16),
               SizedBox(
                 height: 200,
-                child: ListView.separated(
-                  itemCount: products.length,
-                  separatorBuilder: (_, _) => const Divider(),
-                  itemBuilder: (_, i) {
-                    final p = products[i];
-                    final alreadyBoosted = p.isBoostedValid;
-                    return ListTile(
-                      leading: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          width: 48,
-                          height: 48,
-                          color: Theme.of(context).colorScheme.outlineVariant,
-                          child: p.images.isNotEmpty
-                              ? CachedNetworkImage(imageUrl: p.images.first, fit: BoxFit.cover)
-                              : Icon(Icons.image, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                        ),
+                child: products.isEmpty
+                    ? SokoVibeEmptyState(
+                        icon: Icons.inventory_2_outlined,
+                        title: context.tr('no_products'),
+                      )
+                    : ListView.separated(
+                        itemCount: products.length,
+                        separatorBuilder: (_, _) => const Divider(),
+                        itemBuilder: (_, i) {
+                          final p = products[i];
+                          final alreadyBoosted = p.isBoostedValid;
+                          return ListTile(
+                            leading: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                width: 48,
+                                height: 48,
+                                color: Theme.of(context).colorScheme.outlineVariant,
+                                child: p.images.isNotEmpty
+                                    ? CachedNetworkImage(imageUrl: p.images.first, fit: BoxFit.cover)
+                                    : Icon(Icons.image, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                              ),
+                            ),
+                            title: Text(
+                              p.name,
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            subtitle: Text(
+                              alreadyBoosted ? context.tr('already_featured') : context.tr('tap_to_boost'),
+                            ),
+                            trailing: alreadyBoosted
+                                ? Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary)
+                                : const Icon(Icons.arrow_forward_ios, size: 16),
+                            onTap: alreadyBoosted
+                                ? null
+                                : () {
+                                    Navigator.pop(ctx);
+                                    context.push(AppRoutes.productBoost, extra: p);
+                                  },
+                          );
+                        },
                       ),
-                      title: Text(
-                        p.name,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                        subtitle: Text(
-                          alreadyBoosted ? context.tr('already_featured') : context.tr('tap_to_boost'),
-                        ),
-                      trailing: alreadyBoosted
-                          ? Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary)
-                          : const Icon(Icons.arrow_forward_ios, size: 16),
-                      onTap: alreadyBoosted
-                          ? null
-                          : () {
-                              Navigator.pop(ctx);
-                              context.push(AppRoutes.productBoost, extra: p);
-                            },
-                    );
-                  },
-                ),
               ),
             ],
           ),
