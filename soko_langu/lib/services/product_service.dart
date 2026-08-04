@@ -8,6 +8,7 @@ import '../models/product_model.dart';
 import 'cloudinary_service.dart';
 import 'fraud_prevention_service.dart';
 import 'api_config.dart';
+import 'localization_service.dart';
 import '../utils/network_error.dart';
 
 const List<String> knownBrands = [
@@ -146,6 +147,44 @@ class ProductService {
     }
   }
 
+  /// Collapses whitespace and lowercases a listing name so "iPhone 13" and
+  /// "iPhone  13" compare as equal.
+  String _normalizeName(String name) =>
+      name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
+  /// Returns the id of an already-active listing that is a duplicate of the
+  /// proposed one (same normalized name, same price and at least one shared
+  /// image), or null when the listing is unique.
+  Future<String?> _findDuplicateListing(
+    String name,
+    double price,
+    List<String> imageUrls,
+  ) async {
+    try {
+      if (name.trim().isEmpty || imageUrls.isEmpty) return null;
+      final snap = await _db
+          .collection('products')
+          .where('searchName', isEqualTo: name.trim().toLowerCase())
+          .where('isActive', isEqualTo: true)
+          .limit(50)
+          .get();
+      final normalized = _normalizeName(name);
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        if (data['name'] == null) continue;
+        if (_normalizeName(data['name'] as String) != normalized) continue;
+        if ((data['price'] as num? ?? -1).toDouble() != price) continue;
+        final images = (data['images'] as List?)?.cast<String>() ?? const [];
+        if (images.isEmpty) continue;
+        if (!images.any(imageUrls.contains)) continue;
+        return doc.id;
+      }
+    } catch (e) {
+      debugPrint('Duplicate check skipped: $e');
+    }
+    return null;
+  }
+
   Future<String> _writeProduct(
     String uid,
     String name,
@@ -168,6 +207,23 @@ class ProductService {
     String location,
     String? barcode,
   ) async {
+    final duplicate = await _findDuplicateListing(name, price, imageUrls);
+    if (duplicate != null) {
+      await FraudPreventionService().reportDuplicateListing(
+        sellerId: uid,
+        sellerName: sellerName,
+        productName: name,
+        price: price,
+        existingId: duplicate,
+      );
+      final lang = await LocalizationService().getLanguage();
+      throw NetworkError(
+        message: "Duplicate listing blocked: $name",
+        userMessage: LocalizationService.translate('duplicate_listing', lang),
+        originalError: Exception("Duplicate listing blocked"),
+      );
+    }
+
     final searchKeywords = _generateSearchKeywords(name, description, category, brand, barcode);
 
     final docRef = await _db.collection("products").add({
