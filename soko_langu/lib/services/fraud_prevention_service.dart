@@ -107,6 +107,25 @@ class FraudPreventionService {
     debugPrint('FRAUD ALERT [$severity]: $description');
   }
 
+  /// Logs an alert when a seller tries to post a listing that duplicates an
+  /// already-active product (same name, price and photo).
+  Future<void> reportDuplicateListing({
+    required String sellerId,
+    required String sellerName,
+    required String productName,
+    required double price,
+    required String existingId,
+  }) async {
+    await _raiseAlert(
+      sellerId: sellerId,
+      sellerName: sellerName,
+      type: 'duplicate_listing',
+      severity: 'medium',
+      description:
+          'Seller tried to post duplicate of "$productName" (TZS $price) matching active listing $existingId',
+    );
+  }
+
   Future<void> checkNewSeller(String sellerId, String sellerName) async {
     try {
       final userDoc = await _db.collection('users').doc(sellerId).get();
