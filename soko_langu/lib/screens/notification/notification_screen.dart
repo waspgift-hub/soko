@@ -244,6 +244,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
         icon = Icons.check_circle; color = Colors.green;
       case 'bulk':
         icon = Icons.campaign; color = Colors.purple;
+      case 'account':
+        icon = Icons.gavel; color = Colors.red;
       default:
         icon = Icons.notifications; color = cs.tertiary;
     }
