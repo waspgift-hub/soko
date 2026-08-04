@@ -223,6 +223,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
         icon = Icons.chat_bubble_outline; color = Colors.blueGrey;
       case 'comment_reply':
         icon = Icons.reply; color = Colors.teal;
+      case 'review':
+        icon = Icons.star; color = Colors.amber;
+      case 'profile_view':
+        icon = Icons.visibility; color = Colors.indigo;
       case 'flash_sale':
         icon = Icons.flash_on; color = Colors.amber;
       case 'escrow_release':

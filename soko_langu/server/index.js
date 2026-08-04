@@ -2964,6 +2964,41 @@ app.post('/api/admin/broadcast-notification', async (req, res) => {
   }
 });
 
+// Admin → single user message: in-app notification + OneSignal push + email
+// for critical types, mirroring /api/send-notification but admin-authenticated.
+app.post('/api/admin/send-notification', async (req, res) => {
+  try {
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const { userId, title, body, type } = req.body;
+    if (!userId || !title) {
+      return res.status(400).json({ error: 'userId and title are required' });
+    }
+
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
+
+    const notifType = type || 'system';
+    await db.collection('notifications').add({
+      userId,
+      title,
+      body: body || '',
+      data: { type: notifType, fromAdmin: true },
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await sendOneSignalNotification(userId, title, body || '', { type: notifType });
+
+    res.json({ success: true, message: 'Notification sent to user' });
+  } catch (e) {
+    console.error('[Admin Send] Error:', e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ============================================================
 // 🛒 MARKETPLACE — Initiate product purchase payment via ClickPesa
 // ============================================================

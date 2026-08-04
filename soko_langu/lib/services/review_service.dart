@@ -82,6 +82,11 @@ class ReviewService {
               title: 'New Review!',
               body:
                   '${user.displayName ?? "Someone"} rated your product $rating stars',
+              data: {
+                'type': 'review',
+                'productId': productId,
+                'rating': rating.toString(),
+              },
             );
           }
         }

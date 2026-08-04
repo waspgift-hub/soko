@@ -411,6 +411,15 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
+                icon: const Icon(Icons.send, size: 18),
+                label: Text(context.tr('send_message')),
+                onPressed: _showSendMessageDialog,
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
                 icon: const Icon(Icons.delete_forever, size: 18, color: Colors.red),
                 label: Text(context.tr('full_delete'), style: const TextStyle(color: Colors.red)),
                 style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red)),
@@ -421,6 +430,85 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
         ),
       ),
     );
+  }
+
+  void _showSendMessageDialog() {
+    final titleCtrl = TextEditingController();
+    final bodyCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('send_message')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleCtrl,
+              decoration: InputDecoration(
+                labelText: context.tr('title'),
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: bodyCtrl,
+              maxLines: 4,
+              decoration: InputDecoration(
+                labelText: context.tr('message'),
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(context.tr('cancel')),
+          ),
+          ElevatedButton(
+            onPressed: () => _sendMessage(ctx, titleCtrl.text, bodyCtrl.text),
+            child: Text(context.tr('send')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _sendMessage(BuildContext ctx, String title, String body) async {
+    if (title.trim().isEmpty) return;
+    Navigator.pop(ctx);
+    try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final resp = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/admin/send-notification'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'userId': widget.uid,
+          'title': title.trim(),
+          'body': body.trim(),
+          'type': 'system',
+        }),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(resp.statusCode == 200
+                ? context.tr('message_sent')
+                : '${context.tr('imeshindwa')}: ${jsonDecode(resp.body)['error'] ?? resp.statusCode}'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${context.tr('imeshindwa')}: $e')),
+        );
+      }
+    }
   }
 
   Widget _buildBalanceSection(ColorScheme cs, double balance, double escrow, int sales) {
