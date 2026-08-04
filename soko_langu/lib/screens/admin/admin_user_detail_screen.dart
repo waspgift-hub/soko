@@ -272,6 +272,7 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
     final phone = user['phone'] ?? '';
     final suspended = user['isSuspended'] == true;
     final isAdmin = user['isAdmin'] == true;
+    final policyWarnings = (user['policyWarnings'] as num?)?.toInt() ?? 0;
     final kyc = user['kyc'] as Map<String, dynamic>?;
     final kycStatus = kyc?['status'] as String? ?? 'none';
     final sellerBalance = (user['sellerBalance'] ?? 0).toDouble();
@@ -287,7 +288,7 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
           const SizedBox(height: 16),
           _buildKycSection(cs, kyc, kycStatus),
           const SizedBox(height: 12),
-          _buildAccountActions(cs, suspended),
+          _buildAccountActions(cs, suspended, policyWarnings),
           const SizedBox(height: 12),
           _buildBalanceSection(cs, sellerBalance, pendingEscrow, totalSales),
           const SizedBox(height: 12),
@@ -378,14 +379,30 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
     );
   }
 
-  Widget _buildAccountActions(ColorScheme cs, bool suspended) {
+  Widget _buildAccountActions(ColorScheme cs, bool suspended, int policyWarnings) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(context.tr('account_actions'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            Row(
+              children: [
+                Text(context.tr('account_actions'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const Spacer(),
+                Chip(
+                  label: Text(
+                    policyWarnings >= 3
+                        ? context.tr('account_blocked')
+                        : context.trParams('warnings_x_of_3', {'count': '$policyWarnings'}),
+                    style: const TextStyle(fontSize: 11, color: Colors.white),
+                  ),
+                  backgroundColor: policyWarnings >= 3 ? Colors.red : (policyWarnings > 0 ? Colors.orange : Colors.grey),
+                  padding: EdgeInsets.zero,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ],
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -408,13 +425,25 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                icon: const Icon(Icons.send, size: 18),
-                label: Text(context.tr('send_message')),
-                onPressed: _showSendMessageDialog,
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.warning_amber, size: 18, color: Colors.orange),
+                    label: Text(context.tr('send_warning')),
+                    style: OutlinedButton.styleFrom(foregroundColor: Colors.orange),
+                    onPressed: policyWarnings >= 3 ? null : _showWarningDialog,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.send, size: 18),
+                    label: Text(context.tr('send_message')),
+                    onPressed: _showSendMessageDialog,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             SizedBox(
@@ -430,6 +459,84 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
         ),
       ),
     );
+  }
+
+  void _showWarningDialog() {
+    final reasonCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('send_warning')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(context.tr('warning_will_block_after_3')),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonCtrl,
+              maxLines: 3,
+              decoration: InputDecoration(
+                labelText: context.tr('warning_reason'),
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(context.tr('cancel')),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            onPressed: () => _sendWarning(ctx, reasonCtrl.text),
+            child: Text(context.tr('send_warning'), style: const TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _sendWarning(BuildContext ctx, String reason) async {
+    if (reason.trim().isEmpty) {
+      if (ctx.mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          SnackBar(content: Text(context.tr('warning_reason_required'))),
+        );
+      }
+      return;
+    }
+    Navigator.pop(ctx);
+    try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final resp = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/admin/users/${widget.uid}/warn'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'reason': reason.trim()}),
+      );
+      if (resp.statusCode != 200) {
+        throw Exception(jsonDecode(resp.body)['error'] ?? 'Warning failed');
+      }
+      final data = jsonDecode(resp.body);
+      _loadData();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['blocked'] == true
+              ? context.tr('warning_sent_blocked')
+              : context.tr('warning_sent'))),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${context.tr('imeshindwa')}: $e')),
+        );
+      }
+    }
   }
 
   void _showSendMessageDialog() {

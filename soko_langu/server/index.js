@@ -4991,6 +4991,86 @@ app.post('/api/admin/users/:uid/unsuspend', async (req, res) => {
 });
 
 // ============================================================
+// 👑 ADMIN — Policy warning (escalation: warn x3 → block)
+// ============================================================
+app.post('/api/admin/users/:uid/warn', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
+
+    const { uid } = req.params;
+    const { reason } = req.body || {};
+    if (!reason || typeof reason !== 'string' || !reason.trim()) {
+      return res.status(400).json({ error: 'Missing warning reason' });
+    }
+
+    const userDoc = await db.collection('users').doc(uid).get();
+    if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
+    const userData = userDoc.data() || {};
+
+    const current = typeof userData.policyWarnings === 'number' ? userData.policyWarnings : 0;
+    const next = current + 1;
+
+    // Record this warning in a subcollection so admins can review the history.
+    await db.collection('users').doc(uid).collection('policy_warnings').add({
+      reason: reason.trim(),
+      by: auth.uid,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    const blocked = next >= 3;
+    await db.collection('users').doc(uid).update({
+      policyWarnings: next,
+      lastWarningReason: reason.trim(),
+      lastWarningAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...(blocked
+        ? {
+            isSuspended: true,
+            suspendedAt: admin.firestore.FieldValue.serverTimestamp(),
+            suspendedBy: 'policy',
+            suspendedReason: reason.trim(),
+          }
+        : {}),
+    });
+
+    const warningTitle = `Onyo ${next}/3 — Sera ya Soko Vibe`;
+    const warningBody = `Unaonywa (${next}/3): ${reason.trim()}. Ukiingia makosa 3, akaunti itasimamishwa kabisa.`;
+    const blockedTitle = 'Akaunti Yako Imefungwa';
+    const blockedBody = 'Umefikia maonyo 3 na akaunti yako imefungwa kwa kukiuka sera. Wasiliana na msaada.';
+
+    try {
+      await db.collection('notifications').add({
+        userId: uid,
+        title: blocked ? blockedTitle : warningTitle,
+        body: blocked ? blockedBody : warningBody,
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        data: { type: 'account', status: blocked ? 'blocked' : 'warned', warningCount: next },
+      });
+      await sendOneSignalNotification(
+        uid,
+        blocked ? blockedTitle : warningTitle,
+        blocked ? blockedBody : warningBody,
+        { type: 'account', status: blocked ? 'blocked' : 'warned', warningCount: next },
+      );
+    } catch (_) {}
+
+    await auditLog({
+      userId: uid,
+      type: blocked ? 'admin_policy_block' : 'admin_warning',
+      amount: 0,
+      reason: reason.trim(),
+    });
+
+    res.json({ success: true, warnings: next, blocked });
+  } catch (e) {
+    console.error('/api/admin/users/:uid/warn error:', e?.message || e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================================
 // 👑 ADMIN — Delete order
 // ============================================================
 app.delete('/api/admin/orders/:id', async (req, res) => {
@@ -5258,13 +5338,14 @@ app.delete('/api/admin/users/:uid/full-delete', async (req, res) => {
 
     // Delete related data in batches
     const batch = db.batch();
-    const [orders, withdrawals, notifications, products, reviews] = await Promise.all([
+    const [orders, withdrawals, notifications, products, reviews, warnings] = await Promise.all([
       db.collection('orders').where('sellerId', '==', uid).get(),
       db.collection('orders').where('buyerId', '==', uid).get(),
       db.collection('withdrawals').where('userId', '==', uid).get(),
       db.collection('notifications').where('userId', '==', uid).get(),
       db.collection('products').where('sellerId', '==', uid).get(),
       db.collection('reviews').where('userId', '==', uid).get(),
+      db.collection('users').doc(uid).collection('policy_warnings').get(),
     ]);
 
     orders.docs.forEach(d => batch.delete(d.ref));
@@ -5272,8 +5353,16 @@ app.delete('/api/admin/users/:uid/full-delete', async (req, res) => {
     notifications.docs.forEach(d => batch.delete(d.ref));
     products.docs.forEach(d => batch.delete(d.ref));
     reviews.docs.forEach(d => batch.delete(d.ref));
+    warnings.docs.forEach(d => batch.delete(d.ref));
 
     await batch.commit();
+
+    // Remove the Firebase Auth record so the deleted account can't be reused.
+    try {
+      await admin.auth().deleteUser(uid);
+    } catch (e) {
+      console.error(`Full-delete: auth user ${uid} removal failed (likely already gone): ${e?.message || e}`);
+    }
 
     await auditLog({
       userId: uid, type: 'admin_full_delete', amount: 0,
@@ -5282,6 +5371,7 @@ app.delete('/api/admin/users/:uid/full-delete', async (req, res) => {
 
     res.json({ success: true, message: 'User and all related data deleted' });
   } catch (e) {
+    console.error('/api/admin/users/:uid/full-delete error:', e?.message || e);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
