@@ -9,6 +9,7 @@ class AppRoutes {
   static const String chat = '/chat';
   static const String profile = '/profile';
   static const String productDetail = '/product';
+  static const String productReviews = '/product-reviews';
   static const String admin = '/admin';
   static const String sellerDashboard = '/seller';
   static const String notifications = '/notifications';

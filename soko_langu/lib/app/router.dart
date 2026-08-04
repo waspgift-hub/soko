@@ -8,6 +8,7 @@ import '../screens/auth/register_screen.dart';
 import '../screens/auth/forgot_password_screen.dart';
 
 import '../screens/home/product_detail.dart';
+import '../screens/home/product_reviews_screen.dart';
 import '../screens/home/search_screen.dart';
 import '../screens/home/checkout_screen.dart';
 import '../screens/home/category_screen.dart';
@@ -190,6 +191,16 @@ GoRouter buildRouter() {
         path: '${AppRoutes.productDetail}/:id',
         pageBuilder: (context, state) {
           return _premiumPage(ProductDetailPage(product: state.extra as Product));
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.productReviews,
+        pageBuilder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? const {};
+          return _premiumPage(ProductReviewsScreen(
+            productId: extra['productId'] as String? ?? '',
+            productName: extra['productName'] as String? ?? '',
+          ));
         },
       ),
       GoRoute(

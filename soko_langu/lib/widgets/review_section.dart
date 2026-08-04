@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:go_router/go_router.dart';
 import '../services/review_service.dart';
 import '../models/review_model.dart';
 import '../extensions/context_tr.dart';
-import '../utils/network_error.dart';
+import '../app/routes.dart';
 
 class ReviewSection extends StatefulWidget {
   final String productId;
-  const ReviewSection({super.key, required this.productId});
+  final String productName;
+  const ReviewSection({
+    super.key,
+    required this.productId,
+    required this.productName,
+  });
 
   @override
   State<ReviewSection> createState() => _ReviewSectionState();
@@ -16,196 +22,255 @@ class ReviewSection extends StatefulWidget {
 class _ReviewSectionState extends State<ReviewSection> {
   final ReviewService _reviewService = ReviewService();
 
+  void _openAllReviews() {
+    context.push(
+      AppRoutes.productReviews,
+      extra: {
+        'productId': widget.productId,
+        'productName': widget.productName,
+      },
+    );
+  }
+
   Future<void> _writeReview() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    double rating = 5;
-    final commentController = TextEditingController();
-
     final result = await showDialog<bool>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: Text(context.tr('write_review')),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
+      builder: (ctx) => _ReviewDialog(productId: widget.productId),
+    );
+    if (result == true && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.tr('review_submitted'))));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<Review>>(
+      stream: _reviewService.getProductReviews(widget.productId),
+      builder: (context, snapshot) {
+        final reviews = snapshot.data ?? [];
+        if (snapshot.hasError) {
+          return const SizedBox.shrink();
+        }
+
+        if (reviews.isEmpty) {
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(5, (i) {
-                  return IconButton(
-                    icon: Icon(
-                      i < rating ? Icons.star : Icons.star_border,
-                      color: Theme.of(context).colorScheme.tertiary,
-                      size: 36,
-                    ),
-                    onPressed: () => setDialogState(() => rating = i + 1),
-                  );
-                }),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: commentController,
-                maxLines: 3,
-                decoration: InputDecoration(
-                  hintText: context.tr('share_experience'),
-                  border: const OutlineInputBorder(),
+              Text(
+                context.tr('reviews'),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
+              TextButton.icon(
+                onPressed: _writeReview,
+                icon: const Icon(Icons.edit, size: 16),
+                label: Text(context.tr('write')),
+              ),
             ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(context.tr('cancel')),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text(context.tr('submit')),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (result == true) {
-      try {
-        await _reviewService.addReview(
-          productId: widget.productId,
-          rating: rating,
-          comment: commentController.text,
-        );
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(context.tr('review_submitted'))),
           );
         }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(translateError(e))));
-        }
+
+        final avg = reviews.fold<double>(
+              0,
+              (sum, r) => sum + r.rating,
+            ) /
+            reviews.length;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  context.tr('reviews'),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: _writeReview,
+                  icon: const Icon(Icons.edit, size: 16),
+                  label: Text(context.tr('write')),
+                ),
+              ],
+            ),
+            Material(
+              color: Theme.of(context).colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(16),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: _openAllReviews,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Text(
+                        avg.toStringAsFixed(1),
+                        style: TextStyle(
+                          fontSize: 44,
+                          fontWeight: FontWeight.w800,
+                          height: 1,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _Stars(rating: avg, size: 18),
+                            const SizedBox(height: 4),
+                            Text(
+                              context.trParams('based_on_reviews', {
+                                'count': '${reviews.length}',
+                              }),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurfaceVariant,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: _openAllReviews,
+                child: Text(context.tr('see_all')),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _Stars extends StatelessWidget {
+  final double rating;
+  final double size;
+  const _Stars({required this.rating, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(5, (i) {
+        final filled = i < rating.round();
+        return Icon(
+          filled ? Icons.star : Icons.star_border,
+          size: size,
+          color: Colors.amber,
+        );
+      }),
+    );
+  }
+}
+
+class _ReviewDialog extends StatefulWidget {
+  final String productId;
+  const _ReviewDialog({required this.productId});
+
+  @override
+  State<_ReviewDialog> createState() => _ReviewDialogState();
+}
+
+class _ReviewDialogState extends State<_ReviewDialog> {
+  double _rating = 5;
+  final TextEditingController _commentController = TextEditingController();
+  bool _submitting = false;
+
+  Future<void> _submit() async {
+    setState(() => _submitting = true);
+    try {
+      await ReviewService().addReview(
+        productId: widget.productId,
+        rating: _rating,
+        comment: _commentController.text,
+      );
+      if (mounted) Navigator.pop(context, true);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _submitting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to submit review')),
+        );
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              context.tr('reviews'),
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            TextButton.icon(
-              onPressed: _writeReview,
-              icon: const Icon(Icons.edit, size: 16),
-              label: Text(context.tr('write')),
-            ),
-          ],
-        ),
-        StreamBuilder<List<Review>>(
-          stream: _reviewService.getProductReviews(widget.productId),
-          builder: (context, snapshot) {
-            final reviews = snapshot.data ?? [];
-            if (reviews.isEmpty) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Text(
-                  context.tr('no_reviews_yet'),
-                  style: TextStyle(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.6),
-                  ),
+    return AlertDialog(
+      title: Text(context.tr('write_review')),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(5, (i) {
+              return IconButton(
+                icon: Icon(
+                  i < _rating ? Icons.star : Icons.star_border,
+                  color: Theme.of(context).colorScheme.tertiary,
+                  size: 36,
                 ),
+                onPressed: () => setState(() => _rating = i + 1),
               );
-            }
-            return ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: reviews.length,
-              separatorBuilder: (context, index) => const Divider(),
-              itemBuilder: (context, index) {
-                final review = reviews[index];
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 16,
-                            backgroundColor: Theme.of(context).colorScheme.primary,
-                            child: Text(
-                              review.userName.isNotEmpty
-                                  ? review.userName[0].toUpperCase()
-                                  : "?",
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.surface,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            review.userName,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          const Spacer(),
-                          Row(
-                            children: List.generate(
-                              5,
-                              (i) => Icon(
-                                i < review.rating.round()
-                                    ? Icons.star
-                                    : Icons.star_border,
-                                size: 16,
-                                color: Theme.of(context).colorScheme.tertiary,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        review.comment,
-                        style: TextStyle(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withValues(alpha: 0.6),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _formatDate(review.createdAt),
-                        style: TextStyle(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withValues(alpha: 0.6),
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            );
-          },
+            }),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _commentController,
+            maxLines: 3,
+            decoration: InputDecoration(
+              hintText: context.tr('share_experience'),
+              border: const OutlineInputBorder(),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _submitting
+              ? null
+              : () => Navigator.pop(context, false),
+          child: Text(context.tr('cancel')),
+        ),
+        ElevatedButton(
+          onPressed: _submitting ? null : _submit,
+          child: _submitting
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Text(context.tr('submit')),
         ),
       ],
     );
   }
-
-  String _formatDate(DateTime dt) {
-    return "${dt.day}/${dt.month}/${dt.year}";
-  }
 }
-

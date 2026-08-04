@@ -850,7 +850,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     const SizedBox(height: 20),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: ReviewSection(productId: product.id),
+                      child: ReviewSection(
+                        productId: product.id,
+                        productName: product.name,
+                      ),
                     ),
                     const Divider(height: 32),
                     CommentSection(productId: product.id),
