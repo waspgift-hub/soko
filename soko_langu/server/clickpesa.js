@@ -40,15 +40,23 @@ function createPayloadChecksum(payload) {
   return hmac.digest('hex');
 }
 
-async function api(method, path, body) {
+async function api(method, path, body, query) {
   const token = await getToken();
   const finalBody = { ...body };
   if (CLICKPESA_CHECKSUM_KEY && body && method.toUpperCase() !== 'GET') {
     finalBody.checksum = createPayloadChecksum(finalBody);
   }
+  const params = new URLSearchParams();
+  if (query) {
+    for (const [key, value] of Object.entries(query)) {
+      if (value === undefined || value === null || value === '') continue;
+      params.append(key, String(value));
+    }
+  }
+  const qs = params.toString();
   const resp = await axios({
     method,
-    url: `${CLICKPESA_BASE_URL}${path}`,
+    url: `${CLICKPESA_BASE_URL}${path}${qs ? `?${qs}` : ''}`,
     data: finalBody,
     headers: { Authorization: token, 'Content-Type': 'application/json' },
   });
@@ -259,8 +267,36 @@ async function clickpesaPayoutPreview({ amount, orderReference, phoneNumber }) {
   });
 }
 
+/** Normalizes the ClickPesa balance payload to a TZS amount (number). */
 async function clickpesaBalance() {
-  return api('GET', '/account/balance');
+  const raw = await api('GET', '/account/balance');
+  if (typeof raw === 'number') return raw;
+  if (raw && typeof raw === 'object' && Array.isArray(raw.balances)) {
+    const tzs = raw.balances.find((b) => b && b.currency === 'TZS');
+    return Number(tzs?.balance || 0);
+  }
+  if (raw && typeof raw.balance === 'number') return raw.balance;
+  return 0;
+}
+
+/** Raw balances array from ClickPesa (all currencies). */
+async function clickpesaRawBalances() {
+  const raw = await api('GET', '/account/balance');
+  if (Array.isArray(raw)) return raw.map((b) => ({ currency: b.currency, balance: Number(b.balance || 0) }));
+  if (raw && typeof raw === 'object' && Array.isArray(raw.balances)) {
+    return raw.balances.map((b) => ({ currency: b.currency, balance: Number(b.balance || 0) }));
+  }
+  return [];
+}
+
+/** Queries all payments (collections) with optional filters. */
+async function clickpesaQueryPayments(filters = {}) {
+  return api('GET', '/payments/all', undefined, filters);
+}
+
+/** Queries all payouts (disbursements) with optional filters. */
+async function clickpesaQueryPayouts(filters = {}) {
+  return api('GET', '/payouts/all', undefined, filters);
 }
 
 async function clickpesaCreateBillPayOrder({ billAmount, billDescription, billPaymentMode, billReference }) {
@@ -282,6 +318,9 @@ module.exports = {
   clickpesaPayout,
   clickpesaPayoutPreview,
   clickpesaBalance,
+  clickpesaRawBalances,
+  clickpesaQueryPayments,
+  clickpesaQueryPayouts,
   clickpesaCreateBillPayOrder,
   // Fee tiers
   USSD_PUSH_FEE_TIERS,

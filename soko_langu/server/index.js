@@ -20,7 +20,8 @@ if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
 
 const {
   clickpesaCollect, clickpesaPayout, clickpesaBalance, clickpesaPayoutPreview,
-  clickpesaCreateBillPayOrder,
+  clickpesaCreateBillPayOrder, clickpesaRawBalances, clickpesaQueryPayments,
+  clickpesaQueryPayouts,
   getUssdPushFee, getPayoutFee, calcGatewayFee, ALL_PAYMENT_METHODS,
 } = require('./clickpesa');
 const orderEngine = require('./orders');
@@ -4656,6 +4657,76 @@ app.get('/api/admin/finance-summary', async (req, res) => {
       paymentProcessor: 'ClickPesa',
     });
   } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================================
+// 📊 ADMIN — ClickPesa full visibility (balances, payments, payouts)
+// ============================================================
+// Mirrors what the ClickPesa merchant dashboard shows so the admin
+// can audit everything without leaving the app.
+app.get('/api/admin/clickpesa/transactions', async (req, res) => {
+  try {
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const { type = 'all', status = '', channel = '', currency = '', startDate = '', endDate = '', limit = '100' } = req.query;
+    const maxLimit = Math.min(Math.max(parseInt(limit, 10) || 100, 1), 500);
+    const baseFilters = { limit: String(maxLimit), sortBy: 'createdAt', orderBy: 'DESC' };
+    if (status) baseFilters.status = String(status).toUpperCase();
+    if (channel) baseFilters.channel = String(channel);
+    if (currency) baseFilters.collectedCurrency = String(currency).toUpperCase();
+    if (startDate) baseFilters.startDate = String(startDate);
+    if (endDate) baseFilters.endDate = String(endDate);
+
+    const [balancesRes, paymentsRes, payoutsRes] = await Promise.allSettled([
+      clickpesaRawBalances(),
+      type === 'payouts' ? Promise.resolve({ data: [], totalCount: 0 }) : clickpesaQueryPayments(baseFilters),
+      type === 'payments' ? Promise.resolve({ data: [], totalCount: 0 }) : clickpesaQueryPayouts({ ...baseFilters, collectedCurrency: undefined, channel: channel || undefined }),
+    ]);
+
+    const balances = balancesRes.status === 'fulfilled' ? balancesRes.value : [];
+    const payments = paymentsRes.status === 'fulfilled' ? paymentsRes.value : { data: [], totalCount: 0 };
+    const payouts = payoutsRes.status === 'fulfilled' ? payoutsRes.value : { data: [], totalCount: 0 };
+
+    const paymentsData = Array.isArray(payments.data) ? payments.data : [];
+    const payoutsData = Array.isArray(payouts.data) ? payouts.data : [];
+
+    // Normalize amounts (string values) and summarize
+    const summarize = (rows, moneyField) => {
+      const totals = {};
+      const channelTotals = {};
+      let sum = 0;
+      for (const row of rows) {
+        const amt = Number(row[moneyField] || 0) || 0;
+        const st = (row.status || 'UNKNOWN').toUpperCase();
+        totals[st] = (totals[st] || 0) + amt;
+        const ch = row.channel || 'OTHER';
+        channelTotals[ch] = (channelTotals[ch] || 0) + amt;
+        sum += amt;
+      }
+      return { total: sum, byStatus: totals, byChannel: channelTotals };
+    };
+
+    res.json({
+      success: true,
+      balances,
+      payments: {
+        data: paymentsData,
+        totalCount: payments.totalCount || paymentsData.length,
+        summary: summarize(paymentsData, 'collectedAmount'),
+      },
+      payouts: {
+        data: payoutsData,
+        totalCount: payouts.totalCount || payoutsData.length,
+        summary: summarize(payoutsData, 'amount'),
+      },
+      asOf: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.error('ClickPesa admin transactions error:', e?.message || e);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
