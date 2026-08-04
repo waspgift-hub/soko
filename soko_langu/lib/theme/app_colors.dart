@@ -2,51 +2,51 @@ import 'package:flutter/material.dart';
 
 extension AppColorScheme on ColorScheme {
   Color get brandPrimary => brightness == Brightness.dark
-      ? const Color(0xFF52B788)
-      : const Color(0xFF1B4332);
+      ? const Color(0xFFFFFFFF)
+      : const Color(0xFF000000);
 
   Color get brandAccent => brightness == Brightness.dark
-      ? const Color(0xFFFFB74D)
-      : const Color(0xFFFF6F00);
+      ? const Color(0xFFB0B0B0)
+      : const Color(0xFF333333);
 
   Color get brandSuccess => brightness == Brightness.dark
-      ? const Color(0xFF34D399)
-      : const Color(0xFF065535);
+      ? const Color(0xFFD4D4D8)
+      : const Color(0xFF111111);
 
   Color get brandWarning => brightness == Brightness.dark
-      ? const Color(0xFFFBBF24)
-      : const Color(0xFFB45309);
+      ? const Color(0xFFE4E4E7)
+      : const Color(0xFF333333);
 
   Color get brandInfo => brightness == Brightness.dark
-      ? const Color(0xFF60A5FA)
-      : const Color(0xFF1E5FA8);
+      ? const Color(0xFFA1A1AA)
+      : const Color(0xFF18181B);
 
   Color get brandBorder => brightness == Brightness.dark
-      ? const Color(0xFF2A3357)
-      : const Color(0xFFE4E7EF);
+      ? const Color(0xFF2E2E32)
+      : const Color(0xFFE4E4E7);
 
   Color get brandTextPrimary => brightness == Brightness.dark
-      ? const Color(0xFFF2F4FA)
-      : const Color(0xFF10131F);
+      ? const Color(0xFFF4F4F5)
+      : const Color(0xFF09090B);
 
   Color get brandTextSecondary => brightness == Brightness.dark
-      ? const Color(0xFF9AA3BB)
-      : const Color(0xFF5A6172);
+      ? const Color(0xFFA1A1AA)
+      : const Color(0xFF52525B);
 
   Color get surfaceDark => brightness == Brightness.dark
-      ? const Color(0xFF0A0E1A)
-      : const Color(0xFFF8F9FE);
+      ? const Color(0xFF000000)
+      : const Color(0xFFFAFAFA);
 
   Color get surfaceLight => brightness == Brightness.dark
-      ? const Color(0xFF121729)
+      ? const Color(0xFF121212)
       : const Color(0xFFFFFFFF);
 
   Color get cardBase => brightness == Brightness.dark
-      ? const Color(0xFF1A2040)
+      ? const Color(0xFF171717)
       : const Color(0xFFFFFFFF);
 
   Color get cardElevated => brightness == Brightness.dark
-      ? const Color(0xFF222952)
+      ? const Color(0xFF1E1E1E)
       : const Color(0xFFFFFFFF);
 
   Color get glassBg => brightness == Brightness.dark

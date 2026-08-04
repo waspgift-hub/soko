@@ -17,6 +17,7 @@ import '../../theme/app_colors.dart';
 import '../chat/chat_navigation.dart';
 import '../../widgets/payment_banner.dart';
 import '../../widgets/payment_result_dialog.dart';
+import '../../widgets/soko_vibe_loading.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -624,14 +625,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
             borderRadius: BorderRadius.circular(24),
           ),
           child: Center(
-            child: SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                color: cs.primary.withValues(alpha: 0.4),
-              ),
-            ),
+            child: SokoVibeThreeDotLoader(size: 36, dotSize: 8),
           ),
         ),
       ),
