@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Soko Vibe Admin</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%23000000'/%3E%3Ctext x='256' y='320' font-family='Arial,sans-serif' font-size='220' font-weight='bold' fill='%23ffffff' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E">
+<style>
+  :root {
+    --black: #000000;
+    --white: #ffffff;
+    --gray-50: #fafafa;
+    --gray-100: #f4f4f5;
+    --gray-200: #e4e4e7;
+    --gray-300: #d4d4d8;
+    --gray-400: #a1a1aa;
+    --gray-500: #71717a;
+    --gray-600: #52525b;
+    --gray-800: #27272a;
+    --gray-900: #18181b;
+    --red: #dc2626;
+    --orange: #ea580c;
+    --green: #16a34a;
+    --radius: 20px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--white);
+    color: var(--gray-900);
+    min-height: 100vh;
+  }
+  /* ── Login gate ─────────────────────────────── */
+  #gate {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: var(--white); padding: 24px;
+  }
+  .gate-card {
+    width: 100%; max-width: 400px; border: 1px solid var(--gray-200);
+    border-radius: var(--radius); padding: 40px 32px; text-align: center;
+  }
+  .gate-logo {
+    width: 64px; height: 64px; border-radius: 18px; background: var(--black);
+    color: var(--white); font-size: 34px; font-weight: 800; display: flex;
+    align-items: center; justify-content: center; margin: 0 auto 20px;
+  }
+  .gate-card h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+  .gate-card p { color: var(--gray-500); font-size: 14px; margin-top: 8px; margin-bottom: 24px; }
+  .gate-card input {
+    width: 100%; padding: 14px 16px; border: 1.5px solid var(--gray-200);
+    border-radius: 12px; font-size: 15px; margin-bottom: 12px; outline: none;
+    transition: border-color .15s ease;
+  }
+  .gate-card input:focus { border-color: var(--black); }
+  .gate-err { color: var(--red); font-size: 13px; margin-bottom: 12px; min-height: 18px; }
+  /* ── Layout ─────────────────────────────────── */
+  #app { display: none; }
+  header {
+    position: sticky; top: 0; z-index: 50; background: var(--white);
+    border-bottom: 1px solid var(--gray-200);
+  }
+  .head-inner { max-width: 1200px; margin: 0 auto; padding: 16px 24px; display: flex; align-items: center; gap: 16px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 17px; letter-spacing: -0.02em; }
+  .brand .dot { width: 30px; height: 30px; border-radius: 9px; background: var(--black); color: var(--white); display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 800; }
+  .head-right { margin-left: auto; display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--gray-500); }
+  #logout {
+    background: none; border: 1px solid var(--gray-200); border-radius: 999px;
+    padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--gray-600);
+  }
+  #logout:hover { border-color: var(--black); color: var(--black); }
+  nav { border-bottom: 1px solid var(--gray-100); }
+  .nav-inner { max-width: 1200px; margin: 0 auto; display: flex; gap: 4px; padding: 0 16px; }
+  .tab {
+    background: none; border: none; padding: 14px 18px; font-size: 14px; font-weight: 600;
+    color: var(--gray-500); cursor: pointer; border-bottom: 2px solid transparent;
+  }
+  .tab:hover { color: var(--black); }
+  .tab.active { color: var(--black); border-bottom-color: var(--black); }
+  main { max-width: 1200px; margin: 0 auto; padding: 28px 24px 80px; }
+  .panel { display: none; }
+  .panel.active { display: block; animation: fade .25s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  /* ── Stats ──────────────────────────────────── */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 28px; }
+  .stat-card { border: 1px solid var(--gray-200); border-radius: var(--radius); padding: 20px; }
+  .stat-card .num { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; }
+  .stat-card .lbl { font-size: 13px; color: var(--gray-500); margin-top: 4px; }
+  /* ── Toolbar / search ───────────────────────── */
+  .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+  .toolbar input, .toolbar select {
+    padding: 11px 14px; border: 1.5px solid var(--gray-200); border-radius: 12px;
+    font-size: 14px; outline: none; min-width: 220px; background: var(--white);
+  }
+  .toolbar input:focus, .toolbar select:focus { border-color: var(--black); }
+  /* ── Table ──────────────────────────────────── */
+  .table-wrap { border: 1px solid var(--gray-200); border-radius: var(--radius); overflow-x: auto; background: var(--white); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 760px; }
+  th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--gray-400); padding: 14px 16px; border-bottom: 1px solid var(--gray-200);
+    background: var(--gray-50); white-space: nowrap;
+  }
+  td { padding: 12px 16px; border-bottom: 1px solid var(--gray-100); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--gray-50); }
+  .user-cell { display: flex; align-items: center; gap: 12px; }
+  .avatar {
+    width: 36px; height: 36px; border-radius: 50%; background: var(--black); color: var(--white);
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0;
+  }
+  .user-cell .name { font-weight: 600; }
+  .user-cell .sub { font-size: 12px; color: var(--gray-500); }
+  .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+  .pill.suspended { background: var(--red); color: var(--white); }
+  .pill.admin { background: var(--black); color: var(--white); }
+  .pill.warn { background: rgba(234,88,12,.12); color: var(--orange); }
+  .pill.active { background: rgba(22,163,74,.12); color: var(--green); }
+  .prod-img { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; border: 1px solid var(--gray-200); background: var(--gray-100); }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .btn {
+    background: none; border: 1px solid var(--gray-200); border-radius: 9px; padding: 6px 11px;
+    font-size: 12px; font-weight: 600; cursor: pointer; color: var(--gray-600); white-space: nowrap;
+    transition: all .12s ease;
+  }
+  .btn:hover { border-color: var(--black); color: var(--black); }
+  .btn.danger:hover { border-color: var(--red); color: var(--red); }
+  .btn.warn:hover { border-color: var(--orange); color: var(--orange); }
+  .btn.ok:hover { border-color: var(--green); color: var(--green); }
+  .btn.solid { background: var(--black); color: var(--white); border-color: var(--black); }
+  .btn.solid:hover { background: var(--gray-800); color: var(--white); }
+  /* ── Broadcast form ─────────────────────────── */
+  .form-card { max-width: 620px; border: 1px solid var(--gray-200); border-radius: var(--radius); padding: 28px; }
+  .form-card label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+  .form-card input, .form-card textarea {
+    width: 100%; padding: 13px 15px; border: 1.5px solid var(--gray-200); border-radius: 12px;
+    font-size: 14px; font-family: inherit; outline: none; margin-bottom: 18px; resize: vertical;
+  }
+  .form-card input:focus, .form-card textarea:focus { border-color: var(--black); }
+  .toast-zone { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 10px; z-index: 100; }
+  .toast {
+    background: var(--black); color: var(--white); border-radius: 12px; padding: 14px 18px;
+    font-size: 14px; font-weight: 500; box-shadow: 0 12px 32px rgba(0,0,0,.18); max-width: 360px;
+    animation: toastIn .2s ease;
+  }
+  .toast.err { background: var(--red); }
+  .toast.ok { background: var(--green); }
+  @keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .muted { color: var(--gray-400); }
+  .loading { text-align: center; padding: 60px 0; color: var(--gray-500); }
+  .spinner {
+    width: 28px; height: 28px; margin: 0 auto 12px; border-radius: 50%;
+    border: 3px solid var(--gray-200); border-top-color: var(--black); animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .empty { text-align: center; padding: 48px 0; color: var(--gray-400); }
+  .count { font-size: 12px; color: var(--gray-500); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<!-- ═══ LOGIN GATE ═══ -->
+<div id="gate">
+  <div class="gate-card">
+    <div class="gate-logo">S</div>
+    <h1>Soko Vibe Admin</h1>
+    <p>Enter the admin secret to unlock full control.</p>
+    <input type="password" id="secret" placeholder="Admin secret" autocomplete="off">
+    <div class="gate-err" id="gateErr"></div>
+    <button class="btn solid" id="unlockBtn" style="width:100%; padding:14px; font-size:15px;">Unlock</button>
+  </div>
+</div>
+
+<!-- ═══ APP ═══ -->
+<div id="app">
+  <header>
+    <div class="head-inner">
+      <div class="brand"><span class="dot">S</span> Soko Vibe Admin</div>
+      <div class="head-right"><span id="envLabel">Admin</span><button id="logout">Sign out</button></div>
+    </div>
+    <nav><div class="nav-inner">
+      <button class="tab active" data-tab="overview">Overview</button>
+      <button class="tab" data-tab="users">Users</button>
+      <button class="tab" data-tab="products">Products</button>
+      <button class="tab" data-tab="broadcast">Broadcast</button>
+    </div></nav>
+  </header>
+
+  <main>
+    <!-- Overview -->
+    <section class="panel active" id="panel-overview">
+      <div class="stats" id="statsGrid"></div>
+      <div class="form-card">
+        <h2 style="font-size:18px; letter-spacing:-0.02em; margin-bottom:4px;">Broadcast</h2>
+        <p class="muted" style="font-size:14px; margin-bottom:18px;">Quick-send to every user from here.</p>
+        <input type="text" id="ovTitle" placeholder="Title">
+        <textarea id="ovBody" rows="3" placeholder="Message (optional)"></textarea>
+        <button class="btn solid" id="ovSend" style="padding:13px 22px; font-size:14px;">Send to all users</button>
+      </div>
+    </section>
+
+    <!-- Users -->
+    <section class="panel" id="panel-users">
+      <div class="toolbar">
+        <input type="text" id="userSearch" placeholder="Search name, email, phone…">
+        <select id="userFilter">
+          <option value="all">All</option>
+          <option value="suspended">Suspended</option>
+          <option value="warned">Warned (1–2)</option>
+          <option value="blocked">Blocked (3)</option>
+          <option value="admin">Admins</option>
+        </select>
+        <button class="btn solid" id="refreshUsers" style="margin-left:auto;">Refresh</button>
+      </div>
+      <div class="table-wrap" id="usersTableWrap"></div>
+    </section>
+
+    <!-- Products -->
+    <section class="panel" id="panel-products">
+      <div class="toolbar">
+        <input type="text" id="productSearch" placeholder="Search name, seller…">
+        <button class="btn solid" id="refreshProducts" style="margin-left:auto;">Refresh</button>
+      </div>
+      <div class="table-wrap" id="productsTableWrap"></div>
+    </section>
+
+    <!-- Broadcast -->
+    <section class="panel" id="panel-broadcast">
+      <div class="form-card">
+        <h2 style="font-size:18px; letter-spacing:-0.02em; margin-bottom:4px;">Broadcast Notification</h2>
+        <p class="muted" style="font-size:14px; margin-bottom:18px;">Push + in-app notification for every user.</p>
+        <label for="bcTitle">Title *</label>
+        <input type="text" id="bcTitle" placeholder="e.g. New feature is live">
+        <label for="bcBody">Message</label>
+        <textarea id="bcBody" rows="4" placeholder="Optional message body"></textarea>
+        <button class="btn solid" id="bcSend" style="padding:13px 22px; font-size:14px;">Send broadcast</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast-zone" id="toasts"></div>
+
+<script>
+'use strict';
+var API = 'https://soko-langu-server.onrender.com';
+var SECRET_KEY = 'soko_vibe_admin_secret';
+
+var $ = function (id) { return document.getElementById(id); };
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function toast(msg, kind) {
+  var zone = $('toasts');
+  var el = document.createElement('div');
+  el.className = 'toast ' + (kind || '');
+  el.textContent = msg;
+  zone.appendChild(el);
+  setTimeout(function () { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; }, 3200);
+  setTimeout(function () { el.remove(); }, 3600);
+}
+
+function api(path, opts) {
+  opts = opts || {};
+  opts.headers = opts.headers || {};
+  opts.headers['x-admin-secret'] = sessionStorage.getItem(SECRET_KEY) || '';
+  if (opts.body) opts.headers['Content-Type'] = 'application/json';
+  return fetch(API + path, opts).then(function (resp) {
+    if (resp.status === 401) { gateFail(); throw new Error('Unauthorized'); }
+    return resp.json().then(function (data) {
+      if (resp.status >= 400) throw new Error(data.error || ('Request failed (' + resp.status + ')'));
+      return data;
+    });
+  });
+}
+
+function fmtTZ(n) { return 'TSh ' + Math.round(Number(n) || 0).toLocaleString(); }
+function timeAgo(ts) {
+  if (!ts) return '-';
+  var d = new Date(ts.seconds ? ts.seconds * 1000 : ts);
+  if (isNaN(d.getTime())) return '-';
+  var s = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s / 60) + 'm ago';
+  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+  return d.toLocaleDateString();
+}
+
+/* ── Gate ─────────────────────────────────────────── */
+function gateFail() {
+  sessionStorage.removeItem(SECRET_KEY);
+  $('gate').style.display = 'flex';
+  $('app').style.display = 'none';
+  $('gateErr').textContent = 'Invalid or expired secret.';
+}
+function unlock() {
+  var secret = $('secret').value.trim();
+  if (!secret) { $('gateErr').textContent = 'Enter the admin secret.'; return; }
+  sessionStorage.setItem(SECRET_KEY, secret);
+  $('gateErr').textContent = '';
+  api('/api/admin/stats').then(function () {
+    $('gate').style.display = 'none';
+    $('app').style.display = 'block';
+    loadAll();
+  }).catch(function (e) { gateFail(); });
+}
+$('unlockBtn').addEventListener('click', unlock);
+$('secret').addEventListener('keydown', function (e) { if (e.key === 'Enter') unlock(); });
+$('logout').addEventListener('click', function () {
+  sessionStorage.removeItem(SECRET_KEY);
+  location.reload();
+});
+
+/* ── Tabs ─────────────────────────────────────────── */
+document.querySelectorAll('.tab').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    document.querySelectorAll('.tab').forEach(function (b) { b.classList.remove('active'); });
+    document.querySelectorAll('.panel').forEach(function (p) { p.classList.remove('active'); });
+    btn.classList.add('active');
+    $('panel-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'users' && !window._usersLoaded) loadUsers();
+    if (btn.dataset.tab === 'products' && !window._productsLoaded) loadProducts();
+  });
+});
+
+/* ── Overview ─────────────────────────────────────── */
+function loadStats() {
+  api('/api/admin/stats').then(function (d) {
+    var cards = [
+      { n: d.totalUsers, l: 'Total Users' },
+      { n: d.totalOrders, l: 'Total Orders' },
+      { n: d.totalWithdrawals, l: 'Withdrawals' },
+      { n: d.totalAdViews, l: 'Ad Views' },
+      { n: fmtTZ(d.totalSellerBalance), l: 'Seller Balances' },
+    ];
+    $('statsGrid').innerHTML = cards.map(function (c) {
+      return '<div class="stat-card"><div class="num">' + esc(c.n) + '</div><div class="lbl">' + esc(c.l) + '</div></div>';
+    }).join('');
+  }).catch(function (e) { toast(e.message, 'err'); });
+}
+$('ovSend').addEventListener('click', function () {
+  var title = $('ovTitle').value.trim();
+  var body = $('ovBody').value.trim();
+  if (!title) { toast('Title is required', 'err'); return; }
+  var btn = $('ovSend'); btn.disabled = true; btn.textContent = 'Sending…';
+  api('/api/admin/broadcast-notification', { method: 'POST', body: JSON.stringify({ title: title, body: body }) })
+    .then(function (d) { toast(d.message || 'Broadcast sent', 'ok'); $('ovTitle').value = ''; $('ovBody').value = ''; })
+    .catch(function (e) { toast(e.message, 'err'); })
+    .finally(function () { btn.disabled = false; btn.textContent = 'Send to all users'; });
+});
+
+/* ── Users ────────────────────────────────────────── */
+var allUsers = [];
+function loadUsers() {
+  var wrap = $('usersTableWrap');
+  wrap.innerHTML = '<div class="loading"><div class="spinner"></div>Loading users…</div>';
+  api('/api/admin/users').then(function (d) {
+    allUsers = d.users || [];
+    window._usersLoaded = true;
+    renderUsers();
+  }).catch(function (e) {
+    wrap.innerHTML = '<div class="empty">Failed to load users: ' + esc(e.message) + '</div>';
+  });
+}
+function renderUsers() {
+  var q = ($('userSearch').value || '').toLowerCase();
+  var f = $('userFilter').value;
+  var list = allUsers.filter(function (u) {
+    var s = ((u.displayName || '') + ' ' + (u.email || '') + ' ' + (u.phone || '') + ' ' + (u.name || '')).toLowerCase();
+    var ok = s.indexOf(q) !== -1;
+    var w = Number(u.policyWarnings) || 0;
+    if (f === 'suspended' && !(u.isSuspended === true)) ok = false;
+    if (f === 'warned' && !(w >= 1 && w < 3)) ok = false;
+    if (f === 'blocked' && !(w >= 3)) ok = false;
+    if (f === 'admin' && !(u.isAdmin === true)) ok = false;
+    return ok;
+  });
+  var wrap = $('usersTableWrap');
+  if (!list.length) {
+    wrap.innerHTML = '<div class="empty">No users found.</div>';
+    return;
+  }
+  var rows = list.map(function (u) {
+    var w = Number(u.policyWarnings) || 0;
+    var badges = [];
+    if (u.isSuspended === true) badges.push('<span class="pill suspended">Suspended</span>');
+    if (u.isAdmin === true) badges.push('<span class="pill admin">Admin</span>');
+    if (w >= 3) badges.push('<span class="pill warn">Blocked</span>');
+    else if (w > 0) badges.push('<span class="pill warn">' + w + '/3</span>');
+    else badges.push('<span class="pill active">Active</span>');
+    var initial = ((u.displayName || u.name || '?')[0] || '?').toUpperCase();
+    return '<tr>' +
+      '<td><div class="user-cell"><div class="avatar">' + esc(initial) + '</div>' +
+      '<div><div class="name">' + esc(u.displayName || u.name || '—') + '</div>' +
+      '<div class="sub">' + esc(u.email || '') + '</div></div></div></td>' +
+      '<td>' + esc(u.phone || '—') + '</td>' +
+      '<td>' + badges.join(' ') + '</td>' +
+      '<td class="count">' + fmtTZ(u.sellerBalance || 0) + '</td>' +
+      '<td>' + timeAgo(u.createdAt) + '</td>' +
+      '<td><div class="actions">' +
+        '<button class="btn ' + (u.isSuspended === true ? 'ok' : 'danger') + '" data-act="toggle" data-uid="' + esc(u.uid) + '">' + (u.isSuspended === true ? 'Unsuspend' : 'Suspend') + '</button>' +
+        (w < 3 ? '<button class="btn warn" data-act="warn" data-uid="' + esc(u.uid) + '">Warn</button>' : '') +
+        '<button class="btn danger" data-act="del" data-uid="' + esc(u.uid) + '">Delete</button>' +
+        '<button class="btn" data-act="msg" data-uid="' + esc(u.uid) + '">Message</button>' +
+      '</div></td></tr>';
+  }).join('');
+  wrap.innerHTML = '<table><thead><tr>' +
+    '<th>User</th><th>Phone</th><th>Status</th><th>Balance</th><th>Joined</th><th>Actions</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table>';
+}
+$('userSearch').addEventListener('input', renderUsers);
+$('userFilter').addEventListener('change', renderUsers);
+$('refreshUsers').addEventListener('click', loadUsers);
+$('usersTableWrap').addEventListener('click', function (e) {
+  var btn = e.target.closest('button[data-act]');
+  if (!btn) return;
+  var uid = btn.dataset.uid; var act = btn.dataset.act;
+  if (act === 'toggle') {
+    var u = allUsers.find(function (x) { return x.uid === uid; });
+    api('/api/admin/users/' + uid, { method: 'PATCH', body: JSON.stringify({ updates: { isSuspended: !(u && u.isSuspended === true) } }) })
+      .then(function () { toast('Updated', 'ok'); loadUsers(); })
+      .catch(function (err) { toast(err.message, 'err'); });
+  } else if (act === 'warn') {
+    warnUser(uid);
+  } else if (act === 'del') {
+    deleteUser(uid);
+  } else if (act === 'msg') {
+    messageUser(uid);
+  }
+});
+function warnUser(uid) {
+  var reason = prompt('Warning reason (sent to the user):');
+  if (!reason) return;
+  api('/api/admin/users/' + uid + '/warn', { method: 'POST', body: JSON.stringify({ reason: reason }) })
+    .then(function (d) { toast(d.blocked ? '3rd warning — account blocked' : 'Warning sent (' + d.warnings + '/3)', d.blocked ? 'err' : 'ok'); loadUsers(); })
+    .catch(function (e) { toast(e.message, 'err'); });
+}
+function deleteUser(uid) {
+  if (!confirm('Permanently delete this user, all their products, reviews, orders and data? This cannot be undone.')) return;
+  if (!confirm('Type confirmation: this is IRREVERSIBLE.')) return;
+  api('/api/admin/users/' + uid + '/full-delete', { method: 'DELETE' })
+    .then(function () { toast('User deleted', 'ok'); loadUsers(); })
+    .catch(function (e) { toast(e.message, 'err'); });
+}
+function messageUser(uid) {
+  var title = prompt('Notification title:');
+  if (!title) return;
+  var body = prompt('Notification message (optional):', '');
+  if (body === null) return;
+  api('/api/admin/send-notification', { method: 'POST', body: JSON.stringify({ userId: uid, title: title, body: body || '', type: 'system' }) })
+    .then(function () { toast('Message sent', 'ok'); })
+    .catch(function (e) { toast(e.message, 'err'); });
+}
+
+/* ── Products ─────────────────────────────────────── */
+var allProducts = [];
+function loadProducts() {
+  var wrap = $('productsTableWrap');
+  wrap.innerHTML = '<div class="loading"><div class="spinner"></div>Loading products…</div>';
+  api('/api/admin/products').then(function (d) {
+    allProducts = d.products || [];
+    window._productsLoaded = true;
+    renderProducts();
+  }).catch(function (e) {
+    wrap.innerHTML = '<div class="empty">Failed to load products: ' + esc(e.message) + '</div>';
+  });
+}
+function renderProducts() {
+  var q = ($('productSearch').value || '').toLowerCase();
+  var list = allProducts.filter(function (p) {
+    return ((p.name || '') + ' ' + (p.sellerName || '') + ' ' + (p.category || '')).toLowerCase().indexOf(q) !== -1;
+  });
+  var wrap = $('productsTableWrap');
+  if (!list.length) {
+    wrap.innerHTML = '<div class="empty">No products found.</div>';
+    return;
+  }
+  var rows = list.slice(0, 200).map(function (p) {
+    var img = p.images && p.images.length ? p.images[0] : '';
+    return '<tr>' +
+      '<td>' + (img ? '<img class="prod-img" src="' + esc(img) + '" alt="">' : '<div class="prod-img"></div>') + '</td>' +
+      '<td><div class="name">' + esc(p.name) + '</div><div class="sub">' + esc(p.category || '') + (p.isActive === false ? ' · inactive' : '') + '</div></td>' +
+      '<td>' + fmtTZ(p.price) + '</td>' +
+      '<td>' + esc(p.sellerName || '—') + '</td>' +
+      '<td>' + timeAgo(p.createdAt) + '</td>' +
+      '<td><div class="actions">' +
+        '<button class="btn" data-act="toggle" data-id="' + esc(p.id) + '">' + (p.isActive === false ? 'Activate' : 'Hide') + '</button>' +
+        '<button class="btn danger" data-act="del" data-id="' + esc(p.id) + '">Delete</button>' +
+      '</div></td></tr>';
+  }).join('');
+  wrap.innerHTML = '<table><thead><tr>' +
+    '<th></th><th>Name</th><th>Price</th><th>Seller</th><th>Posted</th><th>Actions</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table>';
+}
+$('productSearch').addEventListener('input', renderProducts);
+$('refreshProducts').addEventListener('click', loadProducts);
+$('productsTableWrap').addEventListener('click', function (e) {
+  var btn = e.target.closest('button[data-act]');
+  if (!btn) return;
+  var id = btn.dataset.id; var act = btn.dataset.act;
+  if (act === 'toggle') {
+    var p = allProducts.find(function (x) { return x.id === id; });
+    api('/api/admin/products/' + id, { method: 'PUT', body: JSON.stringify({ isActive: !(p && p.isActive === false) }) })
+      .then(function () { toast('Updated', 'ok'); loadProducts(); })
+      .catch(function (err) { toast(err.message, 'err'); });
+  } else if (act === 'del') {
+    if (!confirm('Delete this product listing permanently?')) return;
+    api('/api/admin/products/' + id, { method: 'DELETE' })
+      .then(function () { toast('Product deleted', 'ok'); loadProducts(); })
+      .catch(function (e) { toast(e.message, 'err'); });
+  }
+});
+
+/* ── Broadcast tab ────────────────────────────────── */
+$('bcSend').addEventListener('click', function () {
+  var title = $('bcTitle').value.trim();
+  var body = $('bcBody').value.trim();
+  if (!title) { toast('Title is required', 'err'); return; }
+  var btn = $('bcSend'); btn.disabled = true; btn.textContent = 'Sending…';
+  api('/api/admin/broadcast-notification', { method: 'POST', body: JSON.stringify({ title: title, body: body }) })
+    .then(function (d) { toast(d.message || 'Broadcast sent', 'ok'); $('bcTitle').value = ''; $('bcBody').value = ''; })
+    .catch(function (e) { toast(e.message, 'err'); })
+    .finally(function () { btn.disabled = false; btn.textContent = 'Send broadcast'; });
+});
+
+/* ── Init ─────────────────────────────────────────── */
+function loadAll() {
+  loadStats();
+  loadUsers();
+  loadProducts();
+}
+(function () {
+  if (sessionStorage.getItem(SECRET_KEY)) {
+    api('/api/admin/stats').then(function () {
+      $('gate').style.display = 'none';
+      $('app').style.display = 'block';
+      loadAll();
+    }).catch(function () { $('gate').style.display = 'flex'; });
+  }
+})();
+</script>
+</body>
+</html>
