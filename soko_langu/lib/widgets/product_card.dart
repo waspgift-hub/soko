@@ -52,19 +52,22 @@ class ProductCard extends StatelessWidget {
                       ? Stack(
                           fit: StackFit.expand,
                           children: [
-                            CachedNetworkImage(
-                              imageUrl: getThumbnailUrl(product.images.first),
-                              cacheManager: SokoCacheManager(),
-                              memCacheWidth: 360,
-                              memCacheHeight: 360,
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => Container(
-                                color: cs.surfaceContainerLow,
-                                child: const Center(child: GoogleLoading(size: 24, strokeWidth: 2)),
-                              ),
-                              errorWidget: (context, url, error) => Container(
-                                color: cs.outlineVariant,
-                                child: Icon(Icons.image, size: 40, color: cs.onSurfaceVariant),
+                            Hero(
+                              tag: 'product-img-${product.id}',
+                              child: CachedNetworkImage(
+                                imageUrl: getThumbnailUrl(product.images.first),
+                                cacheManager: SokoCacheManager(),
+                                memCacheWidth: 360,
+                                memCacheHeight: 360,
+                                fit: BoxFit.cover,
+                                placeholder: (context, url) => Container(
+                                  color: cs.surfaceContainerLow,
+                                  child: const Center(child: GoogleLoading(size: 24, strokeWidth: 2)),
+                                ),
+                                errorWidget: (context, url, error) => Container(
+                                  color: cs.outlineVariant,
+                                  child: Icon(Icons.image, size: 40, color: cs.onSurfaceVariant),
+                                ),
                               ),
                             ),
                             _buildSellerBadge(context, badgeSize, cs),

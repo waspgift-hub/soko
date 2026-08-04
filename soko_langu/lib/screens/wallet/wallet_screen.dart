@@ -11,6 +11,7 @@ import '../../services/api_config.dart';
 import '../../services/balance_privacy_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/ds/ds.dart';
+import '../../widgets/soko_vibe_states.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -1008,21 +1009,9 @@ class _WalletScreenState extends State<WalletScreen> {
                   ),
                   const SizedBox(height: 12),
                   if (_history.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.all(40),
-                      child: Center(
-                        child: Column(
-                          children: [
-                            Icon(Icons.account_balance_wallet_outlined,
-                                size: 48, color: cs.onSurface.withValues(alpha: 0.2)),
-                            const SizedBox(height: 12),
-                            Text(
-                              tr('no_transactions'),
-                              style: TextStyle(color: cs.onSurface.withValues(alpha: 0.4)),
-                            ),
-                          ],
-                        ),
-                      ),
+                    SokoVibeEmptyState(
+                      icon: Icons.account_balance_wallet_outlined,
+                      title: tr('no_transactions'),
                     )
                   else ...[
                     ..._history.map((tx) => _buildTxCard(tx, cs)),

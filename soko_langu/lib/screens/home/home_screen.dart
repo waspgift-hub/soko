@@ -16,6 +16,7 @@ import '../../widgets/ad_banner.dart';
 import '../../widgets/banner_rotator.dart';
 import '../../widgets/premium_widgets.dart';
 import '../../widgets/animated_gradient_line.dart';
+import '../../widgets/recently_viewed_row.dart';
 import '../../widgets/ds/ds.dart';
 
 import '../../extensions/context_tr.dart';
@@ -278,7 +279,12 @@ class _HomeScreenState extends State<HomeScreen>
       ),
       body: SafeArea(
         bottom: false,
-        child: SingleChildScrollView(
+        child: RefreshIndicator(
+          onRefresh: () async {
+            final provider = context.read<ProductFeedProvider>();
+            await provider.refresh();
+          },
+          child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 80),
           child: Column(
@@ -408,6 +414,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
               const SizedBox(height: AppInsets.sm),
+              const RecentlyViewedRow(),
               // Products
               _buildProductsArea(),
               const SizedBox(height: AppInsets.lg),
@@ -415,6 +422,7 @@ class _HomeScreenState extends State<HomeScreen>
               const SizedBox(height: AppInsets.xl),
             ],
           ),
+        ),
         ),
       ),
     );

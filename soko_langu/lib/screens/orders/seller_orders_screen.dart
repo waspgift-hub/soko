@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -11,6 +12,7 @@ import '../../extensions/context_tr.dart';
 import '../../services/api_config.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/glass_container.dart';
+import '../../widgets/soko_vibe_states.dart';
 import '../../utils/network_error.dart';
 import '../../app/routes.dart';
 
@@ -77,17 +79,9 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                 }).toList();
 
                 if (docs.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.inbox_outlined, size: 72,
-                            color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
-                        const SizedBox(height: 16),
-                        Text(context.tr('no_received_orders'),
-                            style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant)),
-                      ],
-                    ),
+                  return SokoVibeEmptyState(
+                    icon: Icons.inbox_outlined,
+                    title: context.tr('no_received_orders'),
                   );
                 }
 
@@ -575,6 +569,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
   }
 
   Future<void> _submitQuote(String orderId, Map<String, dynamic> orderData, double cost, String busName, String plateNumber) async {
+    HapticFeedback.lightImpact();
     setState(() => _quotingOrderId = orderId);
     try {
       final user = FirebaseAuth.instance.currentUser;

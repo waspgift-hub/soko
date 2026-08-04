@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -8,6 +9,7 @@ import 'package:geolocator/geolocator.dart';
 import '../../constants/tanzania_districts.dart';
 import '../../models/product_model.dart';
 import '../../services/api_config.dart';
+import '../../widgets/input_field.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../widgets/glass_container.dart';
@@ -327,9 +329,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   onChanged: (v) => setState(() => _selectedDistrict = v),
                 ),
                 const SizedBox(height: 10),
-                TextField(controller: _streetCtrl, decoration: InputDecoration(hintText: context.tr('street_hint'), border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: true, fillColor: cs.surface.withValues(alpha: 0.5), isDense: true), textCapitalization: TextCapitalization.words, cursorColor: cs.primary),
+                AppInputField(
+                  controller: _streetCtrl,
+                  hint: context.tr('street_hint'),
+                  textInputAction: TextInputAction.next,
+                ),
                 const SizedBox(height: 10),
-                TextField(controller: _landmarksCtrl, decoration: InputDecoration(hintText: context.tr('landmarks_hint'), border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: true, fillColor: cs.surface.withValues(alpha: 0.5), isDense: true), textCapitalization: TextCapitalization.words, cursorColor: cs.primary),
+                AppInputField(
+                  controller: _landmarksCtrl,
+                  hint: context.tr('landmarks_hint'),
+                  maxLines: 2,
+                ),
               ],
             ),
           ),
@@ -375,6 +385,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
 
+    HapticFeedback.lightImpact();
     setState(() => _processing = true);
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) { _showError(context.tr('ingia_akaunti_kwanza')); setState(() => _processing = false); return; }

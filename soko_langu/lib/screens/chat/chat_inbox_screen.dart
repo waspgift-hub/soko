@@ -8,6 +8,7 @@ import '../../models/chat_room.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/verified_badge.dart';
 import '../../widgets/ds/ds.dart';
+import '../../widgets/soko_vibe_states.dart';
 
 class ChatInboxScreen extends StatefulWidget {
   const ChatInboxScreen({super.key});
@@ -113,15 +114,9 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
             );
           }
           if (rooms.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.chat_bubble_outline, size: 64, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
-                  const SizedBox(height: 16),
-                  Text(context.tr('no_conversations'), style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant)),
-                ],
-              ),
+            return SokoVibeEmptyState(
+              icon: Icons.chat_bubble_outline,
+              title: context.tr('no_conversations'),
             );
           }
           return ListView.builder(
