@@ -4,6 +4,7 @@
   },
   "hosting": {
     "public": "hosting",
+    "site": "sokonimoko-8c171-a8d14",
     "ignore": [
       "firebase.json"
     ]

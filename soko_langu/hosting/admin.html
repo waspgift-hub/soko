@@ -1780,12 +1780,38 @@ function showKyc(userId) {
     [['KYC status', st], ['Full name', k.fullName], ['ID type', k.idType], ['ID number', k.idNumber], ['Submitted', fmtDateTime(k.submittedAt)], ['Reviewed', fmtDateTime(k.reviewedAt)], ['Review notes', k.reviewNotes]].map(function (r) {
       return '<div class="text-slate-500">' + esc(r[0]) + '</div><div class="text-slate-800 font-medium">' + esc(r[1] || '—') + '</div>';
     }).join('') + '</div>' +
-    '<div class="grid grid-cols-2 gap-3 mt-5">' +
-    (k.idImageUrl ? '<a href="' + esc(k.idImageUrl) + '" target="_blank" rel="noopener"><img src="' + esc(k.idImageUrl) + '" class="w-full h-44 object-cover rounded-xl border border-slate-200" onerror="this.style.display=\'none\'"><p class="text-xs font-semibold text-indigo-600 mt-1">Open ID image ↗</p></a>' : '<div></div>') +
-    (k.selfieUrl ? '<a href="' + esc(k.selfieUrl) + '" target="_blank" rel="noopener"><img src="' + esc(k.selfieUrl) + '" class="w-full h-44 object-cover rounded-xl border border-slate-200" onerror="this.style.display=\'none\'"><p class="text-xs font-semibold text-indigo-600 mt-1">Open selfie ↗</p></a>' : '') +
-    '</div>';
+    '<div class="mt-5"><p class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Documents (' + kycDocs(k).length + ')</p><div class="grid grid-cols-2 gap-3">' + kycDocs(k).map(docCard).join('') + '</div></div>';
   $('kycModalBody').innerHTML = body;
   openModal('kycModal');
+}
+
+function kycDocs(k) {
+  var out = [];
+  var seen = {};
+  function add(label, url) {
+    if (url && typeof url === 'string' && url.length && !seen[url]) { seen[url] = 1; out.push({ label: label, url: url }); }
+  }
+  add('ID image', k.idImageUrl);
+  add('ID document', k.idDocumentUrl);
+  add('Selfie', k.selfieUrl);
+  add('Address proof', k.addressProofUrl);
+  add('Business license', k.businessLicenseUrl);
+  var raw = k.documents;
+  if (Array.isArray(raw)) {
+    (raw || []).forEach(function (d) {
+      if (d && typeof d === 'object') {
+        add((d.label || d.name || 'Document'), d.url || d.imageUrl || d.path);
+      }
+    });
+  }
+  return out;
+}
+
+function docCard(d) {
+  if (d.label === 'Selfie') {
+    return '<a href="' + esc(d.url) + '" target="_blank" rel="noopener" class="rounded-xl border border-slate-200 overflow-hidden"><img src="' + esc(d.url) + '" class="w-full h-40 object-cover" onerror="this.style.display=\'none\'" onload="this.onerror=null"><span class="block px-3 py-2 text-xs font-semibold text-indigo-600">Selfie ↗</span></a>';
+  }
+  return '<a href="' + esc(d.url) + '" target="_blank" rel="noopener" class="rounded-xl border border-slate-200 overflow-hidden"><img src="' + esc(d.url) + '" class="w-full h-40 object-cover" onerror="this.style.display=\'none\'" onload="this.onerror=null"><span class="block px-3 py-2 text-xs font-semibold text-indigo-600">' + esc(d.label) + ' ↗</span></a>';
 }
 
 /* ============ USERS ============ */
