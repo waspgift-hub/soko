@@ -3090,7 +3090,6 @@ app.get('/api/admin/kyc/all', async (req, res) => {
 
     const snap = await db.collection('users')
       .where('kyc.status', 'in', ['approved', 'pending', 'rejected', 'revoked'])
-      .orderBy('kyc.submittedAt', 'desc')
       .limit(100)
       .get();
 
@@ -3100,7 +3099,11 @@ app.get('/api/admin/kyc/all', async (req, res) => {
       email: doc.data().email || '',
       phone: doc.data().phone || '',
       kyc: doc.data().kyc || {},
-    }));
+    })).sort((a, b) => {
+      const ta = a.kyc.submittedAt && (a.kyc.submittedAt.seconds || a.kyc.submittedAt);
+      const tb = b.kyc.submittedAt && (b.kyc.submittedAt.seconds || b.kyc.submittedAt);
+      return (tb || 0) - (ta || 0);
+    });
 
     res.json({ all });
   } catch (e) {
