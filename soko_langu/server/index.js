@@ -4852,18 +4852,29 @@ app.get('/api/admin/user-detail/:uid', async (req, res) => {
     const { uid } = req.params;
     const [userDoc, ordersSnap, withdrawalsSnap, txSnap] = await Promise.all([
       db.collection('users').doc(uid).get(),
-      db.collection('orders').where('sellerId', '==', uid).orderBy('createdAt', 'desc').limit(50).get(),
-      db.collection('withdrawals').where('userId', '==', uid).orderBy('createdAt', 'desc').limit(50).get(),
-      db.collection('revenue_transactions').where('userId', '==', uid).orderBy('timestamp', 'desc').limit(50).get(),
+      db.collection('orders').where('sellerId', '==', uid).limit(50).get(),
+      db.collection('withdrawals').where('userId', '==', uid).limit(50).get(),
+      db.collection('revenue_transactions').where('userId', '==', uid).limit(50).get(),
     ]);
 
     if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
 
+    const sortDesc = (arr, field) => arr.sort((a, b) => {
+      const ts = (x) => {
+        const v = x && x[field];
+        if (!v) return 0;
+        if (typeof v.seconds === 'number') return v.seconds;
+        if (v instanceof Date) return v.getTime() / 1000;
+        return typeof v === 'number' ? v : 0;
+      };
+      return ts(b) - ts(a);
+    });
+
     res.json({
       user: { uid, ...userDoc.data() },
-      orders: ordersSnap.docs.map(d => ({ id: d.id, ...d.data() })),
-      withdrawals: withdrawalsSnap.docs.map(d => ({ id: d.id, ...d.data() })),
-      revenueTransactions: txSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+      orders: sortDesc(ordersSnap.docs.map(d => ({ id: d.id, ...d.data() })), 'createdAt'),
+      withdrawals: sortDesc(withdrawalsSnap.docs.map(d => ({ id: d.id, ...d.data() })), 'createdAt'),
+      revenueTransactions: sortDesc(txSnap.docs.map(d => ({ id: d.id, ...d.data() })), 'timestamp'),
     });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
