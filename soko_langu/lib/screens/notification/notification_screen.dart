@@ -42,7 +42,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
         if (!snap.hasData) return _buildLoadingScaffold(cs);
 
         final docs = snap.data!.docs;
-        final unreadCount = docs.where((d) => !(d['isRead'] as bool)).length;
+        final unreadCount = docs.where((d) => d['isRead'] != true).length;
 
         return Scaffold(
           backgroundColor: cs.surface,
