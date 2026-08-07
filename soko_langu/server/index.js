@@ -1492,7 +1492,13 @@ app.get('/api/admin/users', async (req, res) => {
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const snap = await db.collection('users').orderBy('createdAt', 'desc').get();
-    const users = snap.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+    const users = snap.docs.map(doc => {
+      const u = { uid: doc.id, ...doc.data() };
+      if (typeof u.sellerBalance !== 'undefined') u.sellerBalance = Math.max(0, u.sellerBalance || 0);
+      if (typeof u.pendingEscrow !== 'undefined') u.pendingEscrow = Math.max(0, u.pendingEscrow || 0);
+      if (typeof u.coins !== 'undefined') u.coins = Math.max(0, u.coins || 0);
+      return u;
+    });
     res.json({ users });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
@@ -2646,7 +2652,8 @@ app.post('/api/escrow/admin-resolve-dispute', async (req, res) => {
         const refundSellerDoc = await db.collection('users').doc(sellerId).get();
         const refundPending = refundSellerDoc.exists ? (refundSellerDoc.data().pendingEscrow || 0) : 0;
         const actualPending = Math.min(sellerReceives, refundPending);
-        const sellerPenalty = Math.min(gatewayFee, sellerReceives);
+        const currentBalance = refundSellerDoc.exists ? (refundSellerDoc.data().sellerBalance || 0) : 0;
+        const sellerPenalty = Math.min(gatewayFee, sellerReceives, Math.max(0, currentBalance));
         await db.collection('users').doc(sellerId).update({
           pendingEscrow: admin.firestore.FieldValue.increment(-actualPending),
           totalSales: admin.firestore.FieldValue.increment(-1),
@@ -2779,8 +2786,10 @@ app.post('/api/escrow/retry-payout', async (req, res) => {
     });
 
     // Deduct from seller balance (it was already credited on initial release)
+    const retryBalance = sellerDoc.data().sellerBalance || 0;
+    const retryDeduct = Math.min(sellerReceives, Math.max(0, retryBalance));
     await db.collection('users').doc(sellerId).update({
-      sellerBalance: admin.firestore.FieldValue.increment(-sellerReceives),
+      sellerBalance: admin.firestore.FieldValue.increment(-retryDeduct),
     });
 
     // Clear failed_retry flags
@@ -4870,8 +4879,14 @@ app.get('/api/admin/user-detail/:uid', async (req, res) => {
       return ts(b) - ts(a);
     });
 
+    const raw = userDoc.data();
+    const user = { uid, ...raw };
+    if (typeof user.sellerBalance !== 'undefined') user.sellerBalance = Math.max(0, user.sellerBalance || 0);
+    if (typeof user.pendingEscrow !== 'undefined') user.pendingEscrow = Math.max(0, user.pendingEscrow || 0);
+    if (typeof user.coins !== 'undefined') user.coins = Math.max(0, user.coins || 0);
+
     res.json({
-      user: { uid, ...userDoc.data() },
+      user,
       orders: sortDesc(ordersSnap.docs.map(d => ({ id: d.id, ...d.data() })), 'createdAt'),
       withdrawals: sortDesc(withdrawalsSnap.docs.map(d => ({ id: d.id, ...d.data() })), 'createdAt'),
       revenueTransactions: sortDesc(txSnap.docs.map(d => ({ id: d.id, ...d.data() })), 'timestamp'),
