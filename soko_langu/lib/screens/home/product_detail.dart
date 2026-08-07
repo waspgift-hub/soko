@@ -24,10 +24,12 @@ import '../../services/flash_sale_service.dart';
 import '../../services/recently_viewed_service.dart';
 import '../../models/flash_sale_model.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_typography.dart';
 import '../../services/notification_service.dart';
 import '../chat/chat_navigation.dart';
 import '../../widgets/ds/ds.dart';
 import '../../widgets/call_seller_button.dart';
+import '../../widgets/soko_vibe_watermark.dart';
 
 // ignore: unused_element
 Color? _hexToColor(String? hex) {
@@ -172,7 +174,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final currentUser = FirebaseAuth.instance.currentUser;
     final product = widget.product;
     final sellerId = product.sellerId;
@@ -380,6 +383,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           ),
                         ),
                       ),
+                      // Soko Vibe watermark
+                      Positioned(
+                        bottom: 18,
+                        left: 12,
+                        child: IgnorePointer(
+                          child: SokoVibeWatermark(compact: false),
+                        ),
+                      ),
                     ],
                   ),
                 )
@@ -411,10 +422,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   children: [
                     Text(
                       product.name,
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: cs.onSurface,
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        height: 1.2,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -485,10 +495,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     ] else ...[
                       Text(
                         context.formatPrice(product.price),
-                        style: TextStyle(
-                          color: cs.secondary,
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
+                        style: AppTypography.amount(cs.primary).copyWith(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       if (_selectedVariantId != null)
@@ -522,10 +531,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     const SizedBox(height: 16),
                     Text(
                       context.tr('description'),
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: cs.onSurface,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.2,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -534,15 +542,15 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       style: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.6),
                         height: 1.5,
+                        fontSize: 14,
                       ),
                     ),
                     const SizedBox(height: 16),
                     Text(
                       context.tr('details'),
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: cs.onSurface,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.2,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -567,10 +575,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       const SizedBox(height: 16),
                       Text(
                         context.tr('variants'),
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: cs.onSurface,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.2,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -630,71 +637,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       ],
                     ],
                     const SizedBox(height: 20),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: cs.primaryContainer.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: cs.primary.withValues(alpha: 0.2),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.storefront_outlined,
-                            size: 20,
-                            color: cs.primary,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: RichText(
-                              text: TextSpan(
-                                children: [
-                                  TextSpan(
-                                    text: context.tr('posted_on'),
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: cs.onSurface.withValues(
-                                        alpha: 0.7,
-                                      ),
-                                    ),
-                                  ),
-                                  TextSpan(
-                                    text: 'Soko Vibe',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
-                                      color: cs.primary,
-                                    ),
-                                  ),
-                                  TextSpan(
-                                    text: context.tr('posted_by'),
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: cs.onSurface.withValues(
-                                        alpha: 0.7,
-                                      ),
-                                    ),
-                                  ),
-                                  TextSpan(
-                                    text: product.sellerName,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: cs.onSurface,
-                                    ),
-                                  ),
-                                  if (product.sellerKycApproved)
-                                    WidgetSpan(child: VerifiedBadge(size: 13)),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
                     GlassCard(
                       onTap: () {
                         if (currentUser == null) {
@@ -747,100 +689,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                               VerifiedBadge(size: 14),
                                           ],
                                         ),
-                                        const SizedBox(height: 6),
-                                        if (currentUser == null)
-                                          Wrap(
-                                            spacing: 8,
-                                            runSpacing: 8,
-                                            crossAxisAlignment:
-                                                WrapCrossAlignment.center,
-                                            children: [
-                                              TextButton(
-                                                onPressed: () => context.push(
-                                                  AppRoutes.login,
-                                                ),
-                                                child: Text(
-                                                  context.tr('view_store'),
-                                                ),
-                                              ),
-                                              CallSellerButton(
-                                                phone:
-                                                    _sellerProfile?.phone ??
-                                                        '',
-                                                height: 40,
-                                                fontSize: 13,
-                                              ),
-                                              ElevatedButton.icon(
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor:
-                                                      cs.whatsappGreen,
-                                                ),
-                                                icon: Icon(
-                                                  Icons.chat,
-                                                  color: cs.surface,
-                                                  size: 18,
-                                                ),
-                                                onPressed: _chatWithSeller,
-                                                label: Text(
-                                                  context.tr('chat'),
-                                                  style: TextStyle(
-                                                    color: cs.onPrimary,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          )
-                                        else if (currentUser.uid != sellerId)
-                                          Wrap(
-                                            spacing: 8,
-                                            runSpacing: 8,
-                                            crossAxisAlignment:
-                                                WrapCrossAlignment.center,
-                                            children: [
-                                              TextButton(
-                                                onPressed: () {
-                                                  if (sellerId.isEmpty) {
-                                                    ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(context.tr('seller_unknown_error'))),
-                                                    );
-                                                  } else {
-                                                    context.push(
-                                                      '${AppRoutes.publicProfile}/$sellerId',
-                                                      extra: product.sellerName,
-                                                    );
-                                                  }
-                                                },
-                                                child: Text(
-                                                  context.tr('view_store'),
-                                                ),
-                                              ),
-                                              CallSellerButton(
-                                                phone:
-                                                    _sellerProfile?.phone ??
-                                                        '',
-                                                height: 40,
-                                                fontSize: 13,
-                                              ),
-                                              ElevatedButton.icon(
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor:
-                                                      cs.whatsappGreen,
-                                                ),
-                                                icon: Icon(
-                                                  Icons.chat,
-                                                  color: cs.surface,
-                                                  size: 18,
-                                                ),
-                                                onPressed: _chatWithSeller,
-                                                label: Text(
-                                                  context.tr('chat'),
-                                                  style: TextStyle(
-                                                    color: cs.onPrimary,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
+                                        const SizedBox(height: 12),
+                                        _buildSellerActions(context, cs),
                                         ],
                                       ),
                                     ),
@@ -1002,6 +852,79 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     ChatNavigation.openSellerChat(context, widget.product.sellerId, widget.product.sellerName);
   }
 
+  Widget _buildSellerActions(BuildContext context, ColorScheme cs) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final sellerId = widget.product.sellerId;
+    final product = widget.product;
+    final isGuest = currentUser == null;
+    final isOwn = !isGuest && currentUser.uid == sellerId;
+    if (isOwn) return const SizedBox.shrink();
+
+    void openStore() {
+      if (isGuest) {
+        context.push(AppRoutes.login);
+      } else if (sellerId.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('seller_unknown_error'))),
+        );
+      } else {
+        context.push(
+          '${AppRoutes.publicProfile}/$sellerId',
+          extra: product.sellerName,
+        );
+      }
+    }
+
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: cs.primary,
+              side: BorderSide(color: cs.primary.withValues(alpha: 0.4), width: 1.5),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              padding: const EdgeInsets.symmetric(vertical: 13),
+            ),
+            icon: const Icon(Icons.storefront_outlined, size: 18),
+            onPressed: openStore,
+            label: Text(
+              context.tr('view_store'),
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: CallSellerButton(
+            phone: _sellerProfile?.phone ?? '',
+            height: 46,
+            fontSize: 12,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: SizedBox(
+            height: 46,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: cs.whatsappGreen,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                padding: const EdgeInsets.symmetric(vertical: 13),
+              ),
+              icon: const Icon(Icons.chat, size: 18),
+              onPressed: _chatWithSeller,
+              label: Text(
+                context.tr('chat'),
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   String _fmtDuration(Duration d) {
     final h = d.inHours;
     final m = d.inMinutes.remainder(60);
@@ -1116,6 +1039,13 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                 ),
               ),
             ),
+          Positioned(
+            bottom: 16,
+            left: 12,
+            child: IgnorePointer(
+              child: SokoVibeWatermark(compact: false),
+            ),
+          ),
         ],
       ),
     );

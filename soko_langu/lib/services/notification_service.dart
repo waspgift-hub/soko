@@ -149,7 +149,7 @@ class NotificationService {
     switch (type) {
       case 'chat':
       case 'group_chat':
-        channelId = 'chat_messages_v5';
+        channelId = 'chat_messages_v6';
         headsUpTitle = data['senderName'] as String? ?? title;
         actions.add(const AndroidNotificationAction('reply', 'Jibu', showsUserInterface: true));
         break;
@@ -169,7 +169,7 @@ class NotificationService {
       case 'kyc_revoked':
       case 'deposit':
       case 'deposit_failed':
-        channelId = 'payments_notifications_v5';
+        channelId = 'payments_notifications_v6';
         headsUpTitle = title;
         final hasOrder = data['orderId'] != null || data['transactionId'] != null;
         // sellerId marks the shipping-quote push to the buyer — pay button
@@ -186,29 +186,32 @@ class NotificationService {
         break;
       case 'boost':
       case 'promotion':
-        channelId = 'general_notifications_v5';
+        channelId = 'general_notifications_v6';
         headsUpTitle = title;
         break;
       case 'flash_sale':
-        channelId = 'general_notifications_v5';
+      case 'new_product':
+        channelId = 'general_notifications_v6';
         headsUpTitle = title;
         break;
       case 'system':
       case 'admin':
       case 'alert':
-        channelId = 'system_alerts_v5';
+        channelId = 'system_alerts_v6';
         headsUpTitle = title;
         break;
       default:
-        channelId = 'general_notifications_v5';
+        channelId = 'general_notifications_v6';
         headsUpTitle = title;
     }
 
     // payload carries type + data so a local tap routes like a OneSignal tap
     final payload = jsonEncode({'type': type, ...data});
 
+    final id = LocalNotificationService.nextNotificationId();
+    debugPrint('[OS] local heads-up → id=$id channel=$channelId title=$headsUpTitle');
     LocalNotificationService().showHeadsUp(
-      id: DateTime.now().millisecondsSinceEpoch % 2147483647,
+      id: id,
       title: headsUpTitle,
       body: body,
       channelId: channelId,

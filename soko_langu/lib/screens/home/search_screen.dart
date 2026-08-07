@@ -9,8 +9,11 @@ import '../../services/search_service.dart';
 import '../../services/search_history_service.dart';
 import '../../app/routes.dart';
 import '../../models/product_model.dart';
+import '../../models/category_model.dart';
 import '../../widgets/google_loading.dart';
+import '../../widgets/soko_vibe_loading.dart';
 import '../../widgets/barcode_scanner_widget.dart';
+import '../../widgets/soko_vibe_watermark.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -46,7 +49,12 @@ class _SearchScreenState extends State<SearchScreen>
     _tabCtrl = TabController(length: _tabs.length, vsync: this);
     _tabCtrl.addListener(() {
       if (!_tabCtrl.indexIsChanging) {
-        setState(() => _selectedTab = _tabs[_tabCtrl.index]);
+        final tab = _tabs[_tabCtrl.index];
+        if (tab == _selectedTab) return;
+        setState(() => _selectedTab = tab);
+        if (_hasSearched && _response != null && _searchCtrl.text.isNotEmpty) {
+          _performSearch();
+        }
       }
     });
     _searchCtrl.addListener(_onSearchChanged);
@@ -144,6 +152,37 @@ class _SearchScreenState extends State<SearchScreen>
       if (mounted) {
         context.push('${AppRoutes.productDetail}/$productId');
       }
+    }
+  }
+
+  void _openCategory(String id, String name, {String? image}) {
+    final cat = Category(
+      id: id.isNotEmpty ? id : name,
+      name: name,
+      nameSw: name,
+      icon: '📦',
+      image: image,
+      subcategories: const [],
+    );
+    context.push(
+      '${AppRoutes.categoryProducts}/${Uri.encodeComponent(name)}',
+      extra: cat,
+    );
+  }
+
+  void _onSuggestionTap(SearchSuggestion s) {
+    _focusNode.unfocus();
+    if (s.type == 'product' && s.id != null && s.id!.isNotEmpty) {
+      _navigateToProduct(s.id!);
+    } else if ((s.type == 'user' || s.type == 'seller') &&
+        s.id != null &&
+        s.id!.isNotEmpty) {
+      context.push('${AppRoutes.publicProfile}/${s.id}', extra: s.text);
+    } else if (s.type == 'category') {
+      _openCategory(s.id ?? s.text, s.text, image: s.image);
+    } else {
+      _searchCtrl.text = s.text;
+      _performSearch();
     }
   }
 
@@ -251,9 +290,8 @@ class _SearchScreenState extends State<SearchScreen>
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          SizedBox(
-                            width: 14, height: 14,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: cs.error),
+                          SokoVibeThreeDotLoader(
+                            size: 14, dotSize: 3.5, color: cs.error,
                           ),
                           const SizedBox(width: 8),
                           Text(context.tr('listening'), style: TextStyle(color: cs.error, fontSize: 13)),
@@ -302,8 +340,8 @@ class _SearchScreenState extends State<SearchScreen>
           filled: true,
           fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: cs.outline.withValues(alpha: 0.7)),
           ),
           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         ),
@@ -339,6 +377,21 @@ class _SearchScreenState extends State<SearchScreen>
       separatorBuilder: (_, __) => const Divider(height: 1, indent: 56),
       itemBuilder: (_, i) {
         final s = _suggestions[i];
+        final IconData typeIcon;
+        final Color typeColor;
+        if (s.type == 'product') {
+          typeIcon = Icons.shopping_bag_outlined;
+          typeColor = cs.primary;
+        } else if (s.type == 'seller' || s.type == 'user') {
+          typeIcon = Icons.storefront_outlined;
+          typeColor = cs.secondary;
+        } else if (s.type == 'category') {
+          typeIcon = Icons.category_outlined;
+          typeColor = cs.tertiary;
+        } else {
+          typeIcon = Icons.search;
+          typeColor = cs.onSurfaceVariant;
+        }
         return ListTile(
           leading: s.image != null && s.image!.isNotEmpty
               ? ClipRRect(
@@ -348,22 +401,34 @@ class _SearchScreenState extends State<SearchScreen>
                     width: 36, height: 36, fit: BoxFit.cover,
                   ),
                 )
-              : Icon(
-                  s.type == 'product' ? Icons.shopping_bag : Icons.person,
-                  size: 20, color: cs.onSurfaceVariant,
+              : Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: typeColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(typeIcon, size: 18, color: typeColor),
                 ),
           title: Text(s.text, style: const TextStyle(fontSize: 14)),
-          subtitle: s.price != null
-              ? Text('${context.currencySymbol()} ${s.price!.toStringAsFixed(0)}',
-                  style: TextStyle(fontSize: 12, color: cs.primary))
-              : Text(context.tr(s.type),
-                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+          subtitle: Row(
+            children: [
+              Icon(typeIcon, size: 11, color: typeColor),
+              const SizedBox(width: 3),
+              Text(
+                context.tr(s.type),
+                style: TextStyle(fontSize: 11, color: typeColor),
+              ),
+              if (s.price != null) ...[
+                const SizedBox(width: 6),
+                Text('· ${context.currencySymbol()} ${s.price!.toStringAsFixed(0)}',
+                    style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+              ],
+            ],
+          ),
           trailing: Icon(Icons.north_west, size: 16, color: cs.onSurfaceVariant),
           dense: true,
-          onTap: () {
-            _searchCtrl.text = s.text;
-            _performSearch();
-          },
+          onTap: () => _onSuggestionTap(s),
         );
       },
     );
@@ -399,6 +464,7 @@ class _SearchScreenState extends State<SearchScreen>
   Widget _buildResultCard(ColorScheme cs, SearchResult r) {
     final isProduct = r.type == 'product';
     final isSeller = r.type == 'user' || r.type == 'seller';
+    final isCategory = r.type == 'category';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -415,6 +481,8 @@ class _SearchScreenState extends State<SearchScreen>
             _navigateToProduct(r.id);
           } else if (isSeller) {
             context.push('${AppRoutes.publicProfile}/${r.id}', extra: r.displayName);
+          } else if (isCategory) {
+            _openCategory(r.id, r.displayName, image: r.image);
           }
         },
         child: Padding(
@@ -424,9 +492,25 @@ class _SearchScreenState extends State<SearchScreen>
               if (r.image != null && r.image!.isNotEmpty) ...[
                 ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: CachedNetworkImage(
-                    imageUrl: r.image!,
-                    width: 64, height: 64, fit: BoxFit.cover,
+                  child: SizedBox(
+                    width: 64,
+                    height: 64,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        CachedNetworkImage(
+                          imageUrl: r.image!,
+                          fit: BoxFit.cover,
+                        ),
+                        Positioned(
+                          bottom: 2,
+                          left: 2,
+                          child: IgnorePointer(
+                            child: SokoVibeWatermark(),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -491,6 +575,15 @@ class _SearchScreenState extends State<SearchScreen>
                             Text('(${r.reviewCount})',
                                 style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
                           ],
+                        ],
+                      ),
+                    if (isCategory)
+                      Row(
+                        children: [
+                          Icon(Icons.category_outlined, size: 13, color: cs.tertiary),
+                          const SizedBox(width: 4),
+                          Text(context.tr('categories'),
+                              style: TextStyle(fontSize: 11, color: cs.tertiary)),
                         ],
                       ),
                   ],

@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../notifiers/auth_notifier.dart';
 import '../../extensions/context_tr.dart';
+import '../../widgets/soko_vibe_loading.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
   const ProfileSetupScreen({super.key});
@@ -102,7 +103,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                   child: ElevatedButton(
                     onPressed: _saving ? null : _save,
                     style: ElevatedButton.styleFrom(backgroundColor: cs.primary, foregroundColor: cs.surface, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                    child: _saving ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : Text(context.tr('save_and_continue'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    child: _saving ? const SokoVibeThreeDotLoader(size: 22, dotSize: 5.5, color: Colors.white) : Text(context.tr('save_and_continue'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],

@@ -64,6 +64,7 @@ class Product {
   final String category;
   final String subcategory;
   final String location;
+  final String district;
   final DateTime createdAt;
   final int stock;
   final bool isWholesale;
@@ -98,6 +99,7 @@ class Product {
     required this.category,
     required this.subcategory,
     required this.location,
+    this.district = '',
     required this.createdAt,
     required this.stock,
     this.isWholesale = false,
@@ -166,6 +168,7 @@ class Product {
       category: data['category'] ?? 'General',
       subcategory: data['subcategory'] ?? '',
       location: data['location'] as String? ?? '',
+      district: data['district'] as String? ?? '',
       createdAt: data['createdAt'] is Timestamp
           ? (data['createdAt'] as Timestamp).toDate()
           : DateTime.now(),
@@ -209,6 +212,7 @@ class Product {
     'category': category,
     'subcategory': subcategory,
     'location': location,
+    'district': district,
     'createdAt': FieldValue.serverTimestamp(),
     'stock': stock,
     'isWholesale': isWholesale,

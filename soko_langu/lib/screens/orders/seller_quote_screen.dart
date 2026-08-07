@@ -52,10 +52,11 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
 
       // Sync the orders doc + timeline and notify the buyer via the server,
       // so the buyer's pay section (status 'quoted') unlocks on both docs.
+      var transitionOk = false;
       try {
         final token = await FirebaseAuth.instance.currentUser?.getIdToken();
         if (token != null) {
-          await http.post(
+          final resp = await http.post(
             Uri.parse('${ApiConfig.baseUrl}/api/orders/transition'),
             headers: {
               'Content-Type': 'application/json',
@@ -67,8 +68,20 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
               'note': jsonEncode({'shippingCost': cost}),
             }),
           );
+          transitionOk = resp.statusCode == 200;
         }
       } catch (_) {}
+
+      // The transactions doc is already quoted locally, but if the server sync
+      // failed the buyer never got notified — make the seller aware.
+      if (!transitionOk && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(context.tr('quote_sync_warning')),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
 
       NotificationService().sendNotification(
         userId: buyerId,
@@ -146,7 +159,21 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
               final buyerName = d['buyerName'] ?? '';
               final buyerPhone = d['buyerPhone'] as String? ?? '';
               final buyerId = d['buyerId'] ?? '';
-              final addr = d['deliveryAddress'] as Map<String, dynamic>?;
+              final addrNested = d['deliveryAddress'] as Map<String, dynamic>?;
+              // The orders API stores the address as flat fields
+              // (region/district/street/landmarks); fall back to them when the
+              // nested deliveryAddress map is absent.
+              final addr = addrNested ??
+                  <String, dynamic>{
+                    'region': d['region'] ?? '',
+                    'district': d['district'] ?? '',
+                    'street': d['street'] ?? '',
+                    'landmarks': d['landmarks'] ?? '',
+                  };
+              final hasAddr = (addr['region'] as String? ?? '').isNotEmpty ||
+                  (addr['district'] as String? ?? '').isNotEmpty ||
+                  (addr['street'] as String? ?? '').isNotEmpty ||
+                  (addr['landmarks'] as String? ?? '').isNotEmpty;
 
               return Padding(
                 padding: const EdgeInsets.only(bottom: 16),
@@ -209,7 +236,7 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
                       Text(context.tr('product'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: cs.onSurfaceVariant)),
                       const SizedBox(height: 8),
                       _detailRow(cs, context.tr('product_price'), context.formatPrice(productPrice)),
-                      if (addr != null) ...[
+                      if (hasAddr) ...[
                         const SizedBox(height: 8),
                         Text(context.tr('delivery_address'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: cs.onSurfaceVariant)),
                         const SizedBox(height: 8),

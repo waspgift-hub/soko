@@ -26,13 +26,13 @@ class DsChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final bg = filled
-        ? (selected ? scheme.brandPrimary : scheme.cardBase)
+        ? (selected ? scheme.primary : scheme.cardBase)
         : Colors.transparent;
     final fg = filled
-        ? (selected ? Colors.white : scheme.brandTextSecondary)
-        : scheme.brandPrimary;
+        ? (selected ? scheme.onPrimary : scheme.brandTextSecondary)
+        : scheme.primary;
     final border = selected && !filled
-        ? Border.all(color: scheme.brandPrimary, width: 1.5)
+        ? Border.all(color: scheme.primary, width: 1.5)
         : Border.all(color: scheme.brandBorder, width: 0.5);
 
     final chip = Container(

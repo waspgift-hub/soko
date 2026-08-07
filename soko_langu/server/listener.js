@@ -19,25 +19,32 @@ try {
 admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 const db = admin.firestore();
 
+const notifPrefs = require('./notificationPrefs');
+
 // ─── OneSignal helpers (adapted from index.js) ──────────────────
 const ONE_SIGNAL_APP_ID = process.env.ONE_SIGNAL_APP_ID;
 const ONE_SIGNAL_REST_API_KEY = process.env.ONE_SIGNAL_REST_API_KEY;
 
 function getChannelId(data = {}) {
   const type = (data && data.type) || 'general';
-  if (type === 'chat' || type === 'group_chat') return 'chat_messages_v5';
-  if (type === 'system' || type === 'admin' || type === 'alert') return 'system_alerts_v5';
+  if (type === 'chat' || type === 'group_chat') return 'chat_messages_v6';
+  if (type === 'system' || type === 'admin' || type === 'alert') return 'system_alerts_v6';
   if (['payment','order','payout','dispute','refund','withdrawal',
        'escrow_release','auto_payout','escrow_auto_release',
        'dispute_resolved','cancelled','auto_withdrawal',
-       'delivery_confirmed','payment_failed','kyc','deposit','deposit_failed'].includes(type)) return 'payments_notifications_v5';
-  return 'general_notifications_v5';
+       'delivery_confirmed','payment_failed','kyc','deposit','deposit_failed'].includes(type)) return 'payments_notifications_v6';
+  return 'general_notifications_v6';
 }
 
 async function sendOsNotification(userId, title, body, data = {}) {
   if (!userId) { console.log('[LISTENER][OS] No userId'); return null; }
   if (!ONE_SIGNAL_APP_ID || !ONE_SIGNAL_REST_API_KEY) {
     console.error('[LISTENER][OS] Missing ONE_SIGNAL_APP_ID or ONE_SIGNAL_REST_API_KEY');
+    return null;
+  }
+  const notifType = (data && data.type) || 'general';
+  if (!(await notifPrefs.isPushAllowed(userId, notifType))) {
+    console.log(`[LISTENER][OS] skipped push to ${userId} type=${notifType} (preferences)`);
     return null;
   }
   try {
@@ -73,7 +80,11 @@ async function sendOsNotification(userId, title, body, data = {}) {
 }
 
 // ─── SMS sender (same pattern as index.js) ──────────────────────────
-async function sendSms(phone, message) {
+async function sendSms(phone, message, userId) {
+  if (userId && !(await notifPrefs.isSmsAllowed(userId))) {
+    console.log(`[LISTENER][SMS] skipped to ${userId} (sms preferences)`);
+    return;
+  }
   const apiKey = process.env.MESEJI_API_KEY;
   if (!apiKey) {
     console.error('[LISTENER] MESEJI_API_KEY not configured');
@@ -153,8 +164,8 @@ function startListener() {
           // SMS buyer + seller
           const grandTotal = (after.productPrice || 0) + (after.shippingCost || 0);
           Promise.all([
-            getUserPhone(buyerId).then(phone => phone && sendSms(phone, `Soko Vibe: Malipo ya TZS ${grandTotal.toLocaleString()} kwa Oda #${orderId} yamepokelewa na kuwekwa salama Escrow. Muuzaji anajiandaa kutuma mzigo wako.`)),
-            getUserPhone(sellerId).then(phone => phone && sendSms(phone, `Soko Vibe: Oda #${orderId} imelipiwa! Fedha ipo salama Escrow. Tafadhali kamilisha usafirishaji stendi na ujaze risiti ya basi kwenye app.`)),
+            getUserPhone(buyerId).then(phone => phone && sendSms(phone, `Soko Vibe: Malipo ya TZS ${grandTotal.toLocaleString()} kwa Oda #${orderId} yamepokelewa na kuwekwa salama Escrow. Muuzaji anajiandaa kutuma mzigo wako.`, buyerId)),
+            getUserPhone(sellerId).then(phone => phone && sendSms(phone, `Soko Vibe: Oda #${orderId} imelipiwa! Fedha ipo salama Escrow. Tafadhali kamilisha usafirishaji stendi na ujaze risiti ya basi kwenye app.`, sellerId)),
           ]);
         }
 
@@ -167,7 +178,7 @@ function startListener() {
 
           // SMS buyer
           getUserPhone(buyerId).then(phone => {
-            if (phone) sendSms(phone, `Soko Vibe: Mzigo wa Oda #${orderId} umesafirishwa kupitia basi la ${busName} (${plateNumber}). Fungua app kuona risiti yako ya kidijitali.`);
+            if (phone) sendSms(phone, `Soko Vibe: Mzigo wa Oda #${orderId} umesafirishwa kupitia basi la ${busName} (${plateNumber}). Fungua app kuona risiti yako ya kidijitali.`, buyerId);
           });
         }
 
@@ -179,7 +190,7 @@ function startListener() {
 
           // SMS seller
           getUserPhone(sellerId).then(phone => {
-            if (phone) sendSms(phone, `Soko Vibe: Mteja amethibitisha kupokea mzigo #${orderId}. TZS ${sellerReceives.toLocaleString()} zimetolewa Escrow na kuwekwa kwenye pochi yako.`);
+            if (phone) sendSms(phone, `Soko Vibe: Mteja amethibitisha kupokea mzigo #${orderId}. TZS ${sellerReceives.toLocaleString()} zimetolewa Escrow na kuwekwa kwenye pochi yako.`, sellerId);
           });
         }
 
@@ -197,7 +208,7 @@ function startListener() {
 
           // SMS buyer
           getUserPhone(buyerId).then(phone => {
-            if (phone) sendSms(phone, `Soko Vibe: Malipo ya ${productName} hayakukamilika. Tafadhali fungua app na ujaribu tena.`);
+            if (phone) sendSms(phone, `Soko Vibe: Malipo ya ${productName} hayakukamilika. Tafadhali fungua app na ujaribu tena.`, buyerId);
           });
         }
 
@@ -214,7 +225,7 @@ function startListener() {
 
           // SMS buyer
           getUserPhone(buyerId).then(phone => {
-            if (phone) sendSms(phone, `Soko Vibe: Fedha za ${productName} (Oda #${orderId}) zimerudishwa kwenye akaunti yako.`);
+            if (phone) sendSms(phone, `Soko Vibe: Fedha za ${productName} (Oda #${orderId}) zimerudishwa kwenye akaunti yako.`, buyerId);
           });
         }
       });
@@ -393,6 +404,77 @@ function startProductListener() {
   );
 }
 
+// ─── District listener: notify users who opted into a district ───────
+// When a new product carries a `district`, every user whose
+// `notification_preferences.interested_districts` array-contains it gets an
+// in-app row + push. Push is additionally gated by the marketing channel and
+// master switch via notificationPrefs (`new_product` maps to marketing).
+function normalizeDistrict(district) {
+  return String(district || '').trim();
+}
+
+function startDistrictProductListener() {
+  console.log('[LISTENER] Starting district product listener...');
+  let knownDistrictIds = new Set();
+  const listenerStartedAt = admin.firestore.Timestamp.now();
+
+  db.collection('products')
+    .orderBy('createdAt', 'desc')
+    .limit(200)
+    .get()
+    .then((snap) => {
+      snap.docs.forEach((doc) => knownDistrictIds.add(doc.id));
+      console.log(`[LISTENER] Loaded ${snap.docs.length} products for district matching`);
+    })
+    .catch((err) => console.error('[LISTENER] Failed to load products for district matching:', err.message));
+
+  db.collection('products').onSnapshot(
+    (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type !== 'added') return;
+        const productId = change.doc.id;
+        if (knownDistrictIds.has(productId)) return;
+        const product = change.doc.data();
+        const productTime = product.createdAt;
+        if (productTime && productTime < listenerStartedAt) return;
+        knownDistrictIds.add(productId);
+
+        const district = normalizeDistrict(product.district);
+        if (!district) return;
+        const sellerId = product.sellerId;
+        if (!sellerId) return;
+        const sellerName = product.sellerName || 'Mfanyabiashara';
+        const productName = product.name || 'bidhaa mpya';
+
+        db.collection('notification_preferences')
+          .where('interested_districts', 'array-contains', district)
+          .get()
+          .then((snap) => {
+            const title = `Bidhaa Mpya katika ${district}!`;
+            const body = `${sellerName} ameweka bidhaa mpya: ${productName} — katika ${district}.`;
+            const data = { type: 'new_product', productId, sellerId, district };
+            for (const doc of snap.docs) {
+              const prefs = doc.data();
+              if (prefs.district_new_products === false) continue;
+              if (doc.id === sellerId) continue;
+              db.collection('notifications').add({
+                userId: doc.id, title, body,
+                data, isRead: false,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              }).catch(() => {});
+              sendOsNotification(doc.id, title, body, data).catch(() => {});
+            }
+            if (snap.size > 0) {
+              console.log(`[LISTENER] District "${district}": notified ${snap.size} interested users about product ${productId}`);
+            }
+          })
+          .catch((err) => console.error('[LISTENER] District interest lookup error:', err.message));
+      });
+    },
+    (error) => console.error('[LISTENER] District listener error:', error)
+  );
+}
+
 // Seed and start both listeners
 db.collection('transactions')
   .where('status', '==', 'pending')
@@ -408,4 +490,5 @@ db.collection('transactions')
     startListener();
     startChatListener();
     startProductListener();
+    startDistrictProductListener();
   });

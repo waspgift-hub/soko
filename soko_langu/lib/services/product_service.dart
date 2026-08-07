@@ -82,6 +82,7 @@ class ProductService {
     required int stock,
     required List<XFile> imageFiles,
     String location = 'Tanzania',
+    String district = '',
     bool isWholesale = false,
     List<Map<String, dynamic>>? wholesaleTiers,
     List<Map<String, dynamic>>? variants,
@@ -136,7 +137,7 @@ class ProductService {
         user.uid, name, description, price, currency, imageUrls,
         category, subcategory, stock, sellerName, sellerPhone,
         sellerKycApproved, isWholesale, wholesaleTiers, variants,
-        attributes, brand, condition, location, barcode,
+        attributes, brand, condition, location, district, barcode,
       );
     } catch (e) {
       throw NetworkError(
@@ -205,6 +206,7 @@ class ProductService {
     String? brand,
     String condition,
     String location,
+    String district,
     String? barcode,
   ) async {
     final duplicate = await _findDuplicateListing(name, price, imageUrls);
@@ -239,6 +241,7 @@ class ProductService {
       "category": category,
       "subcategory": subcategory,
       "location": location,
+      "district": district,
       "stock": stock,
       "isWholesale": isWholesale,
       "wholesaleTiers": wholesaleTiers ?? [],
@@ -576,6 +579,7 @@ class ProductService {
     List<String>? existingImages,
     List<XFile>? newImages,
     String? location,
+    String? district,
     String? barcode,
   }) async {
     try {
@@ -602,6 +606,7 @@ class ProductService {
       if (variants != null) data["variants"] = variants;
       if (condition != null) data["condition"] = condition;
       if (location != null) data["location"] = location;
+      if (district != null) data["district"] = district;
       if (barcode != null) { data["barcode"] = barcode; needsKeywordUpdate = true; }
 
       if (existingImages != null || newImages != null) {

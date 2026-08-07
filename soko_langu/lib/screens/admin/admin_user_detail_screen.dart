@@ -4,10 +4,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // ignore: unused_import
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/api_config.dart';
 import '../../widgets/google_loading.dart';
+import 'admin_kyc_document_view_screen.dart';
 
 class AdminUserDetailScreen extends StatefulWidget {
   final String uid;
@@ -135,112 +135,12 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
     }
   }
 
-  void _showKycReview() {
-    final kyc = _userData?['kyc'] as Map<String, dynamic>?;
-    if (kyc == null) return;
-    final fullName = kyc['fullName'] ?? '';
-    final idType = kyc['idType'] ?? '';
-    final idNumber = kyc['idNumber'] ?? '';
-    final idImageUrl = kyc['idImageUrl'] as String?;
-    final selfieUrl = kyc['selfieUrl'] as String?;
-    final notesCtrl = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(context.tr('review_kyc')),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('${context.tr('full_name')}: $fullName', style: const TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              Text('${context.tr('id_type')}: $idType'),
-              Text('${context.tr('number')}: $idNumber'),
-              if (idImageUrl != null) ...[
-                const SizedBox(height: 8),
-                Text(context.tr('identification_label')),
-                const SizedBox(height: 4),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: CachedNetworkImage(imageUrl: idImageUrl, height: 120, fit: BoxFit.cover, errorWidget: (_, _, _) => const Icon(Icons.broken_image)),
-                ),
-              ],
-              if (selfieUrl != null) ...[
-                const SizedBox(height: 8),
-                Text(context.tr('selfie_label')),
-                const SizedBox(height: 4),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: CachedNetworkImage(imageUrl: selfieUrl, height: 120, fit: BoxFit.cover, errorWidget: (_, _, _) => const Icon(Icons.broken_image)),
-                ),
-              ],
-              const SizedBox(height: 12),
-              TextField(
-                controller: notesCtrl,
-                maxLines: 3,
-                decoration: InputDecoration(
-                  labelText: context.tr('rejection_reason_label'),
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.tr('cancel'))),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.close, size: 16),
-            label: Text(context.tr('reject')),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-            onPressed: () {
-              Navigator.pop(ctx);
-              _submitKycReview(false, notesCtrl.text);
-            },
-          ),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.check, size: 16),
-            label: Text(context.tr('approve')),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
-            onPressed: () {
-              Navigator.pop(ctx);
-              _submitKycReview(true, notesCtrl.text);
-            },
-          ),
-        ],
-      ),
+  Future<void> _showKycReview() async {
+    final user = <String, dynamic>{'uid': widget.uid, ...?_userData};
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => AdminKycDocumentViewScreen(user: user)),
     );
-  }
-
-  Future<void> _submitKycReview(bool approve, String notes) async {
-    try {
-      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-      final resp = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/admin/kyc/review'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({'userId': widget.uid, 'approve': approve, 'notes': notes}),
-      );
-      if (resp.statusCode == 200) {
-        _loadData();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(jsonDecode(resp.body)['message'] ?? context.tr('kyc_status'))),
-          );
-        }
-      } else {
-        throw Exception(jsonDecode(resp.body)['error'] ?? context.tr('kyc_review_failed'));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.tr('imeshindwa').replaceAll('{0}', '$e'))),
-        );
-      }
-    }
+    if (changed == true) _loadData();
   }
 
   @override

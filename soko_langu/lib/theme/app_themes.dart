@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'app_typography.dart';
 
 ThemeData buildLightTheme(Color seed) {
   final scheme = ColorScheme.fromSeed(
-    seedColor: const Color(0xFF000000),
+    seedColor: seed,
     brightness: Brightness.light,
   ).copyWith(
     surface: const Color(0xFFFAFAFA),
@@ -21,7 +22,7 @@ ThemeData buildLightTheme(Color seed) {
 
 ThemeData buildDarkTheme(Color seed) {
   final scheme = ColorScheme.fromSeed(
-    seedColor: const Color(0xFFFFFFFF),
+    seedColor: seed,
     brightness: Brightness.dark,
   ).copyWith(
     surface: const Color(0xFF000000),
@@ -71,13 +72,14 @@ ThemeData _buildTheme(ColorScheme scheme) {
       foregroundColor: scheme.onSurface,
       elevation: 0,
       centerTitle: true,
-      titleTextStyle: GoogleFontsPlus.inter(
+      titleTextStyle: GoogleFonts.inter(
         fontSize: 17,
-        fontWeight: FontWeight.w600,
+        fontWeight: FontWeight.w700,
         letterSpacing: -0.3,
         color: scheme.onSurface,
       ),
       scrolledUnderElevation: 0,
+      surfaceTintColor: Colors.transparent,
     ),
 
     navigationBarTheme: NavigationBarThemeData(
@@ -281,9 +283,11 @@ ThemeData _buildTheme(ColorScheme scheme) {
     cardTheme: CardThemeData(
       color: glassCard,
       elevation: 0,
+      surfaceTintColor: Colors.transparent,
       shadowColor: Colors.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.35)),
       ),
       clipBehavior: Clip.antiAlias,
     ),
@@ -446,20 +450,4 @@ ThemeData _buildTheme(ColorScheme scheme) {
       ),
     ),
   );
-}
-
-class GoogleFontsPlus {
-  static TextStyle inter({
-    double? fontSize,
-    FontWeight? fontWeight,
-    double? letterSpacing,
-    Color? color,
-  }) {
-    return TextStyle(
-      fontSize: fontSize,
-      fontWeight: fontWeight,
-      letterSpacing: letterSpacing,
-      color: color,
-    );
-  }
 }

@@ -14,6 +14,7 @@ import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
 import '../../app/routes.dart';
 import '../../utils/responsive.dart';
+import '../../theme/app_dimens.dart';
 
 class DiscoveryScreen extends StatefulWidget {
   const DiscoveryScreen({super.key});
@@ -150,13 +151,13 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> with AutomaticKeepAli
             slivers: [
               const SliverToBoxAdapter(child: DynamicBanner()),
               SliverPadding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
                 sliver: SliverGrid(
                   gridDelegate:
                       SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: Responsive.gridColumns(context),
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
+                    crossAxisSpacing: AppInsets.md,
+                    mainAxisSpacing: AppInsets.md,
                     childAspectRatio: Responsive.cardAspectRatio(context),
                   ),
                   delegate: SliverChildBuilderDelegate(
@@ -177,7 +178,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> with AutomaticKeepAli
               ),
               const SliverToBoxAdapter(
                 child: Padding(
-                  padding: EdgeInsets.fromLTRB(12, 12, 12, 24),
+                  padding: EdgeInsets.fromLTRB(AppInsets.lg, AppInsets.md, AppInsets.lg, AppInsets.xl),
                   child: AdBanner(),
                 ),
               ),

@@ -423,7 +423,7 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                 child: Icon(item.icon, color: cs.primary, size: 24),
               ),
               const SizedBox(height: AppInsets.sm),
-              Text(item.label, style: TextStyle(fontSize: AppFontSize.xs, color: cs.onSurface, fontWeight: FontWeight.w500),
+              Text(item.label, style: TextStyle(fontSize: AppFontSize.sm, color: cs.onSurface, fontWeight: FontWeight.w500),
                 textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
             ],
           ),

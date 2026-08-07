@@ -14,6 +14,7 @@ import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../widgets/glass_container.dart';
 import '../../widgets/location_map_widget.dart';
+import '../../widgets/soko_vibe_loading.dart';
 import '../../widgets/ds/ds.dart';
 import '../../utils/network_error.dart';
 
@@ -270,7 +271,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           OutlinedButton.icon(
             onPressed: _detecting ? null : _detectLocation,
             icon: _detecting
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                ? SokoVibeThreeDotLoader(size: 18, dotSize: 4.5, color: cs.primary)
                 : const Icon(Icons.my_location, size: 18),
             label: Text(context.tr('get_location')),
             style: OutlinedButton.styleFrom(

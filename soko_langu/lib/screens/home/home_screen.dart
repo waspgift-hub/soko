@@ -18,6 +18,7 @@ import '../../widgets/premium_widgets.dart';
 import '../../widgets/animated_gradient_line.dart';
 import '../../widgets/recently_viewed_row.dart';
 import '../../widgets/ds/ds.dart';
+import '../../theme/app_typography.dart';
 
 import '../../extensions/context_tr.dart';
 import '../../utils/responsive.dart';
@@ -239,8 +240,12 @@ class _HomeScreenState extends State<HomeScreen>
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(context.tr('soko'), style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: cs.primary, letterSpacing: -0.5)),
-                Text(context.tr('vibe'), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.onSurfaceVariant, letterSpacing: 2)),
+                Text(context.tr('soko'),
+                  style: AppTypography.brandTitle(cs.primary).copyWith(fontSize: 22),
+                ),
+                Text(context.tr('vibe'),
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: cs.onSurfaceVariant, letterSpacing: 2.5),
+                ),
               ],
             ),
           ],
@@ -299,8 +304,14 @@ class _HomeScreenState extends State<HomeScreen>
                   decoration: BoxDecoration(
                     color: cs.surface,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: cs.outlineVariant),
-                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 12, offset: const Offset(0, 4))],
+                    border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.7)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: cs.brightness == Brightness.dark ? 0.2 : 0.05),
+                        blurRadius: 14,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
                   child: TextField(
                     controller: _searchCtrl,

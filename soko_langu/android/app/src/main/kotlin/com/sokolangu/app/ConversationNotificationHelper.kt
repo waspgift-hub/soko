@@ -12,7 +12,7 @@ import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 
 object ConversationNotificationHelper {
-    private const val CHANNEL_ID = "chat_messages_v4"
+    private const val CHANNEL_ID = "chat_messages_v6"
     private const val TAG = "chat_conv"
 
     fun show(context: Context, senderName: String, messageText: String, roomId: String, senderId: String) {
@@ -63,7 +63,7 @@ object ConversationNotificationHelper {
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setDefaults(Notification.DEFAULT_ALL)
-            .setGroup("chat_messages_v4")
+            .setGroup("chat_messages_v6")
             .setGroupSummary(false)
             .setSortKey(roomId)
             .apply {

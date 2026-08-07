@@ -5,6 +5,7 @@ import '../services/review_service.dart';
 import '../models/review_model.dart';
 import '../extensions/context_tr.dart';
 import '../app/routes.dart';
+import '../widgets/soko_vibe_loading.dart';
 
 class ReviewSection extends StatefulWidget {
   final String productId;
@@ -263,11 +264,7 @@ class _ReviewDialogState extends State<_ReviewDialog> {
         ElevatedButton(
           onPressed: _submitting ? null : _submit,
           child: _submitting
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+              ? const SokoVibeThreeDotLoader(size: 16, dotSize: 4)
               : Text(context.tr('submit')),
         ),
       ],

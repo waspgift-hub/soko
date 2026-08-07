@@ -50,7 +50,7 @@ class _BoostedCarousel extends StatelessWidget {
             CarouselSlider.builder(
               itemCount: products.length,
               options: CarouselOptions(
-                height: 200,
+                height: 180,
                 autoPlay: true,
                 autoPlayInterval: const Duration(seconds: 4),
                 autoPlayAnimationDuration: const Duration(milliseconds: 600),
@@ -241,7 +241,7 @@ class EarnMoneyBanner extends StatelessWidget {
       onTap: () => context.push(AppRoutes.addProduct),
       child: Container(
         margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-        height: 160,
+        height: 180,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           gradient: LinearGradient(

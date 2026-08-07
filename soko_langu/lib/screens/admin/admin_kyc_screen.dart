@@ -2,11 +2,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:go_router/go_router.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/api_config.dart';
 import '../../widgets/google_loading.dart';
+import 'admin_kyc_document_view_screen.dart';
 
 class AdminKycScreen extends StatefulWidget {
   const AdminKycScreen({super.key});
@@ -455,47 +454,10 @@ class _AdminKycScreenState extends State<AdminKycScreen>
     }
   }
 
-  void _showKycDetail(Map<String, dynamic> user) {
-    final kyc = user['kyc'] as Map<String, dynamic>? ?? {};
-    final idImageUrl = kyc['idImageUrl'] as String?;
-    final selfieUrl = kyc['selfieUrl'] as String?;
-    final cs = Theme.of(context).colorScheme;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(context.tr('kyc_details')),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (idImageUrl != null && idImageUrl.isNotEmpty) ...[
-                Text('${context.tr('id_document')}:', style: TextStyle(fontWeight: FontWeight.bold, color: cs.onSurface)),
-                const SizedBox(height: 4),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: CachedNetworkImage(imageUrl: idImageUrl, height: 180, fit: BoxFit.cover,
-                    errorWidget: (_, _, _) => Icon(Icons.broken_image, size: 48, color: cs.onSurfaceVariant)),
-                ),
-                const SizedBox(height: 12),
-              ],
-              if (selfieUrl != null && selfieUrl.isNotEmpty) ...[
-                Text('${context.tr('selfie')}:', style: TextStyle(fontWeight: FontWeight.bold, color: cs.onSurface)),
-                const SizedBox(height: 4),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: CachedNetworkImage(imageUrl: selfieUrl, height: 180, fit: BoxFit.cover,
-                    errorWidget: (_, _, _) => Icon(Icons.broken_image, size: 48, color: cs.onSurfaceVariant)),
-                ),
-              ],
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.tr('close'))),
-        ],
-      ),
+  Future<void> _showKycDetail(Map<String, dynamic> user) async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => AdminKycDocumentViewScreen(user: user)),
     );
+    if (changed == true && mounted) loadKycData();
   }
 }

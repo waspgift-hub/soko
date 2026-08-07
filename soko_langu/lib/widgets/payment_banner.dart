@@ -108,9 +108,14 @@ class _PaymentBannerContentState extends State<_PaymentBannerContent>
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bottom = MediaQuery.of(context).padding.bottom + 24;
+    final bottom = MediaQuery.of(context).padding.bottom + 32;
 
-    return Stack(
+    // Overlay entries have no Material ancestor, so the text renders with the
+    // fallback DefaultTextStyle (yellow underline quirk). Transparent Material
+    // restores the app text theme + ink without painting a background.
+    return Material(
+      type: MaterialType.transparency,
+      child: Stack(
       children: [
         if (widget.type == PaymentBannerType.success)
           Positioned.fill(child: DsConfetti()),
@@ -128,7 +133,7 @@ class _PaymentBannerContentState extends State<_PaymentBannerContent>
             child: SafeArea(
               top: false,
               child: Padding(
-                padding: EdgeInsets.only(left: 32, right: 32, bottom: bottom),
+                padding: EdgeInsets.only(left: 20, right: 20, bottom: bottom),
                 child: Align(
                   alignment: Alignment.bottomCenter,
                   child: GestureDetector(
@@ -138,7 +143,7 @@ class _PaymentBannerContentState extends State<_PaymentBannerContent>
                       child: BackdropFilter(
                         filter: ui.ImageFilter.blur(sigmaX: 30, sigmaY: 30),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
                           decoration: BoxDecoration(
                             color: isDark
                                 ? cs.surface.withValues(alpha: 0.5)
@@ -149,13 +154,13 @@ class _PaymentBannerContentState extends State<_PaymentBannerContent>
                             child: Row(
                               children: [
                                 Container(
-                                  width: 44,
-                                  height: 44,
+                                  width: 56,
+                                  height: 56,
                                   decoration: BoxDecoration(
                                     color: _accent.withValues(alpha: 0.15),
                                     shape: BoxShape.circle,
                                   ),
-                                  child: Icon(_icon, color: _accent, size: 26),
+                                  child: Icon(_icon, color: _accent, size: 32),
                                 ),
                                 const SizedBox(width: 14),
                                 Expanded(
@@ -176,7 +181,7 @@ class _PaymentBannerContentState extends State<_PaymentBannerContent>
                                         Text(
                                           widget.subtitle!,
                                           style: TextStyle(
-                                            fontSize: 12,
+                                            fontSize: 13,
                                             color: isDark
                                                 ? Colors.white.withValues(alpha: 0.7)
                                                 : cs.onSurface.withValues(alpha: 0.6),
@@ -191,8 +196,8 @@ class _PaymentBannerContentState extends State<_PaymentBannerContent>
                                 if (widget.amount != null) ...[
                                   const SizedBox(width: 8),
                                   Container(
-                                    constraints: const BoxConstraints(maxWidth: 120),
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    constraints: const BoxConstraints(maxWidth: 140),
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                     decoration: BoxDecoration(
                                       color: _accent.withValues(alpha: 0.12),
                                       borderRadius: BorderRadius.circular(12),
@@ -203,7 +208,7 @@ class _PaymentBannerContentState extends State<_PaymentBannerContent>
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
                                         fontWeight: FontWeight.w700,
-                                        fontSize: 14,
+                                        fontSize: 16,
                                         color: _accent,
                                       ),
                                     ),
@@ -211,7 +216,7 @@ class _PaymentBannerContentState extends State<_PaymentBannerContent>
                                 ],
                                 const SizedBox(width: 4),
                                 IconButton(
-                                  icon: const Icon(Icons.close, size: 18),
+                                  icon: const Icon(Icons.close, size: 20),
                                   onPressed: widget.onDismiss,
                                   padding: EdgeInsets.zero,
                                   constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
@@ -232,7 +237,8 @@ class _PaymentBannerContentState extends State<_PaymentBannerContent>
           ),
         ),
       ],
-    );
+    ),
+  );
   }
 }
 
@@ -392,7 +398,7 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bottom = MediaQuery.of(context).padding.bottom + 24;
+    final bottom = MediaQuery.of(context).padding.bottom + 32;
 
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance
@@ -437,9 +443,13 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
                 ? widget.successSubtitle
                 : _errorMsg.isNotEmpty ? _errorMsg : null;
 
-        return FadeTransition(
-          opacity: _fade,
-          child: Stack(
+        // Overlay entries have no Material ancestor — same fix as the static
+        // banner above: transparent Material restores the app text theme.
+        return Material(
+          type: MaterialType.transparency,
+          child: FadeTransition(
+            opacity: _fade,
+            child: Stack(
             children: [
               GestureDetector(
                 onTap: () {
@@ -450,7 +460,7 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
               SafeArea(
                 top: false,
                 child: Padding(
-                  padding: EdgeInsets.only(left: 32, right: 32, bottom: bottom),
+                  padding: EdgeInsets.only(left: 20, right: 20, bottom: bottom),
                   child: Align(
                     alignment: Alignment.bottomCenter,
                     child: GestureDetector(
@@ -462,7 +472,7 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
                         child: BackdropFilter(
                           filter: ui.ImageFilter.blur(sigmaX: 30, sigmaY: 30),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
                             decoration: BoxDecoration(
                               color: isDark
                                   ? cs.surface.withValues(alpha: 0.5)
@@ -481,7 +491,7 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
                                     ),
                                     child: AnimatedSwitcher(
                                       duration: const Duration(milliseconds: 300),
-                                      child: Icon(icon, key: ValueKey(icon), color: accent, size: 24),
+                                      child: Icon(icon, key: ValueKey(icon), color: accent, size: 32),
                                     ),
                                   ),
                                   const SizedBox(width: 14),
@@ -494,7 +504,7 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
                                           title,
                                           style: TextStyle(
                                             fontWeight: FontWeight.w700,
-                                            fontSize: 15,
+                                            fontSize: 17,
                                             color: isDark ? Colors.white : cs.onSurface,
                                           ),
                                         ),
@@ -504,7 +514,7 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
                                             child: Text(
                                               subtitle,
                                               style: TextStyle(
-                                                fontSize: 12,
+                                                fontSize: 13,
                                                 color: isDark
                                                     ? Colors.white.withValues(alpha: 0.7)
                                                     : isFail
@@ -522,14 +532,14 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
                                     Padding(
                                       padding: const EdgeInsets.only(left: 8),
                                       child: SizedBox(
-                                        width: 22,
-                                        height: 22,
-                                        child: GoogleLoading(size: 22, strokeWidth: 2.5),
+                                        width: 28,
+                                        height: 28,
+                                        child: GoogleLoading(size: 28, strokeWidth: 3),
                                       ),
                                     ),
                                   if (isOk || isFail)
                                     IconButton(
-                                      icon: const Icon(Icons.close, size: 18),
+                                      icon: const Icon(Icons.close, size: 20),
                                       onPressed: RealtimePaymentBanner.dismiss,
                                       padding: EdgeInsets.zero,
                                       constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
@@ -549,7 +559,8 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
               ),
             ],
           ),
-        );
+        ),
+      );
       },
     );
   }

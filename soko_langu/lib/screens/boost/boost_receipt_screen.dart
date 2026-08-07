@@ -1,7 +1,5 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../extensions/context_tr.dart';
@@ -22,10 +20,6 @@ class BoostReceiptScreen extends StatelessWidget {
     final productName = data['productName'] as String? ?? '';
     final durationDays = data['durationDays'] as int? ?? 0;
     final createdAt = data['createdAt'];
-    // ignore: unused_local_variable
-    final dateStr = createdAt is Timestamp
-        ? DateFormat('dd/MM/yyyy HH:mm').format(createdAt.toDate())
-        : '';
     final startDate = createdAt is Timestamp
         ? DateFormat('dd/MM/yyyy HH:mm').format(createdAt.toDate())
         : '';
@@ -33,21 +27,12 @@ class BoostReceiptScreen extends StatelessWidget {
         ? DateFormat('dd/MM/yyyy HH:mm')
             .format(createdAt.toDate().add(Duration(days: durationDays)))
         : '';
-    final orderId = data['transactionId'] as String? ?? '';
     final tierColors = <String, Color>{
       'bronze': Color(0xFFCD7F32),
       'silver': Color(0xFFC0C0C0),
       'gold': Color(0xFFFFD700),
     };
     final tierColor = tierColors[tier.toLowerCase()] ?? cs.primary;
-
-    final qrData = jsonEncode({
-      'type': 'boost',
-      'id': orderId,
-      'product': productName,
-      'tier': tier,
-      'amount': totalAmount,
-    });
 
     return Scaffold(
       appBar: AppBar(
@@ -100,34 +85,13 @@ class BoostReceiptScreen extends StatelessWidget {
                 const SizedBox(height: 20),
                 _row(cs, context.tr('product'), productName),
                 _row(cs, context.tr('boost_tier'), tier),
-                _row(cs, context.tr('duration'), '${durationDays} ${context.tr('days')}'),
+                _row(cs, context.tr('duration'), '$durationDays ${context.tr('days')}'),
                 _row(cs, context.tr('start_date'), startDate),
                 _row(cs, context.tr('end_date'), expiryDate),
                 const Divider(height: 24),
                 _row(cs, context.tr('receipt_total'), 'TZS ${nf.format(totalAmount.toInt())}',
                     valueBold: true, valueColor: cs.primary),
                 const SizedBox(height: 20),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.2)),
-                  ),
-                  child: QrImageView(
-                    data: qrData,
-                    version: QrVersions.auto,
-                    size: 140,
-                    eyeStyle: QrEyeStyle(
-                      eyeShape: QrEyeShape.square,
-                      color: cs.primary,
-                    ),
-                    dataModuleStyle: QrDataModuleStyle(
-                      dataModuleShape: QrDataModuleShape.square,
-                      color: cs.onSurface,
-                    ),
-                  ),
-                ),
               ],
             ),
           ),

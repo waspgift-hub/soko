@@ -52,37 +52,62 @@ async function sendFcm(uid, title, body, data) {
 async function sendSms(phone, message) {
   if (!phone || !message) return;
   const apiKey = process.env.MESEJI_API_KEY;
-  if (!apiKey) return;
-  const digits = phone.replace(/\D/g, '');
-  // Meseji only accepts local-format numbers (07XXXXXXXX) inside a contacts
-  // ARRAY — string or +255 format both come back HTTP 500 from the provider.
-  const local = digits.startsWith('255')
-    ? '0' + digits.slice(3)
-    : !digits.startsWith('0')
-      ? '0' + digits
-      : digits;
-  const configured = process.env.MESEJI_SENDER_ID || 'MESEJI';
-  const senders = configured === 'MESEJI' ? ['MESEJI'] : [configured, 'MESEJI'];
-  for (const sender of senders) {
+  if (apiKey) {
+    const digits = phone.replace(/\D/g, '');
+    // Meseji only accepts local-format numbers (07XXXXXXXX) inside a contacts
+    // ARRAY — string or +255 format both come back HTTP 500 from the provider.
+    const local = digits.startsWith('255')
+      ? '0' + digits.slice(3)
+      : !digits.startsWith('0')
+        ? '0' + digits
+        : digits;
+    const configured = process.env.MESEJI_SENDER_ID || 'MESEJI';
+    const senders = configured === 'MESEJI' ? ['MESEJI'] : [configured, 'MESEJI'];
+    for (const sender of senders) {
+      try {
+        const url = process.env.MESEJI_API_URL || 'https://meseji.co.tz/api/v1/sms/send';
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'x-api-key': apiKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            sender_id: sender,
+            message,
+            contacts: [local],
+          }),
+        });
+        if (resp.ok) return;
+        const err = await resp.text();
+        console.error(`[NOTIFY] SMS failed (${resp.status}): ${err}`);
+      } catch (e) {
+        console.error(`[NOTIFY] SMS error: ${e.message}`);
+      }
+    }
+  }
+  const notifyKey = process.env.NOTIFY_AFRICA_SMS_API_KEY;
+  const notifySender = process.env.NOTIFY_AFRICA_SENDER_ID;
+  if (notifyKey && notifySender) {
     try {
-      const url = process.env.MESEJI_API_URL || 'https://meseji.co.tz/api/v1/sms/send';
-      const resp = await fetch(url, {
+      const digits = String(phone).replace(/\D/g, '');
+      // Notify Africa requires international format (2557XXXXXXXX).
+      const intl = digits.startsWith('0') ? '255' + digits.slice(1) : digits;
+      const resp = await fetch('https://api.notify.africa/api/v1/api/messages/send', {
         method: 'POST',
         headers: {
-          'x-api-key': apiKey,
+          Authorization: `Bearer ${notifyKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          sender_id: sender,
-          message,
-          contacts: [local],
-        }),
+        body: JSON.stringify({ phone_number: intl, message, sender_id: notifySender }),
       });
-      if (resp.ok) return;
-      const err = await resp.text();
-      console.error(`[NOTIFY] SMS failed (${resp.status}): ${err}`);
+      if (resp.ok) {
+        const body = await resp.json();
+        if (body.status === 200 || (body.data && body.data.messageId)) return;
+      }
+      console.error(`[NOTIFY] Notify Africa SMS failed (${resp.status}): ${await resp.text()}`);
     } catch (e) {
-      console.error(`[NOTIFY] SMS error: ${e.message}`);
+      console.error(`[NOTIFY] Notify Africa SMS error: ${e.message}`);
     }
   }
 }

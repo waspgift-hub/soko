@@ -14,10 +14,12 @@ import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../utils/network_error.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_typography.dart';
 import '../chat/chat_navigation.dart';
 import '../../widgets/payment_banner.dart';
 import '../../widgets/payment_result_dialog.dart';
 import '../../widgets/soko_vibe_loading.dart';
+import '../../widgets/order_status_config.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -97,8 +99,6 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
       final productId = d['productId'] as String? ?? '';
       final sellerId = d['sellerId'] as String? ?? '';
       final sellerName = d['sellerName'] as String? ?? '';
-      final paymentMethod = d['paymentMethod'] as String? ?? 'ussd_push';
-      final isBillPay = paymentMethod == 'billpay' || paymentMethod == 'BillPay';
 
       final result = await ClickPesaService.initiateMarketplacePayment(
         productPrice: productPrice,
@@ -111,10 +111,10 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
         buyerId: user.uid,
         deliveryType: 'local',
         existingTransactionId: txId,
-        paymentMethod: paymentMethod,
+        paymentMethod: 'ussd_push',
       );
 
-      if (result == null || (result['order_id'] == null && result['billPayNumber'] == null)) {
+      if (result == null || result['order_id'] == null) {
         final errMsg =
             result?['error'] as String? ??
             context.tr('payment_initiation_failed');
@@ -131,37 +131,25 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
       }
 
       if (mounted) {
-        if (isBillPay) {
-          final billPayNumber = result['billPayNumber'] as String? ?? '';
-          final totalAmount = result['totalAmount'] as int? ?? 0;
-          PaymentBanner.show(
-            context: context,
-            type: PaymentBannerType.success,
-            title: 'BillPay Control Number',
-            subtitle: 'Namba: $billPayNumber | Kiasi: TZS $totalAmount',
-            duration: const Duration(seconds: 10),
-          );
-          setState(() {});
-        } else {
-          RealtimePaymentBanner.show(
-            context: context,
-            orderId: result['order_id'] as String,
-            successStatuses: ['escrow_hold', 'paid_escrow_held'],
-            processingTitle: context.tr('processing_payment'),
-            processingSubtitle: context.tr('check_phone_enter_pin'),
-            successTitle: context.tr('payment_successful'),
-            failedTitle: context.tr('payment_failed'),
-            onSuccess: () {
-              if (mounted) {
-                PaymentBanner.show(
-                  context: context,
-                  type: PaymentBannerType.success,
-                  title: context.tr('payment_successful'),
-                );
-                setState(() {});
-              }
-            },
-            onError: (msg) {
+        RealtimePaymentBanner.show(
+          context: context,
+          orderId: result['order_id'] as String,
+          successStatuses: ['escrow_hold', 'paid_escrow_held'],
+          processingTitle: context.tr('processing_payment'),
+          processingSubtitle: context.tr('check_phone_enter_pin'),
+          successTitle: context.tr('payment_successful'),
+          failedTitle: context.tr('payment_failed'),
+          onSuccess: () {
+            if (mounted) {
+              PaymentBanner.show(
+                context: context,
+                type: PaymentBannerType.success,
+                title: context.tr('payment_successful'),
+              );
+              setState(() {});
+            }
+          },
+          onError: (msg) {
               if (mounted) {
                 PaymentResult.show(
                   context: context,
@@ -171,7 +159,6 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
               }
             },
           );
-        }
       }
     } catch (e) {
       if (mounted) {
@@ -682,13 +669,10 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                   child: ElevatedButton.icon(
                     onPressed: _isDeletingSelected ? null : _deleteSelectedOrders,
                     icon: _isDeletingSelected
-                        ? SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: cs.surface,
-                            ),
+                        ? SokoVibeThreeDotLoader(
+                            size: 18,
+                            dotSize: 4.5,
+                            color: cs.surface,
                           )
                         : const Icon(Icons.delete_outline, size: 20),
                     label: Text(
@@ -1265,11 +1249,7 @@ class _OrderGlassCard extends StatelessWidget {
                   children: [
                     Text(
                       'TZS ${_nf(price.toInt())}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                        color: cs.primary,
-                      ),
+                      style: AppTypography.amount(cs.primary).copyWith(fontSize: 16, fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(width: 10),
                     _statusBadge(context, cs, status),
@@ -1294,67 +1274,7 @@ class _OrderGlassCard extends StatelessWidget {
   }
 
   Widget _statusBadge(BuildContext context, ColorScheme cs, String status) {
-    final Color color;
-    final IconData icon;
-    final String label;
-    switch (status) {
-      case 'completed':
-      case 'delivered':
-      case 'delivery_confirmed':
-        color = cs.successGreen;
-        icon = Icons.check_circle_rounded;
-        label = context.tr('completed');
-      case 'paid_escrow_held':
-      case 'escrow_hold':
-        color = Colors.purple;
-        icon = Icons.verified_user_rounded;
-        label = context.tr('secured_in_escrow');
-      case 'dispatched':
-        color = Colors.orange;
-        icon = Icons.local_shipping_rounded;
-        label = context.tr('shipped');
-      case 'awaiting_payment':
-        color = Colors.blue;
-        icon = Icons.account_balance_wallet_rounded;
-        label = context.tr('awaiting_payment');
-      case 'awaiting_shipping_quote':
-        color = Colors.amber;
-        icon = Icons.hourglass_bottom_rounded;
-        label = context.tr('waiting_quote');
-      case 'failed':
-      case 'cancelled':
-      case 'refunded':
-        color = cs.error;
-        icon = Icons.cancel_rounded;
-        label = status;
-      default:
-        color = cs.onSurfaceVariant;
-        icon = Icons.pending_rounded;
-        label = status;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.25)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: color),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
+    return OrderStatusBadge(status: status, compact: true);
   }
 
   Widget _buildMidSection(
@@ -1693,13 +1613,10 @@ class _OrderGlassCard extends StatelessWidget {
         child: OutlinedButton.icon(
           onPressed: effectiveOnTap,
           icon: isLoading
-              ? SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: color,
-                  ),
+              ? SokoVibeThreeDotLoader(
+                  size: 16,
+                  dotSize: 4,
+                  color: color,
                 )
               : Icon(icon, size: 16),
           label: Text(isLoading ? context.tr('processing_label') : label),
@@ -1719,13 +1636,10 @@ class _OrderGlassCard extends StatelessWidget {
       child: ElevatedButton.icon(
         onPressed: effectiveOnTap,
         icon: isLoading
-            ? SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
+            ? SokoVibeThreeDotLoader(
+                size: 16,
+                dotSize: 4,
+                color: Colors.white,
               )
             : Icon(icon, size: 16),
         label: Text(isLoading ? context.tr('processing_label') : label),
@@ -1851,23 +1765,7 @@ class _OrderGlassCard extends StatelessWidget {
   }
 
   Color _statusColor(String status, ColorScheme cs) {
-    switch (status) {
-      case 'completed':
-      case 'delivered':
-      case 'delivery_confirmed':
-        return cs.successGreen;
-      case 'paid_escrow_held':
-      case 'escrow_hold':
-        return Colors.purple;
-      case 'dispatched':
-        return Colors.orange;
-      case 'failed':
-      case 'cancelled':
-      case 'refunded':
-        return cs.error;
-      default:
-        return cs.onSurfaceVariant;
-    }
+    return orderStatusInfo(status, cs).color;
   }
 
   Widget _receiptRow(

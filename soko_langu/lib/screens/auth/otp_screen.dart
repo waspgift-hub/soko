@@ -6,6 +6,7 @@ import '../../notifiers/auth_notifier.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/account_manager.dart';
 import '../../models/saved_account.dart';
+import '../../widgets/soko_vibe_loading.dart';
 
 class OtpScreen extends StatefulWidget {
   final String phone;
@@ -154,7 +155,7 @@ class _OtpScreenState extends State<OtpScreen> {
                 child: ElevatedButton(
                   onPressed: _isLoading ? null : _verify,
                   style: ElevatedButton.styleFrom(backgroundColor: cs.primary, foregroundColor: cs.surface, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                  child: _isLoading ? SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: cs.surface)) : Text(context.tr('verify'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  child: _isLoading ? SokoVibeThreeDotLoader(size: 22, dotSize: 5.5, color: cs.surface) : Text(context.tr('verify'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
               ),
               const SizedBox(height: 16),

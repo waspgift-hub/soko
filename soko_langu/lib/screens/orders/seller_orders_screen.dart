@@ -7,12 +7,13 @@ import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
-import '../../theme/app_colors.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/api_config.dart';
 import '../../widgets/google_loading.dart';
+import '../../widgets/soko_vibe_loading.dart';
 import '../../widgets/glass_container.dart';
 import '../../widgets/soko_vibe_states.dart';
+import '../../widgets/order_status_config.dart';
 import '../../utils/network_error.dart';
 import '../../app/routes.dart';
 
@@ -142,7 +143,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                                     ],
                                   ),
                                 ),
-                                _statusChip(cs, status),
+                                OrderStatusBadge(status: status),
                               ],
                             ),
                             const SizedBox(height: 10),
@@ -175,7 +176,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                                       ? null
                                       : () => _showDispatchDialog(txId, d),
                                   icon: _dispatchingOrderId == txId
-                                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                                      ? SokoVibeThreeDotLoader(size: 16, dotSize: 4, color: cs.surface)
                                       : const Icon(Icons.local_shipping_outlined, size: 16),
                                   label: Text(context.tr('mark_shipped')),
                                   style: FilledButton.styleFrom(
@@ -257,7 +258,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: filters.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (_, i) {
           final key = filters[i];
           final selected = _filter == key;
@@ -284,42 +285,6 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
           );
         },
       ),
-    );
-  }
-
-  Widget _statusChip(ColorScheme cs, String status) {
-    Color chipColor;
-    switch (status) {
-      case 'awaiting_shipping_quote':
-      case 'awaiting_payment':
-        chipColor = cs.tertiary;
-        break;
-      case 'escrow_hold':
-      case 'paid_escrow_held':
-        chipColor = Colors.orange;
-        break;
-      case 'dispatched':
-        chipColor = Colors.blue;
-        break;
-      case 'delivered':
-      case 'completed':
-        chipColor = cs.successGreen;
-        break;
-      case 'refunded':
-      case 'cancelled':
-        chipColor = cs.error;
-        break;
-      default:
-        chipColor = cs.onSurfaceVariant;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: chipColor.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(status.replaceAll('_', ' '),
-          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: chipColor)),
     );
   }
 
@@ -467,7 +432,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                             child: ElevatedButton.icon(
                               onPressed: _quotingOrderId == orderId ? null : () => _showQuoteDialog(orderId, d),
                               icon: _quotingOrderId == orderId
-                                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                                  ? SokoVibeThreeDotLoader(size: 14, dotSize: 3.5, color: cs.surface)
                                   : const Icon(Icons.send_rounded, size: 14),
                               label: Text('Weka Nukuu', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
                               style: ElevatedButton.styleFrom(

@@ -57,7 +57,7 @@ class _DsEmptyStateState extends State<DsEmptyState>
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final tint = widget.tint ?? scheme.brandPrimary;
+    final tint = widget.tint ?? scheme.primary;
 
     return FadeTransition(
       opacity: _fade,

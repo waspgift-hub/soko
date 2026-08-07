@@ -1,729 +1,1053 @@
 ================================================================================
- SOKO VIBE — MFUMO WA KILA MFUMO NA MTIRIRIKO WAKE
+ SOKO VIBE — UCHAMBUZI KAMILI WA MFUMO (FULL SYSTEM FLOW ANALYSIS)
 ================================================================================
- Tarehe: Julai 13, 2026
- Server: https://soko-langu-server.onrender.com
+ Toleo la Hati   : 2.0 (imerekebishwa kwa kufuatana na kodi ya sasa)
+ Tarehe          : Agosti 6, 2026
+ Mfumo           : Soko Vibe (Marketplace ya Tanzania)
+ Server          : https://soko-langu-server.onrender.com
+ Frontend        : Flutter (Android/iOS/Web/Desktop) — lib/
+ Backend         : Node.js + Express — server/
+ Cloud Functions : functions/ (HATUMIWI — imebadilishwa na Express)
+ Database        : Google Firebase Firestore
+ Push            : OneSignal (App ID 2e50d6a7-de2f-4b74-af36-4f1b0b28a1b2)
 ================================================================================
 
+Hati hii inachambua kila kitu kuhusu BACKEND na FRONTEND: muundo wa usanifu,
+flow zote za mifumo (auth, bidhaa, malipo, escrow, orders, chat, arifa, KYC,
+seller, admin, AI, matangazo), server endpoints zote, Firestore collections,
+michakato ya nyuma (cron/listeners), na viunganishi (integrations) vya nje.
 
-================================================================================
-1. MFUMO WA KUJISAJILI NA KUINGIA (AUTH SYSTEM)
-================================================================================
-
-1.1 Kujisajili kwa Email/Password
-------------------------------------------------
-  Mtumiaji anafungua app → anachagua "Register"
-  → Anajaza: jina, email, namba ya simu, password
-  → Firebase Auth inaunda akaunti (createUserWithEmailAndPassword)
-  → Hati mpya inaundwa kwenye Firestore: users/{uid}
-    (displayName, email, phone, createdAt, sellerBalance: 0, n.k.)
-  → Barua pepe ya uthibitisho inatumwa (sendEmailVerification)
-  → Mtumiaji anathibitisha email → anaingia app
-
-1.2 Kuingia kwa Email/Password
-------------------------------------------------
-  Mtumiaji anaingia email + password
-  → Firebase Auth signInWithEmailAndPassword
-  → Ikiwa email haijathibitishwa → anaelekezwa kwenye skrini ya Verify Email
-  → Ikiwa imethibitishwa → anaingia Home Screen
-
-1.3 Kuingia kwa Simu (OTP)
-------------------------------------------------
-  Mtumiaji anaingiza namba ya simu (+255xxxxxxxxx)
-  → App inatuma POST /api/auth/send-otp (server)
-  → Server inatoa OTP ya tarakimu 6, kuiweka Firestore (otp_codes/{phone})
-  → Server inatuma OTP kwa SMS kupitia Meseji API
-  → Mtumiaji anaingiza OTP
-  → App inatuma POST /api/auth/verify-otp (server)
-  → Server inathibitisha OTP → inaleta au kuunda akaunti
-  → Server inatoa Firebase Custom Token
-  → App inatumia token hiyo kuingia (signInWithCustomToken)
-
-1.4 Kuingia kwa Namba ya Simu + Password (Mbadala)
-------------------------------------------------
-  Njia mbadala: Mtumiaji atumia namba ya simu kuingia badala ya email
-  → POST /api/phone-login (server)
-  → Server inathibitisha OTP → inatoa Firebase Custom Token
-  → Ikiwa namba haipo: server inaunda akaunti moja kwa moja
-
-1.5 Magic Link (Email)
-------------------------------------------------
-  Mtumiaji anaingiza email → server inatuma magic link
-  → Mtumiaji anabofya link → anathibitishwa na kuingia moja kwa moja
-  → Hutumia Firebase ActionCodeSettings + sendSignInLinkToEmail
 
 
 ================================================================================
-2. MFUMO WA BIDHAA (PRODUCT SYSTEM)
+0. MUHTASARI WA USANIFU (ARCHITECTURE OVERVIEW)
 ================================================================================
 
-2.1 Kuongeza Bidhaa (Add Product)
-------------------------------------------------
-  Muuzaji anabofya "+" → ana form ya bidhaa
-  → Anapakia picha (Cloudinary unsigned upload)
-  → Anajaza: jina, maelezo, bei, kiasi, jamii (category), eneo
-  → Picha zinapakiwa Cloudinary → URL za picha zinarudishwa
-  → Hati inaundwa Firestore: products/{productId}
-    (sellerId, sellerName, name, description, price, stock,
-     images[], categoryId, location, isActive: true,
-     isBoosted: false, sellerKycApproved: false, createdAt)
+  +----------------------+         +-----------------------------+
+  |  Flutter App (lib/)  | <-----> |  Express Server (server/)    |
+  |  - 62 routes         |  HTTPS  |  - index.js  (API + cron)    |
+  |  - Provider state    |  JSON   |  - listener.js (Firestore    |
+  |  - go_router         |  JWT    |    onSnapshot -> push)       |
+  |  - Hive local cache  |         |  - clickpesa.js (gateway)    |
+  +----------+-----------+         |  - orders.js (order engine)  |
+             |                     |  - search.js (index/query)   |
+             |                     |  - notification*.js          |
+             |                     |  - groq.js (AI proxy)        |
+             |   Firebase Admin SDK|  +-------------+-------------+
+             |                     |                |
+             v                     v                v
+     +---------------+    +------------------+   +-------------------+
+     | Firebase Auth |    |  Cloud Firestore |   | External Services |
+     | (email/phone/ |    |  (hifadhi kuu)   |   | - ClickPesa       |
+     |  Google/magic |    |  - users         |   | - OneSignal       |
+     |  link)        |    |  - products      |   | - Meseji/NotifyAf |
+     +---------------+    |  - transactions  |   | - Cloudinary      |
+                          |  - orders        |   | - SMTP (email)    |
+                          |  - chat_rooms    |   | - Groq AI         |
+                          |  - ... (ona s.25)|   | - Google AdMob    |
+                          +------------------+   +-------------------+
 
-2.2 Kutafuta Bidhaa (Search Products)
-------------------------------------------------
-  Mtumiaji anaandika kwenye search bar
-  → App ina query Firestore products collection
-  → Inachuja kwa: jina (name), jamii (categoryId), eneo (location)
-  → Inapanga kwa: tarehe, bei, umaarufu
-  → Matokeo yanaonyeshwa kwenye gridi
+  PROCESSES ZA SERVER (huendeshwa mbili):
+  1. server/index.js  -> Express API (router zote, escrow, admin, wallet,
+                          search, ai, kron jobs za ndani). Inaendelea kwenye
+                          Render/Railway (Docker node:20).
+  2. server/listener.js-> Process ya pekee inayosikiliza Firestore kwa
+                          onSnapshot (transactions, chat_rooms, products)
+                          na kutuma arifa (OneSignal + in-app + SMS).
 
-2.3 Tazama Bidhaa (Product Detail)
-------------------------------------------------
-  Mtumiaji anabofya bidhaa → anafungua product_detail.dart
-  → Anaona: picha (gallery), jina, bei, maelezo, jina la muuzaji
-  → Anawasiliana na muuzaji (Chat button)
-  → Ananunua (Buy Now / Add to Cart)
-  → Anaona picha zilizoboreshwa (Cloudinary thumbnail w_800/w_1200)
-
-2.4 Flash Sales
-------------------------------------------------
-  Muuzaji anaweza kuunda flash sale kwa bidhaa yake
-  → POST /api/flash-sale/create (server)
-  → Anabainisha: bei ya flash, muda wa kuanza/kuisha, kiasi
-  → Mtumiaji anaona flash sale kwenye banner na product card
-  → Flash sale ina muda wake → inapokwisha inazimwa moja kwa moja
-  → Server ina cron ya kuzima flash sale zilizoisha kila saa
-  → Flash sale scanner inaweza kuunda flash sale kiotomatiki
-    kwa bidhaa ambazo hazijauzwa kwa siku 7
-
-2.5 Kuongeza / Kuongeza Bidhaa (Boost)
-------------------------------------------------
-  Muuzaji analipa ili bidhaa yake ionekane zaidi (Featured)
-  → Anachagua tier: Bronze (TZS 1,500 / siku 3),
-    Silver (TZS 3,000 / siku 7), Gold (TZS 10,000 / siku 30)
-  → Anatoa malipo (tazama sehemu ya Malipo)
-  → Bidhaa inapata sifa: isBoosted: true, boostTier, boostedUntil
-  → Bidhaa inaonyeshwa mwanzoni mwa matokeo ya utafutaji
-  → Arifa inatumwa kwa watumiaji wote kuhusu bidhaa mpya iliyoboostwa
+  NOTE: Folder functions/ (Firebase Cloud Functions) imeacha kutumika.
+  Header ya functions/index.js inasema: "no longer deployed; all functionality
+  runs on Render Express via server/index.js and server/listener.js; kept only
+  as reference."
 
 
 ================================================================================
-3. MFUMO WA MALIPO (PAYMENT SYSTEM)
+1. TEKNOLOJIA (TECH STACK)
 ================================================================================
 
-3.1 Malipo ya Bidhaa (Marketplace Purchase)
-------------------------------------------------
-  Test Mode (kPaymentTestMode = true):
-    → App inaandika moja kwa moja Firestore transactions/{orderId}
-      (status: completed, escrow_hold, nk.)
-    → Hakuna simu inayotumwa, hakuna malipo halisi
+  BACKEND:
+  - Node.js 18 (server/.node-version), Docker node:20-slim
+  - Express 4.18.2 + CORS + dotenv + express-rate-limit
+  - firebase-admin ^11 (Firestore, Auth, FCM legacy)
+  - ClickPesa API (malipo halisi) — server/clickpesa.js (343 lines)
+  - OneSignal REST API (push notifications)
+  - Nodemailer SMTP (email OTP / arifa)
+  - Groq API (chat + Whisper transcription) — server/groq.js
+  - Cloudinary (signed upload) — /api/cloudinary/sign
 
-  Production Mode (kPaymentTestMode = false):
-    → App inatuma POST /api/create-marketplace-payment-link (server)
-    → Server inathibitisha:
-        - Mnumuzi si suspended
-        - Hakuna malipo yanayosubiri kwa bidhaa hii
-        - Kiasi cha siku hakiendi bei ya juu (TZS 5,000,000)
-    → Server inaita Mongike API: mongikeCollect(amount, orderId, buyerPhone)
-    → Mongike inasukuma USSD kwa simu ya mnunuzi
-    → Mnumuzi anaingiza PIN ya mobile money → malipo yanakamilika
-    → Mongike inatuma webhook kwa POST /api/mongike/webhook (server)
-    → Server inasasisha Firestore:
-        - transactions/{orderId} → status: escrow_hold
-        - Revenue inarekodiwa (commission 4%)
-        - PendingEscrow ya muuzaji inaongezeka
-        - Arifa inatumwa kwa mnunuzi na muuzaji
-
-3.2 Escrow System
-------------------------------------------------
-  Malipo yanapofika → pesa zinawekwa escrow (hazijatolewa kwa muuzaji)
-  → Muuzaji anasafirisha bidhaa → POST /api/escrow/dispatch
-  → Server inasasisha status: dispatched
-  → Mnumuzi anapokea bidhaa → POST /api/escrow/release
-  → Server inasasisha status: delivered, escrowReleased: true
-  → Pesa zinatolewa escrow → sellerBalance inaongezeka
-  → Pesa zinatuma moja kwa moja kwa muuzaji (auto-payout)
-  → Ikiwa mnumuzi hajathibitisha kwa muda:
-    auto-release inafanya kazi baada ya siku 3 (local) au siku 7 (regional)
-
-3.3 Kughairi / Mgogoro (Cancel / Dispute)
-------------------------------------------------
-  Kughairi (kabla ya dispatch):
-    → POST /api/escrow/cancel
-    → Pesa zinarudishwa kwa mnunuzi kamili (Mongike payout)
-    → PendingEscrow ya muuzaji inapunguzwa
-
-  Mgogoro (Dispute):
-    → POST /api/escrow/dispute
-    → Mnumuzi anaweka sababu + ushahidi
-    → Status inakuwa: disputed
-    → Admin anaamua: release (muuzaji anapata) au refund (mnunuzi anarudishiwa)
-
-3.4 Boosts / Malipo ya Kuonesha Bidhaa
-------------------------------------------------
-  → POST /api/boost-product (server)
-  → Server inaita Mongike: mongikeCollect()
-  → Mongike inasukuma USSD → mtumiaji anaingiza PIN
-  → Webhook inapofika → bidhaa inawekwa isBoosted: true
-  → Arifa inatumwa kwa watumiaji wote
-
-3.5 Utoaji wa Pesa kwa Muuzaji (Seller Withdrawal)
-------------------------------------------------
-  → POST /api/seller/withdraw (server)
-  → Server inathibitisha salio (sellerBalance)
-  → Inatoa kiasi + ada (TZS 2,000)
-  → Inaita Mongike: mongikePayout() → pesa zinatuma kwa simu ya muuzaji
-  → Ikiwa Mongike inashindwa → pesa zinarudishwa kwenye sellerBalance
-  → Kiwango cha chini cha uondoaji: TZS 5,000
-
-3.6 Utoaji wa Pesa kwa Admin (Admin Withdrawal)
-------------------------------------------------
-  → POST /api/admin/withdraw (server)
-  → Inatoa mapato ya matangazo (AdMob) + commission za platform
-  → Inatuma kwa simu ya admin kupitia Mongike payout
-
-3.7 Mongike Webhooks
-------------------------------------------------
-  /api/mongike/webhook — inapokea malipo ya bidhaa na boost
-  /api/mongike/payout-webhook — inapokea hali ya malipo kwa muuzaji
-  Webhooks zote zinathibitisha x-webhook-secret kabla ya kuchakata
+  FRONTEND (lib/):
+  - Flutter (Material 3, ColorScheme.fromSeed, light/dark)
+  - Provider (ChangeNotifier) — notifiers/ na providers/
+  - go_router 17.x — 62 routes zilizobainishwa (app/routes.dart)
+  - Firebase (core, auth, firestore, storage, crashlytics, performance,
+    app_check, cloud_functions)
+  - OneSignal Flutter SDK (onesignal_flutter 5.6.5)
+  - flutter_local_notifications (heads-up display)
+  - Hive (local cache), shared_preferences
+  - google_mobile_ads (AdMob: banner, interstitial, rewarded)
+  - google_maps + geocoding + geolocator
+  - audio_service + just_audio (sauti/muziki)
+  - image_picker, file_picker, mobile_scanner, qr, pdf/printing (receipt)
+  - webview_flutter, share_plus, url_launcher, permission_handler
 
 
 ================================================================================
-4. MFUMO WA MAZUNGUMZO (CHAT SYSTEM)
+2. MFUMO WA KUINGIA (AUTH SYSTEM)
 ================================================================================
 
-4.1 Kuanzisha Mazungumzo
+2.1 Kujisajili kwa Email/Password
 ------------------------------------------------
-  Mnumuzi anabofya "Wasiliana" kwenye bidhaa
-  → Chat room inaundwa kwenye Firestore: chat_rooms/{roomId}
-    (participants: [buyerId, sellerId], productId, lastMessage, updatedAt)
-  → Ujumbe unaundwa: messages/{messageId}
-    (senderId, text, timestamp, type)
+  Register Screen (lib/screens/auth/register_screen.dart)
+  -> FirebaseAuth.createUserWithEmailAndPassword()
+  -> Hati inaundwa Firestore: users/{uid}
+     (displayName, email, phone, sellerBalance: 0, createdAt, ...)
+  -> sendEmailVerification() inatumwa
+  -> AuthNotifier inasubiri uthibitisho -> Home
 
-4.2 Kutuma Ujumbe
+2.2 Kuingia kwa Email/Password
 ------------------------------------------------
-  Mtumiaji anaandika na kubofya "Tuma"
-  → Ujumbe unaandikwa Firestore: chat_rooms/{roomId}/messages/{msgId}
-  → Server inasikiliza (onSnapshot) kwenye collectionGroup('messages')
-  → Server inatuma FCM kwa mpokeaji:
-    - Arifa ya push inaonekana kwenye simu ya mpokeaji
-    - Ikiwa token imekufa → server inajaribu topic fallback
-    - Ikiwa topic pia inashindwa → token inafutwa
+  -> signInWithEmailAndPassword()
+  -> Email haijathibitishwa -> VerifyEmailScreen
+  -> Ikiwa imethibitishwa -> MainScreen
 
-4.3 Arifa za Chat
+2.3 Kuingia kwa Simu (OTP) — lib/services/meseji_service.dart
 ------------------------------------------------
-  Server inatumia FCM (data + notification payload)
-  → Android inaonyesha arifa moja kwa moja (notification payload)
-  → App ikiwa imefunguliwa: background handler inakataa duplicate
-  → Channel: chat_messages_v3 (kiwango cha juu cha umuhimu)
-  → Sauti: soko_notification
+  +255... -> POST /api/auth/send-otp
+  -> Server inaweka OTP (6 digit, SHA-256) kwenye otp_codes/{phone},
+     expiry dakika 10, kukataliwa kurudiwa
+  -> SMS inatumwa kupitia Meseji (muundo 07) au Notify Africa (2557)
+  -> POST /api/auth/verify-otp -> server inatoa Firebase Custom Token
+  -> app inaingia: signInWithCustomToken
+  Njia mbadala: POST /api/phone-login (ingia kwa simu, ikiwa akaunti haipo
+  inaundwa moja kwa moja)
 
-
-================================================================================
-5. MFUMO WA ARIFA (NOTIFICATION SYSTEM)
-================================================================================
-
-5.1 Arifa za Ndani (In-App)
+2.4 Email OTP (badala ya password)
 ------------------------------------------------
-  Hati: notifications/{notifId}
-    (userId, title, body, isRead, data, createdAt)
-  → Hati inaundwa na server au app
-  → Mtumiaji anaona kwenye notification screen
+  POST /api/auth/send-email-otp -> SMTP OTP kwa email
+  POST /api/auth/verify-email-otp -> thibitisha
+  POST /api/auth/check-phone | check-email -> uthibiti wa kuwepo akaunti
+  POST /api/auth/reset-password-by-phone -> badilisha password bila kuingia
 
-5.2 Arifa za Push (FCM)
+2.5 Magic Link (lib/services/magic_link_service.dart)
 ------------------------------------------------
-  Token inahifadhiwa Firestore: users/{uid}/fcmToken
-  → Server inatuma FCM kwa token ya mtumiaji
-  → Ikiwa token imekufa → server inajaribu topic (user_{uid})
-  → Ikiwa topic inashindwa → token inafutwa
+  Firebase sendSignInLinkToEmail + ActionCodeSettings
+  -> user anabofya link -> anaingia moja kwa moja
 
-5.3 Arifa za Admin
+2.6 Google Sign-In
 ------------------------------------------------
-  Admin anapata arifa kwa:
-    - Mgogoro mpya
-    - KYC mpya inayosubiri
-    - Payout imeshindwa
-  → Server inawatafuta admin wote (isAdmin: true)
-  → Inatuma FCM + in-app notification kwa kila admin
+  GoogleSignIn.instance.initialize() (main.dart) + Firebase GoogleAuthProvider
+  -> akaunti inaundwa au kuingia
 
-
-================================================================================
-6. MFUMO WA KYC (UTHIBITISHO WA UTAMBULISHO)
-================================================================================
-
-6.1 Kuwasilisha KYC
+2.7 Akaunti nyingi (Multi-Account)
 ------------------------------------------------
-  Muuzaji anawasilisha:
-    - Jina kamili
-    - Aina ya kitambulisho (National ID, Passport, Drivers License, Voters ID)
-    - Namba ya kitambulisho
-    - Picha ya kitambulisho
-    - Selfie
-  → POST /api/kyc/submit (server)
-  → Server inathibitisha:
-    - Jina lina angalau majina mawili
-    - Namba ina format sahihi
-    - Picha zimepakiwa
-  → Ikiwa vyote ni sahihi → KYC inakubaliwa moja kwa moja
-  → Ikiwa kuna dosari → KYC inawekwa pending, admin anakagua
+  lib/services/account_manager.dart + models/saved_account.dart
+  -> mtumiaji anaweza kuhifadhi akaunti nyingi (email/Google)
+  -> account_switcher_sheet.dart inaruhusu kubadilisha haraka
+  -> Credentials zimehifadhiwa kwenye Secure Storage (flutter_secure_storage)
 
-6.2 Ukaguzi wa Admin
+2.8 App Lock (PIN)
 ------------------------------------------------
-  Admin anaona orodha ya KYC zinazosubiri
-  → POST /api/admin/kyc/review
-  → Anakubali au kukataa → arifa inatumwa kwa muuzaji
-  → Ikiwa anakubaliwa → sellerKycApproved inawekwa true
-    kwenye bidhaa zake zote
+  lib/services/app_lock_service.dart + lock_screen.dart
+  -> PIN hufungua app, inafungia kwenye background/resume
+  -> Session ya dakika 5 (inahitaji PIN tena baada ya muda)
+  -> SecurityService inaangalia root/emulator/jailbreak
+
+  AUTH GATE CHAIN: AuthGate -> Onboarding -> Login -> ProfileSetup
+  -> (suspended check) -> MainScreen (5 tabs: Home, Discovery, Chat, Notif,
+     Profile) kwa kutumia IndexedStack.
 
 
 ================================================================================
-7. MFUMO WA SAUTI NA MUZIKI (AUDIO/MUSIC SYSTEM)
+3. MFUMO WA BIDHAA (PRODUCT SYSTEM)
 ================================================================================
 
-7.1 Kuruhusiwa kwa Sauti (Permission)
+3.1 Kuongeza Bidhaa (Add Product)
 ------------------------------------------------
-  App inapoanza → swali la ruhusa ya sauti linaonekana
-  → Ikiwa imekataliwa kabisa → "Open Settings" inaonekana
-  → Ruhusa ya notification inaombwa baada ya screen ya kwanza
+  add_product_screen.dart -> product_service.dart
+  - Picha zinapakiwa Cloudinary (unsigned upload, cloud dgbsohnl4,
+    folder soko_langu)
+  - Hati inaundwa: products/{productId}
+    (sellerId, sellerName, name, description, price, stock, images[],
+     categoryId, location, variants, wholesaleTiers, isActive,
+     isBoosted, boostedUntil, boostTier, isFeatured, sellerKycApproved,
+     searchKeywords, searchName, createdAt)
+  - Muuzaji asiye na KYC anaweza kuweka BIDHAA 5 PEKEE
+    (kanuni ya Terms of Service; baada ya KYC + idhini ya admin hana kikomo)
+  - Kuzuia bidhaa duplikati (duplicate listing blocking) imeanzishwa
 
-7.2 Muziki (Music Library)
+3.2 Kutafuta Bidhaa
 ------------------------------------------------
-  Mtumiaji anaona orodha ya nyimbo kutoka kwenye playlist za YouTube/Soko
-  → Anacheza nyimbo kupitia audio handler
-  → Player screen ina: play/pause, next/prev, volume, queue
+  home_screen/search_screen/discovery_screen
+  - Tafuta kwa jina (name), categoryId, eneo (location)
+  - Inapanga: tarehe, bei, umaarufu, featured/boosted ziko mwanzoni
+  - ProductCard inaonyesha: picha, bei (AppTypography.amount), discount,
+    verified badge (KYC), boost badge, rating
 
-7.3 Media Player
+3.3 Bidhaa kuu (Product Detail)
 ------------------------------------------------
-  App inatumia audio_service + just_audio kwa usimamizi wa sauti
-  → Inaweza kucheza nyuma (background) kwa kutumia media session
-  → Inaweza kudhibitiwa kutoka kwenye lock screen na notification bar
+  product_detail.dart
+  - Gallery picha (Cloudinary thumbnails w_800/w_1200)
+  - Buttons: Buy Now, Chat na muuzaji, Wishlist, Comment
+  - Inaonyesha variants, wholesale tiers, location, seller info
+  - Arifa za like/wishlist, comments, replies huenda kwa mmiliki
 
-
-================================================================================
-8. MFUMO WA HADITHI (STATUS/STORIES)
-================================================================================
-
-8.1 Kuunda Hadithi
+3.4 Flash Sales
 ------------------------------------------------
-  Mtumiaji anaweza kuweka picha au video kama hadithi
-  → Hati: statuses/{statusId}
-    (userId, mediaUrl, type: image/video, caption, createdAt, expiresAt)
-  → Hadithi inaisha baada ya saa 24
+  flash_sale_screen.dart + create_flash_sale_screen.dart
+  - Muuzaji anabainisha bei ya flash, muda, kiasi
+  - POST /api/flash-sale/create | /scan | /notify (24h cooldown)
+  - Cron ya saa 1 inazima zile zilizoisha (deactivateExpiredFlashSales)
+  - Scanner inaweza kuunda flash sale kiotomatiki kwa bidhaa
+    zisizouza kwa siku 7
 
-8.2 Kutazama Hadithi
+3.5 Boost (Kutangaza Bidhaa)
 ------------------------------------------------
-  Watumiaji wanaweza kuona hadithi za wafanyabiashara wanaowafuata
-  → UI inaonyesha hadithi kwenye mstari wa juu (status bar)
-  → Anapobofya → hadithi inafunguka kwa skrini nzima
-  → Baada ya sekunde kadhaa → hadithi inayofuata
+  product_boost_screen.dart -> boost_service.dart
+  Tiers:
+    - Bronze : TZS 1,500  kwa siku 3  (TZS 500/siku)
+    - Silver : TZS 3,000  kwa siku 7  (TZS 429/siku)
+    - Gold   : TZS 10,000 kwa siku 30 (TZS 333/siku)
+  -> POST /api/boost-product (ClickPesa USSD push)
+  -> Webhook ikifaulu: isBoosted=true, boostedUntil, boostTier,
+     isFeatured=true -> tx completed -> arifa kwa wote + revenue admin
+  -> failStalePendingBoosts cron (dakika 5) inaweka pending zilizokwisha muda
+     kuwa failed ("muda wa malipo umeisha")
+  -> /api/admin/retro-boost inarekebisha boost zilizopotea
+  -> boost_receipt_screen + boost_receipt_card inaonyesha risiti
 
-
-================================================================================
-9. MFUMO WA ADMIN NA DASHBOARD
-================================================================================
-
-9.1 Admin Dashboard
+3.6 Price Drop
 ------------------------------------------------
-  Admin anaweza:
-    - Kuona takwimu (watumiaji, orders, withdrawals, ad views)
-    - Kusimamia watumiaji (suspend, unsuspend, delete)
-    - Kusimamia bidhaa (delete, feature)
-    - Kusimamia orders (update status)
-    - Kusimamia KYC
-    - Kusimamia disputes
-    - Kutuma arifa kwa watumiaji wote (broadcast)
-    - Kuona financial summary (ad revenue, commissions, boost revenue)
-    - Kuweka actual AdMob revenue
-    - Kuona audit log
-
-9.2 Seller Dashboard
-------------------------------------------------
-  Muuzaji anaweza:
-    - Kuona mauzo yake (total sales, gross volume, seller balance)
-    - Kuona pending escrow
-    - Kutoa pesa (withdrawal)
-    - Kuona analytics ya bidhaa zake
-    - Kuunda flash sales
-
-9.3 Financial Summary
-------------------------------------------------
-  Mapato ya platform yanatokana na:
-    - Commission 4% kwa kila mauzo
-    - Boost revenue (Bronze/Silver/Gold)
-    - AdMob ad revenue (halisi, inaingizwa na admin)
-  → GET /api/admin/finance-summary inatoa muhtasari kamili
+  price_drop_service.dart + price_drop_banner.dart
+  -> inafuatilia mabadiliko ya bei na kumjulisha mtumiaji
 
 
 ================================================================================
-10. MFUMO WA USAFIRISHAJI NA ORDER (DISPATCH & DELIVERY)
+4. MFUMO WA MALIPO NA ESCROW (PAYMENT & ESCROW)
 ================================================================================
 
-10.1 Usafirishaji (Dispatch)
+  Gateways: ClickPesa (halisi) — NOT Mongike. Mongike ni plugin ya zamani ya
+  WooCommerce (mongike-payment-gateway/) na webhook ya legacy /api/webhook.
+
+4.1 Njia za Malipo (Payment Methods)
 ------------------------------------------------
-  Muuzaji anaposafirisha bidhaa:
-  → POST /api/escrow/dispatch
-  → Anajaza: namba ya tracking, picha ya risiti, jina la basi, namba ya plate
-  → Server inasasisha status: dispatched
-  → Arifa inatumwa kwa mnunuzi (FCM + SMS + in-app)
+  - wallet        (pochi ya ndani)
+  - ussd_push     (ClickPesa USSD push - anayeuziwa anapokea USSD)
+  - billpay       (ClickPesa BillPay - order control number)
+  - HaloPesa, CRDB BillPay (1%), CRDB Direct Debit (flat 2,000) - menyu za
+    ClickPesa zilizopo
 
-10.2 Uthibitisho wa Kupokea (Confirm Delivery)
+4.2 Kadi za Ada (Fee Tables) — clickpesa.js + transaction_model.dart
 ------------------------------------------------
-  Mnumuzi anapopokea bidhaa:
-  → POST /api/escrow/release
-  → Pesa zinatolewa escrow → sellerBalance inaongezeka
-  → Auto-payout inatumwa kwa muuzaji
-  → Arifa inatumwa kwa pande zote mbili
+  - Soko Vibe Commission: 3.5% ya bei ya bidhaa
+    (PLATFORM_COMMISSION_PERCENT = 0.035, index.js:535)
+  - ClickPesa USSD Push fee: tiers 54–7,960 TZS kutegemea kiasi
+    (frontend ussdPushFeeTiers: 500-3,000,000; max 7,960)
+  - Payout fee: TZS 2,000 (muuzaji analipa anapotoa pesa)
+  - Kiwango cha juu cha mauzo kwa siku: TZS 5,000,000 (MAX_DAILY_SALE_AMOUNT)
 
+  Hesabu ya Checkout (TransactionFeeBreakdown):
+    processingFee = getUssdPushFee(productPrice)
+    platformFee   = productPrice * 3.5%
+    totalAmount   = productPrice + platformFee + processingFee
+    sellerReceives= productPrice  (muuzaji anapata bei kamili baada ya escrow)
 
-================================================================================
-11. MFUMO WA USAWA (SECURITY SYSTEM)
-================================================================================
-
-11.1 Kukagua Ulaghai (Fraud Prevention)
+4.3 Ununuzi kupitia ClickPesa USSD (Create Payment Link)
 ------------------------------------------------
-  - Kuangalia kama mtumiaji amesitishwa (suspended)
-  - Malipo yanayorudiwa yanakataliwa (checkDuplicatePayment)
-  - Kiwango cha juu cha siku (TZS 5,000,000 kwa siku)
-  - Rate limiting (30 requests/min, 5 payment attempts/min)
-  - OTP ina muda wake (dakika 10) na inaweza kutumika mara moja tu
-  - Risk score ya muuzaji (KYC, umri wa akaunti, fraud alerts)
+  1. Mnumuzi anabofya Buy Now kwenye product_detail / checkout_screen
+  2. Checkout: anachagua deliveryType local/regional + phone
+  3. App inaitwa POST /api/create-marketplace-payment-link
+     (clickpesa_service.initiateMarketplacePayment)
+  4. Server inathibitisha:
+     - Mnumuzi si suspended (checkSuspended)
+     - Hakuna duplicate payment (transaction inasubiri)
+     - Daily limit haijafikiwa (TZS 5M/siku)
+     - Rate limit (paymentRateLimit)
+  5. Server inaita ClickPesa initiate-ussd-push-request
+  6. ClickPesa inasukuma USSD -> mnumuzi anaingiza PIN
+  7. ClickPesa inatuma webhook POST /api/clickpesa/webhook (HMAC verifyWebhook)
+  8. Server inasasisha transaction: status -> escrow_hold
+     - platformFee (3.5%) -> platform
+     - pendingEscrow ya muuzaji += sellerReceives (bei + shipping)
+     - totalSales++, grossSalesVolume += bei
+     - revenue_transactions type 'sale'
+     - Arifa kwa mnunuzi + muuzaji (OneSignal + in-app + SMS)
 
-11.2 Audit Log
+4.4 Escrow Lifecycle
 ------------------------------------------------
-  Kila mabadiliko ya salio yanaandikwa:
-    audit_log/{logId}
-    (userId, type, amount, balanceBefore, balanceAfter, reason, timestamp)
+  Hali za transaction: pending -> awaiting_payment -> quoted -> escrow_hold
+  -> dispatched -> delivered/completed/disputed/cancelled/failed/refunded
 
-11.3 Webhook Security
+  - escrow_hold : pesa zimeingia lakini bado hazijatolewa kwa muuzaji
+  - dispatch    : POST /api/escrow/dispatch  (muuzaji anatuma uthibitisho:
+                  trackingNumber, receiptUrl, photoUrl, note)
+  - release     : POST /api/escrow/release   (mnunuzi anathibitisha kupokea)
+                  -> sellerBalance += sellerReceives; revenue record
+  - cancel      : POST /api/escrow/cancel    (kabla ya dispatch -> refund kamili;
+                  baada ya dispatch -> inahitaji admin)
+  - dispute     : POST /api/escrow/dispute   (sababu + ushahidi) -> disputed
+  - admin-release / admin-resolve-dispute   (release au refund)
+
+  Auto-release (cron ya saa 1): transaction iliyo escrow_hold/dispatched
+  yenye escrowExpiresAt <= sasa inabadilishwa kuwa delivered na pesa zinatolewa.
+    - local   : siku 3  (ESCROW_LOCAL_DAYS = 3)
+    - regional: siku 7  (ESCROW_REGIONAL_DAYS = 7)
+    - (env: ESCROW_AUTO_RELEASE_DAYS=14 inatumika kama mbadala)
+
+4.5 Utoaji wa Pesa (Withdrawals & Payouts)
 ------------------------------------------------
-  Webhooks zote zinathibitisha x-webhook-secret
-  → Ikiwa secret haipo au si sahihi → webhook inakataliwa
+  - POST /api/seller/withdraw: anaondoa amount + TZS 2,000 (payout fee)
+    kwenye sellerBalance; inaunda payout (po_ ref, hali
+    pending/processing/success/failed/refunded/reversed); inaita
+    clickpesaPayout() kinyuma (fire-and-forget)
+  - POST /api/create-payout (admin): payout ya mwongozo + preview
+  - POST /api/payout/retry/:id: majaribio hadi PAYOUT_RETRY_MAX=3
+  - POST /api/clickpesa/payout-webhook (HMAC):
+      SUCCESS -> payout completed
+      FAILED  -> kiasi kinarejeshwa kwenye sellerBalance (atomic reverse)
+  - POST /api/admin/withdraw: mapato ya matangazo + commission -> simu ya admin
+  - Kiwango cha chini cha uondoaji: TZS 5,000
 
-
-================================================================================
-12. MFUMO WA DATA ZILIZOHIFADHIWA NDANI (OFFLINE/CACHE)
-================================================================================
-
-12.1 Local Cache
+4.6 Webhooks (zote zinathibitisha x-webhook-secret / HMAC)
 ------------------------------------------------
-  App inatumia local_cache_service kuhifadhi data kwenye device:
-    - Bidhaa zilizotazamwa hivi karibuni
-    - Matokeo ya utafutaji
-    - Chat rooms na messages (cached_chat_room, cached_message)
-
-12.2 Soko Cache Manager
-------------------------------------------------
-  soko_cache_manager inasimamia caching ya:
-    - Picha (kupitia cached_network_image)
-    - Data kutoka Firestore
-    - Majibu ya API
-
-
-================================================================================
-13. MFUMO WA KUFUATA (FOLLOW SYSTEM)
-================================================================================
-
-13.1 Kufuata / Kutofuata
-------------------------------------------------
-  Mtumiaji anaweza kumfuata muuzaji
-  → Hati: follows/{followId}
-    (followerId, followingId, createdAt)
-  → Orodha ya wafuasi na wanaofuatwa inapatikana
-  → Arifa inatumwa wakati anayefuatwa anaweka bidhaa mpya
-
-
-================================================================================
-14. MFUMO WA MAONI NA UKADIRIAJI (REVIEWS)
-================================================================================
-
-14.1 Kuacha Maoni
-------------------------------------------------
-  Mnumuzi anaweza kuacha maoni baada ya kununua bidhaa
-  → Hati: reviews/{reviewId}
-    (userId, productId, rating: 1-5, comment, createdAt)
-  → Ukadiriaji wa wastani unaonyeshwa kwenye bidhaa
-
-14.2 Maoni ya Bidhaa (Comment Section)
-------------------------------------------------
-  Watumiaji wanaweza kuacha maoni kwenye bidhaa
-  → Hati: products/{productId}/comments/{commentId}
-    (userId, userName, text, createdAt)
+  - POST /api/clickpesa/webhook         (malipo ya bidhaa/boost)
+  - POST /api/clickpesa/payout-webhook  (hali ya payout)
+  - POST /api/webhook                   (LEGACY Mongike-style, bado inatumika
+                                          kwa malipo ya boost)
 
 
 ================================================================================
-15. MFUMO WA RIPOTI (REPORT SYSTEM)
+5. ORDER ENGINE (MFUMO MPYA WA ORDERS) — server/orders.js
 ================================================================================
 
-15.1 Kuripoti Mtumiaji au Bidhaa
-------------------------------------------------
-  Mtumiaji anaweza kuripoti:
-    - Bidhaa isiyo halali
-    - Mtumiaji mwenye tabia mbaya
-  → POST /api/reports
-  → Sababu: spam, bidhaa ghushi, unyanyasaji, n.k.
-  → Arifa inatumwa kwa admin
+  Hii ni state machine tofauti (orders/{orderId}) inayopangwa kwa ajili ya
+  mauzo ya "shipping quote" (muuzaji anatoa bei ya usafirishaji kwanza).
 
+  Hali za ORDER:
+    pending -> quoted -> paid -> escrow_hold -> dispatched -> confirmed
+    -> completed | cancelled | disputed -> refunded | failed
 
-================================================================================
-16. MFUMO WA KANDA ZA WAKATI (TIME ZONES & DELIVERY)
-================================================================================
+  Hali za ESCROW_STATUS: held, released, disputed
 
-16.1 Aina za Usafirishaji
-------------------------------------------------
-  Local (ndani ya mkoa): escrow inafunguliwa baada ya siku 3
-  Regional (nje ya mkoa): escrow inafunguliwa baada ya siku 7
-  Auto-release ikiwa mnunuzi hajathibitisha kwa muda uliopangwa
+  Uhamisho halali (isValidTransition):
+    pending    -> quoted | cancelled
+    quoted     -> paid   | cancelled
+    paid       -> escrow_hold | failed
+    escrow_hold-> dispatched | disputed | cancelled
+    dispatched -> confirmed | disputed
+    confirmed  -> completed | disputed
+    disputed   -> refunded | completed
 
+  Michakato:
+  - POST /api/orders/create: inaunda order (pending) + orderTimeline entry
+  - POST /api/orders/transition: orderEngine.transitionOrder() + timeline
+  - POST /api/orders/:id/timeline: historia ya hatua (orderTimeline collection)
+  - GET  /api/orders/user/:userId: orders za mtumiaji
 
-================================================================================
-17. MFUMO WA INTEGRATION ZA WATU WA TATU
-================================================================================
+  FLOW YA SELLER QUOTE (lib/screens/orders/seller_quote_screen.dart):
+    1. Mnumuzi anaunda order (pending)
+    2. Muuzaji anaona kwenye seller_orders_screen -> seller_quote_screen
+    3. Muuzaji anaweka shippingCost/quote -> order inakuwa 'quoted'
+    4. Mnumuzi analipa (quoted -> paid) -> escrow_hold
+    5. Dispatch -> confirmed (buyer anathibitisha) -> completed
 
-17.1 Mongike (Mobile Money Gateway)
-------------------------------------------------
-  - Kuleta malipo: mongikeCollect() → USSD push kwa simu ya mnunuzi
-  - Kulipa muuzaji: mongikePayout() → tuma pesa kwa simu ya muuzaji
-  - Angalia salio: mongikeBalance()
-  - Ada: TZS 180 kwa malipo (platform inalipa), TZS 2,000 kwa payout (muuzaji analipa)
+  Frontend: order_flow_screen.dart (mwongozo wa hatua kwa hatua),
+  order_detail_screen.dart (timeline ya order), my_purchases_screen.dart
+  (ununuzi wa mnumuzi), seller_orders_screen.dart (orders za muuzaji),
+  receipt_screen.dart (risiti na fallback logic).
 
-17.2 Meseji (SMS Gateway)
-------------------------------------------------
-  - Kutuma OTP kwa simu
-  - Kutuma arifa za usafirishaji
-  - Kutuma arifa za malipo
-
-17.3 Cloudinary (Picha)
-------------------------------------------------
-  - Kupakia picha za bidhaa
-  - Kupiga picha kwa ukubwa unaofaa (thumbnail: w_800, ukubwa kamili: w_1200)
-  - Kupakia picha za KYC na selfie
-
-17.4 Firebase Services
-------------------------------------------------
-  - Firebase Auth (kuingia)
-  - Firestore (database)
-  - Firebase Cloud Messaging (push notifications)
-  - Firebase Admin SDK (server side)
-
-17.5 SMTP (Barua Pepe)
-------------------------------------------------
-  - Kutuma OTP kwa barua pepe
-  - Kutuma arifa za akaunti
-  - Gmail App Password inatumika
+  NOTE: Transactions na Orders ni mifumo miwili inayofanana — transactions ni
+  mfumo wa sasa wa marketplace, orders/orderEngine ni mfumo mpya
+  unaokua (seller quote flow).
 
 
 ================================================================================
-18. MFUMO WA MUZIKI NA VIDEO (YOUTUBE / STREAMING)
+6. MFUMO WA POCHI (WALLET SYSTEM) — Backend (server/index.js)
 ================================================================================
 
-18.1 YouTube Audio
-------------------------------------------------
-  App inaweza kucheza sauti kutoka YouTube
-  → youtube_audio_service inachukua sauti
-  → Inachezwa kupitia audio handler
+  Endpoints (zipo kwenye server; UI ya pochi ya mwisho inakua):
+  - GET  /api/wallet/deposit/methods : njia (USSD push, BillPay)
+  - POST /api/wallet/deposit         : kuweka pesa kwenye pochi
+        (deposits/{dep*}: status, clickpesaReference, billPayNumber,
+         ussdSent/ussdFailed; webhook ikifaulu -> walletBalance += amount)
+  - POST /api/wallet/purchase        : kununua kwa pochi
+        (inahitaji buyerWallet >= totalAmount (totalAmount inajumlisha 3.5%
+         commission); ina-punguza walletBalance, inaunda transaction
+         escrow_hold, pendingEscrow ya muuzaji += sellerReceives
+         (bei + shipping), totalSales++, grossSalesVolume += bei,
+         revenue_transactions type 'sale', arifa kwa mnunuzi)
+  - GET  /api/wallet/balance/:userId : salio (walletBalance)
+  - GET  /api/wallet/history/:userId : historia
+  - POST /api/wallet/delete-history  : futa historia
 
-18.2 Video Query (AI-Powered Search)
-------------------------------------------------
-  video_query_service inasaidia kutafuta video
-  → Ina integrate na AI (Groq) kwa ajili ya utafutaji wa kina
-
-
-================================================================================
-19. SERVER ENDPOINTS (MUHTASARI KAMILI)
-================================================================================
-
-19.1 Afya na Ufuatiliaji (Health & Monitoring)
-------------------------------------------------
-  GET  /health              → { status: "ok" }
-  GET  /ping                → { status: "ok", timestamp: "..." }
-  GET  /api/stats           → Takwimu za mfumo (active escrows, pending KYC, users)
-  GET  /api/fcm-check       → Diagnostiki ya FCM
-  POST /api/test-fcm        → Jaribio la kutuma FCM
-
-19.2 Uthibitishaji (Auth)
-------------------------------------------------
-  POST /api/auth/send-otp   → Tuma OTP kwa simu
-  POST /api/auth/verify-otp → Thibitisha OTP
-  POST /api/phone-login     → Ingia kwa namba ya simu + OTP
-
-19.3 Bidhaa (Products)
-------------------------------------------------
-  DELETE /api/products/:id           → Futa bidhaa (mmiliki pekee)
-  POST   /api/boost-product          → Lipa ili bidhaa ionekane zaidi
-  POST   /api/boost/notify           → Arifa ya bidhaa iliyoboostwa
-
-19.4 Malipo na Escrow (Payments & Escrow)
-------------------------------------------------
-  POST /api/create-marketplace-payment-link   → Anza malipo
-  POST /api/escrow/dispatch                   → Muuzaji anasafirisha
-  POST /api/escrow/release                    → Mnumuzi anathibitisha
-  POST /api/escrow/cancel                     → Mnumuzi anaghairi
-  POST /api/escrow/dispute                    → Mnumuzi anafungua mgogoro
-  POST /api/escrow/admin-release              → Admin anatoa escrow
-  POST /api/escrow/admin-resolve-dispute      → Admin anasuluhisha mgogoro
-  POST /api/escrow/retry-payout               → Jaribu tena payout iliyoshindwa
-
-19.5 Webhooks
-------------------------------------------------
-  POST /api/mongike/webhook             → Malipo yanakamilika/kushindwa
-  POST /api/mongike/payout-webhook      → Payout inakamilika/kushindwa
-  POST /api/webhook                     → Webhook ya zamani (legacy)
-
-19.6 Muuzaji (Seller)
-------------------------------------------------
-  GET  /api/seller/balance              → Angalia salio
-  POST /api/seller/withdraw             → Toa pesa
-
-19.7 Admin
-------------------------------------------------
-  GET    /api/admin/users               → Orodha ya watumiaji
-  GET    /api/admin/users/:uid          → Maelezo ya mtumiaji
-  PUT    /api/admin/users/:uid          → Badilisha mtumiaji
-  PATCH  /api/admin/users/:uid          → Sasisha mtumiaji
-  DELETE /api/admin/users/:uid          → Sitisha mtumiaji
-  DELETE /api/admin/users/:uid/full-delete → Futa mtumiaji kabisa
-  POST   /api/admin/users/:uid/unsuspend    → Rejesha mtumiaji
-  GET    /api/admin/products            → Orodha ya bidhaa
-  DELETE /api/admin/products/:id        → Futa bidhaa
-  PUT    /api/admin/products/:id        → Badilisha bidhaa
-  GET    /api/admin/orders              → Orodha ya orders
-  PUT    /api/admin/orders/:id          → Badilisha order
-  DELETE /api/admin/orders/:id          → Futa order
-  GET    /api/admin/stats               → Takwimu za dashboard
-  GET    /api/admin/transactions        → Orodha ya transactions
-  GET    /api/admin/kyc/pending         → KYC zinazosubiri
-  POST   /api/admin/kyc/review          → Kagua KYC
-  GET    /api/admin/finance-summary     → Muhtasari wa kifedha
-  GET    /api/admin/revenue-transactions → Mapato yote
-  GET    /api/admin/audit-log           → Rekodi za mabadiliko
-  GET    /api/admin/ad-views            → Matangazo yaliyotazamwa
-  POST   /api/admin/admob-revenue       → Weka mapato halisi ya AdMob
-  POST   /api/admin/retro-boost         → Rekebisha boost zilizokosekana
-  POST   /api/admin/delete-doc          → Futa hati yoyote (tahadhari)
-
-19.8 KYC
-------------------------------------------------
-  POST /api/kyc/submit                  → Wasilisha KYC
-  GET  /api/kyc/status/:userId          → Angalia hali ya KYC
-
-19.9 Flash Sales
-------------------------------------------------
-  POST /api/flash-sale/create          → Unda flash sale
-  POST /api/flash-sale/scan            → Skana bidhaa za flash sale
-  POST /api/flash-sale/notify          → Arifu watumiaji kuhusu flash sale
-  POST /api/flash-sales/deactivate-expired → Zima flash sale zilizoisha
-  POST /api/flash-sales/delete         → Futa flash sale
-
-19.10 Arifa na SMS
-------------------------------------------------
-  POST /api/send-notification          → Tuma arifa kwa mtumiaji mmoja
-  POST /api/send-bulk-notification     → Tuma arifa kwa wengi
-  POST /api/notifications/broadcast    → Tuma kwa watumiaji wote
-  POST /api/sms/send                   → Tuma SMS
-  POST /api/clear-token                → Futa FCM token iliyokufa
-
-19.11 Ripoti (Reports)
-------------------------------------------------
-  POST   /api/reports                  → Wasilisha ripoti
-  GET    /api/reports                  → Orodha ya ripoti (admin)
-  PATCH  /api/reports/:id              → Badilisha hali ya ripoti (admin)
-
-19.12 Ulaghai (Fraud)
-------------------------------------------------
-  GET    /api/fraud/alerts             → Arifa za ulaghai
-  PATCH  /api/fraud/alerts/:id/dismiss → Futa arifa ya ulaghai
-  GET    /api/fraud/risk/:sellerId     → Angalia hatari ya muuzaji
-
-19.13 Payouts
-------------------------------------------------
-  POST /api/create-payout              → Unda payout (admin)
-  GET  /api/payout-status/:id          → Angalia hali ya payout
-  GET  /api/payouts                    → Orodha ya payouts
-  POST /api/payout/retry/:id           → Jaribu tena payout
-  POST /api/retry-payment              → Jaribu tena malipo
-
-19.14 Nyingine
-------------------------------------------------
-  POST   /api/transactions/create      → Unda transaction
-  POST   /api/categories/add-defaults  → Weka categories default
-  POST   /api/categories/update        → Badilisha category
-  GET    /api/mongike/balance          → Angalia salio la Mongike
-  POST   /api/mongike/payout-preview   → Angalia makadirio ya payout
-  POST   /api/setup-admin              → Unda akaunti ya admin
-  GET    /api/fcm-check                → Diagnostiki ya FCM
-  POST   /api/test-fcm                 → Jaribu FCM
-  POST   /api/cron/release-escrows     → Fungua escrow zilizoisha (cron)
+  Kwenye app: sellerBalance / pendingEscrow zinaonyeshwa kwenye
+  seller_dashboard_screen na admin_user_detail_screen.
 
 
 ================================================================================
-20. FIRESTORE COLLECTIONS (MUUNDO WA DATABASE)
+7. MFUMO WA MAZUNGUMZO (CHAT & GROUP CHAT)
 ================================================================================
 
-users/{uid}                    → Watumiaji
-products/{productId}           → Bidhaa
-transactions/{transactionId}   → Malipo na escrow
-orders/{orderId}               → Orders (zamani)
-chat_rooms/{roomId}            → Mazungumzo
-  messages/{msgId}             → Ujumbe (subcollection, collectionGroup)
-notifications/{notifId}        → Arifa za ndani
-reviews/{reviewId}             → Maoni
-comments/{commentId}           → Maoni ya bidhaa
-categories/{categoryId}        → Jamii za bidhaa
-flash_sales/{saleId}           → Flash sales
-withdrawals/{withdrawalId}     → Utoaji wa pesa
-payouts/{payoutId}             → Payout records
-revenue_transactions/{id}      → Mapato ya platform
-admin_notifications/{id}       → Arifa za admin
-admin_withdrawals/{id}         → Utoaji wa admin
-audit_log/{logId}              → Rekodi za mabadiliko
-otp_codes/{phone}              → OTP codes
-fraud_alerts/{alertId}         → Arifa za ulaghai
-admob_earnings/{id}            → Mapato halisi ya AdMob
-reports/{reportId}             → Ripoti za watumiaji
-statuses/{statusId}            → Hadithi
-follows/{followId}             → Ufuasi
-ad_views/{viewId}              → Matangazo yaliyotazamwa
-chat_rooms/{roomId}/messages   → Ujumbe wa chat
+7.1 Chat ya Moja-kwa-Moja
+------------------------------------------------
+  lib/services/chat_service.dart + chat_room_screen.dart + chat_page.dart
+  - Mnumuzi anabofya "Wasiliana" kwenye bidhaa -> chat_rooms/{roomId}
+    (participants: [buyerId, sellerId], productId, lastMessage, updatedAt,
+     unread_count_buyer, unread_count_seller)
+  - messages/{msgId}: sender_id, receiver_id, text, type, is_read,
+    is_delivered, reply_to, product_id
+  - Ujumbe umehifadhiwa Hive kwa offline (cached_messages_)
+  - Chat inbox: chats_list_screen.dart / chat_inbox_screen.dart
+  - Chat_typing (chat_typing.dart) - kuona taipu
+  - ConversationNotificationHelper.kt: MessagingStyle ya Android kwenye
+    channel chat_messages_v6, tap inafungua /chat/$roomId
 
+7.2 Group Chat
+------------------------------------------------
+  lib/services/group_service.dart + group_chat_screen.dart +
+  create_group_screen.dart
+  - groups/{groupId}: members, admin(s), name, image, lastMessage
+  - Arifa za group_chat zinaenda kwenye chat_messages_v6
 
-================================================================================
-21. MTIRIRIKO KAMILI WA UNUNUZI (END-TO-END PURCHASE FLOW)
-================================================================================
-
-  1. Mnumuzi anabofya "Buy Now" kwenye bidhaa
-  2. Checkout Screen anaweka: anwani, aina ya usafirishaji (local/regional)
-  3. App inaita POST /api/create-marketplace-payment-link (server)
-  4. Server inathibitisha: si suspended, si duplicate, daily limit haijafikiwa
-  5. Server inaita Mongike: mongikeCollect(amount, orderId, buyerPhone)
-  6. Mongike inasukuma USSD kwa simu ya mnunuzi
-  7. Mnumuzi anaingiza PIN ya mobile money
-  8. Mongike inatuma webhook: POST /api/mongike/webhook
-  9. Server inasasisha transaction: status → escrow_hold
-  10. Commission 4% inakatwa → platformFee
-  11. PendingEscrow ya muuzaji inaongezeka (sellerReceives)
-  12. Arifa inatumwa kwa mnunuzi na muuzaji (FCM + SMS + in-app)
-  13. Muuzaji anasafirisha bidhaa → POST /api/escrow/dispatch
-  14. Mnumuzi anapokea → POST /api/escrow/release
-  15. Pesa zinatolewa escrow → sellerBalance + auto-payout kwa muuzaji
-  16. Ikiwa hakuna uthibitisho → auto-release baada ya siku 3/7
+7.3 Arifa za Chat (server/listener.js + index.js)
+------------------------------------------------
+  - Server inasikiliza collectionGroup('messages')
+  - Inaongeza unread_count ya mpokeaji
+  - Inatuma OneSignal push (chat_messages_v6) + in-app notification
+  - App ikiwa wazi: addForegroundWillDisplayListener -> preventDefault ->
+    heads-up ya ndani kwenye channel sahihi
 
 
 ================================================================================
-22. MTIRIRIKO KAMILI WA KUSAJILI (END-TO-END REGISTRATION FLOW)
+8. BUYER REQUESTS (MAOMBI YA MNUNUZI) — lib/screens/requests/
 ================================================================================
 
-  1. Mtumiaji anafungua app → anaona Onboarding/Login Screen
-  2. Anachagua "Register" → form inafunguka
-  3. Anajaza: jina, email, namba ya simu, password
-  4. Firebase Auth inaunda akaunti
-  5. Hati inaundwa Firestore: users/{uid}
-  6. Barua pepe ya uthibitisho inatumwa
-  7. Mtumiaji anaingia barua pepe → anabofya link
-  8. Anarudi app → anaingia (Login Screen)
-  9. App inampeleka Home Screen
-  10. Anaanza kuona bidhaa, anaweza kuwasiliana na wauzaji
+  models/buyer_request_model.dart + buyer_request_service.dart
+  - Mnumuzi anaandika ombi: title, budget, description, whatsapp
+  - Hati: BuyerRequests/{id}
+    (buyerUid, buyerName, title, budget, description, whatsapp,
+     isLocked: true, unlockedBy: [], createdAt)
+  - Anwani ya WhatsApp imefungwa (isLocked) hadi muuzaji ai- "unlock"
+  - POST /api/seller-quote / muuzaji anafungua anwani (unlockedBy arrayUnion)
+  - Muuzaji anaweza kutoa quote -> mzigo unaendelea kwenye order/payment flow
 
 
 ================================================================================
-MWISHO WA HATI
+9. MFUMO WA KYC (UTHIBITISHO WA UTAMBULISHO)
+================================================================================
+
+  kyc_screen.dart -> kyc_service.dart
+  - Anawasilisha: jina kamili (angalau majina 2), aina ya kitambulisho
+    (National ID, Passport, Driving License, Voters ID), namba, picha ya
+    kitambulisho, selfie
+  - POST /api/kyc/submit -> validation (server)
+  - TODO (kwenye server): NIDA integration na Face Matching zinafuatwa
+  - Ikiwa halali -> inakubaliwa; kuna dosari -> pending (admin anakagua)
+  - POST /api/admin/kyc/review (kubali/kataa) -> arifa kwa muuzaji
+  - Kukubaliwa -> isKycApproved=true, sellerKycApproved=true kwa bidhaa zake
+  - /api/admin/kyc/revoke | /delete | /pending | /all (admin)
+  - Faida za KYC: hufungua kikomo cha bidhaa (zaidi ya 5) na inaongeza
+    kujiamini (verified badge)
+
+
+================================================================================
+10. MFUMO WA ARIFA (NOTIFICATION SYSTEM) — kamili
+================================================================================
+
+  Kanali za Android (zote _v6, IMPORTANCE_MAX):
+    - general_notifications_v6   (flash sale, announcements, alerts, rides)
+    - chat_messages_v6           (chat + group chat)
+    - payments_notifications_v6  (malipo, escrow, payout, refund, KYC)
+    - system_alerts_v6           (usalama, suspension, verification)
+    - ride_notifications_v6      (ride requests - kwa usafiri)
+    - onesignal_default_channel  (mbadala wa OneSignal)
+
+  Kutengenezwa na: MainActivity.kt (createNotificationChannels) +
+  LocalNotificationService._createChannels(). MainActivity inafuta v4/v5
+  zamani ili v6 zizaliwe upya kwa IMPORTANCE_MAX.
+
+  NJIA 4 ZA KUPELEKA ARIFA:
+  1. OneSignal Push (primary) — sendOneSignalNotification()
+     payload: headings/contents {en, sw}, include_external_user_ids,
+     idempotency_key, android_channel_id, android_sound:
+     'soko_notification', android_icon: 'ic_notification', priority 10,
+     android_priority 'high', android_visibility 1
+     Uthibiti: notification_preferences/{userId} (isPushAllowed)
+  2. In-App — notifications/{notifId}
+     (userId, title, body, type, data, isRead, createdAt)
+     Inaonyeshwa kwenye notification_screen.dart
+  3. SMS — sendSms() (Meseji kwanza muundo 07, Notify Africa ikishindwa
+     2557). Inatumika kwa: OTP, dispatch, delivery, payment, refund
+     (SmsNotificationService na server/listener.js)
+  4. Email (SMTP) — OTP, uthibitisho, arifa muhimu (criticalTypes)
+
+  Foreground heads-up: OneSignal.addForegroundWillDisplayListener ->
+  preventDefault() -> LocalNotificationService.showHeadsUp() kwenye channel
+  sahihi (kwa app ikiwa wazi, Android huonyesha banner/peek).
+
+  AINA ZA ARIFA (notifTypeToChannel):
+    chat, group_chat         -> chat_messages_v6
+    system, admin, alert     -> system_alerts_v6
+    payment, order, payout, dispute, refund, boost, kyc, withdrawal,
+    escrow, delivery, deposit, payment_failed, cancelled, dispatched,
+    delivery_confirmed, deposit_failed, auto_payout... -> payments_notifications_v6
+    (mbadala)                -> general_notifications_v6
+
+  Mapendeleo (notification_preferences_screen.dart + notificationPrefs.js):
+    - Uswichi mkuu (general), kwa kila channel (booleans), sms_enabled
+    - broadcast ya flash sale/boost inachuja watumiaji (filterAllowedUserIds,
+      batch 400)
+
+  Arifa za Admin:
+    - mgogoro mpya, KYC mpya, payout imeshindwa
+    - /api/admin/broadcast-notification (kwa wote) + /api/send-bulk-notification
+
+  Uuzaji kwa wilaya (district targeting):
+    - constants/tanzania_districts.dart (mikoa 31) - arifa kwa makusudio
+
+  NOTIFYA WELCOME: sms_notification_service.notifyWelcome ipo lakini HAITUMIKI
+  popote (dead code).
+
+  Logs za diagnostics: '[OS] foreground notification: type=...',
+  '[OS] local heads-up -> id=... channel=...' (notification_service.dart)
+
+
+================================================================================
+11. MFUMO WA HADITHI (STATUS/STORIES)
+================================================================================
+
+  lib/services/status_service.dart + status_list_screen.dart +
+  status_viewer_screen.dart + add_status_screen.dart
+  - statuses/{statusId}: userId, mediaUrl, type (image/video), caption,
+    createdAt, expiresAt (saa 24)
+  - Inaonekana kwa wanaofuatwa (follow) kwenye status bar
+  - Status_zilizoisha hufutwa kiotomatiki
+
+
+================================================================================
+12. UFUASI, WISHLIST, UKADIRIAJI, MAONI, PROFILES
+================================================================================
+
+  - Follow: follows/{followId} (followerId, followingId); arifa wakati
+    anayefuatwa anaweka bidhaa mpya
+  - Wishlist: wishlist_service.dart + wishlist_screen.dart; arifa ya like
+  - Ratings: rating_service.dart (reviews/{reviewId}, 1-5) + review_section.dart
+  - Comments: comment_service.dart (products/{productId}/comments/{commentId});
+    arifa za replies
+  - Profile views: profile_view_service.dart (unaona nani alikutazama)
+  - Public profile: public_profile_screen.dart + seller_profile_screen.dart
+
+
+================================================================================
+13. ZANA ZA MUUZAJI (SELLER TOOLS)
+================================================================================
+
+  - Seller Dashboard (seller_dashboard_screen.dart): totalSales,
+    grossSalesVolume, sellerBalance, pendingEscrow, withdrawal, boost
+  - Seller Earnings (seller_earnings_screen.dart): mapato kwa mda
+  - Seller Statement (seller_statement_screen.dart): taarifa rasmi
+    (POST /api/seller-statement/:sellerId)
+  - Seller Analytics (seller_analytics_screen.dart):
+    (POST /api/seller-analytics/:sellerId)
+  - Shop Customization (shop_customization_screen.dart)
+  - My Ads (my_ads_screen.dart): bidhaa za muuzaji, edit, delete, boost
+  - Dispatch (seller_dispatch_screen.dart): kuweka dispatchProof
+  - Quote (seller_quote_screen.dart): kuweka shippingCost
+
+
+================================================================================
+14. MFUMO WA ADMIN (ADMIN SYSTEM)
+================================================================================
+
+  Admin inaweza (admin_dashboard_screen.dart):
+    - Takwimu za dashboard (users, orders, withdrawals, ad views)
+    - Kusimamia watumiaji: suspend/unsuspend/warn (3-strike policy ->
+      auto-suspend suspendedBy:'policy' + policy_warnings subcollection)/
+      delete/full-delete
+    - Kusimamia bidhaa (delete, edit)
+    - Kusimamia orders na transactions
+    - KYC: pending, review, revoke, delete
+    - Disputes: admin-release, admin-resolve-dispute
+    - Broadcast arifa kwa wote
+    - Finance: /api/admin/finance-summary (commission 3.5%, boost revenue,
+      AdMob revenue), revenue-transactions, admob-revenue (input halisi),
+      audit-log, ad-views
+    - ClickPesa: /api/admin/clickpesa/transactions, balance
+    - Reports & Fraud alerts
+    - Retro-boost (kurekebisha boost zilizopotea), delete-doc
+
+  Admin authentication: requireAdmin (ADMIN_EMAILS allow-list:
+  admin@soko-langu.com, admin@soko-vibe.com) au users.isAdmin.
+
+  Pia kuna: hosting/ (admin HTML panel - taarifa za mapato) + i18n.js.
+
+
+================================================================================
+15. AI ASSISTANT NA SAUTI (AI & VOICE)
+================================================================================
+
+  - ai_assistant_screen.dart + services/ai/ai_service.dart + ai_tool.dart
+  - groq_service.dart: broker wa Groq (llama-3.3-70b) kwa maelezo ya
+    Swahili/English
+  - Server proxy: POST /api/ai/chat (chat completions),
+    POST /api/ai/transcribe (Groq Whisper, whisper-large-v3-turbo)
+  - voice_search_service.dart: utafutaji kwa sauti
+  - video_query_service.dart + MainActivity.kt queryVideos: kutafuta video
+    kwenye MediaStore (Android)
+
+
+================================================================================
+16. MATANGAZO NA MAPATO (ADS & MONETIZATION)
+================================================================================
+
+  - google_mobile_ads: banner (ad_banner.dart), interstitial
+    (interstitial_ad_service.dart, cooldown dakika 20), rewarded
+    (rewarded_ad_service.dart, rewarded_ad_gate.dart)
+  - payment_banner.dart, dynamic_banner.dart, banner_rotator.dart,
+    flash_sale_banner.dart, trending_carousel.dart
+  - Mapato: ad_views/{viewId}, admob_earnings/{id} (admin anaingiza halisi
+    kupitia /api/admin/admob-revenue)
+  - Admin: admin_ads_management_screen.dart, admin_ad_revenue_screen.dart,
+    admin_clickpesa_screen.dart (payments/deposits + disbursements/payouts)
+  - Ads test mode: kAdsTestMode=true (dev), production AdMob pia ipo
+
+
+================================================================================
+17. MFUMO WA UTAFUTAJI (SEARCH) — server/search.js
+================================================================================
+
+  - search_index_products/users/categories (trigram/keyword/prefix index)
+  - POST /api/global-search | /autocomplete | /trending | /record-click
+  - Levenshtein fuzzy correction; relevanceScore
+  - Popularity score (functions/ reference): soldCount*10 + viewCount +
+    rating*5 + reviewCount*3 + isBoosted 50 + isActive 20
+  - MAX_RESULTS 20, autocomplete 10, trending 20
+  - Frontend: search_service.dart, product_search_service.dart,
+    search_screen.dart, search_history_service.dart
+
+
+================================================================================
+18. USAWAHA NA UDANGANYIFU (SECURITY & FRAUD)
+================================================================================
+
+  Server:
+  - Firebase ID token verification (verifyIdToken) kwenye endpoints muhimu;
+    ownership checks (decoded.uid === userId)
+  - express-rate-limit kwenye /api/ (30 req/min), paymentRateLimit
+    (5 attempts/min), otpPhoneRateLimit
+  - Webhook HMAC (verifyWebhook) kwa ClickPesa; (whatsapp/malipopay hawana
+    signature - log-only)
+  - checkSuspended kwenye purchases/payments
+  - checkDuplicatePayment, daily limit TZS 5M
+  - OTP: SHA-256 kwenye Firestore, expiry dakika 10, matumizi moja
+  - Audit log: audit_log/{logId} (userId, type, amount, balanceBefore,
+    balanceAfter, reason, timestamp) kwa kila mabadiliko ya salio
+
+  Frontend:
+  - FraudPreventionService: kukagua miamala inayotiliwa shaka
+  - SecurityService: root/emulator/jailbreak detection
+  - AppLockService: PIN + session dakika 5
+  - AgeGateDialog (umri)
+  - BalancePrivacyService: kuficha salio
+  - Firebase App Check imewashwa
+
+  Policy ya onyo 3 (3-strike): /api/admin/users/:uid/warn inaongeza
+  policy_warnings; ikifikia 3 -> auto-suspend.
+
+
+================================================================================
+19. OFFLINE NA CACHE (OFFLINE & CACHING)
+================================================================================
+
+  - Hive (local_cache_service.dart): cached_products, cached_rooms,
+    cached_messages_ (TypeAdapters 0/1/2)
+  - Firestore persistenceEnabled: true
+  - soko_cache_manager.dart: cache ya picha (cached_network_image),
+    stale siku 3, max 400
+  - recently_viewed_service.dart, search_history_service.dart
+  - models: cached_product.dart, cached_chat_room.dart, cached_message.dart
+  - App ikiwa offline: network_sensitive_wrapper.dart + connectivity_wrapper.dart
+
+
+================================================================================
+20. MICHOMO YA NYUMA (CRON JOBS & LISTENERS)
+================================================================================
+
+  Cron (server/index.js):
+  - releaseExpiredEscrows()  : kila saa 1 — escrow_hold/dispatched zilizoisha
+    muda -> delivered + credit seller (limit 20)
+  - deactivateExpiredFlashSales(): kila saa 1 — isActive=false kwa flash
+    zilizoisha (limit 100)
+  - failStalePendingBoosts(): kila dakika 5 — pending boosts zilizokwisha muda
+    -> failed + arifa
+  - Mara ya kwanza: zinaendeshwa baada ya sekunde 60 (setTimeout)
+  - Self-ping: kila dakika 10 (kuzuia sleeping kwenye Render/Railway)
+  - /api/cron/release-escrows (x-cron-secret == ADMIN_SECRET) — kwa on-demand
+
+  Listener (server/listener.js — process ya pekee):
+  - transactions onSnapshot -> escrow release/expiry arifa + SMS
+  - chat_rooms onSnapshot -> ujumbe mpya, unread counts, push + in-app
+  - products onSnapshot -> bidhaa mpya -> arifa kwa washirika wa chat wa awali
+    (na pia startProductListener() kwenye index.js — kurudiwa (duplicate))
+
+
+================================================================================
+21. VIUNGANISHI VYA NJE (EXTERNAL INTEGRATIONS)
+================================================================================
+
+  - ClickPesa (api.clickpesa.com/third-parties): token cache dakika 55;
+    HMAC-SHA256 payload checksum; initiate-ussd-push-request, payments/all,
+    create-mobile-money-payout, preview-mobile-money-payout, account/balance,
+    billpay/create-order-control-number
+  - OneSignal: push notifications (App ID 2e50d6a7-...)
+  - Meseji SMS (muundo 07) -> Notify Africa (2557) fallback
+  - Cloudinary (signed uploads, folder soko_langu)
+  - SMTP/Nodemailer (Gmail App Password)
+  - Groq AI (chat + Whisper)
+  - Google: Firebase Auth/App Check/Crashlytics/Performance/AdMob,
+    Google Sign-In, Maps/Geocoding/Geolocator
+  - WhatsApp (wa.me links kwenye buyer requests + whatsapp_service.dart)
+  - LIPA_TILL_NUMBER=5722554 (lipa kwa tilikadi) kwenye env
+
+
+================================================================================
+22. FIRESTORE COLLECTIONS (MUUNDO WA DATABASE)
+================================================================================
+
+  users/{uid}                       Watumiaji (walletBalance, sellerBalance,
+                                    pendingEscrow, totalSales,
+                                    grossSalesVolume, isAdmin, isKycApproved,
+                                    isSuspended, fcmToken legacy)
+  products/{productId}              Bidhaa (isBoosted, boostedUntil,
+                                    boostTier, isFeatured, featuredUntil,
+                                    isActive, searchKeywords, searchName,
+                                    sellerKycApproved)
+  transactions/{transactionId}      Malipo & escrow (status, orderId,
+                                    escrowExpiresAt, escrowReleased,
+                                    escrowAutoReleased, platformFee,
+                                    sokovibeCommission, sellerReceives,
+                                    shippingCost, dispatchProof)
+  orders/{orderId}                  Order engine (status, statusHistory,
+                                    escrowStatus, escrowReleased,
+                                    disputeInfo, dispatchProof,
+                                    confirmReceiptAt, completedAt)
+  orderTimeline/{entry}             Historia ya hatua za order
+  chat_rooms/{roomId}               Mazungumzo (participants, productId,
+                                    lastMessage, unread_count_buyer/seller)
+  chat_rooms/{roomId}/messages/{m}  Ujumbe (collectionGroup)
+  groups/{groupId}                  Group chats (members, admins, name)
+  notifications/{notifId}           Arifa za ndani (userId, title, body,
+                                    type, data, isRead, createdAt)
+  notification_preferences/{userId} Mapendeleo ya arifa
+  BuyerRequests/{requestId}         Maombi ya wateja (isLocked, unlockedBy)
+  reviews/{reviewId}                Ukadiriaji (rating 1-5)
+  products/{productId}/comments/{c} Maoni ya bidhaa
+  categories/{categoryId}           Jamii
+  flash_sales/{saleId}              Flash sales (isActive, endTime)
+  statuses/{statusId}               Hadithi (expiresAt saa 24)
+  follows/{followId}                Ufuasi
+  otp_codes/{phone}                 OTP codes (SHA-256, expiry 10 min)
+  deposits/{dep*}                   Amana za pochi (clickpesaReference,
+                                    billPayNumber, ussdSent)
+  payouts/{po_}                     Payouts (hali pending/processing/success/
+                                    failed/refunded/reversed)
+  withdrawals/{withdrawalId}        Utoaji wa pesa
+  admin_withdrawals/{id}            Utoaji wa admin
+  admob_earnings/{id}               Mapato halisi ya AdMob
+  revenue_transactions/{id}         Mapato ya platform (type sale/boost)
+  audit_log/{logId}                 Rekodi za mabadiliko ya salio
+  fraud_alerts/{alertId}            Arifa za ulaghai
+  reports/{reportId}                Ripoti (spam, ghushi, unyanyasaji...)
+  ad_views/{viewId}                 Matangazo yaliyotazamwa
+  admin_notifications/{id}          Arifa za admin
+  search_index_products|users|categories/{id}   Fahirisi ya utafutaji
+  search_index_trending/{id}        Trending search
+  search_index_analytics/{id}       Analytics ya search
+  users/{uid}/policy_warnings/{w}   Maonyo ya policy (subcollection)
+  app_settings/{key}                Mipangilio (flash_sale_push_cooldown)
+  whatsapp_webhook_logs/{id}        Logs (whatsapp/malipopay webhooks)
+  conversations/{id}                (kwa fahirisi)
+
+  Faharasa (composite indexes): firestore.indexes.json — conversations,
+  transactions (buyer/seller + createdAt), flash_sales, notifications,
+  products.
+
+
+================================================================================
+23. SERVER ENDPOINTS (REFERENCE KAMILI)
+================================================================================
+
+  AFYA / MONITORING
+  GET  /health, /ping                          -> status ok
+  GET  /api/stats                              -> takwimu za mfumo
+  GET  /api/fcm-check, /api/test-fcm           -> diagnostics OneSignal
+  GET  /api/diag/fcm-token/:userId             -> (legacy FCM)
+
+  AUTH
+  POST /api/auth/send-otp                      Tuma OTP (SMS)
+  POST /api/auth/verify-otp                    Thibitisha OTP
+  POST /api/auth/send-email-otp                Tuma OTP email
+  POST /api/auth/verify-email-otp              Thibitisha OTP email
+  POST /api/auth/check-phone, check-email      Uwepo wa akaunti
+  POST /api/auth/reset-password-by-phone       Weka password mpya
+  POST /api/phone-login                        Ingia kwa simu
+  POST /api/setup-admin                        Unda admin
+
+  BIDHAA / BOOST
+  DELETE /api/products/:id                     Futa bidhaa (mmiliki)
+  POST   /api/boost-product                    Lipa boost (ClickPesa USSD)
+  POST   /api/boost/notify                     Arifa ya bidhaa iliyoboostwa
+  POST   /api/admin/retro-boost                Rekebisha boost zilizopotea
+
+  MALIPO & ESCROW
+  POST /api/create-marketplace-payment-link    Anza malipo ya bidhaa
+  POST /api/retry-payment                      Jaribu malipo tena
+  POST /api/escrow/dispatch                    Muuzaji asafirishe
+  POST /api/escrow/release                     Mnunuzi athibitishe
+  POST /api/escrow/cancel                      Ghairi / refund
+  POST /api/escrow/dispute                     Fungua mgogoro
+  POST /api/escrow/admin-release               Admin atoe escrow
+  POST /api/escrow/admin-resolve-dispute       Admin asuluhishe
+  POST /api/escrow/retry-payout                Jaribu payout tena
+  GET  /api/transaction-status/:orderId        Angalia hali ya tx
+  POST /api/transactions/create                Unda transaction
+  POST /api/payment-methods, /calc-fee, /gateway-fee   Njia na ada
+
+  POCHI (WALLET)
+  GET  /api/wallet/deposit/methods
+  POST /api/wallet/deposit
+  POST /api/wallet/purchase
+  GET  /api/wallet/balance/:userId
+  GET  /api/wallet/history/:userId
+  POST /api/wallet/delete-history
+
+  SELLER / PAYOUTS
+  GET  /api/seller/balance
+  POST /api/seller/withdraw
+  POST /api/admin/withdraw
+  POST /api/create-payout
+  GET  /api/payout-status/:id
+  GET  /api/payouts
+  POST /api/payout/retry/:id
+
+  ORDERS (ORDER ENGINE)
+  POST /api/orders/create
+  POST /api/orders/transition
+  GET  /api/orders/:id/timeline
+  POST /api/orders/:id/status
+  GET  /api/orders/:id
+  GET  /api/orders/user/:userId
+
+  SELLER ANALYTICS
+  POST /api/seller-analytics/:sellerId
+  POST /api/seller-statement/:sellerId
+
+  ADMIN — WATUMIAJI/BIDHAA/ORDERS
+  GET/PUT   /api/admin/users
+  GET/PUT   /api/admin/products
+  GET/PUT   /api/admin/orders
+  DELETE    /api/admin/users/:uid | PATCH | full-delete | unsuspend | warn
+  GET       /api/admin/user-detail/:uid
+  DELETE    /api/admin/orders/:id | /api/admin/products/:id
+  POST      /api/admin/delete-doc
+
+  ADMIN — FEDHA
+  GET  /api/admin/stats | /transactions | /withdrawals | /analytics
+  GET  /api/admin/finance-summary | /revenue-transactions | /audit-log
+  GET  /api/admin/ad-views | /api/admin/clickpesa/transactions
+  POST /api/admin/admob-revenue
+
+  ADMIN — KYC / ARIFA
+  GET  /api/admin/kyc/pending | /all
+  POST /api/admin/kyc/review | /revoke | /delete
+  POST /api/admin/broadcast-notification | /api/admin/send-notification
+
+  KYC
+  POST /api/kyc/submit
+  GET  /api/kyc/status/:userId
+
+  FLASH SALES
+  POST /api/flash-sale/create | /scan | /notify
+  POST /api/flash-sales/deactivate-expired | /delete
+
+  ARIFA / SMS / CHAT
+  POST /api/send-notification | /api/send-bulk-notification
+  POST /api/notifications/broadcast
+  POST /api/sms/send | /api/whatsapp/send | /api/chat/send
+  POST /api/clear-token (no-op)
+  GET/POST /api/preferences/get | /set  (notification.js router)
+
+  RIPOTI / ULAGHAI
+  POST/GET /api/reports, PATCH /api/reports/:id
+  GET  /api/fraud/alerts, PATCH /api/fraud/alerts/:id/dismiss
+  GET  /api/fraud/risk/:sellerId
+
+  SEARCH
+  POST /api/global-search | /autocomplete | /trending | /record-click
+
+  MISC
+  POST /api/categories/add-defaults | /update
+  POST /api/cloudinary/sign
+  POST /api/ai/chat | /api/ai/transcribe
+  GET  /api/clickpesa/balance | POST /api/clickpesa/payout-preview
+  POST /api/cron/release-escrows (x-cron-secret)
+  POST /api/release-expired-escrows (legacy duplicate)
+
+  WEBHOOKS
+  POST /api/clickpesa/webhook          (HMAC)
+  POST /api/clickpesa/payout-webhook   (HMAC)
+  POST /api/webhook                    (LEGACY Mongike-style, HMAC)
+  POST /api/whatsapp/webhook           (log-only, hakuna signature)
+  POST /api/malipopay/webhook          (log-only, hakuna signature)
+
+
+================================================================================
+24. MTIRIRIKO KAMILI WA UNUNUZI (END-TO-END PURCHASE FLOW)
+================================================================================
+
+  1. Mnumuzi anabofya Buy Now (product_detail.dart)
+  2. Checkout Screen: anachagua deliveryType (local/regional) + phone
+  3. App inahesabu: totalAmount = bei + 3.5% commission + USSD fee
+     (TransactionFeeBreakdown)
+  4. clickpesa_service.initiateMarketplacePayment() -> POST
+     /api/create-marketplace-payment-link
+  5. Server inathibitisha: si suspended, si duplicate, daily limit (TZS 5M),
+     rate limit
+  6. Server inaita ClickPesa initiate-ussd-push-request
+  7. ClickPesa inasukuma USSD -> mnumuzi anaingiza PIN ya mobile money
+  8. ClickPesa inatuma webhook /api/clickpesa/webhook (HMAC)
+  9. Server inasasisha transaction: status -> escrow_hold
+     - platformFee 3.5% -> mapato ya Soko Vibe
+     - pendingEscrow ya muuzaji += sellerReceives
+     - totalSales++, grossSalesVolume += bei
+     - revenue_transactions type 'sale'
+  10. Arifa (OneSignal + in-app + SMS) kwa mnunuzi na muuzaji
+  11. Muuzaji anasafirisha -> /api/escrow/dispatch (dispatchProof)
+  12. Mnumuzi anapokea -> /api/escrow/release
+      -> sellerBalance += sellerReceives
+  13. Muuzaji anatoa pesa -> /api/seller/withdraw
+      (amount + 2,000 payout fee) -> ClickPesa payout
+  14. Ikiwa hakuna uthibitisho: auto-release baada ya siku 3 (local) /
+      siku 7 (regional) kupitia cron ya saa 1
+
+
+================================================================================
+25. MTIRIRIKO KAMILI WA KUWEKA POCHI NA KUNUNUA KWAYO
+================================================================================
+
+  1. Mnumuzi anaweka pesa kwenye pochi -> POST /api/wallet/deposit
+     (USSD push au BillPay) -> deposits/{dep*}
+  2. ClickPesa webhook ikifaulu -> walletBalance += amount
+  3. Kununua -> POST /api/wallet/purchase
+     (inahitaji walletBalance >= totalAmount)
+  4. Server inapunguza walletBalance, inaunda transaction escrow_hold,
+     inaongeza pendingEscrow ya muuzaji, inaandika revenue_transactions
+  5. Escrow inaendelea kama ununuzi wa kawaida (s.24)
+
+
+================================================================================
+26. MTIRIRIKO WA MGOGORO (DISPUTE FLOW)
+================================================================================
+
+  1. Mnumuzi anafungua mgogoro -> POST /api/escrow/dispute
+     (sababu + ushahidi) -> status: disputed
+  2. Arifa kwa admin (admin_notifications + push)
+  3. Admin anakagua ushahidi (admin panel / admin_dashboard)
+  4. Admin anaamua:
+     - release  -> /api/escrow/admin-release (muuzaji anapata)
+     - refund   -> /api/escrow/admin-resolve-dispute (mnunuzi anarudishiwa)
+  5. Kila hatua inaandikwa kwenye audit_log na statusHistory
+
+
+================================================================================
+27. MTIRIRIKO WA BUYER REQUEST -> UZALISHAJI (REQUEST-TO-SALE FLOW)
+================================================================================
+
+  1. Mnumuzi anaandika ombi (post_buyer_request_screen) -> BuyerRequests/{id}
+     (isLocked: true — anwani imefungwa)
+  2. Muuzaji anaona maombi (buyer_requests_screen)
+  3. Muuzaji anafungua anwani -> unlockContact (unlockedBy arrayUnion)
+  4. Muuzaji anaweza kutoa quote (seller_quote_screen) au kuwasiliana
+     kwa WhatsApp (wa.me link)
+  5. Ikiwa quote inakubaliwa -> order/payment flow ya kawaida
+
+
+================================================================================
+28. MFUMO WA MATANGAZO YA BOOST KWENYE MTIRIRIKO WA MALIPO
+================================================================================
+
+  1. Muuzaji anachagua tier (product_boost_screen): Bronze 1,500/3d,
+     Silver 3,000/7d, Gold 10,000/30d
+  2. POST /api/boost-product (ClickPesa USSD push)
+  3. Webhook (/api/webhook legacy au /api/clickpesa/webhook) ikifaulu:
+     - product.isBoosted=true, boostedUntil, boostTier, isFeatured=true
+     - transaction completed
+     - revenue_transactions type 'boost' (admin mapato)
+     - arifa kwa wote (broadcast, 24h cooldown kwa flash-sale)
+  4. Boost inaisha (boostedUntil) -> inarejeshwa kwenye utafutaji wa kawaida
+  5. failStalePendingBoosts (dakika 5) inaweka pending zilizokwisha muda
+     kuwa failed
+
+
+================================================================================
+29. MIFANO YA ARIFA ZA MTUMIAJI (NOTIFICATION TYPES)
+================================================================================
+
+  - order / payment / payment_failed / dispatched / delivery_confirmed
+  - shipping quote (seller anapotoa bei ya usafirishaji)
+  - escrow_release / escrow_auto_release / auto_payout / refund
+  - withdrawal (seller) / deposit / deposit_failed
+  - dispute / dispute_resolved
+  - kyc_approved / kyc_rejected / kyc_revoked
+  - boost_paid / boost_failed / flash_sale / new_product / promotion
+  - chat / group_chat / message
+  - comment / reply / like (wishlist) / rating / profile_view
+  - system / admin / alert / account_suspended
+  - broadcast (admin) / district marketing
+
+
+================================================================================
+30. VITU VILIVYOPITWA NA MABORESHO YA BAADAYE (LEGACY & TODOs)
+================================================================================
+
+  - functions/ (Firebase Cloud Functions) — HATUMIWI, imebadilishwa na
+    Express (index.js + listener.js). Kept for reference.
+  - mongike-payment-gateway/ — plugin ya WooCommerce PHP; si sehemu ya
+    server ya Node. Jina "Mongike" bado linaonekana kwenye TOS/kalenda
+    lakini malipo halisi ni ClickPesa.
+  - /api/webhook (legacy Mongike-style) bado inatumika kwa malipo ya boost
+  - /api/release-expired-escrows (legacy duplicate ya cron; inaweka
+    'completed' badala ya 'delivered')
+  - startProductListener() (index.js) inarudia kazi ya listener.js
+  - /api/clear-token ni no-op ("OneSignal manages tokens")
+  - /api/diag/fcm-token ni legacy FCM tu
+  - notifyWelcome (SMS welcome) haijaitwa popote
+  - TODO KYC: NIDA integration (index.js:2828) + Face Matching (index.js:2833)
+  - .railwayignore inarejea retroboost.js ambayo haipo (stale)
+  - v4/v5 notification channels zimefutwa kwenye MainActivity; sasa v6
+  - LIPA_TILL_NUMBER=5722554 kwenye env (lipa kwa tilikadi)
+
+
+================================================================================
+31. VITAMBULISHO MUHIMU VYA KODI (KEY CONFIG CONSTANTS)
+================================================================================
+
+  Server URL (app)          : https://soko-langu-server.onrender.com
+  OneSignal App ID          : 2e50d6a7-de2f-4b74-af36-4f1b0b28a1b2
+  Platform commission       : 3.5%  (PLATFORM_COMMISSION_PERCENT=0.035)
+  ClickPesa USSD fee        : 54–7,960 TZS (tiers)
+  Payout fee (seller)       : TZS 2,000
+  Min withdrawal            : TZS 5,000
+  Max daily sale            : TZS 5,000,000
+  Escrow days               : local 3 / regional 7 (ESCROW_AUTO_RELEASE_DAYS=14)
+  Boost tiers               : Bronze 1,500/3d | Silver 3,000/7d | Gold 10,000/30d
+  Product limit (no KYC)    : 5 bidhaa
+  OTP expiry                : dakika 10 (SHA-256, matumizi moja)
+  Rate limits               : /api 30 req/min; payment 5/min
+  Ads test mode             : kAdsTestMode=true (dev)
+  Notification channels     : *_v6 (IMPORTANCE_MAX)
+  Admin emails              : admin@soko-langu.com, admin@soko-vibe.com
+
+
+================================================================================
+MWISHO WA HATI — Soko Vibe System Flow (Toleo 2.0)
 ================================================================================

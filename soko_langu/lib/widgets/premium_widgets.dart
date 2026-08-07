@@ -89,6 +89,7 @@ class SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
       child: Column(
@@ -105,8 +106,16 @@ class SectionHeader extends StatelessWidget {
                 borderRadius: BorderRadius.circular(3),
               )),
               const SizedBox(width: 10),
-              Text(title, style: TextStyle(fontSize: AppFontSize.lg, fontWeight: FontWeight.w600, color: cs.onSurface)),
-              const Spacer(),
+              Expanded(
+                child: Text(title,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.3,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
               if (actionLabel != null)
                 GestureDetector(
                   onTap: onAction,
@@ -132,7 +141,7 @@ class SectionHeader extends StatelessWidget {
               if (trailing != null) trailing!,
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppInsets.md),
         ],
       ),
     );

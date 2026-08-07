@@ -14,6 +14,7 @@ import '../../utils/phone_utils.dart';
 import '../../widgets/account_switcher_sheet.dart';
 import '../../widgets/auth_form_widgets.dart';
 import '../../widgets/premium_widgets.dart';
+import '../../theme/app_typography.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -209,7 +210,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                Text(context.tr('app_name'), style: TextStyle(fontSize: AppFontSize.display, fontWeight: FontWeight.w800, color: cs.onSurface, letterSpacing: -1)),
+                Text(context.tr('app_name'), style: AppTypography.brandTitle(cs.onSurface).copyWith(fontSize: 30)),
                 const SizedBox(height: 6),
                 Text(context.tr('welcome_back'), style: TextStyle(fontSize: AppFontSize.lg, color: cs.onSurfaceVariant)),
                 const SizedBox(height: 32),

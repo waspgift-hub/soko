@@ -1,5 +1,6 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import '../widgets/soko_vibe_loading.dart';
 
 class OrderTimelineStep {
   final int stepNumber;
@@ -192,12 +193,8 @@ class OrderTimelineWidget extends StatelessWidget {
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        SizedBox(
-                                          width: 10, height: 10,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 1.5,
-                                            color: stepColor,
-                                          ),
+                                        SokoVibeThreeDotLoader(
+                                          size: 12, dotSize: 3, color: stepColor,
                                         ),
                                         const SizedBox(width: 4),
                                         Text(

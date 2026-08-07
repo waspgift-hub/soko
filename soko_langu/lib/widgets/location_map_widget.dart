@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import '../widgets/soko_vibe_loading.dart';
 
 class LocationMapWidget extends StatefulWidget {
   final double? targetLat;
@@ -178,10 +179,7 @@ class _LocationMapWidgetState extends State<LocationMapWidget> {
                   color: cs.surface.withValues(alpha: 0.9),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: SizedBox(
-                  height: 16, width: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
-                ),
+                child: SokoVibeThreeDotLoader(size: 16, dotSize: 4, color: cs.primary),
               ),
             ),
           Positioned(

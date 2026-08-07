@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.provider.MediaStore
 import android.appwidget.AppWidgetManager
 import android.util.Log
+import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -18,6 +19,11 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Block screenshots and screen recording app-wide (FLAG_SECURE)
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_SECURE,
+            WindowManager.LayoutParams.FLAG_SECURE
+        )
         createNotificationChannels()
         pendingRoute = intent?.getStringExtra("route")
     }
@@ -92,8 +98,8 @@ class MainActivity : FlutterActivity() {
     private fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(NotificationManager::class.java)
-            // Delete old v4 channels (can't modify once created — need new IDs for IMPORTANCE_MAX)
-            listOf("onesignal_default_channel","general_notifications_v4","chat_messages_v4","payments_notifications_v4").forEach {
+            // Delete old v4/v5 channels (can't modify once created — need new IDs for IMPORTANCE_MAX)
+            listOf("onesignal_default_channel","general_notifications_v4","chat_messages_v4","payments_notifications_v4","general_notifications_v5","chat_messages_v5","payments_notifications_v5","system_alerts_v5","ride_notifications_v5").forEach {
                 try { manager.deleteNotificationChannel(it) } catch (_: Exception) {}
             }
             // Recreate OneSignal default channel with MAX importance for instant display
@@ -114,7 +120,7 @@ class MainActivity : FlutterActivity() {
             )
             val channels = listOf(
                 NotificationChannel(
-                    "general_notifications_v5",
+                    "general_notifications_v6",
                     "Soko Vibe",
                     NotificationManager.IMPORTANCE_MAX
                 ).apply {
@@ -128,7 +134,7 @@ class MainActivity : FlutterActivity() {
                     )
                 },
                 NotificationChannel(
-                    "payments_notifications_v5",
+                    "payments_notifications_v6",
                     "Payments",
                     NotificationManager.IMPORTANCE_MAX
                 ).apply {
@@ -142,11 +148,39 @@ class MainActivity : FlutterActivity() {
                     )
                 },
                 NotificationChannel(
-                    "chat_messages_v5",
+                    "chat_messages_v6",
                     "Chat Messages",
                     NotificationManager.IMPORTANCE_MAX
                 ).apply {
                     description = "New message notifications from chats"
+                    enableVibration(true)
+                    enableLights(true)
+                    setShowBadge(true)
+                    setSound(
+                        android.net.Uri.parse("android.resource://$packageName/${R.raw.soko_notification}"),
+                        android.app.Notification.AUDIO_ATTRIBUTES_DEFAULT
+                    )
+                },
+                NotificationChannel(
+                    "system_alerts_v6",
+                    "System Alerts",
+                    NotificationManager.IMPORTANCE_MAX
+                ).apply {
+                    description = "Account security, suspension, verification alerts"
+                    enableVibration(true)
+                    enableLights(true)
+                    setShowBadge(true)
+                    setSound(
+                        android.net.Uri.parse("android.resource://$packageName/${R.raw.soko_notification}"),
+                        android.app.Notification.AUDIO_ATTRIBUTES_DEFAULT
+                    )
+                },
+                NotificationChannel(
+                    "ride_notifications_v6",
+                    "Ride Updates",
+                    NotificationManager.IMPORTANCE_MAX
+                ).apply {
+                    description = "Ride requests, cancellations, trip updates"
                     enableVibration(true)
                     enableLights(true)
                     setShowBadge(true)
