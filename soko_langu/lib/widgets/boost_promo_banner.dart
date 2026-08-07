@@ -97,7 +97,7 @@ class BoostPromoBanner extends StatelessWidget {
       onTap: () => _startBoost(context),
       child: Container(
         margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-        height: 150,
+        height: 180,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           gradient: LinearGradient(

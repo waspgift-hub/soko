@@ -8,7 +8,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 import '../../extensions/context_tr.dart';
 import '../../models/transaction_model.dart';
 import '../../services/api_config.dart';
@@ -16,6 +15,7 @@ import '../../services/sms_notification_service.dart';
 import '../../services/clickpesa_service.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/order_status_config.dart';
 import '../chat/chat_navigation.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/soko_vibe_loading.dart';
@@ -50,13 +50,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   StreamSubscription? _txSub;
 
   // Payment state (used when status is "quoted")
-  double _walletBalance = 0;
-  bool _walletLoading = true;
-  bool _walletInitiated = false;
   bool _paying = false;
-  String _selectedMethod = 'wallet';
-  List<Map<String, dynamic>> _methods = [];
-  bool _methodsLoading = true;
   double _gatewayFee = 0;
 
   @override
@@ -75,9 +69,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       if (mounted) setState(() => _isLoading = false);
     });
     if (status == 'quoted') {
-      _walletInitiated = true;
-      _loadWalletBalance();
-      _loadPaymentMethods();
+      _fetchGatewayFee();
     }
   }
 
@@ -104,14 +96,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     });
   }
 
-  /// Loads wallet balance and payment methods when the order becomes 'quoted'
-  /// while this screen is already open (e.g. the seller quotes while the buyer
+  /// Fetches the ClickPesa gateway fee when the order becomes 'quoted' while
+  /// this screen is already open (e.g. the seller quotes while the buyer
   /// watches the order).
   void _maybeInitQuotedPayment() {
-    if (status == 'quoted' && !_walletInitiated) {
-      _walletInitiated = true;
-      _loadWalletBalance();
-      _loadPaymentMethods();
+    if (status == 'quoted') {
+      _fetchGatewayFee();
     }
   }
 
@@ -189,63 +179,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     }
   }
 
-  Color _statusColor(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    switch (status) {
-      case 'completed':
-      case 'delivered':
-      case 'delivery_confirmed':
-        return cs.successGreen;
-      case 'paid_escrow_hold':
-      case 'escrow_hold':
-        return Colors.purple;
-      case 'dispatched':
-        return Colors.orange;
-      case 'quoted':
-        return Colors.teal;
-      case 'paid':
-        return Colors.indigo;
-      case 'confirmed':
-        return Colors.blueGrey;
-      case 'failed':
-      case 'cancelled':
-      case 'refunded':
-        return cs.error;
-      default:
-        return cs.primary;
-    }
-  }
-
-  String _statusLabel(BuildContext context) {
-    switch (status) {
-      case 'paid_escrow_hold':
-      case 'escrow_hold':
-        return context.tr('secured_in_escrow');
-      case 'dispatched':
-        return context.tr('dispatched_label');
-      case 'delivered':
-      case 'delivery_confirmed':
-      case 'completed':
-        return context.tr('delivered_and_completed');
-      case 'quoted':
-        return 'Nukuu Imetolewa';
-      case 'awaiting_shipping_quote':
-        return context.tr('awaiting_shipping_quote_label');
-      case 'paid':
-        return 'Imelipwa';
-      case 'confirmed':
-        return 'Imethibitishwa';
-      case 'failed':
-        return context.tr('failed');
-      case 'refunded':
-        return context.tr('refunded');
-      case 'cancelled':
-        return context.tr('cancelled');
-      default:
-        return context.tr('pending');
-    }
-  }
-
   String _formatCountdown(Duration d) {
     if (d.isNegative || d == Duration.zero) return '\u2014';
     final days = d.inDays;
@@ -275,11 +208,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                   children: [
                     _buildHeroSection(context, cs),
                     const SizedBox(height: 16),
+                    _buildStatusBanner(context, cs),
+                    const SizedBox(height: 16),
                     _buildTimeline(context, cs),
                     const SizedBox(height: 16),
                     _buildOrderTable(context, cs),
-                    const SizedBox(height: 16),
-                    _buildQrCode(context, cs),
                     const SizedBox(height: 12),
                     if (d['deliveryAddress'] != null ||
                         d['dispatchProof'] != null ||
@@ -418,7 +351,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
               ),
             ),
           ),
-          Positioned(top: 12, right: 12, child: _statusPill(context, cs)),
           Positioned(
             bottom: 16,
             left: 16,
@@ -497,52 +429,37 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     );
   }
 
-  Widget _statusPill(BuildContext context, ColorScheme cs) {
-    final color = _statusColor(context);
-    return AnimatedBuilder(
-      animation: _pulseAnim,
-      builder: (context, _) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.9),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: color.withValues(alpha: _pulseAnim.value * 0.4),
-              blurRadius: 12,
-              spreadRadius: 1,
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 6,
-              height: 6,
+  Widget _buildStatusBanner(BuildContext context, ColorScheme cs) {
+    final showCountdown = _remaining != null &&
+        !_remaining!.isNegative &&
+        _remaining!.inSeconds > 0;
+    return OrderStatusBanner(
+      status: status,
+      subtitle: context.tr('order_status_hint', 'Hali ya agizo lako inaonekana hapa'),
+      trailing: showCountdown
+          ? Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.white.withValues(alpha: 0.6),
-                    blurRadius: 4,
+                color: Colors.orange.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.timer_outlined, size: 12, color: Colors.orange),
+                  const SizedBox(width: 4),
+                  Text(
+                    _formatCountdown(_remaining!),
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.orange,
+                    ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              _statusLabel(context),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
-            ),
-          ],
-        ),
-      ),
+            )
+          : null,
     );
   }
 
@@ -1014,130 +931,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     );
   }
 
-  Widget _buildQrCode(BuildContext context, ColorScheme cs) {
-    final nf = NumberFormat('#,###', 'en');
-    final productName = d['productName'] as String? ?? '';
-    final price = (d['productPrice'] ?? 0).toDouble();
-    final totalAmount = (d['totalAmount'] as num?)?.toDouble() ?? price;
-    final processingFee = (d['processingFee'] as num?)?.toDouble() ?? 0;
-    final platformFee = (d['platformFee'] as num?)?.toDouble() ??
-        (d['sokoLanguCommission'] as num?)?.toDouble() ?? 0;
-    final sellerReceives = (d['sellerReceives'] as num?)?.toDouble() ?? 0;
-    final shippingCost = (d['shippingCost'] as num?)?.toDouble();
-    final sellerName = d['sellerName'] as String? ?? '';
-    final buyerName = d['buyerName'] as String? ?? '';
-    final buyerPhone = d['buyerPhone'] as String? ?? '';
-    final createdAt = d['createdAt'];
-    final ts = createdAt is Timestamp ? createdAt.toDate() : DateTime.now();
-    final dateStr = '${ts.day}/${ts.month}/${ts.year} ${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}';
-    final addr = d['deliveryAddress'] as Map<String, dynamic>?;
-    final addrStr = addr != null
-        ? '\nAnwani: ${addr['region']}, ${addr['district']}, ${addr['street']}${addr['landmarks'] != null ? ' (${addr['landmarks']})' : ''}'
-        : '';
-
-    final steps = [
-      context.tr('order_placed_step'),
-      context.tr('payment_confirmed_step'),
-      context.tr('seller_processes_step'),
-      context.tr('dispatched_step'),
-      context.tr('delivered_step'),
-      context.tr('completed_step'),
-    ];
-    final statusOrder = {'pending': 0, 'paid_escrow_hold': 1, 'escrow_hold': 1, 'dispatched': 2, 'delivered': 3, 'delivery_confirmed': 4, 'completed': 5};
-    final currentStep = statusOrder[status] ?? 0;
-    final stepsStr = steps.asMap().entries
-        .where((e) => e.key <= currentStep || (e.key == currentStep))
-        .map((e) => '${e.key + 1}. ${e.value}')
-        .join('\n');
-
-    final qrData = '''
-══════════════ SOKO VIBE ══════════════
-            RISITI YA UNUNUZI
-
-Agizo #${widget.docId}
-Tarehe: $dateStr
-
-BIDHAA: $productName
-
-MNUNUZI: $buyerName
-Simu: $buyerPhone
-
-MUUZAJI: $sellerName$addrStr
-
-MALIPO:
-  Bei: TSh ${nf.format(price.toInt())}${shippingCost != null && shippingCost > 0 ? '\n  Nauli: TSh ${nf.format(shippingCost.toInt())}' : ''}${platformFee > 0 ? '\n  Commission: TSh ${nf.format(platformFee.toInt())}' : ''}
-  Ada: TSh ${nf.format(processingFee.toInt())}
-  Jumla: TSh ${nf.format(totalAmount.toInt())}
-  Muuzaji anapata: TSh ${nf.format(sellerReceives.toInt())}
-
-HALI: ${_statusLabel(context)}
-
-HATUA:
-$stepsStr
-══════════════════════════════════════
-''';
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cs.surface.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.08)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Icon(Icons.qr_code_scanner_rounded, size: 16, color: cs.primary),
-              const SizedBox(width: 8),
-              Text(
-                context.tr('scan_to_verify'),
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                  color: cs.onSurface,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Center(
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: cs.outlineVariant.withValues(alpha: 0.2),
-                ),
-              ),
-              child: QrImageView(
-                data: qrData,
-                version: QrVersions.auto,
-                size: 120,
-                eyeStyle: QrEyeStyle(
-                  eyeShape: QrEyeShape.square,
-                  color: cs.primary,
-                ),
-                dataModuleStyle: QrDataModuleStyle(
-                  dataModuleShape: QrDataModuleShape.square,
-                  color: cs.onSurface,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildExpandableDetails(BuildContext context, ColorScheme cs) {
     final address = d['deliveryAddress'] as Map<String, dynamic>?;
     final dispatch = d['dispatchProof'] as Map<String, dynamic>?;
@@ -1468,7 +1261,7 @@ $stepsStr
             ],
             const SizedBox(height: 6),
             _feeRow2(cs, 'Commission (3.5%)', 'TZS ${_nf(platformFee.toInt())}', cs.onSurfaceVariant),
-            if (_selectedMethod != 'wallet' && _gatewayFee > 0) ...[
+            if (_gatewayFee > 0) ...[
               const SizedBox(height: 6),
               _feeRow2(cs, 'Ada ya malipo', 'TZS ${_nf(_gatewayFee.toInt())}', cs.secondary),
             ],
@@ -1478,83 +1271,13 @@ $stepsStr
             _feeRow2(cs, 'Jumla', 'TZS ${_nf(total.toInt())}', cs.primary, bold: true),
             const SizedBox(height: 16),
 
-            // Wallet balance
-            if (_walletLoading)
-              const Center(child: Padding(padding: EdgeInsets.all(8), child: SokoVibeThreeDotLoader(size: 28, dotSize: 6)))
-            else ...[
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: cs.surface.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.account_balance_wallet, color: _walletSufficient ? Colors.green : cs.error, size: 22),
-                    const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Salio la pochi', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-                        Text('TZS ${_nf(_walletBalance.toInt())}',
-                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: _walletSufficient ? Colors.green : cs.error)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-
-            // Payment method selector (show non-wallet if insufficient)
-            if (_walletLoading == false && !_walletSufficient) ...[
-              Text('Njia ya malipo', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: cs.onSurface)),
-              const SizedBox(height: 8),
-              if (_methodsLoading)
-                const Center(child: Padding(padding: EdgeInsets.all(8), child: SokoVibeThreeDotLoader(size: 28, dotSize: 6)))
-              else
-                ...(_methods.where((m) => m['id'] != 'wallet').map((m) {
-                  final id = m['id'] as String? ?? '';
-                  final name = m['name'] as String? ?? id;
-                  final selected = _selectedMethod == id;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: () {
-                        setState(() => _selectedMethod = id);
-                        _fetchGatewayFee();
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: selected ? cs.primary : Colors.transparent, width: 1.5),
-                          color: selected ? cs.primary.withValues(alpha: 0.06) : Colors.transparent,
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(_methodIcon(id), color: selected ? cs.primary : cs.onSurfaceVariant, size: 24),
-                            const SizedBox(width: 10),
-                            Expanded(child: Text(name, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: selected ? cs.primary : cs.onSurface))),
-                            Text(selected ? '✓' : '', style: TextStyle(color: cs.primary, fontWeight: FontWeight.w700, fontSize: 16)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                })),
-              const SizedBox(height: 12),
-            ],
-
             SizedBox(
               width: double.infinity,
               height: 50,
               child: ElevatedButton.icon(
                 onPressed: _paying ? null : _payQuotedOrder,
                 icon: _paying
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? SokoVibeThreeDotLoader(size: 20, dotSize: 5, color: cs.surface)
                     : const Icon(Icons.payment, size: 20),
                 label: Text(
                   _paying ? 'Inachakata...' : 'Lipa TZS ${_nf(total.toInt())}',
@@ -1986,51 +1709,13 @@ $stepsStr
 
   // ─── Payment helpers for quoted state ───
 
-  Future<void> _loadWalletBalance() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) { setState(() => _walletLoading = false); return; }
-    try {
-      final resp = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/wallet/balance/${user.uid}'),
-      );
-      if (resp.statusCode == 200) {
-        final data = jsonDecode(resp.body) as Map<String, dynamic>;
-        _walletBalance = (data['balance'] as num?)?.toDouble() ?? 0;
-      }
-    } catch (_) {}
-    if (mounted) setState(() => _walletLoading = false);
-  }
-
-  Future<void> _loadPaymentMethods() async {
-    try {
-      final resp = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/payment-methods'),
-      );
-      if (resp.statusCode == 200) {
-        final data = jsonDecode(resp.body) as Map<String, dynamic>;
-        _methods = (data['methods'] as List?)
-            ?.map((e) => e as Map<String, dynamic>)
-            .toList() ?? [];
-        if (_methods.isNotEmpty && _methods.any((m) => m['id'] == _selectedMethod) == false) {
-          _selectedMethod = _methods.first['id'] as String? ?? 'ussd_push';
-        }
-      }
-    } catch (_) {}
-    setState(() => _methodsLoading = false);
-    _fetchGatewayFee();
-  }
-
   Future<void> _fetchGatewayFee() async {
-    if (_selectedMethod == 'wallet') {
-      if (mounted) setState(() => _gatewayFee = 0);
-      return;
-    }
     try {
       final price = (d['productPrice'] ?? 0).toDouble();
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/gateway-fee'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'method': _selectedMethod, 'amount': price.round()}),
+        body: jsonEncode({'method': 'ussd_push', 'amount': price.round()}),
       );
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
@@ -2044,119 +1729,62 @@ $stepsStr
   double get _quotedProductPrice =>
       (d['productPrice'] ?? 0).toDouble();
   double get _quotedPlatformFee => _quotedProductPrice * 0.035;
-  double get _quotedTotal => _selectedMethod == 'wallet'
-      ? _quotedProductPrice + _quotedShippingCost + _quotedPlatformFee
-      : _quotedProductPrice + _quotedShippingCost + _quotedPlatformFee + _gatewayFee;
-  bool get _walletSufficient => _walletBalance >= _quotedTotal;
+  double get _quotedTotal =>
+      _quotedProductPrice + _quotedShippingCost + _quotedPlatformFee + _gatewayFee;
 
   Future<void> _payQuotedOrder() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     setState(() => _paying = true);
     try {
-      if (_selectedMethod == 'wallet') {
-        final resp = await http.post(
-          Uri.parse('${ApiConfig.baseUrl}/api/wallet/purchase'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'buyerId': user.uid,
-            'buyerName': user.displayName ?? '',
-            'productId': d['productId'] ?? '',
-            'productName': d['productName'] ?? '',
-            'productImage': d['productImage'] ?? '',
-            'productPrice': _quotedProductPrice,
-            'sellerId': d['sellerId'] ?? '',
-            'sellerName': d['sellerName'] ?? '',
-            'shippingCost': _quotedShippingCost,
-            'serviceFeePercent': 3.5,
-            'totalAmount': _quotedTotal,
-            'region': _addrField('region'),
-            'district': _addrField('district'),
-            'street': _addrField('street'),
-            'landmarks': _addrField('landmarks'),
-            'deliveryType': (d['deliveryType'] as String?) ?? 'local',
-            'paymentMethod': 'wallet',
-            'orderId': widget.docId,
-          }),
+      final phone = user.phoneNumber ?? '';
+      final phoneDigits = phone.replaceAll(RegExp(r'\D'), '');
+      final normalizedPhone = phoneDigits.startsWith('0')
+          ? '255${phoneDigits.substring(1)}'
+          : phoneDigits.startsWith('255')
+              ? phoneDigits
+              : '255$phoneDigits';
+
+      final result = await ClickPesaService.initiateMarketplacePayment(
+        productPrice: _quotedProductPrice,
+        productName: d['productName'] ?? '',
+        productId: d['productId'] ?? '',
+        sellerId: d['sellerId'] ?? '',
+        sellerName: d['sellerName'] ?? '',
+        email: user.email ?? '',
+        phone: normalizedPhone,
+        buyerId: user.uid,
+        buyerName: user.displayName ?? '',
+        deliveryType: (d['deliveryType'] as String?) ?? 'local',
+        paymentMethod: 'ussd_push',
+        existingTransactionId: widget.docId,
+      );
+
+      if (result == null || result['order_id'] == null) {
+        final errMsg = result?['error'] as String? ?? 'Payment initiation failed';
+        if (mounted) _showError(errMsg);
+        setState(() => _paying = false);
+        return;
+      }
+
+      // Transition order to paid
+      await _transitionOrder('paid');
+
+      if (mounted) {
+        setState(() => _paying = false);
+        RealtimePaymentBanner.show(
+          context: context,
+          orderId: result['order_id'] as String? ?? '',
+          successStatuses: ['escrow_hold', 'paid_escrow_held'],
+          processingTitle: context.tr('processing_payment'),
+          processingSubtitle: context.tr('check_phone_enter_pin'),
+          successTitle: context.tr('payment_successful'),
+          failedTitle: context.tr('payment_failed'),
+          onSuccess: () {},
+          onError: (msg) {
+            if (mounted) PaymentResult.show(context: context, success: false, errorMessage: msg);
+          },
         );
-        final data = jsonDecode(resp.body) as Map<String, dynamic>;
-        if (resp.statusCode != 200 || data['success'] != true) {
-          if (mounted) _showError(data['error'] ?? 'Payment failed');
-          setState(() => _paying = false);
-          return;
-        }
-        // Transition order to paid
-        await _transitionOrder('paid');
-        if (mounted) {
-          setState(() => _paying = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(context.tr('payment_successful')), behavior: SnackBarBehavior.floating),
-          );
-        }
-      } else {
-        final phone = user.phoneNumber ?? '';
-        final phoneDigits = phone.replaceAll(RegExp(r'\D'), '');
-        final normalizedPhone = phoneDigits.startsWith('0')
-            ? '255${phoneDigits.substring(1)}'
-            : phoneDigits.startsWith('255')
-                ? phoneDigits
-                : '255$phoneDigits';
-
-        final result = await ClickPesaService.initiateMarketplacePayment(
-          productPrice: _quotedProductPrice,
-          productName: d['productName'] ?? '',
-          productId: d['productId'] ?? '',
-          sellerId: d['sellerId'] ?? '',
-          sellerName: d['sellerName'] ?? '',
-          email: user.email ?? '',
-          phone: normalizedPhone,
-          buyerId: user.uid,
-          buyerName: user.displayName ?? '',
-          deliveryType: (d['deliveryType'] as String?) ?? 'local',
-          paymentMethod: _selectedMethod,
-          existingTransactionId: widget.docId,
-        );
-
-        if (result == null || (result['order_id'] == null && result['billPayNumber'] == null)) {
-          final errMsg = result?['error'] as String? ?? 'Payment initiation failed';
-          if (mounted) _showError(errMsg);
-          setState(() => _paying = false);
-          return;
-        }
-
-        // Transition order to paid
-        await _transitionOrder('paid');
-
-        if (mounted) {
-          setState(() => _paying = false);
-          final isBillPay = _selectedMethod == 'billpay';
-          if (isBillPay) {
-            final billPayNumber = result['billPayNumber'] as String? ?? '';
-            if (billPayNumber.isNotEmpty) {
-              PaymentBanner.show(
-                context: context,
-                type: PaymentBannerType.success,
-                title: 'Namba ya BillPay',
-                subtitle: 'Namba: $billPayNumber | Kiasi: TZS ${_quotedTotal.toInt()}',
-                duration: const Duration(seconds: 8),
-              );
-            }
-          } else {
-            RealtimePaymentBanner.show(
-              context: context,
-              orderId: result['order_id'] as String? ?? '',
-              successStatuses: ['escrow_hold', 'paid_escrow_held'],
-              processingTitle: context.tr('processing_payment'),
-              processingSubtitle: context.tr('check_phone_enter_pin'),
-              successTitle: context.tr('payment_successful'),
-              failedTitle: context.tr('payment_failed'),
-              onSuccess: () {},
-              onError: (msg) {
-                if (mounted) PaymentResult.show(context: context, success: false, errorMessage: msg);
-              },
-            );
-          }
-        }
       }
     } catch (e) {
       if (mounted) _showError(translateError(e));
@@ -2178,21 +1806,6 @@ $stepsStr
         body: jsonEncode({'orderId': widget.docId, 'newStatus': newStatus}),
       );
     } catch (_) {}
-  }
-
-  String _addrField(String key) {
-    final addr = d['deliveryAddress'] as Map<String, dynamic>?;
-    if (addr != null) return addr[key] as String? ?? '';
-    return d[key] as String? ?? '';
-  }
-
-  IconData _methodIcon(String id) {
-    switch (id) {
-      case 'wallet': return Icons.account_balance_wallet;
-      case 'ussd_push': return Icons.phone_android;
-      case 'billpay': return Icons.receipt_long;
-      default: return Icons.payment;
-    }
   }
 
   void _showError(String msg) {

@@ -10,6 +10,7 @@ import '../../services/flash_sale_service.dart';
 import '../../models/flash_sale_model.dart';
 import '../../widgets/product_card.dart';
 import '../../app/routes.dart';
+import '../../theme/app_dimens.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/ad_banner.dart';
 import '../../utils/responsive.dart';
@@ -197,11 +198,11 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen>
 
         final products = snapshot.data!;
         return GridView.builder(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(AppInsets.md),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: Responsive.gridColumns(context),
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
+            crossAxisSpacing: AppInsets.md,
+            mainAxisSpacing: AppInsets.md,
             childAspectRatio: Responsive.cardAspectRatio(context),
           ),
           itemCount: products.length,

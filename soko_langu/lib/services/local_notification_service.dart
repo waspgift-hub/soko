@@ -13,6 +13,19 @@ class LocalNotificationService {
   /// Routes local heads-up taps to the same handlers OneSignal uses.
   static void Function(Map<String, dynamic> data)? onTap;
 
+  static int _idCounter = 0;
+
+  /// Returns a monotonic notification id seeded from the clock so IDs never
+  /// collide within a session and rarely collide across restarts, unlike the
+  /// old `millisecondsSinceEpoch % 2^31` scheme which could reuse an id for a
+  /// still-active notification and silently replace it.
+  static int nextNotificationId() {
+    if (_idCounter == 0) {
+      _idCounter = DateTime.now().millisecondsSinceEpoch % 100000000;
+    }
+    return ++_idCounter;
+  }
+
   Future<void> initialize() async {
     if (_initialized) return;
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -55,7 +68,7 @@ class LocalNotificationService {
         AndroidFlutterLocalNotificationsPlugin>();
     if (android == null) return;
     await android.createNotificationChannel(const AndroidNotificationChannel(
-      'general_notifications_v5',
+      'general_notifications_v6',
       'Soko Vibe',
       description: 'Flash sale, announcements, alerts, ride notifications',
       importance: Importance.max,
@@ -63,7 +76,7 @@ class LocalNotificationService {
       playSound: true,
     ));
     await android.createNotificationChannel(const AndroidNotificationChannel(
-      'payments_notifications_v5',
+      'payments_notifications_v6',
       'Payments',
       description: 'Malipo, escrow, payout, refund, KYC updates',
       importance: Importance.max,
@@ -71,7 +84,7 @@ class LocalNotificationService {
       playSound: true,
     ));
     await android.createNotificationChannel(const AndroidNotificationChannel(
-      'chat_messages_v5',
+      'chat_messages_v6',
       'Chat Messages',
       description: 'New message notifications from chats',
       importance: Importance.max,
@@ -79,7 +92,7 @@ class LocalNotificationService {
       playSound: true,
     ));
     await android.createNotificationChannel(const AndroidNotificationChannel(
-      'ride_notifications_v5',
+      'ride_notifications_v6',
       'Ride Updates',
       description: 'Ride requests, cancellations, trip updates',
       importance: Importance.max,
@@ -87,7 +100,7 @@ class LocalNotificationService {
       playSound: true,
     ));
     await android.createNotificationChannel(const AndroidNotificationChannel(
-      'system_alerts_v5',
+      'system_alerts_v6',
       'System Alerts',
       description: 'Account security, suspension, verification alerts',
       importance: Importance.max,
@@ -100,7 +113,7 @@ class LocalNotificationService {
     required int id,
     required String title,
     required String body,
-    String channelId = 'general_notifications_v5',
+    String channelId = 'general_notifications_v6',
     String? payload,
     List<AndroidNotificationAction> actions = const [],
   }) async {
@@ -132,13 +145,13 @@ class LocalNotificationService {
 
   String _channelName(String channelId) {
     switch (channelId) {
-      case 'chat_messages_v5':
+      case 'chat_messages_v6':
         return 'Chat Messages';
-      case 'payments_notifications_v5':
+      case 'payments_notifications_v6':
         return 'Payments';
-      case 'ride_notifications_v5':
+      case 'ride_notifications_v6':
         return 'Ride Updates';
-      case 'system_alerts_v5':
+      case 'system_alerts_v6':
         return 'System Alerts';
       default:
         return 'Soko Vibe';

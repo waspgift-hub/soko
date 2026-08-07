@@ -1,12 +1,19 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'localizations/de_translations.dart';
+import 'localizations/fr_translations.dart';
+import 'localizations/zh_translations.dart';
+
 class LocalizationService {
   static const String _languageKey = 'language_code';
   static const String _currencyKey = 'currency';
 
   static const Map<String, String> supportedLanguages = {
+    'sw': 'Kiswahili',
     'en': 'English',
-    'sw': 'Swahili',
+    'fr': 'Français',
+    'zh': '中文',
+    'de': 'Deutsch',
   };
 
   static const Map<String, Map<String, String>> supportedCurrencies = {
@@ -21,7 +28,7 @@ class LocalizationService {
     'CNY': {'symbol': '¥', 'name': 'Chinese Yuan'},
   };
 
-  static const Map<String, Map<String, String>> translations = {
+  static final Map<String, Map<String, String>> translations = {
     'sw': {
 
       'app_name': 'Soko Vibe',
@@ -43,6 +50,7 @@ class LocalizationService {
       'quantity': 'Idadi',
       'total': 'Jumla',
       'products': 'Bidhaa',
+      'product': 'Bidhaa',
       'no_products': 'Hakuna bidhaa bado',
       'find_products_people': 'Tafuta bidhaa na watu Tanzania nzima',
       'no_categories': 'Hakuna kategoria bado',
@@ -56,6 +64,7 @@ class LocalizationService {
       'stock': 'Hifadhi',
       'wholesale': 'Jumla',
       'seller': 'Muuzaji',
+      'user': 'Mtumiaji',
       'view_store': 'Tazama Duka',
       'chat': 'Zungumza',
       'reviews': 'Maoni',
@@ -90,6 +99,11 @@ class LocalizationService {
       'processing': 'Inachakatwa',
       'shipped': 'Imesafirishwa',
       'delivered': 'Imefikishwa',
+      'awaiting_payment': 'Inasubiri Malipo',
+      'waiting_quote': 'Inasubiri Nukuu ya Usafirishaji',
+      'quoted': 'Nukuu Imetolewa',
+      'paid': 'Imelipwa',
+      'failed': 'Imeshindwa',
       'cancelled': 'Imeghairiwa',
       'edit_profile': 'Hariri Wasifu',
       'display_name': 'Jina la Kuonyesha',
@@ -1019,6 +1033,7 @@ class LocalizationService {
       'mongike_fee_label': 'Ada ya Kuchakata',
       'fee_per_transaction': 'Ada ya kuchakata kwa kila ununuzi',
       'order_status': 'Hali ya Oda',
+      'order_status_hint': 'Fuata maendeleo ya agizo lako hapa',
       'awaiting_shipping_quote_label': 'Inasuburi Gharama ya Usafirishaji',
       'awaiting_payment_label': 'Inasuburi Malipo',
       'paid_escrow_label': 'Imelipwa - Escrow',
@@ -1028,6 +1043,7 @@ class LocalizationService {
       'shipping_cost_set': 'Gharama ya Usafirishaji Imewekwa!',
       'shipping_cost_set_body': 'Muuzaji ameweka gharama ya usafirishaji TZS {0}. Lipa sasa.',
       'shipping_cost_submitted': 'Gharama ya usafirishaji imetumwa kwa mnunuzi',
+      'quote_sync_warning': 'Taarifa ya quote haikufika kwa mnunuzi. Angalia muunganisho na ujaribu tena.',
       'shipping_quote': 'Gharama ya Usafirishaji',
       'no_shipping_requests': 'Hakuna ombi la gharama ya usafirishaji',
       'mark_shipped': 'Safirisha Bidhaa',
@@ -1230,10 +1246,20 @@ class LocalizationService {
       'results': 'Matokeo',
       'notification_preferences': 'Mapendeleo ya Arifa',
       'notification_general': 'Maelezo ya Jumla',
+      'notification_master_hint': 'Zima ili kusitisha arifa zote. Vituo mahususi vinatumika wakati umeanzishwa.',
       'notification_payments': 'Malipo',
       'notification_chat': 'Ujumbe',
       'notification_orders': 'Agizo',
       'notification_rides': 'Usafiri',
+      'notification_marketing': 'Masoko',
+      'push_notifications_title': 'Arifa za Push',
+      'sms_notifications': 'Arifa za SMS',
+      'sms_for_payments': 'SMS kwa malipo',
+      'no_notification_prefs': 'Hakuna mapendeleo ya arifa',
+      'district_notifications': 'Bidhaa Mpya katika Eneo Lako',
+      'district_notifications_hint': 'Pokea arifa kuhusu bidhaa mpya zinazowekwa katika wilaya ulizochagua.',
+      'select_districts': 'Chagua wilaya',
+      'no_districts_selected': 'Hakuna wilaya zilizochaguliwa bado',
       'drivers': 'Madereva',
 
       'seller_location': 'Duka lipo',
@@ -1276,6 +1302,14 @@ class LocalizationService {
       'revoke': 'Batilisha',
       'delete_permanently': 'Futa Kabisa',
       'kyc_details': 'Maelezo ya KYC',
+      'kyc_documents': 'Nyaraka za KYC',
+      'kyc_review_complete': 'Uthibitisho wa KYC umekamilika',
+      'documents': 'Nyaraka',
+      'id_document': 'Kitambulisho',
+      'selfie': 'Selfie',
+      'no_documents': 'Hakuna nyaraka zilizotumwa',
+      'tap_to_zoom': 'Gusa kuangalia kubwa',
+      'account_information': 'Taarifa za Akaunti',
       'title_is_required': 'Kichwa kinahitajika',
       'confirm_broadcast': 'Thibitisha Matangazo',
       'broadcast_notification': 'Tangazo kwa Wote',
@@ -1515,6 +1549,7 @@ class LocalizationService {
       'stock': 'Stock',
       'wholesale': 'Wholesale',
       'seller': 'Seller',
+      'user': 'User',
       'view_store': 'View Store',
       'chat': 'Chat',
       'reviews': 'Reviews',
@@ -1549,6 +1584,10 @@ class LocalizationService {
       'processing': 'Processing',
       'shipped': 'Shipped',
       'delivered': 'Delivered',
+      'awaiting_payment': 'Awaiting Payment',
+      'waiting_quote': 'Waiting Shipping Quote',
+      'quoted': 'Quote Provided',
+      'failed': 'Failed',
       'cancelled': 'Cancelled',
       'edit_profile': 'Edit Profile',
       'display_name': 'Display Name',
@@ -1793,6 +1832,7 @@ class LocalizationService {
       'voice_label': 'Voice',
       'photo_updated': 'Profile photo updated!',
       'products': 'Products',
+      'product': 'Product',
       'followers': 'Followers',
       'following': 'Following',
       'follow': 'Follow',
@@ -2736,6 +2776,7 @@ class LocalizationService {
       'mongike_fee_label': 'Processing Fee',
       'fee_per_transaction': 'Processing fee per transaction',
       'order_status': 'Order Status',
+      'order_status_hint': 'Track the progress of your order here',
       'awaiting_shipping_quote_label': 'Awaiting Shipping Quote',
       'awaiting_payment_label': 'Awaiting Payment',
       'paid_escrow_label': 'Paid - Escrow',
@@ -2745,6 +2786,7 @@ class LocalizationService {
       'shipping_cost_set': 'Shipping Cost Set!',
       'shipping_cost_set_body': 'Seller has set shipping cost TZS {0}. Pay now.',
       'shipping_cost_submitted': 'Shipping cost sent to buyer',
+      'quote_sync_warning': 'Quote notification did not reach the buyer. Check your connection and try again.',
       'shipping_quote': 'Shipping Quote',
       'no_shipping_requests': 'No shipping cost requests',
       'mark_shipped': 'Mark Shipped',
@@ -2890,10 +2932,20 @@ class LocalizationService {
       'results': 'Results',
       'notification_preferences': 'Notification Preferences',
       'notification_general': 'General',
+      'notification_master_hint': 'Turn off to pause all notifications. Individual channels take effect while on.',
       'notification_payments': 'Payments',
       'notification_chat': 'Chat',
       'notification_orders': 'Orders',
       'notification_rides': 'Rides',
+      'notification_marketing': 'Marketing',
+      'push_notifications_title': 'Push Notifications',
+      'sms_notifications': 'SMS Notifications',
+      'sms_for_payments': 'SMS for payments',
+      'no_notification_prefs': 'No notification preferences available',
+      'district_notifications': 'New Products in Your Area',
+      'district_notifications_hint': 'Get notified when sellers list new products in the districts you choose.',
+      'select_districts': 'Select districts',
+      'no_districts_selected': 'No districts selected yet',
       'drivers': 'Drivers',
 
       'seller_location': 'Seller Location',
@@ -2936,6 +2988,14 @@ class LocalizationService {
       'revoke': 'Revoke',
       'delete_permanently': 'Delete Permanently',
       'kyc_details': 'KYC Details',
+      'kyc_documents': 'KYC Documents',
+      'kyc_review_complete': 'KYC review complete',
+      'documents': 'Documents',
+      'id_document': 'ID Document',
+      'selfie': 'Selfie',
+      'no_documents': 'No documents submitted',
+      'tap_to_zoom': 'Tap to zoom',
+      'account_information': 'Account Information',
       'title_is_required': 'Title is required',
       'confirm_broadcast': 'Confirm Broadcast',
       'broadcast_notification': 'Broadcast Notification',
@@ -3135,6 +3195,9 @@ class LocalizationService {
       'clickpesa_phone': 'Phone',
       'pp_footer': '© 2026 Soko Vibe Limited. All rights reserved.',
     },
+    ...frTranslations,
+    ...zhTranslations,
+    ...deTranslations,
   };
 
 

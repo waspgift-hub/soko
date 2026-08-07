@@ -1,9 +1,7 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
@@ -22,7 +20,6 @@ import '../../widgets/glass_container.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/premium_background.dart'; // ignore: unused_import
-import '../../widgets/soko_vibe_loading.dart';
 import '../../utils/network_error.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -38,8 +35,6 @@ class ProductBoostScreen extends StatefulWidget {
 class _ProductBoostScreenState extends State<ProductBoostScreen> {
   BoostTier? _selectedTier;
   bool _processing = false;
-  String _selectedMethod = 'ussd_push';
-  List<Map<String, dynamic>> _methods = [];
   int _gatewayFee = 0;
 
   final _nf = NumberFormat('#,###', 'en');
@@ -47,22 +42,6 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
   @override
   void initState() {
     super.initState();
-    _loadMethods();
-  }
-
-  Future<void> _loadMethods() async {
-    try {
-      final resp = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/payment-methods'),
-      );
-      if (resp.statusCode == 200) {
-        final data = jsonDecode(resp.body) as Map<String, dynamic>;
-        final methods = (data['methods'] as List?)
-            ?.map((e) => e as Map<String, dynamic>)
-            .toList() ?? [];
-        if (mounted) setState(() => _methods = methods);
-      }
-    } catch (_) {}
     _fetchGatewayFee();
   }
 
@@ -73,7 +52,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/gateway-fee'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'method': _selectedMethod, 'amount': price}),
+        body: jsonEncode({'method': 'ussd_push', 'amount': price}),
       );
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
@@ -413,58 +392,6 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Payment Method Selector ──
-                  if (_methods.any((m) => m['id'] != 'wallet'))
-                    ..._methods.where((m) => m['id'] != 'wallet').map((m) {
-                      final id = m['id'] as String? ?? '';
-                      final name = m['name'] as String? ?? id;
-                      final selected = _selectedMethod == id;
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(10),
-                          onTap: () {
-                            setState(() => _selectedMethod = id);
-                            _fetchGatewayFee();
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: selected ? Theme.of(context).colorScheme.primary : Colors.transparent,
-                                width: 1.5,
-                              ),
-                              color: selected
-                                  ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.06)
-                                  : Colors.transparent,
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  id == 'ussd_push' ? Icons.phone_android : Icons.receipt_long,
-                                  size: 20,
-                                  color: selected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    name,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                                      color: selected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ),
-                                if (selected)
-                                  Icon(Icons.check_circle, size: 18, color: Theme.of(context).colorScheme.primary),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    }),
                   const SizedBox(height: 8),
                   Text(
                     context.tr('order_summary'),
@@ -620,10 +547,10 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
             ? widget.product.images.first
             : '',
         productPrice: widget.product.price.toInt(),
-        paymentMethod: _selectedMethod,
+        paymentMethod: 'ussd_push',
       );
 
-      if (result == null || (result['order_id'] == null && result['billPayNumber'] == null)) {
+      if (result == null || result['order_id'] == null) {
         final errMsg =
             result?['error'] as String? ??
             context.tr('payment_initiation_failed');
@@ -638,44 +565,37 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
         return;
       }
 
-      final isBillPay = _selectedMethod == 'billpay';
       final orderId = result['order_id'] as String?;
 
-      if (mounted) {
-        if (isBillPay) {
-          final billPayNumber = result['billPayNumber'] as String? ?? '';
-          final totalAmount = result['totalAmount'] as int? ?? 0;
-          _showBillPayWaitingSheet(orderId!, billPayNumber, totalAmount, _selectedTier!.displayName);
-        } else if (orderId != null) {
-          RealtimePaymentBanner.show(
-            context: context,
-            orderId: orderId,
-            successStatuses: ['completed'],
-            processingTitle: context.tr('processing_payment'),
-            processingSubtitle: context.tr('check_phone_enter_pin'),
-            successTitle: context.tr('payment_successful'),
-            failedTitle: context.tr('payment_failed'),
-            onSuccess: () {
-              if (mounted) {
-                PaymentBanner.show(
-                  context: context,
-                  type: PaymentBannerType.success,
-                  title: context.tr('payment_successful'),
-                );
-                _onPaymentSuccess();
-              }
-            },
-            onError: (msg) {
-              if (mounted) {
-                PaymentResult.show(
-                  context: context,
-                  success: false,
-                  errorMessage: msg,
-                );
-              }
-            },
-          );
-        }
+      if (mounted && orderId != null) {
+        RealtimePaymentBanner.show(
+          context: context,
+          orderId: orderId,
+          successStatuses: ['completed'],
+          processingTitle: context.tr('processing_payment'),
+          processingSubtitle: context.tr('check_phone_enter_pin'),
+          successTitle: context.tr('payment_successful'),
+          failedTitle: context.tr('payment_failed'),
+          onSuccess: () {
+            if (mounted) {
+              PaymentBanner.show(
+                context: context,
+                type: PaymentBannerType.success,
+                title: context.tr('payment_successful'),
+              );
+              _onPaymentSuccess();
+            }
+          },
+          onError: (msg) {
+            if (mounted) {
+              PaymentResult.show(
+                context: context,
+                success: false,
+                errorMessage: msg,
+              );
+            }
+          },
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -738,7 +658,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
               productId: widget.product.id,
               boostPackageName: _selectedTier!.displayName,
               amountPaid: _selectedTier!.priceTzs.toDouble(),
-              paymentMethod: _selectedMethod == 'ussd_push' ? 'USSD Push' : 'BillPay',
+              paymentMethod: 'USSD Push',
               timestamp: DateTime.now(),
               boostExpiryDate: expiry,
               paymentStatus: PaymentStatus.completed,
@@ -756,125 +676,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
         ],
       ),
     );
-  }
-
-  Future<void> _showBillPayWaitingSheet(String orderId, String billPayNumber, int totalAmount, String tierName) async {
-    final completer = Completer<void>();
-    StreamSubscription<DocumentSnapshot>? sub;
-
-    await showModalBottomSheet(
-      context: context,
-      isDismissible: false,
-      enableDrag: false,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return PopScope(
-          canPop: false,
-          onPopInvokedWithResult: (didPop, _) {
-            // ignore: dead_code
-            if (!didPop) sub?.cancel();
-          },
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
-            child: StreamBuilder<DocumentSnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('transactions')
-                  .doc(orderId)
-                  .snapshots(),
-              builder: (ctx, snap) {
-                final status = snap.data?.get('status') as String? ?? 'pending';
-
-                if (status == 'completed' || status == 'failed') {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (ctx.mounted && !completer.isCompleted) {
-                      completer.complete();
-                      Navigator.of(ctx).pop();
-                    }
-                  });
-                }
-
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 40, height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade300,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    if (status == 'completed')
-                      const Icon(Icons.check_circle, color: Colors.green, size: 64)
-                    else if (status == 'failed')
-                      const Icon(Icons.cancel, color: Colors.red, size: 64)
-                    else
-                      const SizedBox(
-                        width: 64, height: 64,
-                        child: SokoVibeThreeDotLoader(size: 48, dotSize: 10),
-                      ),
-                    const SizedBox(height: 20),
-                    Text(
-                      status == 'completed'
-                          ? 'Boost Payment Successful'
-                          : status == 'failed'
-                              ? 'Payment Failed'
-                              : 'BillPay Payment',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    if (status == 'pending')
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Text(
-                          billPayNumber.isNotEmpty
-                              ? 'Namba: $billPayNumber | Kiasi: TZS ${NumberFormat('#,###', 'en').format(totalAmount)}'
-                              : 'Subiri malipo yathibitishe...',
-                          style: TextStyle(
-                              fontSize: 13,
-                              color: Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.6)),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    const SizedBox(height: 24),
-                    if (status == 'completed' || status == 'failed')
-                      FilledButton(
-                        onPressed: () {
-                          if (!completer.isCompleted) completer.complete();
-                          Navigator.of(ctx).pop();
-                          if (status == 'completed') _onPaymentSuccess();
-                        },
-                        child: Text(status == 'completed' ? 'Continue' : 'Retry'),
-                      ),
-                    if (status == 'pending')
-                      TextButton(
-                        onPressed: () {
-                          if (!completer.isCompleted) completer.complete();
-                          Navigator.of(ctx).pop();
-                        },
-                        child: Text(context.tr('cancel')),
-                      ),
-                  ],
-                );
-              },
-            ),
-          ),
-        );
-      },
-    );
-
-    if (!completer.isCompleted) {
-      completer.complete();
-      // ignore: dead_code
-      sub?.cancel();
-    }
-  }
-
+  }
   void _showError(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1095,3 +897,4 @@ class _GlassPaymentDialog {
     );
   }
 }
+

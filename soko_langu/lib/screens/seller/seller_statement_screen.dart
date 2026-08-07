@@ -5,7 +5,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../../extensions/context_tr.dart';
 import 'package:http/http.dart' as http;
-import 'package:qr_flutter/qr_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import '../../services/api_config.dart';
@@ -108,15 +107,6 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
     final dateFmt = DateFormat('dd/MM/yyyy HH:mm', 'en');
     final curFmt = NumberFormat('#,###', 'en');
 
-    // Build statement data for QR code
-    final qrData = jsonEncode({
-      'title': s['statementTitle'],
-      'generatedAt': s['generatedAt'],
-      'seller': seller,
-      'summary': summary,
-      'entries': entries,
-    });
-
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
       child: Column(
@@ -138,10 +128,6 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
               ? _buildEmptyState(cs)
               : _buildTransactionTable(cs, entries, curFmt, dateFmt),
           const SizedBox(height: 24),
-
-          // QR Code
-          _buildQrSection(cs, qrData),
-          const SizedBox(height: 16),
 
           // Footer
           Text(
@@ -338,36 +324,6 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
           Text(context.tr('no_payments_yet', 'No payments yet'), style: TextStyle(color: cs.onSurfaceVariant)),
           const SizedBox(height: 4),
           Text(context.tr('no_payments_subtitle', 'Financial details will appear once you start selling'), style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant.withValues(alpha: 0.7))),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQrSection(ColorScheme cs, String qrData) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.2)),
-      ),
-      child: Column(
-        children: [
-          Text(context.tr('scan_qr_full_info', 'SCAN QR CODE FOR FULL DETAILS'),
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: cs.onSurfaceVariant, letterSpacing: 1)),
-          const SizedBox(height: 12),
-          QrImageView(
-            data: qrData,
-            version: QrVersions.auto,
-            size: 180,
-            backgroundColor: Colors.white,
-            eyeStyle: QrEyeStyle(eyeShape: QrEyeShape.square, color: cs.primary),
-            dataModuleStyle: QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: Colors.black),
-          ),
-          const SizedBox(height: 8),
-          Text(context.tr('scan_qr_hint', 'Scan this QR code for all statement details'),
-              style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
         ],
       ),
     );

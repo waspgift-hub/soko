@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/api_config.dart';
+import '../../widgets/soko_vibe_loading.dart';
 
 class AdminBroadcastScreen extends StatefulWidget {
   const AdminBroadcastScreen({super.key});
@@ -174,7 +175,7 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
                 height: 52,
                 child: ElevatedButton.icon(
                   icon: _sending
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      ? const SokoVibeThreeDotLoader(size: 18, dotSize: 4.5, color: Colors.white)
                       : const Icon(Icons.send_rounded, size: 20),
                   label: Text(_sending ? 'Sending...' : 'Send to All Users'),
                   style: ElevatedButton.styleFrom(

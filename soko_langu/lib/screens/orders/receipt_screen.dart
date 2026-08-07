@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
@@ -14,6 +13,7 @@ import '../../models/transaction_model.dart';
 import '../../extensions/context_tr.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/google_loading.dart';
+import '../../widgets/soko_vibe_loading.dart';
 
 class ReceiptScreen extends StatefulWidget {
   final String orderId;
@@ -136,82 +136,8 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
   ) {
     final nf = NumberFormat('#,###', 'en');
 
-    // Build timeline steps for QR
-    final steps = _getTimelineSteps(status);
-
     // Seller receives = price - platformFee (what seller actually gets)
     final sellerReceives = price - platformFee;
-
-    // Build readable letter for QR scan
-    final dateStr = '${createdAt.day}/${createdAt.month}/${createdAt.year} ${createdAt.hour.toString().padLeft(2, '0')}:${createdAt.minute.toString().padLeft(2, '0')}';
-    final nfLocal = NumberFormat('#,###', 'en');
-    final stepsStr = steps.asMap().entries.map((e) => '${e.key + 1}. ${e.value}').join('\n');
-    final addrStr = deliveryAddress != null
-        ? '\nAnwani: ${deliveryAddress['region']}, ${deliveryAddress['district']}, ${deliveryAddress['street']}${deliveryAddress['landmarks'] != null ? ' (${deliveryAddress['landmarks']})' : ''}'
-        : '';
-    final qrData = _lang == 'sw'
-        ? '''
-══════════════ SOKO VIBE ══════════════
-            RISITI YA UNUNUZI
-
-Agizo #${widget.orderId}
-Tarehe: $dateStr
-
-BIDHAA: $productName
-Maelezo: $productDescription${productDetails.isNotEmpty ? '\nKinachouzwa: $productDetails' : ''}
-
-MNUNUZI: $buyerName
-Simu: $buyerPhone
-
-MUUZAJI: $sellerName
-Simu: $sellerPhone
-Duka: $sellerLocation$addrStr
-
-MALIPO:
-  Bei ya Bidhaa: TSh ${nfLocal.format(price.toInt())}${shippingCost > 0 ? '\n  Nauli: TSh ${nfLocal.format(shippingCost.toInt())}' : ''}${platformFee > 0 ? '\n  Commission ya Soko Vibe: TSh ${nfLocal.format(platformFee.toInt())}' : ''}
-  Ada ya Kuchakata: TSh ${nfLocal.format(clickpesaFee.toInt())}
-  Jumla: TSh ${nfLocal.format(totalAmount.toInt())}
-  Muuzaji anapata: TSh ${nfLocal.format(sellerReceives.toInt())}
-
-HALI: ${_statusLabel(status, context)}
-
-HATUA ZA AGIZO:
-$stepsStr
-
-Scan QR code for full receipt
-══════════════════════════════════════
-'''
-        : '''
-══════════════ SOKO VIBE ══════════════
-           PURCHASE RECEIPT
-
-Order #${widget.orderId}
-Date: $dateStr
-
-PRODUCT: $productName
-Description: $productDescription${productDetails.isNotEmpty ? '\nDetails: $productDetails' : ''}
-
-BUYER: $buyerName
-Phone: $buyerPhone
-
-SELLER: $sellerName
-Phone: $sellerPhone
-Shop: $sellerLocation$addrStr
-
-PAYMENT:
-  Product Price: TSh ${nfLocal.format(price.toInt())}${shippingCost > 0 ? '\n  Shipping: TSh ${nfLocal.format(shippingCost.toInt())}' : ''}${platformFee > 0 ? '\n  Soko Vibe Commission: TSh ${nfLocal.format(platformFee.toInt())}' : ''}
-  Processing Fee: TSh ${nfLocal.format(clickpesaFee.toInt())}
-  Total: TSh ${nfLocal.format(totalAmount.toInt())}
-  Seller Gets: TSh ${nfLocal.format(sellerReceives.toInt())}
-
-STATUS: ${_statusLabel(status, context)}
-
-ORDER TIMELINE:
-$stepsStr
-
-Scan QR code for full receipt
-══════════════════════════════════════
-''';
 
     return Container(
       decoration: BoxDecoration(
@@ -313,9 +239,6 @@ Scan QR code for full receipt
                   ),
                 ],
                 const SizedBox(height: 24),
-                // QR Code
-                _buildQrCode(context, cs, qrData),
-                const SizedBox(height: 20),
                 // Download Button
                 _buildDownloadButton(context, cs, productName, price, shippingCost, platformFee, clickpesaFee, sellerReceives,
                     totalAmount, buyerName, sellerName, buyerPhone, sellerPhone, sellerLocation,
@@ -413,42 +336,6 @@ Scan QR code for full receipt
     );
   }
 
-  Widget _buildQrCode(BuildContext context, ColorScheme cs, String qrData) {
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.2)),
-        ),
-        child: Column(
-          children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Image.asset('assets/app_icon.png', height: 16, errorBuilder: (_, __, ___) => const SizedBox()),
-                const SizedBox(width: 4),
-                Text(context.tr('soko_vibe_brand'), style: TextStyle(fontSize: 8, fontWeight: FontWeight.w700, color: cs.primary, letterSpacing: 1)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            QrImageView(
-              data: qrData,
-              version: QrVersions.auto,
-              size: 160,
-              eyeStyle: QrEyeStyle(eyeShape: QrEyeShape.square, color: cs.primary),
-              dataModuleStyle: QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: Colors.black),
-            ),
-            const SizedBox(height: 8),
-            Text(context.tr( 'scan_to_verify', 'Scan QR kupata taarifa zote'),
-                style: TextStyle(fontSize: 9, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildDownloadButton(
     BuildContext context, ColorScheme cs,
     String productName, double price, double shippingCost, double platformFee, double clickpesaFee, double sellerReceives,
@@ -468,31 +355,6 @@ Scan QR code for full receipt
         lang: _lang,
       ),
     );
-  }
-
-  List<String> _getTimelineSteps(String status) {
-    final allSteps = [
-      context.tr('order_placed', 'Order placed'),
-      context.tr('payment_received', 'Payment received'),
-      context.tr('processing', 'Processing'),
-      context.tr('dispatched_label', 'Dispatched'),
-      context.tr('delivered', 'Delivered'),
-      context.tr('confirmed', 'Confirmed'),
-    ];
-    switch (status) {
-      case 'pending': return allSteps.take(1).toList();
-      case 'awaiting_shipping_quote': return allSteps.take(2).toList();
-      case 'quoted': return allSteps.take(3).toList();
-      case 'paid': return allSteps.take(3).toList();
-      case 'paid_escrow_held': case 'escrow_hold': return allSteps.take(3).toList();
-      case 'dispatched': return allSteps.take(4).toList();
-      case 'delivered': case 'confirmed': return allSteps.take(5).toList();
-      case 'delivery_confirmed': case 'completed': return allSteps;
-      case 'cancelled': return [context.tr('order_placed', 'Order placed'), context.tr('cancelled_label', 'Imeghairiwa')];
-      case 'failed': return [context.tr('order_placed', 'Order placed'), context.tr('payment_failed_short', 'Payment failed')];
-      case 'refunded': return [context.tr('order_placed', 'Order placed'), context.tr('payment_received', 'Payment received'), context.tr('refunded', 'Refunded')];
-      default: return [status];
-    }
   }
 
   Widget _divider(ColorScheme cs) {
@@ -626,7 +488,7 @@ class _ReceiptDownloadButtonState extends State<_ReceiptDownloadButton> {
           child: OutlinedButton.icon(
             onPressed: _isGenerating ? null : _onDownload,
             icon: _isGenerating
-                ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary))
+                ? SokoVibeThreeDotLoader(size: 16, dotSize: 4, color: cs.primary)
                 : const Icon(Icons.download_rounded, size: 18),
             label: Text(_isGenerating ? context.tr('generating', 'Generating...') : context.tr('download_receipt', 'Download Receipt')),
             style: OutlinedButton.styleFrom(

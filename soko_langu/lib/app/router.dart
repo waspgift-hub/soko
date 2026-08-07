@@ -31,7 +31,6 @@ import '../screens/profile/product_boost_screen.dart';
 import '../screens/profile/help_center_screen.dart';
 import '../screens/profile/about_app_screen.dart';
 import '../screens/profile/order_flow_screen.dart';
-import '../screens/wallet/wallet_screen.dart';
 import '../screens/notification/notification_screen.dart';
 import '../screens/notification/notification_preferences_screen.dart';
 import '../screens/onboarding/account_selection_screen.dart';
@@ -40,7 +39,6 @@ import '../screens/auth/magic_link_screen.dart';
 
 import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_user_detail_screen.dart';
-import '../screens/admin/admin_wallet_screen.dart';
 import '../screens/admin/admin_kyc_screen.dart';
 import '../screens/admin/admin_broadcast_screen.dart';
 import '../screens/seller/seller_earnings_screen.dart';
@@ -120,7 +118,6 @@ final List<String> _authRequiredRoutes = [
 final List<String> _adminOnlyRoutes = [
   AppRoutes.admin,
   AppRoutes.adminUserDetail,
-  AppRoutes.adminWallet,
   AppRoutes.adminReports,
 ];
 
@@ -283,10 +280,6 @@ GoRouter buildRouter() {
         pageBuilder: (context, state) => _premiumPage(const OrderFlowScreen()),
       ),
       GoRoute(
-        path: AppRoutes.wallet,
-        pageBuilder: (context, state) => _premiumPage(const WalletScreen()),
-      ),
-      GoRoute(
         path: AppRoutes.addProduct,
         pageBuilder: (context, state) {
           return _premiumPage(AddProductScreen(product: state.extra as dynamic));
@@ -310,10 +303,6 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.adminBroadcast,
         pageBuilder: (context, state) => _premiumPage(const AdminBroadcastScreen()),
-      ),
-      GoRoute(
-        path: AppRoutes.adminWallet,
-        pageBuilder: (context, state) => _premiumPage(const AdminWalletScreen()),
       ),
       GoRoute(
         path: AppRoutes.createGroup,

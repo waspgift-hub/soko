@@ -1,268 +1,993 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="scroll-smooth">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Soko Vibe Admin</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%23000000'/%3E%3Ctext x='256' y='320' font-family='Arial,sans-serif' font-size='220' font-weight='bold' fill='%23ffffff' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E">
-<style>
-  :root {
-    --black: #000000;
-    --white: #ffffff;
-    --gray-50: #fafafa;
-    --gray-100: #f4f4f5;
-    --gray-200: #e4e4e7;
-    --gray-300: #d4d4d8;
-    --gray-400: #a1a1aa;
-    --gray-500: #71717a;
-    --gray-600: #52525b;
-    --gray-800: #27272a;
-    --gray-900: #18181b;
-    --red: #dc2626;
-    --orange: #ea580c;
-    --green: #16a34a;
-    --radius: 20px;
+<title>Soko Vibe Admin — Escrow Dashboard</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] }
+    }
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    background: var(--white);
-    color: var(--gray-900);
-    min-height: 100vh;
-  }
-  /* ── Login gate ─────────────────────────────── */
-  #gate {
-    min-height: 100vh; display: flex; align-items: center; justify-content: center;
-    background: var(--white); padding: 24px;
-  }
-  .gate-card {
-    width: 100%; max-width: 400px; border: 1px solid var(--gray-200);
-    border-radius: var(--radius); padding: 40px 32px; text-align: center;
-  }
-  .gate-logo {
-    width: 64px; height: 64px; border-radius: 18px; background: var(--black);
-    color: var(--white); font-size: 34px; font-weight: 800; display: flex;
-    align-items: center; justify-content: center; margin: 0 auto 20px;
-  }
-  .gate-card h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
-  .gate-card p { color: var(--gray-500); font-size: 14px; margin-top: 8px; margin-bottom: 24px; }
-  .gate-card input {
-    width: 100%; padding: 14px 16px; border: 1.5px solid var(--gray-200);
-    border-radius: 12px; font-size: 15px; margin-bottom: 12px; outline: none;
-    transition: border-color .15s ease;
-  }
-  .gate-card input:focus { border-color: var(--black); }
-  .gate-err { color: var(--red); font-size: 13px; margin-bottom: 12px; min-height: 18px; }
-  /* ── Layout ─────────────────────────────────── */
-  #app { display: none; }
-  header {
-    position: sticky; top: 0; z-index: 50; background: var(--white);
-    border-bottom: 1px solid var(--gray-200);
-  }
-  .head-inner { max-width: 1200px; margin: 0 auto; padding: 16px 24px; display: flex; align-items: center; gap: 16px; }
-  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 17px; letter-spacing: -0.02em; }
-  .brand .dot { width: 30px; height: 30px; border-radius: 9px; background: var(--black); color: var(--white); display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 800; }
-  .head-right { margin-left: auto; display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--gray-500); }
-  #logout {
-    background: none; border: 1px solid var(--gray-200); border-radius: 999px;
-    padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--gray-600);
-  }
-  #logout:hover { border-color: var(--black); color: var(--black); }
-  nav { border-bottom: 1px solid var(--gray-100); }
-  .nav-inner { max-width: 1200px; margin: 0 auto; display: flex; gap: 4px; padding: 0 16px; }
-  .tab {
-    background: none; border: none; padding: 14px 18px; font-size: 14px; font-weight: 600;
-    color: var(--gray-500); cursor: pointer; border-bottom: 2px solid transparent;
-  }
-  .tab:hover { color: var(--black); }
-  .tab.active { color: var(--black); border-bottom-color: var(--black); }
-  main { max-width: 1200px; margin: 0 auto; padding: 28px 24px 80px; }
-  .panel { display: none; }
-  .panel.active { display: block; animation: fade .25s ease; }
-  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-  /* ── Stats ──────────────────────────────────── */
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 28px; }
-  .stat-card { border: 1px solid var(--gray-200); border-radius: var(--radius); padding: 20px; }
-  .stat-card .num { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; }
-  .stat-card .lbl { font-size: 13px; color: var(--gray-500); margin-top: 4px; }
-  /* ── Toolbar / search ───────────────────────── */
-  .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
-  .toolbar input, .toolbar select {
-    padding: 11px 14px; border: 1.5px solid var(--gray-200); border-radius: 12px;
-    font-size: 14px; outline: none; min-width: 220px; background: var(--white);
-  }
-  .toolbar input:focus, .toolbar select:focus { border-color: var(--black); }
-  /* ── Table ──────────────────────────────────── */
-  .table-wrap { border: 1px solid var(--gray-200); border-radius: var(--radius); overflow-x: auto; background: var(--white); }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 760px; }
-  th {
-    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
-    color: var(--gray-400); padding: 14px 16px; border-bottom: 1px solid var(--gray-200);
-    background: var(--gray-50); white-space: nowrap;
-  }
-  td { padding: 12px 16px; border-bottom: 1px solid var(--gray-100); vertical-align: middle; }
-  tr:last-child td { border-bottom: none; }
-  tr:hover td { background: var(--gray-50); }
-  .user-cell { display: flex; align-items: center; gap: 12px; }
-  .avatar {
-    width: 36px; height: 36px; border-radius: 50%; background: var(--black); color: var(--white);
-    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0;
-  }
-  .user-cell .name { font-weight: 600; }
-  .user-cell .sub { font-size: 12px; color: var(--gray-500); }
-  .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
-  .pill.suspended { background: var(--red); color: var(--white); }
-  .pill.admin { background: var(--black); color: var(--white); }
-  .pill.warn { background: rgba(234,88,12,.12); color: var(--orange); }
-  .pill.active { background: rgba(22,163,74,.12); color: var(--green); }
-  .prod-img { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; border: 1px solid var(--gray-200); background: var(--gray-100); }
-  .actions { display: flex; gap: 6px; flex-wrap: wrap; }
-  .btn {
-    background: none; border: 1px solid var(--gray-200); border-radius: 9px; padding: 6px 11px;
-    font-size: 12px; font-weight: 600; cursor: pointer; color: var(--gray-600); white-space: nowrap;
-    transition: all .12s ease;
-  }
-  .btn:hover { border-color: var(--black); color: var(--black); }
-  .btn.danger:hover { border-color: var(--red); color: var(--red); }
-  .btn.warn:hover { border-color: var(--orange); color: var(--orange); }
-  .btn.ok:hover { border-color: var(--green); color: var(--green); }
-  .btn.solid { background: var(--black); color: var(--white); border-color: var(--black); }
-  .btn.solid:hover { background: var(--gray-800); color: var(--white); }
-  /* ── Broadcast form ─────────────────────────── */
-  .form-card { max-width: 620px; border: 1px solid var(--gray-200); border-radius: var(--radius); padding: 28px; }
-  .form-card label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 8px; }
-  .form-card input, .form-card textarea {
-    width: 100%; padding: 13px 15px; border: 1.5px solid var(--gray-200); border-radius: 12px;
-    font-size: 14px; font-family: inherit; outline: none; margin-bottom: 18px; resize: vertical;
-  }
-  .form-card input:focus, .form-card textarea:focus { border-color: var(--black); }
-  .toast-zone { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 10px; z-index: 100; }
-  .toast {
-    background: var(--black); color: var(--white); border-radius: 12px; padding: 14px 18px;
-    font-size: 14px; font-weight: 500; box-shadow: 0 12px 32px rgba(0,0,0,.18); max-width: 360px;
-    animation: toastIn .2s ease;
-  }
-  .toast.err { background: var(--red); }
-  .toast.ok { background: var(--green); }
-  @keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-  .muted { color: var(--gray-400); }
-  .loading { text-align: center; padding: 60px 0; color: var(--gray-500); }
-  .spinner {
-    width: 28px; height: 28px; margin: 0 auto 12px; border-radius: 50%;
-    border: 3px solid var(--gray-200); border-top-color: var(--black); animation: spin .8s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .empty { text-align: center; padding: 48px 0; color: var(--gray-400); }
-  .count { font-size: 12px; color: var(--gray-500); font-weight: 600; }
-</style>
+}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
-<body>
+<body class="bg-slate-100 text-slate-800 antialiased">
 
-<!-- ═══ LOGIN GATE ═══ -->
-<div id="gate">
-  <div class="gate-card">
-    <div class="gate-logo">S</div>
-    <h1>Soko Vibe Admin</h1>
-    <p>Enter the admin secret to unlock full control.</p>
-    <input type="password" id="secret" placeholder="Admin secret" autocomplete="off">
-    <div class="gate-err" id="gateErr"></div>
-    <button class="btn solid" id="unlockBtn" style="width:100%; padding:14px; font-size:15px;">Unlock</button>
+<!-- ============ LOGIN GATE ============ -->
+<div id="gate" class="fixed inset-0 z-[100] bg-slate-900 flex items-center justify-center p-6">
+  <div class="w-full max-w-sm">
+    <div class="bg-slate-800 rounded-2xl p-8 text-center shadow-2xl">
+      <div class="w-16 h-16 mx-auto rounded-2xl bg-indigo-500/20 flex items-center justify-center mb-5">
+        <i data-lucide="shield-check" class="w-9 h-9 text-indigo-400"></i>
+      </div>
+      <h1 class="text-white text-2xl font-extrabold tracking-tight">Soko Vibe Admin</h1>
+      <p class="text-slate-400 text-sm mt-2 mb-6">Enter the admin secret to unlock full control.</p>
+      <input id="secret" type="password" placeholder="Admin secret" autocomplete="off"
+        class="w-full px-4 py-3 rounded-xl bg-slate-700/60 border border-slate-600 text-white placeholder-slate-500 text-sm outline-none focus:border-indigo-500 mb-3">
+      <p id="gateErr" class="text-rose-400 text-xs h-5 mb-1"></p>
+      <button id="unlockBtn" class="w-full py-3 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-semibold text-sm transition">
+        Unlock
+      </button>
+      <p class="text-[11px] text-slate-500 mt-5">soko-langu-server.onrender.com</p>
+    </div>
   </div>
 </div>
 
-<!-- ═══ APP ═══ -->
-<div id="app">
-  <header>
-    <div class="head-inner">
-      <div class="brand"><span class="dot">S</span> Soko Vibe Admin</div>
-      <div class="head-right"><span id="envLabel">Admin</span><button id="logout">Sign out</button></div>
+<!-- ============ SIDEBAR ============ -->
+<aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-72 -translate-x-full lg:translate-x-0 transition-transform duration-300 bg-slate-900 text-slate-400 flex flex-col">
+  <div class="h-16 flex items-center gap-3 px-6 border-b border-slate-800">
+    <div class="w-9 h-9 rounded-xl bg-indigo-500/20 flex items-center justify-center shrink-0">
+      <i data-lucide="shield-check" class="w-5 h-5 text-indigo-400"></i>
     </div>
-    <nav><div class="nav-inner">
-      <button class="tab active" data-tab="overview">Overview</button>
-      <button class="tab" data-tab="users">Users</button>
-      <button class="tab" data-tab="products">Products</button>
-      <button class="tab" data-tab="broadcast">Broadcast</button>
-    </div></nav>
+    <div class="min-w-0">
+      <p class="text-white font-bold leading-tight">Soko Vibe</p>
+      <p class="text-[11px] tracking-widest uppercase text-slate-500">Escrow Admin</p>
+    </div>
+  </div>
+
+  <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-1" id="sidebarNav">
+    <button class="nav-item w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition" data-tab="dashboard">
+      <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard Overview
+    </button>
+    <button class="nav-item w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition" data-tab="orders">
+      <i data-lucide="list-ordered" class="w-5 h-5"></i> Escrow Orders
+      <span id="sideOrdersBadge" class="ml-auto hidden text-[11px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300"></span>
+    </button>
+    <button class="nav-item w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition" data-tab="disputes">
+      <i data-lucide="scale" class="w-5 h-5"></i> Dispute Center
+      <span id="sideDisputesBadge" class="ml-auto hidden text-[11px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400"></span>
+    </button>
+    <button class="nav-item w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition" data-tab="boosts">
+      <i data-lucide="rocket" class="w-5 h-5"></i> Product Boosts
+    </button>
+    <button class="nav-item w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition" data-tab="analytics">
+      <i data-lucide="bar-chart-3" class="w-5 h-5"></i> Marketplace Analytics
+    </button>
+    <button class="nav-item w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition" data-tab="kyc">
+      <i data-lucide="badge-check" class="w-5 h-5"></i> KYC Verification
+      <span id="sideKycBadge" class="ml-auto hidden text-[11px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400"></span>
+    </button>
+    <button class="nav-item w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition" data-tab="users">
+      <i data-lucide="users" class="w-5 h-5"></i> Users
+    </button>
+    <button class="nav-item w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition" data-tab="products">
+      <i data-lucide="package" class="w-5 h-5"></i> Products
+    </button>
+    <button class="nav-item w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition" data-tab="transactions">
+      <i data-lucide="receipt" class="w-5 h-5"></i> Transactions
+    </button>
+    <button class="nav-item w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition" data-tab="finance">
+      <i data-lucide="banknote" class="w-5 h-5"></i> Finance
+    </button>
+    <button class="nav-item w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition" data-tab="withdrawals">
+      <i data-lucide="wallet" class="w-5 h-5"></i> Withdrawals
+    </button>
+    <button class="nav-item w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition" data-tab="moderation">
+      <i data-lucide="flag" class="w-5 h-5"></i> Moderation
+      <span id="sideReportsBadge" class="ml-auto hidden text-[11px] px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400"></span>
+    </button>
+    <button class="nav-item w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition" data-tab="broadcast">
+      <i data-lucide="megaphone" class="w-5 h-5"></i> Broadcast
+    </button>
+    <button class="nav-item w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition" data-tab="audit">
+      <i data-lucide="scroll-text" class="w-5 h-5"></i> Audit Log
+    </button>
+    <button class="nav-item w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition" data-tab="settings">
+      <i data-lucide="settings" class="w-5 h-5"></i> Settings
+    </button>
+  </nav>
+
+  <div class="p-4 border-t border-slate-800">
+    <div class="rounded-xl bg-slate-800/60 p-4 space-y-2">
+      <p class="text-[11px] uppercase tracking-widest text-slate-500 font-semibold">System Balance</p>
+      <div class="flex items-center justify-between text-sm">
+        <span class="text-slate-400 flex items-center gap-2"><i data-lucide="lock" class="w-4 h-4"></i> Vault</span>
+        <span id="sideVault" class="font-semibold text-emerald-400">TZS 0</span>
+      </div>
+      <div class="flex items-center justify-between text-sm">
+        <span class="text-slate-400 flex items-center gap-2"><i data-lucide="banknote" class="w-4 h-4"></i> Fees</span>
+        <span id="sideFees" class="font-semibold text-indigo-400">TZS 0</span>
+      </div>
+    </div>
+    <button onclick="refreshAll()" class="mt-3 w-full flex items-center justify-center gap-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium px-4 py-2.5 transition">
+      <i data-lucide="refresh-cw" id="refreshIcon" class="w-4 h-4"></i> Refresh Data
+    </button>
+    <button onclick="logout()" class="mt-2 w-full flex items-center justify-center gap-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-sm font-medium px-4 py-2.5 transition">
+      <i data-lucide="log-out" class="w-4 h-4"></i> Sign out
+    </button>
+  </div>
+</aside>
+
+<div id="sidebarOverlay" class="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-sm hidden lg:hidden"></div>
+
+<!-- ============ MAIN ============ -->
+<div class="lg:pl-72">
+
+  <!-- Topbar -->
+  <header class="sticky top-0 z-30 bg-white/85 backdrop-blur border-b border-slate-200">
+    <div class="flex items-center gap-3 px-4 lg:px-8 h-16">
+      <button onclick="toggleSidebar()" class="lg:hidden p-2 rounded-lg hover:bg-slate-100 text-slate-600">
+        <i data-lucide="menu" class="w-5 h-5"></i>
+      </button>
+      <h1 id="pageTitle" class="text-lg font-bold text-slate-800 truncate">Dashboard Overview</h1>
+
+      <div class="ml-auto flex items-center gap-2 sm:gap-3">
+
+        <div class="hidden xl:flex items-center gap-2 text-xs">
+          <div class="px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 whitespace-nowrap">
+            <span class="text-slate-500">Vault Balance</span>
+            <span id="navVault" class="font-bold text-emerald-700">TZS 0</span>
+          </div>
+          <div class="px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200 whitespace-nowrap">
+            <span class="text-slate-500">Fees Collected</span>
+            <span id="navFees" class="font-bold text-indigo-700">TZS 0</span>
+          </div>
+        </div>
+
+        <button onclick="refreshAll()" class="hidden sm:flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 text-sm font-medium transition">
+          <i data-lucide="refresh-cw" class="w-4 h-4"></i> <span class="hidden md:inline">Sync</span>
+        </button>
+
+        <!-- Notifications -->
+        <div class="relative">
+          <button id="notifBtn" class="relative p-2 rounded-lg hover:bg-slate-100 text-slate-600 transition">
+            <i data-lucide="bell" class="w-5 h-5"></i>
+            <span id="notifBadge" class="hidden absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white"></span>
+          </button>
+          <div id="notifMenu" class="hidden absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto rounded-xl bg-white shadow-xl ring-1 ring-slate-200 z-40"></div>
+        </div>
+
+        <!-- Profile -->
+        <div class="relative">
+          <button id="profileBtn" class="flex items-center gap-2 p-1.5 pr-2 rounded-lg hover:bg-slate-100 transition">
+            <div class="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-emerald-500 text-white text-xs font-bold flex items-center justify-center">SA</div>
+            <div class="hidden sm:block text-left">
+              <p class="text-sm font-semibold text-slate-800 leading-tight">Soko Admin</p>
+              <p class="text-[11px] text-slate-500 leading-tight">Super Admin</p>
+            </div>
+            <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400"></i>
+          </button>
+          <div id="profileMenu" class="hidden absolute right-0 mt-2 w-56 rounded-xl bg-white shadow-xl ring-1 ring-slate-200 overflow-hidden z-40">
+            <div class="px-4 py-3 border-b border-slate-100">
+              <p class="text-sm font-semibold text-slate-800">Soko Vibe Admin</p>
+              <p class="text-xs text-slate-500" id="lastSyncLabel">—</p>
+            </div>
+            <a href="#" onclick="switchTab('audit'); document.getElementById('profileMenu').classList.add('hidden');" class="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50"><i data-lucide="scroll-text" class="w-4 h-4"></i> Activity Log</a>
+            <a href="#" onclick="logout()" class="flex items-center gap-2 px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50 border-t border-slate-100"><i data-lucide="log-out" class="w-4 h-4"></i> Log Out</a>
+          </div>
+        </div>
+
+      </div>
+    </div>
   </header>
 
-  <main>
-    <!-- Overview -->
-    <section class="panel active" id="panel-overview">
-      <div class="stats" id="statsGrid"></div>
-      <div class="form-card">
-        <h2 style="font-size:18px; letter-spacing:-0.02em; margin-bottom:4px;">Broadcast</h2>
-        <p class="muted" style="font-size:14px; margin-bottom:18px;">Quick-send to every user from here.</p>
-        <input type="text" id="ovTitle" placeholder="Title">
-        <textarea id="ovBody" rows="3" placeholder="Message (optional)"></textarea>
-        <button class="btn solid" id="ovSend" style="padding:13px 22px; font-size:14px;">Send to all users</button>
+  <!-- Content -->
+  <main class="px-4 lg:px-8 py-6 space-y-6">
+
+    <!-- ============ TAB: DASHBOARD ============ -->
+    <section id="tab-dashboard" class="tab-panel space-y-6">
+      <div id="ovAlerts"></div>
+
+      <!-- Metric cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+          <div class="flex items-start justify-between">
+            <div>
+              <p class="text-xs font-medium text-slate-500">Total Escrow Liability</p>
+              <p id="statLiability" class="mt-1 text-2xl font-extrabold text-slate-800">TZS 0</p>
+              <p class="mt-1 text-xs text-emerald-600 font-medium">Live funds in the vault</p>
+            </div>
+            <div class="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center"><i data-lucide="lock" class="w-5 h-5"></i></div>
+          </div>
+        </div>
+        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+          <div class="flex items-start justify-between">
+            <div>
+              <p class="text-xs font-medium text-slate-500">Platform Earnings</p>
+              <p id="statEarnings" class="mt-1 text-2xl font-extrabold text-slate-800">TZS 0</p>
+              <p class="mt-1 text-xs text-emerald-600 font-medium">Fees + boosts revenue</p>
+            </div>
+            <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><i data-lucide="banknote" class="w-5 h-5"></i></div>
+          </div>
+        </div>
+        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+          <div class="flex items-start justify-between">
+            <div>
+              <p class="text-xs font-medium text-slate-500">Active Disputes</p>
+              <p id="statDisputes" class="mt-1 text-2xl font-extrabold text-slate-800">0</p>
+              <p class="mt-1 text-xs text-rose-600 font-medium">Buyer "not received" flags</p>
+            </div>
+            <div class="w-11 h-11 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center"><i data-lucide="scale" class="w-5 h-5"></i></div>
+          </div>
+        </div>
+        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+          <div class="flex items-start justify-between">
+            <div>
+              <p class="text-xs font-medium text-slate-500">Active Product Boosts</p>
+              <p id="statBoosts" class="mt-1 text-2xl font-extrabold text-slate-800">0</p>
+              <p class="mt-1 text-xs text-amber-600 font-medium">Paid placements live</p>
+            </div>
+            <div class="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center"><i data-lucide="rocket" class="w-5 h-5"></i></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Charts -->
+      <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div class="xl:col-span-2 rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h2 class="font-bold text-slate-800">Escrow Volume &amp; Revenue</h2>
+              <p class="text-xs text-slate-500">Monthly funds secured in the ClickPesa vault vs. platform commission</p>
+            </div>
+            <span class="px-3 py-1 rounded-lg bg-slate-100 text-xs font-medium text-slate-600">Last 8 Months</span>
+          </div>
+          <div class="h-80"><canvas id="volumeChart"></canvas></div>
+        </div>
+        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+          <div class="mb-4">
+            <h2 class="font-bold text-slate-800">Order Status Distribution</h2>
+            <p class="text-xs text-slate-500">Live from Firestore order states</p>
+          </div>
+          <div class="h-80 relative"><canvas id="distChart"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Recent orders + side panels -->
+      <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div class="xl:col-span-2 rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+          <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+            <div>
+              <h2 class="font-bold text-slate-800">Recent Escrow Orders</h2>
+              <p class="text-xs text-slate-500">Latest transactions across the pipeline</p>
+            </div>
+            <button onclick="switchTab('orders')" class="text-sm font-medium text-indigo-600 hover:text-indigo-700">View all →</button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                <tr><th class="px-5 py-3 font-semibold">Order</th><th class="px-5 py-3 font-semibold">Buyer</th><th class="px-5 py-3 font-semibold">Total</th><th class="px-5 py-3 font-semibold">Status</th><th class="px-5 py-3 font-semibold"></th></tr>
+              </thead>
+              <tbody id="recentOrders" class="divide-y divide-slate-100"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="space-y-4">
+          <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+            <div class="flex items-center justify-between mb-3">
+              <h2 class="font-bold text-slate-800">Active Disputes</h2>
+              <button onclick="switchTab('disputes')" class="text-xs font-medium text-indigo-600">View all →</button>
+            </div>
+            <div id="dashboardDisputes" class="space-y-3"></div>
+          </div>
+          <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+            <h2 class="font-bold text-slate-800 mb-3">Top Requested Categories</h2>
+            <div id="dashCategories" class="space-y-3"></div>
+          </div>
+        </div>
       </div>
     </section>
 
-    <!-- Users -->
-    <section class="panel" id="panel-users">
-      <div class="toolbar">
-        <input type="text" id="userSearch" placeholder="Search name, email, phone…">
-        <select id="userFilter">
-          <option value="all">All</option>
-          <option value="suspended">Suspended</option>
-          <option value="warned">Warned (1–2)</option>
-          <option value="blocked">Blocked (3)</option>
-          <option value="admin">Admins</option>
-        </select>
-        <button class="btn solid" id="refreshUsers" style="margin-left:auto;">Refresh</button>
+    <!-- ============ TAB: ORDERS ============ -->
+    <section id="tab-orders" class="tab-panel hidden">
+      <div class="rounded-2xl bg-white border border-slate-200 shadow-sm">
+        <div class="px-5 pt-5 pb-4 border-b border-slate-100 space-y-4">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div>
+              <h2 class="font-bold text-slate-800">Escrow Orders Pipeline</h2>
+              <p class="text-xs text-slate-500">Track every order from placement to escrow release</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <button onclick="exportOrders()" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 text-sm font-medium transition">
+                <i data-lucide="download" class="w-4 h-4"></i> Export CSV
+              </button>
+              <button onclick="refreshAll()" class="flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition">
+                <i data-lucide="refresh-cw" class="w-4 h-4"></i> Refresh
+              </button>
+            </div>
+          </div>
+          <div class="flex flex-col sm:flex-row gap-3">
+            <div class="relative flex-1">
+              <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+              <input id="orderSearch" type="text" oninput="state.orderSearch=this.value; renderOrders();" placeholder="Search by order ID, product, buyer or seller..." class="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+            </div>
+            <select id="orderStatusSelect" onchange="state.orderStatus=this.value; renderOrders();" class="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="all">All Statuses</option>
+              <option value="awaiting_payment">Awaiting Payment</option>
+              <option value="escrow_hold">In Escrow Vault</option>
+              <option value="dispatched">Shipped / In Transit</option>
+              <option value="disputed">Disputed</option>
+              <option value="completed">Completed / Released</option>
+              <option value="refunded">Refunded</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="failed">Failed</option>
+            </select>
+          </div>
+          <div id="orderChips" class="flex flex-wrap gap-2"></div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm min-w-[980px]">
+            <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+              <tr>
+                <th class="px-5 py-3 font-semibold">Order</th>
+                <th class="px-5 py-3 font-semibold">Buyer</th>
+                <th class="px-5 py-3 font-semibold">Seller</th>
+                <th class="px-5 py-3 font-semibold">Total (TZS)</th>
+                <th class="px-5 py-3 font-semibold">Courier</th>
+                <th class="px-5 py-3 font-semibold">Receipt</th>
+                <th class="px-5 py-3 font-semibold">Dispatched</th>
+                <th class="px-5 py-3 font-semibold">Status</th>
+                <th class="px-5 py-3 font-semibold"></th>
+              </tr>
+            </thead>
+            <tbody id="ordersBody" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
       </div>
-      <div class="table-wrap" id="usersTableWrap"></div>
     </section>
 
-    <!-- Products -->
-    <section class="panel" id="panel-products">
-      <div class="toolbar">
-        <input type="text" id="productSearch" placeholder="Search name, seller…">
-        <button class="btn solid" id="refreshProducts" style="margin-left:auto;">Refresh</button>
+    <!-- ============ TAB: DISPUTES ============ -->
+    <section id="tab-disputes" class="tab-panel hidden">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div>
+          <h2 class="font-bold text-slate-800">Dispute Center</h2>
+          <p class="text-xs text-slate-500">Orders flagged by buyers — review before releasing funds</p>
+        </div>
+        <div class="flex flex-col sm:flex-row gap-3">
+          <div class="relative">
+            <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+            <input id="disputeSearch" type="text" oninput="state.disputeSearch=this.value; renderDisputes();" placeholder="Search disputes..." class="pl-9 pr-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500 text-sm w-full sm:w-64">
+          </div>
+          <select id="disputeFilter" onchange="state.disputeFilter=this.value; renderDisputes();" class="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-rose-500">
+            <option value="all">All Disputes</option>
+            <option value="open">Open</option>
+            <option value="resolved">Resolved</option>
+          </select>
+        </div>
       </div>
-      <div class="table-wrap" id="productsTableWrap"></div>
+      <div id="disputesGrid" class="grid grid-cols-1 lg:grid-cols-2 gap-4"></div>
     </section>
 
-    <!-- Broadcast -->
-    <section class="panel" id="panel-broadcast">
-      <div class="form-card">
-        <h2 style="font-size:18px; letter-spacing:-0.02em; margin-bottom:4px;">Broadcast Notification</h2>
-        <p class="muted" style="font-size:14px; margin-bottom:18px;">Push + in-app notification for every user.</p>
-        <label for="bcTitle">Title *</label>
-        <input type="text" id="bcTitle" placeholder="e.g. New feature is live">
-        <label for="bcBody">Message</label>
-        <textarea id="bcBody" rows="4" placeholder="Optional message body"></textarea>
-        <button class="btn solid" id="bcSend" style="padding:13px 22px; font-size:14px;">Send broadcast</button>
+    <!-- ============ TAB: BOOSTS ============ -->
+    <section id="tab-boosts" class="tab-panel hidden">
+      <div class="rounded-2xl bg-white border border-slate-200 shadow-sm">
+        <div class="px-5 pt-5 pb-4 border-b border-slate-100 space-y-4">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div>
+              <h2 class="font-bold text-slate-800">Product Boosting Management</h2>
+              <p class="text-xs text-slate-500">Paid placements that show products first on the Flutter app</p>
+            </div>
+            <button onclick="toast('Boosts are purchased by sellers in the app — all paid placements appear here live','info')" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 text-sm font-medium transition">
+              <i data-lucide="info" class="w-4 h-4"></i> How it works
+            </button>
+          </div>
+          <div class="flex flex-col sm:flex-row gap-3">
+            <div class="relative flex-1">
+              <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+              <input type="text" oninput="state.boostSearch=this.value; renderBoosts();" placeholder="Search product or seller..." class="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+            </div>
+            <select onchange="state.boostFilter=this.value; renderBoosts();" class="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="all">All Tiers</option>
+              <option value="bronze">Bronze</option>
+              <option value="silver">Silver</option>
+              <option value="gold">Gold</option>
+            </select>
+            <select onchange="state.boostStatus=this.value; renderBoosts();" class="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="all">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="expired">Expired</option>
+            </select>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm min-w-[760px]">
+            <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+              <tr>
+                <th class="px-5 py-3 font-semibold">Product</th>
+                <th class="px-5 py-3 font-semibold">Seller</th>
+                <th class="px-5 py-3 font-semibold">Tier</th>
+                <th class="px-5 py-3 font-semibold">Amount Paid</th>
+                <th class="px-5 py-3 font-semibold">Started</th>
+                <th class="px-5 py-3 font-semibold">Ends</th>
+                <th class="px-5 py-3 font-semibold">Status</th>
+              </tr>
+            </thead>
+            <tbody id="boostsBody" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
       </div>
     </section>
+
+    <!-- ============ TAB: ANALYTICS ============ -->
+    <section id="tab-analytics" class="tab-panel hidden space-y-4">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+          <p class="text-xs font-medium text-slate-500">New Users Today</p>
+          <p id="anaUsersToday" class="mt-1 text-2xl font-extrabold text-slate-800">0</p>
+          <p class="mt-1 text-xs text-emerald-600 font-medium">Registered in the last 24 hours</p>
+        </div>
+        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+          <p class="text-xs font-medium text-slate-500">Total Products</p>
+          <p id="anaProducts" class="mt-1 text-2xl font-extrabold text-slate-800">0</p>
+          <p class="mt-1 text-xs text-indigo-600 font-medium">Live marketplace catalog</p>
+        </div>
+        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+          <p class="text-xs font-medium text-slate-500">Active Users (24h)</p>
+          <p id="anaActiveUsers" class="mt-1 text-2xl font-extrabold text-slate-800">0</p>
+          <p class="mt-1 text-xs text-amber-600 font-medium">App sessions in the last day</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div class="xl:col-span-2 rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+          <h2 class="font-bold text-slate-800 mb-4">Top Requested Categories</h2>
+          <div id="categoryBars" class="space-y-4"></div>
+        </div>
+        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+          <h2 class="font-bold text-slate-800 mb-4">User Locations</h2>
+          <div id="locationWrap" class="space-y-3"></div>
+        </div>
+      </div>
+
+      <div class="rounded-2xl bg-white border border-slate-200 shadow-sm">
+        <div class="px-5 pt-5 pb-4 border-b border-slate-100">
+          <div>
+            <h2 class="font-bold text-slate-800">Category Distribution</h2>
+            <p class="text-xs text-slate-500">Share of the live product catalog by category</p>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm min-w-[620px]">
+            <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+              <tr>
+                <th class="px-5 py-3 font-semibold">Category</th>
+                <th class="px-5 py-3 font-semibold">Products</th>
+                <th class="px-5 py-3 font-semibold">Share</th>
+                <th class="px-5 py-3 font-semibold">%</th>
+              </tr>
+            </thead>
+            <tbody id="analyticsBody" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ TAB: KYC ============ -->
+    <section id="tab-kyc" class="tab-panel hidden">
+      <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div class="flex items-center gap-2">
+          <button id="kycTabPending" class="kyc-tab text-sm font-semibold px-4 py-2 rounded-lg transition bg-indigo-600 text-white" onclick="switchKycTab('pending')">Pending</button>
+          <button id="kycTabAll" class="kyc-tab text-sm font-semibold px-4 py-2 rounded-lg transition bg-white text-slate-600 border border-slate-200" onclick="switchKycTab('all')">All Records</button>
+        </div>
+        <button onclick="loadKyc(true).then(renderKyc)" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 text-sm font-medium transition">
+          <i data-lucide="refresh-cw" class="w-4 h-4"></i> Refresh
+        </button>
+      </div>
+      <div id="kycWrap"></div>
+    </section>
+
+    <!-- ============ TAB: USERS ============ -->
+    <section id="tab-users" class="tab-panel hidden">
+      <div class="rounded-2xl bg-white border border-slate-200 shadow-sm">
+        <div class="px-5 pt-5 pb-4 border-b border-slate-100 space-y-3">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div>
+              <h2 class="font-bold text-slate-800">User Management</h2>
+              <p class="text-xs text-slate-500">Search, suspend, warn, message or delete accounts</p>
+            </div>
+            <button onclick="loadUsers(true).then(renderUsers)" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 text-sm font-medium transition">
+              <i data-lucide="refresh-cw" class="w-4 h-4"></i> Refresh
+            </button>
+          </div>
+          <div class="flex flex-col sm:flex-row gap-3">
+            <div class="relative flex-1">
+              <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+              <input id="userSearch" type="text" oninput="renderUsers()" placeholder="Search name, email, phone..." class="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+            </div>
+            <select id="userFilter" onchange="renderUsers()" class="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="all">All</option>
+              <option value="suspended">Suspended</option>
+              <option value="warned">Warned (1–2)</option>
+              <option value="blocked">Blocked (3)</option>
+              <option value="admin">Admins</option>
+              <option value="kycApproved">KYC Approved</option>
+              <option value="kycPending">KYC Pending</option>
+            </select>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <div id="usersWrap"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ TAB: PRODUCTS ============ -->
+    <section id="tab-products" class="tab-panel hidden">
+      <div class="rounded-2xl bg-white border border-slate-200 shadow-sm">
+        <div class="px-5 pt-5 pb-4 border-b border-slate-100 space-y-3">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div>
+              <h2 class="font-bold text-slate-800">Product Listings</h2>
+              <p class="text-xs text-slate-500">Hide, feature, boost or delete marketplace products</p>
+            </div>
+            <button onclick="loadProducts(true).then(renderProducts)" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 text-sm font-medium transition">
+              <i data-lucide="refresh-cw" class="w-4 h-4"></i> Refresh
+            </button>
+          </div>
+          <div class="relative">
+            <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+            <input id="productSearch" type="text" oninput="renderProducts()" placeholder="Search name, seller, category..." class="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <div id="productsWrap"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ TAB: TRANSACTIONS ============ -->
+    <section id="tab-transactions" class="tab-panel hidden">
+      <div class="rounded-2xl bg-white border border-slate-200 shadow-sm">
+        <div class="px-5 pt-5 pb-4 border-b border-slate-100 space-y-3">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div>
+              <h2 class="font-bold text-slate-800">Transaction Ledger</h2>
+              <p class="text-xs text-slate-500">Every sale, boost, withdrawal and refund in the system</p>
+            </div>
+            <button onclick="loadTransactions(true).then(function(){ renderTransactions(); refreshTotals(); })" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 text-sm font-medium transition">
+              <i data-lucide="refresh-cw" class="w-4 h-4"></i> Refresh
+            </button>
+          </div>
+          <div class="flex flex-col sm:flex-row gap-3">
+            <div class="relative flex-1">
+              <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+              <input id="txSearch" type="text" oninput="renderTransactions()" placeholder="Search product, name, id..." class="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+            </div>
+            <select id="txType" onchange="renderTransactions()" class="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="all">All types</option>
+              <option value="sale">Sales</option>
+              <option value="boost">Boosts</option>
+              <option value="viewer">Viewer purchases</option>
+              <option value="withdraw">Withdrawals</option>
+              <option value="refund">Refunds</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <div id="transactionsWrap"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ TAB: FINANCE ============ -->
+    <section id="tab-finance" class="tab-panel hidden">
+      <div id="financeGrid"></div>
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mt-4">
+        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+          <h3 class="font-bold text-slate-800 mb-1">AdMob Revenue Entry</h3>
+          <p class="text-xs text-slate-500 mb-4">Record actual Google AdMob earnings for the month.</p>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Amount (TZS)</label>
+          <input id="admobAmount" type="number" min="0" placeholder="e.g. 250000" class="w-full text-sm rounded-lg border border-slate-200 px-3 py-2 mb-3">
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Month label (optional)</label>
+          <input id="admobMonth" placeholder="e.g. 8_2026" class="w-full text-sm rounded-lg border border-slate-200 px-3 py-2 mb-4">
+          <button onclick="submitAdmob()" class="px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold">Save entry</button>
+        </div>
+        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+          <h3 class="font-bold text-slate-800 mb-1">Admin Withdrawal</h3>
+          <p class="text-xs text-slate-500 mb-4">Withdraw platform earnings to a ClickPesa number.</p>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Admin user</label>
+          <select id="wdAdminUser" class="w-full text-sm rounded-lg border border-slate-200 px-3 py-2 mb-3"></select>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Amount (TZS)</label>
+          <input id="wdAmount" type="number" min="1" placeholder="e.g. 100000" class="w-full text-sm rounded-lg border border-slate-200 px-3 py-2 mb-3">
+          <label class="block text-xs font-semibold text-slate-600 mb-1">ClickPesa number (e.g. 2557xxxxxxxxx)</label>
+          <input id="wdPhone" placeholder="255712345678" class="w-full text-sm rounded-lg border border-slate-200 px-3 py-2 mb-4">
+          <button onclick="submitWithdraw()" class="px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold">Withdraw funds</button>
+        </div>
+      </div>
+      <div class="mt-4 grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-bold text-slate-800">Revenue Transactions</h3>
+            <button onclick="loadRevenue(true).then(renderRevenue)" class="text-sm font-medium px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50">Refresh</button>
+          </div>
+          <div id="revenueWrap"></div>
+        </div>
+        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-bold text-slate-800">Ad Views</h3>
+            <button onclick="loadAdViews(true).then(renderAdViews)" class="text-sm font-medium px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50">Refresh</button>
+          </div>
+          <div id="adViewsWrap"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ TAB: WITHDRAWALS ============ -->
+    <section id="tab-withdrawals" class="tab-panel hidden">
+      <div class="rounded-2xl bg-white border border-slate-200 shadow-sm">
+        <div class="px-5 pt-5 pb-4 border-b border-slate-100">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <h2 class="font-bold text-slate-800">Withdrawal Requests</h2>
+              <p class="text-xs text-slate-500">Payouts sent through ClickPesa</p>
+            </div>
+            <button onclick="loadWithdrawals(true).then(renderWithdrawals)" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 text-sm font-medium transition">
+              <i data-lucide="refresh-cw" class="w-4 h-4"></i> Refresh
+            </button>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <div id="withdrawalsWrap"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ TAB: MODERATION ============ -->
+    <section id="tab-moderation" class="tab-panel hidden">
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-bold text-slate-800">User Reports</h3>
+            <button onclick="loadReports(true).then(function(){ renderReports(); refreshBadges(); })" class="text-sm font-medium px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50">Refresh</button>
+          </div>
+          <div id="reportsWrap"></div>
+        </div>
+        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-bold text-slate-800">Fraud Alerts</h3>
+            <button onclick="loadFraud(true).then(function(){ renderFraud(); refreshBadges(); })" class="text-sm font-medium px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50">Refresh</button>
+          </div>
+          <div id="fraudWrap"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ TAB: BROADCAST ============ -->
+    <section id="tab-broadcast" class="tab-panel hidden">
+      <div class="max-w-2xl rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+        <h2 class="text-lg font-bold text-slate-800 mb-1">Broadcast Notification</h2>
+        <p class="text-sm text-slate-500 mb-5">Push + in-app notification for every user.</p>
+        <label class="block text-sm font-semibold text-slate-700 mb-1.5">Title *</label>
+        <input id="bcTitle" placeholder="e.g. New feature is live" class="w-full text-sm rounded-lg border border-slate-200 px-3 py-2.5 mb-4">
+        <label class="block text-sm font-semibold text-slate-700 mb-1.5">Message</label>
+        <textarea id="bcBody" rows="4" placeholder="Optional message body" class="w-full text-sm rounded-lg border border-slate-200 px-3 py-2.5 mb-5 resize-none"></textarea>
+        <button onclick="sendBroadcast()" id="bcSend" class="px-5 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold">Send to all users</button>
+        <p id="bcResult" class="text-xs text-slate-500 mt-3"></p>
+      </div>
+    </section>
+
+    <!-- ============ TAB: AUDIT ============ -->
+    <section id="tab-audit" class="tab-panel hidden">
+      <div class="rounded-2xl bg-white border border-slate-200 shadow-sm">
+        <div class="px-5 pt-5 pb-4 border-b border-slate-100">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <h2 class="font-bold text-slate-800">Audit Log</h2>
+              <p class="text-xs text-slate-500">Every financial movement and admin action</p>
+            </div>
+            <button onclick="loadAudit(true).then(renderAudit)" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 text-sm font-medium transition">
+              <i data-lucide="refresh-cw" class="w-4 h-4"></i> Refresh
+            </button>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <div id="auditWrap"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ TAB: SETTINGS ============ -->
+    <section id="tab-settings" class="tab-panel hidden space-y-4">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm space-y-5">
+          <div>
+            <h2 class="font-bold text-slate-800">Escrow Platform Settings</h2>
+            <p class="text-xs text-slate-500">Defaults applied to new orders</p>
+          </div>
+          <div>
+            <label class="text-sm font-medium text-slate-600">Platform Commission (%)</label>
+            <input id="rateInput" type="number" value="3.5" min="0" max="20" step="0.5" class="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+            <p class="text-xs text-slate-400 mt-1">Set server-side via PLATFORM_COMMISSION_PERCENT — this screen is informational.</p>
+          </div>
+          <div>
+            <label class="text-sm font-medium text-slate-600">Escrow Hold Period (days)</label>
+            <input type="number" value="5" min="1" max="30" class="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+          </div>
+          <div>
+            <label class="text-sm font-medium text-slate-600">ClickPesa API Secret</label>
+            <input type="password" value="••••••••••••••••" readonly class="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:outline-none text-sm font-mono">
+          </div>
+          <button onclick="saveSettings()" class="w-full rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2.5 transition">Save Settings</button>
+        </div>
+
+        <div class="space-y-4">
+          <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+            <h2 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><i data-lucide="webhook" class="w-5 h-5 text-indigo-600"></i> ClickPesa Webhook</h2>
+            <p class="text-xs text-slate-500 mb-3">Register this URL in your ClickPesa dashboard. When a buyer pays, ClickPesa notifies your Node.js server, which transitions the order to "In Escrow Vault" automatically — no admin action needed.</p>
+            <div class="flex items-center gap-2">
+              <input id="webhookUrl" readonly value="https://soko-langu-server.onrender.com/api/clickpesa/webhook" class="flex-1 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-mono text-slate-600 focus:outline-none">
+              <button onclick="copyWebhook()" class="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition whitespace-nowrap">
+                <i data-lucide="copy" class="w-4 h-4"></i> Copy
+              </button>
+            </div>
+            <div class="mt-4 space-y-2 text-xs text-slate-500">
+              <p class="flex gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500 shrink-0"></i> Payment confirmed → order moves to "In Escrow Vault"</p>
+              <p class="flex gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500 shrink-0"></i> Buyer confirms delivery → escrow pushes funds to seller wallet</p>
+              <p class="flex gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500 shrink-0"></i> Refund action → ClickPesa returns funds to buyer</p>
+            </div>
+          </div>
+          <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+            <h2 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><i data-lucide="lock" class="w-5 h-5 text-emerald-600"></i> Escrow Protection</h2>
+            <p class="text-xs text-slate-500 mb-3">Every order in this pipeline is protected end-to-end. Funds only leave the ClickPesa vault after the buyer confirms delivery, or after a dispute is resolved by an admin.</p>
+            <div class="mt-4 space-y-2 text-xs text-slate-500">
+              <p class="flex gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500 shrink-0"></i> Buyer pays ClickPesa → funds locked in vault</p>
+              <p class="flex gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500 shrink-0"></i> Seller dispatches with proof (receipt + tracking)</p>
+              <p class="flex gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500 shrink-0"></i> Buyer confirms → 3.5% commission, rest to seller wallet</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
   </main>
 </div>
 
-<div class="toast-zone" id="toasts"></div>
+<!-- ============ ORDER DETAILS MODAL ============ -->
+<div id="orderModal" class="fixed inset-0 z-[60] hidden items-center justify-center p-4">
+  <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeOrderModal()"></div>
+  <div class="relative w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
+    <div id="orderModalHeader" class="sticky top-0 bg-white border-b border-slate-100 px-6 py-4 flex items-start justify-between gap-3">
+      <div></div>
+      <button onclick="closeOrderModal()" class="p-2 rounded-lg hover:bg-slate-100 text-slate-500"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <div id="orderModalBody" class="px-6 py-5 space-y-5"></div>
+    <div class="sticky bottom-0 bg-white border-t border-slate-100 px-6 py-3 flex justify-end gap-2">
+      <button onclick="closeOrderModal()" class="px-4 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-sm font-medium text-slate-600">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ CONFIRM MODAL ============ -->
+<div id="confirmModal" class="fixed inset-0 z-[70] hidden items-center justify-center p-4">
+  <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeConfirm()"></div>
+  <div class="relative w-full max-w-md rounded-2xl bg-white shadow-2xl p-6">
+    <div id="confirmIcon" class="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4"><i data-lucide="alert-triangle" class="w-6 h-6"></i></div>
+    <h3 id="confirmTitle" class="text-lg font-bold text-slate-800">Are you sure?</h3>
+    <p id="confirmMsg" class="mt-2 text-sm text-slate-500">This action will be recorded in the audit log.</p>
+    <div class="mt-6 flex justify-end gap-2">
+      <button onclick="closeConfirm()" class="px-4 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-sm font-medium text-slate-600">Cancel</button>
+      <button id="confirmBtn" onclick="confirmAction()" class="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TX DETAIL MODAL ============ -->
+<div id="txModal" class="fixed inset-0 z-[70] hidden items-center justify-center p-4">
+  <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeModal('txModal')"></div>
+  <div class="relative w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
+    <div class="sticky top-0 bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+      <h3 class="font-bold text-slate-800">Transaction Detail</h3>
+      <button onclick="closeModal('txModal')" class="p-2 rounded-lg hover:bg-slate-100 text-slate-500"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <div class="p-6" id="txModalBody"></div>
+  </div>
+</div>
+
+<!-- ============ USER DETAIL MODAL ============ -->
+<div id="userModal" class="fixed inset-0 z-[70] hidden items-center justify-center p-4">
+  <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeModal('userModal')"></div>
+  <div class="relative w-full max-w-3xl max-h-[85vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
+    <div class="sticky top-0 bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+      <h3 class="font-bold text-slate-800">User Detail</h3>
+      <button onclick="closeModal('userModal')" class="p-2 rounded-lg hover:bg-slate-100 text-slate-500"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <div class="p-6" id="userModalBody"></div>
+  </div>
+</div>
+
+<!-- ============ KYC DETAIL MODAL ============ -->
+<div id="kycModal" class="fixed inset-0 z-[70] hidden items-center justify-center p-4">
+  <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeModal('kycModal')"></div>
+  <div class="relative w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
+    <div class="sticky top-0 bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+      <h3 class="font-bold text-slate-800">KYC Application</h3>
+      <button onclick="closeModal('kycModal')" class="p-2 rounded-lg hover:bg-slate-100 text-slate-500"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <div class="p-6" id="kycModalBody"></div>
+  </div>
+</div>
+
+<!-- ============ TOASTS ============ -->
+<div id="toasts" class="fixed bottom-5 right-5 z-[80] space-y-2 w-[calc(100%-2.5rem)] max-w-sm"></div>
 
 <script>
 'use strict';
 var API = 'https://soko-langu-server.onrender.com';
 var SECRET_KEY = 'soko_vibe_admin_secret';
 
-var $ = function (id) { return document.getElementById(id); };
+var S = {};
+var loaded = {};
+var charts = {};
+var kycView = 'pending';
+var confirmCb = null;
+
+var state = { orderSearch:'', orderStatus:'all', disputeSearch:'', disputeFilter:'all', boostSearch:'', boostFilter:'all', boostStatus:'all', tab:'dashboard' };
+
+function $(id) { return document.getElementById(id); }
 
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
-    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
   });
 }
 
-function toast(msg, kind) {
-  var zone = $('toasts');
-  var el = document.createElement('div');
-  el.className = 'toast ' + (kind || '');
-  el.textContent = msg;
-  zone.appendChild(el);
-  setTimeout(function () { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; }, 3200);
-  setTimeout(function () { el.remove(); }, 3600);
+function ts(v) {
+  if (v == null) return null;
+  if (typeof v === 'object') {
+    if (v._seconds != null) return v._seconds * 1000 + (v._nanoseconds || 0) / 1e6;
+    if (v.seconds != null) return v.seconds * 1000;
+    if (v.toMillis) return v.toMillis();
+    return null;
+  }
+  if (typeof v === 'number') return v < 1e12 ? v * 1000 : v;
+  var d = new Date(v);
+  return isNaN(d.getTime()) ? null : d.getTime();
 }
 
+function timeAgo(v) {
+  var ms = ts(v);
+  if (ms == null) return '—';
+  var s = Math.floor((Date.now() - ms) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s / 60) + 'm ago';
+  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+  if (s < 86400 * 30) return Math.floor(s / 86400) + 'd ago';
+  return fmtDate(v);
+}
+
+function fmtDate(v) {
+  var ms = ts(v);
+  if (ms == null) return '—';
+  return new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function fmtDateTime(v) {
+  var ms = ts(v);
+  if (ms == null) return '—';
+  return new Date(ms).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function fmtTZ(n) { return 'TZS ' + Math.round(Number(n) || 0).toLocaleString('en-US'); }
+function num(n) { return Math.round(Number(n) || 0); }
+function orderTotal(t) { return Number(t.totalAmount) || (Number(t.productPrice || 0) + Number(t.shippingCost || 0)); }
+
+/* ---------------- STATUS MAP (real backend statuses → admin-dashboard look) ---------------- */
+var STATUS = {
+  pending:            { label:'Pending Shipping',   badge:'bg-slate-50 text-slate-700 ring-1 ring-slate-200',   dot:'bg-slate-400', chart:'#94a3b8' },
+  awaiting_payment:   { label:'Awaiting Payment',   badge:'bg-amber-50 text-amber-700 ring-1 ring-amber-200',   dot:'bg-amber-500', chart:'#f59e0b' },
+  quoted:             { label:'Quoted',             badge:'bg-slate-50 text-slate-700 ring-1 ring-slate-200',   dot:'bg-slate-400', chart:'#94a3b8' },
+  processing:         { label:'Processing',         badge:'bg-amber-50 text-amber-700 ring-1 ring-amber-200',   dot:'bg-amber-500', chart:'#f59e0b' },
+  paid:               { label:'Paid',               badge:'bg-sky-50 text-sky-700 ring-1 ring-sky-200',         dot:'bg-sky-500',   chart:'#0ea5e9' },
+  escrow_hold:        { label:'In Escrow Vault',    badge:'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200', dot:'bg-indigo-500', chart:'#6366f1' },
+  paid_escrow_held:   { label:'In Escrow Vault',    badge:'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200', dot:'bg-indigo-500', chart:'#6366f1' },
+  dispatched:         { label:'Shipped / In Transit', badge:'bg-sky-50 text-sky-700 ring-1 ring-sky-200',       dot:'bg-sky-500',   chart:'#0ea5e9' },
+  in_transit:         { label:'Shipped / In Transit', badge:'bg-sky-50 text-sky-700 ring-1 ring-sky-200',       dot:'bg-sky-500',   chart:'#0ea5e9' },
+  disputed:           { label:'Disputed',            badge:'bg-rose-50 text-rose-700 ring-1 ring-rose-200',     dot:'bg-rose-500',  chart:'#f43f5e' },
+  completed:          { label:'Completed / Released', badge:'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200', dot:'bg-emerald-500', chart:'#10b981' },
+  delivered:          { label:'Completed / Released', badge:'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200', dot:'bg-emerald-500', chart:'#10b981' },
+  delivery_confirmed: { label:'Completed / Released', badge:'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200', dot:'bg-emerald-500', chart:'#10b981' },
+  confirmed:          { label:'Completed / Released', badge:'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200', dot:'bg-emerald-500', chart:'#10b981' },
+  refunded:           { label:'Refunded via ClickPesa', badge:'bg-fuchsia-50 text-fuchsia-700 ring-1 ring-fuchsia-200', dot:'bg-fuchsia-500', chart:'#e879f9' },
+  cancelled:          { label:'Cancelled',           badge:'bg-slate-100 text-slate-600 ring-1 ring-slate-200', dot:'bg-slate-400', chart:'#94a3b8' },
+  failed:             { label:'Failed',              badge:'bg-red-50 text-red-700 ring-1 ring-red-200',         dot:'bg-red-500',   chart:'#ef4444' }
+};
+var CHIP_KEYS = ['awaiting_payment', 'escrow_hold', 'dispatched', 'disputed', 'completed', 'refunded', 'cancelled', 'failed'];
+
+function bucket(s) {
+  if (s === 'paid' || s === 'quoted' || s === 'processing' || s === 'pending' || s === 'awaiting_payment') return 'awaiting_payment';
+  if (s === 'escrow_hold' || s === 'paid_escrow_held') return 'escrow_hold';
+  if (s === 'dispatched' || s === 'in_transit') return 'dispatched';
+  if (s === 'disputed') return 'disputed';
+  if (s === 'completed' || s === 'delivered' || s === 'delivery_confirmed' || s === 'confirmed') return 'completed';
+  if (s === 'refunded') return 'refunded';
+  if (s === 'cancelled') return 'cancelled';
+  if (s === 'failed') return 'failed';
+  return s;
+}
+function isEscrow(s) { return s === 'escrow_hold' || s === 'paid_escrow_held'; }
+function isDone(s) { return ['completed', 'delivered', 'delivery_confirmed', 'confirmed'].indexOf(s) !== -1; }
+function isShipped(s) { return s === 'dispatched' || s === 'in_transit' || s === 'disputed' || isDone(s) || s === 'refunded'; }
+
+function statusBadge(status) {
+  var st = STATUS[status] || STATUS[bucket(status)] || { label: status || 'Unknown', badge: 'bg-slate-100 text-slate-600 ring-1 ring-slate-200', dot: 'bg-slate-400' };
+  return '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ' + st.badge + '"><span class="w-1.5 h-1.5 rounded-full ' + st.dot + '"></span>' + esc(st.label) + '</span>';
+}
+function statusPill(label, colorCls) {
+  return '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold ' + colorCls + '">' + esc(label) + '</span>';
+}
+
+function refreshIcons() { if (window.lucide) window.lucide.createIcons(); }
+
+/* ---------------- TOAST ---------------- */
+function toast(msg, kind) {
+  var palette = { ok: 'bg-emerald-600', err: 'bg-rose-600', info: 'bg-slate-800' };
+  var icon = { ok: 'check-circle-2', err: 'x-circle', info: 'info' };
+  var box = document.createElement('div');
+  box.className = 'flex items-start gap-3 rounded-xl px-4 py-3 shadow-xl text-white text-sm font-medium ' + (palette[kind] || palette.info) + ' animate-[slideIn_.25s_ease]';
+  box.innerHTML = '<i data-lucide="' + (icon[kind] || icon.info) + '" class="w-5 h-5 shrink-0"></i><span class="min-w-0">' + esc(msg) + '</span><button onclick="this.parentElement.remove()" class="ml-auto text-white/70 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>';
+  $('toasts').appendChild(box);
+  refreshIcons();
+  setTimeout(function () { box.style.opacity = '0'; box.style.transition = 'opacity .3s'; }, 3400);
+  setTimeout(function () { box.remove(); }, 3800);
+}
+
+/* ---------------- CONFIRM MODAL (admin-dashboard style) ---------------- */
+function openConfirm(opts) {
+  confirmCb = opts.fn || null;
+  $('confirmTitle').textContent = opts.title || 'Are you sure?';
+  $('confirmMsg').innerHTML = opts.msg || '';
+  var icon = $('confirmIcon');
+  var b = $('confirmBtn');
+  if (opts.tone === 'emerald') {
+    icon.className = 'w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-4';
+    icon.innerHTML = '<i data-lucide="shield-check" class="w-6 h-6"></i>';
+    b.className = 'px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold';
+  } else {
+    icon.className = 'w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4';
+    icon.innerHTML = '<i data-lucide="alert-triangle" class="w-6 h-6"></i>';
+    b.className = 'px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold';
+  }
+  b.textContent = opts.btn || 'Confirm';
+  refreshIcons();
+  openModal('confirmModal');
+}
+function closeConfirm() {
+  $('confirmModal').classList.add('hidden');
+  $('confirmModal').classList.remove('flex');
+  confirmCb = null;
+}
+function confirmAction() {
+  var cb = confirmCb;
+  closeConfirm();
+  if (cb) cb();
+}
+function openModal(id) { $(id).classList.remove('hidden'); $(id).classList.add('flex'); }
+function closeModal(id) { $(id).classList.add('hidden'); $(id).classList.remove('flex'); }
+
+/* ---------------- API ---------------- */
 function api(path, opts) {
   opts = opts || {};
   opts.headers = opts.headers || {};
@@ -277,24 +1002,29 @@ function api(path, opts) {
   });
 }
 
-function fmtTZ(n) { return 'TSh ' + Math.round(Number(n) || 0).toLocaleString(); }
-function timeAgo(ts) {
-  if (!ts) return '-';
-  var d = new Date(ts.seconds ? ts.seconds * 1000 : ts);
-  if (isNaN(d.getTime())) return '-';
-  var s = Math.floor((Date.now() - d.getTime()) / 1000);
-  if (s < 60) return 'just now';
-  if (s < 3600) return Math.floor(s / 60) + 'm ago';
-  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
-  return d.toLocaleDateString();
+function spinner(label) {
+  return '<div class="py-14 text-center"><div class="w-8 h-8 mx-auto rounded-full border-2 border-slate-200 border-t-indigo-500 animate-spin mb-3"></div>' +
+    '<p class="text-sm text-slate-500">' + esc(label) + '</p></div>';
+}
+function emptyRow(msg) {
+  return '<div class="py-10 text-center text-sm text-slate-400">' + esc(msg) + '</div>';
+}
+function tableShell(headers, rowsHtml, minW) {
+  return '<table class="w-full text-sm" style="min-width:' + (minW || '640px') + 'px">' +
+    '<thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500"><tr>' + headers.map(function (h) {
+      return '<th class="px-4 py-3 font-semibold whitespace-nowrap">' + esc(h) + '</th>';
+    }).join('') + '</tr></thead><tbody>' + rowsHtml + '</tbody></table>';
 }
 
-/* ── Gate ─────────────────────────────────────────── */
+function avatar(name, sizeCls) {
+  var ch = ((name || '?')[0] || '?').toUpperCase();
+  return '<div class="' + (sizeCls || 'w-9 h-9 text-sm') + ' rounded-full bg-gradient-to-br from-indigo-500 to-emerald-500 text-white font-bold flex items-center justify-center shrink-0">' + esc(ch) + '</div>';
+}
+
+/* ============ GATE ============ */
 function gateFail() {
   sessionStorage.removeItem(SECRET_KEY);
-  $('gate').style.display = 'flex';
-  $('app').style.display = 'none';
-  $('gateErr').textContent = 'Invalid or expired secret.';
+  $('gate').classList.remove('hidden');
 }
 function unlock() {
   var secret = $('secret').value.trim();
@@ -302,148 +1032,850 @@ function unlock() {
   sessionStorage.setItem(SECRET_KEY, secret);
   $('gateErr').textContent = '';
   api('/api/admin/stats').then(function () {
-    $('gate').style.display = 'none';
-    $('app').style.display = 'block';
-    loadAll();
-  }).catch(function (e) { gateFail(); });
+    $('gate').classList.add('hidden');
+    init();
+  }).catch(function () { gateFail(); });
 }
+function logout() { sessionStorage.removeItem(SECRET_KEY); location.reload(); }
 $('unlockBtn').addEventListener('click', unlock);
 $('secret').addEventListener('keydown', function (e) { if (e.key === 'Enter') unlock(); });
-$('logout').addEventListener('click', function () {
-  sessionStorage.removeItem(SECRET_KEY);
-  location.reload();
-});
 
-/* ── Tabs ─────────────────────────────────────────── */
-document.querySelectorAll('.tab').forEach(function (btn) {
-  btn.addEventListener('click', function () {
-    document.querySelectorAll('.tab').forEach(function (b) { b.classList.remove('active'); });
-    document.querySelectorAll('.panel').forEach(function (p) { p.classList.remove('active'); });
-    btn.classList.add('active');
-    $('panel-' + btn.dataset.tab).classList.add('active');
-    if (btn.dataset.tab === 'users' && !window._usersLoaded) loadUsers();
-    if (btn.dataset.tab === 'products' && !window._productsLoaded) loadProducts();
-  });
-});
-
-/* ── Overview ─────────────────────────────────────── */
-function loadStats() {
-  api('/api/admin/stats').then(function (d) {
-    var cards = [
-      { n: d.totalUsers, l: 'Total Users' },
-      { n: d.totalOrders, l: 'Total Orders' },
-      { n: d.totalWithdrawals, l: 'Withdrawals' },
-      { n: d.totalAdViews, l: 'Ad Views' },
-      { n: fmtTZ(d.totalSellerBalance), l: 'Seller Balances' },
-    ];
-    $('statsGrid').innerHTML = cards.map(function (c) {
-      return '<div class="stat-card"><div class="num">' + esc(c.n) + '</div><div class="lbl">' + esc(c.l) + '</div></div>';
-    }).join('');
-  }).catch(function (e) { toast(e.message, 'err'); });
+/* ============ LAYOUT ============ */
+function toggleSidebar() {
+  var sb = $('sidebar');
+  sb.classList.toggle('-translate-x-full');
+  $('sidebarOverlay').classList.toggle('hidden');
 }
-$('ovSend').addEventListener('click', function () {
-  var title = $('ovTitle').value.trim();
-  var body = $('ovBody').value.trim();
-  if (!title) { toast('Title is required', 'err'); return; }
-  var btn = $('ovSend'); btn.disabled = true; btn.textContent = 'Sending…';
-  api('/api/admin/broadcast-notification', { method: 'POST', body: JSON.stringify({ title: title, body: body }) })
-    .then(function (d) { toast(d.message || 'Broadcast sent', 'ok'); $('ovTitle').value = ''; $('ovBody').value = ''; })
-    .catch(function (e) { toast(e.message, 'err'); })
-    .finally(function () { btn.disabled = false; btn.textContent = 'Send to all users'; });
+$('sidebarOverlay').addEventListener('click', function () {
+  $('sidebar').classList.add('-translate-x-full');
+  $('sidebarOverlay').classList.add('hidden');
 });
 
-/* ── Users ────────────────────────────────────────── */
-var allUsers = [];
-function loadUsers() {
-  var wrap = $('usersTableWrap');
-  wrap.innerHTML = '<div class="loading"><div class="spinner"></div>Loading users…</div>';
-  api('/api/admin/users').then(function (d) {
-    allUsers = d.users || [];
-    window._usersLoaded = true;
-    renderUsers();
-  }).catch(function (e) {
-    wrap.innerHTML = '<div class="empty">Failed to load users: ' + esc(e.message) + '</div>';
+var TAB_TITLES = {
+  dashboard: 'Dashboard Overview', orders: 'Escrow Orders', disputes: 'Dispute Center',
+  boosts: 'Product Boosts', analytics: 'Marketplace Analytics', kyc: 'KYC Verification',
+  users: 'Users', products: 'Products', transactions: 'Transactions', finance: 'Finance',
+  withdrawals: 'Withdrawals', moderation: 'Moderation', broadcast: 'Broadcast',
+  audit: 'Audit Log', settings: 'Settings'
+};
+function switchTab(tab) {
+  state.tab = tab;
+  $('pageTitle').textContent = TAB_TITLES[tab] || tab;
+  document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.add('hidden'); });
+  $('tab-' + tab).classList.remove('hidden');
+  document.querySelectorAll('.nav-item').forEach(function (b) {
+    var active = b.dataset.tab === tab;
+    b.classList.toggle('bg-indigo-600', active);
+    b.classList.toggle('text-white', active);
+    b.classList.toggle('text-slate-400', !active);
+    b.classList.toggle('hover:bg-slate-800', !active);
+  });
+  var render = {
+    dashboard: renderOverview, orders: renderOrders, disputes: renderDisputes,
+    boosts: renderBoosts, analytics: renderAnalytics, kyc: renderKyc,
+    users: renderUsers, products: renderProducts, transactions: renderTransactions,
+    finance: renderFinance, withdrawals: renderWithdrawals, moderation: renderModeration,
+    broadcast: renderBroadcast, audit: renderAudit
+  }[tab];
+  if (render) render();
+  var ov = $('sidebarOverlay');
+  if (!ov.classList.contains('hidden')) {
+    $('sidebar').classList.add('-translate-x-full');
+    ov.classList.add('hidden');
+  }
+}
+document.querySelectorAll('.nav-item').forEach(function (btn) {
+  btn.addEventListener('click', function () { switchTab(btn.dataset.tab); });
+});
+
+$('notifBtn').addEventListener('click', function (e) {
+  e.stopPropagation();
+  $('profileMenu').classList.add('hidden');
+  $('notifMenu').classList.toggle('hidden');
+});
+$('profileBtn').addEventListener('click', function (e) {
+  e.stopPropagation();
+  $('notifMenu').classList.add('hidden');
+  $('profileMenu').classList.toggle('hidden');
+});
+document.addEventListener('click', function () {
+  $('notifMenu').classList.add('hidden');
+  $('profileMenu').classList.add('hidden');
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') { closeOrderModal(); closeConfirm(); closeModal('txModal'); closeModal('userModal'); closeModal('kycModal'); $('notifMenu').classList.add('hidden'); $('profileMenu').classList.add('hidden'); }
+});
+
+function lastSync() {
+  $('lastSyncLabel').textContent = 'Synced ' + new Date().toLocaleTimeString();
+}
+
+/* ============ DATA LOADERS ============ */
+function loadStats(force) {
+  if (loaded.stats && !force) return Promise.resolve(S.stats);
+  return api('/api/admin/stats').then(function (d) { S.stats = d; loaded.stats = true; return d; });
+}
+function loadAnalytics(force) {
+  if (loaded.analytics && !force) return Promise.resolve(S.analytics);
+  return api('/api/admin/analytics').then(function (d) { S.analytics = d; loaded.analytics = true; return d; });
+}
+function loadFinance(force) {
+  if (loaded.finance && !force) return Promise.resolve(S.finance);
+  return api('/api/admin/finance-summary').then(function (d) { S.finance = d; loaded.finance = true; return d; });
+}
+function loadTransactions(force) {
+  if (loaded.transactions && !force) return Promise.resolve(S.transactions);
+  return api('/api/admin/transactions?limit=300').then(function (d) {
+    S.transactions = d.transactions || []; loaded.transactions = true; lastSync(); return d;
+  }).catch(function (e) { throw e; });
+}
+function loadUsers(force) {
+  if (loaded.users && !force) return Promise.resolve(S.users);
+  return api('/api/admin/users').then(function (d) {
+    S.users = d.users || []; loaded.users = true; lastSync(); return d;
+  }).catch(function (e) { throw e; });
+}
+function loadProducts(force) {
+  if (loaded.products && !force) return Promise.resolve(S.products);
+  return api('/api/admin/products').then(function (d) {
+    S.products = d.products || []; loaded.products = true; lastSync(); return d;
+  }).catch(function (e) { throw e; });
+}
+function loadKyc(force) {
+  var jobs = [];
+  if (loaded.kycPending && !force) jobs.push(Promise.resolve(S.kycPending));
+  else jobs.push(api('/api/admin/kyc/pending').then(function (d) { S.kycPending = d.pending || []; loaded.kycPending = true; }));
+  if (loaded.kycAll && !force) jobs.push(Promise.resolve(S.kycAll));
+  else jobs.push(api('/api/admin/kyc/all').then(function (d) { S.kycAll = d.all || []; loaded.kycAll = true; }));
+  return Promise.all(jobs).then(function () { lastSync(); });
+}
+function loadRevenue(force) {
+  if (loaded.revenue && !force) return Promise.resolve(S.revenue);
+  return api('/api/admin/revenue-transactions?limit=200').then(function (d) {
+    S.revenue = d.items || []; loaded.revenue = true; lastSync(); return d;
+  }).catch(function (e) { throw e; });
+}
+function loadWithdrawals(force) {
+  if (loaded.withdrawals && !force) return Promise.resolve(S.withdrawals);
+  return api('/api/admin/withdrawals?limit=200').then(function (d) {
+    S.withdrawals = d.withdrawals || []; loaded.withdrawals = true; lastSync(); return d;
+  }).catch(function (e) { throw e; });
+}
+function loadAudit(force) {
+  if (loaded.audit && !force) return Promise.resolve(S.audit);
+  return api('/api/admin/audit-log?limit=200').then(function (d) {
+    S.audit = d.logs || []; loaded.audit = true; lastSync(); return d;
+  }).catch(function (e) { throw e; });
+}
+function loadAdViews(force) {
+  if (loaded.adViews && !force) return Promise.resolve(S.adViews);
+  return api('/api/admin/ad-views?limit=200').then(function (d) {
+    S.adViews = d.items || []; loaded.adViews = true; lastSync(); return d;
+  }).catch(function (e) { throw e; });
+}
+function loadReports(force) {
+  if (loaded.reports && !force) return Promise.resolve(S.reports);
+  return api('/api/reports').then(function (d) {
+    S.reports = d.reports || []; loaded.reports = true; lastSync(); return d;
+  }).catch(function (e) { throw e; });
+}
+function loadFraud(force) {
+  if (loaded.fraud && !force) return Promise.resolve(S.fraud);
+  return api('/api/fraud/alerts').then(function (d) {
+    S.fraud = d.alerts || []; loaded.fraud = true; lastSync(); return d;
+  }).catch(function (e) { throw e; });
+}
+function loadUserDetail(uid, force) {
+  if (S.userDetail && S.userDetail._uid === uid && !force) return Promise.resolve(S.userDetail);
+  return api('/api/admin/user-detail/' + encodeURIComponent(uid)).then(function (d) {
+    d._uid = uid; S.userDetail = d; return d;
   });
 }
-function renderUsers() {
-  var q = ($('userSearch').value || '').toLowerCase();
-  var f = $('userFilter').value;
-  var list = allUsers.filter(function (u) {
-    var s = ((u.displayName || '') + ' ' + (u.email || '') + ' ' + (u.phone || '') + ' ' + (u.name || '')).toLowerCase();
-    var ok = s.indexOf(q) !== -1;
-    var w = Number(u.policyWarnings) || 0;
-    if (f === 'suspended' && !(u.isSuspended === true)) ok = false;
-    if (f === 'warned' && !(w >= 1 && w < 3)) ok = false;
-    if (f === 'blocked' && !(w >= 3)) ok = false;
-    if (f === 'admin' && !(u.isAdmin === true)) ok = false;
-    return ok;
+
+function saleTx() {
+  return (S.transactions || []).filter(function (t) {
+    return !t.type || t.type === 'sale' || t.type === 'viewer' || t.type === 'view';
   });
-  var wrap = $('usersTableWrap');
-  if (!list.length) {
-    wrap.innerHTML = '<div class="empty">No users found.</div>';
+}
+function getBoosts() {
+  return (S.transactions || []).filter(function (t) { return t.type === 'boost' && (t.status === 'completed' || t.status === 'paid'); })
+    .map(function (t) {
+      var days = Number(t.boostDays) || 0;
+      var started = ts(t.createdAt) || Date.now();
+      var ends = days > 0 ? started + days * 86400000 : started + 7 * 86400000;
+      return { id: t.id, product: t.productName || '—', seller: t.sellerName || '—', tier: t.boostTier || 'bronze', amount: t.amount || 0, started: started, ends: ends, active: Date.now() < ends };
+    });
+}
+
+function refreshAll() {
+  var icon = $('refreshIcon');
+  icon.classList.add('animate-spin');
+  var jobs = [];
+  ['loadStats', 'loadAnalytics', 'loadFinance', 'loadTransactions', 'loadUsers', 'loadProducts',
+   'loadKyc', 'loadRevenue', 'loadWithdrawals', 'loadAudit', 'loadAdViews', 'loadReports', 'loadFraud'].forEach(function (fn) {
+    try { jobs.push(window[fn](true).catch(function () {})); } catch (e) {}
+  });
+  Promise.all(jobs).then(function () {
+    icon.classList.remove('animate-spin');
+    toast('Dashboard synced — live data from Firestore via Node.js', 'ok');
+    refreshTotals();
+    refreshBadges();
+    var active = document.querySelector('.nav-item.bg-indigo-600');
+    if (active) switchTab(active.dataset.tab); else switchTab(state.tab || 'dashboard');
+  });
+}
+
+/* ============ DASHBOARD ============ */
+function renderAlerts() {
+  var el = $('ovAlerts');
+  Promise.all([loadKyc(), loadReports(), loadFraud()]).then(function () {
+    var txs = S.transactions || [];
+    var disputed = txs.filter(function (t) { return t.status === 'disputed'; }).length;
+    var alerts = [];
+    var kycCount = (S.kycPending || []).length;
+    var pendingReports = (S.reports || []).filter(function (r) { return r.status === 'pending'; }).length;
+    var openFraud = (S.fraud || []).filter(function (a) { return !a.resolved; }).length;
+    if (kycCount > 0) alerts.push({ tab: 'kyc', icon: 'badge-check', cls: 'border-amber-200 bg-amber-50 text-amber-700', label: kycCount + ' KYC application' + (kycCount > 1 ? 's' : '') + ' waiting' });
+    if (disputed > 0) alerts.push({ tab: 'disputes', icon: 'scale', cls: 'border-rose-200 bg-rose-50 text-rose-700', label: disputed + ' active dispute' + (disputed > 1 ? 's' : '') });
+    if (pendingReports > 0) alerts.push({ tab: 'moderation', icon: 'flag', cls: 'border-orange-200 bg-orange-50 text-orange-700', label: pendingReports + ' pending report' + (pendingReports > 1 ? 's' : '') });
+    if (openFraud > 0) alerts.push({ tab: 'moderation', icon: 'shield-alert', cls: 'border-red-200 bg-red-50 text-red-700', label: openFraud + ' open fraud alert' + (openFraud > 1 ? 's' : '') });
+    el.innerHTML = alerts.length ? '<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">' + alerts.map(function (a) {
+      return '<button onclick="switchTab(\'' + a.tab + '\')" class="flex items-center gap-3 rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition hover:shadow ' + a.cls + '">' +
+        '<i data-lucide="' + a.icon + '" class="w-5 h-5 shrink-0"></i>' + esc(a.label) + '</button>';
+    }).join('') + '</div>' : '';
+    refreshIcons();
+  }).catch(function () { el.innerHTML = ''; });
+}
+
+function renderOverview() {
+  renderAlerts();
+  refreshTotals();
+  renderRecent();
+  renderDashboardExtras();
+  updateCharts();
+}
+
+function refreshTotals() {
+  var txs = S.transactions || [];
+  var escrowTx = txs.filter(function (t) { return isEscrow(t.status) || t.status === 'dispatched' || t.status === 'in_transit'; });
+  var liability = escrowTx.reduce(function (a, t) { return a + orderTotal(t); }, 0);
+  var fin = S.finance || {};
+  var earnings = Number(fin.totalAdminBalance) || 0;
+  var disputes = txs.filter(function (t) { return t.status === 'disputed'; }).length;
+  var boosts = getBoosts();
+  var activeBoosts = boosts.filter(function (b) { return b.active; }).length;
+
+  $('statLiability').textContent = fmtTZ(liability);
+  $('statEarnings').textContent = fmtTZ(earnings);
+  $('statDisputes').textContent = disputes;
+  $('statBoosts').textContent = activeBoosts;
+  $('navVault').textContent = fmtTZ(liability);
+  $('sideVault').textContent = fmtTZ(liability);
+  $('navFees').textContent = fmtTZ(earnings);
+  $('sideFees').textContent = fmtTZ(earnings);
+
+  var escrowCount = txs.filter(function (t) { return isEscrow(t.status) || t.status === 'dispatched' || t.status === 'in_transit'; }).length;
+  setBadge('sideOrdersBadge', escrowCount);
+  setBadge('sideDisputesBadge', disputes);
+}
+
+function renderRecent() {
+  var txs = saleTx();
+  var recent = txs.slice().sort(function (a, b) { return (ts(b.createdAt) || 0) - (ts(a.createdAt) || 0); }).slice(0, 6);
+  $('recentOrders').innerHTML = recent.map(function (t) {
+    return '<tr class="hover:bg-slate-50 transition">' +
+      '<td class="px-5 py-3"><p class="font-semibold text-slate-800">' + esc(t.productName || '—') + '</p><p class="text-xs text-slate-500">' + esc(t.id || '') + ' · ' + timeAgo(t.createdAt) + '</p></td>' +
+      '<td class="px-5 py-3 text-slate-600 whitespace-nowrap">' + esc(t.buyerName || '—') + '</td>' +
+      '<td class="px-5 py-3 font-semibold text-slate-800 whitespace-nowrap">' + fmtTZ(orderTotal(t)) + '</td>' +
+      '<td class="px-5 py-3 whitespace-nowrap">' + statusBadge(t.status) + '</td>' +
+      '<td class="px-5 py-3 text-right"><button onclick="openOrderModal(\'' + esc(t.id) + '\')" class="p-2 rounded-lg hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 transition"><i data-lucide="eye" class="w-4 h-4"></i></button></td>' +
+      '</tr>';
+  }).join('');
+  refreshIcons();
+}
+
+function renderDashboardExtras() {
+  var txs = S.transactions || [];
+  var disputed = txs.filter(function (t) { return t.status === 'disputed'; });
+  var el = $('dashboardDisputes');
+  el.innerHTML = disputed.length ? disputed.slice(0, 3).map(function (t) {
+    var di = t.disputeInfo || {};
+    return '<div class="flex items-center gap-3 rounded-xl border border-rose-100 bg-rose-50/60 p-3">' +
+      '<div class="w-9 h-9 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center shrink-0"><i data-lucide="alert-triangle" class="w-4 h-4"></i></div>' +
+      '<div class="min-w-0 flex-1"><p class="text-sm font-semibold text-slate-800 truncate">' + esc(t.id || '') + '</p><p class="text-xs text-slate-500 truncate">' + esc(t.buyerName || '') + ' vs ' + esc(t.sellerName || '') + '</p></div>' +
+      '<span class="text-xs font-semibold text-rose-600 whitespace-nowrap">' + timeAgo(di.raisedAt) + '</span>' +
+      '</div>';
+  }).join('') : '<p class="text-sm text-slate-400 text-center py-4">All clear — no open disputes</p>';
+
+  var an = S.analytics || {};
+  var cats = an.productsByCategory || {};
+  var entries = Object.keys(cats).map(function (k) { return { name: k, count: cats[k] }; }).sort(function (a, b) { return b.count - a.count; }).slice(0, 4);
+  var max = entries.length ? Math.max.apply(null, entries.map(function (c) { return c.count; })) : 1;
+  $('dashCategories').innerHTML = entries.length ? entries.map(function (c) {
+    return '<div class="flex items-center justify-between gap-2 text-sm"><span class="text-slate-600 truncate">' + esc(c.name) + '</span><span class="font-semibold text-slate-800 whitespace-nowrap">' + c.count + '</span></div>' +
+      '<div class="h-1.5 rounded-full bg-slate-100 -mt-1"><div class="h-full rounded-full bg-indigo-500" style="width:' + Math.round(c.count / max * 100) + '%"></div></div>';
+  }).join('') : '<p class="text-sm text-slate-400 text-center py-4">No product data yet</p>';
+  refreshIcons();
+}
+
+/* ============ CHARTS ============ */
+function initCharts() {
+  var vctx = $('volumeChart').getContext('2d');
+  charts.volume = new Chart(vctx, {
+    type: 'bar',
+    data: { labels: [], datasets: [
+      { type: 'bar', label: 'Escrow Volume', data: [], backgroundColor: 'rgba(99,102,241,0.85)', borderRadius: 6, yAxisID: 'y' },
+      { type: 'line', label: 'Platform Commission', data: [], borderColor: '#059669', backgroundColor: 'rgba(5,150,105,0.10)', fill: true, tension: 0.4, pointRadius: 3, pointBackgroundColor: '#059669', yAxisID: 'y1' }
+    ] },
+    options: {
+      responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      scales: {
+        y: { beginAtZero: true, grid: { color: 'rgba(15,23,42,0.06)' }, ticks: { callback: function (v) { return 'TZS ' + (v / 1e6).toFixed(1) + 'M'; } } },
+        y1: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, ticks: { callback: function (v) { return 'TZS ' + (v / 1e6).toFixed(1) + 'M'; } } }
+      },
+      plugins: { legend: { position: 'bottom' } }
+    }
+  });
+
+  var dctx = $('distChart').getContext('2d');
+  charts.dist = new Chart(dctx, {
+    type: 'doughnut',
+    data: { labels: [], datasets: [{ data: [], backgroundColor: [], borderWidth: 2, borderColor: '#ffffff' }] },
+    options: { responsive: true, maintainAspectRatio: false, cutout: '62%', plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, padding: 14, usePointStyle: true, pointStyle: 'circle' } } } }
+  });
+}
+
+function escrowish(s) {
+  return ['escrow_hold', 'paid_escrow_held', 'dispatched', 'in_transit', 'disputed', 'completed', 'delivered', 'delivery_confirmed', 'confirmed', 'refunded'].indexOf(s) !== -1;
+}
+
+function updateCharts() {
+  if (!charts.volume || !charts.dist) return;
+  var txs = saleTx();
+  var now = new Date();
+  var months = [];
+  var labels = [];
+  for (var i = 7; i >= 0; i--) {
+    var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    labels.push(d.toLocaleDateString('en-GB', { month: 'short' }));
+    months.push({ y: d.getFullYear(), m: d.getMonth(), escrow: 0, comm: 0 });
+  }
+  txs.forEach(function (t) {
+    var ms = ts(t.createdAt);
+    if (ms == null) return;
+    var dd = new Date(ms);
+    var b = null;
+    for (var i = 0; i < months.length; i++) { if (months[i].y === dd.getFullYear() && months[i].m === dd.getMonth()) { b = months[i]; break; } }
+    if (!b) return;
+    var st = t.status || '';
+    if (escrowish(st)) b.escrow += orderTotal(t);
+    if (isDone(st)) b.comm += Number(t.sokovibeCommission || t.platformFee || 0);
+  });
+
+  charts.volume.data.labels = labels;
+  charts.volume.data.datasets[0].data = months.map(function (m) { return m.escrow; });
+  charts.volume.data.datasets[1].data = months.map(function (m) { return m.comm; });
+  charts.volume.update();
+
+  var counts = {};
+  CHIP_KEYS.forEach(function (k) { counts[k] = 0; });
+  txs.forEach(function (t) { counts[bucket(t.status)] = (counts[bucket(t.status)] || 0) + 1; });
+  var labels2 = [], data2 = [], colors2 = [];
+  CHIP_KEYS.forEach(function (k) {
+    if (counts[k]) { labels2.push(STATUS[k].label); data2.push(counts[k]); colors2.push(STATUS[k].chart); }
+  });
+  charts.dist.data.labels = labels2;
+  charts.dist.data.datasets[0].data = data2;
+  charts.dist.data.datasets[0].backgroundColor = colors2;
+  charts.dist.update();
+}
+
+/* ============ ORDERS ============ */
+function chipCls(active) {
+  return 'px-3 py-1.5 rounded-full text-xs font-semibold ring-1 transition ' + (active ? 'bg-indigo-600 text-white ring-indigo-600' : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50');
+}
+function setOrderFilter(s) {
+  state.orderStatus = s;
+  $('orderStatusSelect').value = s;
+  $('orderSearch').value = '';
+  state.orderSearch = '';
+  renderOrders();
+}
+
+function renderOrders() {
+  if (!loaded.transactions) {
+    loadTransactions().then(function () { renderOrders(); refreshTotals(); }).catch(function (e) { $('ordersBody').innerHTML = '<tr><td colspan="9" class="px-5 py-12 text-center text-slate-400">Failed to load: ' + esc(e.message) + '</td></tr>'; });
     return;
   }
-  var rows = list.map(function (u) {
+  var txs = saleTx();
+  var q = state.orderSearch.toLowerCase();
+  var list = txs.filter(function (t) {
+    var mStatus = state.orderStatus === 'all' || bucket(t.status) === state.orderStatus;
+    var s = ((t.id || '') + ' ' + (t.productName || '') + ' ' + (t.buyerName || '') + ' ' + (t.sellerName || '')).toLowerCase();
+    return mStatus && (!q || s.indexOf(q) !== -1);
+  });
+
+  var counts = { all: txs.length };
+  CHIP_KEYS.forEach(function (k) { counts[k] = txs.filter(function (t) { return bucket(t.status) === k; }).length; });
+
+  $('orderChips').innerHTML =
+    '<button onclick="setOrderFilter(\'all\')" class="' + chipCls(state.orderStatus === 'all') + '">All <span class="ml-1 opacity-70">' + counts.all + '</span></button>' +
+    CHIP_KEYS.map(function (k) {
+      return '<button onclick="setOrderFilter(\'' + k + '\')" class="' + chipCls(state.orderStatus === k) + '">' + STATUS[k].label + ' <span class="ml-1 opacity-70">' + counts[k] + '</span></button>';
+    }).join('');
+
+  var body = $('ordersBody');
+  if (!list.length) {
+    body.innerHTML = '<tr><td colspan="9" class="px-5 py-12 text-center text-slate-400"><i data-lucide="search-x" class="w-8 h-8 mx-auto mb-2"></i><p class="font-medium">No orders match your filters</p></td></tr>';
+  } else {
+    body.innerHTML = list.slice(0, 200).map(orderRow).join('');
+  }
+  refreshIcons();
+}
+
+function orderRow(t) {
+  var dp = t.dispatchProof || {};
+  var courier = t.busName ? esc(t.busName) + (t.plateNumber ? ' — ' + esc(t.plateNumber) : '') : (dp.trackingNumber ? esc(dp.trackingNumber) : '');
+  var receipt = dp.receiptUrl || dp.photoUrl || '';
+  var dispatchedAt = dp.dispatchedAt || t.dispatchedAt;
+  var total = orderTotal(t);
+  return '<tr class="hover:bg-slate-50 transition">' +
+    '<td class="px-5 py-3"><div class="flex items-center gap-3"><div class="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0"><i data-lucide="package" class="w-4 h-4"></i></div><div class="min-w-0"><p class="font-semibold text-slate-800 truncate max-w-[200px]">' + esc(t.productName || '—') + '</p><p class="text-xs text-slate-500">' + esc(t.id || '') + ' · ' + esc(t.category || 'Sale') + '</p></div></div></td>' +
+    '<td class="px-5 py-3 text-slate-600 whitespace-nowrap">' + esc(t.buyerName || '—') + '</td>' +
+    '<td class="px-5 py-3 text-slate-600 whitespace-nowrap">' + esc(t.sellerName || '—') + '</td>' +
+    '<td class="px-5 py-3 font-semibold text-slate-800 whitespace-nowrap">' + fmtTZ(total) + '</td>' +
+    '<td class="px-5 py-3 text-slate-600 whitespace-nowrap text-xs">' + (courier ? courier : '<span class="text-slate-300">—</span>') + '</td>' +
+    '<td class="px-5 py-3">' + (receipt ? '<button onclick="toast(\'Receipt: ' + esc(receipt) + '\',\'info\')" class="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800"><i data-lucide="paperclip" class="w-3.5 h-3.5"></i>' + esc(String(receipt).split('/').pop()) + '</button>' : '<span class="text-slate-300">—</span>') + '</td>' +
+    '<td class="px-5 py-3 text-slate-600 whitespace-nowrap text-xs">' + (isShipped(t.status) ? timeAgo(dispatchedAt) : '<span class="text-slate-300">—</span>') + '</td>' +
+    '<td class="px-5 py-3 whitespace-nowrap">' + statusBadge(t.status) + '</td>' +
+    '<td class="px-5 py-3 text-right"><div class="flex justify-end gap-1.5">' +
+    '<button onclick="openOrderModal(\'' + esc(t.id) + '\')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 text-xs font-semibold text-slate-600 hover:text-indigo-700 transition"><i data-lucide="eye" class="w-3.5 h-3.5"></i> Details</button>' +
+    (isEscrow(t.status) ? '<button onclick="releaseEscrow(\'' + esc(t.id) + '\')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-200 text-emerald-600 hover:bg-emerald-50 text-xs font-semibold transition"><i data-lucide="shield-check" class="w-3.5 h-3.5"></i> Release</button>' : '') +
+    (t.status === 'disputed' ? '<button onclick="resolveDispute(\'' + esc(t.id) + '\',\'release\')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50 text-xs font-semibold transition"><i data-lucide="scale" class="w-3.5 h-3.5"></i> Resolve</button>' : '') +
+    '</div></td></tr>';
+}
+
+function exportOrders() {
+  var txs = saleTx();
+  if (!txs.length) { toast('No transactions to export', 'err'); return; }
+  var rows = [['id', 'product', 'category', 'buyer', 'seller', 'amount', 'shipping', 'total', 'status', 'createdAt', 'courier', 'tracking']];
+  txs.forEach(function (t) {
+    var dp = t.dispatchProof || {};
+    rows.push([t.id || '', t.productName || '', t.category || '', t.buyerName || '', t.sellerName || '',
+      Number(t.productPrice) || 0, Number(t.shippingCost) || 0, orderTotal(t), t.status || '',
+      fmtDateTime(t.createdAt), t.busName || '', dp.trackingNumber || '']);
+  });
+  var csv = rows.map(function (r) { return r.map(function (c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(','); }).join('\n');
+  var blob = new Blob([csv], { type: 'text/csv' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'soko-vibe-orders.csv';
+  a.click();
+  toast('Exported ' + txs.length + ' orders to CSV', 'ok');
+}
+
+function releaseEscrow(orderId) {
+  var t = (S.transactions || []).find(function (x) { return x.id === orderId; });
+  var seller = t ? t.sellerName || 'the seller' : 'the seller';
+  var amount = t ? orderTotal(t) : 0;
+  openConfirm({
+    title: 'Release funds to seller?',
+    msg: fmtTZ(amount) + ' will be pushed from the ClickPesa escrow vault to ' + esc(seller) + '\u2019s wallet. This creates an audit log entry.',
+    tone: 'emerald', btn: 'Release Funds',
+    fn: function () {
+      api('/api/escrow/admin-release', { method: 'POST', body: JSON.stringify({ orderId: orderId }) })
+        .then(function (d) { toast(d.message || 'Escrow released', 'ok'); return loadTransactions(true); })
+        .then(function () { refreshTotals(); renderOrders(); renderDisputes(); renderRecent(); updateCharts(); refreshBadges(); })
+        .catch(function (e) { toast(e.message, 'err'); });
+    }
+  });
+}
+
+/* ============ DISPUTES ============ */
+function renderDisputes() {
+  if (!loaded.transactions) {
+    loadTransactions().then(function () { renderDisputes(); }).catch(function () {});
+    return;
+  }
+  var txs = S.transactions.filter(function (t) { return t.status === 'disputed' || t.status === 'refunded'; });
+  var q = state.disputeSearch.toLowerCase();
+  var list = txs.filter(function (t) {
+    if (state.disputeFilter === 'open') return t.status === 'disputed';
+    if (state.disputeFilter === 'resolved') return t.status === 'refunded';
+    return true;
+  }).filter(function (t) {
+    return !q || ((t.id || '') + ' ' + (t.productName || '') + ' ' + (t.buyerName || '') + ' ' + (t.sellerName || '')).toLowerCase().indexOf(q) !== -1;
+  });
+
+  var grid = $('disputesGrid');
+  if (!list.length) {
+    grid.innerHTML = '<div class="lg:col-span-2 rounded-2xl bg-white border border-slate-200 p-12 text-center text-slate-400"><i data-lucide="scale" class="w-8 h-8 mx-auto mb-2"></i><p class="font-medium">No disputes match your filters</p></div>';
+  } else {
+    grid.innerHTML = list.map(function (t) {
+      var resolved = t.status === 'refunded';
+      var di = t.disputeInfo || {};
+      var ev = di.evidenceUrls || [];
+      var dp = t.dispatchProof || {};
+      var total = orderTotal(t);
+      return '<div class="rounded-2xl bg-white border ' + (resolved ? 'border-fuchsia-200' : 'border-rose-200') + ' shadow-sm overflow-hidden">' +
+        '<div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">' +
+        '<div class="flex items-center gap-3"><div class="w-10 h-10 rounded-lg ' + (resolved ? 'bg-fuchsia-50 text-fuchsia-600' : 'bg-rose-50 text-rose-600') + ' flex items-center justify-center"><i data-lucide="scale" class="w-5 h-5"></i></div>' +
+        '<div><p class="font-bold text-slate-800">' + esc(t.id || '') + '</p><p class="text-xs text-slate-500">' + esc(t.productName || '') + '</p></div></div>' +
+        '<span class="text-xs font-semibold px-2.5 py-1 rounded-full ' + (resolved ? 'bg-fuchsia-50 text-fuchsia-700' : 'bg-rose-50 text-rose-700') + ' whitespace-nowrap">' + (resolved ? 'Resolved' : 'Open · ' + timeAgo(di.raisedAt)) + '</span>' +
+        '</div>' +
+        '<div class="px-5 py-4 space-y-3 text-sm">' +
+        '<div class="rounded-lg bg-rose-50 border border-rose-100 px-3 py-2 text-xs text-rose-700 font-medium">⚠ ' + esc(di.reason || 'Buyer flagged an issue — package not received') + '</div>' +
+        '<div class="grid grid-cols-2 gap-3">' +
+        '<div><p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Buyer</p><p class="text-slate-700 font-medium">' + esc(t.buyerName || '—') + '</p></div>' +
+        '<div><p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Seller</p><p class="text-slate-700 font-medium">' + esc(t.sellerName || '—') + '</p></div>' +
+        '<div><p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Escrowed Amount</p><p class="text-slate-700 font-semibold">' + fmtTZ(total) + '</p></div>' +
+        '<div><p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Receipt</p>' + (dp.receiptUrl ? '<button onclick="toast(\'Opening shipping receipt\',\'info\')" class="text-indigo-600 hover:text-indigo-800 font-medium text-xs flex items-center gap-1"><i data-lucide="paperclip" class="w-3 h-3"></i>' + esc(String(dp.receiptUrl).split('/').pop()) + '</button>' : '<span class="text-slate-300">No receipt</span>') + '</div>' +
+        '<div><p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Dispatched</p><p class="text-slate-700">' + fmtDateTime(dp.dispatchedAt || t.dispatchedAt) + '</p></div>' +
+        '<div><p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Dispute raised</p><p class="text-slate-700">' + timeAgo(di.raisedAt) + '</p></div>' +
+        '</div>' +
+        (ev.length ? '<div class="flex flex-wrap gap-2">' + ev.map(function (u, i) {
+          return '<a href="' + esc(u) + '" target="_blank" rel="noopener" class="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:underline"><i data-lucide="paperclip" class="w-3 h-3"></i> Evidence ' + (i + 1) + '</a>';
+        }).join('') + '</div>' : '') +
+        '</div>' +
+        '<div class="px-5 py-4 bg-slate-50 flex flex-wrap gap-2">' +
+        (resolved
+          ? '<button onclick="openOrderModal(\'' + esc(t.id) + '\')" class="flex-1 min-w-[130px] inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm font-semibold text-slate-600 hover:bg-slate-100 transition"><i data-lucide="eye" class="w-4 h-4"></i> View Case</button>'
+          : '<button onclick="resolveDispute(\'' + esc(t.id) + '\',\'release\')" class="flex-1 min-w-[130px] inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition"><i data-lucide="shield-check" class="w-4 h-4"></i> Release to Seller</button>' +
+            '<button onclick="resolveDispute(\'' + esc(t.id) + '\',\'refund\')" class="flex-1 min-w-[130px] inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold transition"><i data-lucide="rotate-ccw" class="w-4 h-4"></i> Refund via ClickPesa</button>') +
+        '</div>' +
+        '</div>';
+    }).join('');
+  }
+  refreshIcons();
+}
+
+function resolveDispute(orderId, preset) {
+  var t = (S.transactions || []).find(function (x) { return x.id === orderId; });
+  var amount = t ? orderTotal(t) : 0;
+  var buyer = t ? (t.buyerName || 'the buyer') : 'the buyer';
+  var seller = t ? (t.sellerName || 'the seller') : 'the seller';
+  var resolution = preset;
+  if (!resolution) {
+    resolution = prompt('Resolution (release = to seller, refund = to buyer):', 'release');
+    if (!resolution) return;
+    if (resolution !== 'release' && resolution !== 'refund') { toast('Must be "release" or "refund"', 'err'); return; }
+  }
+  var note = prompt('Note / decision (optional):', '');
+  if (note === null) return;
+  var toSeller = resolution === 'release';
+  openConfirm({
+    title: toSeller ? 'Release funds to seller?' : 'Refund buyer via ClickPesa?',
+    msg: fmtTZ(amount) + ' will be ' + (toSeller ? 'pushed from the escrow vault to ' + esc(seller) + '. The order will be marked Completed.' : 'returned from the escrow vault to ' + esc(buyer) + '. The order will be marked Refunded.'),
+    tone: toSeller ? 'emerald' : 'rose',
+    btn: toSeller ? 'Release Funds' : 'Confirm Refund',
+    fn: function () {
+      api('/api/escrow/admin-resolve-dispute', { method: 'POST', body: JSON.stringify({ orderId: orderId, resolution: resolution, note: note || '' }) })
+        .then(function (d) { toast(d.message || 'Dispute resolved', 'ok'); return loadTransactions(true); })
+        .then(function () { renderDisputes(); renderOrders(); renderRecent(); refreshTotals(); updateCharts(); refreshBadges(); })
+        .catch(function (e) { toast(e.message, 'err'); });
+    }
+  });
+}
+
+/* ============ BOOSTS ============ */
+function renderBoosts() {
+  if (!loaded.transactions) {
+    loadTransactions().then(function () { renderBoosts(); }).catch(function () {});
+    return;
+  }
+  var boosts = getBoosts();
+  var q = state.boostSearch.toLowerCase();
+  var list = boosts.filter(function (b) {
+    var mTier = state.boostFilter === 'all' || b.tier === state.boostFilter;
+    var mStatus = state.boostStatus === 'all' || (b.active ? 'active' : 'expired') === state.boostStatus;
+    var mSearch = !q || ((b.product || '') + ' ' + (b.seller || '')).toLowerCase().indexOf(q) !== -1;
+    return mTier && mStatus && mSearch;
+  });
+  var body = $('boostsBody');
+  if (!list.length) {
+    body.innerHTML = '<tr><td colspan="7" class="px-5 py-12 text-center text-slate-400"><i data-lucide="rocket" class="w-8 h-8 mx-auto mb-2"></i><p class="font-medium">No boosts match your filters</p></td></tr>';
+  } else {
+    body.innerHTML = list.map(function (b) {
+      return '<tr class="hover:bg-slate-50 transition">' +
+        '<td class="px-5 py-3"><p class="font-semibold text-slate-800">' + esc(b.product) + '</p><p class="text-xs text-slate-500">' + esc(b.id) + '</p></td>' +
+        '<td class="px-5 py-3 text-slate-600">' + esc(b.seller) + '</td>' +
+        '<td class="px-5 py-3"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-50 text-violet-700 ring-1 ring-violet-200 text-xs font-semibold capitalize"><i data-lucide="zap" class="w-3 h-3"></i>' + esc(b.tier) + '</span></td>' +
+        '<td class="px-5 py-3 font-semibold text-slate-800 whitespace-nowrap">' + fmtTZ(b.amount) + '</td>' +
+        '<td class="px-5 py-3 text-slate-600 text-xs whitespace-nowrap">' + fmtDateTime(b.started) + '</td>' +
+        '<td class="px-5 py-3 text-slate-600 text-xs whitespace-nowrap">' + fmtDateTime(b.ends) + '</td>' +
+        '<td class="px-5 py-3">' + (b.active
+          ? '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 text-xs font-semibold"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>Active</span>'
+          : '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 ring-1 ring-slate-200 text-xs font-semibold"><span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>Expired</span>') + '</td>' +
+        '</tr>';
+    }).join('');
+  }
+  refreshIcons();
+}
+
+/* ============ ANALYTICS ============ */
+function renderAnalytics() {
+  Promise.all([loadAnalytics(), loadTransactions()]).then(function () {
+    var an = S.analytics || {};
+    $('anaUsersToday').textContent = (an.newUsersToday || 0).toLocaleString('en-US');
+    $('anaProducts').textContent = (an.totalProducts || 0).toLocaleString('en-US');
+    $('anaActiveUsers').textContent = ((an.activeUserCounts || {}).perDay || 0).toLocaleString('en-US');
+
+    var cats = an.productsByCategory || {};
+    var entries = Object.keys(cats).map(function (k) { return { name: k, count: cats[k] }; }).sort(function (a, b) { return b.count - a.count; });
+    var max = entries.length ? Math.max.apply(null, entries.map(function (c) { return c.count; })) : 1;
+    var total = entries.reduce(function (a, c) { return a + c.count; }, 0);
+
+    $('categoryBars').innerHTML = entries.length ? entries.map(function (c) {
+      return '<div><div class="flex justify-between text-sm mb-1"><span class="font-medium text-slate-700">' + esc(c.name) + '</span><span class="text-slate-500 font-semibold">' + c.count + ' products</span></div>' +
+        '<div class="h-2.5 rounded-full bg-slate-100"><div class="h-full rounded-full bg-gradient-to-r from-indigo-500 to-emerald-500" style="width:' + Math.round(c.count / max * 100) + '%"></div></div></div>';
+    }).join('') : '<p class="text-sm text-slate-400 py-4 text-center">No product data yet.</p>';
+
+    var locs = an.locationDistribution || {};
+    var locEntries = Object.keys(locs).map(function (k) { return { name: k, count: locs[k] }; }).sort(function (a, b) { return b.count - a.count; }).slice(0, 8);
+    var locMax = locEntries.length ? Math.max.apply(null, locEntries.map(function (c) { return c.count; })) : 1;
+    $('locationWrap').innerHTML = locEntries.length ? locEntries.map(function (c) {
+      return '<div class="flex items-center justify-between gap-2 text-sm"><span class="text-slate-600 truncate">' + esc(c.name) + '</span><span class="font-semibold text-slate-800 whitespace-nowrap">' + c.count + '</span></div>' +
+        '<div class="h-1.5 rounded-full bg-slate-100 -mt-1"><div class="h-full rounded-full bg-emerald-500" style="width:' + Math.round(c.count / locMax * 100) + '%"></div></div>';
+    }).join('') : '<p class="text-sm text-slate-400 py-4 text-center">No location data yet.</p>';
+
+    var body = $('analyticsBody');
+    if (!entries.length) {
+      body.innerHTML = '<tr><td colspan="4" class="px-5 py-12 text-center text-slate-400"><i data-lucide="bar-chart-3" class="w-8 h-8 mx-auto mb-2"></i><p class="font-medium">No categories yet</p></td></tr>';
+    } else {
+      body.innerHTML = entries.slice(0, 40).map(function (c) {
+        var pct = total ? Math.round(c.count / total * 100) : 0;
+        return '<tr class="hover:bg-slate-50 transition">' +
+          '<td class="px-5 py-3 font-semibold text-slate-800">' + esc(c.name) + '</td>' +
+          '<td class="px-5 py-3 text-slate-600">' + c.count + '</td>' +
+          '<td class="px-5 py-3"><div class="w-32 h-1.5 rounded-full bg-slate-100"><div class="h-full rounded-full bg-indigo-500" style="width:' + pct + '%"></div></div></td>' +
+          '<td class="px-5 py-3 font-semibold text-slate-800">' + pct + '%</td></tr>';
+      }).join('');
+    }
+    refreshIcons();
+  }).catch(function (e) {
+    $('categoryBars').innerHTML = '<p class="text-sm text-slate-400 py-4 text-center">Failed to load analytics: ' + esc(e.message) + '</p>';
+  });
+}
+
+/* ============ KYC ============ */
+function switchKycTab(v) {
+  kycView = v;
+  $('kycTabPending').className = 'kyc-tab text-sm font-semibold px-4 py-2 rounded-lg transition ' + (v === 'pending' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 border border-slate-200');
+  $('kycTabAll').className = 'kyc-tab text-sm font-semibold px-4 py-2 rounded-lg transition ' + (v === 'all' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 border border-slate-200');
+  renderKyc();
+}
+function renderKyc() {
+  var wrap = $('kycWrap');
+  if (!loaded.kycPending || !loaded.kycAll) {
+    wrap.innerHTML = spinner('Loading KYC…');
+    loadKyc().then(function () { renderKyc(); }).catch(function () {});
+    return;
+  }
+  if (kycView === 'pending') {
+    var pending = S.kycPending;
+    if (!pending.length) { wrap.innerHTML = emptyRow('No pending KYC applications.'); return; }
+    wrap.innerHTML = '<div class="grid grid-cols-1 xl:grid-cols-2 gap-4">' + pending.map(function (u) {
+      var k = u.kyc || {};
+      var idNum = (k.idNumber || '').replace(/^(.{3}).*(.{3})$/, '$1••••••$2');
+      return '<div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">' +
+        '<div class="flex items-center gap-3 mb-4">' + avatar(u.displayName, 'w-11 h-11') +
+        '<div class="min-w-0"><p class="font-bold text-slate-800 truncate">' + esc(u.displayName || '—') + '</p>' +
+        '<p class="text-xs text-slate-500">' + esc(u.phone || '') + ' · ' + esc(u.email || '') + '</p></div></div>' +
+        '<div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm mb-4">' +
+        '<div class="text-slate-500">Full name</div><div class="text-slate-800 font-medium">' + esc(k.fullName || '—') + '</div>' +
+        '<div class="text-slate-500">ID type</div><div class="text-slate-800 font-medium">' + esc(k.idType || '—') + '</div>' +
+        '<div class="text-slate-500">ID number</div><div class="text-slate-800 font-medium">' + esc(idNum || '—') + '</div>' +
+        '<div class="text-slate-500">Submitted</div><div class="text-slate-800 font-medium">' + timeAgo(k.submittedAt) + '</div></div>' +
+        '<div class="flex gap-2 mb-4">' +
+        (k.idImageUrl ? '<a href="' + esc(k.idImageUrl) + '" target="_blank" rel="noopener" class="flex-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-center px-3 py-2 text-xs font-semibold text-slate-700">View ID</a>' : '') +
+        (k.selfieUrl ? '<a href="' + esc(k.selfieUrl) + '" target="_blank" rel="noopener" class="flex-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-center px-3 py-2 text-xs font-semibold text-slate-700">View selfie</a>' : '') +
+        '<button onclick="showKyc(\'' + esc(u.uid) + '\')" class="flex-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-center px-3 py-2 text-xs font-semibold text-slate-700">Inspect</button></div>' +
+        '<div class="flex gap-2">' +
+        '<button onclick="reviewKyc(\'' + esc(u.uid) + '\', true)" class="flex-1 px-3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold">Approve</button>' +
+        '<button onclick="reviewKyc(\'' + esc(u.uid) + '\', false)" class="flex-1 px-3 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold">Reject</button>' +
+        '</div></div>';
+    }).join('') + '</div>';
+  } else {
+    var all = S.kycAll;
+    if (!all.length) { wrap.innerHTML = emptyRow('No KYC records yet.'); return; }
+    var rows = all.map(function (u) {
+      var k = u.kyc || {};
+      var st = k.status || 'none';
+      var pill = st === 'approved' ? statusPill('Approved', 'bg-emerald-100 text-emerald-700')
+        : st === 'pending' ? statusPill('Pending', 'bg-amber-100 text-amber-700')
+        : st === 'rejected' ? statusPill('Rejected', 'bg-rose-100 text-rose-700')
+        : statusPill('Revoked', 'bg-slate-100 text-slate-600');
+      return '<tr class="hover:bg-slate-50 transition">' +
+        '<td class="px-4 py-3"><div class="flex items-center gap-2">' + avatar(u.displayName, 'w-7 h-7 text-xs') +
+        '<div><p class="font-medium text-slate-800">' + esc(u.displayName || '—') + '</p>' +
+        '<p class="text-xs text-slate-400">' + esc(u.phone || '') + '</p></div></div></td>' +
+        '<td class="px-4 py-3 text-slate-600">' + esc(k.fullName || '—') + '</td>' +
+        '<td class="px-4 py-3 text-slate-600">' + esc(k.idType || '—') + '</td>' +
+        '<td class="px-4 py-3">' + pill + '</td>' +
+        '<td class="px-4 py-3">' + timeAgo(k.submittedAt) + '</td>' +
+        '<td class="px-4 py-3"><div class="flex gap-1.5">' +
+        '<button onclick="showKyc(\'' + esc(u.uid) + '\')" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50">View</button>' +
+        (st === 'approved' ? '<button onclick="revokeKyc(\'' + esc(u.uid) + '\')" class="px-2.5 py-1.5 rounded-lg border border-orange-200 text-xs font-semibold text-orange-600 hover:bg-orange-50">Revoke</button>' : '') +
+        '<button onclick="deleteKyc(\'' + esc(u.uid) + '\')" class="px-2.5 py-1.5 rounded-lg border border-rose-200 text-xs font-semibold text-rose-600 hover:bg-rose-50">Delete</button>' +
+        '</div></td></tr>';
+    }).join('');
+    wrap.innerHTML = tableShell(['User', 'Full name', 'ID type', 'Status', 'Submitted', 'Actions'], rows, '860');
+  }
+  refreshIcons();
+}
+
+function reviewKyc(userId, approve) {
+  var notes = '';
+  if (!approve) {
+    notes = prompt('Rejection reason (sent to the user):');
+    if (notes === null) return;
+  }
+  openConfirm({
+    title: approve ? 'Approve KYC' : 'Reject KYC',
+    msg: approve ? 'Approve KYC for this user? They will be allowed to sell.' : 'Reject this KYC application? The reason will be sent to the user.',
+    tone: approve ? 'emerald' : 'rose',
+    btn: approve ? 'Approve' : 'Reject',
+    fn: function () {
+      api('/api/admin/kyc/review', { method: 'POST', body: JSON.stringify({ userId: userId, approve: approve, notes: notes || '' }) })
+        .then(function (d) { toast(d.message, 'ok'); return loadKyc(true); })
+        .then(function () { renderKyc(); refreshBadges(); })
+        .catch(function (e) { toast(e.message, 'err'); });
+    }
+  });
+}
+function revokeKyc(userId) {
+  var reason = prompt('Reason for revoking KYC (sent to the user):');
+  if (!reason) return;
+  openConfirm({
+    title: 'Revoke KYC', msg: 'Revoke KYC for this user? Their products will be de-listed and they must re-apply.', tone: 'rose', btn: 'Revoke',
+    fn: function () {
+      api('/api/admin/kyc/revoke', { method: 'POST', body: JSON.stringify({ userId: userId, reason: reason }) })
+        .then(function (d) { toast(d.message, 'ok'); return loadKyc(true); })
+        .then(function () { renderKyc(); refreshBadges(); })
+        .catch(function (e) { toast(e.message, 'err'); });
+    }
+  });
+}
+function deleteKyc(userId) {
+  openConfirm({
+    title: 'Delete KYC', msg: 'Permanently delete this user\u2019s KYC data? They will have to submit again from scratch.', tone: 'rose', btn: 'Delete',
+    fn: function () {
+      api('/api/admin/kyc/delete', { method: 'POST', body: JSON.stringify({ userId: userId }) })
+        .then(function (d) { toast(d.message, 'ok'); return loadKyc(true); })
+        .then(function () { renderKyc(); refreshBadges(); })
+        .catch(function (e) { toast(e.message, 'err'); });
+    }
+  });
+}
+function showKyc(userId) {
+  var lists = (S.kycPending || []).concat(S.kycAll || []);
+  var u = lists.find(function (x) { return x.uid === userId; });
+  if (!u) { toast('KYC not found', 'err'); return; }
+  var k = u.kyc || {};
+  var st = k.status || 'none';
+  var body = '<div class="flex items-center gap-3 mb-5">' + avatar(u.displayName, 'w-12 h-12') +
+    '<div><p class="font-bold text-slate-800 text-lg">' + esc(u.displayName || '—') + '</p>' +
+    '<p class="text-sm text-slate-500">' + esc(u.phone || '') + ' · ' + esc(u.email || '') + '</p></div></div>' +
+    '<div class="rounded-xl bg-slate-50 p-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">' +
+    [['KYC status', st], ['Full name', k.fullName], ['ID type', k.idType], ['ID number', k.idNumber], ['Submitted', fmtDateTime(k.submittedAt)], ['Reviewed', fmtDateTime(k.reviewedAt)], ['Review notes', k.reviewNotes]].map(function (r) {
+      return '<div class="text-slate-500">' + esc(r[0]) + '</div><div class="text-slate-800 font-medium">' + esc(r[1] || '—') + '</div>';
+    }).join('') + '</div>' +
+    '<div class="grid grid-cols-2 gap-3 mt-5">' +
+    (k.idImageUrl ? '<a href="' + esc(k.idImageUrl) + '" target="_blank" rel="noopener"><img src="' + esc(k.idImageUrl) + '" class="w-full h-44 object-cover rounded-xl border border-slate-200" onerror="this.style.display=\'none\'"><p class="text-xs font-semibold text-indigo-600 mt-1">Open ID image ↗</p></a>' : '<div></div>') +
+    (k.selfieUrl ? '<a href="' + esc(k.selfieUrl) + '" target="_blank" rel="noopener"><img src="' + esc(k.selfieUrl) + '" class="w-full h-44 object-cover rounded-xl border border-slate-200" onerror="this.style.display=\'none\'"><p class="text-xs font-semibold text-indigo-600 mt-1">Open selfie ↗</p></a>' : '') +
+    '</div>';
+  $('kycModalBody').innerHTML = body;
+  openModal('kycModal');
+}
+
+/* ============ USERS ============ */
+function renderUsers() {
+  var wrap = $('usersWrap');
+  if (!loaded.users) { wrap.innerHTML = spinner('Loading users…'); loadUsers().then(function () { renderUsers(); }).catch(function () {}); return; }
+  var q = ($('userSearch').value || '').toLowerCase();
+  var f = $('userFilter').value;
+  var list = S.users.filter(function (u) {
+    var s = ((u.displayName || '') + ' ' + (u.name || '') + ' ' + (u.email || '') + ' ' + (u.phone || '')).toLowerCase();
+    var ok = s.indexOf(q) !== -1;
+    var w = Number(u.policyWarnings) || 0;
+    var kyc = (u.kyc || {}).status;
+    if (f === 'suspended' && u.isSuspended !== true) ok = false;
+    if (f === 'warned' && !(w >= 1 && w < 3)) ok = false;
+    if (f === 'blocked' && !(w >= 3)) ok = false;
+    if (f === 'admin' && u.isAdmin !== true) ok = false;
+    if (f === 'kycApproved' && kyc !== 'approved') ok = false;
+    if (f === 'kycPending' && kyc !== 'pending') ok = false;
+    return ok;
+  });
+  if (!list.length) { wrap.innerHTML = emptyRow('No users found.'); return; }
+  var rows = list.slice(0, 300).map(function (u) {
     var w = Number(u.policyWarnings) || 0;
     var badges = [];
-    if (u.isSuspended === true) badges.push('<span class="pill suspended">Suspended</span>');
-    if (u.isAdmin === true) badges.push('<span class="pill admin">Admin</span>');
-    if (w >= 3) badges.push('<span class="pill warn">Blocked</span>');
-    else if (w > 0) badges.push('<span class="pill warn">' + w + '/3</span>');
-    else badges.push('<span class="pill active">Active</span>');
-    var initial = ((u.displayName || u.name || '?')[0] || '?').toUpperCase();
-    return '<tr>' +
-      '<td><div class="user-cell"><div class="avatar">' + esc(initial) + '</div>' +
-      '<div><div class="name">' + esc(u.displayName || u.name || '—') + '</div>' +
-      '<div class="sub">' + esc(u.email || '') + '</div></div></div></td>' +
-      '<td>' + esc(u.phone || '—') + '</td>' +
-      '<td>' + badges.join(' ') + '</td>' +
-      '<td class="count">' + fmtTZ(u.sellerBalance || 0) + '</td>' +
-      '<td>' + timeAgo(u.createdAt) + '</td>' +
-      '<td><div class="actions">' +
-        '<button class="btn ' + (u.isSuspended === true ? 'ok' : 'danger') + '" data-act="toggle" data-uid="' + esc(u.uid) + '">' + (u.isSuspended === true ? 'Unsuspend' : 'Suspend') + '</button>' +
-        (w < 3 ? '<button class="btn warn" data-act="warn" data-uid="' + esc(u.uid) + '">Warn</button>' : '') +
-        '<button class="btn danger" data-act="del" data-uid="' + esc(u.uid) + '">Delete</button>' +
-        '<button class="btn" data-act="msg" data-uid="' + esc(u.uid) + '">Message</button>' +
+    if (u.isSuspended === true) badges.push(statusPill('Suspended', 'bg-rose-100 text-rose-700'));
+    if (u.isAdmin === true) badges.push(statusPill('Admin', 'bg-slate-900 text-white'));
+    if (w >= 3) badges.push(statusPill('Blocked', 'bg-orange-100 text-orange-700'));
+    else if (w > 0) badges.push(statusPill(w + '/3', 'bg-orange-100 text-orange-700'));
+    var kyc = (u.kyc || {}).status;
+    if (kyc === 'approved') badges.push(statusPill('KYC', 'bg-emerald-100 text-emerald-700'));
+    else if (kyc === 'pending') badges.push(statusPill('KYC?', 'bg-amber-100 text-amber-700'));
+    else if (kyc === 'rejected' || kyc === 'revoked') badges.push(statusPill('KYC!', 'bg-rose-100 text-rose-700'));
+    if (!badges.length) badges.push(statusPill('Active', 'bg-slate-100 text-slate-600'));
+    return '<tr class="hover:bg-slate-50 transition">' +
+      '<td class="px-4 py-3"><div class="flex items-center gap-3">' + avatar(u.displayName || u.name, 'w-9 h-9 text-sm') +
+      '<div><p class="font-semibold text-slate-800">' + esc(u.displayName || u.name || '—') + '</p>' +
+      '<p class="text-xs text-slate-400">' + esc(u.email || '') + '</p></div></div></td>' +
+      '<td class="px-4 py-3 text-slate-600">' + esc(u.phone || '—') + '</td>' +
+      '<td class="px-4 py-3"><div class="flex flex-wrap gap-1">' + badges.join('') + '</div></td>' +
+      '<td class="px-4 py-3 font-semibold text-slate-800">' + fmtTZ(u.sellerBalance) + '</td>' +
+      '<td class="px-4 py-3 text-slate-500">' + fmtDate(u.createdAt) + '</td>' +
+      '<td class="px-4 py-3"><div class="flex gap-1.5 flex-wrap">' +
+      '<button onclick="showUser(\'' + esc(u.uid) + '\')" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50">Detail</button>' +
+      '<button onclick="toggleSuspend(\'' + esc(u.uid) + '\')" class="px-2.5 py-1.5 rounded-lg border ' + (u.isSuspended === true ? 'border-emerald-200 text-emerald-600 hover:bg-emerald-50' : 'border-rose-200 text-rose-600 hover:bg-rose-50') + ' text-xs font-semibold">' + (u.isSuspended === true ? 'Unsuspend' : 'Suspend') + '</button>' +
+      (w < 3 ? '<button onclick="warnUser(\'' + esc(u.uid) + '\')" class="px-2.5 py-1.5 rounded-lg border border-orange-200 text-xs font-semibold text-orange-600 hover:bg-orange-50">Warn</button>' : '') +
+      '<button onclick="messageUser(\'' + esc(u.uid) + '\')" class="px-2.5 py-1.5 rounded-lg border border-indigo-200 text-xs font-semibold text-indigo-600 hover:bg-indigo-50">Message</button>' +
+      '<button onclick="deleteUser(\'' + esc(u.uid) + '\')" class="px-2.5 py-1.5 rounded-lg border border-rose-200 text-xs font-semibold text-rose-600 hover:bg-rose-50">Delete</button>' +
       '</div></td></tr>';
   }).join('');
-  wrap.innerHTML = '<table><thead><tr>' +
-    '<th>User</th><th>Phone</th><th>Status</th><th>Balance</th><th>Joined</th><th>Actions</th>' +
-    '</tr></thead><tbody>' + rows + '</tbody></table>';
+  wrap.innerHTML = tableShell(['User', 'Phone', 'Status', 'Balance', 'Joined', 'Actions'], rows, '940');
+  refreshIcons();
 }
-$('userSearch').addEventListener('input', renderUsers);
-$('userFilter').addEventListener('change', renderUsers);
-$('refreshUsers').addEventListener('click', loadUsers);
-$('usersTableWrap').addEventListener('click', function (e) {
-  var btn = e.target.closest('button[data-act]');
-  if (!btn) return;
-  var uid = btn.dataset.uid; var act = btn.dataset.act;
-  if (act === 'toggle') {
-    var u = allUsers.find(function (x) { return x.uid === uid; });
-    api('/api/admin/users/' + uid, { method: 'PATCH', body: JSON.stringify({ updates: { isSuspended: !(u && u.isSuspended === true) } }) })
-      .then(function () { toast('Updated', 'ok'); loadUsers(); })
-      .catch(function (err) { toast(err.message, 'err'); });
-  } else if (act === 'warn') {
-    warnUser(uid);
-  } else if (act === 'del') {
-    deleteUser(uid);
-  } else if (act === 'msg') {
-    messageUser(uid);
-  }
-});
+
+function toggleSuspend(uid) {
+  var u = S.users.find(function (x) { return x.uid === uid; });
+  var suspending = !(u && u.isSuspended === true);
+  openConfirm({
+    title: suspending ? 'Suspend user' : 'Unsuspend user',
+    msg: suspending ? 'Suspend this user? They will be locked out of their account.' : 'Re-activate this user account?',
+    tone: suspending ? 'rose' : 'emerald',
+    btn: suspending ? 'Suspend' : 'Unsuspend',
+    fn: function () {
+      var req = suspending
+        ? api('/api/admin/users/' + encodeURIComponent(uid), { method: 'DELETE' })
+        : api('/api/admin/users/' + encodeURIComponent(uid) + '/unsuspend', { method: 'POST' });
+      req.then(function () { toast(suspending ? 'User suspended' : 'User unsuspended', 'ok'); return loadUsers(true); })
+        .then(function () { renderUsers(); refreshBadges(); })
+        .catch(function (e) { toast(e.message, 'err'); });
+    }
+  });
+}
 function warnUser(uid) {
   var reason = prompt('Warning reason (sent to the user):');
   if (!reason) return;
-  api('/api/admin/users/' + uid + '/warn', { method: 'POST', body: JSON.stringify({ reason: reason }) })
-    .then(function (d) { toast(d.blocked ? '3rd warning — account blocked' : 'Warning sent (' + d.warnings + '/3)', d.blocked ? 'err' : 'ok'); loadUsers(); })
+  api('/api/admin/users/' + encodeURIComponent(uid) + '/warn', { method: 'POST', body: JSON.stringify({ reason: reason }) })
+    .then(function (d) { toast(d.blocked ? '3rd warning — account blocked' : 'Warning sent (' + d.warnings + '/3)', d.blocked ? 'err' : 'ok'); return loadUsers(true); })
+    .then(function () { renderUsers(); refreshBadges(); })
     .catch(function (e) { toast(e.message, 'err'); });
 }
 function deleteUser(uid) {
-  if (!confirm('Permanently delete this user, all their products, reviews, orders and data? This cannot be undone.')) return;
-  if (!confirm('Type confirmation: this is IRREVERSIBLE.')) return;
-  api('/api/admin/users/' + uid + '/full-delete', { method: 'DELETE' })
-    .then(function () { toast('User deleted', 'ok'); loadUsers(); })
-    .catch(function (e) { toast(e.message, 'err'); });
+  openConfirm({
+    title: 'Delete user', msg: 'Permanently delete this user, all their products, reviews, orders and data? This cannot be undone.', tone: 'rose', btn: 'Delete forever',
+    fn: function () {
+      api('/api/admin/users/' + encodeURIComponent(uid) + '/full-delete', { method: 'DELETE' })
+        .then(function () { toast('User deleted', 'ok'); return loadUsers(true); })
+        .then(function () { renderUsers(); refreshBadges(); })
+        .catch(function (e) { toast(e.message, 'err'); });
+    }
+  });
 }
 function messageUser(uid) {
   var title = prompt('Notification title:');
@@ -454,93 +1886,608 @@ function messageUser(uid) {
     .then(function () { toast('Message sent', 'ok'); })
     .catch(function (e) { toast(e.message, 'err'); });
 }
-
-/* ── Products ─────────────────────────────────────── */
-var allProducts = [];
-function loadProducts() {
-  var wrap = $('productsTableWrap');
-  wrap.innerHTML = '<div class="loading"><div class="spinner"></div>Loading products…</div>';
-  api('/api/admin/products').then(function (d) {
-    allProducts = d.products || [];
-    window._productsLoaded = true;
-    renderProducts();
+function showUser(uid) {
+  var body = $('userModalBody');
+  body.innerHTML = spinner('Loading user details…');
+  openModal('userModal');
+  loadUserDetail(uid).then(function (d) {
+    var u = d.user || {};
+    var kyc = u.kyc || {};
+    var w = Number(u.policyWarnings) || 0;
+    var balances = [['Seller balance', u.sellerBalance], ['Pending escrow', u.pendingEscrow], ['Coins', u.coins], ['Total sales', u.totalSales], ['Gross volume', u.grossSalesVolume], ['Ad views', u.totalAdViews]];
+    var orderRows = (d.orders || []).slice(0, 20).map(function (o) {
+      return '<tr class="border-b border-slate-100"><td class="px-3 py-2 text-xs font-mono text-slate-500">' + esc(o.id || '') + '</td>' +
+        '<td class="px-3 py-2 text-slate-700">' + esc((o.items || []).map(function (i) { return i.name; }).join(', ') || '—') + '</td>' +
+        '<td class="px-3 py-2 font-semibold">' + fmtTZ(o.totalAmount) + '</td>' +
+        '<td class="px-3 py-2">' + statusBadge(o.status) + '</td></tr>';
+    }).join('');
+    var wdRows = (d.withdrawals || []).slice(0, 20).map(function (wd) {
+      return '<tr class="border-b border-slate-100"><td class="px-3 py-2 font-semibold">' + fmtTZ(wd.amount) + '</td>' +
+        '<td class="px-3 py-2 text-slate-600">' + esc(wd.phone || '—') + '</td>' +
+        '<td class="px-3 py-2">' + statusBadge(wd.status) + '</td>' +
+        '<td class="px-3 py-2 text-xs text-slate-500">' + timeAgo(wd.createdAt) + '</td></tr>';
+    }).join('');
+    var revRows = (d.revenueTransactions || []).slice(0, 20).map(function (r) {
+      return '<tr class="border-b border-slate-100"><td class="px-3 py-2">' + esc(r.type || '—') + '</td>' +
+        '<td class="px-3 py-2 font-semibold ' + ((Number(r.amount) || 0) < 0 ? 'text-rose-600' : 'text-emerald-600') + '">' + fmtTZ(r.amount) + '</td>' +
+        '<td class="px-3 py-2 text-xs text-slate-500">' + esc(r.description || '') + '</td>' +
+        '<td class="px-3 py-2 text-xs text-slate-500">' + timeAgo(r.timestamp) + '</td></tr>';
+    }).join('');
+    body.innerHTML =
+      '<div class="flex items-center gap-4 mb-5">' + avatar(u.displayName || u.name, 'w-14 h-14 text-lg') +
+      '<div><p class="text-lg font-bold text-slate-800">' + esc(u.displayName || u.name || '—') + '</p>' +
+      '<p class="text-sm text-slate-500">' + esc(u.email || '') + ' · ' + esc(u.phone || '') + '</p>' +
+      '<p class="text-xs text-slate-400">' + esc(u.uid || '') + '</p></div>' +
+      '<div class="ml-auto flex gap-2">' +
+      '<button onclick="toggleSuspend(\'' + esc(u.uid) + '\')" class="px-3 py-2 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50">' + (u.isSuspended === true ? 'Unsuspend' : 'Suspend') + '</button>' +
+      '<button onclick="messageUser(\'' + esc(u.uid) + '\')" class="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold">Message</button>' +
+      '</div></div>' +
+      '<div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">' + balances.map(function (b) {
+        return '<div class="rounded-xl bg-slate-50 px-4 py-3"><p class="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">' + esc(b[0]) + '</p>' +
+          '<p class="text-lg font-extrabold text-slate-800">' + (typeof b[1] === 'number' && b[0].toLowerCase().indexOf('sales') === -1 && b[0].toLowerCase().indexOf('volume') === -1 ? fmtTZ(b[1]) : (b[1] != null ? Number(b[1]).toLocaleString() : '—')) + '</p></div>';
+      }).join('') + '</div>' +
+      '<div class="rounded-xl bg-slate-50 px-4 py-3 mb-5 flex flex-wrap gap-x-8 gap-y-1 text-sm">' +
+      '<span class="text-slate-500">Status</span><span class="text-slate-800 font-semibold">' + (u.isSuspended === true ? 'Suspended' : 'Active') + '</span>' +
+      '<span class="text-slate-500">Warnings</span><span class="text-slate-800 font-semibold">' + w + '/3</span>' +
+      '<span class="text-slate-500">Admin</span><span class="text-slate-800 font-semibold">' + (u.isAdmin === true ? 'Yes' : 'No') + '</span>' +
+      '<span class="text-slate-500">KYC</span><span class="text-slate-800 font-semibold">' + esc(kyc.status || 'none') + '</span>' +
+      '<span class="text-slate-500">Joined</span><span class="text-slate-800 font-semibold">' + fmtDate(u.createdAt) + '</span></div>' +
+      '<h4 class="font-bold text-slate-800 mb-2 mt-5">Orders (last 20)</h4>' + (orderRows ? tableShell(['Order', 'Items', 'Amount', 'Status'], orderRows, '520') : emptyRow('No orders')) +
+      '<h4 class="font-bold text-slate-800 mb-2 mt-5">Withdrawals (last 20)</h4>' + (wdRows ? tableShell(['Amount', 'Phone', 'Status', 'Date'], wdRows, '520') : emptyRow('No withdrawals')) +
+      '<h4 class="font-bold text-slate-800 mb-2 mt-5">Revenue transactions (last 20)</h4>' + (revRows ? tableShell(['Type', 'Amount', 'Description', 'Date'], revRows, '640') : emptyRow('No revenue transactions'));
+    refreshIcons();
   }).catch(function (e) {
-    wrap.innerHTML = '<div class="empty">Failed to load products: ' + esc(e.message) + '</div>';
+    body.innerHTML = emptyRow('Failed to load user: ' + e.message);
   });
 }
+
+/* ============ PRODUCTS ============ */
 function renderProducts() {
+  var wrap = $('productsWrap');
+  if (!loaded.products) { wrap.innerHTML = spinner('Loading products…'); loadProducts().then(function () { renderProducts(); }).catch(function () {}); return; }
   var q = ($('productSearch').value || '').toLowerCase();
-  var list = allProducts.filter(function (p) {
-    return ((p.name || '') + ' ' + (p.sellerName || '') + ' ' + (p.category || '')).toLowerCase().indexOf(q) !== -1;
+  var list = S.products.filter(function (p) {
+    return ((p.name || '') + ' ' + (p.sellerName || '') + ' ' + (p.category || '') + ' ' + (p.location || '')).toLowerCase().indexOf(q) !== -1;
   });
-  var wrap = $('productsTableWrap');
-  if (!list.length) {
-    wrap.innerHTML = '<div class="empty">No products found.</div>';
-    return;
-  }
+  if (!list.length) { wrap.innerHTML = emptyRow('No products found.'); return; }
   var rows = list.slice(0, 200).map(function (p) {
     var img = p.images && p.images.length ? p.images[0] : '';
-    return '<tr>' +
-      '<td>' + (img ? '<img class="prod-img" src="' + esc(img) + '" alt="">' : '<div class="prod-img"></div>') + '</td>' +
-      '<td><div class="name">' + esc(p.name) + '</div><div class="sub">' + esc(p.category || '') + (p.isActive === false ? ' · inactive' : '') + '</div></td>' +
-      '<td>' + fmtTZ(p.price) + '</td>' +
-      '<td>' + esc(p.sellerName || '—') + '</td>' +
-      '<td>' + timeAgo(p.createdAt) + '</td>' +
-      '<td><div class="actions">' +
-        '<button class="btn" data-act="toggle" data-id="' + esc(p.id) + '">' + (p.isActive === false ? 'Activate' : 'Hide') + '</button>' +
-        '<button class="btn danger" data-act="del" data-id="' + esc(p.id) + '">Delete</button>' +
+    var boostPill = '';
+    if (p.boostTier) {
+      var bCls = p.boostTier === 'gold' ? 'bg-amber-100 text-amber-700' : p.boostTier === 'silver' ? 'bg-slate-100 text-slate-600' : 'bg-orange-100 text-orange-700';
+      boostPill = statusPill(p.boostTier + ' boost', bCls);
+    }
+    return '<tr class="hover:bg-slate-50 transition">' +
+      '<td class="px-4 py-3">' + (img ? '<img src="' + esc(img) + '" class="w-11 h-11 rounded-xl object-cover border border-slate-200" onerror="this.style.display=\'none\'">' : '<div class="w-11 h-11 rounded-xl bg-slate-100"></div>') + '</td>' +
+      '<td class="px-4 py-3"><p class="font-semibold text-slate-800">' + esc(p.name) + '</p>' +
+      '<p class="text-xs text-slate-400">' + esc(p.category || '') + (p.isActive === false ? ' · inactive' : '') + '</p></td>' +
+      '<td class="px-4 py-3 font-semibold text-slate-800">' + fmtTZ(p.price) + '</td>' +
+      '<td class="px-4 py-3 text-slate-600">' + esc(p.sellerName || '—') + '</td>' +
+      '<td class="px-4 py-3">' + (boostPill || '<span class="text-slate-400 text-xs">—</span>') + '</td>' +
+      '<td class="px-4 py-3 text-slate-500">' + timeAgo(p.createdAt) + '</td>' +
+      '<td class="px-4 py-3"><div class="flex gap-1.5">' +
+      '<button onclick="toggleProduct(\'' + esc(p.id) + '\')" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50">' + (p.isActive === false ? 'Activate' : 'Hide') + '</button>' +
+      '<button onclick="featureProduct(\'' + esc(p.id) + '\')" class="px-2.5 py-1.5 rounded-lg border border-amber-200 text-xs font-semibold text-amber-600 hover:bg-amber-50">' + (p.isFeatured === true ? 'Unfeature' : 'Feature') + '</button>' +
+      '<button onclick="deleteProduct(\'' + esc(p.id) + '\')" class="px-2.5 py-1.5 rounded-lg border border-rose-200 text-xs font-semibold text-rose-600 hover:bg-rose-50">Delete</button>' +
       '</div></td></tr>';
   }).join('');
-  wrap.innerHTML = '<table><thead><tr>' +
-    '<th></th><th>Name</th><th>Price</th><th>Seller</th><th>Posted</th><th>Actions</th>' +
-    '</tr></thead><tbody>' + rows + '</tbody></table>';
+  wrap.innerHTML = tableShell(['', 'Name', 'Price', 'Seller', 'Boost', 'Posted', 'Actions'], rows, '960');
+  refreshIcons();
 }
-$('productSearch').addEventListener('input', renderProducts);
-$('refreshProducts').addEventListener('click', loadProducts);
-$('productsTableWrap').addEventListener('click', function (e) {
-  var btn = e.target.closest('button[data-act]');
-  if (!btn) return;
-  var id = btn.dataset.id; var act = btn.dataset.act;
-  if (act === 'toggle') {
-    var p = allProducts.find(function (x) { return x.id === id; });
-    api('/api/admin/products/' + id, { method: 'PUT', body: JSON.stringify({ isActive: !(p && p.isActive === false) }) })
-      .then(function () { toast('Updated', 'ok'); loadProducts(); })
-      .catch(function (err) { toast(err.message, 'err'); });
-  } else if (act === 'del') {
-    if (!confirm('Delete this product listing permanently?')) return;
-    api('/api/admin/products/' + id, { method: 'DELETE' })
-      .then(function () { toast('Product deleted', 'ok'); loadProducts(); })
-      .catch(function (e) { toast(e.message, 'err'); });
-  }
-});
+function toggleProduct(id) {
+  var p = S.products.find(function (x) { return x.id === id; });
+  var hide = !(p && p.isActive === false);
+  openConfirm({
+    title: hide ? 'Hide product' : 'Activate product',
+    msg: hide ? 'Hide this product from the marketplace?' : 'Re-activate this product listing?',
+    tone: hide ? 'rose' : 'emerald',
+    btn: hide ? 'Hide' : 'Activate',
+    fn: function () {
+      api('/api/admin/products/' + encodeURIComponent(id), { method: 'PUT', body: JSON.stringify({ isActive: !hide }) })
+        .then(function () { toast('Product updated', 'ok'); return loadProducts(true); })
+        .then(function () { renderProducts(); })
+        .catch(function (e) { toast(e.message, 'err'); });
+    }
+  });
+}
+function featureProduct(id) {
+  var p = S.products.find(function (x) { return x.id === id; });
+  var feat = !(p && p.isFeatured === true);
+  api('/api/admin/products/' + encodeURIComponent(id), { method: 'PUT', body: JSON.stringify({ isFeatured: feat }) })
+    .then(function () { toast(feat ? 'Product featured' : 'Product unfeatured', 'ok'); return loadProducts(true); })
+    .then(function () { renderProducts(); })
+    .catch(function (e) { toast(e.message, 'err'); });
+}
+function deleteProduct(id) {
+  openConfirm({
+    title: 'Delete product', msg: 'Delete this product listing permanently?', tone: 'rose', btn: 'Delete',
+    fn: function () {
+      api('/api/admin/products/' + encodeURIComponent(id), { method: 'DELETE' })
+        .then(function () { toast('Product deleted', 'ok'); return loadProducts(true); })
+        .then(function () { renderProducts(); })
+        .catch(function (e) { toast(e.message, 'err'); });
+    }
+  });
+}
 
-/* ── Broadcast tab ────────────────────────────────── */
-$('bcSend').addEventListener('click', function () {
+/* ============ TRANSACTIONS ============ */
+var TX_TYPE = {
+  sale: ['Sale', 'bg-slate-100 text-slate-600'], boost: ['Boost', 'bg-purple-100 text-purple-700'],
+  viewer: ['Viewer Purchase', 'bg-sky-100 text-sky-700'], view: ['Viewer Purchase', 'bg-sky-100 text-sky-700'],
+  seller_withdraw: ['Withdrawal', 'bg-orange-100 text-orange-700'], admin_withdraw: ['Withdrawal', 'bg-orange-100 text-orange-700'],
+  refund: ['Refund', 'bg-fuchsia-100 text-fuchsia-700']
+};
+function txTypeLabel(t) { var m = TX_TYPE[t.type] || (t.type ? [t.type, 'bg-slate-100 text-slate-600'] : TX_TYPE.sale); return m[0]; }
+function txTypeClass(t) { var m = TX_TYPE[t.type] || (t.type ? [t.type, 'bg-slate-100 text-slate-600'] : TX_TYPE.sale); return m[1]; }
+
+function renderTransactions() {
+  var wrap = $('transactionsWrap');
+  if (!loaded.transactions) { wrap.innerHTML = spinner('Loading transactions…'); loadTransactions().then(function () { renderTransactions(); }).catch(function () {}); return; }
+  var q = ($('txSearch').value || '').toLowerCase();
+  var f = $('txType').value;
+  var list = S.transactions.filter(function (t) {
+    var type = t.type || 'sale';
+    var ok = true;
+    if (f === 'sale' && !(type === 'sale' || !t.type)) ok = false;
+    if (f === 'boost' && type !== 'boost') ok = false;
+    if (f === 'viewer' && !(type === 'viewer' || type === 'view')) ok = false;
+    if (f === 'withdraw' && !(type === 'seller_withdraw' || type === 'admin_withdraw')) ok = false;
+    if (f === 'refund' && type !== 'refund') ok = false;
+    if (f === 'other' && ['sale', 'boost', 'viewer', 'view', 'seller_withdraw', 'admin_withdraw', 'refund'].indexOf(type) !== -1) ok = false;
+    var s = ((t.productName || '') + ' ' + (t.buyerName || '') + ' ' + (t.sellerName || '') + ' ' + (t.id || '')).toLowerCase();
+    if (q && s.indexOf(q) === -1) ok = false;
+    return ok;
+  });
+  if (!list.length) { wrap.innerHTML = emptyRow('No transactions match.'); return; }
+  var rows = list.slice(0, 300).map(function (t) {
+    var buyer = t.buyerName || t.sellerName || '—';
+    return '<tr class="hover:bg-slate-50 transition">' +
+      '<td class="px-4 py-3"><p class="font-semibold text-slate-800">' + esc(t.productName || '—') + '</p>' +
+      '<p class="text-xs font-mono text-slate-400">' + esc(t.id || '') + '</p></td>' +
+      '<td class="px-4 py-3"><span class="text-[11px] font-bold px-2 py-0.5 rounded-full ' + txTypeClass(t) + '">' + esc(txTypeLabel(t)) + '</span></td>' +
+      '<td class="px-4 py-3 text-slate-600">' + esc(buyer) + '</td>' +
+      '<td class="px-4 py-3 font-semibold text-slate-800">' + fmtTZ(t.totalAmount) + '</td>' +
+      '<td class="px-4 py-3">' + statusBadge(t.status) + '</td>' +
+      '<td class="px-4 py-3 text-slate-500">' + timeAgo(t.createdAt) + '</td>' +
+      '<td class="px-4 py-3"><button onclick="showTx(\'' + esc(t.id) + '\')" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50">Detail</button></td></tr>';
+  }).join('');
+  wrap.innerHTML = tableShell(['Item', 'Type', 'Party', 'Amount', 'Status', 'Date', ''], rows, '900');
+  refreshIcons();
+}
+
+var TX_FIELDS = [
+  ['id', 'Transaction ID', 'mono'], ['orderId', 'Order ID', 'mono'], ['type', 'Type', ''],
+  ['status', 'Status', ''], ['createdAt', 'Created', 'date'],
+  ['buyerName', 'Buyer', ''], ['buyerPhone', 'Buyer phone', ''], ['buyerId', 'Buyer ID', 'mono'],
+  ['sellerName', 'Seller', ''], ['sellerId', 'Seller ID', 'mono'],
+  ['productName', 'Product', ''], ['productId', 'Product ID', 'mono'],
+  ['productPrice', 'Product price', 'tzs'], ['shippingCost', 'Shipping', 'tzs'],
+  ['processingFee', 'Processing fee', 'tzs'], ['platformFee', 'Platform fee', 'tzs'],
+  ['sokovibeCommission', 'Commission', 'tzs'], ['totalAmount', 'Total paid', 'tzs'],
+  ['sellerReceives', 'Seller receives', 'tzs'],
+  ['escrowStatus', 'Escrow status', ''], ['escrowReleased', 'Escrow released', 'bool'],
+  ['escrowReleasedAt', 'Released at', 'date'], ['shippingCode', 'Shipping code', ''],
+  ['paymentMethod', 'Payment method', ''], ['clickpesaReference', 'ClickPesa ref', 'mono'],
+  ['ussdSent', 'USSD sent', 'bool'], ['ussdFailed', 'USSD failed', 'bool'],
+  ['boostTier', 'Boost tier', ''], ['boostDays', 'Boost days', '']
+];
+function showTx(id) {
+  var t = S.transactions.find(function (x) { return x.id === id; });
+  if (!t) { toast('Transaction not found', 'err'); return; }
+  var body = '<div class="flex items-center justify-between mb-5 flex-wrap gap-2">' +
+    '<div><p class="font-bold text-slate-800 text-lg">' + esc(t.productName || 'Transaction') + '</p>' +
+    '<p class="text-xs font-mono text-slate-400">' + esc(t.id || '') + '</p></div>' + statusBadge(t.status) + '</div>' +
+    '<div class="rounded-xl bg-slate-50 p-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">';
+  TX_FIELDS.forEach(function (f) {
+    var v = t[f[0]];
+    if (v === undefined || v === null || v === '') return;
+    var disp;
+    if (f[2] === 'tzs') disp = fmtTZ(v);
+    else if (f[2] === 'date') disp = fmtDateTime(v);
+    else if (f[2] === 'bool') disp = v === true ? 'Yes' : 'No';
+    else if (f[2] === 'mono') disp = '<span class="font-mono">' + esc(String(v)) + '</span>';
+    else disp = esc(String(v));
+    body += '<div class="text-slate-500">' + esc(f[1]) + '</div><div class="text-slate-800 font-medium">' + disp + '</div>';
+  });
+  if (t.disputeInfo) {
+    var di = t.disputeInfo;
+    body += '<div class="text-slate-500">Dispute reason</div><div class="text-slate-800 font-medium">' + esc(di.reason || '—') + '</div>';
+    if (di.raisedAt) body += '<div class="text-slate-500">Dispute raised</div><div class="text-slate-800 font-medium">' + fmtDateTime(di.raisedAt) + '</div>';
+  }
+  if (t.dispatchProof) {
+    var dp = t.dispatchProof;
+    if (dp.trackingNumber) body += '<div class="text-slate-500">Tracking</div><div class="text-slate-800 font-medium">' + esc(dp.trackingNumber) + '</div>';
+    if (dp.receiptUrl) body += '<div class="text-slate-500">Receipt</div><div class="text-slate-800 font-medium"><a href="' + esc(dp.receiptUrl) + '" target="_blank" rel="noopener" class="text-indigo-600 hover:underline">' + esc(dp.receiptUrl) + '</a></div>';
+    if (dp.dispatchedAt) body += '<div class="text-slate-500">Dispatched</div><div class="text-slate-800 font-medium">' + fmtDateTime(dp.dispatchedAt) + '</div>';
+  }
+  body += '</div>';
+  if (t.type === 'boost' && (t.status === 'completed' || t.status === 'paid')) {
+    body += '<div class="flex gap-2 mt-5"><button onclick="retroBoost(\'' + esc(t.id) + '\')" class="px-4 py-2.5 rounded-xl bg-purple-500 hover:bg-purple-400 text-white text-sm font-semibold">Re-apply boost</button></div>';
+  }
+  if (isEscrow(t.status)) {
+    body += '<div class="flex gap-2 mt-5"><button onclick="releaseEscrow(\'' + esc(t.id) + '\')" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold">Release escrow</button></div>';
+  }
+  if (t.status === 'disputed') {
+    body += '<div class="flex gap-2 mt-5"><button onclick="resolveDispute(\'' + esc(t.id) + '\', \'release\')" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold">Release to seller</button>' +
+      '<button onclick="resolveDispute(\'' + esc(t.id) + '\', \'refund\')" class="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold">Refund buyer</button></div>';
+  }
+  $('txModalBody').innerHTML = body;
+  openModal('txModal');
+}
+function retroBoost(transactionId) {
+  openConfirm({
+    title: 'Retro-boost', msg: 'Re-apply the boost for this paid transaction? Use if the product is not boosted.', tone: 'rose', btn: 'Re-apply',
+    fn: function () {
+      api('/api/admin/retro-boost', { method: 'POST', body: JSON.stringify({ transactionId: transactionId }) })
+        .then(function (d) { toast(d.message || 'Boost re-applied', 'ok'); })
+        .catch(function (e) { toast(e.message, 'err'); });
+    }
+  });
+}
+
+/* ============ ORDER MODAL (timeline) ============ */
+function courierLabel(t) {
+  var dp = t.dispatchProof || {};
+  var parts = [];
+  if (t.busName) parts.push(t.busName + (t.plateNumber ? ' ' + t.plateNumber : ''));
+  if (dp.trackingNumber) parts.push('Tracking: ' + dp.trackingNumber);
+  return parts.length ? esc(parts.join(' · ')) : 'Waiting for seller dispatch';
+}
+function orderTimeline(t) {
+  var s = t.status;
+  var dp = t.dispatchProof || {};
+  var total = orderTotal(t);
+  var paid = !!t.clickpesaReference || isEscrow(s) || s === 'dispatched' || s === 'in_transit' || s === 'disputed' || isDone(s) || s === 'refunded' || s === 'failed' || s === 'cancelled';
+  var shipped = !!dp.dispatchedAt || !!t.dispatchedAt || s === 'dispatched' || s === 'in_transit' || s === 'disputed' || isDone(s) || s === 'refunded';
+  var terminal = isDone(s) || s === 'refunded' || s === 'disputed' || s === 'cancelled' || s === 'failed';
+  var steps = [
+    { icon: 'shopping-bag', title: 'Order Placed', desc: (t.buyerName || 'Buyer') + ' placed order ' + (t.id || '') + ' · ' + esc(t.productName || ''), time: t.createdAt, done: true },
+    { icon: 'shield-check', title: 'ClickPesa Payment Secured', desc: 'Total of ' + fmtTZ(total) + ' locked safely in the escrow vault', time: paid ? t.createdAt : null, done: paid },
+    { icon: 'package-check', title: 'Shipped / In Transit', desc: courierLabel(t), time: shipped ? (dp.dispatchedAt || t.dispatchedAt) : null, done: shipped }
+  ];
+  var lastStep;
+  if (s === 'disputed') lastStep = { icon: 'scale', title: 'Dispute Raised', desc: esc(((t.disputeInfo || {}).reason) || 'Buyer reported an issue. Awaiting admin decision.'), time: (t.disputeInfo || {}).raisedAt };
+  else if (s === 'refunded') lastStep = { icon: 'rotate-ccw', title: 'Refunded via ClickPesa', desc: 'Escrow amount returned to ' + (t.buyerName || 'the buyer') + ' through ClickPesa.', time: t.resolvedAt || t.updatedAt };
+  else if (isDone(s)) lastStep = { icon: 'check-check', title: 'Buyer Confirmed — Funds Released', desc: 'Funds pushed from ClickPesa escrow to ' + (t.sellerName || 'the seller') + '\u2019s wallet.', time: t.escrowReleasedAt || t.completedAt || t.updatedAt };
+  else if (s === 'cancelled') lastStep = { icon: 'x-circle', title: 'Cancelled', desc: 'This order was cancelled before completion.', time: t.updatedAt };
+  else if (s === 'failed') lastStep = { icon: 'alert-triangle', title: 'Payment Failed', desc: 'The payment attempt failed.', time: t.updatedAt };
+  else if (s === 'dispatched' || s === 'in_transit') lastStep = { icon: 'hourglass', title: 'Awaiting Buyer Confirmation', desc: 'Buyer must confirm delivery before the escrow is released.', time: null };
+  else if (isEscrow(s)) lastStep = { icon: 'hourglass', title: 'Awaiting Shipment', desc: 'Funds locked in the vault — waiting for the seller to dispatch.', time: null };
+  else lastStep = { icon: 'hourglass', title: 'Awaiting Payment', desc: 'Waiting for the buyer to pay the total via ClickPesa.', time: null };
+  var l = Object.assign({}, lastStep); l.done = terminal;
+  steps.push(l);
+  return steps;
+}
+
+function openOrderModal(id) {
+  var t = S.transactions.find(function (x) { return x.id === id; });
+  if (!t) { toast('Transaction not found', 'err'); return; }
+  var total = orderTotal(t);
+  $('orderModalHeader').querySelector('div').innerHTML =
+    '<div class="flex items-center gap-3"><div class="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center"><i data-lucide="package" class="w-5 h-5"></i></div>' +
+    '<div><p class="font-bold text-slate-800 text-lg leading-tight">' + esc(t.id || '') + ' — ' + esc(t.productName || '') + '</p><p class="text-xs text-slate-500">Placed ' + fmtDateTime(t.createdAt) + '</p></div></div>';
+
+  var steps = orderTimeline(t).map(function (s, i, arr) {
+    var last = i === arr.length - 1;
+    var iconCls = s.done ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400';
+    return '<li class="relative pl-12">' +
+      (last ? '' : '<span class="absolute left-[19px] top-10 bottom-[-16px] w-0.5 bg-slate-200"></span>') +
+      '<div class="absolute left-0 top-0 w-10 h-10 rounded-full flex items-center justify-center ' + iconCls + '"><i data-lucide="' + s.icon + '" class="w-4 h-4"></i></div>' +
+      '<div class="pb-6"><div class="flex flex-wrap items-center justify-between gap-2"><p class="font-semibold text-slate-800">' + s.title + '</p><span class="text-xs text-slate-400 font-medium whitespace-nowrap">' + (s.time ? fmtDateTime(s.time) : '—') + '</span></div>' +
+      '<p class="text-sm text-slate-500 mt-0.5">' + s.desc + '</p></div></li>';
+  }).join('');
+
+  var dp = t.dispatchProof || {};
+  var showShipping = dp.receiptUrl || dp.trackingNumber || t.busName;
+  $('orderModalBody').innerHTML =
+    '<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">' +
+    '<div class="rounded-xl bg-slate-50 border border-slate-100 p-3"><p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Product Price</p><p class="font-bold text-slate-800">' + fmtTZ(t.productPrice || 0) + '</p></div>' +
+    '<div class="rounded-xl bg-slate-50 border border-slate-100 p-3"><p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Shipping Fee</p><p class="font-bold text-slate-800">' + (t.shippingCost ? fmtTZ(t.shippingCost) : 'Pending') + '</p></div>' +
+    '<div class="rounded-xl bg-indigo-50 border border-indigo-100 p-3"><p class="text-[11px] uppercase tracking-wide text-indigo-400 font-semibold">Escrow Total</p><p class="font-bold text-indigo-700">' + fmtTZ(total) + '</p></div>' +
+    '<div class="rounded-xl bg-slate-50 border border-slate-100 p-3"><p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Status</p><p class="mt-1">' + statusBadge(t.status) + '</p></div>' +
+    '</div>' +
+    '<div class="grid grid-cols-2 gap-3">' +
+    '<div class="rounded-xl border border-slate-100 p-3"><p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold flex items-center gap-1"><i data-lucide="user" class="w-3 h-3"></i> Buyer</p><p class="font-semibold text-slate-800 mt-1">' + esc(t.buyerName || '—') + '</p><p class="text-xs text-slate-400">' + esc(t.buyerPhone || '') + '</p></div>' +
+    '<div class="rounded-xl border border-slate-100 p-3"><p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold flex items-center gap-1"><i data-lucide="store" class="w-3 h-3"></i> Seller</p><p class="font-semibold text-slate-800 mt-1">' + esc(t.sellerName || '—') + '</p><p class="text-xs text-slate-400">Receives ' + fmtTZ(t.sellerReceives) + '</p></div>' +
+    '</div>' +
+    (showShipping ? '<div class="rounded-xl border border-slate-100 p-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm"><span class="text-slate-400 flex items-center gap-1.5"><i data-lucide="truck" class="w-4 h-4"></i> Courier</span><span class="font-medium text-slate-700">' + courierLabel(t) + '</span><span class="text-slate-300">·</span><span class="text-slate-400 flex items-center gap-1.5"><i data-lucide="paperclip" class="w-4 h-4"></i> Receipt</span>' + (dp.receiptUrl ? '<a href="' + esc(dp.receiptUrl) + '" target="_blank" rel="noopener" class="font-medium text-indigo-600 hover:text-indigo-800">' + esc(dp.receiptUrl.split('/').pop()) + '</a>' : '<span class="text-slate-300">—</span>') + '</div>' : '') +
+    '<div><p class="font-bold text-slate-800 mb-3 flex items-center gap-2"><i data-lucide="history" class="w-4 h-4 text-indigo-600"></i> Order Timeline</p><ol>' + steps + '</ol></div>';
+  refreshIcons();
+  openModal('orderModal');
+}
+function closeOrderModal() {
+  closeModal('orderModal');
+}
+
+/* ============ FINANCE ============ */
+function metricCard(icon, iconCls, label, value, sub) {
+  return '<div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">' +
+    '<div class="flex items-start justify-between">' +
+    '<div><p class="text-xs font-medium text-slate-500">' + esc(label) + '</p>' +
+    '<p class="text-2xl font-extrabold text-slate-800 mt-1 tracking-tight">' + value + '</p>' +
+    (sub ? '<p class="text-xs text-slate-500 mt-1">' + sub + '</p>' : '') + '</div>' +
+    '<div class="w-11 h-11 rounded-xl flex items-center justify-center ' + iconCls + '">' +
+    '<i data-lucide="' + icon + '" class="w-5 h-5"></i></div></div></div>';
+}
+function renderFinance() {
+  var el = $('financeGrid');
+  el.innerHTML = spinner('Loading finance…');
+  Promise.all([loadFinance(), loadRevenue(), loadAdViews(), loadUsers()]).then(function () {
+    var f = S.finance || {};
+    var grid =
+      '<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">' +
+      metricCard('lock', 'bg-indigo-50 text-indigo-600', 'ClickPesa Balance', fmtTZ(f.actualClickPesaBalance), 'live wallet') +
+      metricCard('wallet', 'bg-emerald-50 text-emerald-600', 'Available Balance', fmtTZ(f.availableBalance), 'withdrawable') +
+      metricCard('banknote', 'bg-emerald-50 text-emerald-600', 'Total Processed', fmtTZ(f.totalProcessed), 'lifetime volume') +
+      metricCard('send', 'bg-orange-50 text-orange-600', 'Total Payouts', fmtTZ(f.totalPayouts), fmtTZ(f.totalUserPaidOut) + ' users') +
+      metricCard('percent', 'bg-indigo-50 text-indigo-600', 'Commissions', fmtTZ(f.totalCommissions), '3.5% platform fee') +
+      metricCard('rocket', 'bg-purple-50 text-purple-600', 'Boost Revenue', fmtTZ(f.totalBoostRevenue), 'bronze/silver/gold') +
+      metricCard('trending-up', 'bg-cyan-50 text-cyan-600', 'Ad Revenue (est.)', fmtTZ(f.estimatedAdRevenue), 'TZS 15 / view') +
+      metricCard('target', 'bg-slate-50 text-slate-600', 'Ad Revenue (actual)', fmtTZ(f.actualAdRevenue), 'AdMob entry') +
+      '</div>';
+    el.innerHTML = grid;
+    refreshIcons();
+    var adminUsers = S.users.filter(function (u) { return u.isAdmin === true; });
+    var sel = $('wdAdminUser');
+    sel.innerHTML = adminUsers.length
+      ? adminUsers.map(function (u) { return '<option value="' + esc(u.uid) + '">' + esc(u.displayName || u.email || u.uid) + '</option>'; }).join('')
+      : '<option value="">No admin user found</option>';
+  }).catch(function (e) {
+    el.innerHTML = emptyRow('Failed to load finance: ' + e.message);
+  });
+  renderRevenue();
+  renderAdViews();
+}
+function renderRevenue() {
+  var wrap = $('revenueWrap');
+  if (!loaded.revenue) { loadRevenue().then(renderRevenue).catch(function () {}); return; }
+  if (!S.revenue.length) { wrap.innerHTML = emptyRow('No revenue transactions.'); return; }
+  var rows = S.revenue.slice(0, 100).map(function (r) {
+    return '<tr class="border-b border-slate-100 hover:bg-slate-50 transition">' +
+      '<td class="px-4 py-3"><span class="text-[11px] font-bold px-2 py-0.5 rounded-full ' + (r.type === 'boost' ? 'bg-purple-100 text-purple-700' : 'bg-indigo-100 text-indigo-700') + '">' + esc(r.type || '—') + '</span></td>' +
+      '<td class="px-4 py-3 font-semibold ' + ((Number(r.amount) || 0) < 0 ? 'text-rose-600' : 'text-emerald-600') + '">' + fmtTZ(r.amount) + '</td>' +
+      '<td class="px-4 py-3 text-xs text-slate-500 max-w-[220px] truncate">' + esc(r.description || '') + '</td>' +
+      '<td class="px-4 py-3 text-xs text-slate-500">' + timeAgo(r.timestamp) + '</td></tr>';
+  }).join('');
+  wrap.innerHTML = tableShell(['Type', 'Amount', 'Description', 'Date'], rows, '620');
+}
+function renderAdViews() {
+  var wrap = $('adViewsWrap');
+  if (!loaded.adViews) { loadAdViews().then(renderAdViews).catch(function () {}); return; }
+  if (!S.adViews.length) { wrap.innerHTML = emptyRow('No ad views recorded.'); return; }
+  var rows = S.adViews.slice(0, 100).map(function (v) {
+    return '<tr class="border-b border-slate-100 hover:bg-slate-50 transition">' +
+      '<td class="px-4 py-3 text-slate-700">' + esc(v.userId || v.uid || '—') + '</td>' +
+      '<td class="px-4 py-3 text-slate-500">' + esc(v.productName || '—') + '</td>' +
+      '<td class="px-4 py-3 text-xs text-slate-500">' + timeAgo(v.createdAt) + '</td></tr>';
+  }).join('');
+  wrap.innerHTML = tableShell(['User', 'Product', 'Viewed'], rows, '560');
+}
+function submitAdmob() {
+  var amount = parseFloat($('admobAmount').value);
+  if (!(amount >= 0)) { toast('Enter a valid amount', 'err'); return; }
+  api('/api/admin/admob-revenue', { method: 'POST', body: JSON.stringify({ amount: amount, month: $('admobMonth').value.trim() || undefined }) })
+    .then(function (d) { toast(d.message || 'AdMob revenue saved', 'ok'); $('admobAmount').value = ''; $('admobMonth').value = ''; loadFinance(true).then(renderFinance); })
+    .catch(function (e) { toast(e.message, 'err'); });
+}
+function submitWithdraw() {
+  var uid = $('wdAdminUser').value;
+  var amount = parseFloat($('wdAmount').value);
+  var phone = $('wdPhone').value.trim();
+  if (!uid) { toast('Select an admin user', 'err'); return; }
+  if (!(amount > 0)) { toast('Enter a valid amount', 'err'); return; }
+  if (!phone) { toast('Enter a ClickPesa number', 'err'); return; }
+  openConfirm({
+    title: 'Admin withdrawal', msg: 'Withdraw ' + fmtTZ(amount) + ' to ' + esc(phone) + '? A payout fee applies.', tone: 'rose', btn: 'Withdraw',
+    fn: function () {
+      api('/api/admin/withdraw', { method: 'POST', body: JSON.stringify({ userId: uid, amount: amount, phone: phone }) })
+        .then(function (d) { toast(d.message || 'Withdrawal sent', 'ok'); $('wdAmount').value = ''; $('wdPhone').value = ''; loadFinance(true).then(renderFinance); loadWithdrawals(true); })
+        .catch(function (e) { toast(e.message, 'err'); });
+    }
+  });
+}
+
+/* ============ WITHDRAWALS ============ */
+function renderWithdrawals() {
+  var wrap = $('withdrawalsWrap');
+  if (!loaded.withdrawals) { wrap.innerHTML = spinner('Loading withdrawals…'); loadWithdrawals().then(function () { renderWithdrawals(); }).catch(function () {}); return; }
+  if (!S.withdrawals.length) { wrap.innerHTML = emptyRow('No withdrawals yet.'); return; }
+  var rows = S.withdrawals.map(function (w) {
+    return '<tr class="hover:bg-slate-50 transition">' +
+      '<td class="px-4 py-3 font-semibold text-slate-800">' + fmtTZ(w.amount) + '</td>' +
+      '<td class="px-4 py-3 text-slate-600">' + fmtTZ(w.netAmount) + ' <span class="text-xs text-slate-400">(fee ' + fmtTZ(w.fee) + ')</span></td>' +
+      '<td class="px-4 py-3 text-slate-600">' + esc(w.phone || '—') + '</td>' +
+      '<td class="px-4 py-3">' + statusBadge(w.status) + '</td>' +
+      '<td class="px-4 py-3 text-xs font-mono text-slate-500">' + esc(w.payoutId || w.id || '') + '</td>' +
+      '<td class="px-4 py-3 text-slate-500">' + timeAgo(w.createdAt) + '</td></tr>';
+  }).join('');
+  wrap.innerHTML = tableShell(['Amount', 'Net', 'Phone', 'Status', 'Payout ref', 'Date'], rows, '820');
+  refreshIcons();
+}
+
+/* ============ MODERATION ============ */
+function renderModeration() {
+  renderReports();
+  renderFraud();
+}
+function renderReports() {
+  var wrap = $('reportsWrap');
+  if (!loaded.reports) { wrap.innerHTML = spinner('Loading reports…'); loadReports().then(function () { renderReports(); }).catch(function () {}); return; }
+  if (!S.reports.length) { wrap.innerHTML = emptyRow('No reports.'); return; }
+  wrap.innerHTML = S.reports.map(function (r) {
+    var pill = r.status === 'pending' ? statusPill('Pending', 'bg-amber-100 text-amber-700') : statusPill('Resolved', 'bg-emerald-100 text-emerald-700');
+    return '<div class="rounded-2xl border border-slate-200 p-4 mb-3">' +
+      '<div class="flex items-center justify-between mb-2">' +
+      '<p class="font-bold text-slate-800">' + esc(r.reporterName || 'Anonymous') + ' <span class="font-normal text-slate-400">reported</span> ' + esc(r.reportedUserName || 'user') + '</p>' + pill + '</div>' +
+      '<p class="text-xs text-slate-500 mb-2">Reason: <span class="font-semibold text-slate-600">' + esc(r.reason || '—') + '</span></p>' +
+      (r.description ? '<p class="text-sm text-slate-600 mb-2">' + esc(r.description) + '</p>' : '') +
+      '<div class="flex items-center gap-2 text-xs text-slate-400 mb-3">' +
+      (r.productName ? '<span>Product: ' + esc(r.productName) + '</span> · ' : '') + '<span>' + timeAgo(r.createdAt) + '</span></div>' +
+      (r.adminNote ? '<p class="text-xs text-slate-500 mb-3">Admin note: ' + esc(r.adminNote) + '</p>' : '') +
+      (r.status === 'pending' ? '<div class="flex gap-2"><button onclick="resolveReport(\'' + esc(r.id) + '\')" class="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold">Resolve</button>' +
+        '<button onclick="messageUser(\'' + esc(r.reporterId) + '\')" class="px-3 py-2 rounded-lg border border-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-50">Message reporter</button></div>' : '') +
+      '</div>';
+  }).join('');
+}
+function resolveReport(id) {
+  var note = prompt('Admin note (optional):', '');
+  if (note === null) return;
+  api('/api/reports/' + encodeURIComponent(id), { method: 'PATCH', body: JSON.stringify({ status: 'resolved', adminNote: note || '' }) })
+    .then(function () { toast('Report resolved', 'ok'); return loadReports(true); })
+    .then(function () { renderReports(); refreshBadges(); })
+    .catch(function (e) { toast(e.message, 'err'); });
+}
+function renderFraud() {
+  var wrap = $('fraudWrap');
+  if (!loaded.fraud) { wrap.innerHTML = spinner('Loading fraud alerts…'); loadFraud().then(function () { renderFraud(); }).catch(function () {}); return; }
+  if (!S.fraud.length) { wrap.innerHTML = emptyRow('No fraud alerts.'); return; }
+  wrap.innerHTML = S.fraud.map(function (a) {
+    var sev = a.severity || 'low';
+    var pill = a.resolved ? statusPill('Resolved', 'bg-slate-100 text-slate-500')
+      : sev === 'high' ? statusPill('High', 'bg-rose-100 text-rose-700')
+      : sev === 'medium' ? statusPill('Medium', 'bg-orange-100 text-orange-700')
+      : statusPill('Low', 'bg-amber-100 text-amber-700');
+    return '<div class="rounded-2xl border border-slate-200 p-4 mb-3">' +
+      '<div class="flex items-center justify-between mb-2"><p class="font-bold text-slate-800">' + esc(a.sellerName || 'Unknown seller') + '</p>' + pill + '</div>' +
+      '<p class="text-sm text-slate-600 mb-1">' + esc(a.description || '') + '</p>' +
+      '<div class="flex items-center gap-2 text-xs text-slate-400 mb-3"><span class="font-semibold uppercase">' + esc(a.type || '') + '</span> · <span>' + timeAgo(a.detectedAt) + '</span></div>' +
+      (!a.resolved ? '<button onclick="dismissFraud(\'' + esc(a.id) + '\')" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold">Dismiss alert</button>' : '') +
+      '</div>';
+  }).join('');
+}
+function dismissFraud(id) {
+  openConfirm({
+    title: 'Dismiss alert', msg: 'Mark this fraud alert as resolved?', tone: 'emerald', btn: 'Dismiss',
+    fn: function () {
+      api('/api/fraud/alerts/' + encodeURIComponent(id) + '/dismiss', { method: 'PATCH' })
+        .then(function () { toast('Alert dismissed', 'ok'); return loadFraud(true); })
+        .then(function () { renderFraud(); refreshBadges(); })
+        .catch(function (e) { toast(e.message, 'err'); });
+    }
+  });
+}
+
+/* ============ BROADCAST ============ */
+function sendBroadcast() {
   var title = $('bcTitle').value.trim();
   var body = $('bcBody').value.trim();
   if (!title) { toast('Title is required', 'err'); return; }
-  var btn = $('bcSend'); btn.disabled = true; btn.textContent = 'Sending…';
+  var btn = $('bcSend');
+  btn.disabled = true; btn.textContent = 'Sending…';
   api('/api/admin/broadcast-notification', { method: 'POST', body: JSON.stringify({ title: title, body: body }) })
-    .then(function (d) { toast(d.message || 'Broadcast sent', 'ok'); $('bcTitle').value = ''; $('bcBody').value = ''; })
+    .then(function (d) {
+      toast(d.message || 'Broadcast sent', 'ok');
+      $('bcTitle').value = ''; $('bcBody').value = '';
+      $('bcResult').textContent = 'Push: ' + (d.pushNotifications || 0) + ' · In-app: ' + (d.inAppNotifications || 0) + ' · Recipients: ' + (d.totalUsers || 0);
+    })
     .catch(function (e) { toast(e.message, 'err'); })
-    .finally(function () { btn.disabled = false; btn.textContent = 'Send broadcast'; });
-});
-
-/* ── Init ─────────────────────────────────────────── */
-function loadAll() {
-  loadStats();
-  loadUsers();
-  loadProducts();
+    .finally(function () { btn.disabled = false; btn.textContent = 'Send to all users'; });
 }
+function renderBroadcast() { /* static form */ }
+
+/* ============ AUDIT ============ */
+function renderAudit() {
+  var wrap = $('auditWrap');
+  if (!loaded.audit) { wrap.innerHTML = spinner('Loading audit log…'); loadAudit().then(function () { renderAudit(); }).catch(function () {}); return; }
+  if (!S.audit.length) { wrap.innerHTML = emptyRow('No audit entries.'); return; }
+  var rows = S.audit.map(function (l) {
+    return '<tr class="hover:bg-slate-50 transition">' +
+      '<td class="px-4 py-3"><span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">' + esc(l.type || '—') + '</span></td>' +
+      '<td class="px-4 py-3 font-mono text-xs text-slate-500">' + esc(l.userId || '—') + '</td>' +
+      '<td class="px-4 py-3 font-semibold ' + ((Number(l.amount) || 0) < 0 ? 'text-rose-600' : 'text-emerald-600') + '">' + (l.amount != null ? fmtTZ(l.amount) : '—') + '</td>' +
+      '<td class="px-4 py-3 text-xs text-slate-500 max-w-[240px] truncate" title="' + esc(l.reason || '') + '">' + esc(l.reason || '—') + '</td>' +
+      '<td class="px-4 py-3 text-xs font-mono text-slate-400">' + esc(l.relatedId || '—') + '</td>' +
+      '<td class="px-4 py-3 text-slate-500">' + timeAgo(l.timestamp) + '</td></tr>';
+  }).join('');
+  wrap.innerHTML = tableShell(['Type', 'User', 'Amount', 'Reason', 'Related', 'When'], rows, '900');
+  refreshIcons();
+}
+
+/* ============ BADGES / NOTIFICATIONS ============ */
+function setBadge(id, n) {
+  var b = $(id);
+  if (n > 0) { b.textContent = n > 99 ? '99+' : n; b.classList.remove('hidden'); }
+  else b.classList.add('hidden');
+}
+function refreshBadges() {
+  var txs = S.transactions || [];
+  var disputes = txs.filter(function (t) { return t.status === 'disputed'; }).length;
+  var kycCount = (S.kycPending || []).length;
+  var pendingReports = (S.reports || []).filter(function (r) { return r.status === 'pending'; }).length;
+  var openFraud = (S.fraud || []).filter(function (a) { return !a.resolved; }).length;
+
+  setBadge('sideDisputesBadge', disputes);
+  setBadge('sideKycBadge', kycCount);
+  setBadge('sideReportsBadge', pendingReports);
+
+  var total = disputes + kycCount + pendingReports + openFraud;
+  var nb = $('notifBadge');
+  if (total > 0) { nb.textContent = total > 99 ? '99+' : total; nb.classList.remove('hidden'); }
+  else nb.classList.add('hidden');
+
+  var menu = $('notifMenu');
+  var items = [];
+  if (kycCount) items.push({ icon: 'badge-check', text: kycCount + ' KYC application' + (kycCount > 1 ? 's' : '') + ' waiting', tab: 'kyc', cls: 'text-amber-600 bg-amber-50' });
+  if (disputes) items.push({ icon: 'scale', text: disputes + ' active dispute' + (disputes > 1 ? 's' : '') + ' need a decision', tab: 'disputes', cls: 'text-rose-600 bg-rose-50' });
+  if (pendingReports) items.push({ icon: 'flag', text: pendingReports + ' pending report' + (pendingReports > 1 ? 's' : ''), tab: 'moderation', cls: 'text-orange-600 bg-orange-50' });
+  if (openFraud) items.push({ icon: 'shield-alert', text: openFraud + ' open fraud alert' + (openFraud > 1 ? 's' : ''), tab: 'moderation', cls: 'text-red-600 bg-red-50' });
+  var escrowCount = txs.filter(function (t) { return isEscrow(t.status) || t.status === 'dispatched' || t.status === 'in_transit'; }).length;
+  if (escrowCount) items.push({ icon: 'lock', text: escrowCount + ' order' + (escrowCount > 1 ? 's' : '') + ' in escrow', tab: 'orders', cls: 'text-indigo-600 bg-indigo-50' });
+  menu.innerHTML = items.length ? items.map(function (i) {
+    return '<button onclick="switchTab(\'' + i.tab + '\'); document.getElementById(\'notifMenu\').classList.add(\'hidden\')" class="w-full flex items-center gap-3 px-4 py-3 border-b border-slate-100 hover:bg-slate-50 text-left ' + i.cls + '">' +
+      '<i data-lucide="' + i.icon + '" class="w-4 h-4 shrink-0"></i><span class="text-sm font-medium">' + esc(i.text) + '</span></button>';
+  }).join('') : '<div class="px-4 py-6 text-center text-sm text-slate-400">All clear — nothing needs attention.</div>';
+  refreshIcons();
+}
+
+/* ============ SETTINGS ============ */
+function copyWebhook() {
+  var inp = $('webhookUrl');
+  inp.select();
+  inp.setSelectionRange(0, 99999);
+  navigator.clipboard.writeText(inp.value).then(function () { toast('Webhook URL copied to clipboard', 'success'); });
+}
+function saveSettings() {
+  toast('Settings saved — commission rate is ' + $('rateInput').value + '%', 'ok');
+}
+
+/* ============ INIT ============ */
+function init() {
+  loadStats().then(function () { refreshBadges(); }).catch(function () {});
+  loadFinance().then(function () { refreshTotals(); refreshBadges(); }).catch(function () {});
+  loadTransactions().then(function () { refreshTotals(); refreshBadges(); renderOverview(); }).catch(function () {});
+  loadKyc().then(function () { refreshBadges(); }).catch(function () {});
+  loadReports().then(function () { refreshBadges(); }).catch(function () {});
+  loadFraud().then(function () { refreshBadges(); }).catch(function () {});
+  loadUsers().catch(function () {});
+  loadProducts().catch(function () {});
+  loadRevenue().catch(function () {});
+  loadWithdrawals().catch(function () {});
+  loadAudit().catch(function () {});
+  loadAdViews().catch(function () {});
+  initCharts();
+  renderOverview();
+  refreshIcons();
+}
+
 (function () {
   if (sessionStorage.getItem(SECRET_KEY)) {
     api('/api/admin/stats').then(function () {
-      $('gate').style.display = 'none';
-      $('app').style.display = 'block';
-      loadAll();
-    }).catch(function () { $('gate').style.display = 'flex'; });
+      $('gate').classList.add('hidden');
+      init();
+    }).catch(function () { gateFail(); });
   }
+  refreshIcons();
 })();
 </script>
+
+<style>
+@keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+::-webkit-scrollbar-track { background: transparent; }
+</style>
+
 </body>
 </html>

@@ -14,10 +14,10 @@ import '../../services/fraud_prevention_service.dart';
 import '../../providers/product_feed_provider.dart';
 import '../../widgets/google_loading.dart';
 import '../report/admin_reports_screen.dart';
-import 'admin_wallet_screen.dart';
 import 'admin_ads_management_screen.dart';
 import 'admin_transactions_tab.dart';
 import 'admin_clickpesa_screen.dart';
+import 'admin_kyc_document_view_screen.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 
@@ -58,7 +58,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 12, vsync: this);
+    _tabController = TabController(length: 11, vsync: this);
     _checkAdmin();
     _loadFraudStats();
   }
@@ -286,7 +286,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             Tab(icon: const Icon(Icons.ads_click), text: context.tr('ads')),
             Tab(icon: const Icon(Icons.flag), text: context.tr('reports')),
             Tab(icon: const Icon(Icons.security), text: context.tr('fraud')),
-            Tab(icon: const Icon(Icons.payments), text: context.tr('payout')),
             Tab(
               icon: const Icon(Icons.receipt_long),
               text: context.tr('transactions'),
@@ -311,7 +310,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             _buildAdsTab(),
             _buildReportsTab(),
             _buildFraudTab(),
-            _buildPayoutTab(),
             _buildTransactionsTab(),
             _buildChatsTab(),
             _buildClickPesaTab(),
@@ -852,12 +850,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       runSpacing: 10,
       children: [
         _actionTile(
-          Icons.account_balance_wallet,
-          context.tr('wallet'),
-          Theme.of(context).colorScheme.secondary,
-          () => context.push(AppRoutes.adminWallet),
-        ),
-        _actionTile(
           Icons.notifications,
           context.tr('send_notification'),
           Theme.of(context).colorScheme.tertiary,
@@ -1295,145 +1287,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   // ─── ACTION: Review KYC ─────────────────────────────────────
-  void _showKycReviewDialog(Map<String, dynamic> user) {
-    final uid = user['uid'] as String;
-    final kyc = user['kyc'] as Map<String, dynamic>? ?? {};
-    final fullName = kyc['fullName'] ?? user['displayName'] ?? context.tr('unknown');
-    final idType = kyc['idType'] ?? context.tr('unknown');
-    final idNumber = kyc['idNumber'] ?? context.tr('unknown');
-    final idImageUrl = kyc['idImageUrl'] as String?;
-    final selfieUrl = kyc['selfieUrl'] as String?;
-    final notesCtrl = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(context.tr('review_kyc')),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${context.tr('full_name')}: $fullName',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 4),
-              Text('${context.tr('id_type')}: $idType'),
-              Text('${context.tr('number')}: $idNumber'),
-              if (idImageUrl != null) ...[
-                const SizedBox(height: 8),
-                Text(context.tr('identification_label')),
-                const SizedBox(height: 4),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    idImageUrl,
-                    height: 120,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => const Icon(Icons.broken_image),
-                  ),
-                ),
-              ],
-              if (selfieUrl != null) ...[
-                const SizedBox(height: 8),
-                Text(context.tr('selfie_label')),
-                const SizedBox(height: 4),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    selfieUrl,
-                    height: 120,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => const Icon(Icons.broken_image),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 12),
-              TextField(
-                controller: notesCtrl,
-                maxLines: 3,
-                decoration: InputDecoration(
-                  labelText: context.tr('rejection_reason_label'),
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(context.tr('cancel')),
-          ),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.close, size: 16),
-            label: Text(context.tr('reject')),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () {
-              Navigator.pop(ctx);
-              _submitKycReview(uid, false, notesCtrl.text);
-            },
-          ),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.check, size: 16),
-            label: Text(context.tr('approve')),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () {
-              Navigator.pop(ctx);
-              _submitKycReview(uid, true, notesCtrl.text);
-            },
-          ),
-        ],
-      ),
+  Future<void> _showKycReviewDialog(Map<String, dynamic> user) async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => AdminKycDocumentViewScreen(user: user)),
     );
-  }
-
-  Future<void> _submitKycReview(String uid, bool approve, String notes) async {
-    try {
-      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-      final resp = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/admin/kyc/review'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({'userId': uid, 'approve': approve, 'notes': notes}),
-      );
-      final result = jsonDecode(resp.body);
-      if (resp.statusCode == 200) {
-        _loadExceptions();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                result['message'] ??
-                    context
-                        .tr('kyc_status')
-                        .replaceAll(
-                          '{status}',
-                          approve ? 'approved' : 'rejected',
-                        ),
-              ),
-            ),
-          );
-        }
-      } else {
-        throw Exception(result['error'] ?? context.tr('kyc_review_failed'));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(context.tr('imeshindwa').replaceAll('{0}', '$e'))));
-      }
-    }
+    if (changed == true) _loadExceptions();
   }
 
   // ─── ANALYTICS TAB ───────────────────────────────────────
@@ -2314,13 +2172,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     return const AdminReportsScreen(embedded: true);
   }
 
-  // ─── PAYOUT TAB ───────────────────────────────────────────────
+  // ─── TRANSACTIONS TAB ───────────────────────────────────────
   Widget _buildTransactionsTab() {
     return const AdminTransactionsTab();
-  }
-
-  Widget _buildPayoutTab() {
-    return const AdminWalletScreen(embedded: true);
   }
 
   Widget _buildClickPesaTab() {

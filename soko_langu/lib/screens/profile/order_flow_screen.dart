@@ -96,15 +96,6 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                     ),
                     const SizedBox(height: 12),
                     _FeeTiersTable(cs: cs, tiers: ussdPushTiers),
-                    const SizedBox(height: 10),
-                    _SubHeader(cs: cs, text: isEn ? 'BillPay (M-Pesa, Airtel, Tigo)' : 'BillPay (M-Pesa, Airtel, Tigo)'),
-                    _PctRow(cs: cs, label: isEn ? 'Fee charged to organization' : 'Ada inayotozwa kwa shirika', value: '1%'),
-                    const SizedBox(height: 10),
-                    _SubHeader(cs: cs, text: isEn ? 'BillPay (HaloPesa)' : 'BillPay (HaloPesa)'),
-                    _PctRow(cs: cs, label: isEn ? 'Fee charged to organization' : 'Ada inayotozwa kwa shirika', value: '2%'),
-                    const SizedBox(height: 10),
-                    _SubHeader(cs: cs, text: isEn ? 'CRDB BillPay' : 'CRDB BillPay'),
-                    _PctRow(cs: cs, label: isEn ? 'Fee charged to organization' : 'Ada inayotozwa kwa shirika', value: '1%'),
                   ],
                 ),
               ),
@@ -179,16 +170,8 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _SubHeader(cs: cs, text: isEn ? 'Wallet (deposit first)' : 'Pochi (weka hela kwanza)'),
-                    _PctRow(cs: cs, label: isEn ? 'Gateway fee' : 'Ada ya malipo', value: 'Free'),
-                    _PctRow(cs: cs, label: isEn ? 'Deposit via USSD' : 'Kuweka kwa USSD', value: 'TZS 54 \u2013 7,960'),
-                    const SizedBox(height: 10),
                     _SubHeader(cs: cs, text: isEn ? 'USSD Push' : 'USSD Push'),
                     _PctRow(cs: cs, label: isEn ? 'Gateway fee (tiered)' : 'Ada ya malipo (kwa viwango)', value: 'TZS 54 \u2013 7,960'),
-                    _PctRow(cs: cs, label: isEn ? 'Soko Vibe commission' : 'Ada ya Soko Vibe', value: '3.5%'),
-                    const SizedBox(height: 10),
-                    _SubHeader(cs: cs, text: isEn ? 'BillPay' : 'BillPay'),
-                    _PctRow(cs: cs, label: isEn ? 'Gateway fee (1%)' : 'Ada ya malipo (1%)', value: '1%'),
                     _PctRow(cs: cs, label: isEn ? 'Soko Vibe commission' : 'Ada ya Soko Vibe', value: '3.5%'),
                     const SizedBox(height: 16),
                     _SubHeader(cs: cs, text: isEn ? 'Seller Withdrawal (payout)' : 'Muuzaji Kutoa Pesa'),
@@ -198,78 +181,8 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
               ),
               const SizedBox(height: 20),
               _SectionHeader(
-                icon: Icons.receipt_long_outlined,
-                title: isEn ? 'How to Use BillPay' : 'Jinsi ya Kutumia BillPay',
-                cs: cs,
-              ),
-              const SizedBox(height: 8),
-              _InfoCard(
-                cs: cs,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _SubHeader(cs: cs, text: isEn ? '1. Deposit to Wallet' : '1. Kuweka Hela Kwenye Pochi'),
-                    _StepRow(cs: cs, step: isEn
-                      ? 'Go to Wallet \u2192 tap "Weka Pesa" \u2192 select BillPay \u2192 enter amount \u2192 tap deposit.'
-                      : 'Nenda Pochi \u2192 bonyeza "Weka Pesa" \u2192 chagua BillPay \u2192 weka kiasi \u2192 bonyeza weka.'),
-                    _StepRow(cs: cs, step: isEn
-                      ? 'A BillPay control number (Namba ya Kumbukumbu) will appear on screen. Copy or note it down.'
-                      : 'Namba ya kumbukumbu (control number) itaonekana kwenye skrini. Nakili au iandike.'),
-                    _StepRow(cs: cs, step: isEn
-                      ? 'Open M-Pesa \u2192 Lipa \u2192 BillPay \u2192 enter the control number \u2192 enter amount \u2192 enter PIN \u2192 Confirm.'
-                      : 'Fungua M-Pesa \u2192 Lipa \u2192 BillPay \u2192 weka namba ya kumbukumbu \u2192 weka kiasi \u2192 weka PIN \u2192 Thibitisha.'),
-                    _StepRow(cs: cs, step: isEn
-                      ? 'Funds are added to your wallet automatically within seconds.'
-                      : 'Pesa zinaongezwa kwenye pochi yako moja kwa moja baada ya sekunde chache.'),
-                    const SizedBox(height: 10),
-                    _SubHeader(cs: cs, text: isEn ? '2. Pay for a Product (Checkout)' : '2. Kulipa Bidhaa (Checkout)'),
-                    _StepRow(cs: cs, step: isEn
-                      ? 'During checkout, select BillPay as your payment method.'
-                      : 'Wakati wa checkout, chagua BillPay kama njia ya malipo.'),
-                    _StepRow(cs: cs, step: isEn
-                      ? 'Enter your phone number and confirm. A control number will be displayed on screen.'
-                      : 'Weka namba ya simu na thibitisha. Namba ya kumbukumbu itaonekana kwenye skrini.'),
-                    _StepRow(cs: cs, step: isEn
-                      ? 'Open M-Pesa \u2192 Lipa \u2192 BillPay \u2192 enter the control number \u2192 enter amount \u2192 enter PIN. Your order enters escrow automatically.'
-                      : 'Fungua M-Pesa \u2192 Lipa \u2192 BillPay \u2192 weka namba ya kumbukumbu \u2192 weka kiasi \u2192 weka PIN. Oda yako inaingia escrow moja kwa moja.'),
-                    const SizedBox(height: 10),
-                    _SubHeader(cs: cs, text: isEn ? '3. Pay for Product Boost' : '3. Kulipa Boost ya Bidhaa'),
-                    _StepRow(cs: cs, step: isEn
-                      ? 'Go to your product \u2192 tap "Boost" \u2192 select a tier \u2192 choose BillPay as payment method.'
-                      : 'Nenda kwenye bidhaa yako \u2192 bonyeza "Boost" \u2192 chagua kiwango \u2192 chagua BillPay kama njia ya malipo.'),
-                    _StepRow(cs: cs, step: isEn
-                      ? 'Enter your phone, tap pay \u2192 a BillPay control number is displayed. Pay via M-Pesa BillPay using that number.'
-                      : 'Weka namba ya simu, bonyeza lipa \u2192 namba ya kumbukumbu ya BillPay itaonekana. Lipa kwa M-Pesa BillPay ukitumia namba hiyo.'),
-                    _StepRow(cs: cs, step: isEn
-                      ? 'Your boost activates automatically after payment is confirmed.'
-                      : 'Boost yako inawashwa moja kwa moja baada ya malipo kuthibitishwa.'),
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: cs.primary.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.info_outline, size: 16, color: cs.primary),
-                          const SizedBox(width: 8),
-                          Expanded(child: Text(
-                            isEn
-                              ? 'BillPay fee is only 1% (charged to merchant, not you). Works with M-Pesa, Airtel Money, and Tigo Pesa. You will receive a control number \u2014 pay it manually in M-Pesa.'
-                              : 'Ada ya BillPay ni 1% tu (inatozwa kwa biashara, si wewe). Inafanya kazi na M-Pesa, Airtel Money, na Tigo Pesa. Utapokea namba ya kumbukumbu \u2014 lipa kwa M-Pesa mwenyewe.',
-                            style: TextStyle(fontSize: 11, color: cs.primary.withValues(alpha: 0.8)),
-                          )),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-              _SectionHeader(
                 icon: Icons.calculate_outlined,
-                title: isEn ? 'Examples: TZS 100,000 via USSD Push & BillPay' : 'Mifano: TZS 100,000 kwa USSD Push na BillPay',
+                title: isEn ? 'Example: TZS 100,000 via USSD Push' : 'Mfano: TZS 100,000 kwa USSD Push',
                 cs: cs,
               ),
               const SizedBox(height: 8),
@@ -288,16 +201,6 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                     _CalcRow(cs: cs, label: isEn ? 'Seller Receives (before payout fee)' : 'Muuzaji Anapata (kabla ya ada ya kutoa)', value: 'TZS 96,500', bold: true, color: cs.tertiary),
                     const SizedBox(height: 4),
                     _CalcRow(cs: cs, label: isEn ? 'Payout Fee (estimated)' : 'Ada ya Kutoa (makadirio)', value: 'TZS 1,868 \u2013 9,890'),
-                    const SizedBox(height: 16),
-                    const Divider(height: 20),
-                    _SubHeader(cs: cs, text: isEn ? 'BillPay (1% fee)' : 'BillPay (ada 1%)'),
-                    _CalcRow(cs: cs, label: isEn ? 'Product Price' : 'Bei ya Bidhaa', value: 'TZS 100,000'),
-                    _CalcRow(cs: cs, label: isEn ? 'ClickPesa Gateway Fee (1%)' : 'Ada ya ClickPesa (1%)', value: 'TZS 1,000'),
-                    _CalcRow(cs: cs, label: isEn ? 'Soko Vibe Commission (3.5%)' : 'Ada ya Soko Vibe (3.5%)', value: 'TZS 3,500'),
-                    const Divider(height: 20),
-                    _CalcRow(cs: cs, label: isEn ? 'Total Buyer Pays' : 'Jumla Mnunuzi Analipa', value: 'TZS 104,500', bold: true, color: cs.primary),
-                    const SizedBox(height: 8),
-                    _CalcRow(cs: cs, label: isEn ? 'Seller Receives (before payout fee)' : 'Muuzaji Anapata (kabla ya ada ya kutoa)', value: 'TZS 96,500', bold: true, color: cs.tertiary),
                   ],
                 ),
               ),
@@ -311,8 +214,8 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                 ),
                 child: Text(
                   isEn
-                    ? 'Choose any payment method at checkout. Wallet is free (deposit via USSD first). USSD Push sends a phone prompt. BillPay is instant.'
-                    : 'Chagua njia yoyote ya malipo wakati wa checkout. Pochi ni bure (weka hela kwanza kwa USSD). USSD Push inatuma kidokezo kwenye simu. BillPay ni papo hapo.',
+                    ? 'At checkout, USSD Push is the only payment method. You will receive a payment prompt on your phone \u2014 enter your PIN to complete the payment.'
+                    : 'Wakati wa checkout, USSD Push ndiyo njia pekee ya malipo. Utapokea kidokezo cha malipo kwenye simu yako \u2014 weka PIN kukamilisha malipo.',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
@@ -453,32 +356,6 @@ class _FeeRow extends StatelessWidget {
   }
 }
 
-class _StepRow extends StatelessWidget {
-  final ColorScheme cs;
-  final String step;
-  const _StepRow({required this.cs, required this.step});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6, left: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 3),
-            child: Icon(Icons.arrow_forward_ios, size: 8, color: cs.primary.withValues(alpha: 0.5)),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(step, style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.75), height: 1.4)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _CalcRow extends StatelessWidget {
   final ColorScheme cs;
   final String label;
@@ -607,7 +484,7 @@ final flowNodes = [
 final flowDetails = [
   ('Order is placed', 'Seller will confirm'),
   ('Seller sets shipping cost', ''),
-  ('Buyer pays via Wallet, USSD Push, or BillPay', ''),
+  ('Buyer pays via USSD Push', ''),
   ('Funds held securely in escrow', ''),
   ('Seller dispatches via courier', ''),
   ('Buyer confirms receipt', ''),
@@ -617,7 +494,7 @@ final flowDetails = [
 final flowDetailsSW = [
   ('Oda imewekwa', 'Muuzaji atathibitisha'),
   ('Muuzaji anaweka gharama ya usafiri', ''),
-  ('Mnunuzi analipa kwa Pochi, USSD Push, au BillPay', ''),
+  ('Mnunuzi analipa kwa USSD Push', ''),
   ('Fedha zinalindwa kwenye escrow', ''),
   ('Muuzaji anasafirisha bidhaa', ''),
   ('Mnunuzi anathibitisha upokeaji', ''),

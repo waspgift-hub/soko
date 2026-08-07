@@ -9,6 +9,7 @@ import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
 import '../../utils/network_error.dart';
 import '../../widgets/barcode_scanner_widget.dart';
+import '../../constants/tanzania_districts.dart';
 
 class _VariantEntry {
   final TextEditingController nameCtrl = TextEditingController();
@@ -45,6 +46,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   String _selectedCategory = 'Electronics';
   String _selectedSubcategory = '';
   String _selectedCondition = 'new';
+  String _selectedDistrict = '';
   List<SubCategory> _subcategories = [];
   List<XFile> _newImages = [];
   List<String> _existingImages = [];
@@ -75,6 +77,12 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   List<Category> _categories = getDefaultCategories();
 
+  List<String> get _allDistricts => kRegionDistricts.values
+      .expand((d) => d)
+      .toSet()
+      .toList()
+    ..sort();
+
   bool get _isEditing => widget.product != null;
 
   @override
@@ -97,6 +105,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     _existingImages = List.from(p.images);
     if (p.brand != null) _brandController.text = p.brand!;
     if (p.location.isNotEmpty) _locationController.text = p.location;
+    if (p.district.isNotEmpty) _selectedDistrict = p.district;
     if (p.barcode != null) _barcodeController.text = p.barcode!;
     for (var v in p.variants) {
       final entry = _VariantEntry();
@@ -229,6 +238,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
           location: _locationController.text.isNotEmpty
               ? _locationController.text
               : null,
+          district: _selectedDistrict.isEmpty ? null : _selectedDistrict,
           barcode: _barcodeController.text.isNotEmpty
               ? _barcodeController.text.trim()
               : null,
@@ -248,6 +258,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
           location: _locationController.text.isNotEmpty
               ? _locationController.text
               : 'Tanzania',
+          district: _selectedDistrict,
           isWholesale: _isWholesale,
           variants: variantData.isNotEmpty ? variantData : null,
           brand: _brandController.text.isNotEmpty
@@ -537,6 +548,25 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     border: const OutlineInputBorder(),
                     labelStyle: TextStyle(color: Theme.of(context).colorScheme.primary),
                   ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  initialValue: _selectedDistrict.isEmpty ? null : _selectedDistrict,
+                  decoration: InputDecoration(
+                    labelText: context.tr('district'),
+                    border: const OutlineInputBorder(),
+                    labelStyle: TextStyle(color: Theme.of(context).colorScheme.primary),
+                  ),
+                  items: _allDistricts
+                      .map(
+                        (d) => DropdownMenuItem(
+                          value: d,
+                          child: Text(d, overflow: TextOverflow.ellipsis),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) => setState(() => _selectedDistrict = value ?? ''),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(

@@ -27,6 +27,7 @@ const {
 const orderEngine = require('./orders');
 const searchRouter = require('./search').router;
 const notificationRouter = require('./notification').router;
+const notifPrefs = require('./notificationPrefs');
 
 const DEFAULT_PAYOUT_FEE = 2000; // Estimated payout fee (actual varies by amount via clickpesaPayoutPreview)
 const { groqChat, groqTranscribe } = require('./groq');
@@ -74,17 +75,106 @@ app.use(cors({
     cb(null, true); // Allow all in dev — tighten for production
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-secret', 'x-webhook-secret'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-secret', 'x-webhook-secret', 'x-notify-signature', 'x-malipopay-signature'],
   maxAge: 86400,
 }));
 
-app.use(express.json({ limit: '1mb' }));
+// Keep the raw body for HMAC verification — Malipopay signs the exact bytes received.
+app.use(express.json({
+  limit: '1mb',
+  verify: (req, res, buf) => { req.rawBody = buf; },
+}));
 
 app.use((req, res, next) => {
   res.setTimeout(REQUEST_TIMEOUT, () => {
     res.status(504).json({ error: 'Request timed out' });
   });
   next();
+});
+
+// ─── WhatsApp webhook — provider status callbacks (sent/delivered/read/failed) ───
+// Registered before the rate limiter so provider callbacks are never throttled.
+// Provider signs the raw body with HMAC-SHA256 and sends it in the
+// X-Notify-Signature header only when a secret is configured. Set
+// WHATSAPP_WEBHOOK_SECRET on the server to verify; without it we still accept.
+app.post('/api/whatsapp/webhook', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const signature = req.headers['x-notify-signature'] || '';
+    const secret = process.env.WHATSAPP_WEBHOOK_SECRET;
+    if (secret && signature) {
+      const raw = JSON.stringify(body);
+      const expected = crypto.createHmac('sha256', secret).update(raw).digest('hex');
+      const provided = String(signature).replace(/^sha256=/, '');
+      if (expected !== provided) {
+        console.warn(`[WA-WEBHOOK] invalid signature: got=${provided} expected=${expected}`);
+        return res.status(401).json({ error: 'invalid signature' });
+      }
+    }
+    const status = body.status || body.event || body.eventType || body.type || 'unknown';
+    const phone = body.phone || body.to || body.recipient || body.phoneNumber || '';
+    console.log(`[WA-WEBHOOK] status=${status} phone=${phone}`, JSON.stringify(body).slice(0, 500));
+    if (db) {
+      db.collection('whatsapp_webhook_logs').add({
+        status,
+        phone,
+        event: body,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      }).catch((e) => console.error('[WA-WEBHOOK] log write error:', e.message));
+    }
+    res.status(200).json({ received: true });
+  } catch (e) {
+    console.error('[WA-WEBHOOK] error:', e.message);
+    res.status(200).json({ received: true });
+  }
+});
+
+// ─── Malipopay webhook — payment status callbacks (collection/disbursement) ───
+// Registered before the rate limiter so payment callbacks are never throttled.
+// Malipopay signs the raw request body with HMAC-SHA256 (header
+// X-Malipopay-Signature: sha256=<hex>). Set MALIPOPAY_WEBHOOK_SECRET (dashboard
+// Settings > Webhooks — per-webhook signing secret, not the API key) to verify;
+// without it we still accept. Respond 2xx fast — provider retries up to 5 times
+// with exponential backoff until it gets 2xx.
+app.post('/api/malipopay/webhook', async (req, res) => {
+  try {
+    const signature = req.headers['x-malipopay-signature'] || '';
+    const secret = process.env.MALIPOPAY_WEBHOOK_SECRET;
+    if (secret && signature) {
+      const raw = req.rawBody || Buffer.from(JSON.stringify(req.body));
+      const expected = crypto.createHmac('sha256', secret).update(raw).digest('hex');
+      const provided = String(signature).replace(/^sha256=/, '');
+      const a = Buffer.from(provided, 'hex');
+      const b = Buffer.from(expected, 'hex');
+      const valid = a.length === b.length && crypto.timingSafeEqual(a, b);
+      if (!valid) {
+        console.warn(`[MALIPOPAY-WEBHOOK] invalid signature: got=${provided} expected=${expected}`);
+        return res.status(401).json({ error: 'invalid signature' });
+      }
+    }
+    const body = req.body || {};
+    const reference = body.reference || body.customerReference || '';
+    const status = body.status || 'unknown';
+    console.log(`[MALIPOPAY-WEBHOOK] reference=${reference} status=${status}`, JSON.stringify(body).slice(0, 500));
+    if (db && reference) {
+      const refId = `mp_${String(reference).replace(/[^A-Za-z0-9_-]/g, '_')}`;
+      const snap = await db.collection('malipopay_webhook_logs').doc(refId).get();
+      if (!snap.exists) {
+        await db.collection('malipopay_webhook_logs').doc(refId).set({
+          reference,
+          status,
+          event: body,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } else {
+        console.log(`[MALIPOPAY-WEBHOOK] duplicate reference ${reference} ignored`);
+      }
+    }
+    res.status(200).json({ received: true });
+  } catch (e) {
+    console.error('[MALIPOPAY-WEBHOOK] error:', e.message);
+    res.status(200).json({ received: true });
+  }
 });
 
 app.use('/api/', rateLimit);
@@ -113,14 +203,14 @@ function osHeaders() {
 
 // Map notification type → Android notification channel ID (v5 = IMPORTANCE_MAX for heads-up)
 function notifTypeToChannel(type) {
-  if (!type) return 'general_notifications_v5';
-  if (type === 'chat' || type === 'group_chat') return 'chat_messages_v5';
-  if (type === 'system' || type === 'admin' || type === 'alert') return 'system_alerts_v5';
+  if (!type) return 'general_notifications_v6';
+  if (type === 'chat' || type === 'group_chat') return 'chat_messages_v6';
+  if (type === 'system' || type === 'admin' || type === 'alert') return 'system_alerts_v6';
   if (['payment','order','payout','dispute','refund','withdrawal',
        'escrow_release','auto_payout','escrow_auto_release',
        'dispute_resolved','cancelled','auto_withdrawal',
-       'delivery_confirmed','payment_failed','kyc','deposit','deposit_failed'].includes(type)) return 'payments_notifications_v5';
-  return 'general_notifications_v5';
+       'delivery_confirmed','payment_failed','kyc','deposit','deposit_failed'].includes(type)) return 'payments_notifications_v6';
+  return 'general_notifications_v6';
 }
 
 // Retry with exponential backoff so transient OneSignal failures don't drop
@@ -150,6 +240,10 @@ async function sendOneSignalNotification(userId, title, body, data = {}) {
     console.error('[OS] Missing ONE_SIGNAL_APP_ID or ONE_SIGNAL_REST_API_KEY'); return null;
   }
   const notifType = (data && data.type) || 'general';
+  if (!(await notifPrefs.isPushAllowed(userId, notifType))) {
+    console.log(`[OS] skipped push to ${userId} type=${notifType} (preferences)`);
+    return null;
+  }
   // Server copy is already Swahili, so both language keys carry the same text —
   // sw ensures Swahili-locale devices resolve it explicitly instead of en-only.
   const headings = { en: title || '', sw: title || '' };
@@ -209,13 +303,15 @@ async function sendOneSignalBulk(userIds, title, body, data = {}) {
   if (!userIds || userIds.length === 0) return { successCount: 0 };
   if (!ONE_SIGNAL_APP_ID || !ONE_SIGNAL_REST_API_KEY) { console.error('[OS] Missing config'); return { successCount: 0 }; }
   const notifType = (data && data.type) || 'general';
+  const allowedUserIds = await notifPrefs.filterAllowedUserIds(userIds, notifType);
+  if (allowedUserIds.length === 0) { console.log(`[OS] bulk skipped type=${notifType} (no eligible users)`); return { successCount: 0 }; }
   let successCount = 0;
   const batchSize = 2000;
-  for (let i = 0; i < userIds.length; i += batchSize) {
+  for (let i = 0; i < allowedUserIds.length; i += batchSize) {
     const resp = await postOneSignalWithRetry({
       app_id: ONE_SIGNAL_APP_ID,
       idempotency_key: randomUUID(),
-      included_segments: ['Total Subscriptions'],
+      include_external_user_ids: allowedUserIds.slice(i, i + batchSize),
       headings: { en: title || '', sw: title || '' },
       contents: { en: body || '', sw: body || '' },
       data: { ...(data || {}), type: notifType },
@@ -227,8 +323,8 @@ async function sendOneSignalBulk(userIds, title, body, data = {}) {
     if (!resp) continue;
     const result = resp.data;
     if (result.id) {
-      successCount += result.recipients || userIds.length;
-      console.log(`[OS] bulk sent — id=${result.id} recipients=${result.recipients ?? userIds.length}`);
+      successCount += result.recipients || allowedUserIds.length;
+      console.log(`[OS] bulk sent — id=${result.id} recipients=${result.recipients ?? allowedUserIds.length}`);
     } else {
       console.error(`[OS] bulk send failed:`, JSON.stringify(result));
     }
@@ -719,7 +815,7 @@ app.post('/api/boost-product', async (req, res) => {
 });
 
 // ============================================================
-// 📱 SMS — SEND VIA MESEJI
+// 📱 SMS — SEND VIA MESEJI (falls back to Notify Africa)
 // ============================================================
 app.post('/api/sms/send', async (req, res) => {
   try {
@@ -728,33 +824,35 @@ app.post('/api/sms/send', async (req, res) => {
       return res.status(400).json({ error: 'Missing phone or message' });
     }
     const apiKey = process.env.MESEJI_API_KEY;
-    if (!apiKey) {
-      console.error('/api/sms/send: MESEJI_API_KEY not configured');
-      return res.status(500).json({ error: 'SMS not configured' });
-    }
-    const digits = phone.replace(/\D/g, '');
-    // Meseji only accepts local-format numbers (07XXXXXXXX) inside a contacts
-    // ARRAY — string or +255 format both come back HTTP 500 from the provider.
-    const local = digits.startsWith('255') ? '0' + digits.slice(3) : !digits.startsWith('0') ? '0' + digits : digits;
-    const configured = process.env.MESEJI_SENDER_ID || 'MESEJI';
-    const senders = configured === 'MESEJI' ? ['MESEJI'] : [configured, 'MESEJI'];
-    for (const sender of senders) {
-      try {
-        const resp = await axios.post('https://meseji.co.tz/api/v1/sms/send', {
-          sender_id: sender,
-          message,
-          contacts: [local],
-        }, {
-          headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
-          timeout: 15000,
-        });
-        console.log(`/api/sms/send: ok sender=${sender} to ${local} batch=${resp.data?.batch_id || ''}`);
-        return res.json({ sent: true, sender, batchId: resp.data?.batch_id || null });
-      } catch (e) {
-        const errBody = e.response?.data ? JSON.stringify(e.response.data) : e.message;
-        console.error(`/api/sms/send: sender ${sender} error: ${errBody}`);
+    if (apiKey) {
+      const digits = phone.replace(/\D/g, '');
+      // Meseji only accepts local-format numbers (07XXXXXXXX) inside a contacts
+      // ARRAY — string or +255 format both come back HTTP 500 from the provider.
+      const local = digits.startsWith('255') ? '0' + digits.slice(3) : !digits.startsWith('0') ? '0' + digits : digits;
+      const configured = process.env.MESEJI_SENDER_ID || 'MESEJI';
+      const senders = configured === 'MESEJI' ? ['MESEJI'] : [configured, 'MESEJI'];
+      for (const sender of senders) {
+        try {
+          const resp = await axios.post('https://meseji.co.tz/api/v1/sms/send', {
+            sender_id: sender,
+            message,
+            contacts: [local],
+          }, {
+            headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+            timeout: 15000,
+          });
+          console.log(`/api/sms/send: ok sender=${sender} to ${local} batch=${resp.data?.batch_id || ''}`);
+          return res.json({ sent: true, provider: 'meseji', sender, batchId: resp.data?.batch_id || null });
+        } catch (e) {
+          const errBody = e.response?.data ? JSON.stringify(e.response.data) : e.message;
+          console.error(`/api/sms/send: sender ${sender} error: ${errBody}`);
+        }
       }
     }
+    if (await notifyAfricaSms(phone, message)) {
+      return res.json({ sent: true, provider: 'notify_africa' });
+    }
+    console.error('/api/sms/send: no SMS provider delivered (Meseji or Notify Africa)');
     return res.status(502).json({ error: 'SMS provider error' });
   } catch (e) {
     console.error('/api/sms/send error:', e.message);
@@ -762,38 +860,144 @@ app.post('/api/sms/send', async (req, res) => {
   }
 });
 
-// ─── SMS helper (reuses Meseji API from /api/sms/send) ───
+// ============================================================
+// 💬 WHATSAPP — SEND VIA NOTIFY AFRICA (WABA)
+// ============================================================
+app.post('/api/whatsapp/send', async (req, res) => {
+  try {
+    const { phone, message, templateName, templateParameters } = req.body;
+    if (!phone) return res.status(400).json({ error: 'Missing phone' });
+    if (!message && !templateName) {
+      return res.status(400).json({ error: 'Missing message or templateName' });
+    }
+    if (templateName) {
+      const result = await sendWhatsAppTemplate(phone, templateName, templateParameters);
+      return res.json({ sent: result.success, messageId: result.messageId, error: result.error, ...(result.data ? { data: result.data } : {}) });
+    }
+    const result = await sendWhatsAppText(phone, message);
+    res.json({ sent: result.success, messageId: result.messageId, error: result.error, ...(result.data ? { data: result.data } : {}) });
+  } catch (e) {
+    console.error('/api/whatsapp/send error:', e.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── SMS helper (prefers Meseji, falls back to Notify Africa) ───
 async function sendSms(phone, message) {
   try {
     const apiKey = process.env.MESEJI_API_KEY;
-    if (!apiKey) { console.error('sendSms: MESEJI_API_KEY not configured'); return false; }
-    const digits = phone.replace(/\D/g, '');
-    // Meseji only accepts local-format numbers (07XXXXXXXX) inside a contacts
-    // ARRAY — string or +255 format both come back HTTP 500 from the provider.
-    const local = digits.startsWith('255') ? '0' + digits.slice(3) : !digits.startsWith('0') ? '0' + digits : digits;
-    const configured = process.env.MESEJI_SENDER_ID || 'MESEJI';
-    const senders = configured === 'MESEJI' ? ['MESEJI'] : [configured, 'MESEJI'];
-    for (const sender of senders) {
-      try {
-        const resp = await axios.post('https://meseji.co.tz/api/v1/sms/send', {
-          sender_id: sender,
-          message,
-          contacts: [local],
-        }, {
-          headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
-          timeout: 15000,
-        });
-        console.log(`sendSms: ok sender=${sender} to ${local} batch=${resp.data?.batch_id || ''}`);
-        return true;
-      } catch (e) {
-        const errBody = e.response?.data ? JSON.stringify(e.response.data) : e.message;
-        console.error(`sendSms: sender ${sender} error: ${errBody}`);
+    if (apiKey) {
+      const digits = phone.replace(/\D/g, '');
+      // Meseji only accepts local-format numbers (07XXXXXXXX) inside a contacts
+      // ARRAY — string or +255 format both come back HTTP 500 from the provider.
+      const local = digits.startsWith('255') ? '0' + digits.slice(3) : !digits.startsWith('0') ? '0' + digits : digits;
+      const configured = process.env.MESEJI_SENDER_ID || 'MESEJI';
+      const senders = configured === 'MESEJI' ? ['MESEJI'] : [configured, 'MESEJI'];
+      for (const sender of senders) {
+        try {
+          const resp = await axios.post('https://meseji.co.tz/api/v1/sms/send', {
+            sender_id: sender,
+            message,
+            contacts: [local],
+          }, {
+            headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+            timeout: 15000,
+          });
+          console.log(`sendSms: ok sender=${sender} to ${local} batch=${resp.data?.batch_id || ''}`);
+          return true;
+        } catch (e) {
+          const errBody = e.response?.data ? JSON.stringify(e.response.data) : e.message;
+          console.error(`sendSms: sender ${sender} error: ${errBody}`);
+        }
       }
     }
+    if (await notifyAfricaSms(phone, message)) return true;
+    console.error('sendSms: no SMS provider delivered (Meseji or Notify Africa)');
     return false;
   } catch (e) {
     console.error('sendSms error:', e.message);
     return false;
+  }
+}
+
+// ─── Notify Africa — SMS + WhatsApp (WABA) helpers ───
+const NOTIFY_SMS_BASE = 'https://api.notify.africa';
+const NOTIFY_WABA_BASE = 'https://notify-web-assistant-api.beagile.africa';
+
+// Notify Africa requires international format (2557XXXXXXXX).
+function toInternational(phone) {
+  const d = String(phone).replace(/\D/g, '');
+  return d.startsWith('0') ? '255' + d.slice(1) : d;
+}
+
+// Sends via Notify Africa; returns false if not configured or the send failed.
+async function notifyAfricaSms(phone, message) {
+  const apiKey = process.env.NOTIFY_AFRICA_SMS_API_KEY;
+  const senderId = process.env.NOTIFY_AFRICA_SENDER_ID;
+  if (!apiKey || !senderId) {
+    console.error('notifyAfricaSms: missing NOTIFY_AFRICA_SMS_API_KEY / NOTIFY_AFRICA_SENDER_ID');
+    return false;
+  }
+  try {
+    const resp = await axios.post(`${NOTIFY_SMS_BASE}/api/v1/api/messages/send`, {
+      phone_number: toInternational(phone),
+      message,
+      sender_id: senderId,
+    }, {
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      timeout: 15000,
+    });
+    const data = resp.data || {};
+    const ok = data.status === 200 || (data.data && data.data.messageId);
+    console.log(`notifyAfricaSms: ok to ${toInternational(phone)} msgId=${data.data?.messageId || ''} status=${data.data?.status || data.status || ''}`);
+    return ok;
+  } catch (e) {
+    const errBody = e.response?.data ? JSON.stringify(e.response.data) : e.message;
+    console.error(`notifyAfricaSms error: ${errBody}`);
+    return false;
+  }
+}
+
+async function sendWhatsAppText(phone, text) {
+  const apiKey = process.env.NOTIFY_WABA_API_KEY;
+  if (!apiKey) return { success: false, error: 'NOTIFY_WABA_API_KEY not configured' };
+  try {
+    const resp = await axios.post(`${NOTIFY_WABA_BASE}/v1/waba-api/messages/text`, {
+      to: [toInternational(phone)],
+      text,
+    }, {
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      timeout: 15000,
+    });
+    const r = resp.data?.data?.results?.[0] || {};
+    console.log(`sendWhatsAppText: ok to ${toInternational(phone)} msgId=${r.messageId || ''}`);
+    return { success: r.success === true, messageId: r.messageId || '', error: r.error || null, data: resp.data };
+  } catch (e) {
+    const errBody = e.response?.data ? JSON.stringify(e.response.data) : e.message;
+    console.error(`sendWhatsAppText error: ${errBody}`);
+    return { success: false, error: e.response?.data?.message || e.message };
+  }
+}
+
+async function sendWhatsAppTemplate(phone, templateName, templateParameters) {
+  const apiKey = process.env.NOTIFY_WABA_API_KEY;
+  if (!apiKey) return { success: false, error: 'NOTIFY_WABA_API_KEY not configured' };
+  try {
+    const resp = await axios.post(`${NOTIFY_WABA_BASE}/v1/waba-api/messages/template`, {
+      to: [toInternational(phone)],
+      template_name: templateName,
+      template_parameters: templateParameters || {},
+    }, {
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      timeout: 15000,
+    });
+    const r = resp.data?.data?.results?.[0] || {};
+    console.log(`sendWhatsAppTemplate: ok to ${toInternational(phone)} msgId=${r.messageId || ''}`);
+    return { success: r.success === true, messageId: r.messageId || '', error: r.error || null, data: resp.data };
+  } catch (e) {
+    const errBody = e.response?.data ? JSON.stringify(e.response.data) : e.message;
+    console.error(`sendWhatsAppTemplate error: ${errBody}`);
+    return { success: false, error: e.response?.data?.message || e.message };
   }
 }
 
@@ -3150,226 +3354,6 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
       ? e.message
       : 'Internal server error';
     res.status(500).json({ error: msg });
-  }
-});
-
-// ============================================================
-// 🔔 LEGACY WEBHOOK — Handle payment completion (legacy)
-// ============================================================
-app.post('/api/webhook', verifyWebhook, async (req, res) => {
-  try {
-    const { order_id, status, amount, buyer_phone } = req.body;
-    const paymentStatus = status || (req.body.payment_status || '').toLowerCase() || '';
-    if (!order_id || !paymentStatus) {
-      return res.status(200).json({ received: false });
-    }
-
-    if (!db) return res.status(200).json({ received: false });
-
-    const txDoc = await db.collection('transactions').doc(order_id).get();
-    if (!txDoc.exists) return res.status(200).json({ received: false });
-
-    const tx = txDoc.data();
-
-    if (paymentStatus === 'success' || paymentStatus === 'completed') {
-
-      if (tx.type === 'boost') {
-        // Handle boost payment success — update product FIRST before marking tx completed
-        const tier = tx.tier || 'bronze';
-        const tierConfig = BOOST_TIERS[tier] || BOOST_TIERS.bronze;
-        const now = new Date();
-        const boostedUntil = new Date(now.getTime() + tierConfig.days * 24 * 60 * 60 * 1000);
-
-        try {
-          await db.collection('products').doc(tx.productId).update({
-            isBoosted: true,
-            boostedUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
-            boostTier: tier,
-            isFeatured: true,
-            featuredUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
-          });
-        } catch (productErr) {
-          console.error(`Failed to boost product ${tx.productId}:`, productErr);
-          await txDoc.ref.update({ status: 'failed', failureReason: `Product update failed: ${productErr.message}` });
-          return res.status(200).json({ received: true });
-        }
-
-        // Product updated successfully — now mark transaction completed
-        await txDoc.ref.update({ status: 'completed' });
-
-        // Send notification + push
-        if (tx.userId) {
-          await db.collection('notifications').add({
-            userId: tx.userId,
-            title: '✅ Boost imewashwa!',
-            body: `Bidhaa yako imepandishwa kwa daraja la ${tier} kwa siku ${tierConfig.days}.`,
-            data: { type: 'boost', productId: tx.productId },
-            isRead: false,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-          try {
-            await sendOneSignalNotification(tx.userId, '✅ Boost imewashwa!', `Bidhaa yako imepandishwa kwa daraja la ${tier} kwa siku ${tierConfig.days}.`, { type: 'boost', productId: tx.productId || '' });
-          } catch (_) {}
-        }
-
-        // Notify all users about this boost
-        notifyBoostBroadcast(tx.productId, tier, tx.userId).catch(() => {});
-
-        // Record boost payment as admin revenue
-        const boostAmount = tx.amount || tierConfig.price;
-        await db.collection('revenue_transactions').add({
-          userId: 'platform',
-          amount: boostAmount,
-          sokoLanguCommission: boostAmount,
-          type: 'boost',
-          subType: tier,
-          productId: tx.productId,
-          transactionId: order_id,
-          buyerPhone: tx.buyerPhone || '',
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-
-        // Also set totalAmount on the transaction for ClickPesa tracking
-        await txDoc.ref.update({
-          totalAmount: boostAmount,
-          completedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      } else {
-        // Non-boost: mark as completed (purchase handler overwrites to escrow_hold)
-        await txDoc.ref.update({ status: 'completed' });
-      }
-
-      if (tx.type === 'purchase') {
-        const productPrice = tx.productPrice || 0;
-        const platformFee = Math.round(productPrice * PLATFORM_COMMISSION_PERCENT);
-        const payoutFee = DEFAULT_PAYOUT_FEE;
-        const processingFee = tx.processingFee || tx.clickpesaFee || 0;
-        // Seller is reimbursed the shipping cost from escrow on delivery
-        const sellerReceives = productPrice + Math.round(tx.shippingCost || 0);
-        const deliveryType = tx.deliveryType || 'local';
-        const autoReleaseDays = tx.autoReleaseDays || (deliveryType === 'regional' ? ESCROW_REGIONAL_DAYS : ESCROW_LOCAL_DAYS);
-        const escrowExpiry = new Date(Date.now() + autoReleaseDays * 24 * 60 * 60 * 1000);
-
-        // Update transaction — put in escrow instead of auto-paying
-        await txDoc.ref.update({
-          processingFee,
-          platformFee,
-          payoutFee,
-          sokoLanguCommission: platformFee,
-          totalAmount: tx.totalAmount || (productPrice + Math.round(tx.shippingCost || 0) + platformFee + processingFee),
-          sellerReceives,
-          status: 'escrow_hold',
-          paymentMethod: 'ClickPesa',
-          transactionReference: order_id,
-          buyerId: tx.buyerId || '',
-          buyerName: tx.buyerName || '',
-          escrowStatus: 'held',
-          escrowHeldAt: admin.firestore.FieldValue.serverTimestamp(),
-          escrowExpiresAt: admin.firestore.Timestamp.fromDate(escrowExpiry),
-        });
-
-        // Record platform commission immediately
-        await db.collection('revenue_transactions').add({
-          userId: 'platform',
-          amount: platformFee,
-          type: 'commission',
-          description: `Commission for ${tx.productName || 'Product'} (escrow)`,
-          transactionId: order_id,
-          productName: tx.productName || '',
-          productPrice,
-          payoutFee,
-          sokoLanguCommission: platformFee,
-          buyerName: tx.buyerName || '',
-          paymentMethod: 'ClickPesa',
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        });
-
-        // Decrement flash sale stock only for a non-expired active flash sale
-        try {
-          const fsSnap = await db.collection('flash_sales')
-            .where('productId', '==', tx.productId)
-            .where('isActive', '==', true)
-            .limit(5)
-            .get();
-          const payNow = new Date();
-          const activeDoc = fsSnap.docs.find(d => isFlashSaleStillActive(d.data(), payNow));
-          if (activeDoc) {
-            const fsData = activeDoc.data();
-            const newStock = (fsData.stock || 0) - 1;
-            const newSold = (fsData.soldCount || 0) + 1;
-            await activeDoc.ref.update({
-              stock: Math.max(0, newStock),
-              soldCount: newSold,
-              isActive: newStock > 0,
-            });
-          }
-        } catch (_) {}
-
-        // Credit seller's pendingEscrow (not available for withdrawal until released)
-        if (sellerReceives > 0 && tx.sellerId) {
-          await db.collection('users').doc(tx.sellerId).set({
-            pendingEscrow: admin.firestore.FieldValue.increment(sellerReceives),
-            totalSales: admin.firestore.FieldValue.increment(1),
-            grossSalesVolume: admin.firestore.FieldValue.increment(productPrice),
-            lastSaleAt: admin.firestore.FieldValue.serverTimestamp(),
-          }, { merge: true });
-
-          // Notify seller — payment received, held in escrow
-          await db.collection('notifications').add({
-            userId: tx.sellerId,
-            title: 'Umepata Mauzo!',
-            body: `${tx.productName || 'Bidhaa'} imeuzwa. TZS ${sellerReceives.toLocaleString()} imewekwa escrow. Mnunuzi atathibitisha upokeaji ili pesa zifunguliwe.`,
-            isRead: false,
-            type: 'sale',
-            transactionId: order_id,
-            buyerPhone: tx.buyerPhone || '',
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-          try {
-            await sendOneSignalNotification(tx.sellerId, 'Umepata Mauzo!', `${tx.productName || 'Bidhaa'} imeuzwa. TZS ${sellerReceives.toLocaleString()} imewekwa escrow.`, { type: 'order', productId: tx.productId || '', transactionId: order_id, buyerPhone: tx.buyerPhone || '' });
-          } catch (_) {}
-        }
-
-        // Notify buyer to confirm delivery
-        if (tx.buyerId) {
-          await db.collection('notifications').add({
-            userId: tx.buyerId,
-            title: 'Malipo Yamekamilika!',
-            body: `Malipo ya ${tx.productName || 'Bidhaa'} yamepokelewa. Thibitisha upokeaji ili muuzaji apate hela zake.`,
-            isRead: false,
-            type: 'escrow_confirm',
-            transactionId: order_id,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-          try {
-            await sendOneSignalNotification(tx.buyerId, 'Malipo Yamekamilika!', `Malipo ya ${tx.productName || 'Bidhaa'} yamepokelewa.`, { type: 'order', productId: tx.productId || '', transactionId: order_id });
-          } catch (_) {}
-        }
-      }
-    } else if (paymentStatus === 'failed' || paymentStatus === 'cancelled') {
-      await txDoc.ref.update({ status: 'failed', failureReason: 'Payment failed via webhook' });
-      if (tx.type === 'boost') {
-        await notifyBoostPaymentFailed(tx, 'payment failed via webhook');
-      } else if (tx.buyerId) {
-        await db.collection('notifications').add({
-          userId: tx.buyerId,
-          title: 'Malipo Yameshindikana',
-          body: `Malipo ya ${tx.productName || 'Bidhaa'} hayakukamilika. Jaribu tena kwenye app.`,
-          isRead: false,
-          type: 'payment_failed',
-          transactionId: order_id,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        try {
-          await sendOneSignalNotification(tx.buyerId, 'Malipo Yameshindikana', `Malipo ya ${tx.productName || 'Bidhaa'} hayakukamilika. Jaribu tena kwenye app.`, { type: 'payment_failed', productId: tx.productId || '', transactionId: order_id });
-        } catch (_) {}
-      }
-    }
-
-    res.status(200).json({ received: true });
-  } catch (e) {
-    console.error('Webhook error:', e);
-    res.status(200).json({ received: true });
   }
 });
 
@@ -5840,7 +5824,9 @@ app.post('/api/flash-sale/notify', asyncHandler(async (req, res) => {
           const usersSnap = await query.get();
           if (usersSnap.empty) break;
           for (const doc of usersSnap.docs) {
-            if (doc.id) userIds.push(doc.id);
+            // The creator gets a dedicated confirmation push below, so skip
+            // them here to avoid a duplicate broadcast to the seller.
+            if (doc.id && doc.id !== sellerId) userIds.push(doc.id);
           }
           lastPushId = usersSnap.docs[usersSnap.docs.length - 1].id;
         }
@@ -5853,6 +5839,20 @@ app.post('/api/flash-sale/notify', asyncHandler(async (req, res) => {
       }
     } else {
       console.log(`[flash-sale] push skipped — cooldown active (last sent ${lastSentAt.toISOString()})`);
+    }
+
+    // Always confirm to the flash-sale creator that the sale is live, even when
+    // the full-audience broadcast is cooldown-gated.
+    try {
+      if (sellerId) {
+        await sendOneSignalNotification(sellerId,
+          'Flash Sale Yako Imeanzishwa!',
+          `${productName} inauzwa TSh ${salePrice} pekee (-${discountPercent}%).`,
+          { type: 'flash_sale', productName: productName || '' }
+        );
+      }
+    } catch (creatorErr) {
+      console.error('[flash-sale] creator notify error:', creatorErr.message);
     }
 
     // Write in-app notification for all users
@@ -7042,78 +7042,6 @@ app.post('/api/wallet/delete-history', async (req, res) => {
 // ⏰ AUTO-RELEASE ESCROW — Check and release expired escrows
 //     Can be called by a cron job (e.g., GitHub Actions, Render cron)
 // ============================================================
-app.post('/api/release-expired-escrows', async (req, res) => {
-  try {
-    const authHeader = req.headers.authorization || '';
-    const token = authHeader.replace('Bearer ', '');
-    if (!token) return res.status(401).json({ error: 'Unauthorized' });
-    const decoded = await admin.auth().verifyIdToken(token).catch(() => null);
-    if (!decoded) return res.status(403).json({ error: 'Invalid token' });
-    const userDoc = await db.collection('users').doc(decoded.uid).get();
-    if (!userDoc.exists || !userDoc.data().isAdmin) {
-      return res.status(403).json({ error: 'Admin only' });
-    }
-
-    const now = admin.firestore.Timestamp.now();
-    const expiredSnap = await db.collection('transactions')
-      .where('status', '==', 'escrow_hold')
-      .where('escrowExpiresAt', '<=', now)
-      .get();
-
-    let released = 0;
-    let notified = 0;
-
-    for (const doc of expiredSnap.docs) {
-      const tx = doc.data();
-      await doc.ref.update({ status: 'completed', completedAt: now });
-
-      // Release funds to seller
-      const sellerReceives = tx.sellerReceives || tx.productPrice || 0;
-      if (sellerReceives > 0 && tx.sellerId) {
-        await db.collection('users').doc(tx.sellerId).update({
-          sellerBalance: admin.firestore.FieldValue.increment(sellerReceives),
-          totalSales: admin.firestore.FieldValue.increment(1),
-          grossSalesVolume: admin.firestore.FieldValue.increment(tx.productPrice || 0),
-          lastSaleAt: now,
-        });
-      }
-
-      // Notify buyer that escrow auto-released
-      if (tx.buyerId) {
-        await db.collection('notifications').add({
-          userId: tx.buyerId,
-          title: 'Escrow Imetolewa Kiotomatiki',
-          body: `Malipo ya ${tx.productName || 'bidhaa'} yametolewa kwa muuzaji.`,
-          type: 'order',
-          transactionId: doc.id,
-          isRead: false,
-          createdAt: now,
-        });
-      }
-
-      // Notify seller
-      if (tx.sellerId) {
-        await db.collection('notifications').add({
-          userId: tx.sellerId,
-          title: 'Malipo Yamekamilika',
-          body: `Malipo ya ${tx.productName || 'bidhaa'} yamekutolewa. Angalia salio lako.`,
-          type: 'order',
-          transactionId: doc.id,
-          isRead: false,
-          createdAt: now,
-        });
-      }
-
-      released++;
-    }
-
-    res.json({ released, notified: released * 2 });
-  } catch (e) {
-    console.error('Auto-release escrow error:', e);
-    res.status(500).json({ error: e.message });
-  }
-});
-
 // Periodic GC every 5 minutes to keep memory in check (--expose-gc must be enabled)
 if (global.gc) {
   setInterval(() => {
@@ -7144,7 +7072,7 @@ app.post('/api/orders/create', async (req, res) => {
     const decoded = await verifyAuthToken(req);
     if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
 
-    const { buyerId, buyerName, buyerPhone, sellerId, sellerName, productId, productName, productImage, productPrice, shippingCost, deliveryType, region, district, street, landmarks, phone, paymentMethod } = req.body;
+    const { buyerId, buyerName, buyerPhone, sellerId, sellerName, productId, productName, productImage, productPrice, shippingCost, deliveryType, region, district, street, landmarks, latitude, longitude, phone, paymentMethod } = req.body;
     if (!buyerId || !sellerId || !productId || !productName || productPrice == null) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
@@ -7166,6 +7094,8 @@ app.post('/api/orders/create', async (req, res) => {
       deliveryType: deliveryType || 'local',
       region: region || '', district: district || '', street: street || '',
       landmarks: landmarks || '',
+      latitude: latitude ?? null,
+      longitude: longitude ?? null,
       phone: phone || '',
       paymentMethod: paymentMethod || 'ussd_push',
     });
@@ -7188,6 +7118,8 @@ app.post('/api/orders/create', async (req, res) => {
         deliveryType: deliveryType || 'local',
         region: region || '', district: district || '', street: street || '',
         landmarks: landmarks || '',
+        latitude: latitude ?? null,
+        longitude: longitude ?? null,
         status: 'awaiting_shipping_quote',
         paymentMethod: paymentMethod || 'ussd_push',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -7197,12 +7129,15 @@ app.post('/api/orders/create', async (req, res) => {
     }
 
     // Notify seller that a new order is pending — push + in-app + SMS so the
-    // seller always hears about it even with the app closed
+    // seller always hears about it even with the app closed. Include the
+    // buyer's delivery location so the seller can price shipping immediately.
     try {
+      const buyerLocation = [region, district, street].filter(Boolean).join(', ');
+      const orderBody = `${buyerName || 'Mnunuzi'} ametuma agizo la ${productName}.${buyerLocation ? ` Eneo: ${buyerLocation}.` : ''} Toa gharama ya usafirishaji sasa.`;
       await db.collection('notifications').add({
         userId: sellerId,
         title: 'Agizo Jipya Limewasilishwa!',
-        body: `${buyerName || 'Mnunuzi'} ametuma agizo la ${productName}. Toa gharama ya usafirishaji sasa.`,
+        body: orderBody,
         type: 'order',
         data: { orderId: result.orderId, buyerId, productId },
         isRead: false,
@@ -7210,14 +7145,14 @@ app.post('/api/orders/create', async (req, res) => {
       });
       await sendOneSignalNotification(sellerId,
         'Agizo Jipya Limewasilishwa!',
-        `${buyerName || 'Mnunuzi'} ametuma agizo la ${productName}. Toa gharama ya usafirishaji sasa.`,
+        orderBody,
         { type: 'order', orderId: result.orderId, buyerId, productId }
       );
       const sellerSnap = await db.collection('users').doc(sellerId).get();
       const sellerPhone = sellerSnap.data()?.phone;
       if (sellerPhone) {
         await sendSms(sellerPhone,
-          `SOKO VIBE: Agizo JIPYA #${result.orderId}\n${buyerName || 'Mnunuzi'} ametuma agizo la ${productName} (TSh ${result.totalAmount || productPrice}). Fungua app na utoe gharama ya usafirishaji.`
+          `SOKO VIBE: Agizo JIPYA #${result.orderId}\n${buyerName || 'Mnunuzi'} ametuma agizo la ${productName} (TSh ${result.totalAmount || productPrice}).${buyerLocation ? ` Eneo: ${buyerLocation}.` : ''} Fungua app na utoe gharama ya usafirishaji.`
         );
       }
     } catch (e) {
@@ -7298,10 +7233,11 @@ app.post('/api/orders/transition', async (req, res) => {
       } else if (newStatus === 'quoted') {
         // Seller set the shipping cost — buyer must pay the updated bill
         let costLabel = '';
+        let shippingCost = 0;
         try {
           const parsed = JSON.parse(note || '{}');
-          const cost = Number(parsed.shippingCost || 0);
-          if (cost > 0) costLabel = ` la TZS ${cost.toLocaleString()}`;
+          shippingCost = Number(parsed.shippingCost || 0);
+          if (shippingCost > 0) costLabel = ` la TZS ${shippingCost.toLocaleString()}`;
         } catch (_) {}
         await db.collection('notifications').add({
           userId: order.buyerId,
@@ -7316,6 +7252,22 @@ app.post('/api/orders/transition', async (req, res) => {
           'Gharama ya Usafirishaji Imewekwa!',
           `Muuzaji ameweka gharama ya usafirishaji${costLabel}. Lipa sasa.`,
           { type: 'order', orderId, sellerId: order.sellerId }
+        );
+        // Confirm to the seller that their quote was delivered to the buyer
+        const sellerConfirmBody = `Quote yako ya usafirishaji ya TZS ${shippingCost.toLocaleString()} imetumwa kwa ${order.buyerName || 'mnunuzi'}.`;
+        await db.collection('notifications').add({
+          userId: order.sellerId,
+          title: 'Quote Imetumwa!',
+          body: sellerConfirmBody,
+          type: 'order',
+          data: { type: 'order', orderId, buyerId: order.buyerId },
+          isRead: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        await sendOneSignalNotification(order.sellerId,
+          'Quote Imetumwa!',
+          sellerConfirmBody,
+          { type: 'order', orderId, buyerId: order.buyerId }
         );
       } else if (newStatus === 'dispatched') {
         await db.collection('notifications').add({
@@ -7485,7 +7437,6 @@ app.get('/api/orders/user/:userId', async (req, res) => {
   }
 });
 
-startProductListener();
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT} (PID ${process.pid})`);
   console.log(`[MEM] RSS: ${(process.memoryUsage().rss / 1024 / 1024).toFixed(1)}MB`);
@@ -7507,76 +7458,6 @@ app.listen(PORT, () => {
     console.log('[SELF-PING] Disabled — RENDER_EXTERNAL_URL not set');
   }
 });
-
-// ─── Product listener: notify previous chat partners on new product ─────
-function startProductListener() {
-  if (!db) return;
-  console.log('[PRODUCT] Starting product listener...');
-  const MAX_KNOWN = 500;
-
-  // Load recent product IDs on startup
-  let knownProductIds = new Set();
-  db.collection('products')
-    .orderBy('createdAt', 'desc')
-    .limit(200)
-    .get()
-    .then((snap) => {
-      snap.docs.forEach((doc) => knownProductIds.add(doc.id));
-      console.log(`[PRODUCT] Loaded ${snap.docs.length} recent products`);
-    })
-    .catch((err) => console.error('[PRODUCT] Failed to load recent products:', err.message));
-
-  db.collection('products')
-    .onSnapshot(
-      (snapshot) => {
-        snapshot.docChanges().forEach((change) => {
-          if (change.type !== 'added') return;
-          const productId = change.doc.id;
-          if (knownProductIds.has(productId)) return;
-          if (knownProductIds.size >= MAX_KNOWN) {
-            const first = knownProductIds.values().next().value;
-            if (first) knownProductIds.delete(first);
-          }
-          knownProductIds.add(productId);
-
-          const product = change.doc.data();
-          const sellerId = product.sellerId;
-          if (!sellerId) return;
-          const sellerName = product.sellerName || 'Mfanyabiashara';
-          const productName = product.name || 'bidhaa mpya';
-
-          db.collection('chat_rooms')
-            .where('participants', 'array-contains', sellerId)
-            .get()
-            .then((roomsSnap) => {
-              const notified = new Set();
-              for (const roomDoc of roomsSnap.docs) {
-                const room = roomDoc.data();
-                const other = (room.participants || []).find((p) => p !== sellerId);
-                if (!other || notified.has(other)) continue;
-                notified.add(other);
-                const title = sellerName;
-                const body = `${sellerName} ameweka bidhaa mpya: ${productName}.`;
-                db.collection('notifications').add({
-                  userId: other,
-                  title,
-                  body,
-                  data: { type: 'product', productId, sellerId },
-                  isRead: false,
-                  createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                }).catch(() => {});
-                sendOneSignalNotification(other, title, body, { type: 'product', productId, sellerId, productName }).catch(() => {});
-              }
-              if (notified.size > 0) {
-                console.log(`[PRODUCT] Notified ${notified.size} users about new product from ${sellerId}`);
-              }
-            })
-            .catch((err) => console.error('[PRODUCT] Room lookup error:', err.message));
-        });
-      },
-      (error) => console.error('[PRODUCT] Listener error:', error)
-    );
-}
 
 // ============================================================
 // 🔍 DIAGNOSTIC — Check legacy FCM token in user doc

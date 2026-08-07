@@ -43,6 +43,7 @@ import 'services/security_service.dart';
 import 'theme/theme_manager.dart';
 import 'utils/responsive.dart';
 import 'widgets/app_lock_overlay.dart';
+import 'widgets/gradient_background.dart';
 import 'widgets/maintenance_gate.dart';
 import 'widgets/connectivity_wrapper.dart';
 import 'widgets/transaction_status_watcher.dart';
@@ -503,7 +504,13 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
         debugShowCheckedModeBanner: false,
         title: 'Soko Vibe',
         locale: Locale(_langCode),
-        supportedLocales: const [Locale('en'), Locale('sw')],
+        supportedLocales: const [
+          Locale('en'),
+          Locale('sw'),
+          Locale('fr'),
+          Locale('zh'),
+          Locale('de'),
+        ],
         localizationsDelegates: const [
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
@@ -533,19 +540,8 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
       );
     }
 
-    // App-wide gradient background
-    final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    content = Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [isDark ? Colors.black : Colors.white, cs.surface],
-        ),
-      ),
-      child: content,
-    );
+    // App-wide animated gradient background
+    content = GradientBackground(child: content);
 
     // Premium animated background with floating particles
     content = PremiumBackground(child: content);

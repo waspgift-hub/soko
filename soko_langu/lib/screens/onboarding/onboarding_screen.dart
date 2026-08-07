@@ -349,6 +349,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
+  static const Map<String, String> _langFlags = {
+    'sw': '🇹🇿',
+    'en': '🇬🇧',
+    'fr': '🇫🇷',
+    'zh': '🇨🇳',
+    'de': '🇩🇪',
+  };
+
   Widget _buildLanguagePage(ColorScheme cs) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -372,21 +380,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           ),
           const SizedBox(height: 40),
-          _LangButton(
-            label: context.tr('swahili'),
-            sub: context.tr('swahili'),
-            flag: '🇹🇿',
-            selected: _selectedLang == 'sw',
-            onTap: () => setState(() => _selectedLang = 'sw'),
-          ),
-          const SizedBox(height: 16),
-          _LangButton(
-            label: context.tr('english'),
-            sub: context.tr('english'),
-            flag: '🇬🇧',
-            selected: _selectedLang == 'en',
-            onTap: () => setState(() => _selectedLang = 'en'),
-          ),
+          ...LocalizationService.supportedLanguages.entries.map((entry) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: _LangButton(
+                label: entry.value,
+                sub: entry.value,
+                flag: _langFlags[entry.key] ?? '🌐',
+                selected: _selectedLang == entry.key,
+                onTap: () => setState(() => _selectedLang = entry.key),
+              ),
+            );
+          }),
         ],
       ),
     );

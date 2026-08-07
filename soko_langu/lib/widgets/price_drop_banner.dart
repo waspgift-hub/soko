@@ -59,7 +59,7 @@ class _PriceDropBannerState extends State<PriceDropBanner> {
 
         return Container(
           margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-          height: 160,
+          height: 180,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             boxShadow: [

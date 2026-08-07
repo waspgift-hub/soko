@@ -1,30 +1,30 @@
 const NOTIFICATION_CHANNELS = {
   general: {
-    id: 'general_notifications_v5',
+    id: 'general_notifications_v6',
     name: 'Maelezo ya Jumla',
     description: 'Flash sale, announcements, alerts',
     importance: 'max',
   },
   payments: {
-    id: 'payments_notifications_v5',
+    id: 'payments_notifications_v6',
     name: 'Malipo',
     description: 'Malipo, escrow, payout, refund',
     importance: 'max',
   },
   chat: {
-    id: 'chat_messages_v5',
+    id: 'chat_messages_v6',
     name: 'Chat Messages',
     description: 'New message notifications from chats',
     importance: 'max',
   },
   orders: {
-    id: 'orders_notifications_v5',
+    id: 'orders_notifications_v6',
     name: 'Orders',
     description: 'New orders, dispatch, delivery',
     importance: 'max',
   },
   marketing: {
-    id: 'marketing_notifications_v5',
+    id: 'marketing_notifications_v6',
     name: 'Marketing',
     description: 'Promotions, flash sales, product boosts',
     importance: 'high',

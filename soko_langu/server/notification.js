@@ -5,12 +5,12 @@ const router = express.Router();
 const db = admin.firestore();
 
 const NOTIFICATION_CHANNELS = {
-  general: { id: 'general_notifications_v5', name: 'Maelezo ya Jumla' },
-  payments: { id: 'payments_notifications_v5', name: 'Malipo' },
-  chat: { id: 'chat_messages_v5', name: 'Chat Messages' },
-  orders: { id: 'orders_notifications_v5', name: 'Orders' },
-  rides: { id: 'ride_notifications_v5', name: 'Rides' },
-  marketing: { id: 'marketing_notifications_v5', name: 'Marketing' },
+  general: { id: 'general_notifications_v6', name: 'Maelezo ya Jumla' },
+  payments: { id: 'payments_notifications_v6', name: 'Malipo' },
+  chat: { id: 'chat_messages_v6', name: 'Chat Messages' },
+  orders: { id: 'orders_notifications_v6', name: 'Orders' },
+  rides: { id: 'ride_notifications_v6', name: 'Rides' },
+  marketing: { id: 'marketing_notifications_v6', name: 'Marketing' },
 };
 
 const NOTIFICATION_TYPES = {
@@ -62,6 +62,8 @@ router.post('/preferences/get', async (req, res) => {
     for (const key of Object.keys(NOTIFICATION_CHANNELS)) defaults[key] = true;
     for (const key of Object.keys(NOTIFICATION_TYPES)) defaults[key] = true;
     defaults['sms_enabled'] = true;
+    defaults['district_new_products'] = true;
+    defaults['interested_districts'] = [];
     const preferences = doc.exists ? { ...defaults, ...doc.data() } : defaults;
     res.json({ preferences });
   } catch (e) {

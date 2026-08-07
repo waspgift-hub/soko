@@ -40,7 +40,6 @@ class AppRoutes {
   static const String report = '/report';
   static const String adminKyc = '/admin/kyc';
   static const String adminBroadcast = '/admin/broadcast';
-  static const String adminWallet = '/admin/wallet';
   static const String adminReports = '/admin/reports';
   static const String flashSale = '/flash-sale';
   static const String createFlashSale = '/create-flash-sale';
@@ -55,7 +54,6 @@ class AppRoutes {
   static const String sellerAnalytics = '/seller-analytics';
   static const String orderDetail = '/order-detail';
   static const String orderFlow = '/order-flow';
-  static const String wallet = '/wallet';
   static const String sellerOrders = '/seller-orders';
   static const String adminUserDetail = '/admin/user';
   static const String sellerStatement = '/seller-statement';

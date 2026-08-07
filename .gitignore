@@ -8,3 +8,10 @@ server.log
 server_push.log
 server_push_err.log
 mpesa_sandbox_key.txt
+
+# Unrelated / junk
+wifi-billing/
+InShot_*.png
+analyze*.txt
+.firebase/
+*.firebase.cache

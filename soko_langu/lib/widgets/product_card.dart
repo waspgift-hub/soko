@@ -7,6 +7,8 @@ import '../../services/soko_cache_manager.dart';
 import 'google_loading.dart';
 import '../extensions/context_tr.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
+import 'soko_vibe_watermark.dart';
 
 class ProductCard extends StatelessWidget {
   final Product product;
@@ -33,12 +35,12 @@ class ProductCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: cs.surface,
             borderRadius: BorderRadius.circular(radius),
-            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
+            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.6)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
+                color: Colors.black.withValues(alpha: cs.brightness == Brightness.dark ? 0.25 : 0.05),
+                blurRadius: 14,
+                offset: const Offset(0, 5),
               ),
             ],
           ),
@@ -65,12 +67,19 @@ class ProductCard extends StatelessWidget {
                                   child: const Center(child: GoogleLoading(size: 24, strokeWidth: 2)),
                                 ),
                                 errorWidget: (context, url, error) => Container(
-                                  color: cs.outlineVariant,
-                                  child: Icon(Icons.image, size: 40, color: cs.onSurfaceVariant),
+                                  color: cs.surfaceContainerLow,
+                                  child: Icon(Icons.image_outlined, size: 40, color: cs.onSurfaceVariant),
                                 ),
                               ),
                             ),
                             _buildSellerBadge(context, badgeSize, cs),
+                            Positioned(
+                              bottom: 6,
+                              left: 6,
+                              child: IgnorePointer(
+                                child: SokoVibeWatermark(),
+                              ),
+                            ),
                             if (flashSale != null)
                               Positioned(
                                 top: 8, right: 8,
@@ -79,15 +88,16 @@ class ProductCard extends StatelessWidget {
                                   decoration: BoxDecoration(
                                     color: cs.error,
                                     borderRadius: BorderRadius.circular(10),
+                                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 6)],
                                   ),
                                   child: Text('-${flashSale!.discountPercent.toStringAsFixed(0)}%',
-                                    style: TextStyle(color: cs.surface, fontSize: badgeSize, fontWeight: FontWeight.bold),
+                                    style: TextStyle(color: cs.surface, fontSize: badgeSize, fontWeight: FontWeight.w700),
                                   ),
                                 ),
                               ),
                           ],
                         )
-                      : Center(child: Icon(Icons.image, size: 40, color: cs.onSurface.withValues(alpha: 0.6))),
+                      : Center(child: Icon(Icons.image_outlined, size: 40, color: cs.onSurface.withValues(alpha: 0.6))),
                 ),
               ),
               Padding(
@@ -95,13 +105,24 @@ class ProductCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: nameSize, color: cs.onSurface),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: nameSize, color: cs.onSurface),
+                          ),
+                        ),
+                        if (product.sellerKycApproved) ...[
+                          SizedBox(width: 2 * scale),
+                          Icon(Icons.verified, size: 14 * scale, color: cs.successGreen),
+                        ],
+                      ],
                     ),
                     SizedBox(height: 4 * scale),
                     if (flashSale != null) ...[
                       Text(context.formatPrice(flashSale!.salePrice),
-                        style: TextStyle(color: cs.error, fontWeight: FontWeight.w700, fontSize: priceSize),
+                        style: AppTypography.amount(cs.error).copyWith(fontSize: priceSize, fontWeight: FontWeight.w700),
                       ),
                       SizedBox(height: 2 * scale),
                       Text(context.formatPrice(flashSale!.originalPrice),
@@ -109,12 +130,12 @@ class ProductCard extends StatelessWidget {
                       ),
                     ] else
                       Text(context.formatPrice(product.price),
-                        style: TextStyle(color: cs.primary, fontWeight: FontWeight.w700, fontSize: priceSize),
+                        style: AppTypography.amount(cs.primary).copyWith(fontSize: priceSize, fontWeight: FontWeight.w700),
                       ),
                     SizedBox(height: 4 * scale),
                     Row(
                       children: [
-                        Icon(Icons.location_on, size: 12 * scale, color: cs.onSurface.withValues(alpha: 0.5)),
+                        Icon(Icons.location_on_outlined, size: 12 * scale, color: cs.onSurface.withValues(alpha: 0.45)),
                         SizedBox(width: 2 * scale),
                         Expanded(
                           child: Text(product.location,
@@ -122,17 +143,26 @@ class ProductCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        if (product.condition == 'new')
+                          Text('  ·  ${context.tr('new')}',
+                            style: TextStyle(fontSize: smallSize, color: cs.successGreen, fontWeight: FontWeight.w600),
+                          ),
                       ],
                     ),
                     if (product.rating > 0) ...[
                       SizedBox(height: 2 * scale),
                       Row(
                         children: [
-                          Icon(Icons.star, size: 12 * scale, color: cs.trendingOrange),
+                          Icon(Icons.star_rounded, size: 13 * scale, color: cs.trendingOrange),
                           SizedBox(width: 2 * scale),
                           Text("${product.rating.toStringAsFixed(1)} (${product.reviewCount})",
                             style: TextStyle(fontSize: smallSize, color: cs.onSurface.withValues(alpha: 0.5)),
                           ),
+                          const Spacer(),
+                          if (product.soldCount > 0)
+                            Text('${product.soldCount} ${context.tr('sold')}',
+                              style: TextStyle(fontSize: smallSize * 0.9, color: cs.onSurface.withValues(alpha: 0.4)),
+                            ),
                         ],
                       ),
                     ],

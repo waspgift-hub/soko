@@ -62,6 +62,12 @@ class AppTypography {
         height: 1.35,
         color: scheme.onSurfaceVariant,
       ),
+      bodySmall: GoogleFonts.inter(
+        fontSize: 12,
+        fontWeight: FontWeight.w400,
+        height: 1.3,
+        color: scheme.onSurfaceVariant,
+      ),
       labelLarge: GoogleFonts.jetBrainsMono(
         fontSize: 13,
         fontWeight: FontWeight.w500,
