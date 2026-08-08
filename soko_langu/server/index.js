@@ -278,8 +278,12 @@ async function sendOneSignalNotification(userId, title, body, data = {}, opts = 
   });
   if (!resp) return null;
   const result = resp.data;
-  if (result.id) console.log(`[OS] sent push to ${userId} type=${(data && data.type) || 'general'} id=${result.id}`);
-  else console.error(`[OS] push send failed:`, JSON.stringify(result));
+  if (result.id) {
+    console.log(`[OS] sent push to ${userId} type=${(data && data.type) || 'general'} id=${result.id} recipients=${result.recipients ?? '?'} sent=${result.total_sent ?? '?'}`);
+    if ((result.recipients ?? 0) === 0 || result.invalid_external_user_ids?.length) {
+      console.warn(`[OS] WARNING: push accepted but 0 targeted recipients (external_user_id "${userId}" not subscribed?) invalid_external_user_ids=${result.invalid_external_user_ids?.length ?? 0}`);
+    }
+  } else console.error(`[OS] push send failed:`, JSON.stringify(result));
 
   const criticalTypes = ['order', 'payment', 'dispute', 'refund', 'boost', 'kyc', 'withdrawal'];
   if (criticalTypes.includes(notifType)) {
