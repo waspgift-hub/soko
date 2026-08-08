@@ -264,13 +264,28 @@ async function sendOneSignalNotification(userId, title, body, data = {}, opts = 
   // sw ensures Swahili-locale devices resolve it explicitly instead of en-only.
   const headings = { en: title || '', sw: title || '' };
   const contents = { en: body || '', sw: body || '' };
+
+  // Deliver to the external_user_id AND by email alias as a fallback: when a
+  // device is subscribed but its OneSignal subscription was never linked to the
+  // Firebase UID (login missed on cold start), the email alias still matches.
+  const payload = { ...(data || {}), type: notifType };
+  let includeAliases = null;
+  try {
+    const userRec = await db.collection('users').doc(userId).get();
+    const email = userRec.exists ? (userRec.data().email || '') : '';
+    if (email) {
+      includeAliases = { email: [email.toLowerCase()] };
+    }
+  } catch (_) {}
+
   const resp = await postOneSignalWithRetry({
     app_id: ONE_SIGNAL_APP_ID,
     idempotency_key: randomUUID(),
     include_external_user_ids: [userId],
+    ...(includeAliases ? { include_aliases: includeAliases } : {}),
     headings,
     contents,
-    data: { ...(data || {}), type: notifType },
+    data: payload,
     priority: 10, android_priority: 'high', android_visibility: 1,
     existing_android_channel_id: notifTypeToChannel(notifType),
     android_sound: 'soko_notification',
@@ -3162,11 +3177,11 @@ app.post('/api/admin/broadcast-notification', async (req, res) => {
       return res.json({ success: true, message: 'No users to notify', sentCount: 0 });
     }
 
-    // Send push via OneSignal to all users
+    // Send push via OneSignal to all users (admin broadcast always delivers)
     const pushResult = await sendOneSignalBulk(userIds, title, body || '', {
       type: 'system',
       broadcast: 'true',
-    });
+    }, { bypassPrefs: true });
 
     // Save in-app notification for each user (batch of 500)
     let notifCount = 0;
