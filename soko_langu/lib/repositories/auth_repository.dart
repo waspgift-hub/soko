@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../services/api_config.dart';
 import '../services/fraud_prevention_service.dart';
 import '../utils/network_error.dart';
+import '../utils/phone_utils.dart';
 
 class AuthRepository {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -34,12 +35,7 @@ class AuthRepository {
 
   Future<UserCredential> loginWithPhone(String phone, String otp) async {
     try {
-      final clean = phone.replaceAll(RegExp(r'\D'), '');
-      final normalized = clean.startsWith('0')
-          ? '255${clean.substring(1)}'
-          : clean.startsWith('255')
-              ? clean
-              : '255$clean';
+      final normalized = PhoneUtils.toE164(phone);
 
       final res = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/phone-login'),

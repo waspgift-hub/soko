@@ -206,9 +206,14 @@ class FlashSaleService {
 
   Future<void> triggerFlashSaleScan() async {
     try {
+      final user = _auth.currentUser;
+      final token = await user?.getIdToken();
       await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/flash-sale/scan'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
       );
     } catch (e) {
       // Server-side scan, silent fail
@@ -217,9 +222,14 @@ class FlashSaleService {
 
   Future<void> notifyFlashSale(FlashSale sale) async {
     try {
+      final user = _auth.currentUser;
+      final token = await user?.getIdToken();
       await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/flash-sale/notify'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
         body: jsonEncode({
           'productName': sale.productName,
           'salePrice': sale.salePrice,

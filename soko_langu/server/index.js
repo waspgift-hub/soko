@@ -61,10 +61,12 @@ app.use((req, res, next) => {
   next();
 });
 
-// Tight CORS — only allow the Flutter app origins
+// Tight CORS — only allow the Flutter app + admin panel origins
 const ALLOWED_ORIGINS = [
   'https://soko-langu-server.onrender.com',
   'https://soko-langu-server-production.up.railway.app',
+  'https://sokonimoko-8c171-a8d14.web.app',
+  'https://sokonimoko-8c171-a8d14.firebaseapp.com',
   'capacitor://localhost',
   'http://localhost',
   'http://localhost:3000',
@@ -73,9 +75,9 @@ const ALLOWED_ORIGINS = [
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin || ALLOWED_ORIGINS.some(o => origin.startsWith(o))) return cb(null, true);
-    cb(null, true); // Allow all in dev — tighten for production
+    cb(null, false); // Reject unknown origins
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-secret', 'x-webhook-secret', 'x-notify-signature', 'x-malipopay-signature'],
   maxAge: 86400,
 }));
@@ -597,6 +599,15 @@ async function requireUser(req, res) {
   }
 }
 
+/** Allow the authenticated user OR an admin (secret/Bearer) to view private data. */
+async function isOwnerOrAdmin(req, res, ownerId) {
+  const auth = await requireUser(req, res);
+  if (!auth.ok) return false;
+  if (auth.uid === ownerId) return true;
+  const adminAuth = await requireAdmin(req, res);
+  return adminAuth.ok;
+}
+
 // ============================================================
 // ⭐ BOOST PRODUCT — TIER-BASED FEATURED LISTING
 // ============================================================
@@ -733,9 +744,13 @@ app.post('/api/boost-product', async (req, res) => {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.replace('Bearer ', '');
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
-    try { await admin.auth().verifyIdToken(token); } catch (_) { return res.status(403).json({ error: 'Invalid token' }); }
+    let decoded;
+    try { decoded = await admin.auth().verifyIdToken(token); } catch (_) { return res.status(403).json({ error: 'Invalid token' }); }
 
     const { productId, tier, amount, durationDays, phone, userId, productName, productImage, productPrice, paymentMethod } = req.body;
+    if (!userId || decoded.uid !== userId) {
+      return res.status(403).json({ error: 'User ID mismatch' });
+    }
 
     // Cancel stale pending boosts for same user+product so they don't get stuck
     if (db && userId && productId) {
@@ -893,6 +908,8 @@ app.post('/api/boost-product', async (req, res) => {
 // ============================================================
 app.post('/api/sms/send', async (req, res) => {
   try {
+    const auth = await requireUser(req, res);
+    if (!auth.ok) return;
     const { phone, message } = req.body;
     if (!phone || !message) {
       return res.status(400).json({ error: 'Missing phone or message' });
@@ -939,6 +956,8 @@ app.post('/api/sms/send', async (req, res) => {
 // ============================================================
 app.post('/api/whatsapp/send', async (req, res) => {
   try {
+    const auth = await requireUser(req, res);
+    if (!auth.ok) return;
     const { phone, message, templateName, templateParameters } = req.body;
     if (!phone) return res.status(400).json({ error: 'Missing phone' });
     if (!message && !templateName) {
@@ -1146,6 +1165,25 @@ function otpPhoneRateLimit(req, res, next) {
   next();
 }
 
+const otpVerifyHits = new Map();
+const OTP_VERIFY_WINDOW = 15 * 60 * 1000;
+const OTP_VERIFY_MAX = 5;
+
+function otpVerifyRateLimit(req, res, next) {
+  const phone = (req.body?.phone || '').replace(/\D/g, '');
+  const key = phone || (req.body?.email || '').trim().toLowerCase();
+  if (!key) return next();
+  const now = Date.now();
+  if (!otpVerifyHits.has(key)) otpVerifyHits.set(key, []);
+  const hits = otpVerifyHits.get(key).filter(t => now - t < OTP_VERIFY_WINDOW);
+  hits.push(now);
+  otpVerifyHits.set(key, hits);
+  if (hits.length > OTP_VERIFY_MAX) {
+    return res.status(429).json({ error: 'Majibujibu mengi. Simu imefungwa kwa dakika 15.' });
+  }
+  next();
+}
+
 app.post('/api/auth/send-otp', otpPhoneRateLimit, async (req, res) => {
   try {
     const { phone } = req.body;
@@ -1192,7 +1230,7 @@ app.post('/api/auth/send-otp', otpPhoneRateLimit, async (req, res) => {
 // ============================================================
 // 🔐 PHONE OTP — VERIFY
 // ============================================================
-app.post('/api/auth/verify-otp', async (req, res) => {
+app.post('/api/auth/verify-otp', otpVerifyRateLimit, async (req, res) => {
   try {
     const { phone, otp } = req.body;
     if (!phone || !otp) return res.status(400).json({ error: 'Phone and OTP are required' });
@@ -1269,7 +1307,7 @@ app.post('/api/auth/send-email-otp', async (req, res) => {
 // ============================================================
 // 🔐 EMAIL OTP — VERIFY
 // ============================================================
-app.post('/api/auth/verify-email-otp', async (req, res) => {
+app.post('/api/auth/verify-email-otp', otpVerifyRateLimit, async (req, res) => {
   try {
     const { email, otp } = req.body;
     if (!email || !otp) return res.status(400).json({ error: 'Email and OTP are required' });
@@ -1349,7 +1387,7 @@ app.post('/api/auth/check-email', async (req, res) => {
 // ============================================================
 // 🔐 AUTH — Reset password by phone + OTP
 // ============================================================
-app.post('/api/auth/reset-password-by-phone', async (req, res) => {
+app.post('/api/auth/reset-password-by-phone', otpVerifyRateLimit, async (req, res) => {
   try {
     const { phone, otp, newPassword } = req.body;
     if (!phone || !otp || !newPassword) {
@@ -1482,6 +1520,8 @@ app.post('/api/phone-login', async (req, res) => {
 // ============================================================
 app.post('/api/send-notification', async (req, res) => {
   try {
+    const auth = await requireUser(req, res);
+    if (!auth.ok) return;
     const { userId, title, body, data } = req.body;
     if (!userId || !title) {
       return res.status(400).json({ error: 'Missing userId or title' });
@@ -1888,6 +1928,12 @@ app.post('/api/escrow/release', async (req, res) => {
       escrowReleased = order.escrowReleased;
       platformFee = 0;
       payoutMethod = order.payoutMethod;
+    }
+
+    // Do not release escrow to a suspended seller — funds stay in escrow until
+    // an admin resolves the case (see /api/escrow/admin-release).
+    if (await checkSuspended(sellerId)) {
+      return res.status(403).json({ error: 'Seller account is suspended; funds remain in escrow' });
     }
 
     // Mark as released
@@ -2818,21 +2864,8 @@ app.post('/api/escrow/retry-payout', async (req, res) => {
     if (!orderId) return res.status(400).json({ error: 'Missing orderId' });
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-    // Verify admin
-    const authHeader = req.headers.authorization || '';
-    const token = authHeader.replace('Bearer ', '');
-    if (true) {
-      const decoded = await admin.auth().verifyIdToken(token);
-      const userDoc = await db.collection('users').doc(decoded.uid).get();
-      if (!userDoc.exists || !userDoc.data().isAdmin) {
-        return res.status(403).json({ error: 'Admin only' });
-      }
-    } else {
-      const secret = req.headers['x-admin-secret'];
-      if (secret !== process.env.ADMIN_SECRET) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
-    }
+    const adminAuth = await requireAdmin(req, res);
+    if (!adminAuth.ok) return;
 
     const txDoc = await db.collection('transactions').doc(orderId).get();
     if (!txDoc.exists) return res.status(404).json({ error: 'Transaction not found' });
@@ -2910,6 +2943,7 @@ app.post('/api/kyc/submit', async (req, res) => {
     if (!userId || !fullName || !idType || !idNumber) {
       return res.status(400).json({ error: 'Missing required KYC fields' });
     }
+    if (!(await isOwnerOrAdmin(req, res, userId))) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const userDoc = await db.collection('users').doc(userId).get();
@@ -3015,8 +3049,16 @@ app.post('/api/kyc/submit', async (req, res) => {
 
 app.get('/api/kyc/status/:userId', async (req, res) => {
   try {
+    const auth = await requireUser(req, res);
+    if (!auth.ok) return;
     const { userId } = req.params;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    // Only the owner (or an admin via secret/Bearer) may read KYC documents.
+    if (auth.uid !== userId) {
+      const adminAuth = await requireAdmin(req, res);
+      if (!adminAuth.ok) return;
+    }
 
     const userDoc = await db.collection('users').doc(userId).get();
     if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
@@ -3318,9 +3360,13 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
     const authHeader = req.headers.authorization || '';
     const token = authHeader.replace('Bearer ', '');
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
-    try { await admin.auth().verifyIdToken(token); } catch (_) { return res.status(403).json({ error: 'Invalid token' }); }
+    let decoded;
+    try { decoded = await admin.auth().verifyIdToken(token); } catch (_) { return res.status(403).json({ error: 'Invalid token' }); }
 
     const { productPrice, productName, productId, sellerId, sellerName, email, phone, buyerId, deliveryType, shippingCost, existingTransactionId, paymentMethod } = req.body;
+    if (buyerId && decoded.uid !== buyerId) {
+      return res.status(403).json({ error: 'Buyer ID mismatch' });
+    }
     if (!productPrice || !productId || !sellerId || !phone) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
@@ -3731,6 +3777,7 @@ app.get('/api/seller/balance', async (req, res) => {
     const { userId } = req.query;
     if (!userId) return res.status(400).json({ error: 'Missing userId' });
     if (!db) return res.status(503).json({ error: 'Database not configured' });
+    if (!(await isOwnerOrAdmin(req, res, userId))) return;
 
     const userDoc = await db.collection('users').doc(userId).get();
     if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
@@ -4021,6 +4068,7 @@ app.get('/api/payout-status/:id', async (req, res) => {
     if (!db) return res.status(503).json({ error: 'Database not configured' });
     const doc = await db.collection('payouts').doc(req.params.id).get();
     if (!doc.exists) return res.status(404).json({ error: 'Payout not found' });
+    if (!(await isOwnerOrAdmin(req, res, doc.data().userId || ''))) return;
     res.json({ id: doc.id, ...doc.data() });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
@@ -4034,6 +4082,13 @@ app.get('/api/payouts', async (req, res) => {
   try {
     if (!db) return res.status(503).json({ error: 'Database not configured' });
     const { userId, limit: qLimit } = req.query;
+    // Only an admin may list all payouts; a user may list only their own.
+    if (userId) {
+      if (!(await isOwnerOrAdmin(req, res, userId))) return;
+    } else {
+      const adminAuth = await requireAdmin(req, res);
+      if (!adminAuth.ok) return;
+    }
     let query = db.collection('payouts').orderBy('createdAt', 'desc');
     if (userId) query = query.where('userId', '==', userId);
     const snap = await query.limit(parseInt(qLimit) || 50).get();
@@ -4660,6 +4715,7 @@ app.get('/api/transaction-status/:orderId', async (req, res) => {
     if (!doc.exists) return res.status(404).json({ error: 'Transaction not found' });
 
     const data = doc.data();
+    if (!(await isOwnerOrAdmin(req, res, data.buyerId || data.userId || ''))) return;
     res.json({
       success: true,
       status: data.status || 'pending',
@@ -5520,7 +5576,16 @@ app.patch('/api/admin/users/:uid', async (req, res) => {
       return res.status(400).json({ error: 'Missing updates object' });
     }
 
-    await db.collection('users').doc(uid).update(updates);
+    const allowedFields = ['isSuspended', 'isAdmin'];
+    const sanitized = {};
+    for (const field of allowedFields) {
+      if (field in updates) sanitized[field] = updates[field];
+    }
+    if (Object.keys(sanitized).length === 0) {
+      return res.status(400).json({ error: 'No allowed fields provided' });
+    }
+
+    await db.collection('users').doc(uid).update(sanitized);
     res.json({ success: true, message: 'User updated' });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
@@ -5589,6 +5654,8 @@ app.post('/api/cron/release-escrows', async (req, res) => {
 // ============================================================
 app.get('/api/stats', async (req, res) => {
   try {
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const [txSnap, pendingKycSnap, userSnap] = await Promise.all([
@@ -5671,6 +5738,8 @@ app.post('/api/reports', asyncHandler(async (req, res) => {
 // Get reports (admin only)
 app.get('/api/reports', asyncHandler(async (req, res) => {
   try {
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
     const { status } = req.query;
     let query = db.collection('reports').orderBy('createdAt', 'desc');
     if (status) query = query.where('status', '==', status);
@@ -5687,6 +5756,8 @@ app.get('/api/reports', asyncHandler(async (req, res) => {
 // Update report status (admin only)
 app.patch('/api/reports/:id', asyncHandler(async (req, res) => {
   try {
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
     const { id } = req.params;
     const { status, adminNote } = req.body;
 
@@ -5710,6 +5781,8 @@ app.patch('/api/reports/:id', asyncHandler(async (req, res) => {
 // Get fraud alerts
 app.get('/api/fraud/alerts', asyncHandler(async (req, res) => {
   try {
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
     const { resolved } = req.query;
     let query = db.collection('fraud_alerts').orderBy('detectedAt', 'desc');
     if (resolved !== undefined) query = query.where('resolved', '==', resolved === 'true');
@@ -5724,6 +5797,8 @@ app.get('/api/fraud/alerts', asyncHandler(async (req, res) => {
 // Dismiss a fraud alert
 app.patch('/api/fraud/alerts/:id/dismiss', asyncHandler(async (req, res) => {
   try {
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
     await db.collection('fraud_alerts').doc(req.params.id).update({ resolved: true });
     res.json({ success: true });
   } catch (e) {
@@ -5735,6 +5810,7 @@ app.patch('/api/fraud/alerts/:id/dismiss', asyncHandler(async (req, res) => {
 app.get('/api/fraud/risk/:sellerId', asyncHandler(async (req, res) => {
   try {
     const { sellerId } = req.params;
+    if (!(await isOwnerOrAdmin(req, res, sellerId))) return;
     const sellerDoc = await db.collection('users').doc(sellerId).get();
     if (!sellerDoc.exists) return res.status(404).json({ error: 'Seller not found' });
 
@@ -5860,6 +5936,8 @@ app.post('/api/flash-sale/create', asyncHandler(async (req, res) => {
 // ─── FLASH SALE: SCAN PRODUCTS ─────────────────────────
 app.post('/api/flash-sale/scan', asyncHandler(async (req, res) => {
   try {
+    const auth = await requireUser(req, res);
+    if (!auth.ok) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const sevenDaysAgo = new Date(Date.now() - 7 * 86400000);
@@ -5923,9 +6001,13 @@ app.post('/api/flash-sale/scan', asyncHandler(async (req, res) => {
 // ─── FLASH SALE: NOTIFY USERS ──────────────────────────
 app.post('/api/flash-sale/notify', asyncHandler(async (req, res) => {
   try {
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
-
+    const auth = await requireUser(req, res);
+    if (!auth.ok) return;
     const { productName, salePrice, discountPercent, sellerId, productImage } = req.body;
+    if (!sellerId || auth.uid !== sellerId) {
+      return res.status(403).json({ error: 'Seller ID mismatch' });
+    }
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     // Get all users (paginated by document ID)
     let sentCount = 0;
@@ -6022,9 +6104,14 @@ app.post('/api/flash-sale/notify', asyncHandler(async (req, res) => {
 // ─── Boost notification API endpoint (client-callable) ───
 app.post('/api/boost/notify', asyncHandler(async (req, res) => {
   try {
+    const auth = await requireUser(req, res);
+    if (!auth.ok) return;
     const { productId, tier, sellerId } = req.body;
     if (!productId || !tier) {
       return res.status(400).json({ error: 'Missing productId or tier' });
+    }
+    if (sellerId && auth.uid !== sellerId) {
+      return res.status(403).json({ error: 'Seller ID mismatch' });
     }
     await notifyBoostBroadcast(productId, tier, sellerId);
     res.json({ success: true });
@@ -6242,6 +6329,8 @@ setTimeout(failStalePendingBoosts, 60 * 1000);
 // ============================================================
 app.get('/api/clickpesa/balance', async (req, res) => {
   try {
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
     const balance = await clickpesaBalance();
     res.json({ success: true, balance });
   } catch (e) {
@@ -6598,6 +6687,8 @@ app.post('/api/clear-token', async (req, res) => {
 // ─── Diagnostic: check OneSignal credentials ──────────────────
 app.get('/api/fcm-check', async (req, res) => {
   try {
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
     const hasConfig = !!(process.env.ONE_SIGNAL_APP_ID && process.env.ONE_SIGNAL_REST_API_KEY);
     res.json({
       status: hasConfig ? 'configured' : 'missing-config',
@@ -6615,6 +6706,8 @@ app.get('/api/fcm-check', async (req, res) => {
 // ─── Diagnostic: test OneSignal push (by userId) ─────
 app.post('/api/test-fcm', async (req, res) => {
   try {
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
     const { userId, title, body } = req.body;
     if (!title) return res.status(400).json({ error: 'title required' });
     if (!userId) return res.status(400).json({ error: 'userId required' });
@@ -6957,6 +7050,9 @@ app.post('/api/wallet/purchase', async (req, res) => {
     const buyerDoc = await db.collection('users').doc(buyerId).get();
     if (!buyerDoc.exists) return res.status(404).json({ error: 'Buyer not found' });
     const buyerData = buyerDoc.data();
+    if (buyerData.isSuspended === true) {
+      return res.status(403).json({ error: 'Account is suspended' });
+    }
     const balance = buyerData.walletBalance || 0;
     if (balance < totalAmount) {
       return res.status(400).json({ error: 'Insufficient wallet balance' });
@@ -7078,6 +7174,7 @@ app.get('/api/wallet/balance/:userId', async (req, res) => {
   try {
     if (!db) return res.status(503).json({ error: 'Database not configured' });
     const { userId } = req.params;
+    if (!(await isOwnerOrAdmin(req, res, userId))) return;
     const userDoc = await db.collection('users').doc(userId).get();
     if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
     const balance = userDoc.data().walletBalance || 0;
@@ -7093,6 +7190,7 @@ app.get('/api/wallet/history/:userId', async (req, res) => {
   try {
     if (!db) return res.status(503).json({ error: 'Database not configured' });
     const { userId } = req.params;
+    if (!(await isOwnerOrAdmin(req, res, userId))) return;
     const limit = parseInt(req.query.limit) || 50;
     const deposits = await db.collection('deposits')
       .where('userId', '==', userId)
@@ -7580,6 +7678,7 @@ app.get('/api/diag/fcm-token/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
+    if (!(await isOwnerOrAdmin(req, res, userId))) return;
     const userDoc = await db.collection('users').doc(userId).get();
     if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
     const fcmToken = userDoc.data()?.fcmToken || null;

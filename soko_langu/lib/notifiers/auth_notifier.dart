@@ -209,7 +209,7 @@ class AuthNotifier extends ChangeNotifier {
       _syncAppState();
       notifyListeners();
     } catch (e) {
-      _error = e.toString();
+      _error = e is NetworkError ? e.userMessage : e.toString();
       notifyListeners();
       rethrow;
     }
@@ -255,7 +255,7 @@ class AuthNotifier extends ChangeNotifier {
       _syncAppState();
       notifyListeners();
     } catch (e) {
-      _error = e.toString();
+      _error = e is NetworkError ? e.userMessage : e.toString();
       notifyListeners();
       rethrow;
     }

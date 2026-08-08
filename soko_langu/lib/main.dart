@@ -288,7 +288,7 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
       final prefs = await SharedPreferences.getInstance();
 
       setState(() {
-        _langCode = prefs.getString('language_code') ?? 'en';
+        _langCode = prefs.getString('language_code') ?? 'sw';
         _currencyCode = prefs.getString('currency') ?? 'TZS';
       });
 

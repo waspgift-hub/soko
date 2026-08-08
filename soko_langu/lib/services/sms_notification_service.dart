@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'api_config.dart';
 import 'sms_language_preference.dart';
 
@@ -12,9 +13,13 @@ class SmsNotificationService {
     required String message,
   }) async {
     try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/sms/send'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
         body: jsonEncode({
           'phone': phone,
           'message': message,

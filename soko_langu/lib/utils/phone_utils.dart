@@ -40,4 +40,12 @@ class PhoneUtils {
     }
     return digits;
   }
+
+  /// Normalizes any Tanzanian phone format (07.., +255..., 255...) to E.164.
+  static String toE164(String phone) {
+    final digits = phone.replaceAll(RegExp(r'\D'), '');
+    if (digits.startsWith('0')) return '255${digits.substring(1)}';
+    if (digits.startsWith('255')) return digits;
+    return '255$digits';
+  }
 }

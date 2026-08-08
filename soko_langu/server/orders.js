@@ -98,6 +98,14 @@ async function transitionOrder(db, orderId, newStatus, actorId, meta = {}) {
     throw new Error(`Cannot transition from ${order.status} to ${newStatus}`);
   }
   const updates = { status: newStatus, updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+  if (newStatus === ORDER_STATUS.QUOTED) {
+    let parsedNote = {};
+    try { parsedNote = typeof meta.note === 'string' ? JSON.parse(meta.note) : (meta.note || {}); } catch (_) {}
+    const shippingCost = Number(parsedNote.shippingCost || 0);
+    updates.shippingCost = shippingCost;
+    updates.busName = parsedNote.busName || '';
+    updates.plateNumber = parsedNote.plateNumber || '';
+  }
   if (newStatus === ORDER_STATUS.CANCELLED) updates.cancelledAt = admin.firestore.FieldValue.serverTimestamp();
   if (newStatus === ORDER_STATUS.COMPLETED) updates.completedAt = admin.firestore.FieldValue.serverTimestamp();
   if (newStatus === ORDER_STATUS.CONFIRMED) updates.confirmReceiptAt = admin.firestore.FieldValue.serverTimestamp();
@@ -107,6 +115,33 @@ async function transitionOrder(db, orderId, newStatus, actorId, meta = {}) {
   if (newStatus === ORDER_STATUS.COMPLETED || newStatus === ORDER_STATUS.REFUNDED) { updates.escrowStatus = ESCROW_STATUS.RELEASED; updates.escrowReleased = true; updates.escrowReleasedAt = admin.firestore.FieldValue.serverTimestamp(); }
   await doc.ref.update(updates);
   await doc.ref.update({ statusHistory: admin.firestore.FieldValue.arrayUnion({ status: newStatus, at: new Date().toISOString(), by: actorId, ...meta }) });
+
+  // Keep the transactions mirror doc (buyer's payment source of truth) in sync
+  // server-side so a failed client-side manual write can't leave the docs
+  // divergent. The transaction is created with the orderId as its doc id.
+  try {
+    const txRef = db.collection('transactions').doc(orderId);
+    const txDoc = await txRef.get();
+    if (newStatus === ORDER_STATUS.QUOTED) {
+      let parsedNote = {};
+      try { parsedNote = typeof meta.note === 'string' ? JSON.parse(meta.note) : (meta.note || {}); } catch (_) {}
+      const shippingCost = Number(parsedNote.shippingCost || 0);
+      await txRef.set({
+        status: newStatus,
+        shippingCost,
+        busName: parsedNote.busName || '',
+        plateNumber: parsedNote.plateNumber || '',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      if (txDoc.exists) {
+        await txRef.update({ totalAmount: admin.firestore.FieldValue.increment(shippingCost) });
+      }
+    } else if (txDoc.exists) {
+      await txRef.update({ status: newStatus, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    }
+  } catch (e) {
+    console.error('transitionOrder mirror-sync error:', e.message);
+  }
   const titles = {
     [ORDER_STATUS.PENDING]: 'Order Placed',
     [ORDER_STATUS.QUOTED]: 'Shipping Quote Provided',

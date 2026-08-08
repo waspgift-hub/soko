@@ -24,6 +24,7 @@ import '../../widgets/payment_result_dialog.dart';
 import '../../widgets/location_map_widget.dart';
 import '../../widgets/call_seller_button.dart';
 import '../../utils/network_error.dart';
+import '../../utils/phone_utils.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final String docId;
@@ -52,6 +53,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   // Payment state (used when status is "quoted")
   bool _paying = false;
   double _gatewayFee = 0;
+  bool _gatewayFeeFetching = false;
+  Timer? _gatewayFeeDebounce;
 
   @override
   void initState() {
@@ -98,11 +101,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
 
   /// Fetches the ClickPesa gateway fee when the order becomes 'quoted' while
   /// this screen is already open (e.g. the seller quotes while the buyer
-  /// watches the order).
+  /// watches the order). Debounced + guarded so two live streams can't fire
+  /// duplicate requests.
   void _maybeInitQuotedPayment() {
-    if (status == 'quoted') {
+    if (status != 'quoted' || _gatewayFeeFetching) return;
+    _gatewayFeeFetching = true;
+    _gatewayFeeDebounce?.cancel();
+    _gatewayFeeDebounce = Timer(const Duration(milliseconds: 400), () {
+      _gatewayFeeFetching = false;
       _fetchGatewayFee();
-    }
+    });
   }
 
   Map<String, dynamic>? _orderData;
@@ -143,6 +151,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   void dispose() {
     _pulseController.dispose();
     _countdownTimer?.cancel();
+    _gatewayFeeDebounce?.cancel();
     _orderSub?.cancel();
     _txSub?.cancel();
     super.dispose();
@@ -1738,12 +1747,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     setState(() => _paying = true);
     try {
       final phone = user.phoneNumber ?? '';
-      final phoneDigits = phone.replaceAll(RegExp(r'\D'), '');
-      final normalizedPhone = phoneDigits.startsWith('0')
-          ? '255${phoneDigits.substring(1)}'
-          : phoneDigits.startsWith('255')
-              ? phoneDigits
-              : '255$phoneDigits';
+      final normalizedPhone = PhoneUtils.toE164(phone);
 
       final result = await ClickPesaService.initiateMarketplacePayment(
         productPrice: _quotedProductPrice,
@@ -1758,6 +1762,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         deliveryType: (d['deliveryType'] as String?) ?? 'local',
         paymentMethod: 'ussd_push',
         existingTransactionId: widget.docId,
+        shippingCost: _quotedShippingCost,
       );
 
       if (result == null || result['order_id'] == null) {

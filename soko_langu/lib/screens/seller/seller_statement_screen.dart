@@ -332,9 +332,13 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
   Future<void> _shareStatement() async {
     if (_data == null) return;
     try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
       await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/send-notification'),
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
         body: jsonEncode({
           'userId': widget.sellerId,
           'title': context.tr('your_statement', 'Your Statement'),

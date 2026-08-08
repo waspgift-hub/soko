@@ -60,4 +60,5 @@ class AppRoutes {
   static const String boostReceipt = '/boost-receipt';
   static const String buyerRequests = '/buyer-requests';
   static const String postBuyerRequest = '/post-buyer-request';
+  static const String verifyEmail = '/verify-email';
 }

@@ -64,7 +64,7 @@ async function sendOsNotification(userId, title, body, data = {}) {
       small_icon: 'ic_notification',
       large_icon: 'ic_notification',
       android_accent_color: 'FF40916C',
-    }, { headers: { 'Authorization': `Basic ${ONE_SIGNAL_REST_API_KEY}` } });
+    }, { headers: { 'Authorization': `Key ${ONE_SIGNAL_REST_API_KEY}` } });
     const result = resp.data;
     if (result.id) {
       console.log(`[LISTENER][OS] sent to ${userId} type=${(data && data.type) || 'general'} id=${result.id}`);

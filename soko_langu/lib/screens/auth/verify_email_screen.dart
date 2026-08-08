@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../extensions/context_tr.dart';
 import '../../notifiers/auth_notifier.dart';
 import '../../app/routes.dart';
 import '../../widgets/google_loading.dart';
 
 class VerifyEmailScreen extends StatefulWidget {
-  const VerifyEmailScreen({super.key});
+  const VerifyEmailScreen({super.key, this.email});
+
+  /// Email to send/verify the OTP against. Falls back to the signed-in user.
+  final String? email;
 
   @override
   State<VerifyEmailScreen> createState() => _VerifyEmailScreenState();
@@ -18,11 +22,21 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   String? _email;
 
   @override
+  void initState() {
+    super.initState();
+    _email = widget.email;
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _email ??= GoRouterState.of(context).extra is Map
-        ? (GoRouterState.of(context).extra as Map)['email'] as String?
-        : null;
+    if (_email == null || _email!.isEmpty) {
+      final extraEmail = GoRouterState.of(context).extra is Map
+          ? (GoRouterState.of(context).extra as Map)['email'] as String?
+          : null;
+      _email = extraEmail ??
+          FirebaseAuth.instance.currentUser?.email;
+    }
   }
 
   @override

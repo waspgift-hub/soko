@@ -1,0 +1,518 @@
+================================================================================
+SOKO VIBE — FLOW ZA APP NA MAPUNGUFU (GAPS)
+Maelezo kamili ya jinsi app inavyofanya kazi + mapungufu yote yanayojulikana
+Tarehe: 2026-08-08
+================================================================================
+
+Maelezo ya muhtasari:
+- App: Flutter (soko_langu/lib)
+- Backend: Node/Express (soko_langu/server/index.js, ~7,500 mistari, 118+ endpoints)
+- Payment provider: ClickPesa pekee (collection, payout, refund)
+- Notifications: OneSignal + Firestore fallback + SMS (Meseji/NotifyAfrica)
+- Admin panel: hosting/admin.html (Firebase Hosting) + admin screens ndani ya app
+- Search/Notification routers zilizopachikwa: server/search.js, server/notification.js
+- Listener ya Firestore: server/listener.js (OneSignal + SMS triggers)
+
+================================================================================
+SEHEMU A: FLOW KUU ZA APP
+================================================================================
+
+------------------------------------------------------------------------------
+A1. App STARTUP (Initialization Flow)
+------------------------------------------------------------------------------
+1. main() inaanza:
+   - WidgetsFlutterBinding.ensureInitialized()
+   - Firebase.initializeApp (firebase_options.dart)
+   - Firestore persistenceEnabled = true
+   - LocalCacheService.init() (Hive)
+   - Global error handlers → Crashlytics
+   - GoogleSignIn.instance.initialize()
+   - LocalNotificationService().initialize() (heads-up channels)
+   - runApp(SokoVibeApp)
+2. _SokoVibeAppState.initState:
+   - Kujenga ProductFeedProvider, AuthRepository, OnboardingService, AuthNotifier
+   - _initApp(): theme load, language (default 'en'), currency (default 'TZS'),
+     AuthNotifier.initialize(), appStateNotifier.setAppInitialized(),
+     MagicLinkService.initialize(), AppLockService.load(), background services
+3. _initBackgroundServices: Crashlytics, Performance, AppCheck, AdMob,
+   SecurityService, notificationService.initialize() (OneSignal), ExchangeRate,
+   AiService.
+4. AuthGate (Consumer<AuthNotifier>) huamua skrini ya kwanza:
+   - loading → skeleton
+   - onboarding → OnboardingScreen
+   - unauthenticated → LoginScreen
+   - authenticated + suspended → SuspendedPage
+   - authenticated + needsProfileSetup → ProfileSetupScreen
+   - authenticated → MainScreen (bottom nav)
+
+------------------------------------------------------------------------------
+A2. ONBOARDING + KUSAJILI (Register) + KUINGIA (Login)
+------------------------------------------------------------------------------
+ONBOARDING:
+- OnboardingScreen → AccountSelectionScreen → hifadhi account_tier (prefs) →
+  RegisterScreen au LoginScreen.
+
+USAJILI (Register):
+1. RegisterScreen: form + sheria (acceptedTerms) + password match validation
+2. Normalize simu: '0' → '255' prefix
+3. POST /api/auth/check-phone → kama exists, error
+4. POST /api/auth/check-email → kama exists, error
+5. AuthNotifier.sendPhoneOtp() → POST /api/auth/send-otp (MesejiService)
+6. OtpScreen._verify: tarakimu 6 → POST /api/auth/verify-otp
+7. Ikiwa valid → AuthRepository.register() → createUserWithEmailAndPassword +
+   updateDisplayName + _createProfile (Firestore users/{uid})
+8. Update users/{uid}.phone + AccountManager.addOrUpdateAccount()
+9. popUntil first route
+
+KUINGIA (Login):
+- Njia: Email+password (login), Google Sign-In, OTP ya simu (/api/phone-login
+  inarudisha custom token), Magic Link (/api/auth/... email link).
+- Kila njia inafuata: markCompleted → _setAuthState → _fetchAdminStatus →
+  _checkSuspended → _checkProfileCompleteness → _syncAppState.
+- Login ya simu: normalize → POST /api/phone-login → signInWithCustomToken →
+  _ensureProfileExists. NOTE: password inatokana na tarakimu 6 za simu + suffix
+  ('Sv!') — dhaifu lakini app haitaji.
+
+ROUTER GUARDS:
+- _authRequiredRoutes: checkout, kyc, addProduct, profile, settings, editProfile,
+  shopCustomization, wishlist, myAds, sellerDashboard, sellerEarnings,
+  sellerDispatch, sellerQuote, sellerOrders, myPurchases, productBoost,
+  notifications, chats, chat, createGroup, groupChat, createFlashSale, receipt,
+  orderDetail, report.
+- _adminOnlyRoutes: admin, adminUserDetail, adminReports (email check
+  admin@soko-langu.com + isAdmin).
+
+------------------------------------------------------------------------------
+A3. HOME + NAVIGATION (MainScreen / Bottom Nav)
+------------------------------------------------------------------------------
+- Tabs (IndexedStack, lazy): 0=HomeScreen, 1=DiscoveryScreen, 2=placeholder
+  (dead tab), 3=ChatInboxScreen, 4=ProfilePage.
+- Kitufe cha SELL kina-push AddProductScreen moja kwa moja (haichagui tab 2).
+- HomeScreen: search, filter (sort, price, condition, location, brand),
+  FlashSaleService, CategoryService, widget updates (WidgetService.updateWidget
+  inaitwa kutoka SellerDashboard).
+
+------------------------------------------------------------------------------
+A4. KUTAFUTA BIDHAA (Search / Discovery / Category)
+------------------------------------------------------------------------------
+- Global search: POST /api/search/global-search (search.js) — maktaba, na
+  autocomplete /api/search/autocomplete, trending /api/search/trending,
+  record-click /api/search/record-click (zote bila auth ya server? — enda sehemu
+  B gap).
+- Home search/filter iko ndani ya HomeScreen (client-side query kwenye Firestore
+  au kupitia server).
+- ProductDetail: maoni/reviews, comments, similar products, buy now, chat seller,
+  report, boost, wishlist, follow.
+
+------------------------------------------------------------------------------
+A5. KUWEKA BIDHAA (Add Product / Sell)
+------------------------------------------------------------------------------
+1. AddProductScreen (auth required)
+2. Upload picha/video kupitia CloudinaryService (/api/cloudinary/sign →
+   upload)
+3. Submit: Firestore products/{id} (sellerId, category, price, description,
+   location, geohash, condition n.k.)
+4. MyAds → edit/delete (DELETE /api/products/:id, seller match check)
+5. SellerDashboard: stats + WidgetService.updateWidget() (home-screen widget)
+
+------------------------------------------------------------------------------
+A6. BOOST YA BIDHAA (Product Boost)
+------------------------------------------------------------------------------
+1. ProductBoostScreen → BoostService.initiateBoostPayment
+   POST /api/boost-product {productId, tier, amount, durationDays, phone,
+   userId, productName, productImage, productPrice, paymentMethod}
+2. ClickPesa USSD push / BillPay → webhook /api/clickpesa/webhook →
+   isBoosted=true, boostedUntil, isFeatured, featuredUntil (na sisi)
+   (webhook ina-no-op verifyWebhook!)
+3. handleBoostPaymentSuccess: update products/{id} Firestore moja kwa moja
+4. notifyBoost → POST /api/boost/notify (broadcast, NO AUTH server-side)
+5. BoostReceiptScreen inaonyesha receipt (BoostReceipt model)
+
+------------------------------------------------------------------------------
+A7. FLASH SALE
+------------------------------------------------------------------------------
+- FlashSaleService: firestore stream flash_sales, expiry handling
+- CreateFlashSaleScreen → POST /api/flash-sale/create (token + sellerId match)
+- Scan: POST /api/flash-sale/scan (NO AUTH)
+- Notify: POST /api/flash-sale/notify (NO AUTH broadcast, cooldown 24h kwa push)
+- Expired auto-deactivate: POST /api/flash-sales/deactivate-expired (token
+  yoyote), delete admin: POST /api/flash-sales/delete (requireAdmin)
+
+------------------------------------------------------------------------------
+A8. ORDER FLOW (Kuagiza → Escrow → Dispatch → Release → Rating)
+------------------------------------------------------------------------------
+1. ProductDetail → "Buy Now" → CheckoutScreen (auth required)
+2. CheckoutScreen._submitOrder:
+   - Validate region+district+street
+   - getIdToken() → POST /api/orders/create (Bearer) payload: buyerId/Name/Phone,
+     sellerId/Name, productId/name/image/price, region/district/street/landmarks,
+     lat/lng, deliveryType
+   - → OrderDetailScreen
+3. Kulipa:
+   - MyPurchases._payForOrder → initiateMarketplacePayment
+     POST /api/create-marketplace-payment-link (ClickPesa USSD push/BillPay)
+   - PaymentService.processTransaction → FraudPreventionService.check →
+     POST /api/transactions/create
+   - RealtimePaymentBanner → PaymentBanner (success/failed)
+   - OrderDetail: _fetchGatewayFee (status == 'quoted')
+4. Malipo yanapofika (webhook /api/clickpesa/webhook): transaction →
+   escrow_hold
+5. Seller:
+   - SellerOrders._submitQuote → POST /api/orders/transition newStatus:'quoted'
+     + shippingCost/busName/plateNumber + manual update orders/{id} +
+     transactions/{id}
+   - SellerOrders._submitDispatch / SellerDispatchScreen → POST /api/escrow/
+     dispatch {orderId, userId, busName, plateNumber, trackingNumber, note}
+6. Buyer:
+   - _confirmDelivery → POST /api/escrow/release → escrow → sellerBalance →
+     SmsNotificationService.notifyEscrowReleased → _showSellerRatingDialog
+   - _raiseDispute → dialog → POST /api/escrow/dispute → mgogoro → admin
+   - _cancelOrder → POST /api/escrow/cancel → ClickPesa refund
+7. Admin: POST /api/escrow/admin-release, admin-resolve-dispute, retry-payout
+8. OrderDetail ina listeners mbili (orders/{docId} + transactions/{docId}) —
+   orderId ndio ID ya transaction pia (mirror docs)
+9. ReceiptScreen /api/receipt/:orderId, OrderTimeline widgets
+
+STATUS ZA ORDER (kutoka order_status_config.dart):
+pending, awaiting_shipping_quote, quoted, awaiting_payment, paid, dispatched,
+awaiting_delivery, delivered/completed, disputed, cancelled, failed
+
+------------------------------------------------------------------------------
+A9. MIFUKO YA FEDHA (Wallet / Seller Balance / Withdrawal)
+------------------------------------------------------------------------------
+WALLET (mnunuzi):
+- Deposit: POST /api/wallet/deposit (token + userId match) USSD/BillPay
+- Purchase kwa wallet: POST /api/wallet/purchase (buyerId kwenye body — NO AUTH
+  server-side!) — inapunguza balance ya mtu mwingine unaweza kumwibia.
+- Balance/History: GET /api/wallet/balance/:userId, /api/wallet/history/:userId
+  (NO AUTH — leak)
+- Delete history: POST /api/wallet/delete-history (token + userId match)
+
+SELLER:
+- GET /api/seller/balance (NO AUTH, userId query) — returns salio+phone
+- Withdraw: POST /api/seller/withdraw {userId, amount, phone} — NO AUTH
+  (clickpesaService.sellerWithdraw) — fedha inaweza kutolewa na mtu yeyote
+- Payout status/list: /api/payout-status/:id, /api/payouts (NO AUTH)
+- Retry: POST /api/payout/retry/:id (NO AUTH)
+- Admin withdraw: POST /api/admin/withdraw (requireAdmin + uid match)
+- Create payout: POST /api/create-payout (token lakini HAKUNA isAdmin check)
+- Finance summary: GET /api/admin/finance-summary
+- ClickPesa balance: GET /api/clickpesa/balance (NO AUTH)
+- Payout preview: POST /api/clickpesa/payout-preview
+
+------------------------------------------------------------------------------
+A10. KYC (Uthibitishaji wa Kitambulisho)
+------------------------------------------------------------------------------
+1. KycScreen._loadStatus → KycService.getKycStatus → GET /api/kyc/status/:uid
+   + fallback Firestore users/{uid}.kyc
+2. _pickImage → ImagePicker (max 1024px)
+3. _uploadImage → CloudinaryService folder 'kyc/{uid}'
+4. _submit → validate fullName/idNumber/images → upload → POST /api/kyc/submit
+   (HAKUNA owner/token check!) → approved? success : pending
+5. Aina: National ID, Passport, Drivers License, Voters ID
+6. Admin: POST /api/admin/kyc/review, revoke, delete; GET pending, all
+7. TODOs server: NIDA API integration, Face Matching (Rekognition/Azure)
+
+------------------------------------------------------------------------------
+A11. CHAT + MESSAGE
+------------------------------------------------------------------------------
+- ChatsListScreen → ChatInboxScreen → ChatPage / ChatRoomScreen
+- ChatService: getOrCreateRoom, sendMessage → POST /api/chat/send (token +
+  senderId match + participant check — salama), markAsRead, addReaction, block,
+  deleteConversation
+- Groups: CreateGroupScreen, GroupChatScreen (group_service)
+- Cached rooms/messages: Hive (cached_chat_room, cached_message)
+- Typing: chat_typing service
+- OneSignal: chat_messages_v6 channel + group chat push
+
+------------------------------------------------------------------------------
+A12. BUYER REQUESTS (Ombi la Mnunuzi)
+------------------------------------------------------------------------------
+- BuyerRequestsScreen: stream Firestore 'BuyerRequests' ordered by createdAt desc
+- PostBuyerRequestScreen → addRequest (whatsapp inalocked)
+- unlockContact: seller anaupdate unlockedBy (arrayUnion) — hili ni moja kwa
+  moja Firestore, hakuna server authorization kwenye collection (rules? angalia
+  mapungufu B14)
+
+------------------------------------------------------------------------------
+A13. NOTIFICATIONS (Push / SMS / In-app)
+------------------------------------------------------------------------------
+ONE-SIGNAL (client):
+- notification_service.initialize():
+  1. skip ikiwa disabled
+  2. LocalNotificationService (heads-up local fallback)
+  3. OneSignal.initialize(appId)
+  4. requestPermission → denied → Firestore fallback
+  5. OneSignal.login(user.uid) + addEmail (muhimu kwa external_user_id linking!)
+  6. tap listener → routing (main.dart: order→/order-detail/:id, payment→/receipt,
+     chat→/chat/:receiverId, boost/flash_sale/product)
+  7. foreground heads-up listener
+  8. authStateChanges re-login
+- Channels (heads-up): chat_messages_v6, payments_notifications_v6,
+  general_notifications_v6 + action buttons "Lipa Sasa", "Thibitisha Upokeaji"
+
+ONE-SIGNAL (server):
+- sendOneSignalNotification: include_external_user_ids + include_aliases(email)
+  fallback, bypassPrefs kwa CRITICAL_PUSH_TYPES (order/payment/refund/dispute/
+  escrow/payout/withdrawal/kyc/deposit/delivery), android_priority high,
+  existing_android_channel_id (notifTypeToChannel), android_sound
+- sendOneSignalBulk: bulk, filters kwa prefs (filterAllowedUserIds) — admin
+  broadcast bypasses prefs (bypassPrefs:true, iliyorekebishwa 2026-08-08)
+- Endpoints:
+  - POST /api/send-notification (NO AUTH!)
+  - POST /api/send-bulk-notification (requireAdmin)
+  - POST /api/admin/broadcast-notification (requireAdmin) → inaokoa in-app
+    notifications kwa kila user (batch ya 500)
+  - POST /api/admin/send-notification (requireAdmin)
+  - POST /api/notifications/broadcast (requireAdmin)
+  - GET /api/fcm-check, POST /api/test-fcm (NO AUTH)
+- Preferences: notification.js /preferences/get, /preferences/set (Bearer auth,
+  salama) + notificationPrefs.js gating
+- Listener.js: Firestore listener anatuma OneSignal/SMS kwa events (ina Basic
+  auth header ya OneSignal — index.js inatumia 'Key' — kutofautiana!)
+
+SMS:
+- SmsNotificationService + sms_notification_service.dart
+- POST /api/sms/send (NO AUTH!), POST /api/whatsapp/send (NO AUTH)
+- OTP: /api/auth/send-otp (rate limit 3/15min), /api/auth/send-email-otp
+- Transactional SMS kwa escrow release, orders n.k.
+
+------------------------------------------------------------------------------
+A14. ADMIN PANEL (App + hosting/admin.html)
+------------------------------------------------------------------------------
+Admin katika app (Flutter):
+- AdminDashboardScreen, AdminUserDetailScreen, AdminKycScreen,
+  AdminBroadcastScreen, AdminReportsScreen, AdminTransactionsTab,
+  AdminAdsManagementScreen, AdminAdRevenueScreen, AdminClickpesaScreen,
+  AdminKycDocumentViewScreen
+
+Admin HTML (hosting/admin.html): users, products, orders, transactions,
+withdrawals, analytics, finance, broadcast, KYC, reports, fraud, audit, ad-views.
+
+Auth: x-admin-secret header (ADMIN_SECRET env) AU Bearer token + isAdmin.
+
+Broadcast UI → POST /api/admin/broadcast-notification → inaonyesha
+pushNotifications / inAppNotifications / totalUsers.
+
+------------------------------------------------------------------------------
+A15. AI / FEATURES ZINGINE
+------------------------------------------------------------------------------
+- AiAssistantScreen + GroqService: /api/ai/chat (model yoyote inakubaliwa —
+  cost risk), /api/ai/transcribe (Whisper)
+- AdMob: banner (DynamicBanner, AdBanner), interstitial (InterstitialAdService
+  — 1 min timer), rewarded (RewardedAdService, RewardedAdGate)
+- Ad revenue: AdRevenueService (recordAdView, counts), /api/admin/admob-revenue,
+  admin payout kwa sellers
+- ExchangeRateService (TZS/USD), BalancePrivacyService, AppLockService (PIN),
+  StatusService (status stories), RecentlyViewedService, WishlistService
+- Reports: /api/reports (POST salama, GET/PATCH NO AUTH), fraud alerts NO AUTH
+- Accounts switcher: AccountManager (multi-account email/google)
+
+================================================================================
+SEHEMU B: MAPUNGUFU (GAPS) — kwa uzito
+================================================================================
+
+------------------------------------------------------------------------------
+B1. CRITICAL — Mashimo ya FEDHA (unaweza kupoteza au kuteka pesa)
+-------------------------------------------------------------------------------
+1. [FIXED] POST /api/seller/withdraw — token verification + owner check
+   (isOwnerOrAdmin). 
+2. [FIXED] POST /api/create-payout — requireAdmin + x-admin-secret.
+3. [FIXED] POST /api/payout/retry/:id — requireAdmin.
+4. [FIXED] POST /api/escrow/cancel — requireUser + buyerId match.
+5. [FIXED] POST /api/escrow/release — requireUser + buyerId match.
+6. [FIXED] POST /api/escrow/dispute — requireUser + buyerId match.
+7. [FIXED] POST /api/wallet/purchase — requireUser + buyerId match.
+8. [FIXED] POST /api/transactions/create — neutralized (status:'pending',
+   hakuna seller/revenue crediting).
+9. [FIXED] ClickPesa webhooks (/api/clickpesa/webhook + /api/clickpesa/payout-
+   webhook) — verifyWebhook (HMAC/checksum) sasa inatumika (ClickPesa
+   checksum key + canonicalize + createPayloadChecksum).
+
+------------------------------------------------------------------------------
+B2. CRITICAL — Privilege Escalation (Kujifanya Admin)
+-------------------------------------------------------------------------------
+10. [FIXED] POST /api/setup-admin — sasa inahitaji x-admin-secret ===
+    ADMIN_SECRET (hamna NO AUTH tena).
+
+------------------------------------------------------------------------------
+B3. HIGH — Data Leaks / IDOR bila Auth
+-------------------------------------------------------------------------------
+11. [FIXED] GET /api/kyc/status/:userId — isOwnerOrAdmin.
+12. [FIXED] GET /api/seller/balance, GET /api/wallet/balance/:userId,
+    GET /api/wallet/history/:userId — isOwnerOrAdmin.
+13. [FIXED] GET /api/payouts, GET /api/payout-status/:id — isOwnerOrAdmin
+    (payouts: admin pekee; payout-status: owner/admin).
+14. [FIXED] GET /api/reports, PATCH /api/reports/:id,
+    GET /api/fraud/alerts, PATCH /api/fraud/alerts/:id/dismiss,
+    GET /api/fraud/risk/:sellerId — requireAdmin/isOwnerOrAdmin.
+15. [FIXED] GET /api/diag/fcm-token/:userId (isOwnerOrAdmin),
+    GET /api/fcm-check (requireAdmin), GET /api/stats (requireAdmin).
+16. [FIXED] GET /api/clickpesa/balance — requireAdmin.
+17. [FIXED] GET /api/transaction-status/:orderId — isOwnerOrAdmin.
+
+------------------------------------------------------------------------------
+B4. HIGH — Spam / Platform Abuse (NO AUTH)
+-------------------------------------------------------------------------------
+18. [FIXED] POST /api/sms/send — requireUser (Bearer).
+19. [FIXED] POST /api/whatsapp/send — requireUser (Bearer).
+20. [FIXED] POST /api/send-notification — requireUser (Bearer).
+21. [FIXED] POST /api/test-fcm — requireAdmin.
+22. [FIXED] POST /api/flash-sale/notify — requireUser + sellerId === auth.uid.
+23. [FIXED] POST /api/flash-sale/scan — requireUser.
+24. [FIXED] POST /api/boost/notify — requireUser + sellerId === auth.uid.
+25. [FIXED] CORS — origin zisizojulikana zinakataliwa (cb(null,false));
+    allowed origins sasa zinajumuisha Firebase hosting domains; PATCH kwenye
+    methods.
+
+------------------------------------------------------------------------------
+B5. MEDIUM — Auth Isiyo Kamili / IDOR kwenye Endpoints Zilizolindwa
+-------------------------------------------------------------------------------
+26. [FIXED] POST /api/boost-product — sasa inahakikisha token.uid === body.userId.
+27. [FIXED] POST /api/create-marketplace-payment-link — sasa inahakikisha
+    token.uid === buyerId.
+28. [FIXED] POST /api/kyc/submit — isOwnerOrAdmin.
+29. [FIXED] PATCH /api/admin/users/:uid — whitelist (isSuspended/isAdmin pekee).
+30. [FIXED] POST /api/escrow/retry-payout — if(true) imebadilishwa kwa
+    requireAdmin; token tupu haithrow tena 500.
+31. [FIXED] OTP brute-force: verify-otp, verify-email-otp, reset-password-by-
+    phone — otpVerifyRateLimit (5 attempts / 15 min).
+32. /api/phone-login (1372) — password inatokana na tarakimu 6 za simu +
+    suffix; simu zinaweza kusombwa kwa kubashiri (weak, lakini app haina
+    sehemu ya kuingia password ya simu — risk ya kawaida). [IMEBETIWA:
+    OTP verification server-side ina rate limit sasa].
+33. [FIXED] search.js endpoints (global-search, autocomplete, record-click) —
+    zina authenticate (Bearer token + verifyAuthToken); trending inaangalia
+    auth kwa optional. SearchService inatuma Bearer.
+
+------------------------------------------------------------------------------
+B6. MEDIUM — Bugs / Ubora wa Code (Flutter)
+-------------------------------------------------------------------------------
+34. [FIXED] Deep-link/back-nav crash: routes zenye extra (checkout, orderDetail,
+    report) sasa zina null/type guards → zinarudi _MissingRouteData badala ya
+    crash.
+35. [FIXED] GoRouter redirect — checkout/orderDetail/report zina guards za
+    extra zisizo sahihi; route zinazofunguliwa moja kwa moja hazicrash tena.
+36. [FIXED] VerifyEmailScreen imeunganishwa kwenye router (/verify-email) —
+    inapokea email kupitia extra au currentUser.email (fallback); haicrash
+    tena bila extra.
+37. [FIXED] Shipping cost sasa inatumika kwenye payment ya buyer:
+    initiateMarketplacePayment ina shippingCost (my_purchases + order_detail).
+38. [FIXED] Sync ya orders/transactions — sasa server-only: orders.js
+    transitionOrder ina-update orders/{id} + transactions/{id} mirror kwa
+    status + shippingCost/busName/plateNumber; manual updates ya client
+    zimeondolewa (seller_orders_screen).
+39. [FIXED] Race kwenye OrderDetail._initRealtimeListeners — _maybeInitQuotedPayment
+    sasa ina debounce (400ms) + _gatewayFeeFetching guard; haiita
+    _fetchGatewayFee mara nyingi.
+40. [FIXED] KycScreen._submit — user==null check imesogezwa KABLA ya
+    setState(_submitting=true); loading haiachi kuwashwa.
+41. [FIXED] OneSignal init: _listenersRegistered imewekwa BAADA ya handlers
+    zote kuregister — exception ya katikati haifungi retry tena; login + email
+    linking pia inarudiwa kwenye authStateChanges.
+42. [FIXED] NotificationService heads-up / OneSignal linking — suluhu ya
+    server: include_aliases(email) + login robust (2026-08-08). Bado hifadhi:
+    thibitisha kwenye OneSignal logs recipients >= 1.
+43. [FIXED] Error raw (e.toString()) kwenye AuthNotifier (login/register/google/
+    phone) — sasa inatumia NetworkError.userMessage ikiwa ipo.
+44. [FIXED] Phone normalization — DRY: PhoneUtils.toE164() mpya; copies
+    (auth_repository, register_screen, login_screen, meseji_service,
+    order_detail) zote zinatambia moja.
+45. [FIXED] AppConfig langCode default 'en' → 'sw' (main.dart:291) — inaendana
+    na onboarding default 'sw'.
+46. [FIXED] setup-admin sasa inalindwa (x-admin-secret === ADMIN_SECRET) —
+    mwito wowote bila secret unakataliwa 401.
+47. Home-screen widget: ina-update tu kutoka SellerDashboard (WidgetService.
+    updateWidget) — data inaweza kuwa stale mpaka seller aende dashboard.
+    [BAKI — design: refresh home widget kwenye app lifecycle/home focus.]
+48. Tabs: index 2 ni dead placeholder (SizedBox.shrink) — index hazilingani
+    vizuri na nav items. [BAKI — design: rework tab mapping.]
+49. [FIXED] listener.js — 'Basic' → 'Key' header (inaendana na index.js na
+    OneSignal REST API v2).
+50. [FIXED] .env.example — ONE_SIGNAL_APP_ID halisi imebadilishwa kwa
+    placeholder (os_your_one_signal_app_id_here).
+
+------------------------------------------------------------------------------
+B7. LOW — Mazoea / Muundo (Design Debt)
+------------------------------------------------------------------------------
+51. verifyWebhook no-op imekusudiwa kwa manual testing — inahitaji kuwezeshwa
+    kwenye production (HMAC/checksum ya ClickPesa). [FIXED: sasa inatumika —
+    angalia B1#9.]
+52. checkSuspended/checkDailyLimit hazitumiki kila mahali —
+    [FIXED PARTIALLY] escrow/release na wallet/purchase sasa zina seller/buyer
+    suspension checks; bado zingine (k.m. seller/withdraw) ziweke kwenye
+    mzunguko ujao.
+53. requireAdmin inakubali x-admin-secret static kama mbadala — secret ikiwa
+    imevuja ni hatari; zingatia kufunga kwenye IP/AppCheck kwa security kubwa.
+54. Malipopay webhook ni logging tu (line 139) — haichakachui malipo.
+55. TODO server KYC (lines 2876, 2881): NIDA API real-time verification +
+    Face Matching (AWS Rekognition/Azure Face) — hazijaunganishwa (ni manual
+    review tu).
+56. Settings ya privacy: balance privacy, app lock yapo — hakikisha
+    zinatengemewa na user on first run.
+57. Flutter analyze: 0 errors, 31 lint warnings/infos (pre-existing) —
+    zinaweza kuondolewa polepole.
+
+------------------------------------------------------------------------------
+B8. FLOW YA NOTIFICATIONS — Mapungufu Maalum (Kutoka Kikao)
+------------------------------------------------------------------------------
+- Push ya server inarudisha success lakini simu haipati:
+  - Sababu kuu ya kwanza: include_external_user_ids hailingani na subscription
+    (external user id haija-fungwa kwa device).
+  - Iliweka include_aliases(email) + admin broadcast bypassPrefs (2026-08-08).
+  - Bado unahitaji: kuthibitisha kwenye OneSignal logs kwamba
+    recipients >= 1; kuangalia dashboard Message → Delivery.
+- CRITICAL_PUSH_TYPES sasa hupita preference gate (money alerts daima
+  hufika). Admin send/broadcast bypasses prefs.
+- Heads-up display inategemea notification channels (v6) + android_priority
+  high + android_visibility 1 + sound 'soko_notification' — thibitisha channel
+  IDs zinalingana kati ya server (notifTypeToChannel) na app
+  (LocalNotificationService + OneSignal channels).
+
+================================================================================
+SEHEMU C: PRIORITY YA KUREKEBISHA (Mapendekezo)
+================================================================================
+P0 (sasa hivi — fedha/usonji):
+1. [DONE] Weka auth kwenye: seller/withdraw, create-payout (isAdmin),
+   payout/retry, escrow/cancel, escrow/release, escrow/dispute, wallet/purchase,
+   transactions/create (status:'pending').
+2. [DONE] Weka HMAC verification ya ClickPesa webhooks (verifyWebhook).
+3. [DONE] Funga /api/setup-admin kwa ADMIN_SECRET au guard ya mara moja.
+
+P1 (haraka):
+4. [DONE] Weka auth kwenye KYC status, balances, payouts, reports, fraud, stats.
+5. [DONE] Rate-limit OTP verify (5 attempts → lock 15min).
+6. [DONE] Weka auth kwenye sms/send, whatsapp/send, send-notification, test-fcm,
+   flash-sale/notify, boost/notify, flash-sale/scan.
+7. [DONE] Fix route extra null guards (checkout/orderDetail/report).
+8. [DONE] Weka shippingCost kwenye payment ya buyer.
+
+P2 (ubora):
+9. [DONE] Fix manual sync orders/transactions → server-only transition.
+10. [DONE] Fix KYC infinite spinner + OneSignal listener retry bug.
+11. [DONE] Sanitize PATCH /api/admin/users/:uid (whitelist).
+12. [DONE] Sync language default (sw) kwa onboarding.
+13. [DONE] DRY phone normalization (PhoneUtils.toE164).
+
+================================================================================
+SEHEMU D: HABARI ZA MPANGILIO (Ref)
+================================================================================
+- Router: lib/app/router.dart (routes zote ziko lib/app/routes.dart)
+- Server main: server/index.js
+- Search router: server/search.js (POST /global-search, /autocomplete,
+  /trending, /record-click)
+- Notification router: server/notification.js (POST /preferences/get|set)
+- Prefs: server/notificationPrefs.js
+- OneSignal/SMS listener: server/listener.js (Firestore triggers)
+- ClickPesa helpers: server/clickpesa.js
+- Orders helper: server/orders.js
+- Admin HTML: hosting/admin.html
+- Base URL: lib/services/api_config.dart (https://soko-langu-server.onrender.com)
+- OneSignal App ID: 2e50d6a7-de2f-4b74-af36-4f1b0b28a1b2
+- Admin email guard: admin@soko-langu.com
+
+================================================================================
+MWISHO
+================================================================================
+File hii inaweza kusasishwa baada ya kila mzunguko wa kazi. Kila mapungufu
+yaliyorekebishwa — ondoa kutoka kwenye list au weka [FIXED: date].

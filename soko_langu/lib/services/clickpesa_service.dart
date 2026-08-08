@@ -21,6 +21,7 @@ class ClickPesaService {
     String deliveryType = 'local',
     String? existingTransactionId,
     String paymentMethod = 'ussd_push',
+    double shippingCost = 0,
   }) async {
     try {
       final url = '${ApiConfig.baseUrl}/api/create-marketplace-payment-link';
@@ -44,6 +45,7 @@ class ClickPesaService {
           'buyerName': buyerName ?? '',
           'deliveryType': deliveryType,
           'paymentMethod': paymentMethod,
+          'shippingCost': shippingCost,
           if (existingTransactionId != null) 'existingTransactionId': existingTransactionId,
         }),
       );
@@ -68,9 +70,13 @@ class ClickPesaService {
     required int amount,
     required String phone,
   }) async {
+    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
     final resp = await http.post(
       Uri.parse('${ApiConfig.baseUrl}/api/seller/withdraw'),
-      headers: {'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      },
       body: jsonEncode({'userId': userId, 'amount': amount, 'phone': phone}),
     );
     final body = jsonDecode(resp.body) as Map<String, dynamic>;
@@ -128,8 +134,12 @@ class ClickPesaService {
 
   static Future<Map<String, dynamic>?> getPayoutStatus(String payoutId) async {
     try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
       final resp = await http.get(
         Uri.parse('${ApiConfig.baseUrl}/api/payout-status/$payoutId'),
+        headers: {
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
       );
       if (resp.statusCode != 200) return null;
       return jsonDecode(resp.body) as Map<String, dynamic>;
@@ -144,11 +154,14 @@ class ClickPesaService {
     int limit = 50,
   }) async {
     try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
       final params = <String, String>{'limit': limit.toString()};
       if (userId != null) params['userId'] = userId;
       final uri = Uri.parse('${ApiConfig.baseUrl}/api/payouts')
           .replace(queryParameters: params);
-      final resp = await http.get(uri);
+      final resp = await http.get(uri, headers: {
+        if (token != null) 'Authorization': 'Bearer $token',
+      });
       if (resp.statusCode != 200) return [];
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return (data['payouts'] as List?)

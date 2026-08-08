@@ -134,6 +134,9 @@ class _KycScreenState extends State<KycScreen> {
       return;
     }
 
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
     setState(() => _submitting = true);
 
     try {
@@ -150,9 +153,6 @@ class _KycScreenState extends State<KycScreen> {
         setState(() => _submitting = false);
         return;
       }
-
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
 
       final result = await KycService.submitKyc(
         userId: user.uid,

@@ -100,12 +100,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
 
     final raw = _phoneController.text.trim();
-    final digits = raw.replaceAll(RegExp(r'\D'), '');
-    _normalizedPhone = digits.startsWith('0')
-        ? '255${digits.substring(1)}'
-        : digits.startsWith('255')
-        ? digits
-        : '255$digits';
+    _normalizedPhone = PhoneUtils.toE164(raw);
 
     setState(() => _isLoading = true);
     try {

@@ -90,8 +90,6 @@ class NotificationService {
       }
 
       if (!_listenersRegistered) {
-        _listenersRegistered = true;
-
         // Handle notification tap (app opened from notification)
         OneSignal.Notifications.addClickListener((event) {
           final data = event.notification.additionalData ?? {};
@@ -130,6 +128,9 @@ class NotificationService {
         });
 
         debugPrint('[OS] handlers registered');
+        // Set AFTER all handlers are attached so a mid-registration exception
+        // leaves retries possible (otherwise _listenersRegistered stays true).
+        _listenersRegistered = true;
       }
 
       _initialized = true;
@@ -248,9 +249,13 @@ class NotificationService {
   }) async {
     try {
       debugPrint('[OS] sendNotification to $userId: $title');
+      final token = await _auth.currentUser?.getIdToken();
       final response = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/send-notification'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
         body: jsonEncode({
           'userId': userId,
           'title': title,

@@ -140,10 +140,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _sendPhoneOtp() async {
     if (!_formKey.currentState!.validate()) return;
     final raw = _phoneController.text.trim();
-    final digits = raw.replaceAll(RegExp(r'\D'), '');
-    _normalizedPhone = digits.startsWith('0')
-        ? '255${digits.substring(1)}'
-        : digits.startsWith('255') ? digits : '255$digits';
+    _normalizedPhone = PhoneUtils.toE164(raw);
     setState(() => _isLoading = true);
     try {
       await context.read<AuthNotifier>().sendPhoneOtp(_normalizedPhone!);

@@ -560,22 +560,9 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
       if (resp.statusCode != 200 || data['success'] != true) {
         if (mounted) _showError(data['error'] ?? 'Failed to submit quote');
       } else {
-        // Also save shipping details directly on the order doc
-        final orderRef = FirebaseFirestore.instance.collection('orders').doc(orderId);
-        await orderRef.update({
-          'shippingCost': cost,
-          'busName': busName,
-          'plateNumber': plateNumber,
-        });
-
-        // Keep the transactions mirror doc (the buyer's payment source of
-        // truth) in sync, otherwise the buyer still sees the old status.
-        await FirebaseFirestore.instance.collection('transactions').doc(orderId).set({
-          'shippingCost': cost,
-          'totalAmount': FieldValue.increment(cost),
-          'status': 'quoted',
-        }, SetOptions(merge: true));
-
+        // Shipping details + status are synced to orders/{id} AND the
+        // transactions/{id} mirror doc by the server in one place, so a failed
+        // client-side write can't leave the two docs divergent.
         if (mounted) _showSuccess('Nukuu imetumwa kwa mnunuzi');
       }
     } catch (e) {

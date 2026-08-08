@@ -93,7 +93,6 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
       }
 
       final productPrice = (d['productPrice'] as num?)?.toDouble() ?? 0;
-      // ignore: unused_local_variable
       final shippingCost = (d['shippingCost'] as num?)?.toDouble() ?? 0;
       final productName = d['productName'] as String? ?? context.tr('product');
       final productId = d['productId'] as String? ?? '';
@@ -112,6 +111,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
         deliveryType: 'local',
         existingTransactionId: txId,
         paymentMethod: 'ussd_push',
+        shippingCost: shippingCost,
       );
 
       if (result == null || result['order_id'] == null) {

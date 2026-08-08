@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'api_config.dart';
 import '../utils/network_error.dart';
 
@@ -14,9 +15,13 @@ class KycService {
     String? selfieUrl,
   }) async {
     try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/kyc/submit'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
         body: jsonEncode({
           'userId': userId,
           'fullName': fullName,
@@ -39,8 +44,12 @@ class KycService {
 
   static Future<Map<String, dynamic>?> getKycStatus(String userId) async {
     try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
       final resp = await http.get(
         Uri.parse('${ApiConfig.baseUrl}/api/kyc/status/$userId'),
+        headers: {
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
       );
       if (resp.statusCode != 200) return null;
       return jsonDecode(resp.body) as Map<String, dynamic>;

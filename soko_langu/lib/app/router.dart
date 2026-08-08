@@ -36,6 +36,7 @@ import '../screens/notification/notification_preferences_screen.dart';
 import '../screens/onboarding/account_selection_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
 import '../screens/auth/magic_link_screen.dart';
+import '../screens/auth/verify_email_screen.dart';
 
 import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_user_detail_screen.dart';
@@ -171,6 +172,18 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.magicLink,
         pageBuilder: (context, state) => _premiumPage(const MagicLinkScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.verifyEmail,
+        pageBuilder: (context, state) {
+          final extra = state.extra;
+          final email = extra is Map<String, dynamic>
+              ? extra['email'] as String?
+              : extra is String
+                  ? extra
+                  : null;
+          return _premiumPage(VerifyEmailScreen(email: email));
+        },
       ),
       GoRoute(
         path: AppRoutes.accountSelection,
@@ -336,7 +349,13 @@ GoRouter buildRouter() {
       ),
       GoRoute(
         path: AppRoutes.checkout,
-        pageBuilder: (context, state) => _premiumPage(CheckoutScreen(product: state.extra as dynamic)),
+        pageBuilder: (context, state) {
+          final product = state.extra;
+          if (product == null || product is! Product) {
+            return _premiumPage(const _MissingRouteData());
+          }
+          return _premiumPage(CheckoutScreen(product: product));
+        },
       ),
       GoRoute(
         path: AppRoutes.productBoost,
@@ -365,7 +384,9 @@ GoRouter buildRouter() {
         path: '${AppRoutes.orderDetail}/:docId',
         pageBuilder: (context, state) {
           final docId = state.pathParameters['docId']!;
-          final data = state.extra as Map<String, dynamic>;
+          final data = state.extra is Map<String, dynamic>
+              ? state.extra as Map<String, dynamic>
+              : <String, dynamic>{};
           return _premiumPage(OrderDetailScreen(docId: docId, data: data));
         },
       ),
@@ -395,10 +416,12 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.report,
         pageBuilder: (context, state) {
-          final extra = state.extra as Map<String, dynamic>;
+          final extra = state.extra is Map<String, dynamic>
+              ? state.extra as Map<String, dynamic>
+              : <String, dynamic>{};
           return _premiumPage(ReportScreen(
-            reportedUserId: extra['reportedUserId'] as String,
-            reportedUserName: extra['reportedUserName'] as String,
+            reportedUserId: extra['reportedUserId'] as String? ?? '',
+            reportedUserName: extra['reportedUserName'] as String? ?? '',
             productId: extra['productId'] as String?,
             productName: extra['productName'] as String?,
           ));
@@ -434,4 +457,18 @@ GoRouter buildRouter() {
       ),
     ],
   );
+}
+
+class _MissingRouteData extends StatelessWidget {
+  const _MissingRouteData();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(leading: BackButton()),
+      body: Center(
+        child: Text('Data haipatikani. Rudi nyuma na ujaribu tena.'),
+      ),
+    );
+  }
 }

@@ -93,9 +93,13 @@ class BoostService {
     String? sellerId,
   }) async {
     try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
       await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/boost/notify'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
         body: jsonEncode({
           'productId': productId,
           'tier': tierName,
