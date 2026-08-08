@@ -23,6 +23,7 @@ const {
   clickpesaCreateBillPayOrder, clickpesaRawBalances, clickpesaQueryPayments,
   clickpesaQueryPayouts,
   getUssdPushFee, getPayoutFee, calcGatewayFee, ALL_PAYMENT_METHODS,
+  canonicalize, createPayloadChecksum,
 } = require('./clickpesa');
 const orderEngine = require('./orders');
 const searchRouter = require('./search').router;
@@ -422,11 +423,29 @@ function paymentRateLimit(req, res, next) {
   next();
 }
 
-// Verify webhook secret to prevent forged callbacks
+// Verify webhook checksum to prevent forged payment callbacks.
+// ClickPesa signs the canonicalized JSON payload (sorted keys) with
+// HMAC-SHA256 using CLICKPESA_CHECKSUM_KEY and sends it as `checksum` in the body.
 function verifyWebhook(req, res, next) {
-  // ClickPesa uses HMAC checksum in the body, not custom HTTP headers.
-  // This middleware exists for manual testing; we skip header enforcement
-  // because ClickPesa does not send x-webhook-secret.
+  const secret = process.env.CLICKPESA_CHECKSUM_KEY;
+  if (!secret) {
+    // Manual/dev mode — no secret configured, accept but log loudly.
+    console.warn('[WEBHOOK] CLICKPESA_CHECKSUM_KEY not set — webhook checksum NOT verified');
+    return next();
+  }
+  const body = req.body || {};
+  const provided = typeof body.checksum === 'string' ? body.checksum : '';
+  if (!provided) {
+    console.warn('[WEBHOOK] missing checksum — rejecting forged callback');
+    return res.status(401).json({ error: 'invalid checksum' });
+  }
+  const { checksum: _omit, checksumMethod: _omitMethod, ...rest } = body;
+  const expected = createPayloadChecksum(rest);
+  const match = expected && crypto.timingSafeEqual(Buffer.from(provided, 'hex'), Buffer.from(expected, 'hex'));
+  if (!expected || !match) {
+    console.warn('[WEBHOOK] invalid checksum — rejecting callback');
+    return res.status(401).json({ error: 'invalid checksum' });
+  }
   next();
 }
 
@@ -560,6 +579,22 @@ async function requireAdmin(req, res) {
   }
   res.status(401).json({ error: 'Unauthorized' });
   return { ok: false };
+}
+
+/** Verify a Firebase Bearer token and return the authenticated user's uid. */
+async function requireUser(req, res) {
+  const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
+  if (!authHeader.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return { ok: false };
+  }
+  try {
+    const decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
+    return { ok: true, uid: decoded.uid };
+  } catch (_) {
+    res.status(403).json({ error: 'Invalid token' });
+    return { ok: false };
+  }
 }
 
 // ============================================================
@@ -1477,10 +1512,14 @@ app.post('/api/send-notification', async (req, res) => {
 });
 
 // ============================================================
-// 🔧 SETUP — Create admin account (one-time)
+// 🔧 SETUP — Create admin account (requires ADMIN_SECRET)
 // ============================================================
 app.post('/api/setup-admin', async (req, res) => {
   try {
+    const secret = req.headers['x-admin-secret'];
+    if (!secret || secret !== process.env.ADMIN_SECRET) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
     const { password } = req.body;
     if (!password || password.length < 6) {
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
@@ -1788,9 +1827,14 @@ app.post('/api/escrow/dispatch', async (req, res) => {
 // ============================================================
 app.post('/api/escrow/release', async (req, res) => {
   try {
+    const auth = await requireUser(req, res);
+    if (!auth.ok) return;
     const { orderId, userId } = req.body;
     if (!orderId || !userId) {
       return res.status(400).json({ error: 'Missing orderId or userId' });
+    }
+    if (auth.uid !== userId) {
+      return res.status(403).json({ error: 'Forbidden: cannot confirm delivery for another account' });
     }
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
@@ -2383,9 +2427,14 @@ app.post('/api/escrow/admin-release', async (req, res) => {
 // ============================================================
 app.post('/api/escrow/cancel', async (req, res) => {
   try {
+    const auth = await requireUser(req, res);
+    if (!auth.ok) return;
     const { orderId, userId } = req.body;
     if (!orderId || !userId) {
       return res.status(400).json({ error: 'Missing orderId or userId' });
+    }
+    if (auth.uid !== userId) {
+      return res.status(403).json({ error: 'Forbidden: cannot cancel another account' });
     }
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
@@ -2506,9 +2555,14 @@ app.post('/api/escrow/cancel', async (req, res) => {
 // ============================================================
 app.post('/api/escrow/dispute', async (req, res) => {
   try {
+    const auth = await requireUser(req, res);
+    if (!auth.ok) return;
     const { orderId, userId, reason, evidenceUrls } = req.body;
     if (!orderId || !userId) {
       return res.status(400).json({ error: 'Missing orderId or userId' });
+    }
+    if (auth.uid !== userId) {
+      return res.status(403).json({ error: 'Forbidden: cannot raise a dispute for another account' });
     }
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
@@ -3701,9 +3755,14 @@ app.get('/api/seller/balance', async (req, res) => {
 // ============================================================
 app.post('/api/seller/withdraw', async (req, res) => {
   try {
+    const auth = await requireUser(req, res);
+    if (!auth.ok) return;
     const { userId, amount, phone } = req.body;
     if (!userId || !amount || !phone) {
       return res.status(400).json({ error: 'Missing userId, amount, or phone' });
+    }
+    if (auth.uid !== userId) {
+      return res.status(403).json({ error: 'Forbidden: cannot withdraw from another account' });
     }
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
@@ -3908,11 +3967,8 @@ app.post('/api/admin/withdraw', async (req, res) => {
 // ============================================================
 app.post('/api/create-payout', async (req, res) => {
   try {
-    const authHeader = req.headers.authorization || '';
-    const token = authHeader.replace('Bearer ', '');
-    if (!token) return res.status(401).json({ error: 'Unauthorized' });
-    const decoded = await admin.auth().verifyIdToken(token).catch(() => null);
-    if (!decoded) return res.status(403).json({ error: 'Invalid token' });
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
 
     const { userId, amount, phone, type, source } = req.body;
     if (!userId || !amount || !phone) {
@@ -3993,6 +4049,8 @@ app.get('/api/payouts', async (req, res) => {
 // ============================================================
 app.post('/api/payout/retry/:id', async (req, res) => {
   try {
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
     const result = await retryFailedPayout(req.params.id);
     res.json({ success: true, ...result });
@@ -6374,30 +6432,12 @@ app.post('/api/transactions/create', asyncHandler(async (req, res) => {
     productPrice: price, processingFee, platformFee,
     sokovibeCommission: platformFee,
     totalAmount, sellerReceives,
-    status: 'completed',
+    // Never mark a sale complete from this endpoint — real payment must be
+    // confirmed via the ClickPesa webhook before money moves to the seller.
+    status: 'pending',
     paymentMethod: 'ClickPesa',
     transactionReference: transactionReference || '',
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
-
-  await db.collection('users').doc(sellerId).set({
-    sellerBalance: admin.firestore.FieldValue.increment(sellerReceives),
-    totalSales: admin.firestore.FieldValue.increment(1),
-    grossSalesVolume: admin.firestore.FieldValue.increment(price),
-    lastSaleAt: admin.firestore.FieldValue.serverTimestamp(),
-  }, { merge: true });
-
-  await db.collection('revenue_transactions').add({
-    userId: sellerId,
-    amount: sellerReceives,
-    type: 'sale',
-    description: `Sale of ${productName}`,
-    transactionId: txRef.id,
-    productName,
-    productPrice: price,
-    sokovibeCommission: platformFee,
-    buyerName: buyerName || '',
-    timestamp: admin.firestore.FieldValue.serverTimestamp(),
   });
 
   res.json({ success: true, transactionId: txRef.id });
@@ -6897,6 +6937,8 @@ app.post('/api/wallet/deposit', async (req, res) => {
 /// Purchase via wallet balance deduction
 app.post('/api/wallet/purchase', async (req, res) => {
   try {
+    const auth = await requireUser(req, res);
+    if (!auth.ok) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
     const {
       buyerId, buyerName, productId, productName, productImage,
@@ -6906,6 +6948,9 @@ app.post('/api/wallet/purchase', async (req, res) => {
 
     if (!buyerId || !sellerId || !productId || !productName || productPrice == null) {
       return res.status(400).json({ error: 'Missing required fields' });
+    }
+    if (auth.uid !== buyerId) {
+      return res.status(403).json({ error: 'Forbidden: cannot purchase from another account' });
     }
 
     // Verify buyer has sufficient balance

@@ -161,9 +161,14 @@ class ClickPesaService {
   }
 
   static Future<Map<String, dynamic>> retryPayout(String payoutId) async {
+    final user = FirebaseAuth.instance.currentUser;
+    final token = await user?.getIdToken();
     final resp = await http.post(
       Uri.parse('${ApiConfig.baseUrl}/api/payout/retry/$payoutId'),
-      headers: {'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      },
     );
     final body = jsonDecode(resp.body) as Map<String, dynamic>;
     if (resp.statusCode != 200) {

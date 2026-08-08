@@ -322,6 +322,9 @@ module.exports = {
   clickpesaQueryPayments,
   clickpesaQueryPayouts,
   clickpesaCreateBillPayOrder,
+  // Checksum helpers (webhook verification)
+  canonicalize,
+  createPayloadChecksum,
   // Fee tiers
   USSD_PUSH_FEE_TIERS,
   PAYOUT_FEE_TIERS,
