@@ -234,15 +234,31 @@ async function postOneSignalWithRetry(payload, attempts = 3) {
   return null;
 }
 
-async function sendOneSignalNotification(userId, title, body, data = {}) {
+// Money/account notifications must never be silently dropped by user
+// preferences — a payment or dispute affecting funds must always reach the
+// device. Only advisory channels (chat, marketing, general) honor toggles.
+const CRITICAL_PUSH_TYPES = new Set([
+  'order','payment','payment_failed','payment_received',
+  'dispute','disputed','dispute_resolved',
+  'refund','refund_processed','cancelled',
+  'escrow_release','escrow_auto_release',
+  'auto_payout','payout','payout_completed','payout_failed',
+  'withdrawal','withdrawal_failed','auto_withdrawal',
+  'kyc','kyc_approved','kyc_rejected','kyc_revoked',
+  'deposit','deposit_failed','delivery_confirmed',
+]);
+
+async function sendOneSignalNotification(userId, title, body, data = {}, opts = {}) {
   if (!userId) { console.log('[OS] No userId'); return null; }
   if (!ONE_SIGNAL_APP_ID || !ONE_SIGNAL_REST_API_KEY) {
     console.error('[OS] Missing ONE_SIGNAL_APP_ID or ONE_SIGNAL_REST_API_KEY'); return null;
   }
   const notifType = (data && data.type) || 'general';
-  if (!(await notifPrefs.isPushAllowed(userId, notifType))) {
-    console.log(`[OS] skipped push to ${userId} type=${notifType} (preferences)`);
-    return null;
+  if (!opts.bypassPrefs && !CRITICAL_PUSH_TYPES.has(notifType)) {
+    if (!(await notifPrefs.isPushAllowed(userId, notifType))) {
+      console.log(`[OS] skipped push to ${userId} type=${notifType} (preferences)`);
+      return null;
+    }
   }
   // Server copy is already Swahili, so both language keys carry the same text —
   // sw ensures Swahili-locale devices resolve it explicitly instead of en-only.
@@ -299,11 +315,15 @@ async function sendEmailSmtp(userId, subject, bodyText) {
   } catch (e) { console.error(`[SMTP] FAILED user=${userId}: ${e.message}`); return false; }
 }
 
-async function sendOneSignalBulk(userIds, title, body, data = {}) {
+async function sendOneSignalBulk(userIds, title, body, data = {}, opts = {}) {
   if (!userIds || userIds.length === 0) return { successCount: 0 };
   if (!ONE_SIGNAL_APP_ID || !ONE_SIGNAL_REST_API_KEY) { console.error('[OS] Missing config'); return { successCount: 0 }; }
   const notifType = (data && data.type) || 'general';
-  const allowedUserIds = await notifPrefs.filterAllowedUserIds(userIds, notifType);
+  // Admin broadcasts bypass user preference gating so operators can always
+  // reach their full audience; time-sensitive types deliver to everyone too.
+  const allowedUserIds = opts.bypassPrefs || CRITICAL_PUSH_TYPES.has(notifType)
+    ? userIds
+    : await notifPrefs.filterAllowedUserIds(userIds, notifType);
   if (allowedUserIds.length === 0) { console.log(`[OS] bulk skipped type=${notifType} (no eligible users)`); return { successCount: 0 }; }
   let successCount = 0;
   const batchSize = 2000;
@@ -3206,7 +3226,9 @@ app.post('/api/admin/send-notification', async (req, res) => {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    await sendOneSignalNotification(userId, title, body || '', { type: notifType });
+    // Admin-initiated push bypasses user preference toggles so operators can
+    // always reach users (e.g. account actions) regardless of channel settings
+    await sendOneSignalNotification(userId, title, body || '', { type: notifType }, { bypassPrefs: true });
 
     res.json({ success: true, message: 'Notification sent to user' });
   } catch (e) {
@@ -6480,7 +6502,7 @@ app.post('/api/notifications/broadcast', asyncHandler(async (req, res) => {
 
   let sent = 0;
   if (userIds.length > 0) {
-    const osResult = await sendOneSignalBulk(userIds, title, body || '', { ...(data || {}), type: (data && data.type) || 'general' });
+    const osResult = await sendOneSignalBulk(userIds, title, body || '', { ...(data || {}), type: (data && data.type) || 'general' }, { bypassPrefs: true });
     sent = osResult.successCount;
   }
 
