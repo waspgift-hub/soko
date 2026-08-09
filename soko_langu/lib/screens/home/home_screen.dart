@@ -17,6 +17,7 @@ import '../../widgets/banner_rotator.dart';
 import '../../widgets/premium_widgets.dart';
 import '../../widgets/animated_gradient_line.dart';
 import '../../widgets/recently_viewed_row.dart';
+import '../../widgets/staggered_fade_in.dart';
 import '../../widgets/ds/ds.dart';
 import '../../theme/app_typography.dart';
 
@@ -549,10 +550,14 @@ class _HomeScreenState extends State<HomeScreen>
               itemCount: filtered.length,
               itemBuilder: (context, index) {
                 return RepaintBoundary(
-                  child: ProductCard(
-                    product: filtered[index],
-                    flashSale: _flashSales[filtered[index].id],
-                    onTap: () => context.push('${AppRoutes.productDetail}/${filtered[index].id}', extra: filtered[index]),
+                  child: StaggeredFadeIn(
+                    // cap stagger so pagination never delays new rows
+                    index: index % 8,
+                    child: ProductCard(
+                      product: filtered[index],
+                      flashSale: _flashSales[filtered[index].id],
+                      onTap: () => context.push('${AppRoutes.productDetail}/${filtered[index].id}', extra: filtered[index]),
+                    ),
                   ),
                 );
               },

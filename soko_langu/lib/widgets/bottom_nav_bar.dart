@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../screens/profile/profile_screen.dart';
 import '../screens/home/home_screen.dart';
@@ -49,6 +50,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   void _selectTab(int index) {
+    HapticFeedback.selectionClick();
     setState(() {
       _currentIndex = index;
       if (index > _maxVisitedIndex) _maxVisitedIndex = index;
@@ -124,10 +126,15 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final navBorder = isDark
         ? const Color(0x2AFFFFFF)
         : const Color(0x08000000);
+    // Lift the bar above the Android gesture/navigation bar (edge-to-edge
+    // is enforced at targetSdk 36); MediaQuery.padding.bottom is 0 on
+    // legacy devices, so this is safe on both.
+    final bottomInset = MediaQuery.of(context).padding.bottom;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: SizedBox(
+      padding: EdgeInsets.fromLTRB(16, 0, 16, bottomInset + 12),
+      child: RepaintBoundary(
+        child: SizedBox(
         height: 72 + 30,
         child: Stack(
           clipBehavior: Clip.none,
@@ -188,6 +195,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             ),
           ],
         ),
+      ),
       ),
     );
   }

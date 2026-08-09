@@ -41,6 +41,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   late AnimationController _pulseController;
   late Animation<double> _pulseAnim;
   Timer? _countdownTimer;
+  Timer? _autoRefreshTimer;
   Duration? _remaining;
   bool _isLoading = true;
   String? _releasingTxId;
@@ -49,6 +50,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   Map<String, dynamic> _liveData = const {};
   StreamSubscription? _orderSub;
   StreamSubscription? _txSub;
+  DateTime? _lastAutoRefresh;
 
   // Payment state (used when status is "quoted")
   bool _paying = false;
@@ -68,6 +70,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     );
     _startCountdown();
     _initRealtimeListeners();
+    // Poll every 5s to force a rebuild so live statuses/amounts (quoted,
+    // dispatched, released) re-render even if a stream hiccups.
+    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted) return;
+      setState(() => _lastAutoRefresh = DateTime.now());
+    });
     Future.delayed(const Duration(milliseconds: 200), () {
       if (mounted) setState(() => _isLoading = false);
     });
@@ -151,6 +159,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   void dispose() {
     _pulseController.dispose();
     _countdownTimer?.cancel();
+    _autoRefreshTimer?.cancel();
     _gatewayFeeDebounce?.cancel();
     _orderSub?.cancel();
     _txSub?.cancel();
@@ -159,6 +168,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
 
   Map<String, dynamic> get d => _liveData.isNotEmpty ? _liveData : widget.data;
   String get status => d['status'] as String? ?? 'pending';
+
+  bool get _isPaidState =>
+      status == 'paid_escrow_hold' ||
+      status == 'escrow_hold' ||
+      status == 'dispatched' ||
+      status == 'delivered' ||
+      status == 'delivery_confirmed' ||
+      status == 'completed';
 
   String _nf(num n) => NumberFormat('#,###', 'en').format(n);
 
@@ -198,6 +215,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     return '${mins}m';
   }
 
+  String _formatRelative(Duration d) {
+    if (d.inSeconds < 10) return 'sasa';
+    if (d.inMinutes < 1) return '${d.inSeconds}s';
+    return '${d.inMinutes}m';
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -219,6 +242,36 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                     const SizedBox(height: 16),
                     _buildStatusBanner(context, cs),
                     const SizedBox(height: 16),
+                    if (_isPaidState)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: cs.successGreen.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: cs.successGreen.withValues(alpha: 0.15)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.shield_outlined, size: 18, color: cs.successGreen),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  context.tr('escrow_secure_note', 'Fedha zako ziko salama kwenye escrow hadi uthibitishe upokeaji'),
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w500,
+                                    color: cs.successGreen,
+                                    height: 1.35,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     _buildTimeline(context, cs),
                     const SizedBox(height: 16),
                     _buildOrderTable(context, cs),
@@ -361,6 +414,37 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
             ),
           ),
           Positioned(
+            top: 12,
+            left: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    orderStatusInfo(status, cs).icon,
+                    size: 13,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    orderStatusInfo(status, cs).label(context),
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
             bottom: 16,
             left: 16,
             right: 16,
@@ -445,8 +529,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     return OrderStatusBanner(
       status: status,
       subtitle: context.tr('order_status_hint', 'Hali ya agizo lako inaonekana hapa'),
-      trailing: showCountdown
-          ? Container(
+      trailing: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (showCountdown)
+            Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
                 color: Colors.orange.withValues(alpha: 0.1),
@@ -467,8 +555,27 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                   ),
                 ],
               ),
-            )
-          : null,
+            ),
+          if (_lastAutoRefresh != null) ...[
+            if (showCountdown) const SizedBox(height: 4),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.autorenew, size: 10, color: cs.successGreen),
+                const SizedBox(width: 3),
+                  Text(
+                    '${context.tr('last_updated')} ${_formatRelative(DateTime.now().difference(_lastAutoRefresh!))}',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w500,
+                      color: cs.successGreen,
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 

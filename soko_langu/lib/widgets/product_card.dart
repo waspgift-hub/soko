@@ -4,11 +4,11 @@ import '../../models/product_model.dart';
 import '../../models/flash_sale_model.dart';
 import '../../services/product_service.dart';
 import '../../services/soko_cache_manager.dart';
-import 'google_loading.dart';
 import '../extensions/context_tr.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import 'soko_vibe_watermark.dart';
+import 'ds/ds.dart';
 
 class ProductCard extends StatelessWidget {
   final Product product;
@@ -64,7 +64,7 @@ class ProductCard extends StatelessWidget {
                                 fit: BoxFit.cover,
                                 placeholder: (context, url) => Container(
                                   color: cs.surfaceContainerLow,
-                                  child: const Center(child: GoogleLoading(size: 24, strokeWidth: 2)),
+                                  child: const DsSkeleton(),
                                 ),
                                 errorWidget: (context, url, error) => Container(
                                   color: cs.surfaceContainerLow,

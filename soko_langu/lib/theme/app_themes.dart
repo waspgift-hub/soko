@@ -62,6 +62,18 @@ ThemeData _buildTheme(ColorScheme scheme) {
     colorScheme: scheme,
     scaffoldBackgroundColor: scheme.surface,
     textTheme: AppTypography.apply(base.textTheme, scheme),
+    // Android 12+ sparkle ripple + consistent material transitions for the
+    // few non-GoRouter Navigator.push call sites.
+    splashFactory: InkSparkle.splashFactory,
+    pageTransitionsTheme: const PageTransitionsTheme(
+      builders: {
+        TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
+        TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+        TargetPlatform.linux: FadeForwardsPageTransitionsBuilder(),
+        TargetPlatform.windows: FadeForwardsPageTransitionsBuilder(),
+      },
+    ),
 
     iconTheme: IconThemeData(
       color: scheme.onSurface.withValues(alpha: 0.75),

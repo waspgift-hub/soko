@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/comment_model.dart';
 import '../services/comment_service.dart';
 import '../extensions/context_tr.dart';
+import '../theme/app_motion.dart';
 import 'google_loading.dart';
+import 'ds/ds.dart';
 
 class CommentSection extends StatefulWidget {
   final String productId;
@@ -170,10 +173,7 @@ class _CommentSectionState extends State<CommentSection> {
                 ),
               ),
               const SizedBox(width: 8),
-              IconButton(
-                icon: Icon(Icons.send, color: Theme.of(context).colorScheme.primary),
-                onPressed: _addComment,
-              ),
+              _BurstSendButton(onPressed: _addComment),
             ],
           ),
         ),
@@ -200,10 +200,13 @@ class _CommentSectionState extends State<CommentSection> {
               separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (context, i) {
                 final c = comments[i];
-                return _CommentTile(
-                  comment: c,
-                  productId: widget.productId,
-                  onReply: () => _showReplySheet(c.id),
+                return _AnimatedCommentTile(
+                  key: ValueKey(c.id),
+                  child: _CommentTile(
+                    comment: c,
+                    productId: widget.productId,
+                    onReply: () => _showReplySheet(c.id),
+                  ),
                 );
               },
             );
@@ -211,6 +214,90 @@ class _CommentSectionState extends State<CommentSection> {
         ),
         const SizedBox(height: 8),
       ],
+    );
+  }
+}
+
+class _BurstSendButton extends StatefulWidget {
+  final VoidCallback onPressed;
+
+  const _BurstSendButton({required this.onPressed});
+
+  @override
+  State<_BurstSendButton> createState() => _BurstSendButtonState();
+}
+
+class _BurstSendButtonState extends State<_BurstSendButton> {
+  int _burstTick = 0;
+
+  void _handleTap() {
+    HapticFeedback.lightImpact();
+    setState(() => _burstTick++);
+    widget.onPressed();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        IconButton(
+          icon: Icon(Icons.send, color: cs.primary),
+          onPressed: _handleTap,
+        ),
+        Positioned.fill(
+          child: DsMicroBurst(
+            color: cs.primary,
+            trigger: _burstTick,
+            size: 56,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AnimatedCommentTile extends StatefulWidget {
+  final Widget child;
+
+  const _AnimatedCommentTile({super.key, required this.child});
+
+  @override
+  State<_AnimatedCommentTile> createState() => _AnimatedCommentTileState();
+}
+
+class _AnimatedCommentTileState extends State<_AnimatedCommentTile>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<Offset> _slide;
+  late final Animation<double> _fade;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: Motion.cardEnter);
+    _slide = Tween(begin: const Offset(0, -0.25), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _controller, curve: Motion.easeOutCubic));
+    _fade = CurvedAnimation(
+      parent: _controller,
+      curve: Motion.easeInOutCubic,
+    );
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.disableAnimationsOf(context)) return widget.child;
+    return FadeTransition(
+      opacity: _fade,
+      child: SlideTransition(position: _slide, child: widget.child),
     );
   }
 }
@@ -512,8 +599,7 @@ class _CommentTile extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      IconButton(
-                        icon: Icon(Icons.send, color: Theme.of(context).colorScheme.primary),
+                      _BurstSendButton(
                         onPressed: () async {
                           final text = replyController.text.trim();
                           if (text.isEmpty) return;

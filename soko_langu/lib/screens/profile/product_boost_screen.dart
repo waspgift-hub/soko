@@ -402,7 +402,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
                   const SizedBox(height: 4),
                   _summaryRow(context.tr('duration'), '${_selectedTier!.durationDays} ${context.tr('days')}', Theme.of(context).colorScheme.onSurfaceVariant),
                   const SizedBox(height: 4),
-                  _summaryRow('Ada ya Gateway (ClickPesa)', 'TZS ${_nf.format(gwFee)}', Theme.of(context).colorScheme.onSurfaceVariant),
+                  _summaryRow(context.tr('gateway_fee'), 'TZS ${_nf.format(gwFee)}', Theme.of(context).colorScheme.onSurfaceVariant),
                   const SizedBox(height: 4),
                   _summaryRow(context.tr('total'), 'TZS ${_nf.format(totalWithFee)}', Theme.of(context).colorScheme.primary),
                   const SizedBox(height: 8),
@@ -412,7 +412,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          'Ada ya TZS ${_nf.format(gwFee)} ni kwa ajili ya gharama za gateway (ClickPesa). Soko Vibe inapokea TZS ${_nf.format(tierPrice)} kamili.',
+                          context.tr('gateway_fee_note').replaceFirst('{0}', _nf.format(gwFee)).replaceFirst('{1}', _nf.format(tierPrice)),
                           style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
                         ),
                       ),

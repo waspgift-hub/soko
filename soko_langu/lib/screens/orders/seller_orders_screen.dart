@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,12 +11,11 @@ import 'package:http/http.dart' as http;
 import '../../extensions/context_tr.dart';
 import '../../services/api_config.dart';
 import '../../widgets/google_loading.dart';
-import '../../widgets/soko_vibe_loading.dart';
-import '../../widgets/glass_container.dart';
-import '../../widgets/soko_vibe_states.dart';
 import '../../widgets/order_status_config.dart';
 import '../../utils/network_error.dart';
 import '../../app/routes.dart';
+import '../../theme/app_colors.dart';
+import '../../widgets/ds/ds.dart';
 
 class SellerOrdersScreen extends StatefulWidget {
   const SellerOrdersScreen({super.key});
@@ -28,11 +28,43 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
   String _filter = 'all';
   String? _quotingOrderId;
   String? _dispatchingOrderId;
+  Timer? _autoRefreshTimer;
+  DateTime? _lastAutoRefresh;
+
+  static const _filters = ['all', 'pending', 'awaiting_shipping_quote', 'awaiting_payment', 'escrow_hold', 'dispatched', 'delivered', 'completed', 'refunded'];
+
+  static const _filterLabels = {
+    'all': 'all',
+    'pending': 'pending',
+    'awaiting_shipping_quote': 'awaiting_shipping_quote_label',
+    'awaiting_payment': 'awaiting_payment_label',
+    'escrow_hold': 'escrow_hold_label',
+    'dispatched': 'dispatched_label',
+    'delivered': 'delivered',
+    'completed': 'completed',
+    'refunded': 'refunded',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    // Poll the live stream every 5s so status changes appear without a manual
+    // pull-to-refresh; the StreamBuilder rebuild re-emits the latest snapshots.
+    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted) return;
+      setState(() => _lastAutoRefresh = DateTime.now());
+    });
+  }
+
+  @override
+  void dispose() {
+    _autoRefreshTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) {
@@ -50,9 +82,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
       ),
       body: Column(
         children: [
-          _buildFilterBar(cs, isDark),
-          // Pending orders from the orders collection needing quotes
-          _buildPendingOrdersSection(cs, isDark, user),
+          _buildPendingOrdersSection(cs, user),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -80,155 +110,38 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                   return status == _filter;
                 }).toList();
 
-                if (docs.isEmpty) {
-                  return SokoVibeEmptyState(
-                    icon: Icons.inbox_outlined,
-                    title: context.tr('no_received_orders'),
-                  );
-                }
-
-                return ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-                  itemCount: docs.length,
-                  itemBuilder: (_, i) {
-                    final d = docs[i].data() as Map<String, dynamic>;
-                    final txId = docs[i].id;
-                    final status = d['status'] as String? ?? '';
-                    final productName = d['productName'] as String? ?? context.tr('product');
-                    final productImage = d['productImage'] as String? ?? '';
-                    final buyerName = d['buyerName'] as String? ?? '';
-                    final buyerId = d['buyerId'] as String? ?? '';
-                    final productPrice = (d['productPrice'] as num?)?.toDouble() ?? 0;
-                    final shippingCost = (d['shippingCost'] as num?)?.toDouble();
-                    final totalAmount = (d['totalAmount'] as num?)?.toDouble() ?? 0;
-                    final platformFee = (d['platformFee'] as num?)?.toDouble() ?? 0;
-                    final processingFee = (d['processingFee'] as num?)?.toDouble() ?? 0;
-                    final createdAt = d['createdAt'] as Timestamp?;
-                    final dateStr = createdAt != null
-                        ? DateFormat('dd/MM/yyyy HH:mm').format(createdAt.toDate())
-                        : '—';
-
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: GlassContainer(
-                        blur: 24,
-                        opacity: isDark ? 0.1 : 0.06,
-                        borderRadius: 20,
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: Container(
-                                    width: 48, height: 48,
-                                    color: cs.surfaceContainerHighest,
-                                    child: productImage.isNotEmpty
-                                        ? CachedNetworkImage(imageUrl: productImage, fit: BoxFit.cover, width: 48, height: 48)
-                                        : Icon(Icons.image, size: 20, color: cs.onSurfaceVariant),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(productName,
-                                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: cs.onSurface),
-                                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                                      const SizedBox(height: 2),
-                                      Text(dateStr,
-                                          style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-                                    ],
-                                  ),
-                                ),
-                                OrderStatusBadge(status: status),
-                              ],
+                return RefreshIndicator(
+                  onRefresh: () async => setState(() {}),
+                  child: CustomScrollView(
+                    slivers: [
+                      SliverToBoxAdapter(child: _buildStatsHeader(cs, snap.data!.docs)),
+                      SliverToBoxAdapter(child: _buildFilterBar(cs, snap.data!.docs)),
+                      if (docs.isEmpty)
+                        SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: Center(
+                            child: DsEmptyState(
+                              icon: Icons.inbox_outlined,
+                              title: context.tr('no_received_orders'),
                             ),
-                            const SizedBox(height: 10),
-                            Container(height: 1, color: cs.primary.withValues(alpha: 0.08)),
-                            const SizedBox(height: 10),
-                            if (buyerName.isNotEmpty)
-                              _infoRow(cs, Icons.person, context.tr('buyer_label'), buyerName),
-                            _infoRow(cs, Icons.receipt, context.tr('order_id'), txId),
-                            _infoRow(cs, Icons.monetization_on, context.tr('product_price'),
-                                'TZS ${NumberFormat('#,###').format(productPrice)}'),
-                            if (shippingCost != null && shippingCost > 0)
-                              _infoRow(cs, Icons.local_shipping, context.tr('shipping_cost'),
-                                  'TZS ${NumberFormat('#,###').format(shippingCost)}'),
-                            if (platformFee > 0)
-                              _infoRow(cs, Icons.percent, context.tr('soko_vibe_commission'),
-                                  'TZS ${NumberFormat('#,###').format(platformFee)}'),
-                            if (processingFee > 0)
-                              _infoRow(cs, Icons.receipt_long, context.tr('processing_fee'),
-                                  'TZS ${NumberFormat('#,###').format(processingFee)}'),
-                            if (totalAmount > 0)
-                              _infoRow(cs, Icons.payments, context.tr('total_payment'),
-                                  'TZS ${NumberFormat('#,###').format(totalAmount)}',
-                                  bold: true),
-                            if (status == 'escrow_hold') ...[
-                              SizedBox(
-                                width: double.infinity,
-                                height: 40,
-                                child: FilledButton.icon(
-                                  onPressed: _dispatchingOrderId == txId
-                                      ? null
-                                      : () => _showDispatchDialog(txId, d),
-                                  icon: _dispatchingOrderId == txId
-                                      ? SokoVibeThreeDotLoader(size: 16, dotSize: 4, color: cs.surface)
-                                      : const Icon(Icons.local_shipping_outlined, size: 16),
-                                  label: Text(context.tr('mark_shipped')),
-                                  style: FilledButton.styleFrom(
-                                    backgroundColor: cs.primary,
-                                    foregroundColor: cs.surface,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                            ],
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                if (buyerId.isNotEmpty)
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      onPressed: () => _viewBuyerProfile(buyerId),
-                                      icon: const Icon(Icons.person, size: 16),
-                                      label: Text(context.tr('view_profile'),
-                                          style: const TextStyle(fontSize: 13)),
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: cs.primary,
-                                        side: BorderSide(color: cs.primary.withValues(alpha: 0.3)),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                        padding: const EdgeInsets.symmetric(vertical: 8),
-                                      ),
-                                    ),
-                                  ),
-                                if (buyerId.isNotEmpty) const SizedBox(width: 8),
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    onPressed: () => _deleteOrder(txId),
-                                    icon: const Icon(Icons.delete_outline, size: 16),
-                                    label: Text(context.tr('delete_order'),
-                                        style: const TextStyle(fontSize: 13)),
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: cs.error,
-                                      side: BorderSide(color: cs.error.withValues(alpha: 0.3)),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                      padding: const EdgeInsets.symmetric(vertical: 8),
-                                    ),
-                                  ),
-                                ),
-                              ],
+                          ),
+                        )
+                      else
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+                          sliver: SliverList(
+                            delegate: SliverChildBuilderDelegate(
+                              (_, i) {
+                                final d = docs[i].data() as Map<String, dynamic>;
+                                final txId = docs[i].id;
+                                return _buildOrderCard(context, cs, d, txId);
+                              },
+                              childCount: docs.length,
                             ),
-                          ],
+                          ),
                         ),
-                      ),
-                    );
-                  },
+                    ],
+                  ),
                 );
               },
             ),
@@ -238,53 +151,274 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
     );
   }
 
-  Widget _buildFilterBar(ColorScheme cs, bool isDark) {
-    final filters = ['all', 'pending', 'awaiting_shipping_quote', 'awaiting_payment', 'escrow_hold', 'dispatched', 'delivered', 'completed', 'refunded'];
-    final labels = {
-      'all': context.tr('all'),
-      'pending': context.tr('pending'),
-      'awaiting_shipping_quote': context.tr('awaiting_shipping_quote_label'),
-      'awaiting_payment': context.tr('awaiting_payment_label'),
-      'escrow_hold': 'Escrow Hold',
-      'paid_escrow_held': 'Escrow Hold',
-      'dispatched': context.tr('dispatched_label'),
-      'delivered': context.tr('delivered'),
-      'completed': context.tr('completed'),
-      'refunded': context.tr('refunded'),
-    };
+  Widget _buildStatsHeader(ColorScheme cs, List<QueryDocumentSnapshot> allDocs) {
+    final visible = allDocs.where((d) => (d.data() as Map)['deletedForSeller'] != true).toList();
+    final awaitingQuote = visible.where((d) => (d.data() as Map)['status'] == 'awaiting_shipping_quote').length;
+    final needsAction = visible.where((d) {
+      final s = (d.data() as Map)['status'] as String? ?? '';
+      return s == 'awaiting_shipping_quote' || s == 'awaiting_payment' || s == 'escrow_hold' || s == 'paid_escrow_hold';
+    }).length;
 
-    return Container(
-      height: 48,
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: filters.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (_, i) {
-          final key = filters[i];
-          final selected = _filter == key;
-          return GestureDetector(
-            onTap: () => setState(() => _filter = key),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              decoration: BoxDecoration(
-                color: selected ? cs.primary : Colors.transparent,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: selected ? cs.primary : cs.primary.withValues(alpha: 0.3)),
-              ),
-              child: Center(
-                child: Text(
-                  labels[key] ?? key,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                    color: selected ? cs.surface : cs.onSurface,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              cs.primary.withValues(alpha: 0.16),
+              cs.tertiary.withValues(alpha: 0.06),
+            ],
+          ),
+          border: Border.all(color: cs.primary.withValues(alpha: 0.14)),
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: cs.successGreen,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(color: cs.successGreen.withValues(alpha: 0.5), blurRadius: 6),
+                    ],
                   ),
                 ),
-              ),
+                const SizedBox(width: 6),
+                Text(
+                  context.tr('live_updates'),
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: cs.successGreen),
+                ),
+                const SizedBox(width: 4),
+                if (_lastAutoRefresh != null)
+                  Text(
+                    '· ${context.tr('last_updated')} ${_formatRelative(DateTime.now().difference(_lastAutoRefresh!))}',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w500,
+                      color: cs.onSurfaceVariant.withValues(alpha: 0.8),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: _statCell(cs, Icons.rate_review_outlined, '$awaitingQuote', context.tr('awaiting_quotes'), cs.tertiary),
+                ),
+                Container(width: 1, height: 40, color: cs.primary.withValues(alpha: 0.14)),
+                Expanded(
+                  child: _statCell(cs, Icons.pending_actions_outlined, '$needsAction', context.tr('needs_action'), cs.trendingOrange),
+                ),
+                Container(width: 1, height: 40, color: cs.primary.withValues(alpha: 0.14)),
+                Expanded(
+                  child: _statCell(cs, Icons.receipt_long_outlined, '${visible.length}', context.tr('all_orders'), cs.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _statCell(ColorScheme cs, IconData icon, String value, String label, Color color) {
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 15, color: color),
+            const SizedBox(width: 5),
+            Text(value, style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: color)),
+          ],
+        ),
+        const SizedBox(height: 3),
+        Text(
+          label,
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.onSurfaceVariant),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+
+  String _formatRelative(Duration d) {
+    if (d.inSeconds < 10) return context.tr('just_now');
+    if (d.inMinutes < 1) return '${d.inSeconds}s';
+    return '${d.inMinutes}m';
+  }
+
+  Widget _buildFilterBar(ColorScheme cs, List<QueryDocumentSnapshot> allDocs) {
+    final visible = allDocs.where((d) => (d.data() as Map)['deletedForSeller'] != true).toList();
+    return SizedBox(
+      height: 44,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _filters.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          final key = _filters[i];
+          final selected = _filter == key;
+          final count = key == 'all' ? visible.length : visible.where((d) => (d.data() as Map)['status'] == key).length;
+          return Center(
+            child: DsChip(
+              label: '${context.tr(_filterLabels[key]!)} ($count)',
+              selected: selected,
+              onTap: () => setState(() => _filter = key),
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildOrderCard(BuildContext context, ColorScheme cs, Map<String, dynamic> d, String txId) {
+    final status = d['status'] as String? ?? '';
+    final productName = d['productName'] as String? ?? context.tr('product');
+    final productImage = d['productImage'] as String? ?? '';
+    final buyerName = d['buyerName'] as String? ?? '';
+    final buyerId = d['buyerId'] as String? ?? '';
+    final productPrice = (d['productPrice'] as num?)?.toDouble() ?? 0;
+    final shippingCost = (d['shippingCost'] as num?)?.toDouble();
+    final totalAmount = (d['totalAmount'] as num?)?.toDouble() ?? 0;
+    final platformFee = (d['platformFee'] as num?)?.toDouble() ?? 0;
+    final processingFee = (d['processingFee'] as num?)?.toDouble() ?? 0;
+    final createdAt = d['createdAt'] as Timestamp?;
+    final dateStr = createdAt != null
+        ? DateFormat('dd/MM/yyyy HH:mm').format(createdAt.toDate())
+        : '—';
+    final statusInfo = orderStatusInfo(status, cs);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: DsCard(
+        radius: 20,
+        padding: EdgeInsets.zero,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                width: 4,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [statusInfo.color, statusInfo.color.withValues(alpha: 0.35)],
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              width: 48, height: 48,
+                              color: cs.surfaceContainerHighest,
+                              child: productImage.isNotEmpty
+                                  ? CachedNetworkImage(imageUrl: productImage, fit: BoxFit.cover, width: 48, height: 48)
+                                  : Icon(Icons.image, size: 20, color: cs.onSurfaceVariant),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(productName,
+                                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: cs.onSurface),
+                                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                                const SizedBox(height: 3),
+                                Text(dateStr,
+                                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                              ],
+                            ),
+                          ),
+                          OrderStatusBadge(status: status),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Container(height: 1, color: cs.primary.withValues(alpha: 0.08)),
+                      const SizedBox(height: 10),
+                      if (buyerName.isNotEmpty)
+                        _infoRow(cs, Icons.person_outline, context.tr('buyer_label'), buyerName),
+                      _infoRow(cs, Icons.receipt_outlined, context.tr('order_id'), txId),
+                      _infoRow(cs, Icons.monetization_on_outlined, context.tr('product_price'),
+                          'TZS ${NumberFormat('#,###').format(productPrice)}'),
+                      if (shippingCost != null && shippingCost > 0)
+                        _infoRow(cs, Icons.local_shipping_outlined, context.tr('shipping_cost'),
+                            'TZS ${NumberFormat('#,###').format(shippingCost)}'),
+                      if (platformFee > 0)
+                        _infoRow(cs, Icons.percent_outlined, context.tr('soko_vibe_commission'),
+                            'TZS ${NumberFormat('#,###').format(platformFee)}'),
+                      if (processingFee > 0)
+                        _infoRow(cs, Icons.receipt_long_outlined, context.tr('processing_fee'),
+                            'TZS ${NumberFormat('#,###').format(processingFee)}'),
+                      if (totalAmount > 0)
+                        _infoRow(cs, Icons.payments_outlined, context.tr('total_payment'),
+                            'TZS ${NumberFormat('#,###').format(totalAmount)}',
+                            bold: true),
+                      if (status == 'escrow_hold' || status == 'paid_escrow_hold') ...[
+                        const SizedBox(height: 12),
+                        DsButton(
+                          label: context.tr('mark_shipped'),
+                          icon: Icons.local_shipping_outlined,
+                          height: 44,
+                          loading: _dispatchingOrderId == txId,
+                          onPressed: _dispatchingOrderId == txId
+                              ? null
+                              : () => _showDispatchDialog(txId, d),
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          if (buyerId.isNotEmpty) ...[
+                            Expanded(
+                              child: DsButton(
+                                label: context.tr('view_profile'),
+                                icon: Icons.person_outline,
+                                variant: DsButtonVariant.secondary,
+                                height: 40,
+                                onPressed: () => _viewBuyerProfile(buyerId),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          Expanded(
+                            child: DsButton(
+                              label: context.tr('delete_order'),
+                              icon: Icons.delete_outline,
+                              variant: DsButtonVariant.danger,
+                              height: 40,
+                              onPressed: () => _deleteOrder(txId),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -345,7 +479,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
     }
   }
 
-  Widget _buildPendingOrdersSection(ColorScheme cs, bool isDark, User user) {
+  Widget _buildPendingOrdersSection(ColorScheme cs, User user) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('orders')
@@ -370,18 +504,18 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
               child: Row(
                 children: [
-                  Icon(Icons.price_check, size: 16, color: cs.tertiary),
+                  Icon(Icons.rate_review_outlined, size: 16, color: cs.tertiary),
                   const SizedBox(width: 6),
-                  Text('Maagizo yanayohitaji nukuu',
+                  Text(context.tr('orders_needing_quote'),
                       style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: cs.tertiary)),
                 ],
               ),
             ),
             SizedBox(
-              height: 120,
+              height: 132,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -396,12 +530,10 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                   final district = d['district'] as String? ?? '';
 
                   return Container(
-                    width: 220,
+                    width: 240,
                     margin: const EdgeInsets.only(right: 12),
-                    child: GlassContainer(
-                      blur: 20,
-                      opacity: isDark ? 0.12 : 0.08,
-                      borderRadius: 16,
+                    child: DsCard(
+                      radius: 16,
                       padding: const EdgeInsets.all(12),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -434,20 +566,13 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                           const Spacer(),
                           SizedBox(
                             width: double.infinity,
-                            height: 32,
-                            child: ElevatedButton.icon(
+                            height: 34,
+                            child: DsButton(
+                              label: context.tr('place_quote'),
+                              icon: Icons.send_rounded,
+                              height: 34,
+                              loading: _quotingOrderId == orderId,
                               onPressed: _quotingOrderId == orderId ? null : () => _showQuoteDialog(orderId, d),
-                              icon: _quotingOrderId == orderId
-                                  ? SokoVibeThreeDotLoader(size: 14, dotSize: 3.5, color: cs.surface)
-                                  : const Icon(Icons.send_rounded, size: 14),
-                              label: Text('Weka Nukuu', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: cs.primary,
-                                foregroundColor: cs.surface,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                elevation: 0,
-                                padding: const EdgeInsets.symmetric(horizontal: 8),
-                              ),
                             ),
                           ),
                         ],
@@ -470,67 +595,58 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
     final plateCtrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
 
-    final confirmed = await showDialog<bool>(
+    final confirmed = await DsSheet.show<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Weka Gharama ya Usafirishaji'),
-        content: Form(
-          key: formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: shippingCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Gharama ya usafirishaji (TZS)',
-                    prefixText: 'TZS ',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: busCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Jina la basi/gari',
-                    hintText: 'Mf: Scandinavia, Kilimanjaro',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: plateCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Namba ya namba',
-                    hintText: 'Mf: T 123 ABC',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ],
+      content: Form(
+        key: formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              context.tr('enter_shipping_cost'),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-          ),
+            const SizedBox(height: 16),
+            DsTextField(
+              controller: shippingCtrl,
+              label: context.tr('shipping_cost'),
+              hint: 'TZS',
+              prefixIcon: Icons.monetization_on_outlined,
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 12),
+            DsTextField(
+              controller: busCtrl,
+              label: context.tr('bus_name'),
+              hint: 'Mf: Scandinavia, Kilimanjaro',
+              prefixIcon: Icons.directions_bus,
+            ),
+            const SizedBox(height: 12),
+            DsTextField(
+              controller: plateCtrl,
+              label: context.tr('plate_number'),
+              hint: 'Mf: T 123 ABC',
+              prefixIcon: Icons.directions_bus_filled_outlined,
+            ),
+            const SizedBox(height: 24),
+            DsButton(
+              label: context.tr('send_shipping_to_buyer'),
+              icon: Icons.send_rounded,
+              onPressed: () {
+                final costText = shippingCtrl.text.trim();
+                final cost = double.tryParse(costText);
+                if (cost == null || cost <= 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(context.tr('enter_valid_shipping_cost'))),
+                  );
+                  return;
+                }
+                Navigator.pop(context, true);
+              },
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(context.tr('cancel')),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final costText = shippingCtrl.text.trim();
-              final cost = double.tryParse(costText);
-              if (cost == null || cost <= 0) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(context.tr('enter_valid_shipping_cost'))),
-                );
-                return;
-              }
-              Navigator.pop(ctx, true);
-            },
-            child: Text(context.tr('send_shipping_to_buyer')),
-          ),
-        ],
       ),
     );
     if (confirmed != true) return;
@@ -569,7 +685,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
         // Shipping details + status are synced to orders/{id} AND the
         // transactions/{id} mirror doc by the server in one place, so a failed
         // client-side write can't leave the two docs divergent.
-        if (mounted) _showSuccess('Nukuu imetumwa kwa mnunuzi');
+        if (mounted) _showSuccess(context.tr('quote_sent_to_buyer'));
       }
     } catch (e) {
       if (mounted) _showError(translateError(e));
@@ -587,68 +703,56 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
       text: existingCost > 0 ? existingCost.toStringAsFixed(0) : '',
     );
 
-    final confirmed = await showDialog<bool>(
+    final confirmed = await DsSheet.show<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(context.tr('dispatch_title')),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: busCtrl,
-                decoration: InputDecoration(
-                  labelText: context.tr('bus_name'),
-                  hintText: 'Mf: Scandinavia, Kilimanjaro',
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: plateCtrl,
-                decoration: InputDecoration(
-                  labelText: context.tr('plate_number'),
-                  hintText: 'Mf: T 123 ABC',
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: trackCtrl,
-                decoration: InputDecoration(
-                  labelText: context.tr('tracking_number'),
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: noteCtrl,
-                decoration: InputDecoration(
-                  labelText: context.tr('dispatch_note'),
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-              if (existingCost <= 0) ...[
-                const SizedBox(height: 12),
-                TextField(
-                  controller: costCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: context.tr('shipping_cost'),
-                    prefixText: 'TZS ',
-                    border: const OutlineInputBorder(),
-                  ),
-                ),
-              ],
-            ],
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            context.tr('dispatch_title'),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(context.tr('cancel')),
+          const SizedBox(height: 16),
+          DsTextField(
+            controller: busCtrl,
+            label: context.tr('bus_name'),
+            hint: 'Mf: Scandinavia, Kilimanjaro',
+            prefixIcon: Icons.directions_bus,
           ),
-          ElevatedButton(
+          const SizedBox(height: 12),
+          DsTextField(
+            controller: plateCtrl,
+            label: context.tr('plate_number'),
+            hint: 'Mf: T 123 ABC',
+            prefixIcon: Icons.directions_bus_filled_outlined,
+          ),
+          const SizedBox(height: 12),
+          DsTextField(
+            controller: trackCtrl,
+            label: context.tr('tracking_number'),
+            prefixIcon: Icons.qr_code,
+          ),
+          const SizedBox(height: 12),
+          DsTextField(
+            controller: noteCtrl,
+            label: context.tr('dispatch_note'),
+            prefixIcon: Icons.notes,
+          ),
+          if (existingCost <= 0) ...[
+            const SizedBox(height: 12),
+            DsTextField(
+              controller: costCtrl,
+              label: context.tr('shipping_cost'),
+              hint: 'TZS',
+              prefixIcon: Icons.monetization_on_outlined,
+              keyboardType: TextInputType.number,
+            ),
+          ],
+          const SizedBox(height: 24),
+          DsButton(
+            label: context.tr('mark_shipped'),
+            icon: Icons.local_shipping_outlined,
             onPressed: () {
               if (busCtrl.text.trim().isEmpty || plateCtrl.text.trim().isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -656,9 +760,8 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                 );
                 return;
               }
-              Navigator.pop(ctx, true);
+              Navigator.pop(context, true);
             },
-            child: Text(context.tr('mark_shipped')),
           ),
         ],
       ),

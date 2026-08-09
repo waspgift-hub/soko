@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:ui' as ui; // ignore: unused_import
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,11 +6,11 @@ import 'package:http/http.dart' as http;
 import '../../services/api_config.dart';
 import '../../services/sms_notification_service.dart';
 import '../../extensions/context_tr.dart';
+import '../../theme/app_colors.dart';
 import '../../widgets/google_loading.dart';
-import '../../widgets/glass_container.dart';
 import '../../widgets/location_map_widget.dart';
 import '../../utils/network_error.dart';
-import 'package:flutter/foundation.dart';
+import '../../widgets/ds/ds.dart';
 
 class SellerDispatchScreen extends StatefulWidget {
   const SellerDispatchScreen({super.key});
@@ -62,6 +61,7 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
       final result = jsonDecode(resp.body);
 
       if (resp.statusCode == 200 && result['success'] == true) {
+        final busName = _courierNameCtrl.text.trim();
         for (final c in [_courierNameCtrl, _trackingNumberCtrl, _driverPhoneCtrl, _notesCtrl]) {
           c.clear();
         }
@@ -69,7 +69,7 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
           SmsNotificationService.notifyDispatched(
             buyerPhone: buyerPhone,
             orderId: txId,
-            busName: _courierNameCtrl.text.trim(),
+            busName: busName,
             plateNumber: '',
           );
         }
@@ -78,7 +78,6 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
         if (mounted) _showError(result['error'] ?? context.tr('dispatch_failed'));
       }
     } catch (e) {
-      if (kDebugMode) debugPrint('SellerDispatch error: $e');
       if (mounted) _showError(translateError(e));
     }
 
@@ -88,7 +87,6 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       return Scaffold(
@@ -129,174 +127,178 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
           });
 
           if (docs.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.check_circle_outline, size: 72, color: cs.primary.withValues(alpha: 0.4)),
-                  const SizedBox(height: 16),
-                  Text(context.tr('no_products_to_dispatch'),
-                      style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant)),
-                  const SizedBox(height: 8),
-                  Text(context.tr('paid_products_only_hint'),
-                      style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
-                ],
-              ),
+            return DsEmptyState(
+              icon: Icons.check_circle_outline,
+              title: context.tr('no_products_to_dispatch'),
+              body: context.tr('paid_products_only_hint'),
+              tint: cs.successGreen,
             );
           }
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: docs.length,
-            itemBuilder: (_, i) {
-              final d = docs[i].data() as Map<String, dynamic>;
-              final txId = docs[i].id;
-              final productName = d['productName'] ?? context.tr('product');
-              final totalAmount = d['totalAmount'] ?? d['productPrice'] ?? 0;
-              final shippingCost = (d['shippingCost'] as num?)?.toDouble() ?? 0;
-              final buyerPhone = d['buyerPhone'] ?? '';
-              final buyerName = d['buyerName'] ?? '';
-              final addr = d['deliveryAddress'] as Map<String, dynamic>?;
-
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: GlassContainer(
-                  blur: 24,
-                  opacity: isDark ? 0.1 : 0.06,
-                  borderRadius: 22,
-                  padding: const EdgeInsets.all(20),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Status badge
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: cs.primary.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.lock, size: 14, color: cs.primary),
-                                  const SizedBox(width: 6),
-                                  Text(context.tr('paid_label'), style: TextStyle(fontSize: 12, color: cs.primary, fontWeight: FontWeight.w600)),
-                                ],
-                              ),
-                            ),
-                            const Spacer(),
-                            Text(context.formatPrice((totalAmount as num).toDouble()),
-                                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: cs.primary)),
-                          ],
-                        ),
-                        const SizedBox(height: 14),
-                        Text(productName, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: cs.onSurface)),
-                        const SizedBox(height: 6),
-                        if (buyerName.isNotEmpty)
-                          _detailRow(cs, context.tr('buyer_label'), buyerName),
-                        if (buyerPhone.isNotEmpty)
-                          _detailRow(cs, context.tr('phone'), buyerPhone.toString()),
-                        if (addr != null)
-                          _detailRow(cs, context.tr('address'), '${addr['region'] ?? ''}, ${addr['district'] ?? ''}, ${addr['street'] ?? ''}'),
-                        if (addr != null && addr['latitude'] != null && addr['longitude'] != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: LocationMapWidget(
-                              targetLat: (addr['latitude'] as num).toDouble(),
-                              targetLng: (addr['longitude'] as num).toDouble(),
-                              targetLabel: buyerName,
-                              height: 130,
-                              showDistance: true,
-                              interactive: false,
-                            ),
-                          ),
-                        if (shippingCost > 0)
-                          _detailRow(cs, context.tr('shipping_cost'), context.formatPrice(shippingCost)),
-
-                        const SizedBox(height: 16),
-                        Container(height: 1, color: cs.primary.withValues(alpha: 0.1)),
-                        const SizedBox(height: 16),
-
-                        Text(context.tr('shipping_details'),
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: cs.onSurface)),
-                        const SizedBox(height: 12),
-
-                        _buildField(cs, _courierNameCtrl, context.tr('courier_company_name'), Icons.business, required: true),
-                        const SizedBox(height: 10),
-                        _buildField(cs, _trackingNumberCtrl, context.tr('tracking_number'), Icons.qr_code, required: true),
-                        const SizedBox(height: 10),
-                        _buildField(cs, _driverPhoneCtrl, context.tr('driver_phone'), Icons.phone, keyboardType: TextInputType.phone),
-                        const SizedBox(height: 10),
-                        _buildField(cs, _notesCtrl, context.tr('additional_notes'), Icons.notes),
-
-                        const SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 50,
-                          child: ElevatedButton.icon(
-                            onPressed: _dispatchingTxId == txId ? null : () => _dispatchOrder(txId, buyerPhone: buyerPhone),
-                            icon: _dispatchingTxId == txId
-                                ? const SizedBox(width: 20, height: 20, child: GoogleLoading(size: 16, strokeWidth: 2))
-                                : const Icon(Icons.local_shipping, size: 20),
-                            label: Text(_dispatchingTxId == txId ? context.tr('dispatching') : context.tr('confirm_dispatch'),
-                                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: cs.primary,
-                              foregroundColor: cs.surface,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                              elevation: 0,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
+          return RefreshIndicator(
+            onRefresh: () async => setState(() {}),
+            child: ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+              itemCount: docs.length,
+              itemBuilder: (_, i) {
+                final d = docs[i].data() as Map<String, dynamic>;
+                final txId = docs[i].id;
+                return _buildDispatchCard(context, cs, d, txId);
+              },
+            ),
           );
         },
       ),
     );
   }
 
-  Widget _detailRow(ColorScheme cs, String label, String value) {
+  Widget _buildDispatchCard(BuildContext context, ColorScheme cs, Map<String, dynamic> d, String txId) {
+    final productName = d['productName'] ?? context.tr('product');
+    final totalAmount = (d['totalAmount'] ?? d['productPrice'] ?? 0) as num;
+    final shippingCost = (d['shippingCost'] as num?)?.toDouble() ?? 0;
+    final buyerPhone = d['buyerPhone'] ?? '';
+    final buyerName = d['buyerName'] ?? '';
+    final addr = d['deliveryAddress'] as Map<String, dynamic>?;
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        children: [
-          Text('$label: ', style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
-          Expanded(child: Text(value, style: TextStyle(fontSize: 13, color: cs.onSurface, fontWeight: FontWeight.w500))),
-        ],
+      padding: const EdgeInsets.only(bottom: 12),
+      child: DsCard(
+        radius: 20,
+        padding: EdgeInsets.zero,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                width: 4,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [cs.primary, cs.primary.withValues(alpha: 0.35)],
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          DsBadge(
+                            label: context.tr('paid_label'),
+                            color: cs.successGreen,
+                            icon: Icons.lock_outline,
+                          ),
+                          const Spacer(),
+                          Text(context.formatPrice(totalAmount.toDouble()),
+                              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: cs.primary)),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Text(productName,
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: cs.onSurface)),
+                      const SizedBox(height: 8),
+                      if (buyerName.isNotEmpty)
+                        _infoRow(cs, Icons.person_outline, context.tr('buyer_label'), buyerName),
+                      if (buyerPhone.isNotEmpty)
+                        _infoRow(cs, Icons.phone_outlined, context.tr('phone'), buyerPhone.toString()),
+                      if (addr != null)
+                        _infoRow(cs, Icons.place_outlined, context.tr('address'),
+                            '${addr['region'] ?? ''}, ${addr['district'] ?? ''}, ${addr['street'] ?? ''}'),
+                      if (addr != null && addr['latitude'] != null && addr['longitude'] != null) ...[
+                        const SizedBox(height: 8),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: LocationMapWidget(
+                            targetLat: (addr['latitude'] as num).toDouble(),
+                            targetLng: (addr['longitude'] as num).toDouble(),
+                            targetLabel: buyerName,
+                            height: 120,
+                            showDistance: true,
+                            interactive: false,
+                          ),
+                        ),
+                      ],
+                      if (shippingCost > 0)
+                        _infoRow(cs, Icons.local_shipping_outlined, context.tr('shipping_cost'),
+                            context.formatPrice(shippingCost)),
+                      const SizedBox(height: 12),
+                      Container(height: 1, color: cs.primary.withValues(alpha: 0.08)),
+                      const SizedBox(height: 12),
+                      Form(
+                        key: _formKey,
+                        child: Column(
+                          children: [
+                            DsTextField(
+                              controller: _courierNameCtrl,
+                              label: context.tr('courier_company_name'),
+                              prefixIcon: Icons.business_outlined,
+                              validator: (v) => (v == null || v.trim().isEmpty) ? context.tr('required') : null,
+                            ),
+                            const SizedBox(height: 12),
+                            DsTextField(
+                              controller: _trackingNumberCtrl,
+                              label: context.tr('tracking_number'),
+                              prefixIcon: Icons.qr_code_2,
+                              validator: (v) => (v == null || v.trim().isEmpty) ? context.tr('required') : null,
+                            ),
+                            const SizedBox(height: 12),
+                            DsTextField(
+                              controller: _driverPhoneCtrl,
+                              label: context.tr('driver_phone'),
+                              prefixIcon: Icons.phone_outlined,
+                              keyboardType: TextInputType.phone,
+                            ),
+                            const SizedBox(height: 12),
+                            DsTextField(
+                              controller: _notesCtrl,
+                              label: context.tr('additional_notes'),
+                              prefixIcon: Icons.notes,
+                              maxLines: 2,
+                            ),
+                            const SizedBox(height: 14),
+                            DsButton(
+                              label: _dispatchingTxId == txId
+                                  ? context.tr('dispatching')
+                                  : context.tr('confirm_dispatch'),
+                              icon: Icons.local_shipping_outlined,
+                              loading: _dispatchingTxId == txId,
+                              onPressed: _dispatchingTxId == txId
+                                  ? null
+                                  : () => _dispatchOrder(txId, buyerPhone: buyerPhone),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildField(ColorScheme cs, TextEditingController ctrl, String label, IconData icon,
-      {bool required = false, TextInputType? keyboardType}) {
-    return TextFormField(
-      controller: ctrl,
-      keyboardType: keyboardType,
-      textCapitalization: TextCapitalization.words,
-      style: TextStyle(color: cs.onSurface),
-      decoration: InputDecoration(
-        labelText: required ? '$label *' : label,
-        labelStyle: TextStyle(color: cs.onSurfaceVariant),
-        prefixIcon: Icon(icon, size: 20, color: cs.primary),
-        filled: true,
-        fillColor: cs.surface.withValues(alpha: 0.3),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: cs.primary, width: 1.5),
-        ),
+  Widget _infoRow(ColorScheme cs, IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: cs.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Text('$label: ', style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
+          Expanded(
+            child: Text(value,
+                style: TextStyle(fontSize: 13, color: cs.onSurface, fontWeight: FontWeight.w500)),
+          ),
+        ],
       ),
-      validator: required ? (v) => (v == null || v.trim().isEmpty) ? context.tr('required') : null : null,
     );
   }
 

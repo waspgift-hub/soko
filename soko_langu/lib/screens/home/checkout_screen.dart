@@ -12,10 +12,8 @@ import '../../services/api_config.dart';
 import '../../widgets/input_field.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
-import '../../widgets/glass_container.dart';
 import '../../widgets/location_map_widget.dart';
 import '../../widgets/soko_vibe_loading.dart';
-import '../../widgets/ds/ds.dart';
 import '../../utils/network_error.dart';
 
 class CheckoutScreen extends StatefulWidget {
@@ -173,206 +171,383 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final p = widget.product;
 
     return Scaffold(
+      backgroundColor: cs.surface,
       appBar: AppBar(
-        title: Text(context.tr('checkout')),
+        title: Text(
+          context.tr('checkout'),
+          style: TextStyle(fontWeight: FontWeight.w700, color: cs.onSurface),
+        ),
         centerTitle: true,
         backgroundColor: Colors.transparent,
+        elevation: 0,
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      body: Column(
         children: [
-          GlassContainer(
-            blur: 20,
-            opacity: isDark ? 0.12 : 0.08,
-            borderRadius: 20,
-            padding: const EdgeInsets.all(16),
-            child: Row(
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    width: 64, height: 64,
-                    color: cs.surfaceContainerHighest,
-                    child: p.images.isNotEmpty
-                        ? CachedNetworkImage(imageUrl: p.images.first, fit: BoxFit.cover, width: 64, height: 64)
-                        : Icon(Icons.image, size: 28, color: cs.onSurfaceVariant),
-                  ),
+                _buildHeroProduct(context, cs, p),
+                const SizedBox(height: 16),
+                _buildTrustStrip(context, cs),
+                const SizedBox(height: 20),
+
+                _buildSectionTitle(context, cs, Icons.local_shipping_outlined, context.tr('delivery_type')),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _DeliveryTypeChip(
+                        label: context.tr('delivery_within_region'),
+                        icon: Icons.location_city,
+                        selected: _deliveryType == 'local',
+                        color: cs.primary,
+                        onTap: () => setState(() => _deliveryType = 'local'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _DeliveryTypeChip(
+                        label: context.tr('delivery_outside_region'),
+                        icon: Icons.local_shipping,
+                        selected: _deliveryType == 'regional',
+                        color: cs.tertiary,
+                        onTap: () => setState(() => _deliveryType = 'regional'),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(p.name, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: cs.onSurface), maxLines: 1, overflow: TextOverflow.ellipsis),
-                      const SizedBox(height: 4),
-                      Text(context.formatPrice(p.price),
-                          style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600, fontSize: 15)),
-                    ],
+                const SizedBox(height: 20),
+
+                _buildSectionTitle(context, cs, Icons.home_outlined, context.tr('shipping_address')),
+                const SizedBox(height: 12),
+                _buildLocationButton(context, cs),
+                const SizedBox(height: 12),
+                _buildAddressForm(context, cs),
+                if (_latitude != null && _longitude != null) ...[
+                  const SizedBox(height: 16),
+                  _buildSectionTitle(context, cs, Icons.map_outlined, context.tr('view_map')),
+                  const SizedBox(height: 8),
+                  LocationMapWidget(
+                    targetLat: _latitude,
+                    targetLng: _longitude,
+                    height: 200,
+                    showDistance: true,
+                    interactive: true,
+                    draggablePin: true,
+                    onLocationChanged: _onPinChanged,
                   ),
-                ),
+                ],
               ],
             ),
           ),
-          const SizedBox(height: 20),
+          _buildBottomBar(context, cs),
+        ],
+      ),
+    );
+  }
 
-          GlassContainer(
-            blur: 16,
-            opacity: isDark ? 0.08 : 0.05,
-            borderRadius: 16,
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Icon(Icons.info_outline, color: cs.primary, size: 20),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Unaweka agizo bila malipo. Muuzaji atakupa gharama ya usafirishaji, kisha utalipa.',
-                    style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          Text(context.tr('delivery_type'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: cs.onSurface)),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _DeliveryTypeChip(
-                  label: context.tr('delivery_within_region'),
-                  icon: Icons.location_city,
-                  selected: _deliveryType == 'local',
-                  color: cs.primary,
-                  onTap: () => setState(() => _deliveryType = 'local'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _DeliveryTypeChip(
-                  label: context.tr('delivery_outside_region'),
-                  icon: Icons.local_shipping,
-                  selected: _deliveryType == 'regional',
-                  color: cs.tertiary,
-                  onTap: () => setState(() => _deliveryType = 'regional'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-
-          Text(context.tr('shipping_address'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: cs.onSurface)),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: _detecting ? null : _detectLocation,
-            icon: _detecting
-                ? SokoVibeThreeDotLoader(size: 18, dotSize: 4.5, color: cs.primary)
-                : const Icon(Icons.my_location, size: 18),
-            label: Text(context.tr('get_location')),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              side: BorderSide(color: cs.primary.withValues(alpha: 0.3)),
-            ),
-          ),
-          const SizedBox(height: 12),
-          GlassContainer(
-            blur: 16,
-            opacity: isDark ? 0.08 : 0.05,
-            borderRadius: 16,
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                DropdownButtonFormField<String>(
-                  initialValue: _selectedRegion,
-                  decoration: InputDecoration(
-                    hintText: context.tr('select_region'),
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    filled: true,
-                    fillColor: cs.surface.withValues(alpha: 0.5),
-                    isDense: true,
-                  ),
-                  items: _regions
-                      .map((r) => DropdownMenuItem(value: r, child: Text(r)))
-                      .toList(),
-                  onChanged: (v) {
-                    setState(() {
-                      _selectedRegion = v;
-                      _selectedDistrict = null;
-                      if (v != null) _regionCtrl.text = v;
-                    });
-                  },
-                ),
-                const SizedBox(height: 10),
-                DropdownButtonFormField<String>(
-                  initialValue: _selectedDistrict,
-                  decoration: InputDecoration(
-                    hintText: context.tr('district_hint'),
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    filled: true,
-                    fillColor: cs.surface.withValues(alpha: 0.5),
-                    isDense: true,
-                  ),
-                  items: (_selectedRegion == null
-                          ? const <String>[]
-                          : (kRegionDistricts[_selectedRegion] ?? const <String>[]))
-                      .map((d) => DropdownMenuItem(value: d, child: Text(d)))
-                      .toList(),
-                  onChanged: (v) => setState(() => _selectedDistrict = v),
-                ),
-                const SizedBox(height: 10),
-                AppInputField(
-                  controller: _streetCtrl,
-                  hint: context.tr('street_hint'),
-                  textInputAction: TextInputAction.next,
-                ),
-                const SizedBox(height: 10),
-                AppInputField(
-                  controller: _landmarksCtrl,
-                  hint: context.tr('landmarks_hint'),
-                  maxLines: 2,
-                ),
-              ],
-            ),
-          ),
-          if (_latitude != null && _longitude != null) ...[
-            const SizedBox(height: 16),
-            Text(context.tr('view_map'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: cs.onSurface)),
-            const SizedBox(height: 8),
-            LocationMapWidget(
-              targetLat: _latitude,
-              targetLng: _longitude,
-              height: 200,
-              showDistance: true,
-              interactive: true,
-              draggablePin: true,
-              onLocationChanged: _onPinChanged,
-            ),
-          ],
-          const SizedBox(height: 24),
-
-          DsButton(
-            label: _processing ? context.tr('sending') : context.tr('flow_place_order'),
-            icon: Icons.send_rounded,
-            loading: _processing,
-            onPressed: _submitOrder,
-          ),
-          const SizedBox(height: 12),
-          TextButton.icon(
-            onPressed: () => context.pop(),
-            icon: const Icon(Icons.arrow_back, size: 18),
-            label: Text(context.tr('cancel')),
+  Widget _buildHeroProduct(BuildContext context, ColorScheme cs, Product p) {
+    return Container(
+      height: 190,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [cs.primary.withValues(alpha: 0.18), cs.tertiary.withValues(alpha: 0.08)],
+        ),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.12)),
+        boxShadow: [
+          BoxShadow(
+            color: cs.primary.withValues(alpha: 0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
         ],
+      ),
+      child: Stack(
+        children: [
+          if (p.images.isNotEmpty)
+            Positioned(
+              right: -20,
+              top: -10,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: SizedBox(
+                  width: 160,
+                  height: 190,
+                  child: CachedNetworkImage(
+                    imageUrl: p.images.first,
+                    fit: BoxFit.cover,
+                    errorWidget: (_, _, _) => Container(
+                      color: cs.primary.withValues(alpha: 0.06),
+                      child: Icon(Icons.image_rounded, size: 40, color: cs.primary.withValues(alpha: 0.2)),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [
+                    cs.surface.withValues(alpha: 0.85),
+                    cs.surface.withValues(alpha: 0.2),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 16,
+            top: 16,
+            bottom: 16,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 220),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: cs.primary,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.shopping_bag_outlined, size: 13, color: cs.onPrimary),
+                        const SizedBox(width: 5),
+                        Text(
+                          context.tr('checkout'),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: cs.onPrimary,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    p.name,
+                    style: TextStyle(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                      color: cs.onSurface,
+                      height: 1.2,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    context.formatPrice(p.price),
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      color: cs.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTrustStrip(BuildContext context, ColorScheme cs) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: cs.secondaryContainer.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.secondary.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.shield_outlined, color: cs.secondary, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Unaweka agizo bila malipo. Muuzaji atakupa gharama ya usafirishaji, kisha utalipa.',
+              style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant, height: 1.4),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(BuildContext context, ColorScheme cs, IconData icon, String title) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: cs.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 17, color: cs.primary),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          title,
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: cs.onSurface),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLocationButton(BuildContext context, ColorScheme cs) {
+    return SizedBox(
+      width: double.infinity,
+      height: 48,
+      child: OutlinedButton.icon(
+        onPressed: _detecting ? null : _detectLocation,
+        icon: _detecting
+            ? SokoVibeThreeDotLoader(size: 18, dotSize: 4.5, color: cs.primary)
+            : const Icon(Icons.my_location, size: 18),
+        label: Text(context.tr('get_location')),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: cs.primary,
+          backgroundColor: cs.primary.withValues(alpha: 0.06),
+          side: BorderSide(color: cs.primary.withValues(alpha: 0.3)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAddressForm(BuildContext context, ColorScheme cs) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.12)),
+      ),
+      child: Column(
+        children: [
+          DropdownButtonFormField<String>(
+            initialValue: _selectedRegion,
+            decoration: InputDecoration(
+              hintText: context.tr('select_region'),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              filled: true,
+              fillColor: cs.surface.withValues(alpha: 0.5),
+              isDense: true,
+            ),
+            items: _regions
+                .map((r) => DropdownMenuItem(value: r, child: Text(r)))
+                .toList(),
+            onChanged: (v) {
+              setState(() {
+                _selectedRegion = v;
+                _selectedDistrict = null;
+                if (v != null) _regionCtrl.text = v;
+              });
+            },
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            initialValue: _selectedDistrict,
+            decoration: InputDecoration(
+              hintText: context.tr('district_hint'),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              filled: true,
+              fillColor: cs.surface.withValues(alpha: 0.5),
+              isDense: true,
+            ),
+            items: (_selectedRegion == null
+                    ? const <String>[]
+                    : (kRegionDistricts[_selectedRegion] ?? const <String>[]))
+                .map((d) => DropdownMenuItem(value: d, child: Text(d)))
+                .toList(),
+            onChanged: (v) => setState(() => _selectedDistrict = v),
+          ),
+          const SizedBox(height: 10),
+          AppInputField(
+            controller: _streetCtrl,
+            hint: context.tr('street_hint'),
+            textInputAction: TextInputAction.next,
+          ),
+          const SizedBox(height: 10),
+          AppInputField(
+            controller: _landmarksCtrl,
+            hint: context.tr('landmarks_hint'),
+            maxLines: 2,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomBar(BuildContext context, ColorScheme cs) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        border: Border(top: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.15))),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Text(
+                  context.tr('flow_place_order'),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: cs.onSurface),
+                ),
+                const Spacer(),
+                Text(
+                  context.formatPrice(widget.product.price),
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: cs.primary),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton.icon(
+                onPressed: _processing ? null : _submitOrder,
+                icon: _processing
+                    ? SokoVibeThreeDotLoader(size: 20, dotSize: 5, color: cs.onPrimary)
+                    : const Icon(Icons.send_rounded, size: 20),
+                label: Text(
+                  _processing ? context.tr('sending') : context.tr('flow_place_order'),
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: cs.primary,
+                  foregroundColor: cs.onPrimary,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

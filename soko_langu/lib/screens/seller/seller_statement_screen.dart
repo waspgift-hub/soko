@@ -10,6 +10,7 @@ import 'package:open_file/open_file.dart';
 import '../../services/api_config.dart';
 import '../../widgets/google_loading.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/ds/ds.dart';
 
 class SellerStatementScreen extends StatefulWidget {
   final String sellerId;
@@ -107,35 +108,38 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
     final dateFmt = DateFormat('dd/MM/yyyy HH:mm', 'en');
     final curFmt = NumberFormat('#,###', 'en');
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
-      child: Column(
-        children: [
-          // Logo + Title
-          _buildHeader(cs),
-          const SizedBox(height: 20),
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
+        child: Column(
+          children: [
+            // Logo + Title
+            _buildHeader(cs),
+            const SizedBox(height: 20),
 
-          // Seller Info
-          _buildInfoCard(cs, seller, generatedAt, dateFmt),
-          const SizedBox(height: 16),
+            // Seller Info
+            _buildInfoCard(cs, seller, generatedAt, dateFmt),
+            const SizedBox(height: 16),
 
-          // Summary
-          _buildSummaryRow(cs, summary, curFmt),
-          const SizedBox(height: 16),
+            // Summary
+            _buildSummaryRow(cs, summary, curFmt),
+            const SizedBox(height: 16),
 
-          // Transaction Table
-          entries.isEmpty
-              ? _buildEmptyState(cs)
-              : _buildTransactionTable(cs, entries, curFmt, dateFmt),
-          const SizedBox(height: 24),
+            // Transaction Table
+            entries.isEmpty
+                ? _buildEmptyState(cs)
+                : _buildTransactionTable(cs, entries, curFmt, dateFmt),
+            const SizedBox(height: 24),
 
-          // Footer
-          Text(
-            context.tr('seller_statement_footer', 'Soko Vibe © {year} — This is an official financial statement').replaceAll('{year}', DateTime.now().year.toString()),
-            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.6)),
-            textAlign: TextAlign.center,
-          ),
-        ],
+            // Footer
+            Text(
+              context.tr('seller_statement_footer', 'Soko Vibe © {year} — This is an official financial statement').replaceAll('{year}', DateTime.now().year.toString()),
+              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.6)),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -160,14 +164,9 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
   }
 
   Widget _buildInfoCard(ColorScheme cs, Map<String, dynamic> seller, DateTime generatedAt, DateFormat df) {
-    return Container(
-      width: double.infinity,
+    return DsCard(
+      radius: 16,
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.3)),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -196,6 +195,7 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
       decoration: BoxDecoration(
         gradient: LinearGradient(colors: [cs.primary.withValues(alpha: 0.1), cs.primary.withValues(alpha: 0.05)]),
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.14)),
       ),
       child: Column(
         children: [
@@ -241,14 +241,9 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
   }
 
   Widget _buildTransactionTable(ColorScheme cs, List entries, NumberFormat cf, DateFormat df) {
-    return Container(
-      width: double.infinity,
+    return DsCard(
+      radius: 16,
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.2)),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -310,13 +305,9 @@ class _SellerStatementScreenState extends State<SellerStatementScreen> {
   }
 
   Widget _buildEmptyState(ColorScheme cs) {
-    return Container(
-      width: double.infinity,
+    return DsCard(
+      radius: 16,
       padding: const EdgeInsets.all(32),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(16),
-      ),
       child: Column(
         children: [
           Icon(Icons.receipt_long_outlined, size: 48, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),

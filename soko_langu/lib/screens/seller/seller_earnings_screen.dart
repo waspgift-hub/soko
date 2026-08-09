@@ -8,9 +8,9 @@ import '../../services/balance_privacy_service.dart';
 import '../../models/transaction_model.dart';
 import '../../models/withdrawal_model.dart';
 import '../../extensions/context_tr.dart';
-import '../../widgets/google_loading.dart';
 import '../../utils/phone_utils.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/ds/ds.dart';
 
 class SellerEarningsScreen extends StatefulWidget {
   const SellerEarningsScreen({super.key});
@@ -51,9 +51,9 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                   _buildBalanceCard(cs, nf),
                   const SizedBox(height: 12),
                   _buildSalesRow(cs, nf),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
                   _buildFeeInfoCard(cs, nf),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
                   _buildWithdrawalCard(cs, nf),
                   const SizedBox(height: 24),
                   _buildSectionTitle(context.tr('recent_transactions'), cs),
@@ -199,12 +199,12 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
             builder: (context, snap) {
               final count = snap.data ?? 0;
               return _infoCard(
-                icon: Icons.receipt_long,
+                icon: Icons.receipt_long_outlined,
                 label: context.tr('total_sales'),
                 value: '$count',
                 color: cs.tertiary,
-                    cs: cs,
-                  );
+                cs: cs,
+              );
             },
           ),
         ),
@@ -219,8 +219,8 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                 label: context.tr('gross_volume'),
                 value: 'TZS ${nf.format(volume)}',
                 color: cs.secondary,
-                    cs: cs,
-                  );
+                cs: cs,
+              );
             },
           ),
         ),
@@ -272,18 +272,22 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
   }
 
   Widget _buildFeeInfoCard(ColorScheme cs, NumberFormat nf) {
-    return Container(
+    return DsCard(
+      radius: 16,
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.info_outline, color: cs.primary, size: 20),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.info_outline, color: cs.primary, size: 20),
+              ),
               const SizedBox(width: 8),
               Text(
                 context.tr('fee_breakdown_per_sale'),
@@ -326,8 +330,8 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
               children: [
                 Icon(Icons.check_circle, color: cs.primary, size: 18),
                 const SizedBox(width: 8),
-                  Text(
-                    context.tr('net_earnings_formula'),
+                Text(
+                  context.tr('net_earnings_formula'),
                   style: TextStyle(
                     fontSize: 12,
                     color: cs.onSurface.withValues(alpha: 0.63),
@@ -379,16 +383,9 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
         final balance = snap.data ?? 0;
         final canWithdraw = balance >= minWithdraw;
 
-        return Container(
+        return DsCard(
+          radius: 16,
           padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: cs.tertiaryContainer,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: cs.tertiaryContainer,
-              width: 1.5,
-            ),
-          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -397,7 +394,7 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: cs.tertiaryContainer,
+                      color: cs.primary.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
@@ -430,44 +427,23 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                 ],
               ),
               const SizedBox(height: 16),
-              TextField(
+              DsTextField(
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
-                decoration: InputDecoration(
-                  labelText: context.tr('phone_number_label'),
-                  hintText: context.tr('phone_example'),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  prefixIcon: const Icon(Icons.phone_android),
-                  filled: true,
-                  fillColor: cs.surface,
-                ),
+                label: context.tr('phone_number_label'),
+                hint: context.tr('phone_example'),
+                prefixIcon: Icons.phone_android,
               ),
               const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: canWithdraw && !_withdrawing
-                      ? () => _processWithdrawal()
-                      : null,
-                  icon: _withdrawing
-                      ? const GoogleLoading(size: 20, strokeWidth: 2)
-                      : const Icon(Icons.send),
-                  label: Text(
-                    _withdrawing
-                        ? context.tr('processing_label')
-                        : context.tr('withdraw_now_label'),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: canWithdraw ? cs.primary : cs.onSurfaceVariant.withValues(alpha: 0.6),
-                    foregroundColor: cs.surface,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
+              DsButton(
+                label: _withdrawing
+                    ? context.tr('processing_label')
+                    : context.tr('withdraw_now_label'),
+                icon: Icons.send,
+                loading: _withdrawing,
+                onPressed: canWithdraw && !_withdrawing
+                    ? () => _processWithdrawal()
+                    : null,
               ),
               if (!canWithdraw)
                 Padding(
@@ -565,63 +541,59 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
           return _emptyCard(context.tr('no_transactions'), cs);
         }
         return Column(
-          children: completedTxns.take(10).map((tx) => Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            decoration: BoxDecoration(
-              color: cs.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: cs.outlineVariant, width: 1),
-            ),
-            child: Padding(
+          children: completedTxns.take(10).map((tx) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: DsCard(
+              radius: 14,
               padding: const EdgeInsets.all(12),
               child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: cs.tertiaryContainer,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(Icons.shopping_bag, color: cs.primary, size: 20),
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: cs.successGreen.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          tx.productName,
-                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${tx.buyerName} | ${DateFormat('dd/MM/yy').format(tx.createdAt)}',
-                          style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.51)),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Fee: -TZS ${nf.format(tx.processingFee)} | Soko Vibe: -TZS ${nf.format(tx.sokoLanguCommission)}',
-                          style: TextStyle(fontSize: 11, color: cs.error.withValues(alpha: 0.7)),
-                        ),
-                      ],
-                    ),
+                  child: Icon(Icons.shopping_bag, color: cs.successGreen, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        tx.productName,
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${tx.buyerName} | ${DateFormat('dd/MM/yy').format(tx.createdAt)}',
+                        style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.51)),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Fee: -TZS ${nf.format(tx.processingFee)} | Soko Vibe: -TZS ${nf.format(tx.sokoLanguCommission)}',
+                        style: TextStyle(fontSize: 11, color: cs.error.withValues(alpha: 0.7)),
+                      ),
+                    ],
                   ),
-                  Text(
-                    'TZS ${nf.format(tx.sellerReceives)}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                      color: cs.primary.withValues(alpha: 0.85),
-                    ),
+                ),
+                Text(
+                  'TZS ${nf.format(tx.sellerReceives)}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                    color: cs.primary.withValues(alpha: 0.85),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          )).toList(),
-        );
-      },
-    );
-  }
+          ),
+        )).toList(),
+      );
+    },
+  );
+}
 
   Widget _buildWithdrawalHistory(ColorScheme cs, NumberFormat nf) {
     return StreamBuilder<List<WithdrawalRequest>>(
@@ -635,14 +607,10 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
           return _emptyCard(context.tr('no_withdrawals'), cs);
         }
         return Column(
-          children: withdrawals.map((w) => Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            decoration: BoxDecoration(
-              color: cs.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: cs.outlineVariant, width: 1),
-            ),
-            child: Padding(
+          children: withdrawals.map((w) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: DsCard(
+              radius: 14,
               padding: const EdgeInsets.all(12),
               child: Row(
                 children: [
@@ -650,70 +618,69 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: w.status == WithdrawalStatus.completed
-                          ? cs.tertiaryContainer
-                          : cs.errorContainer,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      w.status == WithdrawalStatus.completed
-                          ? Icons.check_circle
-                          : Icons.cancel,
-                      color: w.status == WithdrawalStatus.completed
-                          ? cs.primary
-                          : cs.error,
-                      size: 20,
-                    ),
+                          ? cs.successGreen.withValues(alpha: 0.12)
+                        : cs.errorContainer,
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'TZS ${nf.format(w.netAmount)} → ${PhoneUtils.formatForDisplay(w.phone)}',
-                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  child: Icon(
+                    w.status == WithdrawalStatus.completed
+                        ? Icons.check_circle
+                        : Icons.cancel,
+                    color: w.status == WithdrawalStatus.completed
+                        ? cs.successGreen
+                        : cs.error,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'TZS ${nf.format(w.netAmount)} → ${PhoneUtils.formatForDisplay(w.phone)}',
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        w.status == WithdrawalStatus.completed
+                            ? 'Fee: TZS ${nf.format(w.fee)} | ${DateFormat('MMM dd, yyyy HH:mm').format(w.createdAt)}'
+                            : 'Failed: ${w.failureReason ?? context.tr('unknown')}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: w.status == WithdrawalStatus.completed
+                              ? cs.onSurface.withValues(alpha: 0.51)
+                              : cs.error,
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          w.status == WithdrawalStatus.completed
-                              ? 'Fee: TZS ${nf.format(w.fee)} | ${DateFormat('MMM dd, yyyy HH:mm').format(w.createdAt)}'
-                              : 'Failed: ${w.failureReason ?? context.tr('unknown')}',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: w.status == WithdrawalStatus.completed
-                                ? cs.onSurface.withValues(alpha: 0.51)
-                                : cs.error,
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  Text(
-                    '-TZS ${nf.format(w.amount)}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                      color: cs.error,
-                    ),
+                ),
+                Text(
+                  '-TZS ${nf.format(w.amount)}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                    color: cs.error,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          )).toList(),
-        );
-      },
-    );
-  }
+          ),
+        )).toList(),
+      );
+    },
+  );
+}
 
   Widget _emptyCard(String message, ColorScheme cs) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Center(
-          child: Text(
-            message,
-            style: TextStyle(color: cs.onSurface.withValues(alpha: 0.47)),
-          ),
+    return DsCard(
+      radius: 16,
+      padding: const EdgeInsets.all(24),
+      child: Center(
+        child: Text(
+          message,
+          style: TextStyle(color: cs.onSurface.withValues(alpha: 0.47)),
         ),
       ),
     );

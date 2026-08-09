@@ -1,4 +1,3 @@
-import 'dart:ui' as ui; // ignore: unused_import
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../services/product_service.dart';
 import '../../services/payment_service.dart';
+import '../../services/widget_service.dart';
 import '../../services/balance_privacy_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../models/product_model.dart';
@@ -14,13 +14,10 @@ import '../../models/transaction_model.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/phone_utils.dart';
-import '../../models/flash_sale_model.dart';
-import '../../services/flash_sale_service.dart';
 import '../../widgets/google_loading.dart';
-import '../../widgets/glass_container.dart';
-import '../../services/widget_service.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../widgets/soko_vibe_states.dart';
+import '../../widgets/ds/ds.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class SellerDashboardScreen extends StatefulWidget {
   const SellerDashboardScreen({super.key});
@@ -122,37 +119,25 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                     child: ListView(
                       padding: EdgeInsets.fromLTRB(16, 8, 16, 16 + MediaQuery.of(context).padding.bottom),
                       children: [
-                        // Stats row with glass cards
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: Row(
-                            children: [
-                              Expanded(child: _glassStatCard(cs, Icons.inventory_2, productCount.toString(), context.tr('total_products'), cs.secondary)),
-                              const SizedBox(width: 12),
-                              Expanded(child: _glassStatCard(cs, Icons.receipt_long, '$txCount ${context.tr('sold')}', context.tr('total_sales'), cs.tertiary)),
-                            ],
-                          ),
-                        ),
+                        _buildStatsRow(cs, productCount, txCount),
+                        const SizedBox(height: 16),
                         _buildEarningsCard(),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 20),
                         _buildQuickActions(cs, isDark, productSnap.data ?? []),
                         if (user?.email == 'admin@soko-langu.com' || _isAdmin) ...[
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 20),
                           _buildAdminSection(),
                         ],
-                        if (completedTx.isNotEmpty) ...[
-                          const SizedBox(height: 20),
-                          Text(context.tr('tx_history'),
-                            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: cs.onSurface)),
-                          const SizedBox(height: 10),
-                          ...completedTx.take(10).map((tx) => _buildTransactionTile(tx)),
-                        ] else ...[
-                          const SizedBox(height: 20),
-                          Center(
-                            child: Text(context.tr('no_transactions'),
-                              style: TextStyle(color: cs.onSurfaceVariant)),
+                        const SizedBox(height: 20),
+                        _buildSectionTitle(context, cs, Icons.receipt_long_outlined, context.tr('tx_history')),
+                        const SizedBox(height: 12),
+                        if (completedTx.isNotEmpty)
+                          ...completedTx.take(10).map((tx) => _buildTransactionTile(tx))
+                        else
+                          DsEmptyState(
+                            icon: Icons.receipt_long_outlined,
+                            title: context.tr('no_transactions'),
                           ),
-                        ],
                       ],
                     ),
                   );
@@ -165,11 +150,40 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     );
   }
 
-  Widget _glassStatCard(ColorScheme cs, IconData icon, String value, String label, Color color) {
-    return GlassContainer(
-      blur: 20,
-      opacity: 0.1,
-      borderRadius: 18,
+  Widget _buildSectionTitle(BuildContext context, ColorScheme cs, IconData icon, String title) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: cs.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 17, color: cs.primary),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          title,
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: cs.onSurface),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatsRow(ColorScheme cs, int productCount, int txCount) {
+    return Row(
+      children: [
+        Expanded(child: _statCard(cs, Icons.inventory_2_outlined, '$productCount', context.tr('total_products'), cs.secondary)),
+        const SizedBox(width: 12),
+        Expanded(child: _statCard(cs, Icons.receipt_long_outlined, '$txCount ${context.tr('sold')}', context.tr('total_sales'), cs.tertiary)),
+      ],
+    );
+  }
+
+  Widget _statCard(ColorScheme cs, IconData icon, String value, String label, Color color) {
+    return DsCard(
+      onTap: null,
+      radius: 20,
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -177,7 +191,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
+              color: color.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: color, size: 24),
@@ -192,105 +206,65 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   }
 
   Widget _buildQuickActions(ColorScheme cs, bool isDark, List<Product> products) {
-    return GlassContainer(
-      blur: 24,
-      opacity: isDark ? 0.08 : 0.05,
-      borderRadius: 24,
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(context.tr('actions_title'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: cs.onSurface)),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(child: _actionButton(cs, Icons.add_business, context.tr('sell_product'), () => context.push(AppRoutes.addProduct), cs.primary)),
-              const SizedBox(width: 8),
-              Expanded(child: _actionButton(cs, Icons.price_check, context.tr('give_quote'), () => context.push(AppRoutes.sellerQuote), cs.secondary)),
-              const SizedBox(width: 8),
-              Expanded(child: _actionButton(cs, Icons.local_shipping, context.tr('dispatch_product'), () => context.push(AppRoutes.sellerDispatch), cs.trendingOrange)),
-              const SizedBox(width: 8),
-              Expanded(child: _actionButton(cs, Icons.store, context.tr('customize_shop_action'), () => context.push(AppRoutes.shopCustomization), cs.primary)),
-            ],
+    final actions = [
+      _QuickActionData(Icons.add_business_outlined, context.tr('sell_product'), () => context.push(AppRoutes.addProduct), cs.primary),
+      _QuickActionData(Icons.price_check_outlined, context.tr('give_quote'), () => context.push(AppRoutes.sellerQuote), cs.secondary),
+      _QuickActionData(Icons.local_shipping_outlined, context.tr('dispatch_product'), () => context.push(AppRoutes.sellerDispatch), cs.trendingOrange),
+      _QuickActionData(Icons.storefront_outlined, context.tr('customize_shop_action'), () => context.push(AppRoutes.shopCustomization), cs.primary),
+      _QuickActionData(Icons.verified_outlined, context.tr('boost_listing_action'), () => _showBoostDialog(products), cs.trendingOrange),
+      _QuickActionData(Icons.account_balance_outlined, context.tr('statement'), () => context.push(AppRoutes.sellerStatement), cs.premiumTeal),
+      _QuickActionData(Icons.receipt_long_outlined, context.tr('order_history'), () => context.push(AppRoutes.sellerOrders), cs.tertiary),
+      _QuickActionData(Icons.flash_on_outlined, context.tr('unda_flash_sale'), () => context.push(AppRoutes.createFlashSale), cs.trendingOrange),
+      _QuickActionData(Icons.manage_search_outlined, context.tr('natufuta_bidhaa'), () => context.push(AppRoutes.buyerRequests), cs.secondary),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle(context, cs, Icons.bolt_outlined, context.tr('actions_title')),
+        const SizedBox(height: 12),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 1.05,
           ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(child: _actionButton(cs, Icons.verified, context.tr('boost_listing_action'), () => _showBoostDialog(products), cs.trendingOrange)),
-              const SizedBox(width: 8),
-              Expanded(child: _actionButton(cs, Icons.account_balance, 'Statement', () => context.push(AppRoutes.sellerStatement), cs.premiumTeal)),
-              const SizedBox(width: 8),
-              Expanded(child: _actionButton(cs, Icons.receipt_long, context.tr('order_history'), () => context.push(AppRoutes.sellerOrders), cs.tertiary)),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(child: _actionButton(cs, Icons.flash_on, context.tr('unda_flash_sale'), () => context.push(AppRoutes.createFlashSale), cs.trendingOrange)),
-              const SizedBox(width: 8),
-              Expanded(child: _actionButton(cs, Icons.manage_search, context.tr('natufuta_bidhaa'), () => context.push(AppRoutes.buyerRequests), cs.secondary)),
-            ],
-          ),
-        ],
-      ),
+          itemCount: actions.length,
+          itemBuilder: (_, i) => _buildQuickActionTile(cs, isDark, actions[i]),
+        ),
+      ],
     );
   }
 
-  Widget _actionButton(ColorScheme cs, IconData icon, String label, VoidCallback onTap, Color color) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: color.withValues(alpha: 0.15)),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 24),
-            const SizedBox(height: 6),
-            Text(label, textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 10, color: cs.onSurface, fontWeight: FontWeight.w500)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _statCard(
-    BuildContext context,
-    IconData icon,
-    String value,
-    String label,
-    Color color,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
-          width: 1.5,
-        ),
-      ),
+  Widget _buildQuickActionTile(ColorScheme cs, bool isDark, _QuickActionData a) {
+    return DsCard(
+      onTap: a.onTap,
+      radius: 18,
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: color, size: 28),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: color,
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: a.color.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(12),
             ),
+            child: Icon(a.icon, color: a.color, size: 24),
           ),
-          Text(
-            label,
-            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              a.label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11, color: cs.onSurface, fontWeight: FontWeight.w600, height: 1.2),
+            ),
           ),
         ],
       ),
@@ -298,84 +272,100 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   }
 
   Widget _buildTransactionTile(MarketplaceTransaction tx) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
-          width: 1.5,
-        ),
-      ),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: tx.status == TransactionStatus.delivered || tx.status == TransactionStatus.completed
-              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.12)
-              : tx.status == TransactionStatus.escrowHold
-                  ? Theme.of(context).colorScheme.tertiary.withValues(alpha: 0.12)
-                  : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.12),
-          child: Icon(
-            tx.status == TransactionStatus.delivered || tx.status == TransactionStatus.completed
-                ? Icons.check_circle
-                : tx.status == TransactionStatus.escrowHold
-                    ? Icons.lock
-                    : Icons.pending,
-            color: tx.status == TransactionStatus.delivered || tx.status == TransactionStatus.completed
-                ? Theme.of(context).colorScheme.primary
-                : tx.status == TransactionStatus.escrowHold
-                    ? Theme.of(context).colorScheme.tertiary
-                    : Theme.of(context).colorScheme.onSurfaceVariant,
+    final cs = Theme.of(context).colorScheme;
+    final delivered = tx.status == TransactionStatus.delivered || tx.status == TransactionStatus.completed;
+    final escrow = tx.status == TransactionStatus.escrowHold;
+    final statusColor = delivered ? cs.successGreen : escrow ? cs.tertiary : cs.onSurfaceVariant;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: DsCard(
+        radius: 18,
+        padding: EdgeInsets.zero,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                width: 4,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [statusColor, statusColor.withValues(alpha: 0.35)],
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: statusColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          delivered
+                              ? Icons.check_circle_rounded
+                              : escrow
+                                  ? Icons.lock_rounded
+                                  : Icons.pending_outlined,
+                          color: statusColor,
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(tx.productName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            const SizedBox(height: 3),
+                            Text('${tx.buyerName} · TZS ${tx.sellerReceives.toStringAsFixed(0)}',
+                                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            if (tx.buyerPhone.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(PhoneUtils.formatForDisplay(tx.buyerPhone),
+                                    style: TextStyle(fontSize: 11, color: cs.primary)),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text('TZS ${tx.totalAmount.toStringAsFixed(0)}',
+                              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: cs.primary)),
+                          const SizedBox(height: 2),
+                          Text('${tx.createdAt.day}/${tx.createdAt.month}/${tx.createdAt.year}',
+                              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+                          if (tx.platformFee > 0)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text('Comm: -TZS ${tx.platformFee.toStringAsFixed(0)}',
+                                  style: TextStyle(fontSize: 10, color: cs.error)),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-        ),
-        title: Text(
-          tx.productName,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('${tx.buyerName} - TZS ${tx.sellerReceives.toStringAsFixed(0)}'),
-            if (tx.platformFee > 0)
-              Text(
-                'Commission: -TZS ${tx.platformFee.toStringAsFixed(0)}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).colorScheme.error,
-                ),
-              ),
-            if (tx.buyerPhone.isNotEmpty)
-              Text(
-                PhoneUtils.formatForDisplay(tx.buyerPhone),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-          ],
-        ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              'TZS ${tx.totalAmount.toStringAsFixed(0)}',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            Text(
-              '${tx.createdAt.day}/${tx.createdAt.month}/${tx.createdAt.year}',
-              style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
-            ),
-          ],
         ),
       ),
     );
   }
 
   Widget _buildAdminSection() {
+    final cs = Theme.of(context).colorScheme;
     return FutureBuilder<Map<String, double>>(
       future: _paymentService.getRevenueStats(),
       builder: (context, snap) {
@@ -386,35 +376,50 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              context.tr('admin_platform_earnings'),
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
+            _buildSectionTitle(context, cs, Icons.admin_panel_settings_outlined, context.tr('admin_platform_earnings')),
+            const SizedBox(height: 12),
             Row(
               children: [
-                _statCard(
-                  context,
-                  Icons.account_balance,
-                  '\$${(stats['totalEarnings'] ?? 0).toStringAsFixed(2)}',
-                  context.tr('platform_commission_2'),
-                  Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                Expanded(
+                  child: _adminStatCard(
+                    cs,
+                    Icons.account_balance_outlined,
+                    '\$${(stats['totalEarnings'] ?? 0).toStringAsFixed(2)}',
+                    context.tr('platform_commission_2'),
+                    cs.onSurface.withValues(alpha: 0.6),
+                  ),
                 ),
                 const SizedBox(width: 12),
-                _statCard(
-                  context,
-                  Icons.trending_up,
-                  '\$${(stats['todayEarnings'] ?? 0).toStringAsFixed(2)}',
-                  context.tr('today'),
-                  Theme.of(context).colorScheme.primary,
+                Expanded(
+                  child: _adminStatCard(
+                    cs,
+                    Icons.trending_up,
+                    '\$${(stats['todayEarnings'] ?? 0).toStringAsFixed(2)}',
+                    context.tr('today'),
+                    cs.primary,
+                  ),
                 ),
               ],
             ),
           ],
         );
       },
+    );
+  }
+
+  Widget _adminStatCard(ColorScheme cs, IconData icon, String value, String label, Color color) {
+    return DsCard(
+      radius: 16,
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 22),
+          const SizedBox(height: 8),
+          Text(value, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: color)),
+          Text(label, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+        ],
+      ),
     );
   }
 
@@ -437,7 +442,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 end: Alignment.bottomRight,
                 colors: [cs.primary, cs.primary.withValues(alpha: 0.75)],
               ),
-              borderRadius: BorderRadius.circular(22),
+              borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(color: cs.primary.withValues(alpha: 0.3), blurRadius: 24, offset: const Offset(0, 10)),
               ],
@@ -453,7 +458,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                         color: cs.surface.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Icon(Icons.account_balance_wallet, color: cs.surface, size: 24),
+                      child: Icon(Icons.account_balance_wallet_rounded, color: cs.surface, size: 24),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -470,7 +475,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                       ),
                     ),
                     const SizedBox(width: 4),
-                    Icon(Icons.arrow_forward_ios, color: cs.surface.withValues(alpha: 0.7), size: 16),
+                    Icon(Icons.arrow_forward_ios_rounded, color: cs.surface.withValues(alpha: 0.7), size: 16),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -490,485 +495,82 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     );
   }
 
-  // ignore: unused_element
-  Widget _buildKycCard() {
-    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
-    final cs = Theme.of(context).colorScheme;
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
-      builder: (context, snap) {
-        final kyc = snap.data?.data() as Map<String, dynamic>?;
-        final kycData = kyc?['kyc'] as Map<String, dynamic>?;
-        final kycStatus = kycData?['status'] as String? ?? 'none';
-
-        String title;
-        String subtitle;
-        Color color;
-        IconData icon;
-
-        switch (kycStatus) {
-          case 'approved':
-            title = context.tr('kyc_approved');
-            subtitle = context.tr('can_sell_products');
-            color = cs.primary;
-            icon = Icons.verified;
-            break;
-          case 'pending':
-            title = context.tr('kyc_pending');
-            subtitle = context.tr('kyc_pending_subtitle');
-            color = cs.tertiary;
-            icon = Icons.hourglass_top;
-            break;
-          case 'rejected':
-            title = context.tr('kyc_rejected');
-            subtitle = context.tr('kyc_rejected_subtitle');
-            color = cs.error;
-            icon = Icons.cancel;
-            break;
-          default:
-            title = context.tr('kyc_not_submitted');
-            subtitle = context.tr('verify_id_to_sell');
-            color = cs.onSurface.withValues(alpha: 0.6);
-            icon = Icons.verified_outlined;
-        }
-
-        return GestureDetector(
-          onTap: () => context.push(AppRoutes.kyc),
-          child: GlassContainer(
-            blur: 20,
-            opacity: 0.08,
-            borderRadius: 18,
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(icon, color: color, size: 28),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title, style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 4),
-                      Text(subtitle, style: TextStyle(color: color.withValues(alpha: 0.8), fontSize: 13)),
-                    ],
-                  ),
-                ),
-                Icon(Icons.arrow_forward_ios, color: color, size: 18),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  // ignore: unused_element
-  Widget _buildPayoutPrefsCard() {
-    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
-      builder: (context, snap) {
-        final data = snap.data?.data() as Map<String, dynamic>?;
-        final autoPayout = data?['autoPayout'] as bool? ?? true;
-        return Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(Icons.sync, color: Theme.of(context).colorScheme.primary, size: 24),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      context.tr('auto_payout'),
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      autoPayout ? context.tr('auto_payout') : context.tr('manual_payout'),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Switch(
-                value: autoPayout,
-                onChanged: (val) async {
-                  await FirebaseFirestore.instance
-                      .collection('users')
-                      .doc(uid)
-                      .update({'autoPayout': val});
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // ignore: unused_element
-  Widget _buildQuoteButton() {
-    return GestureDetector(
-      onTap: () => context.push(AppRoutes.sellerQuote),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.primary.withValues(alpha: 0.6)],
-          ),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.price_check, color: Colors.white, size: 28),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    context.tr('give_quote'),
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    context.tr('seller_quote_subtitle'),
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.8),
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 18),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ignore: unused_element
-  Widget _buildDispatchButton() {
-    final cs = Theme.of(context).colorScheme;
-    return GestureDetector(
-      onTap: () => context.push(AppRoutes.sellerDispatch),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [cs.trendingOrange, cs.trendingOrange.withValues(alpha: 0.75)],
-          ),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.local_shipping, color: Colors.white, size: 28),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    context.tr('dispatch_title'),
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    context.tr('dispatch_subtitle'),
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.8),
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 18),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ignore: unused_element
-  Widget _buildCustomizeShopButton() {
-    return GestureDetector(
-      onTap: () => context.push(AppRoutes.shopCustomization),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.primary.withValues(alpha: 0.6)],
-          ),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child:  Icon(Icons.store, color: Theme.of(context).colorScheme.surface, size: 28),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    context.tr('customize_shop'),
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.surface,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    context.tr('customize_shop_subtitle'),
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.8),
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.arrow_forward_ios, color: Theme.of(context).colorScheme.surface, size: 18),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ignore: unused_element
-  Widget _buildFlashSaleCard(List<Product> products) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cs = Theme.of(context).colorScheme;
-    return StreamBuilder<List<FlashSale>>(
-      stream: FlashSaleService().getMyFlashSales(),
-      builder: (context, snap) {
-        final activeCount = snap.data?.length ?? 0;
-        return GestureDetector(
-          onTap: () {
-            if (products.isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(context.tr('add_product_first'))),
-              );
-              return;
-            }
-            context.push(AppRoutes.createFlashSale);
-          },
-          child: GlassContainer(
-            blur: 24,
-            opacity: isDark ? 0.12 : 0.06,
-            borderRadius: 22,
-            padding: const EdgeInsets.all(18),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: cs.error.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(Icons.local_fire_department, color: cs.error, size: 28),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(context.tr('unda_flash_sale'),
-                        style: TextStyle(color: cs.onSurface, fontSize: 17, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 4),
-                      Text(activeCount > 0
-                          ? context.tr('flash_sales_active').replaceFirst('{0}', '$activeCount')
-                          : context.tr('create_flash_sale_prompt'),
-                        style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
-                    ],
-                  ),
-                ),
-                Icon(Icons.arrow_forward_ios, color: cs.onSurfaceVariant, size: 16),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  // ignore: unused_element
-  Widget _buildBoostButton(List<Product> products) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cs = Theme.of(context).colorScheme;
-    return GestureDetector(
-      onTap: products.isEmpty ? null : () => _showBoostDialog(products),
-      child: GlassContainer(
-        blur: 24,
-        opacity: isDark ? 0.12 : 0.06,
-        borderRadius: 22,
-        padding: const EdgeInsets.all(18),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: cs.trendingOrange.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(Icons.verified, color: cs.trendingOrange, size: 28),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(context.tr('boost_listing'),
-                    style: TextStyle(color: cs.onSurface, fontSize: 17, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text(products.isEmpty ? context.tr('add_product_first') : context.tr('boost_plans'),
-                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
-                ],
-              ),
-            ),
-            Icon(Icons.arrow_forward_ios, color: cs.onSurfaceVariant, size: 16),
-          ],
-        ),
-      ),
-    );
-  }
-
   void _showBoostDialog(List<Product> products) {
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => DsSheet(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              context.tr('boost_dialog_title'),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              context.tr('choose_product_boost'),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 280,
+              child: products.isEmpty
+                  ? SokoVibeEmptyState(
+                      icon: Icons.inventory_2_outlined,
+                      title: context.tr('no_products'),
+                    )
+                  : ListView.separated(
+                      itemCount: products.length,
+                      separatorBuilder: (_, _) => const Divider(),
+                      itemBuilder: (_, i) {
+                        final p = products[i];
+                        final alreadyBoosted = p.isBoostedValid;
+                        return ListTile(
+                          leading: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              width: 48,
+                              height: 48,
+                              color: Theme.of(context).colorScheme.outlineVariant,
+                              child: p.images.isNotEmpty
+                                  ? CachedNetworkImage(imageUrl: p.images.first, fit: BoxFit.cover)
+                                  : Icon(Icons.image, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                            ),
+                          ),
+                          title: Text(
+                            p.name,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          subtitle: Text(
+                            alreadyBoosted ? context.tr('already_featured') : context.tr('tap_to_boost'),
+                          ),
+                          trailing: alreadyBoosted
+                              ? Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary)
+                              : const Icon(Icons.arrow_forward_ios, size: 16),
+                          onTap: alreadyBoosted
+                              ? null
+                              : () {
+                                  Navigator.pop(ctx);
+                                  context.push(AppRoutes.productBoost, extra: p);
+                                },
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
       ),
-      builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                context.tr('boost_dialog_title'),
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                context.tr('choose_product_boost'),
-                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                height: 200,
-                child: products.isEmpty
-                    ? SokoVibeEmptyState(
-                        icon: Icons.inventory_2_outlined,
-                        title: context.tr('no_products'),
-                      )
-                    : ListView.separated(
-                        itemCount: products.length,
-                        separatorBuilder: (_, _) => const Divider(),
-                        itemBuilder: (_, i) {
-                          final p = products[i];
-                          final alreadyBoosted = p.isBoostedValid;
-                          return ListTile(
-                            leading: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Container(
-                                width: 48,
-                                height: 48,
-                                color: Theme.of(context).colorScheme.outlineVariant,
-                                child: p.images.isNotEmpty
-                                    ? CachedNetworkImage(imageUrl: p.images.first, fit: BoxFit.cover)
-                                    : Icon(Icons.image, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                              ),
-                            ),
-                            title: Text(
-                              p.name,
-                              style: const TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                            subtitle: Text(
-                              alreadyBoosted ? context.tr('already_featured') : context.tr('tap_to_boost'),
-                            ),
-                            trailing: alreadyBoosted
-                                ? Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary)
-                                : const Icon(Icons.arrow_forward_ios, size: 16),
-                            onTap: alreadyBoosted
-                                ? null
-                                : () {
-                                    Navigator.pop(ctx);
-                                    context.push(AppRoutes.productBoost, extra: p);
-                                  },
-                          );
-                        },
-                      ),
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
+}
 
+class _QuickActionData {
+  const _QuickActionData(this.icon, this.label, this.onTap, this.color);
 
-
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color color;
 }

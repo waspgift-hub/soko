@@ -188,12 +188,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             icon: Icon(Icons.share, color: cs.primary),
             onPressed: () => _shareProduct(product),
           ),
-          IconButton(
-            icon: Icon(
-              _isFav ? Icons.favorite : Icons.favorite_border,
-              color: _isFav ? cs.error : null,
-            ),
+          DsLikeButton(
+            isLiked: _isFav,
             onPressed: _toggleFav,
+            activeColor: cs.error,
+            idleColor: cs.primary,
           ),
           if (currentUser != null && currentUser.uid != sellerId)
             IconButton(

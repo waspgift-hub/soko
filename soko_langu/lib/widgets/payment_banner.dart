@@ -119,6 +119,8 @@ class _PaymentBannerContentState extends State<_PaymentBannerContent>
       children: [
         if (widget.type == PaymentBannerType.success)
           Positioned.fill(child: DsConfetti()),
+        if (widget.type == PaymentBannerType.success)
+          const Positioned.fill(child: DsCelebrationRain()),
         GestureDetector(
           onTap: widget.onDismiss,
           child: FadeTransition(
@@ -364,6 +366,7 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
             }
           } else if (widget.successStatuses.contains(status)) {
             if (mounted && !_done) {
+              CelebrationOverlay.show(context);
               widget.onSuccess?.call();
               _finish();
             }
@@ -415,6 +418,8 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
 
         if (isOk && !_done) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
+            // Payment landed — throw a full-screen "sherehe" confetti rain.
+            CelebrationOverlay.show(context);
             widget.onSuccess?.call();
             _finish();
           });

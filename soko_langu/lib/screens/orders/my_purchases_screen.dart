@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
@@ -41,8 +42,27 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
   final Set<String> _selectedIds = {};
   bool _isDeletingSelected = false;
   List<QueryDocumentSnapshot> _currentDocs = [];
+  Timer? _autoRefreshTimer;
+  DateTime? _lastAutoRefresh;
 
   static const _filters = ['all', 'pending', 'active', 'completed', 'failed'];
+
+  @override
+  void initState() {
+    super.initState();
+    // Poll the live stream every 5s so status changes appear without a manual
+    // pull-to-refresh; the StreamBuilder rebuild re-emits the latest snapshots.
+    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted) return;
+      setState(() => _lastAutoRefresh = DateTime.now());
+    });
+  }
+
+  @override
+  void dispose() {
+    _autoRefreshTimer?.cancel();
+    super.dispose();
+  }
 
   List<QueryDocumentSnapshot> _filterDocs(List<QueryDocumentSnapshot> docs) {
     docs = docs
@@ -528,8 +548,177 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     );
   }
 
-  int _filterCount(List<QueryDocumentSnapshot> docs, String filter) {
-    return docs.where((d) {
+  Widget _buildStatsHeader(
+    ColorScheme cs,
+    List<QueryDocumentSnapshot> allDocs,
+  ) {
+    final visible = allDocs
+        .where((d) => (d.data() as Map)['deletedForBuyer'] != true)
+        .toList();
+    final active = visible.where((d) {
+      final s = (d.data() as Map)['status'] as String? ?? '';
+      return s == 'pending' ||
+          s == 'awaiting_shipping_quote' ||
+          s == 'awaiting_payment' ||
+          s == 'quoted' ||
+          s == 'paid_escrow_hold' ||
+          s == 'escrow_hold' ||
+          s == 'dispatched' ||
+          s == 'delivered';
+    }).length;
+    final completed = visible.where((d) {
+      final s = (d.data() as Map)['status'] as String? ?? '';
+      return s == 'completed' || s == 'delivery_confirmed';
+    }).length;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              cs.primary.withValues(alpha: 0.16),
+              cs.tertiary.withValues(alpha: 0.06),
+            ],
+          ),
+          border: Border.all(color: cs.primary.withValues(alpha: 0.14)),
+        ),
+        child: Column(
+          children: [
+            if (_lastAutoRefresh != null)
+              Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: cs.successGreen,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: cs.successGreen.withValues(alpha: 0.5),
+                          blurRadius: 6,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    context.tr('live_updates'),
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: cs.successGreen,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '· ${context.tr('last_updated')} ${_formatRelative(DateTime.now().difference(_lastAutoRefresh!))}',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w500,
+                      color: cs.onSurfaceVariant.withValues(alpha: 0.8),
+                    ),
+                  ),
+                ],
+              ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: _statCell(
+                    cs,
+                    Icons.inventory_2_outlined,
+                    '$active',
+                    context.tr('active_orders'),
+                    cs.primary,
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 40,
+                  color: cs.primary.withValues(alpha: 0.14),
+                ),
+                Expanded(
+                  child: _statCell(
+                    cs,
+                    Icons.check_circle_outline,
+                    '$completed',
+                    context.tr('completed_orders'),
+                    cs.successGreen,
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 40,
+                  color: cs.primary.withValues(alpha: 0.14),
+                ),
+                Expanded(
+                  child: _statCell(
+                    cs,
+                    Icons.shopping_bag_outlined,
+                    '${visible.length}',
+                    context.tr('all_orders'),
+                    cs.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _statCell(
+    ColorScheme cs,
+    IconData icon,
+    String value,
+    String label,
+    Color color,
+  ) {
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 15, color: color),
+            const SizedBox(width: 5),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 19,
+                fontWeight: FontWeight.w900,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 3),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: cs.onSurfaceVariant,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+
+  String _formatRelative(Duration d) {
+    if (d.inSeconds < 10) return 'sasa';
+    if (d.inMinutes < 1) return '${d.inSeconds}s';
+    return '${d.inMinutes}m';
+  }
+
+  int _filterCount(List<QueryDocumentSnapshot> docs, String filter) {    return docs.where((d) {
       final s = (d.data() as Map)['status'] as String? ?? '';
       switch (filter) {
         case 'pending':
@@ -783,6 +972,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
             },
             child: CustomScrollView(
               slivers: [
+                SliverToBoxAdapter(child: _buildStatsHeader(cs, allDocs)),
                 SliverToBoxAdapter(child: _buildFilterChips(cs, allDocs)),
                 if (docs.isEmpty)
                   SliverFillRemaining(child: _buildEmptyState(cs, allDocs))
@@ -921,78 +1111,107 @@ class _OrderGlassCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(24),
             child: BackdropFilter(
               filter: ui.ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Stack(
                 children: [
-                  if (isSelectionMode)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(0, 8, 12, 0),
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: Transform.scale(
-                          scale: 1.1,
-                          child: Checkbox(
-                            value: isSelected,
-                            onChanged: (_) => onToggleSelect(),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            activeColor: cs.primary,
-                          ),
+                  // Status accent rail (left edge)
+                  Positioned(
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 4,
+                      decoration: BoxDecoration(
+                        borderRadius: const BorderRadius.horizontal(
+                          right: Radius.circular(4),
+                        ),
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            orderStatusInfo(status, cs).color,
+                            orderStatusInfo(status, cs).color.withValues(alpha: 0.35),
+                          ],
                         ),
                       ),
                     ),
-                  _buildTopSection(
-                    context,
-                    cs,
-                    productImage,
-                    productName,
-                    price,
-                    status,
-                    docId,
                   ),
-                  Divider(
-                    height: 1,
-                    indent: 16,
-                    endIndent: 16,
-                    color: cs.outlineVariant.withValues(alpha: 0.1),
-                  ),
-                  _buildMidSection(
-                    context,
-                    cs,
-                    docId,
-                    dateStr,
-                    sellerName,
-                    sellerId,
-                    paymentMethod,
-                    status,
-                    productId,
-                  ),
-                  Divider(
-                    height: 1,
-                    indent: 16,
-                    endIndent: 16,
-                    color: cs.outlineVariant.withValues(alpha: 0.1),
-                  ),
-                  _buildActions(
-                    context,
-                    cs,
-                    status,
-                    price,
-                    shippingCost,
-                    totalAmount,
-                    platformFee: platformFee,
-                    processingFee: processingFee,
-                  ),
-                  if (status == 'delivered' ||
-                      status == 'delivery_confirmed' ||
-                      status == 'completed')
-                    _buildReceiptCard(
-                      context,
-                      cs,
-                      status,
-                      Theme.of(context).brightness == Brightness.dark,
+                  Padding(
+                    padding: const EdgeInsets.only(left: 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (isSelectionMode)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(0, 8, 12, 0),
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: Transform.scale(
+                                scale: 1.1,
+                                child: Checkbox(
+                                  value: isSelected,
+                                  onChanged: (_) => onToggleSelect(),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  activeColor: cs.primary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        _buildTopSection(
+                          context,
+                          cs,
+                          productImage,
+                          productName,
+                          price,
+                          status,
+                          docId,
+                        ),
+                        Divider(
+                          height: 1,
+                          indent: 16,
+                          endIndent: 16,
+                          color: cs.outlineVariant.withValues(alpha: 0.1),
+                        ),
+                        _buildMidSection(
+                          context,
+                          cs,
+                          docId,
+                          dateStr,
+                          sellerName,
+                          sellerId,
+                          paymentMethod,
+                          status,
+                          productId,
+                        ),
+                        Divider(
+                          height: 1,
+                          indent: 16,
+                          endIndent: 16,
+                          color: cs.outlineVariant.withValues(alpha: 0.1),
+                        ),
+                        _buildActions(
+                          context,
+                          cs,
+                          status,
+                          price,
+                          shippingCost,
+                          totalAmount,
+                          platformFee: platformFee,
+                          processingFee: processingFee,
+                        ),
+                        if (status == 'delivered' ||
+                            status == 'delivery_confirmed' ||
+                            status == 'completed')
+                          _buildReceiptCard(
+                            context,
+                            cs,
+                            status,
+                            Theme.of(context).brightness == Brightness.dark,
+                          ),
+                      ],
                     ),
+                  ),
                 ],
               ),
             ),
@@ -1257,6 +1476,11 @@ class _OrderGlassCard extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+          Icon(
+            Icons.chevron_right_rounded,
+            size: 22,
+            color: cs.onSurfaceVariant.withValues(alpha: 0.4),
           ),
         ],
       ),
