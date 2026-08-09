@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'app_transitions.dart';
 import '../models/product_model.dart';
 import '../screens/auth/auth_gate.dart';
 import '../screens/auth/login_screen.dart';
@@ -69,23 +70,7 @@ import 'app_state.dart' as app_state;
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
 Page<T> _premiumPage<T>(Widget child) {
-  return CustomTransitionPage<T>(
-    child: child,
-    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      return SlideTransition(
-        position: Tween<Offset>(
-          begin: const Offset(0.08, 0),
-          end: Offset.zero,
-        ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
-        child: FadeTransition(
-          opacity: animation,
-          child: child,
-        ),
-      );
-    },
-    transitionDuration: const Duration(milliseconds: 300),
-    reverseTransitionDuration: const Duration(milliseconds: 250),
-  );
+  return buildAppPage<T>(child);
 }
 
 final List<String> _authRequiredRoutes = [

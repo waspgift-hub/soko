@@ -8,6 +8,7 @@ import '../screens/home/discovery_screen.dart';
 import '../screens/chat/chat_inbox_screen.dart';
 import '../screens/home/add_product_screen.dart';
 import '../services/user_service.dart';
+import '../app/app_transitions.dart';
 import '../extensions/context_tr.dart';
 import '../main.dart';
 import '../utils/responsive.dart';
@@ -298,7 +299,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         onTap: () {
           Navigator.of(
             context,
-          ).push(MaterialPageRoute(builder: (_) => const AddProductScreen()));
+          ).push(buildAppRoute(builder: (_) => const AddProductScreen()));
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
@@ -467,7 +468,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                       borderRadius: BorderRadius.circular(12),
                       onTap: () {
                         Navigator.of(context).push(
-                          MaterialPageRoute(
+                          buildAppRoute(
                             builder: (_) => const AddProductScreen(),
                           ),
                         );

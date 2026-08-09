@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../extensions/context_tr.dart';
+import '../../app/app_transitions.dart';
 import '../../services/api_config.dart';
 import '../../widgets/google_loading.dart';
 import 'admin_kyc_document_view_screen.dart';
@@ -456,7 +457,7 @@ class _AdminKycScreenState extends State<AdminKycScreen>
 
   Future<void> _showKycDetail(Map<String, dynamic> user) async {
     final changed = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => AdminKycDocumentViewScreen(user: user)),
+      buildAppRoute(builder: (_) => AdminKycDocumentViewScreen(user: user)),
     );
     if (changed == true && mounted) loadKycData();
   }

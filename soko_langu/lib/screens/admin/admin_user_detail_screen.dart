@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart'; // ignore: unused_import
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import '../../extensions/context_tr.dart';
+import '../../app/app_transitions.dart';
 import '../../services/api_config.dart';
 import '../../widgets/google_loading.dart';
 import 'admin_kyc_document_view_screen.dart';
@@ -138,7 +139,7 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
   Future<void> _showKycReview() async {
     final user = <String, dynamic>{'uid': widget.uid, ...?_userData};
     final changed = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => AdminKycDocumentViewScreen(user: user)),
+      buildAppRoute(builder: (_) => AdminKycDocumentViewScreen(user: user)),
     );
     if (changed == true) _loadData();
   }

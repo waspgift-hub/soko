@@ -8,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart'; // ignore: unused_import
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/routes.dart';
+import '../../app/app_transitions.dart';
 import '../../extensions/context_tr.dart';
 import '../../models/saved_account.dart';
 import '../../notifiers/auth_notifier.dart';
@@ -128,7 +129,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       }
       await context.read<AuthNotifier>().sendPhoneOtp(_normalizedPhone!);
       if (mounted) {
-        Navigator.push(context, MaterialPageRoute(
+        Navigator.push(context, buildAppRoute(
           builder: (_) => OtpScreen(
             phone: _normalizedPhone!,
             email: _emailController.text.trim(),

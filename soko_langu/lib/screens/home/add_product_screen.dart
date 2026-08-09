@@ -8,6 +8,7 @@ import '../../services/category_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
 import '../../utils/network_error.dart';
+import '../../app/app_transitions.dart';
 import '../../widgets/barcode_scanner_widget.dart';
 import '../../constants/tanzania_districts.dart';
 
@@ -183,7 +184,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   Future<void> _scanBarcode() async {
     final result = await Navigator.push<String>(
       context,
-      MaterialPageRoute(builder: (_) => const BarcodeScannerWidget()),
+      buildAppRoute(builder: (_) => const BarcodeScannerWidget()),
     );
     if (result != null && result.isNotEmpty && mounted) {
       _barcodeController.text = result;

@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
+import '../../app/app_transitions.dart';
 import '../../services/analytics_service.dart';
 import '../../models/analytics_models.dart';
 import '../../services/api_config.dart';
@@ -1289,7 +1290,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   // ─── ACTION: Review KYC ─────────────────────────────────────
   Future<void> _showKycReviewDialog(Map<String, dynamic> user) async {
     final changed = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => AdminKycDocumentViewScreen(user: user)),
+      buildAppRoute(builder: (_) => AdminKycDocumentViewScreen(user: user)),
     );
     if (changed == true) _loadExceptions();
   }

@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../extensions/context_tr.dart';
+import '../../app/app_transitions.dart';
 import '../../services/search_service.dart';
 import '../../services/search_history_service.dart';
 import '../../app/routes.dart';
@@ -259,7 +260,7 @@ class _SearchScreenState extends State<SearchScreen>
   Future<void> _openBarcodeScanner() async {
     final result = await Navigator.push<String>(
       context,
-      MaterialPageRoute(builder: (_) => const BarcodeScannerWidget()),
+      buildAppRoute(builder: (_) => const BarcodeScannerWidget()),
     );
     if (result != null && result.isNotEmpty && mounted) {
       _searchCtrl.text = result;
