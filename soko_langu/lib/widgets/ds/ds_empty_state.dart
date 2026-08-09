@@ -6,6 +6,10 @@ import 'ds_button.dart';
 
 /// Design-system empty state (spec §17): 48dp icon in a 96dp 10%-tint circle,
 /// title, secondary body, and a single primary CTA. Entrance scales 0.9→1.
+///
+/// When [centered] is true the state fills its parent and centers the content
+/// vertically — use it for full-screen empty bodies. Set it to false when the
+/// state sits inside an existing scrollable/column (e.g. a section on a page).
 class DsEmptyState extends StatefulWidget {
   final IconData icon;
   final String title;
@@ -13,6 +17,7 @@ class DsEmptyState extends StatefulWidget {
   final String? actionLabel;
   final VoidCallback? onAction;
   final Color? tint;
+  final bool centered;
 
   const DsEmptyState({
     super.key,
@@ -22,6 +27,7 @@ class DsEmptyState extends StatefulWidget {
     this.actionLabel,
     this.onAction,
     this.tint,
+    this.centered = true,
   });
 
   @override
@@ -63,48 +69,50 @@ class _DsEmptyStateState extends State<DsEmptyState>
       opacity: _fade,
       child: ScaleTransition(
         scale: _scale,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.s6,
-            vertical: AppSpacing.s8,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 96,
-                height: 96,
-                decoration: BoxDecoration(
-                  color: tint.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.s6,
+              vertical: AppSpacing.s8,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 96,
+                  height: 96,
+                  decoration: BoxDecoration(
+                    color: tint.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(widget.icon, size: 48, color: tint),
                 ),
-                child: Icon(widget.icon, size: 48, color: tint),
-              ),
-              const SizedBox(height: AppSpacing.s5),
-              Text(
-                widget.title,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              if (widget.body != null) ...[
-                const SizedBox(height: AppSpacing.s2),
+                const SizedBox(height: AppSpacing.s5),
                 Text(
-                  widget.body!,
+                  widget.title,
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: scheme.brandTextSecondary,
-                      ),
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
+                if (widget.body != null) ...[
+                  const SizedBox(height: AppSpacing.s2),
+                  Text(
+                    widget.body!,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: scheme.brandTextSecondary,
+                        ),
+                  ),
+                ],
+                if (widget.actionLabel != null && widget.onAction != null) ...[
+                  const SizedBox(height: AppSpacing.s6),
+                  DsButton(
+                    label: widget.actionLabel!,
+                    onPressed: widget.onAction,
+                    height: 48,
+                  ),
+                ],
               ],
-              if (widget.actionLabel != null && widget.onAction != null) ...[
-                const SizedBox(height: AppSpacing.s6),
-                DsButton(
-                  label: widget.actionLabel!,
-                  onPressed: widget.onAction,
-                  height: 48,
-                ),
-              ],
-            ],
+            ),
           ),
         ),
       ),

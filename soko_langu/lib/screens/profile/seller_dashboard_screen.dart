@@ -137,6 +137,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                           DsEmptyState(
                             icon: Icons.receipt_long_outlined,
                             title: context.tr('no_transactions'),
+                            centered: false,
                           ),
                       ],
                     ),

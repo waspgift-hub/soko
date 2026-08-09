@@ -19,6 +19,7 @@ import '../../theme/app_typography.dart';
 import '../chat/chat_navigation.dart';
 import '../../widgets/payment_banner.dart';
 import '../../widgets/payment_result_dialog.dart';
+import '../../widgets/buyer_transport_sheet.dart';
 import '../../widgets/soko_vibe_loading.dart';
 import '../../widgets/order_status_config.dart';
 import 'package:go_router/go_router.dart';
@@ -241,6 +242,13 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
       _showError('${context.tr('confirm_failed_msg')}: $e');
     }
     setState(() => _releasingTxId = null);
+  }
+
+  Future<void> _submitTransport(String txId, Map<String, dynamic> d) async {
+    final saved = await showBuyerTransportSheet(context: context, orderId: txId);
+    if (!saved || !mounted) return;
+    _showSuccess(context.tr('transport_saved'));
+    setState(() {});
   }
 
   void _showSellerRatingDialog(
@@ -989,6 +997,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                         cancellingTxId: _cancellingTxId,
                         onPay: _payForOrder,
                         onConfirm: _confirmDelivery,
+                        onTransport: _submitTransport,
                         onDispute: _raiseDispute,
                         onCancel: _cancelOrder,
                         onDelete: _deleteOrder,
@@ -1032,6 +1041,7 @@ class _OrderGlassCard extends StatelessWidget {
   final Function(String) onDispute;
   final Function(String) onCancel;
   final Function(String) onDelete;
+  final Function(String, Map<String, dynamic>) onTransport;
   final String Function(String) escrowLabel;
   final bool isSelectionMode;
   final bool isSelected;
@@ -1050,6 +1060,7 @@ class _OrderGlassCard extends StatelessWidget {
     required this.onDispute,
     required this.onCancel,
     required this.onDelete,
+    required this.onTransport,
     required this.escrowLabel,
     this.isSelectionMode = false,
     this.isSelected = false,
@@ -1700,6 +1711,9 @@ class _OrderGlassCard extends StatelessWidget {
   }) {
     final canPay = status == 'awaiting_payment' || status == 'quoted';
     final canConfirm = status == 'delivered' || status == 'dispatched';
+    final canFillTransport =
+        (status == 'escrow_hold' || status == 'paid_escrow_held') &&
+        data['buyerTransport'] == null;
     final canDispute =
         status == 'paid_escrow_held' ||
         status == 'escrow_hold' ||
@@ -1735,6 +1749,18 @@ class _OrderGlassCard extends StatelessWidget {
           releasingTxId == docId ? null : () => onConfirm(docId),
           cs.successGreen,
           releasingTxId == docId,
+        ),
+      );
+    if (canFillTransport)
+      actions.add(
+        _buildActionBtn(
+          context,
+          cs,
+          Icons.local_shipping_outlined,
+          context.tr('transport_details'),
+          () => onTransport(docId, data),
+          cs.primary,
+          false,
         ),
       );
     if (status == 'awaiting_shipping_quote')

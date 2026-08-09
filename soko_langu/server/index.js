@@ -1862,6 +1862,75 @@ app.post('/api/escrow/dispatch', async (req, res) => {
 });
 
 // ============================================================
+// 🔒 ESCROW — Buyer fills transport details after payment is held.
+//     Buyer states how the goods will be sent (bus/bodaboda/pikipiki),
+//     which the seller then uses to dispatch. Status must be escrow_hold.
+// ============================================================
+app.post('/api/escrow/buyer-transport', async (req, res) => {
+  try {
+    const auth = await requireUser(req, res);
+    if (!auth.ok) return;
+    const { orderId, userId, transportMethod, companyName, plateNumber, driverName, driverPhone, note } = req.body;
+    if (!orderId || !userId) {
+      return res.status(400).json({ error: 'Missing orderId or userId' });
+    }
+    if (!transportMethod || !['bus', 'bodaboda', 'pikipiki'].includes(transportMethod)) {
+      return res.status(400).json({ error: 'transportMethod must be bus, bodaboda or pikipiki' });
+    }
+    if (auth.uid !== userId) {
+      return res.status(403).json({ error: 'Forbidden: cannot set transport for another account' });
+    }
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const txDoc = await db.collection('transactions').doc(orderId).get();
+    if (!txDoc.exists) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+    const tx = txDoc.data();
+    if (tx.buyerId !== userId) {
+      return res.status(403).json({ error: 'Only the buyer can set transport details' });
+    }
+    if (tx.status !== 'escrow_hold') {
+      return res.status(400).json({ error: `Transport can only be set while payment is held. Current status: ${tx.status}` });
+    }
+    if (tx.escrowReleased === true) {
+      return res.status(400).json({ error: 'Escrow already released' });
+    }
+
+    const buyerTransport = {
+      method: transportMethod,
+      companyName: companyName || '',
+      plateNumber: plateNumber || '',
+      driverName: driverName || '',
+      driverPhone: driverPhone || '',
+      note: note || '',
+      submittedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    await txDoc.ref.update({ buyerTransport });
+
+    // Notify seller (notification screen)
+    await db.collection('notifications').add({
+      userId: tx.sellerId,
+      title: '🚚 Mnunuzi Amechagua Usafirishaji!',
+      body: `${tx.buyerName || 'Mnunuzi'} ameweka taarifa za usafirishaji kwa Oda #${orderId}. Fungua app na tuma bidhaa.`,
+      isRead: false,
+      data: { type: 'buyer_transport', transactionId: orderId },
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // Push to seller
+    try {
+      await sendOneSignalNotification(tx.sellerId, 'Mnunuzi Amechagua Usafirishaji!', `${tx.buyerName || 'Mnunuzi'} ameweka taarifa za usafirishaji. Tumia hizo taarifa kutuma bidhaa.`, { type: 'buyer_transport', transactionId: orderId });
+    } catch (_) {}
+
+    res.json({ success: true, message: 'Taarifa za usafirishaji zimehifadhiwa' });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================================
 // 🔒 ESCROW — Release payment to seller (buyer confirms delivery)
 //     Requires status to be 'dispatched' first
 // ============================================================
@@ -4688,6 +4757,185 @@ app.get('/api/seller-statement/:sellerId', async (req, res) => {
         phone: sellerPhone,
         email: sellerEmail,
         location: sellerLocation,
+      },
+      summary: {
+        totalCredits: Math.round(totalCredits * 100) / 100,
+        totalDebits: Math.round(totalDebits * 100) / 100,
+        currentBalance: Math.round(balance * 100) / 100,
+        totalTransactions: entries.length,
+      },
+      entries,
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================================
+// 📄 BUYER STATEMENT — Financial record of a buyer's payments
+//     Lists every payment (debit) and refund (credit) made by the
+//     buyer over the last 12 months, with running balance.
+// ============================================================
+app.get('/api/buyer-statement/:buyerId', async (req, res) => {
+  try {
+    const { buyerId } = req.params;
+    if (!buyerId) return res.status(400).json({ error: 'buyerId required' });
+
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    let decoded;
+    try {
+      decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
+    } catch {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    if (decoded.uid !== buyerId) {
+      const userDoc = await db.collection('users').doc(decoded.uid).get();
+      if (!userDoc.exists || !userDoc.data().isAdmin) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+    }
+
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const buyerDoc = await db.collection('users').doc(buyerId).get();
+    if (!buyerDoc.exists) return res.status(404).json({ error: 'Buyer not found' });
+    const buyerData = buyerDoc.data();
+    const buyerName = buyerData.name || buyerData.displayName || 'Mnunuzi';
+    const buyerPhone = buyerData.phone || buyerData.phoneNumber || '';
+    const buyerEmail = buyerData.email || '';
+    const buyerLocation = buyerData.location || '';
+
+    const twelveMonthsAgo = new Date();
+    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+
+    const txSnap = await db.collection('transactions')
+      .where('buyerId', '==', buyerId)
+      .get();
+    const txDocs = txSnap.docs.filter((doc) => {
+      const createdAt = doc.data().createdAt;
+      const t = createdAt ? (createdAt.toDate ? createdAt.toDate() : new Date(createdAt)) : null;
+      return t != null && t >= twelveMonthsAgo;
+    });
+
+    // Payments made by the buyer (money out)
+    const paidStatuses = new Set(['paid', 'escrow_hold', 'dispatched', 'delivered', 'delivery_confirmed', 'completed', 'refunded']);
+    const entries = [];
+    let runningBalance = 0;
+
+    for (const doc of txDocs) {
+      const d = doc.data();
+      const status = d.status || '';
+      const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
+      const totalAmount = d.totalAmount || 0;
+      const sellerName = d.sellerName || 'Muuzaji';
+      const productName = d.productName || 'Bidhaa';
+
+      if (paidStatuses.has(status)) {
+        runningBalance -= totalAmount;
+        entries.push({
+          type: 'debit',
+          date: createdAt ? createdAt.toISOString() : null,
+          description: `Malipo: ${productName} - ${sellerName}`,
+          grossAmount: totalAmount,
+          commission: 0,
+          netAmount: totalAmount,
+          runningBalance: runningBalance,
+          transactionId: doc.id,
+          status,
+        });
+      }
+
+      if (status === 'refunded' || status === 'failed') {
+        const refundAmount = d.refundAmount || d.totalAmount || 0;
+        if (refundAmount > 0) {
+          runningBalance += refundAmount;
+          entries.push({
+            type: 'credit',
+            date: createdAt ? createdAt.toISOString() : null,
+            description: `Marejesho: ${productName} - pesa zimerudishwa`,
+            grossAmount: refundAmount,
+            commission: 0,
+            netAmount: refundAmount,
+            runningBalance: runningBalance,
+            transactionId: doc.id,
+            status: 'refunded',
+          });
+        }
+      }
+    }
+
+    // Wallet deposits (money added to buyer's Soko wallet)
+    const walletSnap = await db.collection('wallet_transactions')
+      .where('userId', '==', buyerId)
+      .get();
+    for (const doc of walletSnap.docs) {
+      const d = doc.data();
+      const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
+      if (createdAt && createdAt >= twelveMonthsAgo) {
+        const amount = d.amount || 0;
+        const type = d.type || '';
+        if (type === 'deposit') {
+          runningBalance -= amount;
+          entries.push({
+            type: 'debit',
+            date: createdAt.toISOString(),
+            description: `Tapo la pochi: ${d.description || 'Uwekaji wa fedha'}`,
+            grossAmount: amount,
+            commission: 0,
+            netAmount: amount,
+            runningBalance: runningBalance,
+            transactionId: doc.id,
+            status: 'completed',
+          });
+        } else if (type === 'refund') {
+          runningBalance += amount;
+          entries.push({
+            type: 'credit',
+            date: createdAt.toISOString(),
+            description: `Marejesho ya pochi: ${d.description || ''}`,
+            grossAmount: amount,
+            commission: 0,
+            netAmount: amount,
+            runningBalance: runningBalance,
+            transactionId: doc.id,
+            status: 'completed',
+          });
+        }
+      }
+    }
+
+    // Sort all entries by date
+    entries.sort((a, b) => {
+      if (!a.date && !b.date) return 0;
+      if (!a.date) return -1;
+      if (!b.date) return 1;
+      return new Date(a.date) - new Date(b.date);
+    });
+
+    // Recalculate running balance chronologically
+    let balance = 0;
+    for (const entry of entries) {
+      if (entry.type === 'credit') balance += entry.netAmount;
+      else balance -= entry.netAmount;
+      entry.runningBalance = balance;
+    }
+
+    const totalCredits = entries.filter(e => e.type === 'credit').reduce((s, e) => s + e.netAmount, 0);
+    const totalDebits = entries.filter(e => e.type === 'debit').reduce((s, e) => s + e.netAmount, 0);
+
+    res.json({
+      success: true,
+      statementTitle: 'Soko Vibe Buyer Statement',
+      generatedAt: new Date().toISOString(),
+      buyer: {
+        buyerId,
+        name: buyerName,
+        phone: buyerPhone,
+        email: buyerEmail,
+        location: buyerLocation,
       },
       summary: {
         totalCredits: Math.round(totalCredits * 100) / 100,

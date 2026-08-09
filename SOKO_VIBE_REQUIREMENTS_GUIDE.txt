@@ -1,0 +1,127 @@
+SOKO VIBE - MWONGOZO WA MAHITAJI (2026)
+=======================================
+TXT HII NI GUIDELINE - Fungua, pitia, rekebisha kabla ya kukamilisha.
+Usifute mpaka mambo yote yamefanyika.
+
+=====================================================================
+[1] FLASH SALE
+=====================================================================
+1.1 Banner ya flash sale ionekane MARA MOJA baada ya kutengenezwa (ndani ya ms app iwe updated).
+1.2 Picha ya bidhaa ifanye 75% ya banner ya flash sale (sio nusu, sio sehemu ndogo - 75%).
+1.3 Flash sale ikitengenezwa -> push notification (OneSignal) + heads-up (local notification)
+    kwa wateja: "fulani amepunguza bei ya bidhaa fulani".
+1.4 Kwenye ku-create flash sale: mtumiaji akibonyeza "Watch Ad" -> ads ionekane MARA MOJA.
+
+=====================================================================
+[2] MALIPO / PAYMENT BANNER
+=====================================================================
+2.1 Banner isiwe "loading forever":
+    - ClickPesa akisema failed -> banner iwe FAILED mara moja.
+    - Baada ya failed, vitu vingine vitokee (error details / retry).
+2.2 Banner yoyote ya malipo ikitokea -> mtumiaji ASIWEZE kufanya kitu kingine
+    mpaka malipo yakamilike AU yawe failed (modal blocking).
+    - Lakini kuwe na safety timeout (dakika 1) - banner isifunge app milele.
+2.3 Shenghe (confetti) isijirudie mara mbili.
+2.4 Success -> shenghe moja + risiti inaweza kutoka.
+
+=====================================================================
+[3] FLOW YA ORDER (ESCROW) - muhimu sana
+=====================================================================
+3.1 Buyer anaweka address -> anatuma order.
+3.2 Order inafika kwa seller.
+3.3 Seller anaona: buyer amechagua bidhaa GANI na anakaa WAPI
+    (region/district/street/kijiji).
+3.4 Seller anaweka bei ya shipping fee.
+3.5 Buyer anapata taarifa -> analipa.
+3.6 Malipo yanafanikiwa -> hela inaingia account ya ClickPesa, HAItolewi
+    mpaka muuzaji atume mzigo (ESCROW).
+3.7 Baada ya malipo kuwekwa escrow -> BUYER anajaza:
+    - bus / bodaboda / pikipiki atakayo ituma
+    - vitu vingine vya usafirishaji
+    - maelezo mafupi (short note)
+3.8 Seller anatuma mzigo -> buyer anapata taarifa: "nenda sehemu fulani",
+    atakuta mzigo wake pamoja na maelezo madogo kutoka seller.
+3.9 Mnunuzi akiona mzigo -> anathibitisha (confirm receipt).
+3.10 Hapo ndipo RISITI inatoka kwa seller NA buyer.
+3.11 Taarifa zote zina rekodiwa kwenye ACCOUNT STATEMENT (sio seller
+    statement tu) na details zote (2026 mwaka).
+
+=====================================================================
+[4] NOTIFICATIONS - mfumo mzima
+=====================================================================
+4.1 Kila situation -> notification inaingia kwenye SCREEN ya notification.
+4.2 Push notification = OneSignal.
+4.3 Heads-up notification = LOCAL notification (iko kwenye device).
+4.4 SMS (meseji) inatumwa TU kwa:
+    - malipo yamekamilika
+    - malipo hayajakamilika
+    - ku-send OTP
+4.5 Notification zisionekane MARA MBILI (dedup) - hususani order details.
+
+=====================================================================
+[5] UTENGANO WA SEHEMU (kila kipengele kazi yake)
+=====================================================================
+5.1 Sehemu ya kuangalia order -> kazi yake ni kuangalia order TU.
+5.2 Sehemu ya kuweka shipping fee -> kazi yake ni hiyo TU.
+5.3 Sehemu ya kutuma bidhaa -> kazi yake ni hiyo TU.
+5.4 Sehemu ya kuweka address -> kazi yake ni hiyo TU.
+5.5 Hakuna kipengele kinachoingilia kazi ya kingine.
+
+=====================================================================
+[6] ADDRESS / MIKOA YA TANZANIA
+=====================================================================
+6.1 Web search 2026: mikoa YOTE ya Tanzania + wilaya zake + mitaa yake +
+    vitongoji vyote.
+6.2 Kwa urahisi wa selection (buyer) na seller kujua buyer yupo wapi.
+
+=====================================================================
+[7] CHAT
+=====================================================================
+7.1 Chat list: onyesha JINA la member, sio ID.
+7.2 Push + heads-up notification ya UNREAD BUBBLE:
+    - inaonekana kwa mtumiaji ANAYEPOKEA ujumbe (sio mtumaji)
+    - ikiwa hayupo kwenye chat room.
+7.3 Kwenye chat room kuwe na indicator za: TYPING, OFFLINE, ONLINE.
+7.4 Profile picture:
+    - kama haja set picha -> icon ya mtu (person icon)
+    - akiweka picha -> picha yake ionekane.
+
+=====================================================================
+[8] AI
+=====================================================================
+8.1 ONDOA dropdown/drop-up banner ile inayo kaa kwenye AI.
+8.2 AI ISITUME bidhaa / isionyeshe bidhaa ambazo hazijatumwa.
+8.3 Kama mtumiaji anaongea SALAMU tu -> bidhaa zisionyeshwe.
+8.4 Kwenye ANALYTICS kuwe na AI wa kutoa maoni machache kuhusiana na
+    kuikuza bidhaa.
+8.5 Taarifa zinazoonekana kwenye analytics ziwe za KWELI (sio hard-coded).
+
+=====================================================================
+[9] LANGUAJE
+=====================================================================
+9.1 Languaje ziwe TATU tu: KISWAHILI, ENGLISH, KICHINA (Chinese).
+9.2 Ondoa zingine zote.
+
+=====================================================================
+[10] PROFILE / RATINGS
+=====================================================================
+10.1 Records za rates zionyeshe REAL data, sio hard-coded.
+10.2 Watumiaji wawe na permission ya ku-rate bidhaa.
+10.3 Watumiaji waone "buyer requests".
+
+=====================================================================
+[11] SEARCH SCREEN
+=====================================================================
+11.1 Mtumiaji hajasearch chochote -> zionekane:
+     - bidhaa zilizo BOOSTIWA ziwe za KWANZA
+     - zisizo-boostiwa ziwe za MWISHO.
+11.2 Feature mpya: MOST RATED PRODUCTS (bidhaa zenye rates nyingi).
+11.3 Feature mpya: MOST RATED SELLERS.
+
+=====================================================================
+[12] MENGINE YA UI/UX
+=====================================================================
+12.1 "Analytics" (nje) vs "Statistics" (ndani) - fananisha: linaloonekana
+     ni "Analytics" kila mahali.
+12.2 Order details zirekebishwe (taarifa zisionekane mara mbili).
+12.3 Changisha UI na UX kwa ujumla.

@@ -123,6 +123,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                             child: DsEmptyState(
                               icon: Icons.inbox_outlined,
                               title: context.tr('no_received_orders'),
+                              centered: false,
                             ),
                           ),
                         )
@@ -397,6 +398,21 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                                 variant: DsButtonVariant.secondary,
                                 height: 40,
                                 onPressed: () => _viewBuyerProfile(buyerId),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          if (status == 'delivered' ||
+                              status == 'completed' ||
+                              status == 'delivery_confirmed') ...[
+                            Expanded(
+                              child: DsButton(
+                                label: context.tr('view_receipt'),
+                                icon: Icons.receipt_long_outlined,
+                                variant: DsButtonVariant.secondary,
+                                height: 40,
+                                onPressed: () =>
+                                    context.push('${AppRoutes.receipt}/$txId'),
                               ),
                             ),
                             const SizedBox(width: 8),

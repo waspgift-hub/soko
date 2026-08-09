@@ -121,12 +121,9 @@ class _PaymentBannerContentState extends State<_PaymentBannerContent>
           Positioned.fill(child: DsConfetti()),
         if (widget.type == PaymentBannerType.success)
           const Positioned.fill(child: DsCelebrationRain()),
-        GestureDetector(
-          onTap: widget.onDismiss,
-          child: FadeTransition(
-            opacity: _fade,
-            child: Container(color: Colors.black.withValues(alpha: 0.35)),
-          ),
+        // Visual-only dim: must not swallow taps meant for the screen below.
+        IgnorePointer(
+          child: Container(color: Colors.black.withValues(alpha: 0.35)),
         ),
         SlideTransition(
           position: _slide,
@@ -314,8 +311,10 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
   late final AnimationController _ctrl;
   late final Animation<double> _fade;
   bool _done = false;
+  bool _timedOut = false;
   String _errorMsg = '';
   Timer? _pollTimer;
+  Timer? _timeoutTimer;
 
   @override
   void initState() {
@@ -327,12 +326,22 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
     _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeIn);
     _ctrl.forward();
     _startPolling();
+    // Safety net: never let a stuck payment banner block the whole app —
+    // surface it as a failed state (with retry) instead of vanishing silently.
+    _timeoutTimer = Timer(const Duration(minutes: 1), () {
+      if (mounted && !_done) {
+        setState(() => _timedOut = true);
+        widget.onError?.call('Payment timed out. Please try again.');
+        _finish();
+      }
+    });
   }
 
   @override
   void dispose() {
     _ctrl.dispose();
     _pollTimer?.cancel();
+    _timeoutTimer?.cancel();
     super.dispose();
   }
 
@@ -366,7 +375,6 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
             }
           } else if (widget.successStatuses.contains(status)) {
             if (mounted && !_done) {
-              CelebrationOverlay.show(context);
               widget.onSuccess?.call();
               _finish();
             }
@@ -413,18 +421,18 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
         final status = data?['status'] as String? ?? 'pending';
 
         final isOk = widget.successStatuses.contains(status);
-        final isFail = status == 'failed' || status == 'cancelled';
+        final isFail = (status == 'failed' || status == 'cancelled') || _timedOut;
         final isLoading = !isOk && !isFail;
 
         if (isOk && !_done) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            // Payment landed — throw a full-screen "sherehe" confetti rain.
-            CelebrationOverlay.show(context);
+            // Payment landed — fire the caller's success handler; celebration
+            // confetti belongs to PaymentBanner (success), not this overlay.
             widget.onSuccess?.call();
             _finish();
           });
         }
-        if (isFail && !_done) {
+        if (isFail && !_done && !_timedOut) {
           final reason = data?['failureReason'] as String? ??
               data?['errorMessage'] as String? ??
               'Payment failed';

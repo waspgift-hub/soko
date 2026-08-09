@@ -105,7 +105,7 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
         stream: FirebaseFirestore.instance
             .collection('transactions')
             .where('sellerId', isEqualTo: user.uid)
-            .where('status', whereIn: ['paid_escrow_held', 'dispatched'])
+            .where('status', whereIn: ['escrow_hold', 'paid_escrow_held', 'dispatched'])
             .snapshots(),
         builder: (context, snap) {
           if (snap.hasError) {
@@ -116,7 +116,9 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
           }
 
           final docs = snap.data!.docs
-              .where((d) => (d.data() as Map)['status'] == 'paid_escrow_held')
+              .where((d) =>
+                  (d.data() as Map)['status'] == 'escrow_hold' ||
+                  (d.data() as Map)['status'] == 'paid_escrow_held')
               .where((d) => (d.data() as Map)['deletedForSeller'] != true)
               .toList();
           docs.sort((a, b) {
@@ -226,6 +228,8 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
                       if (shippingCost > 0)
                         _infoRow(cs, Icons.local_shipping_outlined, context.tr('shipping_cost'),
                             context.formatPrice(shippingCost)),
+                      if (d['buyerTransport'] != null)
+                        _buyerTransportCard(cs, d['buyerTransport'] as Map<String, dynamic>),
                       const SizedBox(height: 12),
                       Container(height: 1, color: cs.primary.withValues(alpha: 0.08)),
                       const SizedBox(height: 12),
@@ -281,6 +285,57 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buyerTransportCard(ColorScheme cs, Map<String, dynamic> t) {
+    final method = t['method'] as String? ?? '';
+    final methodLabel = method == 'bus'
+        ? context.tr('transport_bus')
+        : method == 'bodaboda'
+            ? context.tr('transport_bodaboda')
+            : context.tr('transport_pikipiki');
+    final company = t['companyName'] as String? ?? '';
+    final plate = t['plateNumber'] as String? ?? '';
+    final driver = t['driverName'] as String? ?? '';
+    final phone = t['driverPhone'] as String? ?? '';
+    final note = t['note'] as String? ?? '';
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: cs.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.local_shipping_outlined, size: 16, color: cs.primary),
+              const SizedBox(width: 6),
+              Text(
+                context.tr('buyer_transport_label'),
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: cs.primary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _infoRow(cs, Icons.directions_outlined, context.tr('transport_method'), methodLabel),
+          if (company.isNotEmpty)
+            _infoRow(cs, Icons.business_outlined, context.tr('transport_company'), company),
+          if (plate.isNotEmpty)
+            _infoRow(cs, Icons.pin_outlined, context.tr('transport_plate'), plate),
+          if (driver.isNotEmpty)
+            _infoRow(cs, Icons.person_outline, context.tr('transport_driver_name'), driver),
+          if (phone.isNotEmpty)
+            _infoRow(cs, Icons.phone_outlined, context.tr('driver_phone'), phone),
+          if (note.isNotEmpty)
+            _infoRow(cs, Icons.notes, context.tr('transport_note'), note),
+        ],
       ),
     );
   }

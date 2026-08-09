@@ -21,6 +21,7 @@ import '../../widgets/google_loading.dart';
 import '../../widgets/soko_vibe_loading.dart';
 import '../../widgets/payment_banner.dart';
 import '../../widgets/payment_result_dialog.dart';
+import '../../widgets/buyer_transport_sheet.dart';
 import '../../widgets/location_map_widget.dart';
 import '../../widgets/call_seller_button.dart';
 import '../../utils/network_error.dart';
@@ -1316,6 +1317,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     final user = FirebaseAuth.instance.currentUser;
     final isBuyer = user != null && d['buyerId'] == user.uid;
     final canConfirm = status == 'delivered' || status == 'dispatched';
+    final canFillTransport =
+        (status == 'escrow_hold' || status == 'paid_escrow_held') &&
+        isBuyer &&
+        d['buyerTransport'] == null;
     final canDispute =
         status == 'paid_escrow_hold' ||
         status == 'escrow_hold' ||
@@ -1411,7 +1416,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       );
     }
 
-    if (!canConfirm && !canDispute && !canCancel)
+    if (!canConfirm && !canDispute && !canCancel && !canFillTransport)
       return const SizedBox.shrink();
 
     return Container(
@@ -1430,6 +1435,24 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       ),
       child: Column(
         children: [
+          if (canFillTransport)
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: () => _submitTransport(),
+                icon: const Icon(Icons.local_shipping_outlined, size: 20),
+                label: Text(context.tr('transport_details')),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: cs.primary,
+                  foregroundColor: cs.surface,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  elevation: 0,
+                ),
+              ),
+            ),
           if (canConfirm)
             SizedBox(
               width: double.infinity,
@@ -1703,6 +1726,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     if (mounted) setState(() => _releasingTxId = null);
   }
 
+  Future<void> _submitTransport() async {
+    final saved = await showBuyerTransportSheet(
+      context: context,
+      orderId: widget.docId,
+    );
+    if (!saved || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(context.tr('transport_saved')),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    setState(() {});
+  }
+
   Future<void> _raiseDispute(String txId) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -1892,7 +1930,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
           processingSubtitle: context.tr('check_phone_enter_pin'),
           successTitle: context.tr('payment_successful'),
           failedTitle: context.tr('payment_failed'),
-          onSuccess: () {},
+          onSuccess: () {
+            if (mounted) {
+              PaymentBanner.show(
+                context: context,
+                type: PaymentBannerType.success,
+                title: context.tr('payment_successful'),
+              );
+            }
+          },
           onError: (msg) {
             if (mounted) PaymentResult.show(context: context, success: false, errorMessage: msg);
           },

@@ -136,8 +136,12 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
   ) {
     final nf = NumberFormat('#,###', 'en');
 
-    // Seller receives = price - platformFee (what seller actually gets)
-    final sellerReceives = price - platformFee;
+    // Seller receives = price - platformFee (what seller actually gets);
+    // prefer the stored field when the server recorded the true payout.
+    final storedSellerReceives = (d['sellerReceives'] as num?)?.toDouble();
+    final sellerReceives = (storedSellerReceives != null && storedSellerReceives > 0)
+        ? storedSellerReceives
+        : price - platformFee;
 
     return Container(
       decoration: BoxDecoration(
@@ -287,7 +291,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Image.asset('assets/app_icon.png', height: 32, errorBuilder: (_, __, ___) =>
+              Image.asset('assets/app_icon.png', height: 32, errorBuilder: (_, _, _) =>
                 Icon(Icons.store, size: 28, color: cs.primary)),
               const SizedBox(width: 8),
               Text(context.tr('soko_vibe_brand'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 2, color: cs.primary)),
