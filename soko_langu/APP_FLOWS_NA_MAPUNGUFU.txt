@@ -31,7 +31,8 @@ A1. App STARTUP (Initialization Flow)
    - runApp(SokoVibeApp)
 2. _SokoVibeAppState.initState:
    - Kujenga ProductFeedProvider, AuthRepository, OnboardingService, AuthNotifier
-   - _initApp(): theme load, language (default 'en'), currency (default 'TZS'),
+   - _initApp(): theme load, language (default 'sw', inaendana na onboarding),
+     currency (default 'TZS'),
      AuthNotifier.initialize(), appStateNotifier.setAppInitialized(),
      MagicLinkService.initialize(), AppLockService.load(), background services
 3. _initBackgroundServices: Crashlytics, Performance, AppCheck, AdMob,
@@ -96,9 +97,9 @@ A3. HOME + NAVIGATION (MainScreen / Bottom Nav)
 A4. KUTAFUTA BIDHAA (Search / Discovery / Category)
 ------------------------------------------------------------------------------
 - Global search: POST /api/search/global-search (search.js) — maktaba, na
-  autocomplete /api/search/autocomplete, trending /api/search/trending,
-  record-click /api/search/record-click (zote bila auth ya server? — enda sehemu
-  B gap).
+  autocomplete /api/search/autocomplete, record-click /api/search/record-click
+  (zina Bearer auth — verifyAuthToken; SearchService inatuma token).
+  Trending /api/search/trending ni public (data isiyo nyeti).
 - Home search/filter iko ndani ya HomeScreen (client-side query kwenye Firestore
   au kupitia server).
 - ProductDetail: maoni/reviews, comments, similar products, buy now, chat seller,
@@ -123,9 +124,9 @@ A6. BOOST YA BIDHAA (Product Boost)
    userId, productName, productImage, productPrice, paymentMethod}
 2. ClickPesa USSD push / BillPay → webhook /api/clickpesa/webhook →
    isBoosted=true, boostedUntil, isFeatured, featuredUntil (na sisi)
-   (webhook ina-no-op verifyWebhook!)
+   (webhook inathibitisha HMAC/checksum — verifyWebhook)
 3. handleBoostPaymentSuccess: update products/{id} Firestore moja kwa moja
-4. notifyBoost → POST /api/boost/notify (broadcast, NO AUTH server-side)
+4. notifyBoost → POST /api/boost/notify (requireUser + sellerId === auth.uid)
 5. BoostReceiptScreen inaonyesha receipt (BoostReceipt model)
 
 ------------------------------------------------------------------------------
@@ -133,8 +134,9 @@ A7. FLASH SALE
 ------------------------------------------------------------------------------
 - FlashSaleService: firestore stream flash_sales, expiry handling
 - CreateFlashSaleScreen → POST /api/flash-sale/create (token + sellerId match)
-- Scan: POST /api/flash-sale/scan (NO AUTH)
-- Notify: POST /api/flash-sale/notify (NO AUTH broadcast, cooldown 24h kwa push)
+- Scan: POST /api/flash-sale/scan (requireUser)
+- Notify: POST /api/flash-sale/notify (requireUser + sellerId === auth.uid,
+  cooldown 24h kwa push)
 - Expired auto-deactivate: POST /api/flash-sales/deactivate-expired (token
   yoyote), delete admin: POST /api/flash-sales/delete (requireAdmin)
 
@@ -159,8 +161,9 @@ A8. ORDER FLOW (Kuagiza → Escrow → Dispatch → Release → Rating)
    escrow_hold
 5. Seller:
    - SellerOrders._submitQuote → POST /api/orders/transition newStatus:'quoted'
-     + shippingCost/busName/plateNumber + manual update orders/{id} +
-     transactions/{id}
+      + shippingCost/busName/plateNumber (server ina-sync orders/{id} +
+      transactions/{id} mirror — orders.js transitionOrder). Server-only — client
+      write ya transactions doc iliondolewa (redundant).
    - SellerOrders._submitDispatch / SellerDispatchScreen → POST /api/escrow/
      dispatch {orderId, userId, busName, plateNumber, trackingNumber, note}
 6. Buyer:
@@ -182,22 +185,23 @@ A9. MIFUKO YA FEDHA (Wallet / Seller Balance / Withdrawal)
 ------------------------------------------------------------------------------
 WALLET (mnunuzi):
 - Deposit: POST /api/wallet/deposit (token + userId match) USSD/BillPay
-- Purchase kwa wallet: POST /api/wallet/purchase (buyerId kwenye body — NO AUTH
-  server-side!) — inapunguza balance ya mtu mwingine unaweza kumwibia.
+- Purchase kwa wallet: POST /api/wallet/purchase (requireUser + buyerId match +
+  buyer suspension check)
 - Balance/History: GET /api/wallet/balance/:userId, /api/wallet/history/:userId
-  (NO AUTH — leak)
+  (isOwnerOrAdmin)
 - Delete history: POST /api/wallet/delete-history (token + userId match)
 
 SELLER:
-- GET /api/seller/balance (NO AUTH, userId query) — returns salio+phone
-- Withdraw: POST /api/seller/withdraw {userId, amount, phone} — NO AUTH
-  (clickpesaService.sellerWithdraw) — fedha inaweza kutolewa na mtu yeyote
-- Payout status/list: /api/payout-status/:id, /api/payouts (NO AUTH)
-- Retry: POST /api/payout/retry/:id (NO AUTH)
+- GET /api/seller/balance (isOwnerOrAdmin, userId query) — returns salio+phone
+- Withdraw: POST /api/seller/withdraw {userId, amount, phone} — isOwnerOrAdmin
+  (clickpesaService.sellerWithdraw)
+- Payout status/list: /api/payout-status/:id (isOwnerOrAdmin),
+  /api/payouts (requireAdmin)
+- Retry: POST /api/payout/retry/:id (requireAdmin)
 - Admin withdraw: POST /api/admin/withdraw (requireAdmin + uid match)
-- Create payout: POST /api/create-payout (token lakini HAKUNA isAdmin check)
+- Create payout: POST /api/create-payout (requireAdmin + x-admin-secret)
 - Finance summary: GET /api/admin/finance-summary
-- ClickPesa balance: GET /api/clickpesa/balance (NO AUTH)
+- ClickPesa balance: GET /api/clickpesa/balance (requireAdmin)
 - Payout preview: POST /api/clickpesa/payout-preview
 
 ------------------------------------------------------------------------------
@@ -208,7 +212,7 @@ A10. KYC (Uthibitishaji wa Kitambulisho)
 2. _pickImage → ImagePicker (max 1024px)
 3. _uploadImage → CloudinaryService folder 'kyc/{uid}'
 4. _submit → validate fullName/idNumber/images → upload → POST /api/kyc/submit
-   (HAKUNA owner/token check!) → approved? success : pending
+   (isOwnerOrAdmin) → approved? success : pending
 5. Aina: National ID, Passport, Drivers License, Voters ID
 6. Admin: POST /api/admin/kyc/review, revoke, delete; GET pending, all
 7. TODOs server: NIDA API integration, Face Matching (Rekognition/Azure)
@@ -230,9 +234,9 @@ A12. BUYER REQUESTS (Ombi la Mnunuzi)
 ------------------------------------------------------------------------------
 - BuyerRequestsScreen: stream Firestore 'BuyerRequests' ordered by createdAt desc
 - PostBuyerRequestScreen → addRequest (whatsapp inalocked)
-- unlockContact: seller anaupdate unlockedBy (arrayUnion) — hili ni moja kwa
-  moja Firestore, hakuna server authorization kwenye collection (rules? angalia
-  mapungufu B14)
+- unlockContact: seller anaupdate unlockedBy (arrayUnion) — firestore.rules
+  inaruhusu update ya BuyerRequests kuwa 'unlockedBy' pekee kwa seller
+  (notSuspended), create inahitaji buyerUid === auth.uid. [SAWA]
 
 ------------------------------------------------------------------------------
 A13. NOTIFICATIONS (Push / SMS / In-app)
@@ -259,21 +263,21 @@ ONE-SIGNAL (server):
 - sendOneSignalBulk: bulk, filters kwa prefs (filterAllowedUserIds) — admin
   broadcast bypasses prefs (bypassPrefs:true, iliyorekebishwa 2026-08-08)
 - Endpoints:
-  - POST /api/send-notification (NO AUTH!)
+  - POST /api/send-notification (requireUser)
   - POST /api/send-bulk-notification (requireAdmin)
   - POST /api/admin/broadcast-notification (requireAdmin) → inaokoa in-app
     notifications kwa kila user (batch ya 500)
   - POST /api/admin/send-notification (requireAdmin)
   - POST /api/notifications/broadcast (requireAdmin)
-  - GET /api/fcm-check, POST /api/test-fcm (NO AUTH)
+  - GET /api/fcm-check (requireAdmin), POST /api/test-fcm (requireAdmin)
 - Preferences: notification.js /preferences/get, /preferences/set (Bearer auth,
   salama) + notificationPrefs.js gating
-- Listener.js: Firestore listener anatuma OneSignal/SMS kwa events (ina Basic
-  auth header ya OneSignal — index.js inatumia 'Key' — kutofautiana!)
+- Listener.js: Firestore listener anatuma OneSignal/SMS kwa events (ina 'Key'
+  auth header ya OneSignal — inaendana na index.js na REST API v2)
 
 SMS:
 - SmsNotificationService + sms_notification_service.dart
-- POST /api/sms/send (NO AUTH!), POST /api/whatsapp/send (NO AUTH)
+- POST /api/sms/send (requireUser), POST /api/whatsapp/send (requireUser)
 - OTP: /api/auth/send-otp (rate limit 3/15min), /api/auth/send-email-otp
 - Transactional SMS kwa escrow release, orders n.k.
 
@@ -305,7 +309,8 @@ A15. AI / FEATURES ZINGINE
   admin payout kwa sellers
 - ExchangeRateService (TZS/USD), BalancePrivacyService, AppLockService (PIN),
   StatusService (status stories), RecentlyViewedService, WishlistService
-- Reports: /api/reports (POST salama, GET/PATCH NO AUTH), fraud alerts NO AUTH
+- Reports: /api/reports (POST salama; GET/PATCH requireAdmin/isOwnerOrAdmin),
+  fraud alerts requireAdmin/isOwnerOrAdmin
 - Accounts switcher: AccountManager (multi-account email/google)
 
 ================================================================================
@@ -364,6 +369,11 @@ B4. HIGH — Spam / Platform Abuse (NO AUTH)
 25. [FIXED] CORS — origin zisizojulikana zinakataliwa (cb(null,false));
     allowed origins sasa zinajumuisha Firebase hosting domains; PATCH kwenye
     methods.
+26. [FIXED] firestore.rules — duplicate `match /transactions/{txId}` block (line
+    ~260) iliiondolewa. Block ya pekee sasa ni strict: buyer anaweza update
+    `deletedForBuyer` tu, seller `deletedForSeller`/`shippingCost` tu; status/
+    amounts zote zinabaki server-owned (webhook/escrow/orders transition);
+    delete kwa isAdmin pekee.
 
 ------------------------------------------------------------------------------
 B5. MEDIUM — Auth Isiyo Kamili / IDOR kwenye Endpoints Zilizolindwa

@@ -106,13 +106,17 @@ service cloud.firestore {
         isAdmin()
       );
       allow create: if isSignedIn() && request.resource.data.buyerId == request.auth.uid;
+      // The server owns all status/amount mutations (webhook, escrow, orders
+      // transition). Clients may only soft-delete their own row (hide it from
+      // their list) or, for sellers, persist a previously missing shipping cost
+      // before dispatching.
       allow update: if isSignedIn() && (
         (resource.data.buyerId == request.auth.uid && (
-          resource.data.status == 'pending' ||
-          resource.data.status == 'awaiting_payment' ||
-          resource.data.status == 'failed'
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedForBuyer'])
         )) ||
-        resource.data.sellerId == request.auth.uid ||
+        (resource.data.sellerId == request.auth.uid && (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedForSeller', 'shippingCost'])
+        )) ||
         isAdmin()
       );
       allow delete: if isAdmin();
@@ -254,17 +258,6 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-    }
-
-    // ─── TRANSACTIONS (server-managed, client read-only) ────
-    match /transactions/{txId} {
-      allow read: if isSignedIn() && (
-        resource.data.buyerId == request.auth.uid ||
-        resource.data.sellerId == request.auth.uid ||
-        isAdmin()
-      );
-      // For now, allow writes for backward compat (webhook already writes server-side)
-      allow write: if isSignedIn();
     }
 
     // ─── REVENUE TRANSACTIONS ───────────────────────────────

@@ -119,6 +119,7 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
 
           final docs = snap.data!.docs
               .where((d) => (d.data() as Map)['status'] == 'paid_escrow_held')
+              .where((d) => (d.data() as Map)['deletedForSeller'] != true)
               .toList();
           docs.sort((a, b) {
             final ta = (a.data() as Map)['createdAt'];

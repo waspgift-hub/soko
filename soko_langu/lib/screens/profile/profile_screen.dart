@@ -220,12 +220,10 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                                     ? (imageUrl.startsWith('http') ? NetworkImage(imageUrl) as ImageProvider : FileImage(File(imageUrl)))
                                     : null,
                                 child: imageUrl == null
-                                    ? Text(
-                                        _profile?.displayName.isNotEmpty == true ? _profile!.displayName[0].toUpperCase()
-                                            : user?.displayName != null ? user!.displayName![0].toUpperCase()
-                                            : user?.email != null ? user!.email![0].toUpperCase()
-                                            : "U",
-                                        style: TextStyle(fontSize: 40, color: cs.primary, fontWeight: FontWeight.bold),
+                                    ? Icon(
+                                        Icons.person_outline_rounded,
+                                        color: cs.primary,
+                                        size: 48,
                                       )
                                     : null,
                               ),

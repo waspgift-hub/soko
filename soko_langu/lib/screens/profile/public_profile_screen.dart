@@ -219,15 +219,10 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                         ? NetworkImage(profile!.profileImage)
                         : null,
                     child: profile?.profileImage.isEmpty != false
-                        ? Text(
-                            (profile?.displayName.isNotEmpty == true
-                                    ? profile!.displayName
-                                    : widget.userName)[0]
-                                .toUpperCase(),
-                            style: TextStyle(
-                              fontSize: 40,
-                              color: cs.onPrimaryContainer,
-                            ),
+                        ? Icon(
+                            Icons.person_outline_rounded,
+                            size: 44,
+                            color: cs.onPrimaryContainer,
                           )
                         : null,
                   ),

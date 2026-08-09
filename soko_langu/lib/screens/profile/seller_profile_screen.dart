@@ -227,15 +227,10 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
                     ? NetworkImage(profile!.profileImage)
                     : null,
                 child: profile?.profileImage.isEmpty != false
-                    ? Text(
-                        (profile?.displayName.isNotEmpty == true
-                                ? profile!.displayName
-                                : widget.sellerName)[0]
-                            .toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 40,
-                          color: Theme.of(context).colorScheme.surface,
-                        ),
+                    ? Icon(
+                        Icons.person_outline_rounded,
+                        size: 44,
+                        color: Theme.of(context).colorScheme.surface,
                       )
                     : null,
               ),

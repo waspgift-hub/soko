@@ -44,14 +44,9 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
     HapticFeedback.lightImpact();
 
     try {
-      await FirebaseFirestore.instance.collection('transactions').doc(txId).update({
-        'shippingCost': cost,
-        'totalAmount': FieldValue.increment(cost),
-        'status': 'quoted',
-      });
-
-      // Sync the orders doc + timeline and notify the buyer via the server,
-      // so the buyer's pay section (status 'quoted') unlocks on both docs.
+      // The server owns the quoted transition: it updates orders/{id} and the
+      // transactions/{id} mirror (shippingCost + totalAmount) atomically via
+      // transitionOrder, so a failed server call can't leave the docs divergent.
       var transitionOk = false;
       try {
         final token = await FirebaseAuth.instance.currentUser?.getIdToken();
@@ -72,8 +67,8 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
         }
       } catch (_) {}
 
-      // The transactions doc is already quoted locally, but if the server sync
-      // failed the buyer never got notified — make the seller aware.
+      // If the server sync failed the buyer never got notified — make the
+      // seller aware so they can retry.
       if (!transitionOk && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -132,7 +127,9 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
             return const Center(child: GoogleLoading());
           }
 
-          final docs = snap.data!.docs;
+          final docs = snap.data!.docs
+              .where((d) => (d.data() as Map)['deletedForSeller'] != true)
+              .toList();
           docs.sort((a, b) {
             final ta = (a.data() as Map)['createdAt'];
             final tb = (b.data() as Map)['createdAt'];

@@ -74,6 +74,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                 }
 
                 var docs = snap.data!.docs.where((doc) {
+                  if ((doc.data() as Map)['deletedForSeller'] == true) return false;
                   if (_filter == 'all') return true;
                   final status = (doc.data() as Map)['status'] as String? ?? '';
                   return status == _filter;
@@ -324,7 +325,12 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
     if (confirmed != true) return;
 
     try {
-      await FirebaseFirestore.instance.collection('transactions').doc(txId).delete();
+      // Soft-delete (flag) instead of a hard delete — the server owns the
+      // transactions doc and needs it intact for the orders flow.
+      await FirebaseFirestore.instance
+          .collection('transactions')
+          .doc(txId)
+          .update({'deletedForSeller': true});
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(context.tr('product_deleted'))),
