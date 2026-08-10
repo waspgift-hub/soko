@@ -931,42 +931,46 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
               txId,
               copyable: true,
             ),
-          const Divider(height: 20),
-          _tableRow(
-            cs,
-            context.tr('product_price'),
-            'TZS ${_nf(price.toInt())}',
-          ),
-          if (shippingCost != null && shippingCost > 0)
+          // The quoted payment card already shows the full price breakdown,
+          // so skip it here to avoid showing the same figures twice.
+          if (status != 'quoted') ...[
+            const Divider(height: 20),
             _tableRow(
               cs,
-              context.tr('shipping_cost'),
-              'TZS ${_nf(shippingCost.toInt())}',
+              context.tr('product_price'),
+              'TZS ${_nf(price.toInt())}',
             ),
-          if (discount != null && discount > 0)
+            if (shippingCost != null && shippingCost > 0)
+              _tableRow(
+                cs,
+                context.tr('shipping_cost'),
+                'TZS ${_nf(shippingCost.toInt())}',
+              ),
+            if (discount != null && discount > 0)
+              _tableRow(
+                cs,
+                context.tr('discount'),
+                '-TZS ${_nf(discount.toInt())}',
+              ),
             _tableRow(
               cs,
-              context.tr('discount'),
-              '-TZS ${_nf(discount.toInt())}',
+              'Soko Vibe Commission',
+              'TZS ${_nf(platformFee.toInt())}',
             ),
-          _tableRow(
-            cs,
-            'Soko Vibe Commission',
-            'TZS ${_nf(platformFee.toInt())}',
-          ),
-          _tableRow(
-            cs,
-            context.tr('processing_fee'),
-            'TZS ${_nf(processingFee.toInt())}',
-          ),
-          const Divider(height: 20),
-          _tableRow(
-            cs,
-            context.tr('total'),
-            'TZS ${_nf(totalAmount.toInt())}',
-            bold: true,
-            accent: true,
-          ),
+            _tableRow(
+              cs,
+              context.tr('processing_fee'),
+              'TZS ${_nf(processingFee.toInt())}',
+            ),
+            const Divider(height: 20),
+            _tableRow(
+              cs,
+              context.tr('total'),
+              'TZS ${_nf(totalAmount.toInt())}',
+              bold: true,
+              accent: true,
+            ),
+          ],
         ],
       ),
     );
@@ -1068,7 +1072,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     final dispatch = d['dispatchProof'] as Map<String, dynamic>?;
     final hasAddress = address != null;
     final hasDispatch = dispatch != null;
-    final hasFees = _hasFees();
+    // The quoted payment card already lists the fees, so hide this duplicate
+    // breakdown while the order is awaiting payment.
+    final hasFees = _hasFees() && status != 'quoted';
 
     if (!hasAddress && !hasDispatch && !hasFees) return const SizedBox.shrink();
 

@@ -88,17 +88,16 @@ class _FlashSaleBannerState extends State<FlashSaleBanner>
           ),
         ],
       ),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => context.push(AppRoutes.flashSale),
-        borderRadius: BorderRadius.circular(20),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: Row(
-            children: [
-              Expanded(flex: 3, child: _buildLeftPanel(sales.length, cs)),
-              Expanded(flex: 2, child: _buildRightPanel(sales, cs)),
-            ],
-          ),
+        child: Row(
+          children: [
+            // Product image dominates 75% of the banner (guideline 1.2);
+            // sale info is the remaining 25%.
+            Expanded(flex: 3, child: _buildImagePanel(sales, cs)),
+            Expanded(flex: 1, child: _buildInfoPanel(sales, cs)),
+          ],
         ),
       ),
     );
@@ -145,213 +144,175 @@ class _FlashSaleBannerState extends State<FlashSaleBanner>
     );
   }
 
-  Widget _buildLeftPanel(int saleCount, ColorScheme cs) {
+  Widget _buildImagePanel(List<FlashSale> sales, ColorScheme cs) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        PageView.builder(
+          controller: _pageController,
+          onPageChanged: (page) => setState(() => _currentPage = page),
+          itemCount: sales.length,
+          itemBuilder: (context, index) {
+            final sale = sales[index];
+            return sale.productImage.isNotEmpty
+                ? CachedNetworkImage(
+                    imageUrl: sale.productImage,
+                    fit: BoxFit.cover,
+                    errorWidget: (_, _, _) => const _ImagePlaceholder(),
+                  )
+                : const _ImagePlaceholder();
+          },
+        ),
+        // Soft edge gradient so the discount/text stays readable on photos.
+        Positioned.fill(
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.3),
+                    Colors.transparent,
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (sales.length > 1)
+          Positioned(
+            bottom: 8,
+            left: 0,
+            right: 0,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(sales.length, (i) {
+                final isActive = i == _currentPage;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  width: isActive ? 14 : 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: isActive ? Colors.white : Colors.white54,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                );
+              }),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildInfoPanel(List<FlashSale> sales, ColorScheme cs) {
+    final sale = sales[_currentPage.clamp(0, sales.length - 1).toInt()];
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
-      decoration: BoxDecoration(
+      padding: const EdgeInsets.all(10),
+      decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.orange.shade50, Colors.orange.shade100],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
+          colors: [Colors.deepOrange, Colors.orange],
         ),
       ),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                padding: const EdgeInsets.all(4),
+                padding: const EdgeInsets.all(3),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.1),
+                  color: Colors.black.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: const Icon(Icons.local_fire_department,
-                    color: Colors.black87, size: 14),
+                    color: Colors.white, size: 12),
               ),
-              const SizedBox(width: 6),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(context.tr('app_name').toUpperCase(),
-                      style: const TextStyle(
-                          color: Colors.black87,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1)),
-                  Text(context.tr('flash_sale_label'),
-                      style: TextStyle(
-                          color: Colors.black54,
-                          fontSize: 7,
-                          letterSpacing: 0.5)),
-                ],
+              const SizedBox(width: 4),
+              const Expanded(
+                child: Text(
+                  'FLASH',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1,
+                  ),
+                ),
               ),
             ],
           ),
           const Spacer(),
           Text(
-            context.tr('flash_deals'),
+            '-${sale.discountPercent.toStringAsFixed(0)}%',
             style: const TextStyle(
-              color: Colors.black,
-              fontSize: 22,
+              color: Colors.white,
+              fontSize: 26,
               fontWeight: FontWeight.w900,
-              letterSpacing: 1.5,
+              height: 1,
             ),
           ),
           const SizedBox(height: 6),
           Text(
-            context.tr('banner_subtitle'),
-            style: TextStyle(
-                color: Colors.black54,
-                fontSize: 10,
-                height: 1.5,
-                letterSpacing: 0.5),
+            sale.productName,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            context.formatPrice(sale.salePrice),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const Spacer(),
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.phone,
-                  color: Colors.black54, size: 11),
-              const SizedBox(width: 4),
-              Text('$saleCount ${context.tr('deals')}',
-                  style: const TextStyle(
-                      color: Colors.black54, fontSize: 9)),
-              const Spacer(),
-              const Icon(Icons.arrow_forward_ios,
-                  color: Colors.black38, size: 12),
+              const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 9),
+              const SizedBox(width: 2),
+              Flexible(
+                child: Text('${sales.length} ${context.tr('deals')}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        color: Colors.white70, fontSize: 8)),
+              ),
             ],
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildRightPanel(List<FlashSale> sales, ColorScheme cs) {
+class _ImagePlaceholder extends StatelessWidget {
+  const _ImagePlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.orange.shade100, Colors.orange.shade50],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
-      ),
-      child: Column(
-        children: [
-          Expanded(
-            child: PageView.builder(
-              controller: _pageController,
-              onPageChanged: (page) =>
-                  setState(() => _currentPage = page),
-              itemCount: sales.length,
-              itemBuilder: (context, index) {
-                final sale = sales[index];
-                return Padding(
-                  padding:
-                      const EdgeInsets.fromLTRB(8, 12, 8, 4),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 64,
-                        height: 64,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                                color: cs.tertiary
-                                    .withValues(alpha: 0.3),
-                                blurRadius: 10,
-                                offset: const Offset(0, 3)),
-                          ],
-                        ),
-                        child: ClipOval(
-                          child: sale.productImage.isNotEmpty
-                              ? CachedNetworkImage(
-                                  imageUrl: sale.productImage,
-                                  fit: BoxFit.cover,
-                                  errorWidget: (_, _, _) => const Icon(
-                                      Icons.image,
-                                      color: Colors.black38,
-                                      size: 28))
-                              : Container(
-                                  color: Colors.black.withValues(alpha: 0.08),
-                                  child: const Icon(Icons.image,
-                                      color: Colors.black38,
-                                      size: 28)),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        sale.productName.length > 14
-                            ? '${sale.productName.substring(0, 12)}..'
-                            : sale.productName,
-                        style: const TextStyle(
-                            color: Colors.black87,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w600),
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color:
-                              Colors.black.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          '-${sale.discountPercent.toStringAsFixed(0)}%',
-                          style: const TextStyle(
-                              color: Colors.black87,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        context.formatPrice(sale.salePrice),
-                        style: const TextStyle(
-                            color: Colors.black54,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-          if (sales.length > 1)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children:
-                    List.generate(sales.length, (i) {
-                  final isActive = i == _currentPage;
-                  return AnimatedContainer(
-                    duration:
-                        const Duration(milliseconds: 300),
-                    margin: const EdgeInsets.symmetric(
-                        horizontal: 2),
-                    width: isActive ? 16 : 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: isActive
-                          ? Colors.black87
-                          : Colors.black26,
-                      borderRadius:
-                          BorderRadius.circular(3),
-                    ),
-                  );
-                }),
-              ),
-            ),
-        ],
+      color: Colors.orange.shade100,
+      child: Center(
+        child: Icon(Icons.image, color: Colors.black.withValues(alpha: 0.2), size: 36),
       ),
     );
   }
