@@ -1,9 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
 import '../models/review_model.dart';
 import 'notification_service.dart';
 import '../utils/network_error.dart';
+import 'api_config.dart';
 
 class ReviewService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -50,10 +52,19 @@ class ReviewService {
       await user.reload();
       await user.getIdToken(true);
 
-      const isVerified = false;
+      final productDoc = await _db
+          .collection('products')
+          .doc(productId)
+          .get();
+      final productData = productDoc.data();
+      final sellerId = productData?['sellerId'] as String? ?? '';
+
+      // Verified purchase = buyer has a delivered/completed order for this product.
+      final isVerified = await _isVerifiedPurchase(productId, user.uid);
 
       await _db.collection("reviews").add({
         'productId': productId,
+        'sellerId': sellerId,
         'userId': user.uid,
         'userName': user.displayName ?? user.email ?? 'Anonymous',
         'userImage': user.photoURL,
@@ -65,30 +76,23 @@ class ReviewService {
         'isVerifiedPurchase': isVerified,
       });
 
-      // Update product rating
-      await _updateProductRating(productId, rating);
+      // Update product rating via server admin SDK (client rules forbid product updates)
+      await _recomputeProductRating(productId);
 
       // Notify seller
       try {
-        final productDoc = await _db
-            .collection('products')
-            .doc(productId)
-            .get();
-        if (productDoc.exists) {
-          final sellerId = productDoc.data()?['sellerId'] as String?;
-          if (sellerId != null) {
-            _notif.sendNotification(
-              userId: sellerId,
-              title: 'New Review!',
-              body:
-                  '${user.displayName ?? "Someone"} rated your product $rating stars',
-              data: {
-                'type': 'review',
-                'productId': productId,
-                'rating': rating.toString(),
-              },
-            );
-          }
+        if (sellerId.isNotEmpty) {
+          _notif.sendNotification(
+            userId: sellerId,
+            title: 'New Review!',
+            body:
+                '${user.displayName ?? "Someone"} rated your product $rating stars',
+            data: {
+              'type': 'review',
+              'productId': productId,
+              'rating': rating.toString(),
+            },
+          );
         }
       } catch (e) {
         debugPrint('ReviewService sendNotification: $e');
@@ -99,6 +103,22 @@ class ReviewService {
           userMessage: translateError(e),
           originalError: e,
         );
+    }
+  }
+
+  /// Whether this buyer has a delivered/completed order for the product.
+  Future<bool> _isVerifiedPurchase(String productId, String userId) async {
+    try {
+      final snap = await _db
+          .collection('orders')
+          .where('buyerId', isEqualTo: userId)
+          .where('productId', isEqualTo: productId)
+          .where('status', whereIn: ['delivered', 'completed'])
+          .limit(1)
+          .get();
+      return snap.docs.isNotEmpty;
+    } catch (e) {
+      return false;
     }
   }
 
@@ -137,32 +157,24 @@ class ReviewService {
   }
 
   // =========================
-  // 🔄 UPDATE PRODUCT RATING
+  // 🔄 RECOMPUTE PRODUCT RATING (server admin SDK)
   // =========================
-  Future<void> _updateProductRating(String productId, double newRating) async {
+  Future<void> _recomputeProductRating(String productId) async {
     try {
-      final reviews = await _db
-          .collection("reviews")
-          .where("productId", isEqualTo: productId)
-          .get();
-
-      final reviewList = reviews.docs;
-      final totalRating = reviewList.fold<double>(
-        0,
-        (total, doc) => total + (doc.data()['rating'] ?? 0).toDouble(),
-      );
-      final averageRating = totalRating / reviewList.length;
-
-      await _db.collection("products").doc(productId).update({
-        'rating': averageRating,
-        'reviewCount': reviewList.length,
-      });
+      final user = _auth.currentUser;
+      if (user == null) return;
+      final token = await user.getIdToken();
+      await http
+          .post(
+            Uri.parse('${ApiConfig.baseUrl}/api/products/$productId/rating'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 15));
     } catch (e) {
-      throw NetworkError(
-          message: "Failed to update product rating: $e",
-          userMessage: translateError(e),
-          originalError: e,
-        );
+      debugPrint('ReviewService recompute rating: $e');
     }
   }
 }

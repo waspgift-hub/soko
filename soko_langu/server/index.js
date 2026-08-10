@@ -5679,6 +5679,57 @@ app.delete('/api/products/:id', async (req, res) => {
 });
 
 // ============================================================
+// ⭐ PRODUCT — Recompute aggregated rating from real reviews
+// (client cannot update products/{id}; server admin SDK recomputes
+//  averageRating + reviewCount from the reviews collection)
+// ============================================================
+app.post('/api/products/:id/rating', async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    let decoded;
+    try {
+      decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
+    } catch {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ error: 'productId required' });
+
+    const productDoc = await db.collection('products').doc(id).get();
+    if (!productDoc.exists) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    const reviewsSnap = await db.collection('reviews')
+      .where('productId', '==', id)
+      .get();
+
+    let total = 0;
+    for (const doc of reviewsSnap.docs) {
+      total += Number(doc.data().rating) || 0;
+    }
+    const count = reviewsSnap.docs.length;
+    const average = count > 0 ? total / count : 0;
+
+    await db.collection('products').doc(id).update({
+      rating: average,
+      reviewCount: count,
+    });
+
+    res.json({ success: true, rating: average, reviewCount: count });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================================
 // 👑 ADMIN — Delete any product
 // ============================================================
 app.delete('/api/admin/products/:id', async (req, res) => {

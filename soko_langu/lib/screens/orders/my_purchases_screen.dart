@@ -303,6 +303,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                   userImage: user?.photoURL,
                   rating: rating,
                   comment: commentCtrl.text.trim(),
+                  isVerifiedPurchase: true,
                 );
                 if (mounted) _showSuccess(context.tr('rating_submitted'));
               },

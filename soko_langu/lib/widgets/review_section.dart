@@ -35,7 +35,10 @@ class _ReviewSectionState extends State<ReviewSection> {
 
   Future<void> _writeReview() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      context.push(AppRoutes.login);
+      return;
+    }
 
     final result = await showDialog<bool>(
       context: context,
@@ -217,7 +220,7 @@ class _ReviewDialogState extends State<_ReviewDialog> {
       if (mounted) {
         setState(() => _submitting = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to submit review')),
+          SnackBar(content: Text(context.tr('review_failed'))),
         );
       }
     }

@@ -45,6 +45,7 @@ const Map<String, Map<String, String>> zhTranslations = {
     'helpful': '有帮助',
     'no_reviews_yet': '还没有评价。快来写第一条吧！',
     'review_submitted': '评价已提交！',
+    'review_failed': '评价提交失败，请重试。',
     'share_experience': '分享你的体验...',
     'write': '撰写',
     'rate_seller': '给卖家评分',

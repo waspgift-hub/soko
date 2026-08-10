@@ -100,6 +100,8 @@ final List<String> _authRequiredRoutes = [
   AppRoutes.receipt,
   AppRoutes.orderDetail,
   AppRoutes.report,
+  AppRoutes.buyerRequests,
+  AppRoutes.postBuyerRequest,
 ];
 
 final List<String> _adminOnlyRoutes = [

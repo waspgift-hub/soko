@@ -1,7 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
 import '../models/review_model.dart';
 import 'notification_service.dart';
+import 'api_config.dart';
 
 class SellerRating {
   final double averageRating;
@@ -124,6 +126,7 @@ class RatingService {
     String? userImage,
     required double rating,
     required String comment,
+    bool isVerifiedPurchase = false,
   }) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) await user.getIdToken(true);
@@ -139,7 +142,7 @@ class RatingService {
       'createdAt': FieldValue.serverTimestamp(),
       'images': [],
       'helpfulCount': 0,
-      'isVerifiedPurchase': true,
+      'isVerifiedPurchase': isVerifiedPurchase,
     };
 
     final existing = await _db
@@ -155,6 +158,11 @@ class RatingService {
       await _db.collection('reviews').add(data);
     }
 
+    // Product ratings also refresh the product's aggregated rating/count.
+    if (!productId.startsWith('seller_')) {
+      await _recomputeProductRating(productId);
+    }
+
     try {
       if (user?.uid != sellerId) {
         await NotificationService().sendNotification(
@@ -167,6 +175,26 @@ class RatingService {
           },
         );
       }
+    } catch (e) {
+      // non-critical
+    }
+  }
+
+  /// Recomputes products/{id} rating via server admin SDK (rules forbid client updates).
+  Future<void> _recomputeProductRating(String productId) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      final token = await user.getIdToken();
+      await http
+          .post(
+            Uri.parse('${ApiConfig.baseUrl}/api/products/$productId/rating'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 15));
     } catch (e) {
       // non-critical
     }

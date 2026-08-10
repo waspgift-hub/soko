@@ -186,6 +186,35 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  Widget _quickActionChip(ColorScheme cs, IconData icon, String label, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: [cs.primary.withValues(alpha: 0.12), cs.primary.withValues(alpha: 0.04)]),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: cs.primary.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 18, color: cs.primary),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cs.onSurface),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _brandChip(String label, String? brand) {
     final isSelected = _selectedBrand == brand;
     final cs = Theme.of(context).colorScheme;
@@ -358,6 +387,32 @@ class _HomeScreenState extends State<HomeScreen>
                     if (index == 0) return _brandChip(context.tr('all'), null);
                     return _brandChip(_brands[index - 1], _brands[index - 1]);
                   },
+                ),
+              ),
+              const SizedBox(height: AppInsets.sm),
+              // Buyer requests quick actions
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _quickActionChip(
+                        cs,
+                        Icons.lightbulb_outline_rounded,
+                        context.tr('buyer_requests_title'),
+                        () => context.push(AppRoutes.buyerRequests),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _quickActionChip(
+                        cs,
+                        Icons.add_circle_outline_rounded,
+                        context.tr('post_request'),
+                        () => context.push(AppRoutes.postBuyerRequest),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: AppInsets.sm),
