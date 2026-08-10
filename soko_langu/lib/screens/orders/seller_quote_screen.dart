@@ -158,17 +158,19 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
     final buyerId = d['buyerId'] ?? '';
     final addrNested = d['deliveryAddress'] as Map<String, dynamic>?;
     // The orders API stores the address as flat fields
-    // (region/district/street/landmarks); fall back to them when the
+    // (region/district/ward/street/landmarks); fall back to them when the
     // nested deliveryAddress map is absent.
     final addr = addrNested ??
         <String, dynamic>{
           'region': d['region'] ?? '',
           'district': d['district'] ?? '',
+          'ward': d['ward'] ?? '',
           'street': d['street'] ?? '',
           'landmarks': d['landmarks'] ?? '',
         };
     final hasAddr = (addr['region'] as String? ?? '').isNotEmpty ||
         (addr['district'] as String? ?? '').isNotEmpty ||
+        (addr['ward'] as String? ?? '').isNotEmpty ||
         (addr['street'] as String? ?? '').isNotEmpty ||
         (addr['landmarks'] as String? ?? '').isNotEmpty;
 
@@ -250,6 +252,8 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
                         const SizedBox(height: 2),
                         _infoRow(cs, Icons.place_outlined, context.tr('delivery_address'),
                             '${addr['region'] ?? ''}${(addr['region'] as String? ?? '').isNotEmpty && (addr['district'] as String? ?? '').isNotEmpty ? ', ' : ''}${addr['district'] ?? ''}'),
+                        if ((addr['ward'] as String? ?? '').isNotEmpty)
+                          _infoRow(cs, Icons.holiday_village_outlined, context.tr('ward'), addr['ward'] as String? ?? ''),
                         if ((addr['street'] as String? ?? '').isNotEmpty)
                           _infoRow(cs, Icons.streetview_outlined, context.tr('street_label'), addr['street'] as String? ?? ''),
                         if (addr['landmarks'] != null && (addr['landmarks'] as String).isNotEmpty)

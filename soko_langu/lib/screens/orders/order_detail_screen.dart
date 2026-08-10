@@ -1048,7 +1048,23 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   }
 
   Widget _buildExpandableDetails(BuildContext context, ColorScheme cs) {
-    final address = d['deliveryAddress'] as Map<String, dynamic>?;
+    // The orders API stores the address as flat fields
+    // (region/district/ward/street/landmarks); fall back to them when the
+    // nested deliveryAddress map is absent.
+    final address = d['deliveryAddress'] as Map<String, dynamic>?
+        ?? (((d['region'] as String? ?? '').isNotEmpty ||
+                (d['district'] as String? ?? '').isNotEmpty ||
+                (d['street'] as String? ?? '').isNotEmpty)
+            ? {
+                'region': d['region'],
+                'district': d['district'],
+                'ward': d['ward'],
+                'street': d['street'],
+                'landmarks': d['landmarks'],
+                'latitude': d['latitude'],
+                'longitude': d['longitude'],
+              }
+            : null);
     final dispatch = d['dispatchProof'] as Map<String, dynamic>?;
     final hasAddress = address != null;
     final hasDispatch = dispatch != null;

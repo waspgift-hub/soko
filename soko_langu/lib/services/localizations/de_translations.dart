@@ -1083,6 +1083,7 @@ const Map<String, Map<String, String>> deTranslations = {
     'shipping_address_title': 'Lieferadresse',
     'region_hint': 'Region',
     'district_hint': 'Bezirk',
+    'ward_hint': 'Kata / Ward',
     'street_hint': 'Straße',
     'landmarks_hint': 'Wahrzeichen',
     'phone_label_title': 'Telefonnummer',

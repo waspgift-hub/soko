@@ -150,7 +150,18 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
     final shippingCost = (d['shippingCost'] as num?)?.toDouble() ?? 0;
     final buyerPhone = d['buyerPhone'] ?? '';
     final buyerName = d['buyerName'] ?? '';
-    final addr = d['deliveryAddress'] as Map<String, dynamic>?;
+    final addr = d['deliveryAddress'] as Map<String, dynamic>?
+        // orders-format docs keep the address as flat fields at top level
+        ?? (d['region'] != null
+            ? {
+                'region': d['region'],
+                'district': d['district'],
+                'ward': d['ward'],
+                'street': d['street'],
+                'latitude': d['latitude'],
+                'longitude': d['longitude'],
+              }
+            : null);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -200,7 +211,7 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
                         _infoRow(cs, Icons.phone_outlined, context.tr('phone'), buyerPhone.toString()),
                       if (addr != null)
                         _infoRow(cs, Icons.place_outlined, context.tr('address'),
-                            '${addr['region'] ?? ''}, ${addr['district'] ?? ''}, ${addr['street'] ?? ''}'),
+                            '${addr['region'] ?? ''}, ${addr['district'] ?? ''}${(addr['ward'] as String? ?? '').isNotEmpty ? ', ${addr['ward']}' : ''}, ${addr['street'] ?? ''}'),
                       if (addr != null && addr['latitude'] != null && addr['longitude'] != null) ...[
                         const SizedBox(height: 8),
                         ClipRRect(

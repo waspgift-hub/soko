@@ -1001,6 +1001,7 @@ const Map<String, Map<String, String>> zhTranslations = {
     'shipping_quote_info': '卖家提供报价后将添加运费',
     'region_hint': '地区 / Region',
     'district_hint': '县区 / District',
+    'ward_hint': '村 / Ward',
     'street_hint': '街道 / Street',
     'landmarks_hint': '周边地标 / Landmarks',
     'shipping_info_message': '卖家将提供运费。协商一致后，你将支付商品总价 + 运费。',

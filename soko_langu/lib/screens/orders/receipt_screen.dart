@@ -95,6 +95,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                     ? {
                         'region': d['region'],
                         'district': d['district'],
+                        'ward': d['ward'],
                         'street': d['street'],
                         'landmarks': d['landmarks'],
                       }
@@ -196,6 +197,8 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                   _infoSection(cs, context.tr( 'shipping_address', 'Anwani ya Usafirishaji'), [
                     _infoRow(cs, context.tr( 'region', 'Mkoa'), deliveryAddress['region'] as String? ?? ''),
                     _infoRow(cs, context.tr( 'district', 'Wilaya'), deliveryAddress['district'] as String? ?? ''),
+                    if (deliveryAddress['ward'] != null && (deliveryAddress['ward'] as String? ?? '').isNotEmpty)
+                      _infoRow(cs, context.tr( 'ward', 'Kata'), deliveryAddress['ward'] as String),
                     _infoRow(cs, context.tr( 'street', 'Mtaa'), deliveryAddress['street'] as String? ?? ''),
                     if (deliveryAddress['landmarks'] != null)
                       _infoRow(cs, context.tr( 'landmarks', 'Alama'), deliveryAddress['landmarks'] as String),

@@ -143,6 +143,8 @@ class ReceiptPdfService {
                   _buildInfoRow(t('Mkoa', 'Region'), deliveryAddress['region'] as String, nf),
                 if (deliveryAddress['district'] != null)
                   _buildInfoRow(t('Wilaya', 'District'), deliveryAddress['district'] as String, nf),
+                if (deliveryAddress['ward'] != null && (deliveryAddress['ward'] as String? ?? '').isNotEmpty)
+                  _buildInfoRow(t('Kata', 'Ward'), deliveryAddress['ward'] as String, nf),
                 if (deliveryAddress['street'] != null)
                   _buildInfoRow(t('Mtaa', 'Street'), deliveryAddress['street'] as String, nf),
                 if (deliveryAddress['landmarks'] != null)

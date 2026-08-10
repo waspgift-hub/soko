@@ -7276,7 +7276,7 @@ app.post('/api/wallet/purchase', async (req, res) => {
     const {
       buyerId, buyerName, productId, productName, productImage,
       productPrice, sellerId, sellerName, processingFee, serviceFeePercent,
-      totalAmount, region, district, street, landmarks, deliveryType, orderId, shippingCost,
+      totalAmount, region, district, ward, street, landmarks, deliveryType, orderId, shippingCost,
     } = req.body;
 
     if (!buyerId || !sellerId || !productId || !productName || productPrice == null) {
@@ -7352,6 +7352,7 @@ app.post('/api/wallet/purchase', async (req, res) => {
       sellerReceives,
       shippingCost: shipping,
       region, district, street,
+      ward: ward || '',
       landmarks: landmarks || '',
       deliveryType: escrowDeliveryType,
       autoReleaseDays,
@@ -7525,7 +7526,7 @@ app.post('/api/orders/create', async (req, res) => {
     const decoded = await verifyAuthToken(req);
     if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
 
-    const { buyerId, buyerName, buyerPhone, sellerId, sellerName, productId, productName, productImage, productPrice, shippingCost, deliveryType, region, district, street, landmarks, latitude, longitude, phone, paymentMethod } = req.body;
+    const { buyerId, buyerName, buyerPhone, sellerId, sellerName, productId, productName, productImage, productPrice, shippingCost, deliveryType, region, district, ward, street, landmarks, latitude, longitude, phone, paymentMethod } = req.body;
     if (!buyerId || !sellerId || !productId || !productName || productPrice == null) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
@@ -7546,6 +7547,7 @@ app.post('/api/orders/create', async (req, res) => {
       totalAmount,
       deliveryType: deliveryType || 'local',
       region: region || '', district: district || '', street: street || '',
+      ward: ward || '',
       landmarks: landmarks || '',
       latitude: latitude ?? null,
       longitude: longitude ?? null,
@@ -7570,6 +7572,7 @@ app.post('/api/orders/create', async (req, res) => {
         totalAmount,
         deliveryType: deliveryType || 'local',
         region: region || '', district: district || '', street: street || '',
+        ward: ward || '',
         landmarks: landmarks || '',
         latitude: latitude ?? null,
         longitude: longitude ?? null,
@@ -7585,7 +7588,7 @@ app.post('/api/orders/create', async (req, res) => {
     // seller always hears about it even with the app closed. Include the
     // buyer's delivery location so the seller can price shipping immediately.
     try {
-      const buyerLocation = [region, district, street].filter(Boolean).join(', ');
+      const buyerLocation = [region, district, ward, street].filter(Boolean).join(', ');
       const orderBody = `${buyerName || 'Mnunuzi'} ametuma agizo la ${productName}.${buyerLocation ? ` Eneo: ${buyerLocation}.` : ''} Toa gharama ya usafirishaji sasa.`;
       await db.collection('notifications').add({
         userId: sellerId,

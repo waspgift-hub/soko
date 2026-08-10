@@ -534,6 +534,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                   final buyerName = d['buyerName'] ?? '';
                   final region = d['region'] as String? ?? '';
                   final district = d['district'] as String? ?? '';
+                  final ward = d['ward'] as String? ?? '';
 
                   return Container(
                     width: 240,
@@ -568,7 +569,8 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                           if (buyerName.isNotEmpty)
                             Text('$buyerName', style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
                           if (region.isNotEmpty)
-                            Text('$region, $district', style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
+                            Text('$region, $district${ward.isNotEmpty ? ', $ward' : ''}',
+                                style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
                           const Spacer(),
                           SizedBox(
                             width: double.infinity,

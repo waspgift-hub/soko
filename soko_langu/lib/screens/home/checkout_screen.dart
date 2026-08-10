@@ -36,14 +36,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   String _deliveryType = 'local';
   String? _selectedRegion;
   String? _selectedDistrict;
-
-  static const List<String> _regions = [
-    'Arusha', 'Dar es Salaam', 'Dodoma', 'Geita', 'Iringa', 'Kagera',
-    'Katavi', 'Kigoma', 'Kilimanjaro', 'Lindi', 'Manyara', 'Mara',
-    'Mbeya', 'Mjini Magharibi', 'Morogoro', 'Mtwara', 'Mwanza',
-    'Njombe', 'Pwani', 'Rukwa', 'Ruvuma', 'Shinyanga', 'Simiyu',
-    'Singida', 'Songwe', 'Tabora', 'Tanga',
-  ];
+  String? _selectedWard;
 
   @override
   void dispose() {
@@ -56,13 +49,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   void _matchRegion(String raw) {
     if (raw.isEmpty) return;
     final normalized = raw.toLowerCase().replaceAll(RegExp(r'\s*(mkoa|region)\s*$'), '').trim();
-    for (final r in _regions) {
+    for (final r in kRegions) {
       if (r.toLowerCase() == normalized) {
         _selectedRegion = r;
         return;
       }
     }
-    for (final r in _regions) {
+    for (final r in kRegions) {
       if (r.toLowerCase().contains(normalized) || normalized.contains(r.toLowerCase())) {
         _selectedRegion = r;
         return;
@@ -81,6 +74,22 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
     for (final d in list) {
       if (d.toLowerCase().contains(normalized) || normalized.contains(d.toLowerCase())) return d;
+    }
+    return null;
+  }
+
+  /// Matches a geocoded neighbourhood/suburb against the current district's
+  /// kata list; returns null when there is no match so the user picks from the
+  /// list (or leaves it empty, since the street is the required field).
+  String? _matchWard(String raw) {
+    if (raw.isEmpty || _selectedDistrict == null) return null;
+    final list = kDistrictWards[_selectedDistrict] ?? const <String>[];
+    final normalized = raw.toLowerCase().trim();
+    for (final w in list) {
+      if (w.toLowerCase() == normalized) return w;
+    }
+    for (final w in list) {
+      if (w.toLowerCase().contains(normalized) || normalized.contains(w.toLowerCase())) return w;
     }
     return null;
   }
@@ -144,18 +153,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       if (address == null) return;
       if (!mounted) return;
       final state = (address['state'] as String?) ?? '';
+      final suburb = (address['suburb'] as String?)
+          ?? (address['neighbourhood'] as String?)
+          ?? _landmarksCtrl.text;
+      final district = _matchDistrict((address['city_district'] as String?)
+          ?? (address['municipality'] as String?)
+          ?? (address['county'] as String?)
+          ?? (address['state_district'] as String?)
+          ?? '');
       setState(() {
         _regionCtrl.text = state;
         _matchRegion(state);
-        _selectedDistrict = _matchDistrict((address['city_district'] as String?)
-            ?? (address['municipality'] as String?)
-            ?? (address['county'] as String?)
-            ?? (address['state_district'] as String?)
-            ?? '');
+        _selectedDistrict = district;
+        _selectedWard = _matchWard(suburb);
         _streetCtrl.text = (address['road'] as String?) ?? _streetCtrl.text;
-        _landmarksCtrl.text = (address['suburb'] as String?)
-            ?? (address['neighbourhood'] as String?)
-            ?? _landmarksCtrl.text;
+        _landmarksCtrl.text = suburb;
       });
     } catch (_) {}
   }
@@ -453,7 +465,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               fillColor: cs.surface.withValues(alpha: 0.5),
               isDense: true,
             ),
-            items: _regions
+            items: kRegions
                 .map((r) => DropdownMenuItem(value: r, child: Text(r)))
                 .toList(),
             onChanged: (v) {
@@ -481,8 +493,33 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     : (kRegionDistricts[_selectedRegion] ?? const <String>[]))
                 .map((d) => DropdownMenuItem(value: d, child: Text(d)))
                 .toList(),
-            onChanged: (v) => setState(() => _selectedDistrict = v),
+            onChanged: (v) {
+              setState(() {
+                _selectedDistrict = v;
+                _selectedWard = null;
+              });
+            },
           ),
+          if (_selectedDistrict != null &&
+              (kDistrictWards[_selectedDistrict]?.isNotEmpty ?? false)) ...[
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              initialValue: _selectedWard,
+              decoration: InputDecoration(
+                hintText: context.tr('ward_hint'),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                filled: true,
+                fillColor: cs.surface.withValues(alpha: 0.5),
+                isDense: true,
+              ),
+              items: kDistrictWards[_selectedDistrict]!
+                  .map((w) => DropdownMenuItem(value: w, child: Text(w)))
+                  .toList(),
+              onChanged: (v) => setState(() => _selectedWard = v),
+            ),
+          ],
           const SizedBox(height: 10),
           AppInputField(
             controller: _streetCtrl,
@@ -587,6 +624,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           'productPrice': p.price,
           'region': region,
           'district': district,
+          'ward': _selectedWard ?? '',
           'street': street,
           'landmarks': _landmarksCtrl.text.trim(),
           'latitude': _latitude,
