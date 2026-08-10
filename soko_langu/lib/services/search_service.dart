@@ -125,9 +125,7 @@ class SearchResponse {
     required this.hasMore,
     this.correction,
     required this.query,
-  });
-
-  factory SearchResponse.fromMap(Map<String, dynamic> map) {
+  });  factory SearchResponse.fromMap(Map<String, dynamic> map) {
     final resultsList = (map['results'] as List<dynamic>?)
             ?.map((e) => SearchResult.fromMap(e as Map<String, dynamic>))
             .toList() ??
@@ -164,6 +162,12 @@ class SearchResponse {
       query: query,
     );
   }
+}
+
+class MostRatedData {
+  final List<SearchResult> products;
+  final List<SearchResult> sellers;
+  const MostRatedData({required this.products, required this.sellers});
 }
 
 class SearchService {
@@ -315,6 +319,25 @@ class SearchService {
     } catch (e) {
       print('[SearchService] Trending server failed, returning empty: $e');
       return [];
+    }
+  }
+
+  /// Fetches most-rated products and sellers for the initial search view.
+  Future<MostRatedData?> getMostRated({int limit = 10}) async {
+    try {
+      final data = await _post('most-rated', {'limit': limit});
+      final map = data as Map<String, dynamic>;
+      if (map['success'] != true) return null;
+      final products = (map['products'] as List<dynamic>? ?? [])
+          .map((e) => SearchResult.fromMap(e as Map<String, dynamic>))
+          .toList();
+      final sellers = (map['sellers'] as List<dynamic>? ?? [])
+          .map((e) => SearchResult.fromMap(e as Map<String, dynamic>))
+          .toList();
+      return MostRatedData(products: products, sellers: sellers);
+    } catch (e) {
+      print('[SearchService] Most-rated failed: $e');
+      return null;
     }
   }
 

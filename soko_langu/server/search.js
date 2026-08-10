@@ -361,6 +361,87 @@ router.post('/record-click', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════
+// MOST RATED — top-rated products & sellers for the initial view
+// (open to guests; auth optional)
+// ════════════════════════════════════════════════════════════
+router.post('/most-rated', async (req, res) => {
+  try {
+    const limit = Math.min(Number(req.body.limit) || 10, 20);
+
+    // Top rated products — real reviewCount, active listings only
+    const productsSnap = await db.collection('products')
+      .where('isActive', '==', true)
+      .orderBy('reviewCount', 'desc')
+      .limit(limit * 2)
+      .get();
+    const products = [];
+    for (const doc of productsSnap.docs) {
+      const d = doc.data();
+      if ((d.reviewCount || 0) <= 0) continue;
+      const imgs = d.images || [];
+      const boostedUntil = d.boostedUntil;
+      const boosted = !!(d.isBoosted && boostedUntil &&
+        new Date(boostedUntil.seconds ? boostedUntil.seconds * 1000 : boostedUntil) > new Date());
+      products.push({
+        id: doc.id,
+        type: 'product',
+        displayName: d.name || '',
+        description: d.description || '',
+        price: d.price || 0,
+        image: imgs.length ? imgs[0] : null,
+        sellerName: d.sellerName || '',
+        category: d.category || '',
+        rating: d.rating || 0,
+        reviewCount: d.reviewCount || 0,
+        location: d.location || '',
+        isBoosted: boosted,
+        kycApproved: !!d.sellerKycApproved,
+      });
+      if (products.length >= limit) break;
+    }
+
+    // Top rated sellers — aggregate real reviews by sellerId
+    const reviewsSnap = await db.collection('reviews').get();
+    const bySeller = {};
+    for (const doc of reviewsSnap.docs) {
+      const r = doc.data();
+      if (!r.sellerId || r.sellerId.startsWith('seller_')) continue;
+      if (!bySeller[r.sellerId]) bySeller[r.sellerId] = { total: 0, count: 0 };
+      bySeller[r.sellerId].total += Number(r.rating) || 0;
+      bySeller[r.sellerId].count += 1;
+    }
+    const ranked = Object.entries(bySeller)
+      .map(([sellerId, s]) => ({ sellerId, avg: s.total / s.count, count: s.count }))
+      .filter((r) => r.count > 0)
+      .sort((a, b) => b.avg - a.avg || b.count - a.count)
+      .slice(0, 8);
+
+    const sellers = [];
+    for (const r of ranked) {
+      const userDoc = await db.collection('users').doc(r.sellerId).get();
+      if (!userDoc.exists) continue;
+      const u = userDoc.data();
+      if (u.isSuspended) continue;
+      sellers.push({
+        id: r.sellerId,
+        type: 'seller',
+        displayName: u.displayName || u.name || '',
+        image: u.photoURL || u.photoUrl || null,
+        rating: r.avg,
+        reviewCount: r.count,
+        kycApproved: !!u.isKycApproved,
+        location: u.location || '',
+      });
+    }
+
+    res.json({ success: true, products, sellers });
+  } catch (e) {
+    console.error('[SEARCH] most-rated error:', e.message);
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════
 // HELPERS
 // ════════════════════════════════════════════════════════════
 async function recordSearchQuery(userId, query, resultCount, type) {

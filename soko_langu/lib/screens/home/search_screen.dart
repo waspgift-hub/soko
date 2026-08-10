@@ -44,6 +44,12 @@ class _SearchScreenState extends State<SearchScreen>
   String _selectedTab = 'all';
   Timer? _debounce;
 
+  // Initial/discovery state (no search yet): boosted-first listing + most-rated sections.
+  List<SearchResult> _discoveryProducts = [];
+  List<SearchResult> _mostRatedProducts = [];
+  List<SearchResult> _mostRatedSellers = [];
+  bool _loadingInitial = true;
+
   @override
   void initState() {
     super.initState();
@@ -62,6 +68,8 @@ class _SearchScreenState extends State<SearchScreen>
     _focusNode.addListener(_onFocusChanged);
     _loadHistory();
     _loadTrending();
+    _loadDiscovery();
+    _loadMostRated();
   }
 
   @override
@@ -85,6 +93,71 @@ class _SearchScreenState extends State<SearchScreen>
     try {
       final t = await _searchService.getTrendingSearches();
       if (mounted) setState(() => _trending = t);
+    } catch (_) {}
+  }
+
+  /// Loads a default listing when nothing has been searched: boosted
+  /// products first, non-boosted products after (guideline 11.1).
+  Future<void> _loadDiscovery() async {
+    try {
+      final fs = FirebaseFirestore.instance;
+      final boostedSnap = await fs
+          .collection('products')
+          .where('isActive', isEqualTo: true)
+          .where('isBoosted', isEqualTo: true)
+          .limit(12)
+          .get();
+      final recentSnap = await fs
+          .collection('products')
+          .where('isActive', isEqualTo: true)
+          .orderBy('createdAt', descending: true)
+          .limit(30)
+          .get();
+
+      final boosted = <Product>[];
+      final normal = <SearchResult>[];
+      final seen = <String>{};
+
+      final boostedItems = boostedSnap.docs.map((d) => Product.fromFirestore(d)).toList()
+        ..removeWhere((p) => !p.isBoostedValid)
+        ..sort((a, b) => (b.boostedUntil ?? DateTime(0)).compareTo(a.boostedUntil ?? DateTime(0)));
+      for (final p in boostedItems.take(10)) {
+        boosted.add(p);
+        seen.add(p.id);
+      }
+
+      final recent = recentSnap.docs.map((d) => Product.fromFirestore(d)).toList();
+      for (final p in recent) {
+        if (seen.contains(p.id) || p.isBoostedValid) continue;
+        normal.add(SearchResult.fromProduct(p));
+        seen.add(p.id);
+        if (normal.length >= 20) break;
+      }
+
+      if (mounted) {
+        setState(() {
+          _discoveryProducts = [
+            ...boosted.map((p) => SearchResult.fromProduct(p)),
+            ...normal,
+          ];
+          _loadingInitial = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingInitial = false);
+    }
+  }
+
+  /// Loads most-rated products (11.2) and most-rated sellers (11.3).
+  Future<void> _loadMostRated() async {
+    try {
+      final data = await _searchService.getMostRated(limit: 8);
+      if (mounted && data != null) {
+        setState(() {
+          _mostRatedProducts = data.products;
+          _mostRatedSellers = data.sellers;
+        });
+      }
     } catch (_) {}
   }
 
@@ -712,16 +785,202 @@ class _SearchScreenState extends State<SearchScreen>
   }
 
   Widget _buildInitialState(ColorScheme cs) {
-    if (_trending.isNotEmpty) return _buildHistoryPanel(cs);
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.search, size: 72, color: cs.onSurfaceVariant.withValues(alpha: 0.2)),
-          const SizedBox(height: 16),
-          Text(context.tr('search_products_users'),
-              style: TextStyle(fontSize: 15, color: cs.onSurfaceVariant)),
+    final boosted = _discoveryProducts.where((r) => r.isBoosted).toList();
+    final normal = _discoveryProducts.where((r) => !r.isBoosted).toList();
+    final hasContent = _mostRatedProducts.isNotEmpty ||
+        _mostRatedSellers.isNotEmpty ||
+        _discoveryProducts.isNotEmpty;
+
+    return ListView(
+      padding: const EdgeInsets.all(12),
+      children: [
+        if (_mostRatedProducts.isNotEmpty) ...[
+          _buildSectionHeader(cs, Icons.star_rounded, context.tr('most_rated_products')),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 210,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _mostRatedProducts.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (_, i) => _buildMostRatedProductCard(cs, _mostRatedProducts[i]),
+            ),
+          ),
+          const SizedBox(height: 20),
         ],
+        if (_mostRatedSellers.isNotEmpty) ...[
+          _buildSectionHeader(cs, Icons.storefront_rounded, context.tr('most_rated_sellers')),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 150,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _mostRatedSellers.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (_, i) => _buildMostRatedSellerCard(cs, _mostRatedSellers[i]),
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
+        if (boosted.isNotEmpty) ...[
+          _buildSectionHeader(cs, Icons.rocket_launch_rounded, context.tr('featured_products')),
+          const SizedBox(height: 8),
+          ...boosted.map((r) => _buildResultCard(cs, r)),
+          const SizedBox(height: 12),
+        ],
+        if (normal.isNotEmpty) ...[
+          _buildSectionHeader(cs, Icons.inventory_2_outlined, context.tr('other_products')),
+          const SizedBox(height: 8),
+          ...normal.map((r) => _buildResultCard(cs, r)),
+        ],
+        if (_loadingInitial && !hasContent)
+          const Padding(
+            padding: EdgeInsets.all(40),
+            child: Center(child: SokoVibeLoading()),
+          ),
+        if (!hasContent && !_loadingInitial)
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.search, size: 72, color: cs.onSurfaceVariant.withValues(alpha: 0.2)),
+                  const SizedBox(height: 16),
+                  Text(context.tr('search_products_users'),
+                      style: TextStyle(fontSize: 15, color: cs.onSurfaceVariant)),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildSectionHeader(ColorScheme cs, IconData icon, String title) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: cs.primary),
+        const SizedBox(width: 6),
+        Text(title,
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: cs.onSurface)),
+      ],
+    );
+  }
+
+  Widget _buildMostRatedProductCard(ColorScheme cs, SearchResult r) {
+    return SizedBox(
+      width: 140,
+      child: Card(
+        margin: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        child: InkWell(
+          onTap: () => _navigateToProduct(r.id),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: r.image != null && r.image!.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: r.image!,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                      )
+                    : Container(
+                        color: cs.surfaceContainerHighest,
+                        child: const Center(child: Icon(Icons.image_outlined, color: Colors.grey)),
+                      ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(r.displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 2),
+                    if (r.price != null)
+                      Text('${context.currencySymbol()} ${r.price!.toStringAsFixed(0)}',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: cs.primary)),
+                    Row(
+                      children: [
+                        const Icon(Icons.star, size: 13, color: Colors.amber),
+                        const SizedBox(width: 2),
+                        Text(r.rating?.toStringAsFixed(1) ?? '0.0',
+                            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+                        const SizedBox(width: 4),
+                        Text('(${r.reviewCount ?? 0})',
+                            style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMostRatedSellerCard(ColorScheme cs, SearchResult r) {
+    return SizedBox(
+      width: 120,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () =>
+            context.push('${AppRoutes.publicProfile}/${r.id}', extra: r.displayName),
+        child: Column(
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                CircleAvatar(
+                  radius: 32,
+                  backgroundColor: cs.surfaceContainerHighest,
+                  backgroundImage: r.image != null && r.image!.isNotEmpty
+                      ? CachedNetworkImageProvider(r.image!)
+                      : null,
+                  child: (r.image == null || r.image!.isEmpty)
+                      ? Icon(Icons.storefront, color: cs.onSurfaceVariant)
+                      : null,
+                ),
+                if (r.kycApproved)
+                  Positioned(
+                    right: -2,
+                    bottom: -2,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(color: cs.surface, shape: BoxShape.circle),
+                      child: const Icon(Icons.verified, size: 16, color: Colors.blue),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(r.displayName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 2),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.star, size: 13, color: Colors.amber),
+                const SizedBox(width: 2),
+                Text(r.rating?.toStringAsFixed(1) ?? '0.0',
+                    style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+                const SizedBox(width: 3),
+                Text('(${r.reviewCount ?? 0})',
+                    style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
