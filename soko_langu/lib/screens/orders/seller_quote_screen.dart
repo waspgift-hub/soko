@@ -6,7 +6,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
 import '../../services/api_config.dart';
-import '../../services/notification_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
 import '../../utils/network_error.dart';
@@ -74,13 +73,6 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
           ),
         );
       }
-
-      NotificationService().sendNotification(
-        userId: buyerId,
-        title: context.tr('shipping_cost_set'),
-        body: context.tr('shipping_cost_set_body').replaceAll('{0}', cost.toStringAsFixed(0)),
-        data: {'type': 'shipping_quote', 'transactionId': txId},
-      );
 
       _shippingCostCtrl.clear();
       if (mounted) _showSuccess(context.tr('shipping_cost_submitted'));

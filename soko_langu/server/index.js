@@ -1842,14 +1842,6 @@ app.post('/api/escrow/dispatch', async (req, res) => {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    // SMS buyer about dispatch
-    try {
-      const busName = req.body.busName || 'basi';
-      const plateNumber = req.body.plateNumber || '';
-      const msg = `Soko Vibe: Mzigo wa Oda #${orderId} umesafirishwa kupitia basi la ${busName} (${plateNumber}). Fungua app kuona risiti yako ya kidijitali.`;
-      if (tx.buyerPhone) sendSms(tx.buyerPhone, msg);
-    } catch (_) {}
-
     // Push to buyer
     try {
       await sendOneSignalNotification(tx.buyerId, 'Bidhaa Imesafirishwa!', `${tx.productName || 'Bidhaa'} imesafirishwa. Thibitisha upokeaji ukishapata mzigo.`, { type: 'dispatched', transactionId: orderId });
@@ -7609,13 +7601,6 @@ app.post('/api/orders/create', async (req, res) => {
         orderBody,
         { type: 'order', orderId: result.orderId, buyerId, productId }
       );
-      const sellerSnap = await db.collection('users').doc(sellerId).get();
-      const sellerPhone = sellerSnap.data()?.phone;
-      if (sellerPhone) {
-        await sendSms(sellerPhone,
-          `SOKO VIBE: Agizo JIPYA #${result.orderId}\n${buyerName || 'Mnunuzi'} ametuma agizo la ${productName} (TSh ${result.totalAmount || productPrice}).${buyerLocation ? ` Eneo: ${buyerLocation}.` : ''} Fungua app na utoe gharama ya usafirishaji.`
-        );
-      }
     } catch (e) {
       console.error('order create notify error:', e.message);
     }
@@ -7674,24 +7659,11 @@ app.post('/api/orders/transition', async (req, res) => {
 
     const result = await orderEngine.transitionOrder(db, orderId, newStatus, decoded.uid, { note });
 
-    // Real-time status notifications: seller hears on payment, buyer on dispatch
+    // Real-time status notifications: buyer on quote, buyer on dispatch
+    // Payment confirmations are NOT sent here — the ClickPesa webhook is the
+    // single source so the seller/buyer don't get duplicate "payment done" rows.
     try {
-      if (newStatus === 'paid' || newStatus === 'escrow_hold') {
-        await db.collection('notifications').add({
-          userId: order.sellerId,
-          title: 'Malipo Yamekamilika!',
-          body: `${order.buyerName || 'Mnunuzi'} amelipia agizo la ${order.productName || ''}. Escrow imeshikilia fedha.`,
-          type: 'payment',
-          data: { type: 'order', orderId, buyerId: order.buyerId },
-          isRead: false,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        await sendOneSignalNotification(order.sellerId,
-          'Malipo Yamekamilika!',
-          `${order.buyerName || 'Mnunuzi'} amelipia agizo la ${order.productName || ''}. Escrow imeshikilia fedha.`,
-          { type: 'order', orderId, buyerId: order.buyerId }
-        );
-      } else if (newStatus === 'quoted') {
+      if (newStatus === 'quoted') {
         // Seller set the shipping cost — buyer must pay the updated bill
         let costLabel = '';
         let shippingCost = 0;

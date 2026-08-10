@@ -10,7 +10,6 @@ import '../../models/boost_tier.dart';
 import '../../services/boost_service.dart';
 import '../../services/api_config.dart';
 import '../../extensions/context_tr.dart';
-import '../../services/sms_notification_service.dart';
 import '../../models/boost_receipt.dart';
 import '../../models/payment_model.dart';
 import '../../widgets/boost_receipt_card.dart';
@@ -631,19 +630,9 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
       sellerId: user?.uid,
     );
 
-    // SMS seller about boost payment (server also sends via callback)
-    final sellerPhone = widget.product.sellerPhone ?? '';
     final expiry = DateTime.now().add(
       Duration(days: _selectedTier!.durationDays),
     );
-    if (sellerPhone.isNotEmpty) {
-      SmsNotificationService.notifyBoostPaid(
-        sellerPhone: sellerPhone,
-        amountPaid: _selectedTier!.priceTzs.toString(),
-        boostExpiryDate: DateFormat('dd/MM/yyyy').format(expiry),
-      );
-    }
-
     if (!mounted) return;
     showDialog(
       context: context,

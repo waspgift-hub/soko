@@ -11,7 +11,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../extensions/context_tr.dart';
 import '../../models/transaction_model.dart';
 import '../../services/api_config.dart';
-import '../../services/sms_notification_service.dart';
 import '../../services/clickpesa_service.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
@@ -1679,29 +1678,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
               behavior: SnackBarBehavior.floating,
             ),
           );
-        }
-        final txDoc = await FirebaseFirestore.instance
-            .collection('transactions')
-            .doc(txId)
-            .get();
-        if (txDoc.exists) {
-          final tx = txDoc.data()!;
-          final sid = tx['sellerId'] as String? ?? '';
-          final grandTotal = ((tx['totalAmount'] as num?)?.toDouble() ?? 0);
-          if (sid.isNotEmpty) {
-            final sDoc = await FirebaseFirestore.instance
-                .collection('users')
-                .doc(sid)
-                .get();
-            final sPhone = sDoc.data()?['phone'] as String?;
-            if (sPhone != null && sPhone.isNotEmpty) {
-              SmsNotificationService.notifyEscrowReleased(
-                sellerPhone: sPhone,
-                grandTotal: grandTotal.toStringAsFixed(0),
-                orderId: txId,
-              );
-            }
-          }
         }
       } else {
         if (mounted)

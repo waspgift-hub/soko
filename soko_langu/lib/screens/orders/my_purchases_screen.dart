@@ -9,7 +9,6 @@ import 'package:intl/intl.dart';
 import '../../models/transaction_model.dart';
 import '../../services/api_config.dart';
 import '../../services/clickpesa_service.dart';
-import '../../services/sms_notification_service.dart';
 import '../../services/rating_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
@@ -216,21 +215,6 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
           final sellerId = tx['sellerId'] as String? ?? '';
           final productId = tx['productId'] as String? ?? '';
           final productName = tx['productName'] as String? ?? '';
-          final grandTotal = ((tx['totalAmount'] as num?)?.toDouble() ?? 0);
-          if (sellerId.isNotEmpty) {
-            final sellerDoc = await FirebaseFirestore.instance
-                .collection('users')
-                .doc(sellerId)
-                .get();
-            final sellerPhone = sellerDoc.data()?['phone'] as String?;
-            if (sellerPhone != null && sellerPhone.isNotEmpty) {
-              SmsNotificationService.notifyEscrowReleased(
-                sellerPhone: sellerPhone,
-                grandTotal: grandTotal.toStringAsFixed(0),
-                orderId: txId,
-              );
-            }
-          }
           if (mounted && sellerId.isNotEmpty && productId.isNotEmpty) {
             _showSellerRatingDialog(txId, sellerId, productId, productName);
           }

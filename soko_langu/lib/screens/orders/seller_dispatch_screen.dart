@@ -4,7 +4,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import '../../services/api_config.dart';
-import '../../services/sms_notification_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/google_loading.dart';
@@ -37,7 +36,7 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
     super.dispose();
   }
 
-  Future<void> _dispatchOrder(String txId, {String buyerPhone = ''}) async {
+  Future<void> _dispatchOrder(String txId) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     if (!_formKey.currentState!.validate()) return;
@@ -61,17 +60,8 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
       final result = jsonDecode(resp.body);
 
       if (resp.statusCode == 200 && result['success'] == true) {
-        final busName = _courierNameCtrl.text.trim();
         for (final c in [_courierNameCtrl, _trackingNumberCtrl, _driverPhoneCtrl, _notesCtrl]) {
           c.clear();
-        }
-        if (buyerPhone.isNotEmpty) {
-          SmsNotificationService.notifyDispatched(
-            buyerPhone: buyerPhone,
-            orderId: txId,
-            busName: busName,
-            plateNumber: '',
-          );
         }
         if (mounted) _showSuccess(context.tr('product_dispatched_msg'));
       } else {
@@ -273,7 +263,7 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
                               loading: _dispatchingTxId == txId,
                               onPressed: _dispatchingTxId == txId
                                   ? null
-                                  : () => _dispatchOrder(txId, buyerPhone: buyerPhone),
+                                  : () => _dispatchOrder(txId),
                             ),
                           ],
                         ),

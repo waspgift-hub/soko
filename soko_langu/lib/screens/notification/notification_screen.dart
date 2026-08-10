@@ -283,10 +283,15 @@ class _NotificationScreenState extends State<NotificationScreen> {
             }
             break;
           case 'order':
+          case 'sale':
+          case 'payment':
+          case 'escrow_confirm':
           case 'escrow_release':
           case 'escrow_auto_release':
           case 'delivery_confirmed':
           case 'dispatched':
+          case 'buyer_transport':
+          case 'shipping_quote':
           case 'disputed':
           case 'dispute_resolved':
           case 'failed_retry':
