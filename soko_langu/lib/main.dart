@@ -288,7 +288,10 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
       final prefs = await SharedPreferences.getInstance();
 
       setState(() {
-        _langCode = prefs.getString('language_code') ?? 'sw';
+        final savedLang = prefs.getString('language_code');
+        _langCode = (savedLang != null && LocalizationService.supportedLanguages.containsKey(savedLang))
+            ? savedLang
+            : 'sw';
         _currencyCode = prefs.getString('currency') ?? 'TZS';
       });
 
@@ -507,9 +510,7 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
         supportedLocales: const [
           Locale('en'),
           Locale('sw'),
-          Locale('fr'),
           Locale('zh'),
-          Locale('de'),
         ],
         localizationsDelegates: const [
           GlobalMaterialLocalizations.delegate,

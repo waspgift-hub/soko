@@ -1,7 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'localizations/de_translations.dart';
-import 'localizations/fr_translations.dart';
 import 'localizations/zh_translations.dart';
 
 class LocalizationService {
@@ -11,9 +9,7 @@ class LocalizationService {
   static const Map<String, String> supportedLanguages = {
     'sw': 'Kiswahili',
     'en': 'English',
-    'fr': 'Français',
     'zh': '中文',
-    'de': 'Deutsch',
   };
 
   static const Map<String, Map<String, String>> supportedCurrencies = {
@@ -3333,9 +3329,7 @@ class LocalizationService {
       'error_loading_transactions': 'Error loading transactions',
       'no_withdrawals': 'No withdrawals yet',
     },
-    ...frTranslations,
     ...zhTranslations,
-    ...deTranslations,
   };
 
 
