@@ -115,6 +115,7 @@ const Map<String, Map<String, String>> zhTranslations = {
     'something_wrong': '出错了！',
     'online': '在线',
     'offline': '离线',
+    'member': '会员',
     'last_seen': '最后上线',
     'just_now': '刚刚',
     'minutes_ago': '分钟前',

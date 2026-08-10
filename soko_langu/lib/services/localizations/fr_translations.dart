@@ -126,6 +126,7 @@ const Map<String, Map<String, String>> frTranslations = {
     'required': 'Obligatoire',
     'online': 'En ligne',
     'offline': 'Hors ligne',
+    'member': 'Membre',
     'last_seen': 'Vu pour la dernière fois',
     'just_now': 'à l\'instant',
     'minutes_ago': 'il y a quelques minutes',

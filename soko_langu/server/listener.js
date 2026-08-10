@@ -238,109 +238,8 @@ function startListener() {
   console.log('[LISTENER] Ready. Listening for transaction changes...');
 }
 
-// ─── Chat message listener: notify recipient on new message ─────
-function startChatListener() {
-  console.log('[LISTENER] Starting chat message listener...');
-
-  let knownMessageIds = new Set();
-  const listenerStartedAt = admin.firestore.Timestamp.now();
-
-  // Load recent message IDs to avoid re-sending on startup
-  db.collectionGroup('messages')
-    .orderBy('timestamp', 'desc')
-    .limit(200)
-    .get()
-    .then((snap) => {
-      snap.docs.forEach((doc) => knownMessageIds.add(doc.id));
-      console.log(`[LISTENER] Loaded ${snap.docs.length} recent chat messages`);
-    })
-    .catch((err) => {
-      console.error('[LISTENER] Failed to load recent messages:', err.message);
-    });
-
-  // Watch all messages subcollections — no .where() to avoid needing a composite index.
-  // We filter in-memory using knownMessageIds (dedup) and listenerStartedAt (cutoff).
-  db.collectionGroup('messages')
-    .onSnapshot(
-      (snapshot) => {
-        snapshot.docChanges().forEach((change) => {
-          if (change.type !== 'added') return;
-          const msgId = change.doc.id;
-          // Skip messages already known from the initial load
-          if (knownMessageIds.has(msgId)) return;
-          const msgData = change.doc.data();
-          // Skip messages older than listener start (in-memory filter, no index needed)
-          const msgTime = msgData.timestamp;
-          if (msgTime && msgTime < listenerStartedAt) return;
-          knownMessageIds.add(msgId);
-
-          const senderId = msgData.sender_id || '';
-          const text = msgData.text || '';
-
-          if (!senderId || !text) return;
-
-          // Get the room ID from the document reference path
-          const roomId = change.doc.ref.parent.parent?.id;
-          if (!roomId) return;
-
-          // Skip AI Dalali messages
-          if (senderId === 'ai_dalali') return;
-
-          console.log(`[LISTENER] New chat message in room ${roomId} from ${senderId}`);
-
-          // Look up room participants
-          db.collection('chat_rooms').doc(roomId).get()
-            .then((roomSnap) => {
-              if (!roomSnap.exists) return;
-              const room = roomSnap.data();
-              const participants = room.participants || [];
-
-              // Find recipient (the other participant)
-              const receiverId = participants.find(p => p !== senderId);
-              if (!receiverId) return;
-
-              // Look up sender's display name
-              return db.collection('users').doc(senderId).get()
-                .then((senderSnap) => {
-                  const senderData = senderSnap.data() || {};
-                  const senderName = senderData.displayName || senderData.name || 'Mtumiaji';
-
-                  // Send via OneSignal
-                  const title = senderName;
-                  const body = text;
-                  return sendOsNotification(receiverId, title, body, { type: 'chat', senderId, senderName, roomId })
-                    .then(() => {
-                      console.log(`[LISTENER] Chat notification sent to ${receiverId}`);
-                    })
-                    .catch((err) => {
-                      console.error('[LISTENER] Chat push error:', err.message);
-                    })
-                    .then(() => {
-                      // Create in-app notification doc
-                      return db.collection('notifications').add({
-                        userId: receiverId,
-                        title: senderName,
-                        body: text,
-                        type: 'chat',
-                        data: { senderId, senderName, roomId },
-                        isRead: false,
-                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                      }).catch((err) => {
-                        console.error('[LISTENER] Chat in-app notification error:', err.message);
-                      });
-                    });
-                });
-            })
-            .catch((err) => {
-              console.error('[LISTENER] Chat notification error:', err.message);
-            });
-        });
-      },
-      (error) => {
-        console.error('[LISTENER] Chat listener error:', error);
-      }
-    );
-}
+// Chat messages are handled exclusively by the /api/chat/send endpoint —
+// a listener here would double-fire every push and in-app notification.
 
 // ─── Product listener: notify previous chat partners on new product ─────
 function startProductListener() {
@@ -488,7 +387,6 @@ db.collection('transactions')
   })
   .finally(() => {
     startListener();
-    startChatListener();
     startProductListener();
     startDistrictProductListener();
   });

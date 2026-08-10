@@ -127,7 +127,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
               final otherId = room.participants.where((p) => p != uid).firstOrNull ?? '';
               if (otherId.isEmpty) return const SizedBox.shrink();
               _fetchUser(otherId);
-              final name = _userNames[otherId] ?? otherId.substring(0, 8);
+              final name = _userNames[otherId] ?? context.tr('member');
               final photo = _userPhotos[otherId] ?? '';
 
               final isBuyer = room.buyerId == uid;
@@ -224,8 +224,7 @@ class _ChatListTile extends StatelessWidget {
                   backgroundColor: cs.primary.withValues(alpha: 0.12),
                   backgroundImage: photo.isNotEmpty ? NetworkImage(photo) : null,
                   child: photo.isEmpty
-                      ? Text(name.isNotEmpty ? name[0].toUpperCase() : '?',
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: cs.primary))
+                      ? Icon(Icons.person, size: 28, color: cs.primary)
                       : null,
                 ),
                 const SizedBox(width: 14),

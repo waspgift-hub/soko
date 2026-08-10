@@ -212,6 +212,20 @@ class UserService {
     });
   }
 
+  /// Persist which chat room the user is currently viewing so the server can
+  /// suppress unread counts, pushes, and in-app rows for the live conversation.
+  /// null clears the marker.
+  Future<void> setActiveChatRoom(String? roomId) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    await _db.collection('users').doc(uid).update({
+      if (roomId == null)
+        'activeChatRoom': FieldValue.delete()
+      else
+        'activeChatRoom': roomId,
+    });
+  }
+
   /// Stream the other user's lastActive for presence detection.
   Stream<DateTime?> streamLastActive(String uid) {
     return _db.collection('users').doc(uid).snapshots().map((doc) {

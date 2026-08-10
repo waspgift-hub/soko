@@ -126,6 +126,7 @@ const Map<String, Map<String, String>> deTranslations = {
     'required': 'Erforderlich',
     'online': 'Online',
     'offline': 'Offline',
+    'member': 'Mitglied',
     'last_seen': 'Zuletzt online',
     'just_now': 'gerade eben',
     'minutes_ago': 'Minuten zuvor',

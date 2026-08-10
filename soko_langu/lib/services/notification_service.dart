@@ -27,6 +27,10 @@ class NotificationService {
   static final GlobalKey<ScaffoldMessengerState> messengerKey =
       GlobalKey<ScaffoldMessengerState>();
   static void Function(Map<String, dynamic> data)? onNotificationTap;
+
+  /// Chat room currently on screen — chat heads-ups are skipped while the user
+  /// is viewing that conversation so it never interrupts the live thread.
+  static String? activeChatRoomId;
   static void Function(Map<String, dynamic> data)? onPaymentNotificationTap;
 
   Future<bool> isEnabled() async {
@@ -106,6 +110,10 @@ class NotificationService {
           final body = notif.body ?? '';
           final type = data['type'] as String? ?? 'general';
           debugPrint('[OS] foreground notification: type=$type title=$title');
+          if (type == 'chat' && activeChatRoomId != null && data['roomId'] == activeChatRoomId) {
+            debugPrint('[OS] skipping heads-up — already viewing room $activeChatRoomId');
+            return;
+          }
           _showHeadsUpNotification(title, body, type, data);
         });
 
@@ -428,11 +436,17 @@ class NotificationService {
             DateTime.now().difference(createdAt.toDate()).inMinutes > 2) {
           continue;
         }
+        final dType = d['type']?.toString() ?? 'general';
+        final dData = Map<String, dynamic>.from(d['data'] as Map? ?? const {});
+        if (dType == 'chat' && activeChatRoomId != null && dData['roomId'] == activeChatRoomId) {
+          debugPrint('[OS] fallback: skipping heads-up — already viewing room $activeChatRoomId');
+          continue;
+        }
         _showHeadsUpNotification(
           d['title']?.toString() ?? '',
           d['body']?.toString() ?? '',
-          d['type']?.toString() ?? 'general',
-          Map<String, dynamic>.from(d['data'] as Map? ?? const {}),
+          dType,
+          dData,
         );
       }
     });

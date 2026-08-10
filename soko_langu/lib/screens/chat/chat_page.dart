@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/chat_service.dart';
 import '../../services/chat_typing.dart';
+import '../../services/notification_service.dart';
 import '../../services/user_service.dart';
 import '../../services/whatsapp_service.dart';
 import '../../models/message_model.dart';
@@ -48,6 +49,7 @@ class _ChatPageState extends State<ChatPage> {
   bool _autoScrolling = false;
   String? _receiverPhone;
   String? _receiverPhoto;
+  String? _receiverName;
   StreamSubscription<UserProfile?>? _profileSub;
 
   // Optimistic messages: tempId → Message
@@ -81,6 +83,10 @@ class _ChatPageState extends State<ChatPage> {
       if (mounted) setState(() => _otherLastActive = t);
     });
     _userService.updateLastActive();
+    // Tell the server this conversation is on screen so it suppresses unread,
+    // push, and in-app rows for it.
+    NotificationService.activeChatRoomId = _roomId;
+    _userService.setActiveChatRoom(_roomId);
     // Refresh presence every 30s while chat is open
     _presenceTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       _userService.updateLastActive();
@@ -93,6 +99,7 @@ class _ChatPageState extends State<ChatPage> {
       setState(() {
         _receiverPhone = profile.phone;
         _receiverPhoto = profile.profileImage;
+        _receiverName = profile.displayName;
       });
     }
     _profileSub = _userService.streamProfile(widget.receiverId).listen((p) {
@@ -101,9 +108,17 @@ class _ChatPageState extends State<ChatPage> {
         if (p != null) {
           _receiverPhone = p.phone;
           _receiverPhoto = p.profileImage;
+          _receiverName = p.displayName;
         }
       });
     });
+  }
+
+  /// Receiver display name, falling back to a generic member label instead of
+  /// ever leaking the raw uid into the UI.
+  String get _displayName {
+    final name = _receiverName ?? widget.receiverName;
+    return (name.isNotEmpty) ? name : context.tr('member');
   }
 
   void _openWhatsApp() {
@@ -115,7 +130,7 @@ class _ChatPageState extends State<ChatPage> {
       return;
     }
     final msg = WhatsAppService.generateProfileMessage(
-      sellerName: widget.receiverName,
+      sellerName: _displayName,
     );
     WhatsAppService().openWhatsApp(phoneNumber: phone, message: msg);
   }
@@ -131,6 +146,11 @@ class _ChatPageState extends State<ChatPage> {
     _focusNode.dispose();
     _typingTimer?.cancel();
     _chatTyping.stopTyping(widget.receiverId);
+    // Only clear the marker if this room is still the active one
+    if (NotificationService.activeChatRoomId == _roomId) {
+      NotificationService.activeChatRoomId = null;
+      _userService.setActiveChatRoom(null);
+    }
     super.dispose();
   }
 
@@ -314,7 +334,7 @@ class _ChatPageState extends State<ChatPage> {
         titleSpacing: 0,
         title: GestureDetector(
           onTap: () => context.push('${AppRoutes.publicProfile}/${widget.receiverId}',
-              extra: widget.receiverName),
+              extra: _displayName),
           child: Row(
             children: [
               CircleAvatar(
@@ -324,10 +344,7 @@ class _ChatPageState extends State<ChatPage> {
                     ? NetworkImage(_receiverPhoto!)
                     : null,
                 child: _receiverPhoto == null || _receiverPhoto!.isEmpty
-                    ? Text(widget.receiverName.isNotEmpty
-                        ? widget.receiverName[0].toUpperCase()
-                        : '?',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cs.primary))
+                    ? Icon(Icons.person, size: 20, color: cs.primary)
                     : null,
               ),
               const SizedBox(width: 10),
@@ -335,7 +352,7 @@ class _ChatPageState extends State<ChatPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(widget.receiverName,
+                    Text(_displayName,
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -360,6 +377,22 @@ class _ChatPageState extends State<ChatPage> {
                               const SizedBox(width: 4),
                               Text(context.tr('online'),
                                   style: TextStyle(fontSize: 12, color: const Color(0xFF25D366))),
+                            ],
+                          )
+                        else if (_otherLastActive != null)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 8, height: 8,
+                                decoration: BoxDecoration(
+                                  color: isDark ? Colors.white38 : const Color(0xFFB0BEC5),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(context.tr('offline'),
+                                  style: TextStyle(fontSize: 12, color: isDark ? Colors.white38 : const Color(0xFF78909C))),
                             ],
                           ),
                       ],
@@ -484,7 +517,7 @@ class _ChatPageState extends State<ChatPage> {
                                     _replyToContent = msg.content;
                                     _replyToSender = isMe
                                         ? (FirebaseAuth.instance.currentUser?.displayName ?? context.tr('you'))
-                                        : widget.receiverName;
+                                        : _displayName;
                                     _focusNode.requestFocus();
                                     setState(() {});
                                   },
@@ -672,7 +705,7 @@ class _ChatPageState extends State<ChatPage> {
               onTap: () {
                 Navigator.pop(ctx);
                 context.push('${AppRoutes.publicProfile}/${widget.receiverId}',
-                    extra: widget.receiverName);
+                    extra: _displayName);
               },
             ),
             ListTile(

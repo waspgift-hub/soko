@@ -7031,38 +7031,66 @@ app.post('/api/chat/send', async (req, res) => {
       last_timestamp: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    // Increment unread count for receiver
-    try {
-      const receiverDoc = await db.collection('users').doc(receiverId).get();
-      if (receiverDoc.exists) {
-        const receiverData = receiverDoc.data();
-        const fieldName = receiverData.isBuyer === true ? 'unread_count_buyer' : 'unread_count_seller';
-        await db.collection('chat_rooms').doc(roomId).update({
-          [fieldName]: admin.firestore.FieldValue.increment(1),
-        });
-      }
-    } catch (_) {}
-
-    // Send OneSignal push to receiver
+    // Presence-aware delivery: a recipient currently viewing this exact
+    // conversation (activeChatRoom === roomId) sees the message live, so we
+    // skip the unread bump, push, and in-app banner. If they are in the app
+    // elsewhere (fresh lastActive) we still bump unread + in-app badge but skip
+    // the disruptive heads-up push.
+    const RECEIVER_FRESH_MS = 2 * 60 * 1000;
     const senderName = senderDoc.exists
       ? (senderDoc.data().displayName || senderDoc.data().name || 'Mtumiaji')
       : 'Mtumiaji';
+    let receiverActiveHere = false;
+    let receiverFresh = false;
+    let receiverData = null;
+    let receiverRoomId = null;
     try {
-      await sendOneSignalNotification(receiverId, senderName, text, { type: 'chat', senderId, senderName, roomId });
+      const receiverDoc = await db.collection('users').doc(receiverId).get();
+      if (receiverDoc.exists) {
+        receiverData = receiverDoc.data();
+        receiverRoomId = receiverData.activeChatRoom || null;
+        const lastActive = receiverData.lastActive;
+        if (lastActive && typeof lastActive.toMillis === 'function') {
+          receiverFresh = Date.now() - lastActive.toMillis() < RECEIVER_FRESH_MS;
+        }
+      }
     } catch (_) {}
+    // activeChatRoom only counts as "watching live" while the user's presence
+    // is fresh — lastActive stops refreshing when the app backgrounds, so
+    // pushes resume ~2min after they leave the app.
+    receiverActiveHere = receiverRoomId === roomId && receiverFresh;
 
-    // Create in-app notification doc for receiver
-    try {
-      await db.collection('notifications').add({
-        userId: receiverId,
-        title: senderName,
-        body: text,
-        type: 'chat',
-        data: { senderId, senderName, roomId },
-        isRead: false,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-    } catch (_) {}
+    // Increment unread count for receiver (unless they're watching the room)
+    if (!receiverActiveHere) {
+      try {
+        const fieldName = receiverData?.isBuyer === true ? 'unread_count_buyer' : 'unread_count_seller';
+        await db.collection('chat_rooms').doc(roomId).update({
+          [fieldName]: admin.firestore.FieldValue.increment(1),
+        });
+      } catch (_) {}
+    }
+
+    // Send OneSignal push to receiver (only when they're away from the app)
+    if (!receiverActiveHere && !receiverFresh) {
+      try {
+        await sendOneSignalNotification(receiverId, senderName, text, { type: 'chat', senderId, senderName, roomId });
+      } catch (_) {}
+    }
+
+    // Create in-app notification doc for receiver (unless watching the room)
+    if (!receiverActiveHere) {
+      try {
+        await db.collection('notifications').add({
+          userId: receiverId,
+          title: senderName,
+          body: text,
+          type: 'chat',
+          data: { senderId, senderName, roomId },
+          isRead: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (_) {}
+    }
 
     res.json({ success: true, messageId: msgRef.id });
   } catch (e) {
