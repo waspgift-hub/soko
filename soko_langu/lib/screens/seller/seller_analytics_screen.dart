@@ -8,6 +8,7 @@ import '../../theme/app_colors.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/ds/ds.dart';
+import '../../main.dart';
 
 class SellerAnalyticsScreen extends StatefulWidget {
   final String sellerId;
@@ -22,6 +23,9 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
   SellerAnalytics? _data;
   bool _loading = true;
   Timer? _refreshTimer;
+  String? _aiInsights;
+  bool _aiLoading = false;
+  bool _aiRequested = false;
 
   @override
   void initState() {
@@ -48,9 +52,26 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
           _data = data;
           _loading = false;
         });
+      if (!_aiRequested && data.totalProducts > 0) {
+        _aiRequested = true;
+        await _generateInsights();
+      }
     } catch (_) {
       if (mounted && _loading) setState(() => _loading = false);
     }
+  }
+
+  Future<void> _generateInsights() async {
+    final data = _data;
+    if (data == null) return;
+    final locale = AppConfig.of(context).langCode;
+    setState(() => _aiLoading = true);
+    final insights = await _analytics.generateInsights(data, locale: locale);
+    if (!mounted) return;
+    setState(() {
+      _aiInsights = insights;
+      _aiLoading = false;
+    });
   }
 
   @override
@@ -84,6 +105,8 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
                 children: [
                   _buildSummaryRow(cs, nf),
+                  const SizedBox(height: 16),
+                  _buildAiInsightsCard(cs),
                   const SizedBox(height: 16),
                   _buildMonthlySalesChart(cs, nf),
                   const SizedBox(height: 16),
@@ -127,7 +150,7 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
       (context.tr('products'), '${_data!.totalProducts}', Icons.inventory_2_outlined, cs.primary),
       (context.tr('views'), '${_data!.totalProductViews}', Icons.visibility_outlined, cs.secondary),
       (context.tr('sales'), '${_data!.successfulOrders}', Icons.shopping_bag_outlined, cs.successGreen),
-      (context.tr('earnings'), 'TSh ${_formatAmount(_data!.monthlyEarnings)}', Icons.monetization_on_outlined, cs.trendingOrange),
+      (context.tr('earnings'), '${context.currencySymbol()} ${_formatAmount(_data!.monthlyEarnings)}', Icons.monetization_on_outlined, cs.trendingOrange),
     ];
     return GridView.builder(
       shrinkWrap: true,
@@ -168,6 +191,53 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildAiInsightsCard(ColorScheme cs) {
+    final hasData = _data!.totalProducts > 0;
+    return DsCard(
+      radius: 20,
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _buildSectionHeader(cs, Icons.auto_awesome_rounded, context.tr('ai_insights'), cs.premiumAmber),
+              ),
+              if (_aiInsights != null)
+                TextButton.icon(
+                  onPressed: _aiLoading ? null : _generateInsights,
+                  icon: Icon(Icons.refresh_rounded, size: 16),
+                  label: Text(context.tr('regenerate'), style: const TextStyle(fontSize: 12)),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (!hasData)
+            Text(
+              context.tr('no_data'),
+              style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+            )
+          else if (_aiLoading && _aiInsights == null)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: GoogleLoading()),
+            )
+          else if (_aiInsights == null)
+            Text(
+              context.tr('ai_insights_empty'),
+              style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+            )
+          else
+            Text(
+              _aiInsights!,
+              style: TextStyle(fontSize: 13, height: 1.6, color: cs.onSurface.withValues(alpha: 0.9)),
+            ),
+        ],
+      ),
     );
   }
 

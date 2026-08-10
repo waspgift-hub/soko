@@ -641,13 +641,48 @@ class AnalyticsService {
 
   // ── AI-Powered Insights ───────────────────────────────────────────────
 
-  Future<String> generateInsights(SellerAnalytics analytics) async {
+  /// Builds an advisory prompt from the seller's real analytics data.
+  /// Swahili by default; English when the user has set the app to English.
+  Future<String> generateInsights(SellerAnalytics analytics, {String locale = 'sw'}) async {
+    final isEn = locale == 'en';
     try {
       final groq = GroqService();
-      final prompt =
-          '''
+      final prompt = isEn
+          ? '''
+These are real analytics for a seller on Soko Vibe. Analyze and give detailed advice in English:
+
+Products: ${analytics.totalProducts}
+Product views: ${analytics.totalProductViews}
+Male viewers: ${analytics.genderBreakdown['male'] ?? 0}
+Female viewers: ${analytics.genderBreakdown['female'] ?? 0}
+Top viewing location: ${analytics.topLocation}
+Boost impressions: ${analytics.boostImpressions}
+Top viewing age group: ${analytics.topAgeGroup}
+Earnings this month: TSh ${analytics.monthlyEarnings.toStringAsFixed(0)}
+Total orders: ${analytics.totalOrders}
+Successful orders: ${analytics.successfulOrders}
+Failed orders: ${analytics.failedOrders}
+Success rate: ${analytics.orderSuccessRate.toStringAsFixed(1)}%
+Average rating: ${analytics.averageRating.toStringAsFixed(1)}/5
+Positive reviews: ${analytics.positiveReviews}
+Negative reviews: ${analytics.negativeReviews}
+
+Also factor in the wider economy and world events (e.g. inflation, shopping seasons, holidays, changes in Tanzanian business law) and relate them to the seller's numbers.
+
+Provide:
+1. SUMMARY — overall business health
+2. ROOT CAUSE — what is causing challenges (failed orders, low rating, etc.)
+3. RECOMMENDATIONS — what the seller should do to improve
+4. NEW CUSTOMERS — how to get more buyers on Soko Vibe
+5. VALUE — the benefit of using Soko Vibe
+6. STRATEGIC ADVICE — ways to increase sales and customers
+7. EXTERNAL MARKET OUTLOOK — how outside events affect the business
+
+Answer in simple English like a business adviser. Give actionable advice.
+'''
+          : '''
 Hii ni takwimu za muuzaji kwenye Soko Vibe. Chambua na toa ushauri wa kina kwa Kiswahili:
- 
+
 Bidhaa: ${analytics.totalProducts}
 Matazamio ya bidhaa: ${analytics.totalProductViews}
 Wanaume: ${analytics.genderBreakdown['male'] ?? 0}
@@ -680,7 +715,9 @@ Jibu kwa Kiswahili, lugha rahisi, kama mshauri wa biashara. Toa ushauri unaoteke
 
       return await groq.sendMessage(prompt);
     } catch (e) {
-      return 'Samahani, siwezi kuchambua takwimu kwa sasa. Tafadhali jaribu tena baadaye.';
+      return isEn
+          ? 'Sorry, I cannot analyze the statistics right now. Please try again later.'
+          : 'Samahani, siwezi kuchambua takwimu kwa sasa. Tafadhali jaribu tena baadaye.';
     }
   }
 }

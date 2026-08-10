@@ -10,7 +10,14 @@ class ProductSearchService {
 
   ProductSearchResult? _mapDoc(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
     try {
-      return ProductSearchResult.fromFirestore(doc.id, doc.data());
+      final data = doc.data();
+      // Only fully-submitted listings may be surfaced to the AI — a product
+      // missing its name, price, or seller is an incomplete/draft submission.
+      final name = (data['name'] as String? ?? '').trim();
+      final price = (data['price'] as num?)?.toDouble() ?? 0;
+      final sellerId = (data['sellerId'] as String? ?? '').trim();
+      if (name.isEmpty || price <= 0 || sellerId.isEmpty) return null;
+      return ProductSearchResult.fromFirestore(doc.id, data);
     } catch (_) {
       return null;
     }

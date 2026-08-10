@@ -483,6 +483,9 @@ class LocalizationService {
       'ai_hear_error':
           'Samahani mkuu, siwezi kusikia vizuri. Tafadhali jaribu tena au andika jina la bidhaa.',
       'ai_generic_error': 'Samahani mkuu, kuna tatizo. Tafadhali jaribu tena.',
+      'ai_insights': 'Ushauri wa AI wa kukuza biashara',
+      'ai_insights_empty': 'Tafuta maoni ya AI kwa kubofya ikoni ya kuonyesha upya hapo juu.',
+      'regenerate': 'Onyesha upya',
       'ai_chat_hint': 'Andika chochote... tafuta, ongea, omba ushauri',
       'ai_tip_title': 'Mkuu! Dalali ana ushauri',
       'ai_seller_tip':
@@ -2258,6 +2261,9 @@ class LocalizationService {
           'Sorry chief, I cannot hear clearly. Please try again or type the product name.',
       'ai_generic_error':
           'Sorry chief, something went wrong. Please try again.',
+      'ai_insights': 'AI advice to grow your business',
+      'ai_insights_empty': 'Get AI advice by tapping the refresh icon above.',
+      'regenerate': 'Refresh',
       'ai_chat_hint': 'Type anything... search, talk, ask for advice',
       'ai_tip_title': 'Chief! Dalali has advice',
       'ai_seller_tip':

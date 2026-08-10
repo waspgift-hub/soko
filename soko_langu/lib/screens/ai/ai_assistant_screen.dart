@@ -6,10 +6,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/ai/ai_service.dart';
 import '../../services/product_search_service.dart';
 import '../../main.dart';
-import '../../services/product_service.dart';
 import '../../services/voice_search_service.dart';
 import '../../services/localization_service.dart';
-import '../../models/product_model.dart';
 import '../../models/product_search_result.dart';
 import '../../extensions/context_tr.dart';
 import '../../utils/chat_utils.dart';
@@ -34,14 +32,11 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
   bool _isRecording = false;
-  List<Product> _sellerProducts = [];
-  bool _showSellerTip = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _checkSellerProducts();
   }
 
   @override
@@ -53,17 +48,6 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
         isUser: false,
       ));
     }
-  }
-
-  Future<void> _checkSellerProducts() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    final products = await ProductService().getMyProducts().first;
-    if (products.isEmpty) return;
-    setState(() {
-      _sellerProducts = products;
-      _showSellerTip = products.any((p) => p.soldCount == 0 && p.viewCount < 20);
-    });
   }
 
   @override
@@ -146,7 +130,12 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
     });
     _scrollToBottom();
 
-    final products = await _searcher.searchProducts(transcribed);
+    final List<ProductSearchResult> products;
+    if (_isProductQuery(transcribed)) {
+      products = await _searcher.searchProducts(transcribed);
+    } else {
+      products = const [];
+    }
     await _showProductResults(transcribed, products);
   }
 
@@ -215,6 +204,16 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
     return AiService.buildInAppCatalogContext(buffer.toString());
   }
 
+  bool _isProductQuery(String text) {
+    final normalized = text.toLowerCase().trim();
+    final greetingTokens = ['hello', 'hi', 'hujambo', 'habari', 'mambo', 'salamu',
+        'salam', 'morning', 'jambo', 'poa', 'vipi', 'hey', 'good morning',
+        'good afternoon', 'good evening', 'mzuri', 'zuri', 'asante', 'thank',
+        'shukran', 'karibu', 'poa sana', 'umeamkaje', 'umefika'];
+    final trimmed = normalized.replaceAll(RegExp(r'[?!.,\s]+$'), '');
+    return !greetingTokens.any((g) => trimmed == g || trimmed.endsWith(' $g'));
+  }
+
   Future<void> _sendMessage(String text) async {
     if (text.trim().isEmpty) return;
 
@@ -226,7 +225,13 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
     _controller.clear();
 
     try {
-      final products = await _searcher.searchProducts(text);
+      final List<ProductSearchResult> products;
+      final isProductQuery = _isProductQuery(text);
+      if (isProductQuery) {
+        products = await _searcher.searchProducts(text);
+      } else {
+        products = const [];
+      }
 
       String? richContext;
       if (products.isNotEmpty) {
@@ -240,8 +245,10 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
         productContext: richContext,
         catalogStatus: products.isNotEmpty
             ? AiCatalogStatus.foundInApp
-            : AiCatalogStatus.notFoundInApp,
-        searchQuery: text,
+            : isProductQuery
+                ? AiCatalogStatus.notFoundInApp
+                : AiCatalogStatus.generalChat,
+        searchQuery: isProductQuery ? text : null,
         locale: locale,
       );
 
@@ -269,6 +276,24 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
 
   Future<void> _showProductResults(String query, List<ProductSearchResult> products) async {
     final locale = AppConfig.of(context).langCode;
+    if (!_isProductQuery(query)) {
+      final reply = await _ai.sendMessage(
+        query,
+        productContext: null,
+        catalogStatus: AiCatalogStatus.generalChat,
+        searchQuery: null,
+        locale: locale,
+      );
+      setState(() {
+        _isLoading = false;
+        _messages.add(ChatMessage(
+          text: reply,
+          isUser: false,
+        ));
+      });
+      _scrollToBottom();
+      return;
+    }
     if (products.isEmpty) {
       final reply = await _ai.sendMessage(
         query,
@@ -374,7 +399,6 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
       ),
       body: Column(
         children: [
-          if (_showSellerTip) _buildSellerTip(),
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
@@ -481,49 +505,6 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
             ? Icon(Icons.mic_rounded, color: cs.onError, size: 20, key: const ValueKey('recording'))
             : Icon(Icons.mic_none_rounded, color: cs.onSurface.withValues(alpha: 0.6), size: 20, key: const ValueKey('idle')),
         ),
-      ),
-    );
-  }
-
-  Widget _buildSellerTip() {
-    final lowPerf = _sellerProducts.where((p) => p.soldCount == 0 && p.viewCount < 20).toList();
-    if (lowPerf.isEmpty) return const SizedBox.shrink();
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [cs.primary, cs.primary.withValues(alpha: 0.7)]),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.lightbulb_outline, color: cs.onPrimary, size: 22),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  context.tr('ai_tip_title'),
-                  style: GoogleFonts.spaceGrotesk(color: cs.onPrimary, fontWeight: FontWeight.w600, fontSize: 13),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  context.tr('ai_seller_tip').replaceAll('{0}', lowPerf.take(3).map((p) => p.name).join(', ')),
-                  style: TextStyle(color: cs.onPrimary.withValues(alpha: 0.9), fontSize: 12),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-          TextButton(
-            onPressed: () => setState(() => _showSellerTip = false),
-            style: TextButton.styleFrom(foregroundColor: cs.onPrimary, padding: const EdgeInsets.all(4)),
-            child: Text(context.tr('ok'), style: GoogleFonts.jetBrainsMono(fontWeight: FontWeight.w600, fontSize: 11, color: cs.onPrimary)),
-          ),
-        ],
       ),
     );
   }
