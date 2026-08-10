@@ -1,15 +1,11 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
-import 'package:http/http.dart' as http;
 import '../../extensions/context_tr.dart';
-import '../../services/api_config.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/order_status_config.dart';
 import '../../utils/network_error.dart';
@@ -26,8 +22,6 @@ class SellerOrdersScreen extends StatefulWidget {
 
 class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
   String _filter = 'all';
-  String? _quotingOrderId;
-  String? _dispatchingOrderId;
   Timer? _autoRefreshTimer;
   DateTime? _lastAutoRefresh;
 
@@ -381,10 +375,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                           label: context.tr('mark_shipped'),
                           icon: Icons.local_shipping_outlined,
                           height: 44,
-                          loading: _dispatchingOrderId == txId,
-                          onPressed: _dispatchingOrderId == txId
-                              ? null
-                              : () => _showDispatchDialog(txId, d),
+                          onPressed: () => context.push(AppRoutes.sellerDispatch),
                         ),
                       ],
                       const SizedBox(height: 12),
@@ -538,7 +529,6 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                 itemCount: pending.length,
                 itemBuilder: (_, i) {
                   final d = pending[i].data() as Map<String, dynamic>;
-                  final orderId = pending[i].id;
                   final productName = d['productName'] ?? 'Product';
                   final productImage = d['productImage'] as String? ?? '';
                   final buyerName = d['buyerName'] ?? '';
@@ -587,8 +577,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                               label: context.tr('place_quote'),
                               icon: Icons.send_rounded,
                               height: 34,
-                              loading: _quotingOrderId == orderId,
-                              onPressed: _quotingOrderId == orderId ? null : () => _showQuoteDialog(orderId, d),
+                              onPressed: () => context.push(AppRoutes.sellerQuote),
                             ),
                           ),
                         ],
@@ -602,259 +591,6 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
           ],
         );
       },
-    );
-  }
-
-  Future<void> _showQuoteDialog(String orderId, Map<String, dynamic> orderData) async {
-    final shippingCtrl = TextEditingController();
-    final busCtrl = TextEditingController();
-    final plateCtrl = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
-    final confirmed = await DsSheet.show<bool>(
-      context: context,
-      content: Form(
-        key: formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              context.tr('enter_shipping_cost'),
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            DsTextField(
-              controller: shippingCtrl,
-              label: context.tr('shipping_cost'),
-              hint: 'TZS',
-              prefixIcon: Icons.monetization_on_outlined,
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 12),
-            DsTextField(
-              controller: busCtrl,
-              label: context.tr('bus_name'),
-              hint: 'Mf: Scandinavia, Kilimanjaro',
-              prefixIcon: Icons.directions_bus,
-            ),
-            const SizedBox(height: 12),
-            DsTextField(
-              controller: plateCtrl,
-              label: context.tr('plate_number'),
-              hint: 'Mf: T 123 ABC',
-              prefixIcon: Icons.directions_bus_filled_outlined,
-            ),
-            const SizedBox(height: 24),
-            DsButton(
-              label: context.tr('send_shipping_to_buyer'),
-              icon: Icons.send_rounded,
-              onPressed: () {
-                final costText = shippingCtrl.text.trim();
-                final cost = double.tryParse(costText);
-                if (cost == null || cost <= 0) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(context.tr('enter_valid_shipping_cost'))),
-                  );
-                  return;
-                }
-                Navigator.pop(context, true);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-    if (confirmed != true) return;
-    final cost = double.tryParse(shippingCtrl.text.trim()) ?? 0;
-    if (cost <= 0) return;
-    _submitQuote(orderId, orderData, cost, busCtrl.text.trim(), plateCtrl.text.trim());
-  }
-
-  Future<void> _submitQuote(String orderId, Map<String, dynamic> orderData, double cost, String busName, String plateNumber) async {
-    HapticFeedback.lightImpact();
-    setState(() => _quotingOrderId = orderId);
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
-      final token = await user.getIdToken();
-      final resp = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/orders/transition'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'orderId': orderId,
-          'newStatus': 'quoted',
-          'note': jsonEncode({
-            'shippingCost': cost,
-            'busName': busName,
-            'plateNumber': plateNumber,
-          }),
-        }),
-      );
-      final data = jsonDecode(resp.body) as Map<String, dynamic>;
-      if (resp.statusCode != 200 || data['success'] != true) {
-        if (mounted) _showError(data['error'] ?? 'Failed to submit quote');
-      } else {
-        // Shipping details + status are synced to orders/{id} AND the
-        // transactions/{id} mirror doc by the server in one place, so a failed
-        // client-side write can't leave the two docs divergent.
-        if (mounted) _showSuccess(context.tr('quote_sent_to_buyer'));
-      }
-    } catch (e) {
-      if (mounted) _showError(translateError(e));
-    }
-    setState(() => _quotingOrderId = null);
-  }
-
-  Future<void> _showDispatchDialog(String txId, Map<String, dynamic> d) async {
-    final busCtrl = TextEditingController();
-    final plateCtrl = TextEditingController();
-    final trackCtrl = TextEditingController();
-    final noteCtrl = TextEditingController();
-    final existingCost = (d['shippingCost'] as num?)?.toDouble() ?? 0;
-    final costCtrl = TextEditingController(
-      text: existingCost > 0 ? existingCost.toStringAsFixed(0) : '',
-    );
-
-    final confirmed = await DsSheet.show<bool>(
-      context: context,
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            context.tr('dispatch_title'),
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          DsTextField(
-            controller: busCtrl,
-            label: context.tr('bus_name'),
-            hint: 'Mf: Scandinavia, Kilimanjaro',
-            prefixIcon: Icons.directions_bus,
-          ),
-          const SizedBox(height: 12),
-          DsTextField(
-            controller: plateCtrl,
-            label: context.tr('plate_number'),
-            hint: 'Mf: T 123 ABC',
-            prefixIcon: Icons.directions_bus_filled_outlined,
-          ),
-          const SizedBox(height: 12),
-          DsTextField(
-            controller: trackCtrl,
-            label: context.tr('tracking_number'),
-            prefixIcon: Icons.qr_code,
-          ),
-          const SizedBox(height: 12),
-          DsTextField(
-            controller: noteCtrl,
-            label: context.tr('dispatch_note'),
-            prefixIcon: Icons.notes,
-          ),
-          if (existingCost <= 0) ...[
-            const SizedBox(height: 12),
-            DsTextField(
-              controller: costCtrl,
-              label: context.tr('shipping_cost'),
-              hint: 'TZS',
-              prefixIcon: Icons.monetization_on_outlined,
-              keyboardType: TextInputType.number,
-            ),
-          ],
-          const SizedBox(height: 24),
-          DsButton(
-            label: context.tr('mark_shipped'),
-            icon: Icons.local_shipping_outlined,
-            onPressed: () {
-              if (busCtrl.text.trim().isEmpty || plateCtrl.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(context.tr('dispatch_required_fields'))),
-                );
-                return;
-              }
-              Navigator.pop(context, true);
-            },
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-
-    final parsedCost = existingCost > 0 ? null : double.tryParse(costCtrl.text.trim());
-    await _submitDispatch(
-      txId,
-      busCtrl.text.trim(),
-      plateCtrl.text.trim(),
-      trackCtrl.text.trim(),
-      noteCtrl.text.trim(),
-      parsedCost,
-    );
-  }
-
-  Future<void> _submitDispatch(
-    String txId,
-    String busName,
-    String plateNumber,
-    String trackingNumber,
-    String note,
-    double? cost,
-  ) async {
-    setState(() => _dispatchingOrderId = txId);
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
-      final token = await user.getIdToken();
-
-      // Persist a previously missing delivery cost before dispatching.
-      if (cost != null && cost > 0) {
-        await FirebaseFirestore.instance
-            .collection('transactions')
-            .doc(txId)
-            .update({'shippingCost': cost});
-      }
-
-      final resp = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/escrow/dispatch'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'orderId': txId,
-          'userId': user.uid,
-          'busName': busName,
-          'plateNumber': plateNumber,
-          'trackingNumber': trackingNumber,
-          'note': note,
-        }),
-      );
-      final data = jsonDecode(resp.body) as Map<String, dynamic>;
-      if (resp.statusCode != 200 || data['success'] != true) {
-        if (mounted) _showError(data['error'] ?? 'Failed to mark shipped');
-      } else {
-        if (mounted) _showSuccess(context.tr('order_shipped_success'));
-      }
-    } catch (e) {
-      if (mounted) _showError(translateError(e));
-    }
-    if (mounted) setState(() => _dispatchingOrderId = null);
-  }
-
-  void _showError(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.error),
-    );
-  }
-
-  void _showSuccess(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.primary),
     );
   }
 
