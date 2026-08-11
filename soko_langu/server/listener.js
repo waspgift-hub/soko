@@ -52,6 +52,7 @@ async function sendOsNotification(userId, title, body, data = {}) {
     const resp = await axios.post('https://onesignal.com/api/v1/notifications', {
       app_id: ONE_SIGNAL_APP_ID,
       include_external_user_ids: [userId],
+      channel_for_external_user_ids: 'push',
       headings: { en: title || '' },
       contents: { en: body || '' },
       data: { ...(data || {}), type: (data && data.type) || 'general' },

@@ -274,24 +274,17 @@ async function sendOneSignalNotification(userId, title, body, data = {}, opts = 
   const headings = { en: title || '', sw: title || '' };
   const contents = { en: body || '', sw: body || '' };
 
-  // Deliver to the external_user_id AND by email alias as a fallback: when a
-  // device is subscribed but its OneSignal subscription was never linked to the
-  // Firebase UID (login missed on cold start), the email alias still matches.
+  // Push-only targeting: accounts carry email aliases in OneSignal and email
+  // sending is disabled on this app, so without channel_for_external_user_ids
+  // the whole notification fails 400 ("Email sending for this app has been
+  // disabled") before it ever reaches the subscribed device.
   const payload = { ...(data || {}), type: notifType };
-  let includeAliases = null;
-  try {
-    const userRec = await db.collection('users').doc(userId).get();
-    const email = userRec.exists ? (userRec.data().email || '') : '';
-    if (email) {
-      includeAliases = { email: [email.toLowerCase()] };
-    }
-  } catch (_) {}
 
   const resp = await postOneSignalWithRetry({
     app_id: ONE_SIGNAL_APP_ID,
     idempotency_key: randomUUID(),
     include_external_user_ids: [userId],
-    ...(includeAliases ? { include_aliases: includeAliases } : {}),
+    channel_for_external_user_ids: 'push',
     headings,
     contents,
     data: payload,
@@ -360,6 +353,7 @@ async function sendOneSignalBulk(userIds, title, body, data = {}, opts = {}) {
       app_id: ONE_SIGNAL_APP_ID,
       idempotency_key: randomUUID(),
       include_external_user_ids: allowedUserIds.slice(i, i + batchSize),
+      channel_for_external_user_ids: 'push',
       headings: { en: title || '', sw: title || '' },
       contents: { en: body || '', sw: body || '' },
       data: { ...(data || {}), type: notifType },

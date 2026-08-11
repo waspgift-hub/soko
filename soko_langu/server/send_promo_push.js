@@ -75,6 +75,7 @@ async function sendPushOne(userId) {
       app_id: ONE_SIGNAL_APP_ID,
       idempotency_key: randomUUID(),
       include_external_user_ids: [userId],
+      channel_for_external_user_ids: 'push',
       headings: { en: TITLE, sw: TITLE },
       contents: { en: BODY, sw: BODY },
       data: { type: 'marketing', promo: 'promo_push_2026' },
