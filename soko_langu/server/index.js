@@ -933,25 +933,25 @@ app.post('/api/sms/send', async (req, res) => {
     if (!phone || !message) {
       return res.status(400).json({ error: 'Missing phone or message' });
     }
-    const apiKey = process.env.MESEJI_API_KEY;
-    if (apiKey) {
-      const digits = phone.replace(/\D/g, '');
-      // Meseji only accepts local-format numbers (07XXXXXXXX) inside a contacts
-      // ARRAY — string or +255 format both come back HTTP 500 from the provider.
-      const local = digits.startsWith('255') ? '0' + digits.slice(3) : !digits.startsWith('0') ? '0' + digits : digits;
-      const configured = process.env.MESEJI_SENDER_ID || 'MESEJI';
-      const senders = configured === 'MESEJI' ? ['MESEJI'] : [configured, 'MESEJI'];
-      for (const sender of senders) {
-        try {
-          const resp = await axios.post('https://meseji.co.tz/api/v1/sms/send', {
-            sender_id: sender,
-            message,
-            contacts: [local],
-          }, {
-            headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
-            timeout: 15000,
-          });
-          console.log(`/api/sms/send: ok sender=${sender} to ${local} batch=${resp.data?.batch_id || ''}`);
+      const apiKey = process.env.MESEJI_API_KEY;
+      if (apiKey) {
+        const digits = phone.replace(/\D/g, '');
+        // Meseji expects `contacts` as a single local-format STRING. The array
+        // form returns `finalContacts.split is not a function` (verified live).
+        const local = digits.startsWith('255') ? '0' + digits.slice(3) : !digits.startsWith('0') ? '0' + digits : digits;
+        const configured = process.env.MESEJI_SENDER_ID || 'MESEJI';
+        const senders = configured === 'MESEJI' ? ['MESEJI'] : [configured, 'MESEJI'];
+        for (const sender of senders) {
+          try {
+            const resp = await axios.post('https://meseji.co.tz/api/v1/sms/send', {
+              sender_id: sender,
+              message,
+              contacts: local,
+            }, {
+              headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+              timeout: 15000,
+            });
+            console.log(`/api/sms/send: ok sender=${sender} to ${local} batch=${resp.data?.batch_id || ''}`);
           return res.json({ sent: true, provider: 'meseji', sender, batchId: resp.data?.batch_id || null });
         } catch (e) {
           const errBody = e.response?.data ? JSON.stringify(e.response.data) : e.message;
@@ -1000,8 +1000,8 @@ async function sendSms(phone, message) {
     const apiKey = process.env.MESEJI_API_KEY;
     if (apiKey) {
       const digits = phone.replace(/\D/g, '');
-      // Meseji only accepts local-format numbers (07XXXXXXXX) inside a contacts
-      // ARRAY — string or +255 format both come back HTTP 500 from the provider.
+      // Meseji expects `contacts` as a single local-format STRING; array form
+      // fails with `finalContacts.split is not a function` (verified live).
       const local = digits.startsWith('255') ? '0' + digits.slice(3) : !digits.startsWith('0') ? '0' + digits : digits;
       const configured = process.env.MESEJI_SENDER_ID || 'MESEJI';
       const senders = configured === 'MESEJI' ? ['MESEJI'] : [configured, 'MESEJI'];
@@ -1010,7 +1010,7 @@ async function sendSms(phone, message) {
           const resp = await axios.post('https://meseji.co.tz/api/v1/sms/send', {
             sender_id: sender,
             message,
-            contacts: [local],
+            contacts: local,
           }, {
             headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
             timeout: 15000,
