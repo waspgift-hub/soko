@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import '../../services/api_config.dart';
+import '../../services/clickpesa_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/soko_vibe_states.dart';
@@ -32,6 +33,7 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
   int _payoutsTotal = 0;
   Map<String, dynamic> _paymentsSummary = {};
   Map<String, dynamic> _payoutsSummary = {};
+  Map<String, dynamic>? _financeSummary;
   DateTime? _asOf;
 
   String _type = 'all';
@@ -95,6 +97,10 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
         _asOf = DateTime.tryParse(result['asOf'] as String? ?? '');
         _loading = false;
       });
+      final finance = await ClickPesaService.getFinanceSummary();
+      if (mounted && finance != null) {
+        setState(() => _financeSummary = finance);
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -190,6 +196,10 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         children: [
+          if (_financeSummary != null) ...[
+            _buildFinanceCard(nf),
+            const SizedBox(height: 12),
+          ],
           _buildFilterCard(),
           const SizedBox(height: 12),
           _buildBalanceCard(nf),
@@ -374,6 +384,124 @@ class _AdminClickPesaScreenState extends State<AdminClickPesaScreen> {
 
   Widget _buildBalanceCard(NumberFormat nf) {
     return _balanceCard(nf);
+  }
+
+  Widget _buildFinanceCard(NumberFormat nf) {
+    final cs = Theme.of(context).colorScheme;
+    final f = _financeSummary ?? {};
+    final totalAdmin = (f['totalAdminBalance'] as num?)?.toDouble() ?? 0;
+    final commissions = (f['totalCommissions'] as num?)?.toDouble() ?? 0;
+    final adRevenue = (f['actualAdRevenue'] as num?)?.toDouble() ?? 0;
+    final boostRevenue = (f['totalBoostRevenue'] as num?)?.toDouble() ?? 0;
+    final processed = (f['totalProcessed'] as num?)?.toDouble() ?? 0;
+    final payouts = (f['totalPayouts'] as num?)?.toDouble() ?? 0;
+    final available = (f['availableBalance'] as num?)?.toDouble() ?? 0;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.savings_outlined, color: cs.primary),
+                const SizedBox(width: 8),
+                Text(
+                  context.tr('soko_vibe_earnings'),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _financeRow(
+              context.tr('platform_balance'),
+              totalAdmin,
+              cs.primary,
+              nf,
+              bold: true,
+            ),
+            const SizedBox(height: 4),
+            _financeRow(
+              context.tr('soko_vibe_available'),
+              available,
+              cs.tertiary,
+              nf,
+              bold: true,
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Divider(thickness: 1),
+            ),
+            _financeRow(
+              context.tr('total_commissions'),
+              commissions,
+              cs.onSurface,
+              nf,
+            ),
+            const SizedBox(height: 4),
+            _financeRow(
+              context.tr('ad_revenue'),
+              adRevenue,
+              cs.onSurface,
+              nf,
+            ),
+            const SizedBox(height: 4),
+            _financeRow(
+              context.tr('boost_revenue'),
+              boostRevenue,
+              cs.onSurface,
+              nf,
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Divider(thickness: 1),
+            ),
+            _financeRow(
+              context.tr('total_processed'),
+              processed,
+              cs.onSurfaceVariant,
+              nf,
+            ),
+            const SizedBox(height: 4),
+            _financeRow(
+              context.tr('total_payouts'),
+              payouts,
+              cs.onSurfaceVariant,
+              nf,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _financeRow(
+    String label,
+    double amount,
+    Color color,
+    NumberFormat nf, {
+    bool bold = false,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            fontWeight: bold ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+        Text(
+          'TSh ${nf.format(amount.round())}',
+          style: TextStyle(
+            fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
+            color: color,
+            fontSize: bold ? 17 : 14,
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildSummaryCard(NumberFormat nf) {

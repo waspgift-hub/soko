@@ -385,7 +385,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                   child: _adminStatCard(
                     cs,
                     Icons.account_balance_outlined,
-                    '\$${(stats['totalEarnings'] ?? 0).toStringAsFixed(2)}',
+                    '${context.currencySymbol()}${(stats['totalEarnings'] ?? 0).toStringAsFixed(0)}',
                     context.tr('platform_commission_2'),
                     cs.onSurface.withValues(alpha: 0.6),
                   ),
@@ -395,7 +395,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                   child: _adminStatCard(
                     cs,
                     Icons.trending_up,
-                    '\$${(stats['todayEarnings'] ?? 0).toStringAsFixed(2)}',
+                    '${context.currencySymbol()}${(stats['todayEarnings'] ?? 0).toStringAsFixed(0)}',
                     context.tr('today'),
                     cs.primary,
                   ),

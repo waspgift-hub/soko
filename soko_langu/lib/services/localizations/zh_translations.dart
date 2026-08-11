@@ -1625,6 +1625,12 @@ const Map<String, Map<String, String>> zhTranslations = {
     'clickpesa_amount': '金额',
     'clickpesa_channel': '渠道',
     'clickpesa_phone': '电话',
+    'soko_vibe_earnings': 'Soko Vibe 收入',
+    'soko_vibe_available': '可用',
+    'total_commissions': '佣金总额',
+    'boost_revenue': '推广收入',
+    'total_processed': '已处理资金总额',
+    'platform_balance': '平台余额',
     'pp_footer': '© 2026 Soko Vibe Limited. 保留所有权利。',
   },
 };

@@ -192,9 +192,14 @@ class ClickPesaService {
 
   static Future<Map<String, dynamic>?> getFinanceSummary() async {
     try {
+      final user = FirebaseAuth.instance.currentUser;
+      final token = await user?.getIdToken();
       final resp = await http.get(
         Uri.parse('${ApiConfig.baseUrl}/api/admin/finance-summary'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
       );
       if (resp.statusCode != 200) return null;
       return jsonDecode(resp.body) as Map<String, dynamic>;
