@@ -4,6 +4,7 @@
 // Kept only as a reference.
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
+const https = require('node:https');
 
 admin.initializeApp();
 
@@ -448,4 +449,43 @@ exports.notifyOnPurchase = functions.firestore
         }
       );
     }
+  });
+
+// ─── KEEP-ALIVE PINGER ───
+// Render's free web instances sleep after ~15 minutes of inactivity and take
+// 30-120s to cold-start for the next visitor. This scheduled function pings the
+// server every 5 minutes so it stays warm. Cloud Scheduler free tier covers one
+// job, so this costs nothing. Deploy with:
+//   firebase deploy --only functions:keepalivePing
+// Set SERVER_URL to the public Express base URL if it differs from the default.
+function pingUrl(url) {
+  return new Promise((resolve) => {
+    const parsed = new URL(url);
+    const req = https.request(
+      {
+        hostname: parsed.hostname,
+        path: parsed.pathname + parsed.search,
+        method: 'GET',
+        timeout: 15000,
+        headers: { 'User-Agent': 'keepalive' },
+      },
+      (res) => {
+        res.resume();
+        res.on('end', () => resolve({ ok: true, status: res.statusCode }));
+      }
+    );
+    req.on('timeout', () => { req.destroy(); resolve({ ok: false, error: 'timeout' }); });
+    req.on('error', (e) => resolve({ ok: false, error: e.message }));
+    req.end();
+  });
+}
+
+exports.keepalivePing = functions.pubsub
+  .schedule('every 5 minutes')
+  .timeZone('Africa/Dar_es_Salaam')
+  .onRun(async () => {
+    const base = process.env.SERVER_URL || 'https://soko-langu-server.onrender.com';
+    const result = await pingUrl(`${base}/health`);
+    console.log(`[KEEPALIVE] ${base}/health -> ${JSON.stringify(result)}`);
+    return null;
   });

@@ -1,5 +1,6 @@
 const express = require('express');
 const admin = require('firebase-admin');
+const cache = require('./cache');
 
 const router = express.Router();
 const db = admin.firestore();
@@ -294,8 +295,14 @@ router.post('/autocomplete', async (req, res) => {
     const { query } = req.body;
     if (!query || query.trim().length === 0) return res.json({ suggestions: [] });
     const queryLower = query.trim().toLowerCase();
+
+    // Keystroke-by-keystroke calls hammer the index — 90s TTL on a per-query key.
+    const cacheKey = `autocomplete:${queryLower}`;
+    const cached = cache.get(cacheKey);
+    if (cached) return res.json(cached);
+
     const prefixEnd = queryLower + '\uf8ff';
-    const suggestions = new Map();
+    const matchMap = new Map();
     const [productSnap, userSnap, categorySnap] = await Promise.all([
       db.collection(SEARCH_INDEX.products).where('name', '>=', queryLower).where('name', '<=', prefixEnd).orderBy('popularity', 'desc').limit(MAX_AUTOCOMPLETE).get(),
       db.collection(SEARCH_INDEX.users).where('name', '>=', queryLower).where('name', '<=', prefixEnd).orderBy('popularity', 'desc').limit(5).get(),
@@ -303,17 +310,19 @@ router.post('/autocomplete', async (req, res) => {
     ]);
     for (const doc of productSnap.docs) {
       const d = doc.data();
-      suggestions.set(d.displayName + '_product', { text: d.displayName, type: 'product', image: d.image || '', price: d.price, id: doc.id });
+      matchMap.set(d.displayName + '_product', { text: d.displayName, type: 'product', image: d.image || '', price: d.price, id: doc.id });
     }
     for (const doc of userSnap.docs) {
       const d = doc.data();
-      suggestions.set(d.displayName + '_user', { text: d.displayName, type: 'seller', image: d.profileImage || '', id: doc.id });
+      matchMap.set(d.displayName + '_user', { text: d.displayName, type: 'seller', image: d.profileImage || '', id: doc.id });
     }
     for (const doc of categorySnap.docs) {
       const d = doc.data();
-      suggestions.set(d.displayName + '_category', { text: d.displayName, type: 'category', image: d.image || d.icon || '', id: doc.id });
+      matchMap.set(d.displayName + '_category', { text: d.displayName, type: 'category', image: d.image || d.icon || '', id: doc.id });
     }
-    res.json({ suggestions: Array.from(suggestions.values()).slice(0, MAX_AUTOCOMPLETE) });
+    const suggestions = Array.from(matchMap.values()).slice(0, MAX_AUTOCOMPLETE);
+    cache.set(cacheKey, { suggestions }, 90 * 1000);
+    res.json({ suggestions });
   } catch (e) {
     console.error('[SEARCH] autocomplete error:', e.message);
     res.status(400).json({ error: e.message });
@@ -325,9 +334,14 @@ router.post('/autocomplete', async (req, res) => {
 // ════════════════════════════════════════════════════════════
 router.post('/trending', async (req, res) => {
   try {
+    const CACHE_KEY = 'trending:all';
+    const cached = cache.get(CACHE_KEY);
+    if (cached) return res.json(cached);
     const snap = await db.collection(SEARCH_INDEX.trending).orderBy('count', 'desc').limit(MAX_TRENDING).get();
     const trending = snap.docs.map(doc => ({ text: doc.id, count: doc.data().count || 0 }));
-    res.json({ trending });
+    const payload = { trending };
+    cache.set(CACHE_KEY, payload, 5 * 60 * 1000);
+    res.json(payload);
   } catch (e) {
     console.error('[SEARCH] trending error:', e.message);
     res.status(400).json({ error: e.message });
@@ -367,6 +381,12 @@ router.post('/record-click', async (req, res) => {
 router.post('/most-rated', async (req, res) => {
   try {
     const limit = Math.min(Number(req.body.limit) || 10, 20);
+
+    // Reads the whole `reviews` collection + per-seller user docs per request —
+    // the single biggest read on the Spark free tier. Cache for 10 minutes.
+    const cacheKey = `most-rated:${limit}`;
+    const cached = cache.get(cacheKey);
+    if (cached) return res.json(cached);
 
     // Top rated products — real reviewCount, active listings only
     const productsSnap = await db.collection('products')
@@ -434,7 +454,9 @@ router.post('/most-rated', async (req, res) => {
       });
     }
 
-    res.json({ success: true, products, sellers });
+    const payload = { success: true, products, sellers };
+    cache.set(cacheKey, payload, 10 * 60 * 1000);
+    res.json(payload);
   } catch (e) {
     console.error('[SEARCH] most-rated error:', e.message);
     res.status(400).json({ error: e.message });

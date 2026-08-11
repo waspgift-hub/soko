@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const compression = require('compression');
 const cors = require('cors');
 const crypto = require('crypto');
 const admin = require('firebase-admin');
@@ -49,6 +50,11 @@ process.on('warning', (warning) => {
 });
 
 const app = express();
+
+// gzip all responses — JSON payloads shrink ~70% on the mobile data plans most
+// users are on. Compress before the raw-body verify so webhook HMACs still see
+// exact bytes (compression only affects outbound bodies, not inbound req.body).
+app.use(compression());
 
 const REQUEST_TIMEOUT = 20000; // 20 seconds
 
@@ -397,6 +403,19 @@ const walletHits = new Map(); // per-wallet rate limit for payments
 const RATE_WINDOW = 60 * 1000;
 const RATE_MAX = 30;
 const PAYMENT_RATE_MAX = 5; // max 5 payment attempts per 60s per IP
+
+// The Maps above only ever grow — on the free 512MB plan a long-lived process
+// would slowly OOM under sustained traffic. Sweep expired buckets every 5 min.
+setInterval(() => {
+  const now = Date.now();
+  for (const map of [rateHits, walletHits]) {
+    for (const [key, times] of map) {
+      const live = times.filter((t) => now - t < RATE_WINDOW);
+      if (live.length === 0) map.delete(key);
+      else map.set(key, live);
+    }
+  }
+}, 5 * 60 * 1000).unref();
 
 function rateLimit(req, res, next) {
   const ip = req.ip || req.connection.remoteAddress || 'unknown';
@@ -1150,6 +1169,17 @@ async function notifyAdmins(title, body, data = {}) {
 const otpPhoneHits = new Map();
 const OTP_PHONE_WINDOW = 15 * 60 * 1000;
 const OTP_PHONE_MAX = 3;
+
+setInterval(() => {
+  const now = Date.now();
+  for (const map of [otpPhoneHits, otpVerifyHits]) {
+    for (const [key, times] of map) {
+      const live = times.filter((t) => now - t < OTP_PHONE_WINDOW);
+      if (live.length === 0) map.delete(key);
+      else map.set(key, live);
+    }
+  }
+}, 5 * 60 * 1000).unref();
 
 function otpPhoneRateLimit(req, res, next) {
   const phone = (req.body?.phone || '').replace(/\D/g, '');
