@@ -2334,6 +2334,13 @@ app.post('/api/clickpesa/webhook', verifyWebhook, async (req, res) => {
           escrowExpiresAt: admin.firestore.Timestamp.fromDate(escrowExpiry),
         });
 
+        // Keep the mirrored orders doc in sync so both collections agree.
+        db.collection('orders').doc(orderId).update({
+          status: 'escrow_hold',
+          escrowStatus: 'held',
+          escrowHeldAt: admin.firestore.FieldValue.serverTimestamp(),
+        }).catch(() => {});
+
         // Everything below is non-critical — fire-and-forget for speed
         db.collection('revenue_transactions').add({
           userId: 'platform',
@@ -2421,6 +2428,13 @@ app.post('/api/clickpesa/webhook', verifyWebhook, async (req, res) => {
         failureReason: payload.message || payload.error || 'payment failed',
         completedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+
+      // Keep the mirrored orders doc in sync on failure too.
+      db.collection('orders').doc(orderId).update({
+        status: 'failed',
+        failureReason: payload.message || payload.error || 'payment failed',
+        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }).catch(() => {});
 
       // Boost failure — SMS + push + in-app to the boost user (buyerId === userId)
       if (tx.type === 'boost') {
@@ -4836,8 +4850,10 @@ app.get('/api/buyer-statement/:buyerId', async (req, res) => {
       return t != null && t >= twelveMonthsAgo;
     });
 
-    // Payments made by the buyer (money out)
-    const paidStatuses = new Set(['paid', 'escrow_hold', 'dispatched', 'delivered', 'delivery_confirmed', 'completed', 'refunded']);
+    // Payments made by the buyer (money out). 'paid' is intentionally excluded:
+    // it is set client-side the moment a USSD push is sent, BEFORE payment is
+    // actually confirmed, so counting it here would show unpaid orders as paid.
+    const paidStatuses = new Set(['escrow_hold', 'paid_escrow_hold', 'paid_escrow_held', 'dispatched', 'delivered', 'delivery_confirmed', 'confirmed', 'completed', 'refunded']);
     const entries = [];
     let runningBalance = 0;
 
@@ -4864,7 +4880,9 @@ app.get('/api/buyer-statement/:buyerId', async (req, res) => {
         });
       }
 
-      if (status === 'refunded' || status === 'failed') {
+      // Only a genuinely refunded order adds money back. A 'failed' order was
+      // never paid, so crediting it would fabricate income in the statement.
+      if (status === 'refunded') {
         const refundAmount = d.refundAmount || d.totalAmount || 0;
         if (refundAmount > 0) {
           runningBalance += refundAmount;
@@ -4883,7 +4901,36 @@ app.get('/api/buyer-statement/:buyerId', async (req, res) => {
       }
     }
 
-    // Wallet deposits (money added to buyer's Soko wallet)
+    // Wallet deposits (money added to the buyer's Soko wallet) — money IN, so
+    // they are credits. The deposit is only counted once ClickPesa confirms it
+    // ('completed'); pending/failed top-ups never touch the balance.
+    const depositSnap = await db.collection('deposits')
+      .where('userId', '==', buyerId)
+      .get();
+    for (const doc of depositSnap.docs) {
+      const d = doc.data();
+      if (d.status !== 'completed') continue;
+      const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
+      if (createdAt && createdAt >= twelveMonthsAgo) {
+        const amount = d.amount || 0;
+        runningBalance += amount;
+        entries.push({
+          type: 'credit',
+          date: createdAt.toISOString(),
+          description: `Uwekaji wa fedha: ${d.paymentMethod === 'BillPay' ? 'BillPay' : 'Mobile Money'}`,
+          grossAmount: amount,
+          commission: 0,
+          netAmount: amount,
+          runningBalance: runningBalance,
+          transactionId: doc.id,
+          status: 'completed',
+        });
+      }
+    }
+
+    // Legacy wallet_transactions records (if ever written by older builds).
+    // A wallet 'deposit' is money in (credit), a wallet 'refund' is also money
+    // back to the buyer (credit).
     const walletSnap = await db.collection('wallet_transactions')
       .where('userId', '==', buyerId)
       .get();
@@ -4893,25 +4940,12 @@ app.get('/api/buyer-statement/:buyerId', async (req, res) => {
       if (createdAt && createdAt >= twelveMonthsAgo) {
         const amount = d.amount || 0;
         const type = d.type || '';
-        if (type === 'deposit') {
-          runningBalance -= amount;
-          entries.push({
-            type: 'debit',
-            date: createdAt.toISOString(),
-            description: `Tapo la pochi: ${d.description || 'Uwekaji wa fedha'}`,
-            grossAmount: amount,
-            commission: 0,
-            netAmount: amount,
-            runningBalance: runningBalance,
-            transactionId: doc.id,
-            status: 'completed',
-          });
-        } else if (type === 'refund') {
+        if (type === 'deposit' || type === 'refund') {
           runningBalance += amount;
           entries.push({
             type: 'credit',
             date: createdAt.toISOString(),
-            description: `Marejesho ya pochi: ${d.description || ''}`,
+            description: `Tapo la pochi: ${d.description || ''}`,
             grossAmount: amount,
             commission: 0,
             netAmount: amount,

@@ -171,25 +171,34 @@ class OrderStatusBanner extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            color.withValues(alpha: 0.16),
-            color.withValues(alpha: 0.05),
+            color.withValues(alpha: 0.2),
+            color.withValues(alpha: 0.07),
+            cs.surface.withValues(alpha: 0.9),
           ],
         ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.1),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Row(
         children: [
           Container(
-            width: 44,
-            height: 44,
+            width: 50,
+            height: 50,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
+              color: color.withValues(alpha: 0.16),
               shape: BoxShape.circle,
+              border: Border.all(color: color.withValues(alpha: 0.22)),
             ),
-            child: Icon(info.icon, size: 22, color: color),
+            child: Icon(info.icon, size: 24, color: color),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 13),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -197,18 +206,19 @@ class OrderStatusBanner extends StatelessWidget {
                 Text(
                   info.label(context),
                   style: TextStyle(
-                    fontSize: 15,
+                    fontSize: 16,
                     fontWeight: FontWeight.w800,
                     color: color,
                   ),
                 ),
                 if (subtitle != null && subtitle!.isNotEmpty) ...[
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 3),
                   Text(
                     subtitle!,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 12.5,
                       color: cs.onSurfaceVariant,
+                      height: 1.3,
                     ),
                   ),
                 ],

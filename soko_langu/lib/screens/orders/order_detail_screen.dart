@@ -242,36 +242,43 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                     const SizedBox(height: 16),
                     _buildStatusBanner(context, cs),
                     const SizedBox(height: 16),
-                    if (_isPaidState)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: cs.successGreen.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: cs.successGreen.withValues(alpha: 0.15)),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.shield_outlined, size: 18, color: cs.successGreen),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  context.tr('escrow_secure_note', 'Fedha zako ziko salama kwenye escrow hadi uthibitishe upokeaji'),
-                                  style: TextStyle(
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w500,
-                                    color: cs.successGreen,
-                                    height: 1.35,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                if (_isPaidState)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: cs.successGreen.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: cs.successGreen.withValues(alpha: 0.2)),
                       ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: cs.successGreen.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(Icons.shield_outlined, size: 18, color: cs.successGreen),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              context.tr('escrow_secure_note', 'Fedha zako ziko salama kwenye escrow hadi uthibitishe upokeaji'),
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w500,
+                                color: cs.successGreen,
+                                height: 1.35,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                     _buildTimeline(context, cs),
                     const SizedBox(height: 16),
                     _buildOrderTable(context, cs),
@@ -344,14 +351,31 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   Widget _buildHeader(BuildContext context, ColorScheme cs) {
     return Container(
       padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 8),
+      decoration: BoxDecoration(
+        color: cs.surface.withValues(alpha: 0.6),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Row(
         children: [
           IconButton(
             icon: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: cs.surface.withValues(alpha: 0.8),
+                color: cs.surface.withValues(alpha: 0.9),
                 shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: Icon(
                 Icons.arrow_back_ios_new_rounded,
@@ -526,9 +550,30 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     final showCountdown = _remaining != null &&
         !_remaining!.isNegative &&
         _remaining!.inSeconds > 0;
+
+    // Subtitle must reflect the real payment state, not a generic hint — a
+    // failed order shows the failure reason, a confirmed one shows the amount.
+    String statusSubtitle = context.tr('order_status_hint');
+    if (status == 'failed') {
+      final reason = d['failureReason'];
+      statusSubtitle = reason is String && reason.isNotEmpty
+          ? reason
+          : context.tr('payment_failed_short');
+    } else if (status == 'escrow_hold' ||
+        status == 'paid_escrow_hold' ||
+        status == 'dispatched' ||
+        status == 'delivered' ||
+        status == 'delivery_confirmed' ||
+        status == 'completed') {
+      final amt = (d['totalAmount'] is num ? d['totalAmount'] as num : 0).toDouble();
+      statusSubtitle = '${context.tr('paid_label')} \u2022 TZS ${_nf(amt)}';
+    } else if (status == 'quoted' || status == 'awaiting_payment') {
+      statusSubtitle = context.tr('awaiting_payment');
+    }
+
     return OrderStatusBanner(
       status: status,
-      subtitle: context.tr('order_status_hint', 'Hali ya agizo lako inaonekana hapa'),
+      subtitle: statusSubtitle,
       trailing: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -620,16 +665,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     final current = _currentStep();
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: cs.surface.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.08)),
+        color: cs.surface.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -638,8 +683,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         children: [
           Row(
             children: [
-              Icon(Icons.timeline_rounded, size: 16, color: cs.primary),
-              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.route_rounded, size: 16, color: cs.primary),
+              ),
+              const SizedBox(width: 10),
               Text(
                 context.tr('order_status'),
                 style: TextStyle(
@@ -659,7 +711,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                   ),
                   decoration: BoxDecoration(
                     color: Colors.orange.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -684,125 +736,145 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
             ],
           ),
           const SizedBox(height: 16),
-          SizedBox(
-            height: 80,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: steps.length,
-              separatorBuilder: (_, _) =>
-                  _timelineConnector(cs, current, steps),
-              itemBuilder: (_, i) {
-                final step = steps[i];
-                final active = i <= current;
-                final isCurrent = i == current;
-                return _timelineStep(step, active, isCurrent, i, current, cs);
-              },
-            ),
-          ),
+          for (var i = 0; i < steps.length; i++)
+            _verticalStep(cs, steps[i], i, current, steps.length),
         ],
       ),
     );
   }
 
-  Widget _timelineConnector(
+  Widget _verticalStep(
     ColorScheme cs,
-    int current,
-    List<_StepData> steps,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: Container(
-        width: 20,
-        height: 2,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              current < steps.length
-                  ? steps[current].color.withValues(alpha: 0.4)
-                  : cs.outlineVariant,
-              cs.outlineVariant.withValues(alpha: 0.2),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(1),
-        ),
-      ),
-    );
-  }
-
-  Widget _timelineStep(
     _StepData step,
-    bool active,
-    bool isCurrent,
     int i,
     int current,
-    ColorScheme cs,
+    int total,
   ) {
-    return SizedBox(
-      width: 56,
-      child: Column(
-        children: [
-          AnimatedBuilder(
-            animation: _pulseAnim,
-            builder: (context, _) {
-              final size = isCurrent ? 36.0 : 32.0;
-              return Container(
-                width: size,
-                height: size,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: active
-                      ? step.color
-                      : cs.surfaceContainerHighest.withValues(alpha: 0.3),
-                  border: isCurrent
-                      ? Border.all(
-                          color: step.color.withValues(alpha: 0.6),
-                          width: 2.5,
-                        )
-                      : null,
-                  boxShadow: isCurrent
-                      ? [
-                          BoxShadow(
-                            color: step.color.withValues(
-                              alpha: _pulseAnim.value * 0.5,
-                            ),
-                            blurRadius: 10,
-                          ),
-                        ]
-                      : active
-                      ? [
-                          BoxShadow(
-                            color: step.color.withValues(alpha: 0.2),
-                            blurRadius: 4,
-                          ),
-                        ]
-                      : [],
+    final active = i <= current;
+    final isCurrent = i == current;
+    final isLast = i == total - 1;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 40,
+          child: Column(
+            children: [
+              AnimatedBuilder(
+                animation: _pulseAnim,
+                builder: (context, _) {
+                  return Container(
+                    width: isCurrent ? 40 : 34,
+                    height: isCurrent ? 40 : 34,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: active
+                          ? step.color
+                          : cs.surfaceContainerHighest.withValues(alpha: 0.4),
+                      border: isCurrent
+                          ? Border.all(
+                              color: step.color.withValues(alpha: 0.5),
+                              width: 3,
+                            )
+                          : null,
+                      boxShadow: isCurrent
+                          ? [
+                              BoxShadow(
+                                color: step.color.withValues(
+                                  alpha: _pulseAnim.value * 0.4,
+                                ),
+                                blurRadius: 12,
+                                spreadRadius: 2,
+                              ),
+                            ]
+                          : active
+                          ? [
+                              BoxShadow(
+                                color: step.color.withValues(alpha: 0.2),
+                                blurRadius: 6,
+                              ),
+                            ]
+                          : [],
+                    ),
+                    child: Icon(
+                      active ? Icons.check_rounded : step.icon,
+                      size: isCurrent ? 18 : 16,
+                      color: active
+                          ? cs.surface
+                          : cs.onSurfaceVariant.withValues(alpha: 0.4),
+                    ),
+                  );
+                },
+              ),
+              if (!isLast)
+                Container(
+                  width: 3,
+                  height: 22,
+                  margin: const EdgeInsets.symmetric(vertical: 2),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(2),
+                    color: active
+                        ? step.color.withValues(alpha: 0.4)
+                        : cs.outlineVariant.withValues(alpha: 0.3),
+                  ),
                 ),
-                child: Icon(
-                  active ? Icons.check_rounded : Icons.circle_outlined,
-                  size: isCurrent ? 16 : 13,
-                  color: active
-                      ? cs.surface
-                      : cs.onSurfaceVariant.withValues(alpha: 0.3),
-                ),
-              );
-            },
+            ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            step.label,
-            style: TextStyle(
-              fontSize: 9,
-              fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
-              color: active
-                  ? cs.onSurface
-                  : cs.onSurfaceVariant.withValues(alpha: 0.4),
+        ),
+        Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(
+              bottom: isLast ? 0 : 4,
+              top: isCurrent ? 8 : 5,
             ),
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    step.label,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: isCurrent
+                          ? FontWeight.w800
+                          : FontWeight.w600,
+                      color: active
+                          ? cs.onSurface
+                          : cs.onSurfaceVariant.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ),
+                if (isCurrent)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: step.color.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      context.tr('in_progress'),
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: step.color,
+                      ),
+                    ),
+                  )
+                else if (active)
+                  Icon(
+                    Icons.check_circle_rounded,
+                    size: 16,
+                    color: step.color.withValues(alpha: 0.7),
+                  ),
+              ],
+            ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -832,16 +904,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         : '';
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: cs.surface.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.08)),
+        color: cs.surface.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -857,7 +929,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
-                  Icons.table_chart_outlined,
+                  Icons.receipt_long_outlined,
                   size: 16,
                   color: cs.primary,
                 ),
@@ -887,7 +959,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.receipt_outlined, size: 13, color: cs.primary),
+                      Icon(
+                        Icons.receipt_outlined,
+                        size: 13,
+                        color: cs.primary,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         context.tr('receipt'),
@@ -934,41 +1010,103 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
           // The quoted payment card already shows the full price breakdown,
           // so skip it here to avoid showing the same figures twice.
           if (status != 'quoted') ...[
-            const Divider(height: 20),
-            _tableRow(
-              cs,
-              context.tr('product_price'),
-              'TZS ${_nf(price.toInt())}',
-            ),
-            if (shippingCost != null && shippingCost > 0)
-              _tableRow(
-                cs,
-                context.tr('shipping_cost'),
-                'TZS ${_nf(shippingCost.toInt())}',
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.fromLTRB(12, 14, 12, 4),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: cs.outlineVariant.withValues(alpha: 0.08),
+                ),
               ),
-            if (discount != null && discount > 0)
-              _tableRow(
-                cs,
-                context.tr('discount'),
-                '-TZS ${_nf(discount.toInt())}',
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.account_balance_wallet_outlined,
+                        size: 15,
+                        color: cs.primary.withValues(alpha: 0.7),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        context.tr('payment_breakdown'),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                          color: cs.onSurface,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  _tableRow(
+                    cs,
+                    context.tr('product_price'),
+                    'TZS ${_nf(price.toInt())}',
+                  ),
+                  if (shippingCost != null && shippingCost > 0)
+                    _tableRow(
+                      cs,
+                      context.tr('shipping_cost'),
+                      'TZS ${_nf(shippingCost.toInt())}',
+                    ),
+                  if (discount != null && discount > 0)
+                    _tableRow(
+                      cs,
+                      context.tr('discount'),
+                      '-TZS ${_nf(discount.toInt())}',
+                    ),
+                  _tableRow(
+                    cs,
+                    'Soko Vibe Commission',
+                    'TZS ${_nf(platformFee.toInt())}',
+                  ),
+                  _tableRow(
+                    cs,
+                    context.tr('processing_fee'),
+                    'TZS ${_nf(processingFee.toInt())}',
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          cs.primary.withValues(alpha: 0.14),
+                          cs.primary.withValues(alpha: 0.06),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          context.tr('total'),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          'TZS ${_nf(totalAmount.toInt())}',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w900,
+                            color: cs.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            _tableRow(
-              cs,
-              'Soko Vibe Commission',
-              'TZS ${_nf(platformFee.toInt())}',
-            ),
-            _tableRow(
-              cs,
-              context.tr('processing_fee'),
-              'TZS ${_nf(processingFee.toInt())}',
-            ),
-            const Divider(height: 20),
-            _tableRow(
-              cs,
-              context.tr('total'),
-              'TZS ${_nf(totalAmount.toInt())}',
-              bold: true,
-              accent: true,
             ),
           ],
         ],
@@ -988,7 +1126,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+        padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 6),
         decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(
@@ -998,9 +1136,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
           ),
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             SizedBox(
-              width: 110,
+              width: 120,
               child: Text(
                 label,
                 style: TextStyle(
@@ -1080,22 +1219,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
 
     return Container(
       decoration: BoxDecoration(
-        color: cs.surface.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.08)),
+        color: cs.surface.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         child: ExpansionTile(
-          tilePadding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          tilePadding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
+          childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
           leading: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
@@ -1351,20 +1490,34 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
 
     if ((status == 'pending' || status == 'awaiting_shipping_quote') && isBuyer) {
       return Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: cs.surface.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.08)),
+          color: cs.surface.withValues(alpha: 0.7),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: Row(
           children: [
-            Icon(Icons.hourglass_top, color: cs.primary, size: 24),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: cs.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(Icons.hourglass_top, color: cs.primary, size: 24),
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 'Agizo limewasilishwa kwa muuzaji. Subiri muuzaji kutoa gharama ya usafirishaji.',
-                style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant),
+                style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant, height: 1.35),
               ),
             ),
           ],
@@ -1379,43 +1532,71 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       final total = _quotedTotal;
 
       return Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: cs.surface.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.08)),
+          color: cs.surface.withValues(alpha: 0.7),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(Icons.payments_outlined, color: cs.primary, size: 20),
-                const SizedBox(width: 8),
-                Text('Malipo', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: cs.onSurface)),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: cs.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.payments_outlined, color: cs.primary, size: 18),
+                ),
+                const SizedBox(width: 10),
+                Text('Malipo', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: cs.onSurface)),
               ],
             ),
-            const SizedBox(height: 12),
-            _feeRow2(cs, 'Bei ya bidhaa', 'TZS ${_nf(price.toInt())}', cs.onSurface),
-            if (shipping > 0) ...[
-              const SizedBox(height: 6),
-              _feeRow2(cs, 'Gharama ya usafirishaji', 'TZS ${_nf(shipping.toInt())}', cs.tertiary),
-            ],
-            const SizedBox(height: 6),
-            _feeRow2(cs, 'Commission (3.5%)', 'TZS ${_nf(platformFee.toInt())}', cs.onSurfaceVariant),
-            if (_gatewayFee > 0) ...[
-              const SizedBox(height: 6),
-              _feeRow2(cs, 'Ada ya malipo', 'TZS ${_nf(_gatewayFee.toInt())}', cs.secondary),
-            ],
-            const SizedBox(height: 6),
-            Container(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)),
-            const SizedBox(height: 8),
-            _feeRow2(cs, 'Jumla', 'TZS ${_nf(total.toInt())}', cs.primary, bold: true),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.fromLTRB(12, 14, 12, 6),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: cs.outlineVariant.withValues(alpha: 0.08),
+                ),
+              ),
+              child: Column(
+                children: [
+                  _feeRow2(cs, 'Bei ya bidhaa', 'TZS ${_nf(price.toInt())}', cs.onSurface),
+                  if (shipping > 0) ...[
+                    const SizedBox(height: 6),
+                    _feeRow2(cs, 'Gharama ya usafirishaji', 'TZS ${_nf(shipping.toInt())}', cs.tertiary),
+                  ],
+                  const SizedBox(height: 6),
+                  _feeRow2(cs, 'Commission (3.5%)', 'TZS ${_nf(platformFee.toInt())}', cs.onSurfaceVariant),
+                  if (_gatewayFee > 0) ...[
+                    const SizedBox(height: 6),
+                    _feeRow2(cs, 'Ada ya malipo', 'TZS ${_nf(_gatewayFee.toInt())}', cs.secondary),
+                  ],
+                  const SizedBox(height: 8),
+                  Container(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)),
+                  const SizedBox(height: 8),
+                  _feeRow2(cs, 'Jumla', 'TZS ${_nf(total.toInt())}', cs.primary, bold: true),
+                ],
+              ),
+            ),
             const SizedBox(height: 16),
 
             SizedBox(
               width: double.infinity,
-              height: 50,
+              height: 52,
               child: ElevatedButton.icon(
                 onPressed: _paying ? null : _payQuotedOrder,
                 icon: _paying
@@ -1423,7 +1604,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                     : const Icon(Icons.payment, size: 20),
                 label: Text(
                   _paying ? 'Inachakata...' : 'Lipa TZS ${_nf(total.toInt())}',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: cs.primary,
                   foregroundColor: cs.surface,
@@ -1441,16 +1622,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       return const SizedBox.shrink();
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: cs.surface.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.08)),
+        color: cs.surface.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -1571,14 +1752,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       padding: EdgeInsets.only(
         left: 16,
         right: 16,
-        top: 12,
-        bottom: MediaQuery.of(context).padding.bottom + 12,
+        top: 10,
+        bottom: MediaQuery.of(context).padding.bottom + 10,
       ),
       decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.15)),
-        ),
-        color: cs.surface,
+        color: cs.surface.withValues(alpha: 0.92),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, -4),
+          ),
+        ],
       ),
       child: SafeArea(
         top: false,
@@ -1586,10 +1771,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
           children: [
             Expanded(
               child: SizedBox(
-                height: 46,
+                height: 48,
                 child: CallSellerButton(
                   phone: d['sellerPhone'] as String? ?? '',
-                  height: 46,
+                  height: 48,
                   fontSize: 12,
                 ),
               ),
@@ -1597,7 +1782,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
             const SizedBox(width: 8),
             Expanded(
               child: SizedBox(
-                height: 46,
+                height: 48,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: cs.whatsappGreen,
@@ -1626,7 +1811,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
               const SizedBox(width: 8),
               Expanded(
                 child: SizedBox(
-                  height: 46,
+                  height: 48,
                   child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       foregroundColor: cs.primary,
@@ -1655,7 +1840,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
             if (showReceipt) ...[
               const SizedBox(width: 8),
               SizedBox(
-                height: 46,
+                height: 48,
                 child: OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
                     foregroundColor: cs.primary,
@@ -1915,9 +2100,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         return;
       }
 
-      // Transition order to paid
-      await _transitionOrder('paid');
-
       if (mounted) {
         setState(() => _paying = false);
         RealtimePaymentBanner.show(
@@ -1928,12 +2110,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
           processingSubtitle: context.tr('check_phone_enter_pin'),
           successTitle: context.tr('payment_successful'),
           failedTitle: context.tr('payment_failed'),
+          successSubtitle: '${context.tr('paid_label')} \u2022 TZS ${_nf(_quotedTotal)}',
           onSuccess: () {
             if (mounted) {
               PaymentBanner.show(
                 context: context,
                 type: PaymentBannerType.success,
                 title: context.tr('payment_successful'),
+                amount: 'TZS ${_nf(_quotedTotal)}',
               );
             }
           },
@@ -1946,22 +2130,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       if (mounted) _showError(translateError(e));
       setState(() => _paying = false);
     }
-  }
-
-  Future<void> _transitionOrder(String newStatus) async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
-      final token = await user.getIdToken();
-      await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/orders/transition'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({'orderId': widget.docId, 'newStatus': newStatus}),
-      );
-    } catch (_) {}
   }
 
   void _showError(String msg) {

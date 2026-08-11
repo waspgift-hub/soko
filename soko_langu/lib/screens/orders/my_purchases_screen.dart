@@ -161,10 +161,12 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
           failedTitle: context.tr('payment_failed'),
           onSuccess: () {
             if (mounted) {
+              final paidAmount = (d['totalAmount'] as num?)?.toDouble() ?? productPrice;
               PaymentBanner.show(
                 context: context,
                 type: PaymentBannerType.success,
                 title: context.tr('payment_successful'),
+                amount: 'TZS ${NumberFormat('#,###', 'en').format(paidAmount)}',
               );
               setState(() {});
             }

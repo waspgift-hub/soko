@@ -10,6 +10,7 @@ import 'package:open_file/open_file.dart';
 import '../../services/api_config.dart';
 import '../../widgets/google_loading.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/order_status_config.dart';
 import '../../widgets/ds/ds.dart';
 
 /// Buyer statement screen — mirrors the seller statement layout but pulls from
@@ -191,7 +192,7 @@ class _BuyerStatementScreenState extends State<BuyerStatementScreen> {
             children: [
               _summaryItem(cs, context.tr('total_paid', 'Total Paid'), 'TSh ${cf.format(debits)}', cs.error),
               const SizedBox(width: 12),
-              _summaryItem(cs, context.tr('total_refunds', 'Total Refunds'), 'TSh ${cf.format(credits)}', cs.successGreen),
+              _summaryItem(cs, context.tr('total_credits', 'Total Credits'), 'TSh ${cf.format(credits)}', cs.successGreen),
             ],
           ),
           const SizedBox(height: 12),
@@ -205,7 +206,7 @@ class _BuyerStatementScreenState extends State<BuyerStatementScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(context.tr('net_spend', 'NET SPEND'), style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: balance >= 0 ? cs.successGreen : cs.error)),
+                Text(context.tr('wallet_balance'), style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: balance >= 0 ? cs.successGreen : cs.error)),
                 Text('TSh ${cf.format(balance)}', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: balance >= 0 ? cs.successGreen : cs.error)),
               ],
             ),
@@ -256,6 +257,8 @@ class _BuyerStatementScreenState extends State<BuyerStatementScreen> {
             final e = entry.value as Map<String, dynamic>;
             final date = e['date'] != null ? DateTime.tryParse(e['date'] as String) : null;
             final isCredit = e['type'] == 'credit';
+            final statusInfo = orderStatusInfo(e['status'] as String? ?? 'completed', cs);
+            final description = e['description']?.toString() ?? '';
             return Container(
               padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
               decoration: i.isOdd ? BoxDecoration(color: cs.surfaceContainerHighest.withValues(alpha: 0.15)) : null,
@@ -267,8 +270,25 @@ class _BuyerStatementScreenState extends State<BuyerStatementScreen> {
                         style: TextStyle(fontSize: 9, color: cs.onSurfaceVariant))),
                   Expanded(
                     flex: 2,
-                    child: Text((e['description']?.toString() ?? '').substring(0, ((e['description']?.toString() ?? '').length).clamp(0, 20)),
-                        style: TextStyle(fontSize: 9, color: cs.onSurface), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          description.substring(0, description.length.clamp(0, 20)),
+                          style: TextStyle(fontSize: 9, color: cs.onSurface),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          statusInfo.label(context),
+                          style: TextStyle(fontSize: 8, fontWeight: FontWeight.w700, color: statusInfo.color),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
                   SizedBox(
                     width: 55,
                     child: Text(isCredit ? 'TSh ${cf.format((e['netAmount'] as num?)?.toDouble() ?? 0)}' : '',
