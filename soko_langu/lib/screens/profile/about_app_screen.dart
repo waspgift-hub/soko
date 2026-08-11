@@ -75,7 +75,7 @@ class AboutAppScreen extends StatelessWidget {
 
               const SizedBox(height: 12),
 
-              // Soko Vibe Team
+              // Credits — Founder / Developers / Investors
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
@@ -87,34 +87,27 @@ class AboutAppScreen extends StatelessWidget {
                     width: 1.5,
                   ),
                 ),
-                child: Row(
+                child: Column(
                   children: [
-                    Icon(Icons.group, color: Theme.of(context).colorScheme.primary, size: 24),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            context.tr('developer'),
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurface.withValues(alpha: 0.6),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            context.tr('developer_names'),
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Theme.of(context).colorScheme.onSurface,
-                            ),
-                          ),
-                        ],
-                      ),
+                    _creditRow(
+                      context,
+                      icon: Icons.emoji_events,
+                      label: context.tr('founder_label'),
+                      value: context.tr('founder_name'),
+                    ),
+                    const Divider(height: 20),
+                    _creditRow(
+                      context,
+                      icon: Icons.code,
+                      label: context.tr('developer'),
+                      value: context.tr('developer_names'),
+                    ),
+                    const Divider(height: 20),
+                    _creditRow(
+                      context,
+                      icon: Icons.handshake_outlined,
+                      label: context.tr('investors_label'),
+                      value: context.tr('investors_names'),
                     ),
                   ],
                 ),
@@ -268,6 +261,45 @@ class AboutAppScreen extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _creditRow(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, color: Theme.of(context).colorScheme.primary, size: 24),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.6),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

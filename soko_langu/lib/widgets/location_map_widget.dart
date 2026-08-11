@@ -136,8 +136,8 @@ class _LocationMapWidgetState extends State<LocationMapWidget> {
             },
             myLocationEnabled: true,
             myLocationButtonEnabled: false,
-            zoomControlsEnabled: false,
-            zoomGesturesEnabled: widget.interactive,
+            zoomControlsEnabled: true,
+            zoomGesturesEnabled: true,
             scrollGesturesEnabled: widget.interactive,
             tiltGesturesEnabled: false,
             rotateGesturesEnabled: false,
@@ -185,25 +185,52 @@ class _LocationMapWidgetState extends State<LocationMapWidget> {
           Positioned(
             bottom: 8,
             right: 8,
-            child: Container(
-              decoration: BoxDecoration(
-                color: cs.surface,
-                borderRadius: BorderRadius.circular(8),
-                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4)],
-              ),
-              child: IconButton(
-                icon: Icon(
-                  _mapType == MapType.normal ? Icons.satellite : Icons.map,
-                  size: 18, color: cs.onSurface,
+            child: Row(
+              children: [
+                if (_myLocation != null)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: cs.surface,
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4)],
+                      ),
+                      child: IconButton(
+                        tooltip: 'My location',
+                        icon: Icon(Icons.my_location, size: 18, color: cs.primary),
+                        onPressed: () => _goToMyLocation(),
+                      ),
+                    ),
+                  ),
+                Container(
+                  decoration: BoxDecoration(
+                    color: cs.surface,
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4)],
+                  ),
+                  child: IconButton(
+                    icon: Icon(
+                      _mapType == MapType.normal ? Icons.satellite : Icons.map,
+                      size: 18, color: cs.onSurface,
+                    ),
+                    onPressed: () => setState(() {
+                      _mapType = _mapType == MapType.normal ? MapType.satellite : MapType.normal;
+                    }),
+                  ),
                 ),
-                onPressed: () => setState(() {
-                  _mapType = _mapType == MapType.normal ? MapType.satellite : MapType.normal;
-                }),
-              ),
+              ],
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _goToMyLocation() async {
+    if (_myLocation == null) return;
+    await _mapController?.animateCamera(
+      CameraUpdate.newLatLngZoom(_myLocation!, 16),
     );
   }
 

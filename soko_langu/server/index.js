@@ -4478,6 +4478,101 @@ app.get('/api/admin/analytics', async (req, res) => {
 });
 
 // ============================================================
+// 📊 ADMIN — Daily time-series (money volume, commissions, new users)
+// ============================================================
+app.get('/api/admin/timeseries', async (req, res) => {
+  try {
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const days = Math.min(parseInt(req.query.days) || 30, 90);
+    const now = new Date();
+
+    // Build empty per-day buckets (oldest → newest)
+    const series = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+      series.push({ date: day.toISOString().slice(0, 10), money: 0, commission: 0, users: 0 });
+    }
+    const index = new Map(series.map((s, i) => [s.date, i]));
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1));
+
+    const [txSnap, usersSnap] = await Promise.all([
+      db.collection('transactions').get(),
+      db.collection('users').get(),
+    ]);
+
+    for (const doc of txSnap.docs) {
+      const d = doc.data();
+      if (!PAID_STATUSES.has(d.status || '')) continue;
+      const created = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
+      if (!created || created < start) continue;
+      const i = index.get(created.toISOString().slice(0, 10));
+      if (i === undefined) continue;
+      series[i].money += (d.totalAmount || 0);
+      series[i].commission += (d.sokoLanguCommission || d.sokovibeCommission || d.platformFee || d.platformCommission || 0);
+    }
+
+    for (const doc of usersSnap.docs) {
+      const d = doc.data();
+      const created = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
+      if (!created || created < start) continue;
+      const i = index.get(created.toISOString().slice(0, 10));
+      if (i === undefined) continue;
+      series[i].users++;
+    }
+
+    res.json({ success: true, series });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================================
+// 📊 ADMIN — Online / presence (lightweight, polled every few seconds)
+// ============================================================
+app.get('/api/admin/online', async (req, res) => {
+  try {
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const [sessionsSnap, usersCountSnap] = await Promise.all([
+      db.collection('user_sessions').get(),
+      db.collection('users').count().get(),
+    ]);
+
+    const now = Date.now();
+    let lastMinute = 0, last5Min = 0, last15Min = 0, lastHour = 0, lastDay = 0;
+    const recent = [];
+    for (const doc of sessionsSnap.docs) {
+      const ts = doc.data().lastActive;
+      const lastActive = ts ? (ts.toDate ? ts.toDate().getTime() : new Date(ts).getTime()) : 0;
+      if (!lastActive) continue;
+      const diff = now - lastActive;
+      if (diff <= 60000) lastMinute++;
+      if (diff <= 300000) last5Min++;
+      if (diff <= 900000) last15Min++;
+      if (diff <= 3600000) lastHour++;
+      if (diff <= 86400000) lastDay++;
+      if (diff <= 600000) recent.push({ uid: doc.id, lastActive: lastActive });
+    }
+    recent.sort((a, b) => b.lastActive - a.lastActive);
+
+    res.json({
+      success: true,
+      totalUsers: (usersCountSnap.data() || {}).count || 0,
+      online: { lastMinute, last5Min, last15Min, lastHour, lastDay },
+      recentlyActive: recent.slice(0, 30),
+      asOf: now,
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================================
 // 📊 SELLER — Seller-specific analytics (products, views, orders, reviews)
 // ============================================================
 app.get('/api/seller-analytics/:sellerId', async (req, res) => {
@@ -4714,8 +4809,8 @@ app.get('/api/seller-statement/:sellerId', async (req, res) => {
       const d = doc.data();
       const status = d.status || '';
       const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
-      const amount = d.totalAmount || 0;
-      const commission = d.platformCommission || 0;
+      const amount = d.sellerReceives || d.totalAmount || 0;
+      const commission = d.platformCommission || d.platformFee || 0;
       const buyerName = d.buyerName || d.buyerPhone || 'Mnunuzi';
       const productName = d.productName || 'Bidhaa';
 
@@ -5354,14 +5449,46 @@ app.get('/api/admin/user-detail/:uid', async (req, res) => {
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const { uid } = req.params;
-    const [userDoc, ordersSnap, withdrawalsSnap, txSnap] = await Promise.all([
+    const [userDoc, ordersSnap, withdrawalsSnap, txSnap, auditSnap, sessionSnap] = await Promise.all([
       db.collection('users').doc(uid).get(),
       db.collection('orders').where('sellerId', '==', uid).limit(50).get(),
       db.collection('withdrawals').where('userId', '==', uid).limit(50).get(),
       db.collection('revenue_transactions').where('userId', '==', uid).limit(50).get(),
+      db.collection('audit_log').where('userId', '==', uid).orderBy('timestamp', 'desc').limit(50).get(),
+      db.collection('user_sessions').doc(uid).get(),
     ]);
 
     if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
+
+    // Orders the user bought (as buyer) + chat history for the activity trail
+    const buyerOrdersSnap = await db.collection('orders').where('buyerId', '==', uid).limit(50).get();
+    const roomsSnap = await db.collection('chat_rooms').where('participants', 'array-contains', uid).limit(10).get();
+    const chatMessages = [];
+    await Promise.all(roomsSnap.docs.map(async (roomDoc) => {
+      try {
+        const msgs = await db.collection('chat_rooms').doc(roomDoc.id).collection('messages')
+          .orderBy('timestamp', 'desc').limit(5).get();
+        msgs.docs.forEach(m => {
+          const md = m.data();
+          if (md.sender_id === uid || md.receiver_id === uid) {
+            chatMessages.push({
+              id: m.id, roomId: roomDoc.id,
+              senderId: md.sender_id || '', receiverId: md.receiver_id || '',
+              text: md.text || '', isRead: !!md.is_read,
+              timestamp: md.timestamp || null,
+            });
+          }
+        });
+      } catch (_) {}
+    }));
+    chatMessages.sort((a, b) => {
+      const av = a.timestamp ? (a.timestamp.toDate ? a.timestamp.toDate().getTime() : new Date(a.timestamp).getTime()) : 0;
+      const bv = b.timestamp ? (b.timestamp.toDate ? b.timestamp.toDate().getTime() : new Date(b.timestamp).getTime()) : 0;
+      return bv - av;
+    });
+    const lastActive = sessionSnap.exists
+      ? (sessionSnap.data().lastActive ? sessionSnap.data().lastActive.toDate() : null)
+      : null;
 
     const sortDesc = (arr, field) => arr.sort((a, b) => {
       const ts = (x) => {
@@ -5383,8 +5510,12 @@ app.get('/api/admin/user-detail/:uid', async (req, res) => {
     res.json({
       user,
       orders: sortDesc(ordersSnap.docs.map(d => ({ id: d.id, ...d.data() })), 'createdAt'),
+      buyerOrders: sortDesc(buyerOrdersSnap.docs.map(d => ({ id: d.id, ...d.data() })), 'createdAt'),
       withdrawals: sortDesc(withdrawalsSnap.docs.map(d => ({ id: d.id, ...d.data() })), 'createdAt'),
       revenueTransactions: sortDesc(txSnap.docs.map(d => ({ id: d.id, ...d.data() })), 'timestamp'),
+      auditLog: sortDesc(auditSnap.docs.map(d => ({ id: d.id, ...d.data() })), 'timestamp'),
+      chatMessages: chatMessages.slice(0, 30),
+      lastActive: lastActive ? lastActive.getTime() : null,
     });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
@@ -6900,9 +7031,10 @@ app.post('/api/transactions/create', asyncHandler(async (req, res) => {
 
   const price = Number(productPrice);
   const processingFee = getUssdPushFee(price);
-  const platformFee = price * 0.03;
+  const platformFee = Math.round(price * PLATFORM_COMMISSION_PERCENT);
+  // Buyer (payer) bears processing fee + commission; seller receives the full price.
   const totalAmount = price + processingFee + platformFee;
-  const sellerReceives = price - platformFee;
+  const sellerReceives = price;
 
   const txRef = await db.collection('transactions').doc();
   await txRef.set({

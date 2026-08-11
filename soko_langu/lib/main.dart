@@ -261,7 +261,8 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
     if (uid != null) {
       _analyticsService.trackUserSession(uid);
       _sessionTimer?.cancel();
-      _sessionTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+      // 1-minute heartbeat keeps presence accurate for the admin online panel.
+      _sessionTimer = Timer.periodic(const Duration(minutes: 1), (_) {
         _analyticsService.trackUserSession(uid);
       });
     }

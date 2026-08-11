@@ -24,6 +24,10 @@ class TermsOfServiceScreen extends StatelessWidget {
               Text(context.tr('tos_last_updated'), style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.5))),
               const SizedBox(height: 24),
 
+              _summary(context, cs, context.tr('tos_founder_summary')),
+
+              const SizedBox(height: 8),
+
               _section(cs, context.tr('tos_section_1_title'), context.tr('tos_section_1_body')),
               _section(cs, context.tr('tos_section_2_title'), context.tr('tos_section_2_body')),
               _section(cs, context.tr('tos_section_3_title'), context.tr('tos_section_3_body')),
@@ -50,6 +54,22 @@ class TermsOfServiceScreen extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _summary(BuildContext context, ColorScheme cs, String body) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.primaryContainer.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.6)),
+      ),
+      child: Text(
+        body,
+        style: TextStyle(fontSize: 13.5, height: 1.6, color: cs.onSurface),
       ),
     );
   }

@@ -145,6 +145,10 @@ tailwind.config = {
       <div class="ml-auto flex items-center gap-2 sm:gap-3">
 
         <div class="hidden xl:flex items-center gap-2 text-xs">
+          <div id="onlinePill" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 whitespace-nowrap">
+            <span class="text-slate-500 dark:text-neutral-400">Online Now</span>
+            <span id="navOnline" class="font-bold text-green-600">0</span>
+          </div>
           <div class="px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/40 border border-emerald-200 dark:border-emerald-800 whitespace-nowrap">
             <span class="text-slate-500 dark:text-neutral-400">Vault Balance</span>
             <span id="navVault" class="font-bold text-emerald-700">TZS 0</span>
@@ -268,6 +272,64 @@ tailwind.config = {
             <p class="text-xs text-slate-500 dark:text-neutral-400">Live from Firestore order states</p>
           </div>
           <div class="h-80 relative"><canvas id="distChart"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Live presence -->
+      <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-4 shadow-sm">
+          <p class="text-xs font-medium text-slate-500 dark:text-neutral-400">Online Right Now</p>
+          <p id="ovOnlineNow" class="mt-1 text-2xl font-extrabold text-green-600">0</p>
+          <p class="text-[11px] text-slate-400 dark:text-neutral-500">active in the last 1 min</p>
+        </div>
+        <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-4 shadow-sm">
+          <p class="text-xs font-medium text-slate-500 dark:text-neutral-400">Active (5 min)</p>
+          <p id="ovOnline5" class="mt-1 text-2xl font-extrabold text-slate-800 dark:text-neutral-100">0</p>
+          <p class="text-[11px] text-slate-400 dark:text-neutral-500">users interacting now</p>
+        </div>
+        <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-4 shadow-sm">
+          <p class="text-xs font-medium text-slate-500 dark:text-neutral-400">Active (1 hour)</p>
+          <p id="ovOnlineHour" class="mt-1 text-2xl font-extrabold text-slate-800 dark:text-neutral-100">0</p>
+          <p class="text-[11px] text-slate-400 dark:text-neutral-500">used the app recently</p>
+        </div>
+        <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-4 shadow-sm">
+          <p class="text-xs font-medium text-slate-500 dark:text-neutral-400">Active (24 hours)</p>
+          <p id="ovOnlineDay" class="mt-1 text-2xl font-extrabold text-slate-800 dark:text-neutral-100">0</p>
+          <p class="text-[11px] text-slate-400 dark:text-neutral-500">daily actives</p>
+        </div>
+        <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-4 shadow-sm">
+          <p class="text-xs font-medium text-slate-500 dark:text-neutral-400">Total Users</p>
+          <p id="ovTotalUsers" class="mt-1 text-2xl font-extrabold text-slate-800 dark:text-neutral-100">0</p>
+          <p class="text-[11px] text-slate-400 dark:text-neutral-500">registered accounts</p>
+        </div>
+        <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-4 shadow-sm">
+          <p class="text-xs font-medium text-slate-500 dark:text-neutral-400">Inactive Now</p>
+          <p id="ovInactiveNow" class="mt-1 text-2xl font-extrabold text-slate-800 dark:text-neutral-100">0</p>
+          <p class="text-[11px] text-slate-400 dark:text-neutral-500">not active in last 5 min</p>
+        </div>
+      </div>
+
+      <!-- Time series charts -->
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h2 class="font-bold text-slate-800 dark:text-neutral-100">Money Volume (Time)</h2>
+              <p class="text-xs text-slate-500 dark:text-neutral-400">Daily paid transaction volume vs. platform commission</p>
+            </div>
+            <span class="px-3 py-1 rounded-lg bg-slate-100 dark:bg-neutral-800 text-xs font-medium text-slate-600 dark:text-neutral-300">Last 30 Days</span>
+          </div>
+          <div class="h-72"><canvas id="moneyChart"></canvas></div>
+        </div>
+        <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h2 class="font-bold text-slate-800 dark:text-neutral-100">User Volume (Time)</h2>
+              <p class="text-xs text-slate-500 dark:text-neutral-400">Daily new user signups</p>
+            </div>
+            <span class="px-3 py-1 rounded-lg bg-slate-100 dark:bg-neutral-800 text-xs font-medium text-slate-600 dark:text-neutral-300">Last 30 Days</span>
+          </div>
+          <div class="h-72"><canvas id="usersChart"></canvas></div>
         </div>
       </div>
 
@@ -1227,6 +1289,17 @@ function loadUserDetail(uid, force) {
     d._uid = uid; S.userDetail = d; return d;
   });
 }
+function loadTimeseries(force) {
+  if (S.timeseries && !force) return Promise.resolve(S.timeseries);
+  return api('/api/admin/timeseries?days=30').then(function (d) {
+    S.timeseries = d.series || []; loaded.timeseries = true; return d;
+  }).catch(function (e) { throw e; });
+}
+function loadOnlineUsers() {
+  return api('/api/admin/online').then(function (d) {
+    S.online = d; lastSync(); return d;
+  }).catch(function () {});
+}
 
 function saleTx() {
   return (S.transactions || []).filter(function (t) {
@@ -1289,6 +1362,8 @@ function renderOverview() {
   renderRecent();
   renderDashboardExtras();
   updateCharts();
+  loadTimeseries().then(updateTimeseries).catch(function () {});
+  if (S.online) renderPresence(); else loadOnlineUsers().then(renderPresence);
 }
 
 function refreshTotals() {
@@ -1379,6 +1454,42 @@ function initCharts() {
     data: { labels: [], datasets: [{ data: [], backgroundColor: [], borderWidth: 2, borderColor: '#ffffff' }] },
     options: { responsive: true, maintainAspectRatio: false, cutout: '62%', plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, padding: 14, usePointStyle: true, pointStyle: 'circle' } } } }
   });
+
+  var mctx = $('moneyChart').getContext('2d');
+  charts.money = new Chart(mctx, {
+    type: 'bar',
+    data: { labels: [], datasets: [
+      { type: 'bar', label: 'Money Volume', data: [], backgroundColor: 'rgba(16,185,129,0.85)', borderRadius: 6, yAxisID: 'y' },
+      { type: 'line', label: 'Platform Commission', data: [], borderColor: '#059669', backgroundColor: 'rgba(5,150,105,0.10)', fill: true, tension: 0.4, pointRadius: 2, pointBackgroundColor: '#059669', yAxisID: 'y1' }
+    ] },
+    options: {
+      responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12, color: '#64748b' }, grid: { display: false } },
+        y: { beginAtZero: true, grid: { color: 'rgba(15,23,42,0.06)' }, ticks: { callback: function (v) { return 'TZS ' + (v / 1e6).toFixed(1) + 'M'; } } },
+        y1: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, ticks: { callback: function (v) { return 'TZS ' + (v / 1e3).toFixed(0) + 'K'; } } }
+      },
+      plugins: { legend: { position: 'bottom' } }
+    }
+  });
+
+  var uctx = $('usersChart').getContext('2d');
+  charts.users = new Chart(uctx, {
+    type: 'bar',
+    data: { labels: [], datasets: [
+      { label: 'New Users', data: [], backgroundColor: 'rgba(14,165,233,0.85)', borderRadius: 6 },
+      { type: 'line', label: 'Cumulative Users', data: [], borderColor: '#059669', backgroundColor: 'rgba(5,150,105,0.10)', fill: true, tension: 0.4, pointRadius: 2, pointBackgroundColor: '#059669', yAxisID: 'y1' }
+    ] },
+    options: {
+      responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12, color: '#64748b' }, grid: { display: false } },
+        y: { beginAtZero: true, grid: { color: 'rgba(15,23,42,0.06)' } },
+        y1: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false } }
+      },
+      plugins: { legend: { position: 'bottom' } }
+    }
+  });
 }
 
 function refreshCharts() {
@@ -1399,6 +1510,51 @@ function refreshCharts() {
     charts.dist.options.plugins.legend.labels.color = legend;
     charts.dist.update();
   }
+  if (charts.money) {
+    charts.money.options.scales.x.ticks.color = tick;
+    charts.money.options.scales.y.grid.color = grid;
+    charts.money.options.scales.y1.grid.color = grid;
+    charts.money.options.scales.y.ticks.color = tick;
+    charts.money.options.scales.y1.ticks.color = tick;
+    charts.money.options.plugins.legend.labels.color = legend;
+    charts.money.update();
+  }
+  if (charts.users) {
+    charts.users.options.scales.x.ticks.color = tick;
+    charts.users.options.scales.y.grid.color = grid;
+    charts.users.options.scales.y1.grid.color = grid;
+    charts.users.options.scales.y.ticks.color = tick;
+    charts.users.options.scales.y1.ticks.color = tick;
+    charts.users.options.plugins.legend.labels.color = legend;
+    charts.users.update();
+  }
+}
+
+function updateTimeseries() {
+  if (!charts.money || !charts.users || !S.timeseries) return;
+  var series = S.timeseries;
+  var labels = series.map(function (s) { return s.date.slice(5); });
+  charts.money.data.labels = labels;
+  charts.money.data.datasets[0].data = series.map(function (s) { return Math.round(s.money); });
+  charts.money.data.datasets[1].data = series.map(function (s) { return Math.round(s.commission); });
+  charts.money.update();
+  var cumulative = 0;
+  charts.users.data.labels = labels;
+  charts.users.data.datasets[0].data = series.map(function (s) { return s.users; });
+  charts.users.data.datasets[1].data = series.map(function (s) { cumulative += s.users; return cumulative; });
+  charts.users.update();
+}
+
+function renderPresence() {
+  if (!S.online) return;
+  var o = S.online;
+  $('navOnline').textContent = o.online.last5Min;
+  $('ovOnlineNow').textContent = o.online.lastMinute;
+  $('ovOnline5').textContent = o.online.last5Min;
+  $('ovOnlineHour').textContent = o.online.lastHour;
+  $('ovOnlineDay').textContent = o.online.lastDay;
+  $('ovTotalUsers').textContent = o.totalUsers;
+  $('ovInactiveNow').textContent = Math.max(0, (o.totalUsers || 0) - o.online.last5Min);
 }
 
 function escrowish(s) {
@@ -1995,6 +2151,29 @@ function showUser(uid) {
         '<td class="px-3 py-2 text-xs text-slate-500 dark:text-neutral-400">' + esc(r.description || '') + '</td>' +
         '<td class="px-3 py-2 text-xs text-slate-500 dark:text-neutral-400">' + timeAgo(r.timestamp) + '</td></tr>';
     }).join('');
+    var boughtRows = (d.buyerOrders || []).slice(0, 20).map(function (o) {
+      return '<tr class="border-b border-slate-100 dark:border-neutral-800"><td class="px-3 py-2 text-xs font-mono text-slate-500 dark:text-neutral-400">' + esc(o.id || '') + '</td>' +
+        '<td class="px-3 py-2 text-slate-700 dark:text-neutral-200">' + esc((o.items || []).map(function (i) { return i.name; }).join(', ') || '—') + '</td>' +
+        '<td class="px-3 py-2 font-semibold">' + fmtTZ(o.totalAmount) + '</td>' +
+        '<td class="px-3 py-2">' + statusBadge(o.status) + '</td>' +
+        '<td class="px-3 py-2 text-xs text-slate-500 dark:text-neutral-400">' + timeAgo(o.createdAt) + '</td></tr>';
+    }).join('');
+    var chatRows = (d.chatMessages || []).slice(0, 20).map(function (m) {
+      var dir = m.senderId === u.uid ? '→ ' : '← ';
+      return '<tr class="border-b border-slate-100 dark:border-neutral-800"><td class="px-3 py-2 text-xs text-slate-400 dark:text-neutral-500">' + dir + '</td>' +
+        '<td class="px-3 py-2 text-slate-700 dark:text-neutral-200 max-w-[260px] truncate">' + esc(m.text || '') + '</td>' +
+        '<td class="px-3 py-2 text-xs font-mono text-slate-400 dark:text-neutral-500 truncate max-w-[120px]">' + esc(m.roomId || '') + '</td>' +
+        '<td class="px-3 py-2 text-xs text-slate-500 dark:text-neutral-400">' + timeAgo(m.timestamp) + '</td></tr>';
+    }).join('');
+    var auditRows = (d.auditLog || []).slice(0, 30).map(function (a) {
+      return '<tr class="border-b border-slate-100 dark:border-neutral-800"><td class="px-3 py-2">' + esc(a.type || '—') + '</td>' +
+        '<td class="px-3 py-2 font-semibold ' + ((Number(a.amount) || 0) < 0 ? 'text-rose-600' : 'text-emerald-600') + '">' + fmtTZ(a.amount) + '</td>' +
+        '<td class="px-3 py-2 text-xs text-slate-500 dark:text-neutral-400 max-w-[280px]">' + esc(a.reason || '') + '</td>' +
+        '<td class="px-3 py-2 text-xs text-slate-500 dark:text-neutral-400">' + timeAgo(a.timestamp) + '</td></tr>';
+    }).join('');
+    var online = d.lastActive ? (Date.now() - d.lastActive < 2 * 60000 ? 'Online now' : (Date.now() - d.lastActive < 5 * 60000 ? 'Active (5 min)' : 'Offline')) : 'Unknown';
+    var doneTx = (d.revenueTransactions || []).filter(function (r) { return !/fail|cancel|refund/i.test(r.type || ''); }).length;
+    var failTx = (d.revenueTransactions || []).filter(function (r) { return /fail|cancel|refund/i.test(r.type || ''); }).length;
     body.innerHTML =
       '<div class="flex items-center gap-4 mb-5">' + avatar(u.displayName || u.name, 'w-14 h-14 text-lg') +
       '<div><p class="text-lg font-bold text-slate-800 dark:text-neutral-100">' + esc(u.displayName || u.name || '—') + '</p>' +
@@ -2010,13 +2189,22 @@ function showUser(uid) {
       }).join('') + '</div>' +
       '<div class="rounded-xl bg-slate-50 dark:bg-neutral-800 px-4 py-3 mb-5 flex flex-wrap gap-x-8 gap-y-1 text-sm">' +
       '<span class="text-slate-500 dark:text-neutral-400">Status</span><span class="text-slate-800 dark:text-neutral-100 font-semibold">' + (u.isSuspended === true ? 'Suspended' : 'Active') + '</span>' +
+      '<span class="text-slate-500 dark:text-neutral-400">Presence</span><span class="font-semibold ' + (online === 'Online now' ? 'text-green-600' : 'text-slate-500') + '">' + esc(online) + '</span>' +
+      '<span class="text-slate-500 dark:text-neutral-400">Last active</span><span class="text-slate-800 dark:text-neutral-100 font-semibold">' + (d.lastActive ? timeAgo(d.lastActive) : '—') + '</span>' +
       '<span class="text-slate-500 dark:text-neutral-400">Warnings</span><span class="text-slate-800 dark:text-neutral-100 font-semibold">' + w + '/3</span>' +
       '<span class="text-slate-500 dark:text-neutral-400">Admin</span><span class="text-slate-800 dark:text-neutral-100 font-semibold">' + (u.isAdmin === true ? 'Yes' : 'No') + '</span>' +
       '<span class="text-slate-500 dark:text-neutral-400">KYC</span><span class="text-slate-800 dark:text-neutral-100 font-semibold">' + esc(kyc.status || 'none') + '</span>' +
       '<span class="text-slate-500 dark:text-neutral-400">Joined</span><span class="text-slate-800 dark:text-neutral-100 font-semibold">' + fmtDate(u.createdAt) + '</span></div>' +
+      '<div class="rounded-xl bg-slate-50 dark:bg-neutral-800 px-4 py-3 mb-5 flex flex-wrap gap-x-8 gap-y-1 text-sm">' +
+      '<span class="text-slate-500 dark:text-neutral-400">Transactions</span><span class="text-emerald-600 font-semibold">' + doneTx + ' succeeded</span>' +
+      '<span class="text-rose-600 font-semibold">' + failTx + ' failed/refunded</span>' +
+      '<span class="text-slate-500 dark:text-neutral-400">Total sales</span><span class="text-slate-800 dark:text-neutral-100 font-semibold">' + fmtTZ(u.grossSalesVolume) + '</span></div>' +
       '<h4 class="font-bold text-slate-800 dark:text-neutral-100 mb-2 mt-5">Orders (last 20)</h4>' + (orderRows ? tableShell(['Order', 'Items', 'Amount', 'Status'], orderRows, '520') : emptyRow('No orders')) +
+      '<h4 class="font-bold text-slate-800 dark:text-neutral-100 mb-2 mt-5">Purchases as buyer (last 20)</h4>' + (boughtRows ? tableShell(['Order', 'Items', 'Amount', 'Status', 'Date'], boughtRows, '560') : emptyRow('No purchases')) +
       '<h4 class="font-bold text-slate-800 dark:text-neutral-100 mb-2 mt-5">Withdrawals (last 20)</h4>' + (wdRows ? tableShell(['Amount', 'Phone', 'Status', 'Date'], wdRows, '520') : emptyRow('No withdrawals')) +
-      '<h4 class="font-bold text-slate-800 dark:text-neutral-100 mb-2 mt-5">Revenue transactions (last 20)</h4>' + (revRows ? tableShell(['Type', 'Amount', 'Description', 'Date'], revRows, '640') : emptyRow('No revenue transactions'));
+      '<h4 class="font-bold text-slate-800 dark:text-neutral-100 mb-2 mt-5">Revenue transactions (last 20)</h4>' + (revRows ? tableShell(['Type', 'Amount', 'Description', 'Date'], revRows, '640') : emptyRow('No revenue transactions')) +
+      '<h4 class="font-bold text-slate-800 dark:text-neutral-100 mb-2 mt-5">Chat history (last 20)</h4>' + (chatRows ? tableShell(['Dir', 'Message', 'Room', 'Date'], chatRows, '560') : emptyRow('No chat messages')) +
+      '<h4 class="font-bold text-slate-800 dark:text-neutral-100 mb-2 mt-5">Audit trail (last 30)</h4>' + (auditRows ? tableShell(['Type', 'Amount', 'Reason', 'When'], auditRows, '640') : emptyRow('No audit events'));
     refreshIcons();
   }).catch(function (e) {
     body.innerHTML = emptyRow('Failed to load user: ' + e.message);
@@ -2564,6 +2752,9 @@ function init() {
   refreshCharts();
   renderOverview();
   refreshIcons();
+  loadOnlineUsers().then(renderPresence);
+  if (window.presenceTimer) clearInterval(window.presenceTimer);
+  window.presenceTimer = setInterval(function () { loadOnlineUsers().then(renderPresence); }, 5000);
 }
 
 (function () {

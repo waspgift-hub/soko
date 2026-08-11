@@ -29,58 +29,77 @@ class RewardedAdGate {
     String? message,
   ) async {
     final completer = Completer<bool>();
+    var isLoading = false;
 
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(Icons.play_circle_outline, color: Theme.of(context).colorScheme.tertiary, size: 28),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(title ?? context.tr('watch_ad')),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Icon(Icons.play_circle_outline, color: Theme.of(context).colorScheme.tertiary, size: 28),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(title ?? context.tr('watch_ad')),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(message ?? context.tr('ad_required')),
+              const SizedBox(height: 8),
+              Text(
+                context.tr('watch_ad_to_continue'),
+                style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: isLoading
+                  ? null
+                  : () {
+                      Navigator.of(ctx).pop();
+                      completer.complete(false);
+                    },
+              child: Text(context.tr('cancel')),
+            ),
+            ElevatedButton.icon(
+              onPressed: isLoading
+                  ? null
+                  : () async {
+                      setDialogState(() => isLoading = true);
+                      final loaded = await _rewardedAdService.preload();
+                      if (!ctx.mounted) return;
+                      Navigator.of(ctx).pop();
+                      if (loaded) {
+                        final earned = await _rewardedAdService.show(
+                          onUserEarned: () => _recordRewardedAdView(),
+                        );
+                        completer.complete(earned);
+                      } else {
+                        completer.complete(false);
+                      }
+                    },
+              icon: isLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.play_arrow, size: 18),
+              label: Text(isLoading ? context.tr('loading') : context.tr('watch_ad')),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.tertiary,
+                foregroundColor: Theme.of(context).colorScheme.surface,
+              ),
             ),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(message ?? context.tr('ad_required')),
-            const SizedBox(height: 8),
-            Text(
-              context.tr('watch_ad_to_continue'),
-              style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              completer.complete(false);
-            },
-            child: Text(context.tr('cancel')),
-          ),
-          ElevatedButton.icon(
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              await _rewardedAdService.preload();
-              final earned = await _rewardedAdService.show(
-                onUserEarned: () => _recordRewardedAdView(),
-              );
-              completer.complete(earned);
-            },
-            icon: const Icon(Icons.play_arrow, size: 18),
-            label: Text(context.tr('watch_ad')),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.tertiary,
-              foregroundColor: Theme.of(context).colorScheme.surface,
-            ),
-          ),
-        ],
       ),
     );
 

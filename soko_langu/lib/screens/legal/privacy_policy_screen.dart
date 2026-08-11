@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../extensions/context_tr.dart';
 
 class PrivacyPolicyScreen extends StatelessWidget {
   const PrivacyPolicyScreen({super.key});
@@ -8,7 +9,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Privacy Policy'),
+        title: Text(context.tr('privacy_policy')),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
@@ -22,6 +23,22 @@ class PrivacyPolicyScreen extends StatelessWidget {
               const SizedBox(height: 4),
               Text('Last Updated: 29 July 2026 | Effective Date: 29 July 2026', style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.5))),
               const SizedBox(height: 24),
+
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: cs.primary.withValues(alpha: 0.6)),
+                ),
+                child: Text(
+                  context.tr('pp_founder_summary'),
+                  style: TextStyle(fontSize: 13.5, height: 1.6, color: cs.onSurface),
+                ),
+              ),
+
+              const SizedBox(height: 8),
 
               _section(cs, '1. INTRODUCTION AND SCOPE',
                 '1.1 This Privacy Policy ("Policy") constitutes a legally binding agreement between you ("User", "you", "your", "Data Subject") and Soko Vibe ("we", "our", "us", "the Company", "the Platform"), a company duly registered and operating under the laws of the United Republic of Tanzania.\n\n'
