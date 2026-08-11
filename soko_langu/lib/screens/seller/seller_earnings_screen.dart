@@ -71,11 +71,16 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
 
   Widget _buildBalanceCard(ColorScheme cs, NumberFormat nf) {
     return StreamBuilder<List<dynamic>>(
-      stream: StreamZip([_service.streamSellerBalance(), _service.streamSellerTotalWithdrawn()]),
+      stream: StreamZip([
+        _service.streamSellerBalance(),
+        _service.streamSellerTotalWithdrawn(),
+        _service.streamPendingEscrow(),
+      ]),
       builder: (context, snap) {
-        final data = snap.data ?? [0, 0];
+        final data = snap.data ?? [0, 0, 0];
         final balance = (data[0] as num).toDouble();
         final withdrawn = (data[1] as num).toDouble();
+        final escrow = (data[2] as num).toDouble();
         final totalEarned = balance + withdrawn;
         return Container(
           padding: const EdgeInsets.all(24),
@@ -130,6 +135,26 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                   ),
                 ),
               ),
+              if (escrow > 0)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(
+                    children: [
+                      Icon(Icons.lock_clock_outlined, color: cs.surface.withValues(alpha: 0.8), size: 15),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          context.tr('escrow_awaiting_confirmation').replaceFirst('{0}', nf.format(escrow)),
+                          style: TextStyle(
+                            color: cs.surface.withValues(alpha: 0.85),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               const SizedBox(height: 12),
               Row(
                 children: [

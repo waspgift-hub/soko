@@ -1159,6 +1159,7 @@ const Map<String, Map<String, String>> zhTranslations = {
     'product_featured_for_days': '商品已推荐 {days} 天',
     'admin': '管理员',
     'pending_escrow': '托管待处理',
+    'escrow_awaiting_confirmation': '托管: TZS {0} (等待买家确认)',
 
     'otp_code_hint': '输入 OTP 验证码',
     'verify': '验证',

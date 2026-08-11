@@ -631,11 +631,12 @@ const BOOST_TIERS = {
 };
 
 const PLATFORM_COMMISSION_PERCENT = 0.035; // 3.5% platform commission
+const AD_REVENUE_PER_VIEW = 15;        // TZS per ad view (estimate only)
 const MIN_WITHDRAWAL = 5000;          // Minimum withdrawal TZS 5,000
 
 // Transaction statuses that mean money really came in. Used everywhere a
-// transaction record is counted as a payment (buyer statement, seller
-// statement, dashboards) so a single source of truth prevents drift.
+// transaction record is counted as a payment (buyer statement, admin
+// dashboards) so a single source of truth prevents drift.
 const PAID_STATUSES = new Set([
   'escrow_hold',
   'paid_escrow_hold',
@@ -646,6 +647,16 @@ const PAID_STATUSES = new Set([
   'confirmed',
   'completed',
   'refunded',
+]);
+
+// Statuses where the escrow has actually been released to the seller (buyer
+// confirmation, admin release, or auto-release). Escrow-hold statuses are NOT
+// credits: the money is still held in pendingEscrow until release, so counting
+// them here would inflate the seller's earnings before they earn them.
+const SELLER_CREDIT_STATUSES = new Set([
+  'delivered',
+  'delivery_confirmed',
+  'completed',
 ]);
 
 // DEFAULT_PAYOUT_FEE (2000 TZS estimate) — actual ClickPesa payout fee varies by amount; use clickpesaPayoutPreview for exact fee
@@ -4047,18 +4058,21 @@ app.post('/api/admin/withdraw', async (req, res) => {
     if (!user.isAdmin) return res.status(403).json({ error: 'Admin access required' });
     if (user.isSuspended) return res.status(403).json({ error: 'Account suspended' });
 
-    const admobSnap = await db.collection('admob_earnings').orderBy('month', 'desc').limit(1).get();
-    let actualAdRevenue = 0;
-    if (!admobSnap.empty) {
-      actualAdRevenue = admobSnap.docs[0].data().amount || 0;
-    }
-
     const revSnap = await db.collection('revenue_transactions').get();
     let totalCommissions = 0;
+    let totalBoostRevenue = 0;
     revSnap.docs.forEach(doc => {
-      totalCommissions += (doc.data().sokoLanguCommission || 0);
+      const d = doc.data();
+      if (d.type === 'boost') {
+        totalBoostRevenue += (d.sokoLanguCommission || 0);
+      } else {
+        totalCommissions += (d.sokoLanguCommission || 0);
+      }
     });
-    const totalAdminBalance = actualAdRevenue + totalCommissions;
+    // Withdrawable balance = platform commissions + boost revenue only. AdMob
+    // revenue lives in Google's account, not the Soko Vibe ClickPesa wallet,
+    // so it must never be part of what the admin withdraws.
+    const totalAdminBalance = totalCommissions + totalBoostRevenue;
 
     const withdrawnSnap = await db.collection('admin_withdrawals')
       .where('userId', '==', userId)
@@ -4066,7 +4080,7 @@ app.post('/api/admin/withdraw', async (req, res) => {
     let totalWithdrawn = 0;
     withdrawnSnap.docs.forEach(doc => {
       const d = doc.data();
-      if (d.status === 'completed') totalWithdrawn += d.amount || 0;
+      if (d.status === 'completed') totalWithdrawn += (d.netAmount || d.amount || 0);
     });
     const availableBalance = totalAdminBalance - totalWithdrawn;
 
@@ -4572,7 +4586,10 @@ app.get('/api/seller-analytics/:sellerId', async (req, res) => {
       const amount = d.totalAmount || 0;
       const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
 
-      if (completedStatuses.has(status)) {
+      // Only count earnings/orders once the escrow is released to the seller.
+      // escrow_hold / dispatched are still held in pendingEscrow.
+      const escrowReleasedToSeller = d.escrowReleased === true || SELLER_CREDIT_STATUSES.has(status);
+      if (completedStatuses.has(status) && escrowReleasedToSeller && status !== 'refunded') {
         successfulOrders++;
         successfulTransactions++;
         if (createdAt && createdAt >= monthStart) {
@@ -4702,7 +4719,12 @@ app.get('/api/seller-statement/:sellerId', async (req, res) => {
       const buyerName = d.buyerName || d.buyerPhone || 'Mnunuzi';
       const productName = d.productName || 'Bidhaa';
 
-      if (paidStatuses.has(status)) {
+      // Only count a sale as credit once the escrow has been released to the
+      // seller. escrow_hold / dispatched are still held in pendingEscrow and
+      // would inflate the seller's earnings if counted here. 'refunded' never
+      // credits the seller even though orders.js flags it as released.
+      const escrowReleasedToSeller = d.escrowReleased === true || SELLER_CREDIT_STATUSES.has(status);
+      if (paidStatuses.has(status) && escrowReleasedToSeller && status !== 'refunded') {
         runningBalance += amount;
         entries.push({
           type: 'credit',
@@ -5066,9 +5088,9 @@ app.get('/api/admin/finance-summary', async (req, res) => {
     }
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-    // 1. Estimated ad revenue (each ad view = 15 TZS)
+    // 1. Estimated ad revenue (each ad view = configured rate)
     const adSnap = await db.collection('ad_views').count().get();
-    const estimatedAdRevenue = (adSnap.data().count || 0) * 15;
+    const estimatedAdRevenue = (adSnap.data().count || 0) * AD_REVENUE_PER_VIEW;
 
     // 2. Actual Google AdMob revenue (manually entered by admin)
     const admobSnap = await db.collection('admob_earnings').orderBy('month', 'desc').limit(1).get();
@@ -5121,7 +5143,10 @@ app.get('/api/admin/finance-summary', async (req, res) => {
 
     const totalPayouts = totalPaidOut + totalAdminPaidOut;
 
-    const availableBalance = totalAdminBalance - totalAdminPaidOut;
+    // Money the admin can actually withdraw: platform commissions + boost
+    // revenue only. AdMob revenue sits in Google's account, never in the Soko
+    // Vibe ClickPesa wallet, so it must not be withdrawable.
+    const availableBalance = totalCommissions + totalBoostRevenue - totalAdminPaidOut;
 
     // 7. Admin withdrawal history
     let totalAdminWithdrawn = 0;
@@ -5154,6 +5179,8 @@ app.get('/api/admin/finance-summary', async (req, res) => {
       totalAdminWithdrawn,
       actualClickPesaBalance,
       paymentProcessor: 'ClickPesa',
+      platformCommissionPercent: PLATFORM_COMMISSION_PERCENT,
+      adRevenuePerView: AD_REVENUE_PER_VIEW,
     });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });

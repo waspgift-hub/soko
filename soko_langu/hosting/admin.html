@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" class="scroll-smooth">
 <head>
 <meta charset="UTF-8">
@@ -8,6 +8,7 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
 tailwind.config = {
+  darkMode: 'class',
   theme: {
     extend: {
       fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] }
@@ -21,37 +22,37 @@ tailwind.config = {
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
-<body class="bg-slate-100 text-slate-800 antialiased">
+<body class="bg-slate-100 dark:bg-neutral-950 text-slate-800 dark:text-neutral-100 antialiased">
 
 <!-- ============ LOGIN GATE ============ -->
-<div id="gate" class="fixed inset-0 z-[100] bg-slate-900 flex items-center justify-center p-6">
+<div id="gate" class="fixed inset-0 z-[100] bg-neutral-950 flex items-center justify-center p-6">
   <div class="w-full max-w-sm">
-    <div class="bg-slate-800 rounded-2xl p-8 text-center shadow-2xl">
-      <div class="w-16 h-16 mx-auto rounded-2xl bg-indigo-500/20 flex items-center justify-center mb-5">
-        <i data-lucide="shield-check" class="w-9 h-9 text-indigo-400"></i>
+    <div class="bg-slate-800 dark:bg-neutral-800 rounded-2xl p-8 text-center shadow-2xl">
+      <div class="w-16 h-16 mx-auto rounded-2xl bg-green-500/20 flex items-center justify-center mb-5">
+        <i data-lucide="shield-check" class="w-9 h-9 text-green-400"></i>
       </div>
       <h1 class="text-white text-2xl font-extrabold tracking-tight">Soko Vibe Admin</h1>
-      <p class="text-slate-400 text-sm mt-2 mb-6">Enter the admin secret to unlock full control.</p>
+      <p class="text-slate-400 dark:text-neutral-500 text-sm mt-2 mb-6">Enter the admin secret to unlock full control.</p>
       <input id="secret" type="password" placeholder="Admin secret" autocomplete="off"
-        class="w-full px-4 py-3 rounded-xl bg-slate-700/60 border border-slate-600 text-white placeholder-slate-500 text-sm outline-none focus:border-indigo-500 mb-3">
+        class="w-full px-4 py-3 rounded-xl bg-slate-700 dark:bg-neutral-800/60 border border-slate-600 dark:border-neutral-700 text-white placeholder-slate-500 dark:placeholder-neutral-500 text-sm outline-none focus:border-green-500 mb-3">
       <p id="gateErr" class="text-rose-400 text-xs h-5 mb-1"></p>
-      <button id="unlockBtn" class="w-full py-3 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-semibold text-sm transition">
+      <button id="unlockBtn" class="w-full py-3 rounded-xl bg-green-500 hover:bg-green-400 text-white font-semibold text-sm transition">
         Unlock
       </button>
-      <p class="text-[11px] text-slate-500 mt-5">soko-langu-server.onrender.com</p>
+      <p class="text-[11px] text-slate-500 dark:text-neutral-400 mt-5">soko-langu-server.onrender.com</p>
     </div>
   </div>
 </div>
 
 <!-- ============ SIDEBAR ============ -->
-<aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-72 -translate-x-full lg:translate-x-0 transition-transform duration-300 bg-slate-900 text-slate-400 flex flex-col">
-  <div class="h-16 flex items-center gap-3 px-6 border-b border-slate-800">
-    <div class="w-9 h-9 rounded-xl bg-indigo-500/20 flex items-center justify-center shrink-0">
-      <i data-lucide="shield-check" class="w-5 h-5 text-indigo-400"></i>
+<aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-72 -translate-x-full lg:translate-x-0 transition-transform duration-300 bg-neutral-950 text-slate-400 dark:text-neutral-500 flex flex-col">
+  <div class="h-16 flex items-center gap-3 px-6 border-b border-slate-800 dark:border-neutral-800">
+    <div class="w-9 h-9 rounded-xl bg-green-500/20 flex items-center justify-center shrink-0">
+      <i data-lucide="shield-check" class="w-5 h-5 text-green-400"></i>
     </div>
     <div class="min-w-0">
       <p class="text-white font-bold leading-tight">Soko Vibe</p>
-      <p class="text-[11px] tracking-widest uppercase text-slate-500">Escrow Admin</p>
+      <p class="text-[11px] tracking-widest uppercase text-slate-500 dark:text-neutral-400">Escrow Admin</p>
     </div>
   </div>
 
@@ -61,7 +62,7 @@ tailwind.config = {
     </button>
     <button class="nav-item w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition" data-tab="orders">
       <i data-lucide="list-ordered" class="w-5 h-5"></i> Escrow Orders
-      <span id="sideOrdersBadge" class="ml-auto hidden text-[11px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300"></span>
+      <span id="sideOrdersBadge" class="ml-auto hidden text-[11px] px-2 py-0.5 rounded-full bg-slate-800 dark:bg-neutral-800 text-slate-300 dark:text-neutral-300"></span>
     </button>
     <button class="nav-item w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition" data-tab="disputes">
       <i data-lucide="scale" class="w-5 h-5"></i> Dispute Center
@@ -107,19 +108,19 @@ tailwind.config = {
     </button>
   </nav>
 
-  <div class="p-4 border-t border-slate-800">
-    <div class="rounded-xl bg-slate-800/60 p-4 space-y-2">
-      <p class="text-[11px] uppercase tracking-widest text-slate-500 font-semibold">System Balance</p>
+  <div class="p-4 border-t border-slate-800 dark:border-neutral-800">
+    <div class="rounded-xl bg-slate-800 dark:bg-neutral-800/60 p-4 space-y-2">
+      <p class="text-[11px] uppercase tracking-widest text-slate-500 dark:text-neutral-400 font-semibold">System Balance</p>
       <div class="flex items-center justify-between text-sm">
-        <span class="text-slate-400 flex items-center gap-2"><i data-lucide="lock" class="w-4 h-4"></i> Vault</span>
+        <span class="text-slate-400 dark:text-neutral-500 flex items-center gap-2"><i data-lucide="lock" class="w-4 h-4"></i> Vault</span>
         <span id="sideVault" class="font-semibold text-emerald-400">TZS 0</span>
       </div>
       <div class="flex items-center justify-between text-sm">
-        <span class="text-slate-400 flex items-center gap-2"><i data-lucide="banknote" class="w-4 h-4"></i> Fees</span>
-        <span id="sideFees" class="font-semibold text-indigo-400">TZS 0</span>
+        <span class="text-slate-400 dark:text-neutral-500 flex items-center gap-2"><i data-lucide="banknote" class="w-4 h-4"></i> Fees</span>
+        <span id="sideFees" class="font-semibold text-green-400">TZS 0</span>
       </div>
     </div>
-    <button onclick="refreshAll()" class="mt-3 w-full flex items-center justify-center gap-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium px-4 py-2.5 transition">
+    <button onclick="refreshAll()" class="mt-3 w-full flex items-center justify-center gap-2 rounded-lg bg-slate-800 dark:bg-neutral-800 hover:bg-slate-700 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-slate-200 dark:text-neutral-200 text-sm font-medium px-4 py-2.5 transition">
       <i data-lucide="refresh-cw" id="refreshIcon" class="w-4 h-4"></i> Refresh Data
     </button>
     <button onclick="logout()" class="mt-2 w-full flex items-center justify-center gap-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-sm font-medium px-4 py-2.5 transition">
@@ -128,62 +129,69 @@ tailwind.config = {
   </div>
 </aside>
 
-<div id="sidebarOverlay" class="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-sm hidden lg:hidden"></div>
+<div id="sidebarOverlay" class="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm hidden lg:hidden"></div>
 
 <!-- ============ MAIN ============ -->
 <div class="lg:pl-72">
 
   <!-- Topbar -->
-  <header class="sticky top-0 z-30 bg-white/85 backdrop-blur border-b border-slate-200">
+  <header class="sticky top-0 z-30 bg-white dark:bg-neutral-900/85 dark:bg-neutral-950/85 backdrop-blur border-b border-slate-200 dark:border-neutral-700">
     <div class="flex items-center gap-3 px-4 lg:px-8 h-16">
-      <button onclick="toggleSidebar()" class="lg:hidden p-2 rounded-lg hover:bg-slate-100 text-slate-600">
+      <button onclick="toggleSidebar()" class="lg:hidden p-2 rounded-lg hover:bg-slate-100 dark:bg-neutral-800 dark:hover:bg-neutral-800 text-slate-600 dark:text-neutral-300">
         <i data-lucide="menu" class="w-5 h-5"></i>
       </button>
-      <h1 id="pageTitle" class="text-lg font-bold text-slate-800 truncate">Dashboard Overview</h1>
+      <h1 id="pageTitle" class="text-lg font-bold text-slate-800 dark:text-neutral-100 truncate">Dashboard Overview</h1>
 
       <div class="ml-auto flex items-center gap-2 sm:gap-3">
 
         <div class="hidden xl:flex items-center gap-2 text-xs">
           <div class="px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 whitespace-nowrap">
-            <span class="text-slate-500">Vault Balance</span>
+            <span class="text-slate-500 dark:text-neutral-400">Vault Balance</span>
             <span id="navVault" class="font-bold text-emerald-700">TZS 0</span>
           </div>
-          <div class="px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200 whitespace-nowrap">
-            <span class="text-slate-500">Fees Collected</span>
-            <span id="navFees" class="font-bold text-indigo-700">TZS 0</span>
+          <div class="px-3 py-1.5 rounded-lg bg-green-50 border border-green-200 whitespace-nowrap">
+            <span class="text-slate-500 dark:text-neutral-400">Fees Collected</span>
+            <span id="navFees" class="font-bold text-green-700">TZS 0</span>
           </div>
         </div>
 
-        <button onclick="refreshAll()" class="hidden sm:flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 text-sm font-medium transition">
+        <button onclick="refreshAll()" class="hidden sm:flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 text-slate-600 dark:text-neutral-300 text-sm font-medium transition">
           <i data-lucide="refresh-cw" class="w-4 h-4"></i> <span class="hidden md:inline">Sync</span>
+        </button>
+
+        <!-- Theme toggle -->
+        <button id="themeToggle" onclick="toggleTheme()" title="Toggle dark mode"
+          class="relative p-2 rounded-lg border border-slate-200 dark:border-neutral-700 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 text-slate-600 dark:text-neutral-300 dark:text-neutral-300 dark:border-neutral-700 dark:hover:bg-neutral-800 transition">
+          <i data-lucide="moon" id="themeIconMoon" class="w-5 h-5"></i>
+          <i data-lucide="sun" id="themeIconSun" class="w-5 h-5 hidden"></i>
         </button>
 
         <!-- Notifications -->
         <div class="relative">
-          <button id="notifBtn" class="relative p-2 rounded-lg hover:bg-slate-100 text-slate-600 transition">
+          <button id="notifBtn" class="relative p-2 rounded-lg hover:bg-slate-100 dark:bg-neutral-800 dark:hover:bg-neutral-800 text-slate-600 dark:text-neutral-300 transition">
             <i data-lucide="bell" class="w-5 h-5"></i>
             <span id="notifBadge" class="hidden absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white"></span>
           </button>
-          <div id="notifMenu" class="hidden absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto rounded-xl bg-white shadow-xl ring-1 ring-slate-200 z-40"></div>
+          <div id="notifMenu" class="hidden absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto rounded-xl bg-white dark:bg-neutral-900 shadow-xl ring-1 ring-slate-200 dark:ring-neutral-700 z-40"></div>
         </div>
 
         <!-- Profile -->
         <div class="relative">
-          <button id="profileBtn" class="flex items-center gap-2 p-1.5 pr-2 rounded-lg hover:bg-slate-100 transition">
-            <div class="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-emerald-500 text-white text-xs font-bold flex items-center justify-center">SA</div>
+          <button id="profileBtn" class="flex items-center gap-2 p-1.5 pr-2 rounded-lg hover:bg-slate-100 dark:bg-neutral-800 dark:hover:bg-neutral-800 transition">
+            <div class="w-9 h-9 rounded-full bg-gradient-to-br from-green-500 to-emerald-500 text-white text-xs font-bold flex items-center justify-center">SA</div>
             <div class="hidden sm:block text-left">
-              <p class="text-sm font-semibold text-slate-800 leading-tight">Soko Admin</p>
-              <p class="text-[11px] text-slate-500 leading-tight">Super Admin</p>
+              <p class="text-sm font-semibold text-slate-800 dark:text-neutral-100 leading-tight">Soko Admin</p>
+              <p class="text-[11px] text-slate-500 dark:text-neutral-400 leading-tight">Super Admin</p>
             </div>
-            <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400"></i>
+            <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 dark:text-neutral-500"></i>
           </button>
-          <div id="profileMenu" class="hidden absolute right-0 mt-2 w-56 rounded-xl bg-white shadow-xl ring-1 ring-slate-200 overflow-hidden z-40">
-            <div class="px-4 py-3 border-b border-slate-100">
-              <p class="text-sm font-semibold text-slate-800">Soko Vibe Admin</p>
-              <p class="text-xs text-slate-500" id="lastSyncLabel">—</p>
+          <div id="profileMenu" class="hidden absolute right-0 mt-2 w-56 rounded-xl bg-white dark:bg-neutral-900 shadow-xl ring-1 ring-slate-200 dark:ring-neutral-700 overflow-hidden z-40">
+            <div class="px-4 py-3 border-b border-slate-100 dark:border-neutral-800">
+              <p class="text-sm font-semibold text-slate-800 dark:text-neutral-100">Soko Vibe Admin</p>
+              <p class="text-xs text-slate-500 dark:text-neutral-400" id="lastSyncLabel">—</p>
             </div>
-            <a href="#" onclick="switchTab('audit'); document.getElementById('profileMenu').classList.add('hidden');" class="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50"><i data-lucide="scroll-text" class="w-4 h-4"></i> Activity Log</a>
-            <a href="#" onclick="logout()" class="flex items-center gap-2 px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50 border-t border-slate-100"><i data-lucide="log-out" class="w-4 h-4"></i> Log Out</a>
+            <a href="#" onclick="switchTab('audit'); document.getElementById('profileMenu').classList.add('hidden');" class="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-600 dark:text-neutral-300 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800"><i data-lucide="scroll-text" class="w-4 h-4"></i> Activity Log</a>
+            <a href="#" onclick="logout()" class="flex items-center gap-2 px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50 border-t border-slate-100 dark:border-neutral-800"><i data-lucide="log-out" class="w-4 h-4"></i> Log Out</a>
           </div>
         </div>
 
@@ -200,41 +208,41 @@ tailwind.config = {
 
       <!-- Metric cards -->
       <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+        <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
           <div class="flex items-start justify-between">
             <div>
-              <p class="text-xs font-medium text-slate-500">Total Escrow Liability</p>
-              <p id="statLiability" class="mt-1 text-2xl font-extrabold text-slate-800">TZS 0</p>
+              <p class="text-xs font-medium text-slate-500 dark:text-neutral-400">Total Escrow Liability</p>
+              <p id="statLiability" class="mt-1 text-2xl font-extrabold text-slate-800 dark:text-neutral-100">TZS 0</p>
               <p class="mt-1 text-xs text-emerald-600 font-medium">Live funds in the vault</p>
             </div>
-            <div class="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center"><i data-lucide="lock" class="w-5 h-5"></i></div>
+            <div class="w-11 h-11 rounded-xl bg-green-50 text-green-600 flex items-center justify-center"><i data-lucide="lock" class="w-5 h-5"></i></div>
           </div>
         </div>
-        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+        <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
           <div class="flex items-start justify-between">
             <div>
-              <p class="text-xs font-medium text-slate-500">Platform Earnings</p>
-              <p id="statEarnings" class="mt-1 text-2xl font-extrabold text-slate-800">TZS 0</p>
+              <p class="text-xs font-medium text-slate-500 dark:text-neutral-400">Platform Earnings</p>
+              <p id="statEarnings" class="mt-1 text-2xl font-extrabold text-slate-800 dark:text-neutral-100">TZS 0</p>
               <p class="mt-1 text-xs text-emerald-600 font-medium">Fees + boosts revenue</p>
             </div>
             <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><i data-lucide="banknote" class="w-5 h-5"></i></div>
           </div>
         </div>
-        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+        <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
           <div class="flex items-start justify-between">
             <div>
-              <p class="text-xs font-medium text-slate-500">Active Disputes</p>
-              <p id="statDisputes" class="mt-1 text-2xl font-extrabold text-slate-800">0</p>
+              <p class="text-xs font-medium text-slate-500 dark:text-neutral-400">Active Disputes</p>
+              <p id="statDisputes" class="mt-1 text-2xl font-extrabold text-slate-800 dark:text-neutral-100">0</p>
               <p class="mt-1 text-xs text-rose-600 font-medium">Buyer "not received" flags</p>
             </div>
             <div class="w-11 h-11 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center"><i data-lucide="scale" class="w-5 h-5"></i></div>
           </div>
         </div>
-        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+        <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
           <div class="flex items-start justify-between">
             <div>
-              <p class="text-xs font-medium text-slate-500">Active Product Boosts</p>
-              <p id="statBoosts" class="mt-1 text-2xl font-extrabold text-slate-800">0</p>
+              <p class="text-xs font-medium text-slate-500 dark:text-neutral-400">Active Product Boosts</p>
+              <p id="statBoosts" class="mt-1 text-2xl font-extrabold text-slate-800 dark:text-neutral-100">0</p>
               <p class="mt-1 text-xs text-amber-600 font-medium">Paid placements live</p>
             </div>
             <div class="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center"><i data-lucide="rocket" class="w-5 h-5"></i></div>
@@ -244,20 +252,20 @@ tailwind.config = {
 
       <!-- Charts -->
       <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div class="xl:col-span-2 rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+        <div class="xl:col-span-2 rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
           <div class="flex items-center justify-between mb-4">
             <div>
-              <h2 class="font-bold text-slate-800">Escrow Volume &amp; Revenue</h2>
-              <p class="text-xs text-slate-500">Monthly funds secured in the ClickPesa vault vs. platform commission</p>
+              <h2 class="font-bold text-slate-800 dark:text-neutral-100">Escrow Volume &amp; Revenue</h2>
+              <p class="text-xs text-slate-500 dark:text-neutral-400">Monthly funds secured in the ClickPesa vault vs. platform commission</p>
             </div>
-            <span class="px-3 py-1 rounded-lg bg-slate-100 text-xs font-medium text-slate-600">Last 8 Months</span>
+            <span class="px-3 py-1 rounded-lg bg-slate-100 dark:bg-neutral-800 text-xs font-medium text-slate-600 dark:text-neutral-300">Last 8 Months</span>
           </div>
           <div class="h-80"><canvas id="volumeChart"></canvas></div>
         </div>
-        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+        <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
           <div class="mb-4">
-            <h2 class="font-bold text-slate-800">Order Status Distribution</h2>
-            <p class="text-xs text-slate-500">Live from Firestore order states</p>
+            <h2 class="font-bold text-slate-800 dark:text-neutral-100">Order Status Distribution</h2>
+            <p class="text-xs text-slate-500 dark:text-neutral-400">Live from Firestore order states</p>
           </div>
           <div class="h-80 relative"><canvas id="distChart"></canvas></div>
         </div>
@@ -265,33 +273,33 @@ tailwind.config = {
 
       <!-- Recent orders + side panels -->
       <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div class="xl:col-span-2 rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
-          <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+        <div class="xl:col-span-2 rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 shadow-sm overflow-hidden">
+          <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-neutral-800">
             <div>
-              <h2 class="font-bold text-slate-800">Recent Escrow Orders</h2>
-              <p class="text-xs text-slate-500">Latest transactions across the pipeline</p>
+              <h2 class="font-bold text-slate-800 dark:text-neutral-100">Recent Escrow Orders</h2>
+              <p class="text-xs text-slate-500 dark:text-neutral-400">Latest transactions across the pipeline</p>
             </div>
-            <button onclick="switchTab('orders')" class="text-sm font-medium text-indigo-600 hover:text-indigo-700">View all →</button>
+            <button onclick="switchTab('orders')" class="text-sm font-medium text-green-600 hover:text-green-700">View all →</button>
           </div>
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
-              <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+              <thead class="bg-slate-50 dark:bg-neutral-800 text-left text-xs uppercase tracking-wide text-slate-500 dark:text-neutral-400">
                 <tr><th class="px-5 py-3 font-semibold">Order</th><th class="px-5 py-3 font-semibold">Buyer</th><th class="px-5 py-3 font-semibold">Total</th><th class="px-5 py-3 font-semibold">Status</th><th class="px-5 py-3 font-semibold"></th></tr>
               </thead>
-              <tbody id="recentOrders" class="divide-y divide-slate-100"></tbody>
+              <tbody id="recentOrders" class="divide-y divide-slate-100 dark:divide-neutral-800"></tbody>
             </table>
           </div>
         </div>
         <div class="space-y-4">
-          <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+          <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
             <div class="flex items-center justify-between mb-3">
-              <h2 class="font-bold text-slate-800">Active Disputes</h2>
-              <button onclick="switchTab('disputes')" class="text-xs font-medium text-indigo-600">View all →</button>
+              <h2 class="font-bold text-slate-800 dark:text-neutral-100">Active Disputes</h2>
+              <button onclick="switchTab('disputes')" class="text-xs font-medium text-green-600">View all →</button>
             </div>
             <div id="dashboardDisputes" class="space-y-3"></div>
           </div>
-          <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
-            <h2 class="font-bold text-slate-800 mb-3">Top Requested Categories</h2>
+          <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
+            <h2 class="font-bold text-slate-800 dark:text-neutral-100 mb-3">Top Requested Categories</h2>
             <div id="dashCategories" class="space-y-3"></div>
           </div>
         </div>
@@ -300,28 +308,28 @@ tailwind.config = {
 
     <!-- ============ TAB: ORDERS ============ -->
     <section id="tab-orders" class="tab-panel hidden">
-      <div class="rounded-2xl bg-white border border-slate-200 shadow-sm">
-        <div class="px-5 pt-5 pb-4 border-b border-slate-100 space-y-4">
+      <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 shadow-sm">
+        <div class="px-5 pt-5 pb-4 border-b border-slate-100 dark:border-neutral-800 space-y-4">
           <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div>
-              <h2 class="font-bold text-slate-800">Escrow Orders Pipeline</h2>
-              <p class="text-xs text-slate-500">Track every order from placement to escrow release</p>
+              <h2 class="font-bold text-slate-800 dark:text-neutral-100">Escrow Orders Pipeline</h2>
+              <p class="text-xs text-slate-500 dark:text-neutral-400">Track every order from placement to escrow release</p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-              <button onclick="exportOrders()" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 text-sm font-medium transition">
+              <button onclick="exportOrders()" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 text-slate-600 dark:text-neutral-300 text-sm font-medium transition">
                 <i data-lucide="download" class="w-4 h-4"></i> Export CSV
               </button>
-              <button onclick="refreshAll()" class="flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition">
+              <button onclick="refreshAll()" class="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition">
                 <i data-lucide="refresh-cw" class="w-4 h-4"></i> Refresh
               </button>
             </div>
           </div>
           <div class="flex flex-col sm:flex-row gap-3">
             <div class="relative flex-1">
-              <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
-              <input id="orderSearch" type="text" oninput="state.orderSearch=this.value; renderOrders();" placeholder="Search by order ID, product, buyer or seller..." class="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+              <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-neutral-500"></i>
+              <input id="orderSearch" type="text" oninput="state.orderSearch=this.value; renderOrders();" placeholder="Search by order ID, product, buyer or seller..." class="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm">
             </div>
-            <select id="orderStatusSelect" onchange="state.orderStatus=this.value; renderOrders();" class="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <select id="orderStatusSelect" onchange="state.orderStatus=this.value; renderOrders();" class="px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-sm text-slate-600 dark:text-neutral-300 focus:outline-none focus:ring-2 focus:ring-green-500">
               <option value="all">All Statuses</option>
               <option value="awaiting_payment">Awaiting Payment</option>
               <option value="escrow_hold">In Escrow Vault</option>
@@ -337,7 +345,7 @@ tailwind.config = {
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-sm min-w-[980px]">
-            <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+            <thead class="bg-slate-50 dark:bg-neutral-800 text-left text-xs uppercase tracking-wide text-slate-500 dark:text-neutral-400">
               <tr>
                 <th class="px-5 py-3 font-semibold">Order</th>
                 <th class="px-5 py-3 font-semibold">Buyer</th>
@@ -350,7 +358,7 @@ tailwind.config = {
                 <th class="px-5 py-3 font-semibold"></th>
               </tr>
             </thead>
-            <tbody id="ordersBody" class="divide-y divide-slate-100"></tbody>
+            <tbody id="ordersBody" class="divide-y divide-slate-100 dark:divide-neutral-800"></tbody>
           </table>
         </div>
       </div>
@@ -360,15 +368,15 @@ tailwind.config = {
     <section id="tab-disputes" class="tab-panel hidden">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
-          <h2 class="font-bold text-slate-800">Dispute Center</h2>
-          <p class="text-xs text-slate-500">Orders flagged by buyers — review before releasing funds</p>
+          <h2 class="font-bold text-slate-800 dark:text-neutral-100">Dispute Center</h2>
+          <p class="text-xs text-slate-500 dark:text-neutral-400">Orders flagged by buyers — review before releasing funds</p>
         </div>
         <div class="flex flex-col sm:flex-row gap-3">
           <div class="relative">
-            <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
-            <input id="disputeSearch" type="text" oninput="state.disputeSearch=this.value; renderDisputes();" placeholder="Search disputes..." class="pl-9 pr-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500 text-sm w-full sm:w-64">
+            <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-neutral-500"></i>
+            <input id="disputeSearch" type="text" oninput="state.disputeSearch=this.value; renderDisputes();" placeholder="Search disputes..." class="pl-9 pr-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 focus:outline-none focus:ring-2 focus:ring-rose-500 text-sm w-full sm:w-64">
           </div>
-          <select id="disputeFilter" onchange="state.disputeFilter=this.value; renderDisputes();" class="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-rose-500">
+          <select id="disputeFilter" onchange="state.disputeFilter=this.value; renderDisputes();" class="px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-sm text-slate-600 dark:text-neutral-300 focus:outline-none focus:ring-2 focus:ring-rose-500">
             <option value="all">All Disputes</option>
             <option value="open">Open</option>
             <option value="resolved">Resolved</option>
@@ -380,29 +388,29 @@ tailwind.config = {
 
     <!-- ============ TAB: BOOSTS ============ -->
     <section id="tab-boosts" class="tab-panel hidden">
-      <div class="rounded-2xl bg-white border border-slate-200 shadow-sm">
-        <div class="px-5 pt-5 pb-4 border-b border-slate-100 space-y-4">
+      <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 shadow-sm">
+        <div class="px-5 pt-5 pb-4 border-b border-slate-100 dark:border-neutral-800 space-y-4">
           <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div>
-              <h2 class="font-bold text-slate-800">Product Boosting Management</h2>
-              <p class="text-xs text-slate-500">Paid placements that show products first on the Flutter app</p>
+              <h2 class="font-bold text-slate-800 dark:text-neutral-100">Product Boosting Management</h2>
+              <p class="text-xs text-slate-500 dark:text-neutral-400">Paid placements that show products first on the Flutter app</p>
             </div>
-            <button onclick="toast('Boosts are purchased by sellers in the app — all paid placements appear here live','info')" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 text-sm font-medium transition">
+            <button onclick="toast('Boosts are purchased by sellers in the app — all paid placements appear here live','info')" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 text-slate-600 dark:text-neutral-300 text-sm font-medium transition">
               <i data-lucide="info" class="w-4 h-4"></i> How it works
             </button>
           </div>
           <div class="flex flex-col sm:flex-row gap-3">
             <div class="relative flex-1">
-              <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
-              <input type="text" oninput="state.boostSearch=this.value; renderBoosts();" placeholder="Search product or seller..." class="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+              <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-neutral-500"></i>
+              <input type="text" oninput="state.boostSearch=this.value; renderBoosts();" placeholder="Search product or seller..." class="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm">
             </div>
-            <select onchange="state.boostFilter=this.value; renderBoosts();" class="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <select onchange="state.boostFilter=this.value; renderBoosts();" class="px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-sm text-slate-600 dark:text-neutral-300 focus:outline-none focus:ring-2 focus:ring-green-500">
               <option value="all">All Tiers</option>
               <option value="bronze">Bronze</option>
               <option value="silver">Silver</option>
               <option value="gold">Gold</option>
             </select>
-            <select onchange="state.boostStatus=this.value; renderBoosts();" class="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <select onchange="state.boostStatus=this.value; renderBoosts();" class="px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-sm text-slate-600 dark:text-neutral-300 focus:outline-none focus:ring-2 focus:ring-green-500">
               <option value="all">All Statuses</option>
               <option value="active">Active</option>
               <option value="expired">Expired</option>
@@ -411,7 +419,7 @@ tailwind.config = {
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-sm min-w-[760px]">
-            <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+            <thead class="bg-slate-50 dark:bg-neutral-800 text-left text-xs uppercase tracking-wide text-slate-500 dark:text-neutral-400">
               <tr>
                 <th class="px-5 py-3 font-semibold">Product</th>
                 <th class="px-5 py-3 font-semibold">Seller</th>
@@ -422,7 +430,7 @@ tailwind.config = {
                 <th class="px-5 py-3 font-semibold">Status</th>
               </tr>
             </thead>
-            <tbody id="boostsBody" class="divide-y divide-slate-100"></tbody>
+            <tbody id="boostsBody" class="divide-y divide-slate-100 dark:divide-neutral-800"></tbody>
           </table>
         </div>
       </div>
@@ -431,44 +439,44 @@ tailwind.config = {
     <!-- ============ TAB: ANALYTICS ============ -->
     <section id="tab-analytics" class="tab-panel hidden space-y-4">
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
-          <p class="text-xs font-medium text-slate-500">New Users Today</p>
-          <p id="anaUsersToday" class="mt-1 text-2xl font-extrabold text-slate-800">0</p>
+        <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
+          <p class="text-xs font-medium text-slate-500 dark:text-neutral-400">New Users Today</p>
+          <p id="anaUsersToday" class="mt-1 text-2xl font-extrabold text-slate-800 dark:text-neutral-100">0</p>
           <p class="mt-1 text-xs text-emerald-600 font-medium">Registered in the last 24 hours</p>
         </div>
-        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
-          <p class="text-xs font-medium text-slate-500">Total Products</p>
-          <p id="anaProducts" class="mt-1 text-2xl font-extrabold text-slate-800">0</p>
-          <p class="mt-1 text-xs text-indigo-600 font-medium">Live marketplace catalog</p>
+        <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
+          <p class="text-xs font-medium text-slate-500 dark:text-neutral-400">Total Products</p>
+          <p id="anaProducts" class="mt-1 text-2xl font-extrabold text-slate-800 dark:text-neutral-100">0</p>
+          <p class="mt-1 text-xs text-green-600 font-medium">Live marketplace catalog</p>
         </div>
-        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
-          <p class="text-xs font-medium text-slate-500">Active Users (24h)</p>
-          <p id="anaActiveUsers" class="mt-1 text-2xl font-extrabold text-slate-800">0</p>
+        <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
+          <p class="text-xs font-medium text-slate-500 dark:text-neutral-400">Active Users (24h)</p>
+          <p id="anaActiveUsers" class="mt-1 text-2xl font-extrabold text-slate-800 dark:text-neutral-100">0</p>
           <p class="mt-1 text-xs text-amber-600 font-medium">App sessions in the last day</p>
         </div>
       </div>
 
       <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div class="xl:col-span-2 rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
-          <h2 class="font-bold text-slate-800 mb-4">Top Requested Categories</h2>
+        <div class="xl:col-span-2 rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
+          <h2 class="font-bold text-slate-800 dark:text-neutral-100 mb-4">Top Requested Categories</h2>
           <div id="categoryBars" class="space-y-4"></div>
         </div>
-        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
-          <h2 class="font-bold text-slate-800 mb-4">User Locations</h2>
+        <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
+          <h2 class="font-bold text-slate-800 dark:text-neutral-100 mb-4">User Locations</h2>
           <div id="locationWrap" class="space-y-3"></div>
         </div>
       </div>
 
-      <div class="rounded-2xl bg-white border border-slate-200 shadow-sm">
-        <div class="px-5 pt-5 pb-4 border-b border-slate-100">
+      <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 shadow-sm">
+        <div class="px-5 pt-5 pb-4 border-b border-slate-100 dark:border-neutral-800">
           <div>
-            <h2 class="font-bold text-slate-800">Category Distribution</h2>
-            <p class="text-xs text-slate-500">Share of the live product catalog by category</p>
+            <h2 class="font-bold text-slate-800 dark:text-neutral-100">Category Distribution</h2>
+            <p class="text-xs text-slate-500 dark:text-neutral-400">Share of the live product catalog by category</p>
           </div>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-sm min-w-[620px]">
-            <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+            <thead class="bg-slate-50 dark:bg-neutral-800 text-left text-xs uppercase tracking-wide text-slate-500 dark:text-neutral-400">
               <tr>
                 <th class="px-5 py-3 font-semibold">Category</th>
                 <th class="px-5 py-3 font-semibold">Products</th>
@@ -476,7 +484,7 @@ tailwind.config = {
                 <th class="px-5 py-3 font-semibold">%</th>
               </tr>
             </thead>
-            <tbody id="analyticsBody" class="divide-y divide-slate-100"></tbody>
+            <tbody id="analyticsBody" class="divide-y divide-slate-100 dark:divide-neutral-800"></tbody>
           </table>
         </div>
       </div>
@@ -486,10 +494,10 @@ tailwind.config = {
     <section id="tab-kyc" class="tab-panel hidden">
       <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div class="flex items-center gap-2">
-          <button id="kycTabPending" class="kyc-tab text-sm font-semibold px-4 py-2 rounded-lg transition bg-indigo-600 text-white" onclick="switchKycTab('pending')">Pending</button>
-          <button id="kycTabAll" class="kyc-tab text-sm font-semibold px-4 py-2 rounded-lg transition bg-white text-slate-600 border border-slate-200" onclick="switchKycTab('all')">All Records</button>
+          <button id="kycTabPending" class="kyc-tab text-sm font-semibold px-4 py-2 rounded-lg transition bg-green-600 text-white" onclick="switchKycTab('pending')">Pending</button>
+          <button id="kycTabAll" class="kyc-tab text-sm font-semibold px-4 py-2 rounded-lg transition bg-white dark:bg-neutral-900 text-slate-600 dark:text-neutral-300 border border-slate-200 dark:border-neutral-700" onclick="switchKycTab('all')">All Records</button>
         </div>
-        <button onclick="loadKyc(true).then(renderKyc)" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 text-sm font-medium transition">
+        <button onclick="loadKyc(true).then(renderKyc)" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 text-slate-600 dark:text-neutral-300 text-sm font-medium transition">
           <i data-lucide="refresh-cw" class="w-4 h-4"></i> Refresh
         </button>
       </div>
@@ -498,23 +506,23 @@ tailwind.config = {
 
     <!-- ============ TAB: USERS ============ -->
     <section id="tab-users" class="tab-panel hidden">
-      <div class="rounded-2xl bg-white border border-slate-200 shadow-sm">
-        <div class="px-5 pt-5 pb-4 border-b border-slate-100 space-y-3">
+      <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 shadow-sm">
+        <div class="px-5 pt-5 pb-4 border-b border-slate-100 dark:border-neutral-800 space-y-3">
           <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div>
-              <h2 class="font-bold text-slate-800">User Management</h2>
-              <p class="text-xs text-slate-500">Search, suspend, warn, message or delete accounts</p>
+              <h2 class="font-bold text-slate-800 dark:text-neutral-100">User Management</h2>
+              <p class="text-xs text-slate-500 dark:text-neutral-400">Search, suspend, warn, message or delete accounts</p>
             </div>
-            <button onclick="loadUsers(true).then(renderUsers)" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 text-sm font-medium transition">
+            <button onclick="loadUsers(true).then(renderUsers)" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 text-slate-600 dark:text-neutral-300 text-sm font-medium transition">
               <i data-lucide="refresh-cw" class="w-4 h-4"></i> Refresh
             </button>
           </div>
           <div class="flex flex-col sm:flex-row gap-3">
             <div class="relative flex-1">
-              <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
-              <input id="userSearch" type="text" oninput="renderUsers()" placeholder="Search name, email, phone..." class="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+              <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-neutral-500"></i>
+              <input id="userSearch" type="text" oninput="renderUsers()" placeholder="Search name, email, phone..." class="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm">
             </div>
-            <select id="userFilter" onchange="renderUsers()" class="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <select id="userFilter" onchange="renderUsers()" class="px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-sm text-slate-600 dark:text-neutral-300 focus:outline-none focus:ring-2 focus:ring-green-500">
               <option value="all">All</option>
               <option value="suspended">Suspended</option>
               <option value="warned">Warned (1–2)</option>
@@ -533,20 +541,20 @@ tailwind.config = {
 
     <!-- ============ TAB: PRODUCTS ============ -->
     <section id="tab-products" class="tab-panel hidden">
-      <div class="rounded-2xl bg-white border border-slate-200 shadow-sm">
-        <div class="px-5 pt-5 pb-4 border-b border-slate-100 space-y-3">
+      <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 shadow-sm">
+        <div class="px-5 pt-5 pb-4 border-b border-slate-100 dark:border-neutral-800 space-y-3">
           <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div>
-              <h2 class="font-bold text-slate-800">Product Listings</h2>
-              <p class="text-xs text-slate-500">Hide, feature, boost or delete marketplace products</p>
+              <h2 class="font-bold text-slate-800 dark:text-neutral-100">Product Listings</h2>
+              <p class="text-xs text-slate-500 dark:text-neutral-400">Hide, feature, boost or delete marketplace products</p>
             </div>
-            <button onclick="loadProducts(true).then(renderProducts)" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 text-sm font-medium transition">
+            <button onclick="loadProducts(true).then(renderProducts)" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 text-slate-600 dark:text-neutral-300 text-sm font-medium transition">
               <i data-lucide="refresh-cw" class="w-4 h-4"></i> Refresh
             </button>
           </div>
           <div class="relative">
-            <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
-            <input id="productSearch" type="text" oninput="renderProducts()" placeholder="Search name, seller, category..." class="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+            <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-neutral-500"></i>
+            <input id="productSearch" type="text" oninput="renderProducts()" placeholder="Search name, seller, category..." class="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm">
           </div>
         </div>
         <div class="overflow-x-auto">
@@ -557,23 +565,23 @@ tailwind.config = {
 
     <!-- ============ TAB: TRANSACTIONS ============ -->
     <section id="tab-transactions" class="tab-panel hidden">
-      <div class="rounded-2xl bg-white border border-slate-200 shadow-sm">
-        <div class="px-5 pt-5 pb-4 border-b border-slate-100 space-y-3">
+      <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 shadow-sm">
+        <div class="px-5 pt-5 pb-4 border-b border-slate-100 dark:border-neutral-800 space-y-3">
           <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div>
-              <h2 class="font-bold text-slate-800">Transaction Ledger</h2>
-              <p class="text-xs text-slate-500">Every sale, boost, withdrawal and refund in the system</p>
+              <h2 class="font-bold text-slate-800 dark:text-neutral-100">Transaction Ledger</h2>
+              <p class="text-xs text-slate-500 dark:text-neutral-400">Every sale, boost, withdrawal and refund in the system</p>
             </div>
-            <button onclick="loadTransactions(true).then(function(){ renderTransactions(); refreshTotals(); })" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 text-sm font-medium transition">
+            <button onclick="loadTransactions(true).then(function(){ renderTransactions(); refreshTotals(); })" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 text-slate-600 dark:text-neutral-300 text-sm font-medium transition">
               <i data-lucide="refresh-cw" class="w-4 h-4"></i> Refresh
             </button>
           </div>
           <div class="flex flex-col sm:flex-row gap-3">
             <div class="relative flex-1">
-              <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
-              <input id="txSearch" type="text" oninput="renderTransactions()" placeholder="Search product, name, id..." class="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+              <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-neutral-500"></i>
+              <input id="txSearch" type="text" oninput="renderTransactions()" placeholder="Search product, name, id..." class="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm">
             </div>
-            <select id="txType" onchange="renderTransactions()" class="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <select id="txType" onchange="renderTransactions()" class="px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-sm text-slate-600 dark:text-neutral-300 focus:outline-none focus:ring-2 focus:ring-green-500">
               <option value="all">All types</option>
               <option value="sale">Sales</option>
               <option value="boost">Boosts</option>
@@ -594,39 +602,46 @@ tailwind.config = {
     <section id="tab-finance" class="tab-panel hidden">
       <div id="financeGrid"></div>
       <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mt-4">
-        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
-          <h3 class="font-bold text-slate-800 mb-1">AdMob Revenue Entry</h3>
-          <p class="text-xs text-slate-500 mb-4">Record actual Google AdMob earnings for the month.</p>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Amount (TZS)</label>
-          <input id="admobAmount" type="number" min="0" placeholder="e.g. 250000" class="w-full text-sm rounded-lg border border-slate-200 px-3 py-2 mb-3">
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Month label (optional)</label>
-          <input id="admobMonth" placeholder="e.g. 8_2026" class="w-full text-sm rounded-lg border border-slate-200 px-3 py-2 mb-4">
-          <button onclick="submitAdmob()" class="px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold">Save entry</button>
+        <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
+          <h3 class="font-bold text-slate-800 dark:text-neutral-100 mb-1">AdMob Revenue Entry</h3>
+          <p class="text-xs text-slate-500 dark:text-neutral-400 mb-4">Record actual Google AdMob earnings for the month.</p>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-neutral-300 mb-1">Amount (TZS)</label>
+          <input id="admobAmount" type="number" min="0" placeholder="e.g. 250000" class="w-full text-sm rounded-lg border border-slate-200 dark:border-neutral-700 px-3 py-2 mb-3">
+          <label class="block text-xs font-semibold text-slate-600 dark:text-neutral-300 mb-1">Month label (optional)</label>
+          <input id="admobMonth" placeholder="e.g. 8_2026" class="w-full text-sm rounded-lg border border-slate-200 dark:border-neutral-700 px-3 py-2 mb-4">
+          <button onclick="submitAdmob()" class="px-4 py-2.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold">Save entry</button>
         </div>
-        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
-          <h3 class="font-bold text-slate-800 mb-1">Admin Withdrawal</h3>
-          <p class="text-xs text-slate-500 mb-4">Withdraw platform earnings to a ClickPesa number.</p>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Admin user</label>
-          <select id="wdAdminUser" class="w-full text-sm rounded-lg border border-slate-200 px-3 py-2 mb-3"></select>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Amount (TZS)</label>
-          <input id="wdAmount" type="number" min="1" placeholder="e.g. 100000" class="w-full text-sm rounded-lg border border-slate-200 px-3 py-2 mb-3">
-          <label class="block text-xs font-semibold text-slate-600 mb-1">ClickPesa number (e.g. 2557xxxxxxxxx)</label>
-          <input id="wdPhone" placeholder="255712345678" class="w-full text-sm rounded-lg border border-slate-200 px-3 py-2 mb-4">
+        <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
+          <h3 class="font-bold text-slate-800 dark:text-neutral-100 mb-1">Admin Withdrawal</h3>
+          <p class="text-xs text-slate-500 dark:text-neutral-400 mb-4">Withdraw platform earnings (commissions + boosts) to a ClickPesa number.</p>
+          <div id="wdBalanceLine" class="mb-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 px-4 py-3">
+            <p class="text-xs text-emerald-700 dark:text-emerald-300 font-semibold">Withdrawable balance</p>
+            <p id="wdBalance" class="text-2xl font-extrabold text-emerald-800 dark:text-emerald-200">TZS 0</p>
+          </div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-neutral-300 mb-1">Admin user</label>
+          <select id="wdAdminUser" class="w-full text-sm rounded-lg border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-800 dark:text-neutral-100 px-3 py-2 mb-3"></select>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-neutral-300 mb-1">Amount (TZS)</label>
+          <div class="flex gap-2 mb-3">
+            <input id="wdAmount" type="number" min="1" placeholder="e.g. 100000" class="flex-1 text-sm rounded-lg border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-800 dark:text-neutral-100 px-3 py-2">
+            <button onclick="setWithdrawAll()" class="px-3 py-2 rounded-lg border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-xs font-semibold whitespace-nowrap transition">All</button>
+          </div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-neutral-300 mb-1">ClickPesa number (e.g. 2557xxxxxxxxx)</label>
+          <input id="wdPhone" placeholder="255712345678" class="w-full text-sm rounded-lg border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-800 dark:text-neutral-100 px-3 py-2 mb-4">
           <button onclick="submitWithdraw()" class="px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold">Withdraw funds</button>
         </div>
       </div>
       <div class="mt-4 grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+        <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
           <div class="flex items-center justify-between mb-3">
-            <h3 class="font-bold text-slate-800">Revenue Transactions</h3>
-            <button onclick="loadRevenue(true).then(renderRevenue)" class="text-sm font-medium px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50">Refresh</button>
+            <h3 class="font-bold text-slate-800 dark:text-neutral-100">Revenue Transactions</h3>
+            <button onclick="loadRevenue(true).then(renderRevenue)" class="text-sm font-medium px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800">Refresh</button>
           </div>
           <div id="revenueWrap"></div>
         </div>
-        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+        <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
           <div class="flex items-center justify-between mb-3">
-            <h3 class="font-bold text-slate-800">Ad Views</h3>
-            <button onclick="loadAdViews(true).then(renderAdViews)" class="text-sm font-medium px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50">Refresh</button>
+            <h3 class="font-bold text-slate-800 dark:text-neutral-100">Ad Views</h3>
+            <button onclick="loadAdViews(true).then(renderAdViews)" class="text-sm font-medium px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800">Refresh</button>
           </div>
           <div id="adViewsWrap"></div>
         </div>
@@ -635,14 +650,14 @@ tailwind.config = {
 
     <!-- ============ TAB: WITHDRAWALS ============ -->
     <section id="tab-withdrawals" class="tab-panel hidden">
-      <div class="rounded-2xl bg-white border border-slate-200 shadow-sm">
-        <div class="px-5 pt-5 pb-4 border-b border-slate-100">
+      <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 shadow-sm">
+        <div class="px-5 pt-5 pb-4 border-b border-slate-100 dark:border-neutral-800">
           <div class="flex items-center justify-between gap-3">
             <div>
-              <h2 class="font-bold text-slate-800">Withdrawal Requests</h2>
-              <p class="text-xs text-slate-500">Payouts sent through ClickPesa</p>
+              <h2 class="font-bold text-slate-800 dark:text-neutral-100">Withdrawal Requests</h2>
+              <p class="text-xs text-slate-500 dark:text-neutral-400">Payouts sent through ClickPesa</p>
             </div>
-            <button onclick="loadWithdrawals(true).then(renderWithdrawals)" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 text-sm font-medium transition">
+            <button onclick="loadWithdrawals(true).then(renderWithdrawals)" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 text-slate-600 dark:text-neutral-300 text-sm font-medium transition">
               <i data-lucide="refresh-cw" class="w-4 h-4"></i> Refresh
             </button>
           </div>
@@ -656,17 +671,17 @@ tailwind.config = {
     <!-- ============ TAB: MODERATION ============ -->
     <section id="tab-moderation" class="tab-panel hidden">
       <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+        <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
           <div class="flex items-center justify-between mb-3">
-            <h3 class="font-bold text-slate-800">User Reports</h3>
-            <button onclick="loadReports(true).then(function(){ renderReports(); refreshBadges(); })" class="text-sm font-medium px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50">Refresh</button>
+            <h3 class="font-bold text-slate-800 dark:text-neutral-100">User Reports</h3>
+            <button onclick="loadReports(true).then(function(){ renderReports(); refreshBadges(); })" class="text-sm font-medium px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800">Refresh</button>
           </div>
           <div id="reportsWrap"></div>
         </div>
-        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
+        <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
           <div class="flex items-center justify-between mb-3">
-            <h3 class="font-bold text-slate-800">Fraud Alerts</h3>
-            <button onclick="loadFraud(true).then(function(){ renderFraud(); refreshBadges(); })" class="text-sm font-medium px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50">Refresh</button>
+            <h3 class="font-bold text-slate-800 dark:text-neutral-100">Fraud Alerts</h3>
+            <button onclick="loadFraud(true).then(function(){ renderFraud(); refreshBadges(); })" class="text-sm font-medium px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800">Refresh</button>
           </div>
           <div id="fraudWrap"></div>
         </div>
@@ -675,28 +690,28 @@ tailwind.config = {
 
     <!-- ============ TAB: BROADCAST ============ -->
     <section id="tab-broadcast" class="tab-panel hidden">
-      <div class="max-w-2xl rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
-        <h2 class="text-lg font-bold text-slate-800 mb-1">Broadcast Notification</h2>
-        <p class="text-sm text-slate-500 mb-5">Push + in-app notification for every user.</p>
-        <label class="block text-sm font-semibold text-slate-700 mb-1.5">Title *</label>
-        <input id="bcTitle" placeholder="e.g. New feature is live" class="w-full text-sm rounded-lg border border-slate-200 px-3 py-2.5 mb-4">
-        <label class="block text-sm font-semibold text-slate-700 mb-1.5">Message</label>
-        <textarea id="bcBody" rows="4" placeholder="Optional message body" class="w-full text-sm rounded-lg border border-slate-200 px-3 py-2.5 mb-5 resize-none"></textarea>
-        <button onclick="sendBroadcast()" id="bcSend" class="px-5 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold">Send to all users</button>
-        <p id="bcResult" class="text-xs text-slate-500 mt-3"></p>
+      <div class="max-w-2xl rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
+        <h2 class="text-lg font-bold text-slate-800 dark:text-neutral-100 mb-1">Broadcast Notification</h2>
+        <p class="text-sm text-slate-500 dark:text-neutral-400 mb-5">Push + in-app notification for every user.</p>
+        <label class="block text-sm font-semibold text-slate-700 dark:text-neutral-200 mb-1.5">Title *</label>
+        <input id="bcTitle" placeholder="e.g. New feature is live" class="w-full text-sm rounded-lg border border-slate-200 dark:border-neutral-700 px-3 py-2.5 mb-4">
+        <label class="block text-sm font-semibold text-slate-700 dark:text-neutral-200 mb-1.5">Message</label>
+        <textarea id="bcBody" rows="4" placeholder="Optional message body" class="w-full text-sm rounded-lg border border-slate-200 dark:border-neutral-700 px-3 py-2.5 mb-5 resize-none"></textarea>
+        <button onclick="sendBroadcast()" id="bcSend" class="px-5 py-3 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold">Send to all users</button>
+        <p id="bcResult" class="text-xs text-slate-500 dark:text-neutral-400 mt-3"></p>
       </div>
     </section>
 
     <!-- ============ TAB: AUDIT ============ -->
     <section id="tab-audit" class="tab-panel hidden">
-      <div class="rounded-2xl bg-white border border-slate-200 shadow-sm">
-        <div class="px-5 pt-5 pb-4 border-b border-slate-100">
+      <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 shadow-sm">
+        <div class="px-5 pt-5 pb-4 border-b border-slate-100 dark:border-neutral-800">
           <div class="flex items-center justify-between gap-3">
             <div>
-              <h2 class="font-bold text-slate-800">Audit Log</h2>
-              <p class="text-xs text-slate-500">Every financial movement and admin action</p>
+              <h2 class="font-bold text-slate-800 dark:text-neutral-100">Audit Log</h2>
+              <p class="text-xs text-slate-500 dark:text-neutral-400">Every financial movement and admin action</p>
             </div>
-            <button onclick="loadAudit(true).then(renderAudit)" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 text-sm font-medium transition">
+            <button onclick="loadAudit(true).then(renderAudit)" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 text-slate-600 dark:text-neutral-300 text-sm font-medium transition">
               <i data-lucide="refresh-cw" class="w-4 h-4"></i> Refresh
             </button>
           </div>
@@ -711,50 +726,50 @@ tailwind.config = {
     <section id="tab-settings" class="tab-panel hidden space-y-4">
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-        <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm space-y-5">
+        <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm space-y-5">
           <div>
-            <h2 class="font-bold text-slate-800">Escrow Platform Settings</h2>
-            <p class="text-xs text-slate-500">Defaults applied to new orders</p>
+            <h2 class="font-bold text-slate-800 dark:text-neutral-100">Escrow Platform Settings</h2>
+            <p class="text-xs text-slate-500 dark:text-neutral-400">Defaults applied to new orders</p>
           </div>
           <div>
-            <label class="text-sm font-medium text-slate-600">Platform Commission (%)</label>
-            <input id="rateInput" type="number" value="3.5" min="0" max="20" step="0.5" class="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
-            <p class="text-xs text-slate-400 mt-1">Set server-side via PLATFORM_COMMISSION_PERCENT — this screen is informational.</p>
+            <label class="text-sm font-medium text-slate-600 dark:text-neutral-300">Platform Commission (%)</label>
+            <input id="rateInput" type="number" min="0" max="20" step="0.5" placeholder="—" class="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm">
+            <p class="text-xs text-slate-400 dark:text-neutral-500 mt-1">Read-only — configured server-side. Updated from live data on load.</p>
           </div>
           <div>
-            <label class="text-sm font-medium text-slate-600">Escrow Hold Period (days)</label>
-            <input type="number" value="5" min="1" max="30" class="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+            <label class="text-sm font-medium text-slate-600 dark:text-neutral-300">Escrow Hold Period (days)</label>
+            <input type="number" value="5" min="1" max="30" class="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm">
           </div>
           <div>
-            <label class="text-sm font-medium text-slate-600">ClickPesa API Secret</label>
-            <input type="password" value="••••••••••••••••" readonly class="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:outline-none text-sm font-mono">
+            <label class="text-sm font-medium text-slate-600 dark:text-neutral-300">ClickPesa API Secret</label>
+            <input type="password" value="••••••••••••••••" readonly class="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 focus:outline-none text-sm font-mono">
           </div>
-          <button onclick="saveSettings()" class="w-full rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2.5 transition">Save Settings</button>
+          <button onclick="saveSettings()" class="w-full rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-2.5 transition">Save Settings</button>
         </div>
 
         <div class="space-y-4">
-          <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
-            <h2 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><i data-lucide="webhook" class="w-5 h-5 text-indigo-600"></i> ClickPesa Webhook</h2>
-            <p class="text-xs text-slate-500 mb-3">Register this URL in your ClickPesa dashboard. When a buyer pays, ClickPesa notifies your Node.js server, which transitions the order to "In Escrow Vault" automatically — no admin action needed.</p>
+          <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
+            <h2 class="font-bold text-slate-800 dark:text-neutral-100 mb-3 flex items-center gap-2"><i data-lucide="webhook" class="w-5 h-5 text-green-600"></i> ClickPesa Webhook</h2>
+            <p class="text-xs text-slate-500 dark:text-neutral-400 mb-3">Register this URL in your ClickPesa dashboard. When a buyer pays, ClickPesa notifies your Node.js server, which transitions the order to "In Escrow Vault" automatically — no admin action needed.</p>
             <div class="flex items-center gap-2">
-              <input id="webhookUrl" readonly value="https://soko-langu-server.onrender.com/api/clickpesa/webhook" class="flex-1 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-mono text-slate-600 focus:outline-none">
-              <button onclick="copyWebhook()" class="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition whitespace-nowrap">
+              <input id="webhookUrl" readonly value="https://soko-langu-server.onrender.com/api/clickpesa/webhook" class="flex-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 text-xs font-mono text-slate-600 dark:text-neutral-300 focus:outline-none">
+              <button onclick="copyWebhook()" class="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-neutral-950 hover:bg-slate-800 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-white text-xs font-semibold transition whitespace-nowrap">
                 <i data-lucide="copy" class="w-4 h-4"></i> Copy
               </button>
             </div>
-            <div class="mt-4 space-y-2 text-xs text-slate-500">
+            <div class="mt-4 space-y-2 text-xs text-slate-500 dark:text-neutral-400">
               <p class="flex gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500 shrink-0"></i> Payment confirmed → order moves to "In Escrow Vault"</p>
               <p class="flex gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500 shrink-0"></i> Buyer confirms delivery → escrow pushes funds to seller wallet</p>
               <p class="flex gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500 shrink-0"></i> Refund action → ClickPesa returns funds to buyer</p>
             </div>
           </div>
-          <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
-            <h2 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><i data-lucide="lock" class="w-5 h-5 text-emerald-600"></i> Escrow Protection</h2>
-            <p class="text-xs text-slate-500 mb-3">Every order in this pipeline is protected end-to-end. Funds only leave the ClickPesa vault after the buyer confirms delivery, or after a dispute is resolved by an admin.</p>
-            <div class="mt-4 space-y-2 text-xs text-slate-500">
+          <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
+            <h2 class="font-bold text-slate-800 dark:text-neutral-100 mb-3 flex items-center gap-2"><i data-lucide="lock" class="w-5 h-5 text-emerald-600"></i> Escrow Protection</h2>
+            <p class="text-xs text-slate-500 dark:text-neutral-400 mb-3">Every order in this pipeline is protected end-to-end. Funds only leave the ClickPesa vault after the buyer confirms delivery, or after a dispute is resolved by an admin.</p>
+            <div class="mt-4 space-y-2 text-xs text-slate-500 dark:text-neutral-400">
               <p class="flex gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500 shrink-0"></i> Buyer pays ClickPesa → funds locked in vault</p>
               <p class="flex gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500 shrink-0"></i> Seller dispatches with proof (receipt + tracking)</p>
-              <p class="flex gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500 shrink-0"></i> Buyer confirms → 3.5% commission, rest to seller wallet</p>
+              <p class="flex gap-2"><i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-500 shrink-0"></i> Buyer confirms → platform commission deducted, rest to seller wallet</p>
             </div>
           </div>
         </div>
@@ -767,28 +782,28 @@ tailwind.config = {
 
 <!-- ============ ORDER DETAILS MODAL ============ -->
 <div id="orderModal" class="fixed inset-0 z-[60] hidden items-center justify-center p-4">
-  <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeOrderModal()"></div>
-  <div class="relative w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
-    <div id="orderModalHeader" class="sticky top-0 bg-white border-b border-slate-100 px-6 py-4 flex items-start justify-between gap-3">
+  <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeOrderModal()"></div>
+  <div class="relative w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-2xl bg-white dark:bg-neutral-900 shadow-2xl">
+    <div id="orderModalHeader" class="sticky top-0 bg-white dark:bg-neutral-900 border-b border-slate-100 dark:border-neutral-800 px-6 py-4 flex items-start justify-between gap-3">
       <div></div>
-      <button onclick="closeOrderModal()" class="p-2 rounded-lg hover:bg-slate-100 text-slate-500"><i data-lucide="x" class="w-5 h-5"></i></button>
+      <button onclick="closeOrderModal()" class="p-2 rounded-lg hover:bg-slate-100 dark:bg-neutral-800 dark:hover:bg-neutral-800 text-slate-500 dark:text-neutral-400"><i data-lucide="x" class="w-5 h-5"></i></button>
     </div>
     <div id="orderModalBody" class="px-6 py-5 space-y-5"></div>
-    <div class="sticky bottom-0 bg-white border-t border-slate-100 px-6 py-3 flex justify-end gap-2">
-      <button onclick="closeOrderModal()" class="px-4 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-sm font-medium text-slate-600">Close</button>
+    <div class="sticky bottom-0 bg-white dark:bg-neutral-900 border-t border-slate-100 dark:border-neutral-800 px-6 py-3 flex justify-end gap-2">
+      <button onclick="closeOrderModal()" class="px-4 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 text-sm font-medium text-slate-600 dark:text-neutral-300">Close</button>
     </div>
   </div>
 </div>
 
 <!-- ============ CONFIRM MODAL ============ -->
 <div id="confirmModal" class="fixed inset-0 z-[70] hidden items-center justify-center p-4">
-  <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeConfirm()"></div>
-  <div class="relative w-full max-w-md rounded-2xl bg-white shadow-2xl p-6">
+  <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeConfirm()"></div>
+  <div class="relative w-full max-w-md rounded-2xl bg-white dark:bg-neutral-900 shadow-2xl p-6">
     <div id="confirmIcon" class="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4"><i data-lucide="alert-triangle" class="w-6 h-6"></i></div>
-    <h3 id="confirmTitle" class="text-lg font-bold text-slate-800">Are you sure?</h3>
-    <p id="confirmMsg" class="mt-2 text-sm text-slate-500">This action will be recorded in the audit log.</p>
+    <h3 id="confirmTitle" class="text-lg font-bold text-slate-800 dark:text-neutral-100">Are you sure?</h3>
+    <p id="confirmMsg" class="mt-2 text-sm text-slate-500 dark:text-neutral-400">This action will be recorded in the audit log.</p>
     <div class="mt-6 flex justify-end gap-2">
-      <button onclick="closeConfirm()" class="px-4 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-sm font-medium text-slate-600">Cancel</button>
+      <button onclick="closeConfirm()" class="px-4 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 text-sm font-medium text-slate-600 dark:text-neutral-300">Cancel</button>
       <button id="confirmBtn" onclick="confirmAction()" class="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold">Confirm</button>
     </div>
   </div>
@@ -796,11 +811,11 @@ tailwind.config = {
 
 <!-- ============ TX DETAIL MODAL ============ -->
 <div id="txModal" class="fixed inset-0 z-[70] hidden items-center justify-center p-4">
-  <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeModal('txModal')"></div>
-  <div class="relative w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
-    <div class="sticky top-0 bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between">
-      <h3 class="font-bold text-slate-800">Transaction Detail</h3>
-      <button onclick="closeModal('txModal')" class="p-2 rounded-lg hover:bg-slate-100 text-slate-500"><i data-lucide="x" class="w-5 h-5"></i></button>
+  <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeModal('txModal')"></div>
+  <div class="relative w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl bg-white dark:bg-neutral-900 shadow-2xl">
+    <div class="sticky top-0 bg-white dark:bg-neutral-900 border-b border-slate-100 dark:border-neutral-800 px-6 py-4 flex items-center justify-between">
+      <h3 class="font-bold text-slate-800 dark:text-neutral-100">Transaction Detail</h3>
+      <button onclick="closeModal('txModal')" class="p-2 rounded-lg hover:bg-slate-100 dark:bg-neutral-800 dark:hover:bg-neutral-800 text-slate-500 dark:text-neutral-400"><i data-lucide="x" class="w-5 h-5"></i></button>
     </div>
     <div class="p-6" id="txModalBody"></div>
   </div>
@@ -808,11 +823,11 @@ tailwind.config = {
 
 <!-- ============ USER DETAIL MODAL ============ -->
 <div id="userModal" class="fixed inset-0 z-[70] hidden items-center justify-center p-4">
-  <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeModal('userModal')"></div>
-  <div class="relative w-full max-w-3xl max-h-[85vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
-    <div class="sticky top-0 bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between">
-      <h3 class="font-bold text-slate-800">User Detail</h3>
-      <button onclick="closeModal('userModal')" class="p-2 rounded-lg hover:bg-slate-100 text-slate-500"><i data-lucide="x" class="w-5 h-5"></i></button>
+  <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeModal('userModal')"></div>
+  <div class="relative w-full max-w-3xl max-h-[85vh] overflow-y-auto rounded-2xl bg-white dark:bg-neutral-900 shadow-2xl">
+    <div class="sticky top-0 bg-white dark:bg-neutral-900 border-b border-slate-100 dark:border-neutral-800 px-6 py-4 flex items-center justify-between">
+      <h3 class="font-bold text-slate-800 dark:text-neutral-100">User Detail</h3>
+      <button onclick="closeModal('userModal')" class="p-2 rounded-lg hover:bg-slate-100 dark:bg-neutral-800 dark:hover:bg-neutral-800 text-slate-500 dark:text-neutral-400"><i data-lucide="x" class="w-5 h-5"></i></button>
     </div>
     <div class="p-6" id="userModalBody"></div>
   </div>
@@ -820,11 +835,11 @@ tailwind.config = {
 
 <!-- ============ KYC DETAIL MODAL ============ -->
 <div id="kycModal" class="fixed inset-0 z-[70] hidden items-center justify-center p-4">
-  <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeModal('kycModal')"></div>
-  <div class="relative w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
-    <div class="sticky top-0 bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between">
-      <h3 class="font-bold text-slate-800">KYC Application</h3>
-      <button onclick="closeModal('kycModal')" class="p-2 rounded-lg hover:bg-slate-100 text-slate-500"><i data-lucide="x" class="w-5 h-5"></i></button>
+  <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeModal('kycModal')"></div>
+  <div class="relative w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl bg-white dark:bg-neutral-900 shadow-2xl">
+    <div class="sticky top-0 bg-white dark:bg-neutral-900 border-b border-slate-100 dark:border-neutral-800 px-6 py-4 flex items-center justify-between">
+      <h3 class="font-bold text-slate-800 dark:text-neutral-100">KYC Application</h3>
+      <button onclick="closeModal('kycModal')" class="p-2 rounded-lg hover:bg-slate-100 dark:bg-neutral-800 dark:hover:bg-neutral-800 text-slate-500 dark:text-neutral-400"><i data-lucide="x" class="w-5 h-5"></i></button>
     </div>
     <div class="p-6" id="kycModalBody"></div>
   </div>
@@ -896,13 +911,13 @@ function orderTotal(t) { return Number(t.totalAmount) || (Number(t.productPrice 
 
 /* ---------------- STATUS MAP (real backend statuses → admin-dashboard look) ---------------- */
 var STATUS = {
-  pending:            { label:'Pending Shipping',   badge:'bg-slate-50 text-slate-700 ring-1 ring-slate-200',   dot:'bg-slate-400', chart:'#94a3b8' },
+  pending:            { label:'Pending Shipping',   badge:'bg-slate-50 dark:bg-neutral-800 text-slate-700 dark:text-neutral-200 ring-1 ring-slate-200 dark:ring-neutral-700',   dot:'bg-slate-400', chart:'#94a3b8' },
   awaiting_payment:   { label:'Awaiting Payment',   badge:'bg-amber-50 text-amber-700 ring-1 ring-amber-200',   dot:'bg-amber-500', chart:'#f59e0b' },
-  quoted:             { label:'Quoted',             badge:'bg-slate-50 text-slate-700 ring-1 ring-slate-200',   dot:'bg-slate-400', chart:'#94a3b8' },
+  quoted:             { label:'Quoted',             badge:'bg-slate-50 dark:bg-neutral-800 text-slate-700 dark:text-neutral-200 ring-1 ring-slate-200 dark:ring-neutral-700',   dot:'bg-slate-400', chart:'#94a3b8' },
   processing:         { label:'Processing',         badge:'bg-amber-50 text-amber-700 ring-1 ring-amber-200',   dot:'bg-amber-500', chart:'#f59e0b' },
   paid:               { label:'Paid',               badge:'bg-sky-50 text-sky-700 ring-1 ring-sky-200',         dot:'bg-sky-500',   chart:'#0ea5e9' },
-  escrow_hold:        { label:'In Escrow Vault',    badge:'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200', dot:'bg-indigo-500', chart:'#6366f1' },
-  paid_escrow_held:   { label:'In Escrow Vault',    badge:'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200', dot:'bg-indigo-500', chart:'#6366f1' },
+  escrow_hold:        { label:'In Escrow Vault',    badge:'bg-green-50 text-green-700 ring-1 ring-green-200', dot:'bg-green-500', chart:'#6366f1' },
+  paid_escrow_held:   { label:'In Escrow Vault',    badge:'bg-green-50 text-green-700 ring-1 ring-green-200', dot:'bg-green-500', chart:'#6366f1' },
   dispatched:         { label:'Shipped / In Transit', badge:'bg-sky-50 text-sky-700 ring-1 ring-sky-200',       dot:'bg-sky-500',   chart:'#0ea5e9' },
   in_transit:         { label:'Shipped / In Transit', badge:'bg-sky-50 text-sky-700 ring-1 ring-sky-200',       dot:'bg-sky-500',   chart:'#0ea5e9' },
   disputed:           { label:'Disputed',            badge:'bg-rose-50 text-rose-700 ring-1 ring-rose-200',     dot:'bg-rose-500',  chart:'#f43f5e' },
@@ -911,7 +926,7 @@ var STATUS = {
   delivery_confirmed: { label:'Completed / Released', badge:'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200', dot:'bg-emerald-500', chart:'#10b981' },
   confirmed:          { label:'Completed / Released', badge:'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200', dot:'bg-emerald-500', chart:'#10b981' },
   refunded:           { label:'Refunded via ClickPesa', badge:'bg-fuchsia-50 text-fuchsia-700 ring-1 ring-fuchsia-200', dot:'bg-fuchsia-500', chart:'#e879f9' },
-  cancelled:          { label:'Cancelled',           badge:'bg-slate-100 text-slate-600 ring-1 ring-slate-200', dot:'bg-slate-400', chart:'#94a3b8' },
+  cancelled:          { label:'Cancelled',           badge:'bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-300 ring-1 ring-slate-200 dark:ring-neutral-700', dot:'bg-slate-400', chart:'#94a3b8' },
   failed:             { label:'Failed',              badge:'bg-red-50 text-red-700 ring-1 ring-red-200',         dot:'bg-red-500',   chart:'#ef4444' }
 };
 var CHIP_KEYS = ['awaiting_payment', 'escrow_hold', 'dispatched', 'disputed', 'completed', 'refunded', 'cancelled', 'failed'];
@@ -932,7 +947,7 @@ function isDone(s) { return ['completed', 'delivered', 'delivery_confirmed', 'co
 function isShipped(s) { return s === 'dispatched' || s === 'in_transit' || s === 'disputed' || isDone(s) || s === 'refunded'; }
 
 function statusBadge(status) {
-  var st = STATUS[status] || STATUS[bucket(status)] || { label: status || 'Unknown', badge: 'bg-slate-100 text-slate-600 ring-1 ring-slate-200', dot: 'bg-slate-400' };
+  var st = STATUS[status] || STATUS[bucket(status)] || { label: status || 'Unknown', badge: 'bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-300 ring-1 ring-slate-200 dark:ring-neutral-700', dot: 'bg-slate-400' };
   return '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ' + st.badge + '"><span class="w-1.5 h-1.5 rounded-full ' + st.dot + '"></span>' + esc(st.label) + '</span>';
 }
 function statusPill(label, colorCls) {
@@ -943,7 +958,7 @@ function refreshIcons() { if (window.lucide) window.lucide.createIcons(); }
 
 /* ---------------- TOAST ---------------- */
 function toast(msg, kind) {
-  var palette = { ok: 'bg-emerald-600', err: 'bg-rose-600', info: 'bg-slate-800' };
+  var palette = { ok: 'bg-emerald-600', err: 'bg-rose-600', info: 'bg-slate-800 dark:bg-neutral-800' };
   var icon = { ok: 'check-circle-2', err: 'x-circle', info: 'info' };
   var box = document.createElement('div');
   box.className = 'flex items-start gap-3 rounded-xl px-4 py-3 shadow-xl text-white text-sm font-medium ' + (palette[kind] || palette.info) + ' animate-[slideIn_.25s_ease]';
@@ -1003,22 +1018,22 @@ function api(path, opts) {
 }
 
 function spinner(label) {
-  return '<div class="py-14 text-center"><div class="w-8 h-8 mx-auto rounded-full border-2 border-slate-200 border-t-indigo-500 animate-spin mb-3"></div>' +
-    '<p class="text-sm text-slate-500">' + esc(label) + '</p></div>';
+  return '<div class="py-14 text-center"><div class="w-8 h-8 mx-auto rounded-full border-2 border-slate-200 dark:border-neutral-700 border-t-green-500 animate-spin mb-3"></div>' +
+    '<p class="text-sm text-slate-500 dark:text-neutral-400">' + esc(label) + '</p></div>';
 }
 function emptyRow(msg) {
-  return '<div class="py-10 text-center text-sm text-slate-400">' + esc(msg) + '</div>';
+  return '<div class="py-10 text-center text-sm text-slate-400 dark:text-neutral-500">' + esc(msg) + '</div>';
 }
 function tableShell(headers, rowsHtml, minW) {
   return '<table class="w-full text-sm" style="min-width:' + (minW || '640px') + 'px">' +
-    '<thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500"><tr>' + headers.map(function (h) {
+    '<thead class="bg-slate-50 dark:bg-neutral-800 text-left text-xs uppercase tracking-wide text-slate-500 dark:text-neutral-400"><tr>' + headers.map(function (h) {
       return '<th class="px-4 py-3 font-semibold whitespace-nowrap">' + esc(h) + '</th>';
     }).join('') + '</tr></thead><tbody>' + rowsHtml + '</tbody></table>';
 }
 
 function avatar(name, sizeCls) {
   var ch = ((name || '?')[0] || '?').toUpperCase();
-  return '<div class="' + (sizeCls || 'w-9 h-9 text-sm') + ' rounded-full bg-gradient-to-br from-indigo-500 to-emerald-500 text-white font-bold flex items-center justify-center shrink-0">' + esc(ch) + '</div>';
+  return '<div class="' + (sizeCls || 'w-9 h-9 text-sm') + ' rounded-full bg-gradient-to-br from-green-500 to-emerald-500 text-white font-bold flex items-center justify-center shrink-0">' + esc(ch) + '</div>';
 }
 
 /* ============ GATE ============ */
@@ -1051,6 +1066,27 @@ $('sidebarOverlay').addEventListener('click', function () {
   $('sidebarOverlay').classList.add('hidden');
 });
 
+/* ============ THEME (dark / light) ============ */
+function applyTheme(dark) {
+  var html = document.documentElement;
+  html.classList.toggle('dark', dark);
+  if (dark) { localStorage.setItem('sv_admin_theme', 'dark'); }
+  else { localStorage.setItem('sv_admin_theme', 'light'); }
+  var moon = $('themeIconMoon'), sun = $('themeIconSun');
+  if (moon && sun) {
+    moon.classList.toggle('hidden', dark);
+    sun.classList.toggle('hidden', !dark);
+  }
+  refreshIcons();
+  if (window.refreshCharts) refreshCharts();
+}
+function initTheme() {
+  var saved = localStorage.getItem('sv_admin_theme');
+  var dark = saved ? saved === 'dark' : window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  applyTheme(dark);
+}
+function toggleTheme() { applyTheme(!document.documentElement.classList.contains('dark')); }
+
 var TAB_TITLES = {
   dashboard: 'Dashboard Overview', orders: 'Escrow Orders', disputes: 'Dispute Center',
   boosts: 'Product Boosts', analytics: 'Marketplace Analytics', kyc: 'KYC Verification',
@@ -1065,10 +1101,10 @@ function switchTab(tab) {
   $('tab-' + tab).classList.remove('hidden');
   document.querySelectorAll('.nav-item').forEach(function (b) {
     var active = b.dataset.tab === tab;
-    b.classList.toggle('bg-indigo-600', active);
+    b.classList.toggle('bg-green-600', active);
     b.classList.toggle('text-white', active);
-    b.classList.toggle('text-slate-400', !active);
-    b.classList.toggle('hover:bg-slate-800', !active);
+    b.classList.toggle('text-slate-400 dark:text-neutral-500', !active);
+    b.classList.toggle('hover:bg-slate-800 dark:bg-neutral-800 dark:hover:bg-neutral-700', !active);
   });
   var render = {
     dashboard: renderOverview, orders: renderOrders, disputes: renderDisputes,
@@ -1220,7 +1256,7 @@ function refreshAll() {
     toast('Dashboard synced — live data from Firestore via Node.js', 'ok');
     refreshTotals();
     refreshBadges();
-    var active = document.querySelector('.nav-item.bg-indigo-600');
+    var active = document.querySelector('.nav-item.bg-green-600');
     if (active) switchTab(active.dataset.tab); else switchTab(state.tab || 'dashboard');
   });
 }
@@ -1283,12 +1319,12 @@ function renderRecent() {
   var txs = saleTx();
   var recent = txs.slice().sort(function (a, b) { return (ts(b.createdAt) || 0) - (ts(a.createdAt) || 0); }).slice(0, 6);
   $('recentOrders').innerHTML = recent.map(function (t) {
-    return '<tr class="hover:bg-slate-50 transition">' +
-      '<td class="px-5 py-3"><p class="font-semibold text-slate-800">' + esc(t.productName || '—') + '</p><p class="text-xs text-slate-500">' + esc(t.id || '') + ' · ' + timeAgo(t.createdAt) + '</p></td>' +
-      '<td class="px-5 py-3 text-slate-600 whitespace-nowrap">' + esc(t.buyerName || '—') + '</td>' +
-      '<td class="px-5 py-3 font-semibold text-slate-800 whitespace-nowrap">' + fmtTZ(orderTotal(t)) + '</td>' +
+    return '<tr class="hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 transition">' +
+      '<td class="px-5 py-3"><p class="font-semibold text-slate-800 dark:text-neutral-100">' + esc(t.productName || '—') + '</p><p class="text-xs text-slate-500 dark:text-neutral-400">' + esc(t.id || '') + ' · ' + timeAgo(t.createdAt) + '</p></td>' +
+      '<td class="px-5 py-3 text-slate-600 dark:text-neutral-300 whitespace-nowrap">' + esc(t.buyerName || '—') + '</td>' +
+      '<td class="px-5 py-3 font-semibold text-slate-800 dark:text-neutral-100 whitespace-nowrap">' + fmtTZ(orderTotal(t)) + '</td>' +
       '<td class="px-5 py-3 whitespace-nowrap">' + statusBadge(t.status) + '</td>' +
-      '<td class="px-5 py-3 text-right"><button onclick="openOrderModal(\'' + esc(t.id) + '\')" class="p-2 rounded-lg hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 transition"><i data-lucide="eye" class="w-4 h-4"></i></button></td>' +
+      '<td class="px-5 py-3 text-right"><button onclick="openOrderModal(\'' + esc(t.id) + '\')" class="p-2 rounded-lg hover:bg-green-50 text-slate-400 dark:text-neutral-500 hover:text-green-600 transition"><i data-lucide="eye" class="w-4 h-4"></i></button></td>' +
       '</tr>';
   }).join('');
   refreshIcons();
@@ -1302,19 +1338,19 @@ function renderDashboardExtras() {
     var di = t.disputeInfo || {};
     return '<div class="flex items-center gap-3 rounded-xl border border-rose-100 bg-rose-50/60 p-3">' +
       '<div class="w-9 h-9 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center shrink-0"><i data-lucide="alert-triangle" class="w-4 h-4"></i></div>' +
-      '<div class="min-w-0 flex-1"><p class="text-sm font-semibold text-slate-800 truncate">' + esc(t.id || '') + '</p><p class="text-xs text-slate-500 truncate">' + esc(t.buyerName || '') + ' vs ' + esc(t.sellerName || '') + '</p></div>' +
+      '<div class="min-w-0 flex-1"><p class="text-sm font-semibold text-slate-800 dark:text-neutral-100 truncate">' + esc(t.id || '') + '</p><p class="text-xs text-slate-500 dark:text-neutral-400 truncate">' + esc(t.buyerName || '') + ' vs ' + esc(t.sellerName || '') + '</p></div>' +
       '<span class="text-xs font-semibold text-rose-600 whitespace-nowrap">' + timeAgo(di.raisedAt) + '</span>' +
       '</div>';
-  }).join('') : '<p class="text-sm text-slate-400 text-center py-4">All clear — no open disputes</p>';
+  }).join('') : '<p class="text-sm text-slate-400 dark:text-neutral-500 text-center py-4">All clear — no open disputes</p>';
 
   var an = S.analytics || {};
   var cats = an.productsByCategory || {};
   var entries = Object.keys(cats).map(function (k) { return { name: k, count: cats[k] }; }).sort(function (a, b) { return b.count - a.count; }).slice(0, 4);
   var max = entries.length ? Math.max.apply(null, entries.map(function (c) { return c.count; })) : 1;
   $('dashCategories').innerHTML = entries.length ? entries.map(function (c) {
-    return '<div class="flex items-center justify-between gap-2 text-sm"><span class="text-slate-600 truncate">' + esc(c.name) + '</span><span class="font-semibold text-slate-800 whitespace-nowrap">' + c.count + '</span></div>' +
-      '<div class="h-1.5 rounded-full bg-slate-100 -mt-1"><div class="h-full rounded-full bg-indigo-500" style="width:' + Math.round(c.count / max * 100) + '%"></div></div>';
-  }).join('') : '<p class="text-sm text-slate-400 text-center py-4">No product data yet</p>';
+    return '<div class="flex items-center justify-between gap-2 text-sm"><span class="text-slate-600 dark:text-neutral-300 truncate">' + esc(c.name) + '</span><span class="font-semibold text-slate-800 dark:text-neutral-100 whitespace-nowrap">' + c.count + '</span></div>' +
+      '<div class="h-1.5 rounded-full bg-slate-100 dark:bg-neutral-800 -mt-1"><div class="h-full rounded-full bg-green-500" style="width:' + Math.round(c.count / max * 100) + '%"></div></div>';
+  }).join('') : '<p class="text-sm text-slate-400 dark:text-neutral-500 text-center py-4">No product data yet</p>';
   refreshIcons();
 }
 
@@ -1324,7 +1360,7 @@ function initCharts() {
   charts.volume = new Chart(vctx, {
     type: 'bar',
     data: { labels: [], datasets: [
-      { type: 'bar', label: 'Escrow Volume', data: [], backgroundColor: 'rgba(99,102,241,0.85)', borderRadius: 6, yAxisID: 'y' },
+      { type: 'bar', label: 'Escrow Volume', data: [], backgroundColor: 'rgba(16,185,129,0.85)', borderRadius: 6, yAxisID: 'y' },
       { type: 'line', label: 'Platform Commission', data: [], borderColor: '#059669', backgroundColor: 'rgba(5,150,105,0.10)', fill: true, tension: 0.4, pointRadius: 3, pointBackgroundColor: '#059669', yAxisID: 'y1' }
     ] },
     options: {
@@ -1343,6 +1379,26 @@ function initCharts() {
     data: { labels: [], datasets: [{ data: [], backgroundColor: [], borderWidth: 2, borderColor: '#ffffff' }] },
     options: { responsive: true, maintainAspectRatio: false, cutout: '62%', plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, padding: 14, usePointStyle: true, pointStyle: 'circle' } } } }
   });
+}
+
+function refreshCharts() {
+  var dark = document.documentElement.classList.contains('dark');
+  var grid = dark ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)';
+  var tick = dark ? '#9ca3af' : '#64748b';
+  var legend = dark ? '#e5e7eb' : '#111827';
+  if (charts.volume) {
+    charts.volume.options.scales.y.grid.color = grid;
+    charts.volume.options.scales.y1.grid.color = grid;
+    charts.volume.options.scales.y.ticks.color = tick;
+    charts.volume.options.scales.y1.ticks.color = tick;
+    charts.volume.options.plugins.legend.labels.color = legend;
+    charts.volume.update();
+  }
+  if (charts.dist) {
+    charts.dist.data.datasets[0].borderColor = dark ? '#171717' : '#ffffff';
+    charts.dist.options.plugins.legend.labels.color = legend;
+    charts.dist.update();
+  }
 }
 
 function escrowish(s) {
@@ -1392,7 +1448,7 @@ function updateCharts() {
 
 /* ============ ORDERS ============ */
 function chipCls(active) {
-  return 'px-3 py-1.5 rounded-full text-xs font-semibold ring-1 transition ' + (active ? 'bg-indigo-600 text-white ring-indigo-600' : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50');
+  return 'px-3 py-1.5 rounded-full text-xs font-semibold ring-1 transition ' + (active ? 'bg-green-600 text-white ring-green-600' : 'bg-white dark:bg-neutral-900 text-slate-600 dark:text-neutral-300 ring-slate-200 dark:ring-neutral-700 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800');
 }
 function setOrderFilter(s) {
   state.orderStatus = s;
@@ -1404,7 +1460,7 @@ function setOrderFilter(s) {
 
 function renderOrders() {
   if (!loaded.transactions) {
-    loadTransactions().then(function () { renderOrders(); refreshTotals(); }).catch(function (e) { $('ordersBody').innerHTML = '<tr><td colspan="9" class="px-5 py-12 text-center text-slate-400">Failed to load: ' + esc(e.message) + '</td></tr>'; });
+    loadTransactions().then(function () { renderOrders(); refreshTotals(); }).catch(function (e) { $('ordersBody').innerHTML = '<tr><td colspan="9" class="px-5 py-12 text-center text-slate-400 dark:text-neutral-500">Failed to load: ' + esc(e.message) + '</td></tr>'; });
     return;
   }
   var txs = saleTx();
@@ -1426,7 +1482,7 @@ function renderOrders() {
 
   var body = $('ordersBody');
   if (!list.length) {
-    body.innerHTML = '<tr><td colspan="9" class="px-5 py-12 text-center text-slate-400"><i data-lucide="search-x" class="w-8 h-8 mx-auto mb-2"></i><p class="font-medium">No orders match your filters</p></td></tr>';
+    body.innerHTML = '<tr><td colspan="9" class="px-5 py-12 text-center text-slate-400 dark:text-neutral-500"><i data-lucide="search-x" class="w-8 h-8 mx-auto mb-2"></i><p class="font-medium">No orders match your filters</p></td></tr>';
   } else {
     body.innerHTML = list.slice(0, 200).map(orderRow).join('');
   }
@@ -1439,19 +1495,19 @@ function orderRow(t) {
   var receipt = dp.receiptUrl || dp.photoUrl || '';
   var dispatchedAt = dp.dispatchedAt || t.dispatchedAt;
   var total = orderTotal(t);
-  return '<tr class="hover:bg-slate-50 transition">' +
-    '<td class="px-5 py-3"><div class="flex items-center gap-3"><div class="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0"><i data-lucide="package" class="w-4 h-4"></i></div><div class="min-w-0"><p class="font-semibold text-slate-800 truncate max-w-[200px]">' + esc(t.productName || '—') + '</p><p class="text-xs text-slate-500">' + esc(t.id || '') + ' · ' + esc(t.category || 'Sale') + '</p></div></div></td>' +
-    '<td class="px-5 py-3 text-slate-600 whitespace-nowrap">' + esc(t.buyerName || '—') + '</td>' +
-    '<td class="px-5 py-3 text-slate-600 whitespace-nowrap">' + esc(t.sellerName || '—') + '</td>' +
-    '<td class="px-5 py-3 font-semibold text-slate-800 whitespace-nowrap">' + fmtTZ(total) + '</td>' +
-    '<td class="px-5 py-3 text-slate-600 whitespace-nowrap text-xs">' + (courier ? courier : '<span class="text-slate-300">—</span>') + '</td>' +
-    '<td class="px-5 py-3">' + (receipt ? '<button onclick="toast(\'Receipt: ' + esc(receipt) + '\',\'info\')" class="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800"><i data-lucide="paperclip" class="w-3.5 h-3.5"></i>' + esc(String(receipt).split('/').pop()) + '</button>' : '<span class="text-slate-300">—</span>') + '</td>' +
-    '<td class="px-5 py-3 text-slate-600 whitespace-nowrap text-xs">' + (isShipped(t.status) ? timeAgo(dispatchedAt) : '<span class="text-slate-300">—</span>') + '</td>' +
+  return '<tr class="hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 transition">' +
+    '<td class="px-5 py-3"><div class="flex items-center gap-3"><div class="w-9 h-9 rounded-lg bg-green-50 text-green-600 flex items-center justify-center shrink-0"><i data-lucide="package" class="w-4 h-4"></i></div><div class="min-w-0"><p class="font-semibold text-slate-800 dark:text-neutral-100 truncate max-w-[200px]">' + esc(t.productName || '—') + '</p><p class="text-xs text-slate-500 dark:text-neutral-400">' + esc(t.id || '') + ' · ' + esc(t.category || 'Sale') + '</p></div></div></td>' +
+    '<td class="px-5 py-3 text-slate-600 dark:text-neutral-300 whitespace-nowrap">' + esc(t.buyerName || '—') + '</td>' +
+    '<td class="px-5 py-3 text-slate-600 dark:text-neutral-300 whitespace-nowrap">' + esc(t.sellerName || '—') + '</td>' +
+    '<td class="px-5 py-3 font-semibold text-slate-800 dark:text-neutral-100 whitespace-nowrap">' + fmtTZ(total) + '</td>' +
+    '<td class="px-5 py-3 text-slate-600 dark:text-neutral-300 whitespace-nowrap text-xs">' + (courier ? courier : '<span class="text-slate-300 dark:text-neutral-300">—</span>') + '</td>' +
+    '<td class="px-5 py-3">' + (receipt ? '<button onclick="toast(\'Receipt: ' + esc(receipt) + '\',\'info\')" class="inline-flex items-center gap-1 text-xs font-medium text-green-600 hover:text-green-800"><i data-lucide="paperclip" class="w-3.5 h-3.5"></i>' + esc(String(receipt).split('/').pop()) + '</button>' : '<span class="text-slate-300 dark:text-neutral-300">—</span>') + '</td>' +
+    '<td class="px-5 py-3 text-slate-600 dark:text-neutral-300 whitespace-nowrap text-xs">' + (isShipped(t.status) ? timeAgo(dispatchedAt) : '<span class="text-slate-300 dark:text-neutral-300">—</span>') + '</td>' +
     '<td class="px-5 py-3 whitespace-nowrap">' + statusBadge(t.status) + '</td>' +
     '<td class="px-5 py-3 text-right"><div class="flex justify-end gap-1.5">' +
-    '<button onclick="openOrderModal(\'' + esc(t.id) + '\')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 text-xs font-semibold text-slate-600 hover:text-indigo-700 transition"><i data-lucide="eye" class="w-3.5 h-3.5"></i> Details</button>' +
+    '<button onclick="openOrderModal(\'' + esc(t.id) + '\')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-neutral-700 hover:border-green-300 hover:bg-green-50 text-xs font-semibold text-slate-600 dark:text-neutral-300 hover:text-green-700 transition"><i data-lucide="eye" class="w-3.5 h-3.5"></i> Details</button>' +
     (isEscrow(t.status) ? '<button onclick="releaseEscrow(\'' + esc(t.id) + '\')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-200 text-emerald-600 hover:bg-emerald-50 text-xs font-semibold transition"><i data-lucide="shield-check" class="w-3.5 h-3.5"></i> Release</button>' : '') +
-    (t.status === 'disputed' ? '<button onclick="resolveDispute(\'' + esc(t.id) + '\',\'release\')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50 text-xs font-semibold transition"><i data-lucide="scale" class="w-3.5 h-3.5"></i> Resolve</button>' : '') +
+    (t.status === 'disputed' ? '<button onclick="resolveDispute(\'' + esc(t.id) + '\',\'release\')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-green-200 text-green-600 hover:bg-green-50 text-xs font-semibold transition"><i data-lucide="scale" class="w-3.5 h-3.5"></i> Resolve</button>' : '') +
     '</div></td></tr>';
 }
 
@@ -1509,7 +1565,7 @@ function renderDisputes() {
 
   var grid = $('disputesGrid');
   if (!list.length) {
-    grid.innerHTML = '<div class="lg:col-span-2 rounded-2xl bg-white border border-slate-200 p-12 text-center text-slate-400"><i data-lucide="scale" class="w-8 h-8 mx-auto mb-2"></i><p class="font-medium">No disputes match your filters</p></div>';
+    grid.innerHTML = '<div class="lg:col-span-2 rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-12 text-center text-slate-400 dark:text-neutral-500"><i data-lucide="scale" class="w-8 h-8 mx-auto mb-2"></i><p class="font-medium">No disputes match your filters</p></div>';
   } else {
     grid.innerHTML = list.map(function (t) {
       var resolved = t.status === 'refunded';
@@ -1517,29 +1573,29 @@ function renderDisputes() {
       var ev = di.evidenceUrls || [];
       var dp = t.dispatchProof || {};
       var total = orderTotal(t);
-      return '<div class="rounded-2xl bg-white border ' + (resolved ? 'border-fuchsia-200' : 'border-rose-200') + ' shadow-sm overflow-hidden">' +
-        '<div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">' +
+      return '<div class="rounded-2xl bg-white dark:bg-neutral-900 border ' + (resolved ? 'border-fuchsia-200' : 'border-rose-200') + ' shadow-sm overflow-hidden">' +
+        '<div class="px-5 py-4 border-b border-slate-100 dark:border-neutral-800 flex items-center justify-between gap-3">' +
         '<div class="flex items-center gap-3"><div class="w-10 h-10 rounded-lg ' + (resolved ? 'bg-fuchsia-50 text-fuchsia-600' : 'bg-rose-50 text-rose-600') + ' flex items-center justify-center"><i data-lucide="scale" class="w-5 h-5"></i></div>' +
-        '<div><p class="font-bold text-slate-800">' + esc(t.id || '') + '</p><p class="text-xs text-slate-500">' + esc(t.productName || '') + '</p></div></div>' +
+        '<div><p class="font-bold text-slate-800 dark:text-neutral-100">' + esc(t.id || '') + '</p><p class="text-xs text-slate-500 dark:text-neutral-400">' + esc(t.productName || '') + '</p></div></div>' +
         '<span class="text-xs font-semibold px-2.5 py-1 rounded-full ' + (resolved ? 'bg-fuchsia-50 text-fuchsia-700' : 'bg-rose-50 text-rose-700') + ' whitespace-nowrap">' + (resolved ? 'Resolved' : 'Open · ' + timeAgo(di.raisedAt)) + '</span>' +
         '</div>' +
         '<div class="px-5 py-4 space-y-3 text-sm">' +
         '<div class="rounded-lg bg-rose-50 border border-rose-100 px-3 py-2 text-xs text-rose-700 font-medium">⚠ ' + esc(di.reason || 'Buyer flagged an issue — package not received') + '</div>' +
         '<div class="grid grid-cols-2 gap-3">' +
-        '<div><p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Buyer</p><p class="text-slate-700 font-medium">' + esc(t.buyerName || '—') + '</p></div>' +
-        '<div><p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Seller</p><p class="text-slate-700 font-medium">' + esc(t.sellerName || '—') + '</p></div>' +
-        '<div><p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Escrowed Amount</p><p class="text-slate-700 font-semibold">' + fmtTZ(total) + '</p></div>' +
-        '<div><p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Receipt</p>' + (dp.receiptUrl ? '<button onclick="toast(\'Opening shipping receipt\',\'info\')" class="text-indigo-600 hover:text-indigo-800 font-medium text-xs flex items-center gap-1"><i data-lucide="paperclip" class="w-3 h-3"></i>' + esc(String(dp.receiptUrl).split('/').pop()) + '</button>' : '<span class="text-slate-300">No receipt</span>') + '</div>' +
-        '<div><p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Dispatched</p><p class="text-slate-700">' + fmtDateTime(dp.dispatchedAt || t.dispatchedAt) + '</p></div>' +
-        '<div><p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Dispute raised</p><p class="text-slate-700">' + timeAgo(di.raisedAt) + '</p></div>' +
+        '<div><p class="text-[11px] uppercase tracking-wide text-slate-400 dark:text-neutral-500 font-semibold">Buyer</p><p class="text-slate-700 dark:text-neutral-200 font-medium">' + esc(t.buyerName || '—') + '</p></div>' +
+        '<div><p class="text-[11px] uppercase tracking-wide text-slate-400 dark:text-neutral-500 font-semibold">Seller</p><p class="text-slate-700 dark:text-neutral-200 font-medium">' + esc(t.sellerName || '—') + '</p></div>' +
+        '<div><p class="text-[11px] uppercase tracking-wide text-slate-400 dark:text-neutral-500 font-semibold">Escrowed Amount</p><p class="text-slate-700 dark:text-neutral-200 font-semibold">' + fmtTZ(total) + '</p></div>' +
+        '<div><p class="text-[11px] uppercase tracking-wide text-slate-400 dark:text-neutral-500 font-semibold">Receipt</p>' + (dp.receiptUrl ? '<button onclick="toast(\'Opening shipping receipt\',\'info\')" class="text-green-600 hover:text-green-800 font-medium text-xs flex items-center gap-1"><i data-lucide="paperclip" class="w-3 h-3"></i>' + esc(String(dp.receiptUrl).split('/').pop()) + '</button>' : '<span class="text-slate-300 dark:text-neutral-300">No receipt</span>') + '</div>' +
+        '<div><p class="text-[11px] uppercase tracking-wide text-slate-400 dark:text-neutral-500 font-semibold">Dispatched</p><p class="text-slate-700 dark:text-neutral-200">' + fmtDateTime(dp.dispatchedAt || t.dispatchedAt) + '</p></div>' +
+        '<div><p class="text-[11px] uppercase tracking-wide text-slate-400 dark:text-neutral-500 font-semibold">Dispute raised</p><p class="text-slate-700 dark:text-neutral-200">' + timeAgo(di.raisedAt) + '</p></div>' +
         '</div>' +
         (ev.length ? '<div class="flex flex-wrap gap-2">' + ev.map(function (u, i) {
-          return '<a href="' + esc(u) + '" target="_blank" rel="noopener" class="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:underline"><i data-lucide="paperclip" class="w-3 h-3"></i> Evidence ' + (i + 1) + '</a>';
+          return '<a href="' + esc(u) + '" target="_blank" rel="noopener" class="inline-flex items-center gap-1 text-xs font-semibold text-green-600 hover:underline"><i data-lucide="paperclip" class="w-3 h-3"></i> Evidence ' + (i + 1) + '</a>';
         }).join('') + '</div>' : '') +
         '</div>' +
-        '<div class="px-5 py-4 bg-slate-50 flex flex-wrap gap-2">' +
+        '<div class="px-5 py-4 bg-slate-50 dark:bg-neutral-800 flex flex-wrap gap-2">' +
         (resolved
-          ? '<button onclick="openOrderModal(\'' + esc(t.id) + '\')" class="flex-1 min-w-[130px] inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm font-semibold text-slate-600 hover:bg-slate-100 transition"><i data-lucide="eye" class="w-4 h-4"></i> View Case</button>'
+          ? '<button onclick="openOrderModal(\'' + esc(t.id) + '\')" class="flex-1 min-w-[130px] inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-sm font-semibold text-slate-600 dark:text-neutral-300 hover:bg-slate-100 dark:bg-neutral-800 dark:hover:bg-neutral-800 transition"><i data-lucide="eye" class="w-4 h-4"></i> View Case</button>'
           : '<button onclick="resolveDispute(\'' + esc(t.id) + '\',\'release\')" class="flex-1 min-w-[130px] inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition"><i data-lucide="shield-check" class="w-4 h-4"></i> Release to Seller</button>' +
             '<button onclick="resolveDispute(\'' + esc(t.id) + '\',\'refund\')" class="flex-1 min-w-[130px] inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold transition"><i data-lucide="rotate-ccw" class="w-4 h-4"></i> Refund via ClickPesa</button>') +
         '</div>' +
@@ -1593,19 +1649,19 @@ function renderBoosts() {
   });
   var body = $('boostsBody');
   if (!list.length) {
-    body.innerHTML = '<tr><td colspan="7" class="px-5 py-12 text-center text-slate-400"><i data-lucide="rocket" class="w-8 h-8 mx-auto mb-2"></i><p class="font-medium">No boosts match your filters</p></td></tr>';
+    body.innerHTML = '<tr><td colspan="7" class="px-5 py-12 text-center text-slate-400 dark:text-neutral-500"><i data-lucide="rocket" class="w-8 h-8 mx-auto mb-2"></i><p class="font-medium">No boosts match your filters</p></td></tr>';
   } else {
     body.innerHTML = list.map(function (b) {
-      return '<tr class="hover:bg-slate-50 transition">' +
-        '<td class="px-5 py-3"><p class="font-semibold text-slate-800">' + esc(b.product) + '</p><p class="text-xs text-slate-500">' + esc(b.id) + '</p></td>' +
-        '<td class="px-5 py-3 text-slate-600">' + esc(b.seller) + '</td>' +
+      return '<tr class="hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 transition">' +
+        '<td class="px-5 py-3"><p class="font-semibold text-slate-800 dark:text-neutral-100">' + esc(b.product) + '</p><p class="text-xs text-slate-500 dark:text-neutral-400">' + esc(b.id) + '</p></td>' +
+        '<td class="px-5 py-3 text-slate-600 dark:text-neutral-300">' + esc(b.seller) + '</td>' +
         '<td class="px-5 py-3"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-50 text-violet-700 ring-1 ring-violet-200 text-xs font-semibold capitalize"><i data-lucide="zap" class="w-3 h-3"></i>' + esc(b.tier) + '</span></td>' +
-        '<td class="px-5 py-3 font-semibold text-slate-800 whitespace-nowrap">' + fmtTZ(b.amount) + '</td>' +
-        '<td class="px-5 py-3 text-slate-600 text-xs whitespace-nowrap">' + fmtDateTime(b.started) + '</td>' +
-        '<td class="px-5 py-3 text-slate-600 text-xs whitespace-nowrap">' + fmtDateTime(b.ends) + '</td>' +
+        '<td class="px-5 py-3 font-semibold text-slate-800 dark:text-neutral-100 whitespace-nowrap">' + fmtTZ(b.amount) + '</td>' +
+        '<td class="px-5 py-3 text-slate-600 dark:text-neutral-300 text-xs whitespace-nowrap">' + fmtDateTime(b.started) + '</td>' +
+        '<td class="px-5 py-3 text-slate-600 dark:text-neutral-300 text-xs whitespace-nowrap">' + fmtDateTime(b.ends) + '</td>' +
         '<td class="px-5 py-3">' + (b.active
           ? '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 text-xs font-semibold"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>Active</span>'
-          : '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 ring-1 ring-slate-200 text-xs font-semibold"><span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>Expired</span>') + '</td>' +
+          : '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-neutral-800 text-slate-500 dark:text-neutral-400 ring-1 ring-slate-200 dark:ring-neutral-700 text-xs font-semibold"><span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>Expired</span>') + '</td>' +
         '</tr>';
     }).join('');
   }
@@ -1626,42 +1682,42 @@ function renderAnalytics() {
     var total = entries.reduce(function (a, c) { return a + c.count; }, 0);
 
     $('categoryBars').innerHTML = entries.length ? entries.map(function (c) {
-      return '<div><div class="flex justify-between text-sm mb-1"><span class="font-medium text-slate-700">' + esc(c.name) + '</span><span class="text-slate-500 font-semibold">' + c.count + ' products</span></div>' +
-        '<div class="h-2.5 rounded-full bg-slate-100"><div class="h-full rounded-full bg-gradient-to-r from-indigo-500 to-emerald-500" style="width:' + Math.round(c.count / max * 100) + '%"></div></div></div>';
-    }).join('') : '<p class="text-sm text-slate-400 py-4 text-center">No product data yet.</p>';
+      return '<div><div class="flex justify-between text-sm mb-1"><span class="font-medium text-slate-700 dark:text-neutral-200">' + esc(c.name) + '</span><span class="text-slate-500 dark:text-neutral-400 font-semibold">' + c.count + ' products</span></div>' +
+        '<div class="h-2.5 rounded-full bg-slate-100 dark:bg-neutral-800"><div class="h-full rounded-full bg-gradient-to-r from-green-500 to-emerald-500" style="width:' + Math.round(c.count / max * 100) + '%"></div></div></div>';
+    }).join('') : '<p class="text-sm text-slate-400 dark:text-neutral-500 py-4 text-center">No product data yet.</p>';
 
     var locs = an.locationDistribution || {};
     var locEntries = Object.keys(locs).map(function (k) { return { name: k, count: locs[k] }; }).sort(function (a, b) { return b.count - a.count; }).slice(0, 8);
     var locMax = locEntries.length ? Math.max.apply(null, locEntries.map(function (c) { return c.count; })) : 1;
     $('locationWrap').innerHTML = locEntries.length ? locEntries.map(function (c) {
-      return '<div class="flex items-center justify-between gap-2 text-sm"><span class="text-slate-600 truncate">' + esc(c.name) + '</span><span class="font-semibold text-slate-800 whitespace-nowrap">' + c.count + '</span></div>' +
-        '<div class="h-1.5 rounded-full bg-slate-100 -mt-1"><div class="h-full rounded-full bg-emerald-500" style="width:' + Math.round(c.count / locMax * 100) + '%"></div></div>';
-    }).join('') : '<p class="text-sm text-slate-400 py-4 text-center">No location data yet.</p>';
+      return '<div class="flex items-center justify-between gap-2 text-sm"><span class="text-slate-600 dark:text-neutral-300 truncate">' + esc(c.name) + '</span><span class="font-semibold text-slate-800 dark:text-neutral-100 whitespace-nowrap">' + c.count + '</span></div>' +
+        '<div class="h-1.5 rounded-full bg-slate-100 dark:bg-neutral-800 -mt-1"><div class="h-full rounded-full bg-emerald-500" style="width:' + Math.round(c.count / locMax * 100) + '%"></div></div>';
+    }).join('') : '<p class="text-sm text-slate-400 dark:text-neutral-500 py-4 text-center">No location data yet.</p>';
 
     var body = $('analyticsBody');
     if (!entries.length) {
-      body.innerHTML = '<tr><td colspan="4" class="px-5 py-12 text-center text-slate-400"><i data-lucide="bar-chart-3" class="w-8 h-8 mx-auto mb-2"></i><p class="font-medium">No categories yet</p></td></tr>';
+      body.innerHTML = '<tr><td colspan="4" class="px-5 py-12 text-center text-slate-400 dark:text-neutral-500"><i data-lucide="bar-chart-3" class="w-8 h-8 mx-auto mb-2"></i><p class="font-medium">No categories yet</p></td></tr>';
     } else {
       body.innerHTML = entries.slice(0, 40).map(function (c) {
         var pct = total ? Math.round(c.count / total * 100) : 0;
-        return '<tr class="hover:bg-slate-50 transition">' +
-          '<td class="px-5 py-3 font-semibold text-slate-800">' + esc(c.name) + '</td>' +
-          '<td class="px-5 py-3 text-slate-600">' + c.count + '</td>' +
-          '<td class="px-5 py-3"><div class="w-32 h-1.5 rounded-full bg-slate-100"><div class="h-full rounded-full bg-indigo-500" style="width:' + pct + '%"></div></div></td>' +
-          '<td class="px-5 py-3 font-semibold text-slate-800">' + pct + '%</td></tr>';
+        return '<tr class="hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 transition">' +
+          '<td class="px-5 py-3 font-semibold text-slate-800 dark:text-neutral-100">' + esc(c.name) + '</td>' +
+          '<td class="px-5 py-3 text-slate-600 dark:text-neutral-300">' + c.count + '</td>' +
+          '<td class="px-5 py-3"><div class="w-32 h-1.5 rounded-full bg-slate-100 dark:bg-neutral-800"><div class="h-full rounded-full bg-green-500" style="width:' + pct + '%"></div></div></td>' +
+          '<td class="px-5 py-3 font-semibold text-slate-800 dark:text-neutral-100">' + pct + '%</td></tr>';
       }).join('');
     }
     refreshIcons();
   }).catch(function (e) {
-    $('categoryBars').innerHTML = '<p class="text-sm text-slate-400 py-4 text-center">Failed to load analytics: ' + esc(e.message) + '</p>';
+    $('categoryBars').innerHTML = '<p class="text-sm text-slate-400 dark:text-neutral-500 py-4 text-center">Failed to load analytics: ' + esc(e.message) + '</p>';
   });
 }
 
 /* ============ KYC ============ */
 function switchKycTab(v) {
   kycView = v;
-  $('kycTabPending').className = 'kyc-tab text-sm font-semibold px-4 py-2 rounded-lg transition ' + (v === 'pending' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 border border-slate-200');
-  $('kycTabAll').className = 'kyc-tab text-sm font-semibold px-4 py-2 rounded-lg transition ' + (v === 'all' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 border border-slate-200');
+  $('kycTabPending').className = 'kyc-tab text-sm font-semibold px-4 py-2 rounded-lg transition ' + (v === 'pending' ? 'bg-green-600 text-white' : 'bg-white dark:bg-neutral-900 text-slate-600 dark:text-neutral-300 border border-slate-200 dark:border-neutral-700');
+  $('kycTabAll').className = 'kyc-tab text-sm font-semibold px-4 py-2 rounded-lg transition ' + (v === 'all' ? 'bg-green-600 text-white' : 'bg-white dark:bg-neutral-900 text-slate-600 dark:text-neutral-300 border border-slate-200 dark:border-neutral-700');
   renderKyc();
 }
 function renderKyc() {
@@ -1677,19 +1733,19 @@ function renderKyc() {
     wrap.innerHTML = '<div class="grid grid-cols-1 xl:grid-cols-2 gap-4">' + pending.map(function (u) {
       var k = u.kyc || {};
       var idNum = (k.idNumber || '').replace(/^(.{3}).*(.{3})$/, '$1••••••$2');
-      return '<div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">' +
+      return '<div class="bg-white dark:bg-neutral-900 rounded-2xl border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">' +
         '<div class="flex items-center gap-3 mb-4">' + avatar(u.displayName, 'w-11 h-11') +
-        '<div class="min-w-0"><p class="font-bold text-slate-800 truncate">' + esc(u.displayName || '—') + '</p>' +
-        '<p class="text-xs text-slate-500">' + esc(u.phone || '') + ' · ' + esc(u.email || '') + '</p></div></div>' +
+        '<div class="min-w-0"><p class="font-bold text-slate-800 dark:text-neutral-100 truncate">' + esc(u.displayName || '—') + '</p>' +
+        '<p class="text-xs text-slate-500 dark:text-neutral-400">' + esc(u.phone || '') + ' · ' + esc(u.email || '') + '</p></div></div>' +
         '<div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm mb-4">' +
-        '<div class="text-slate-500">Full name</div><div class="text-slate-800 font-medium">' + esc(k.fullName || '—') + '</div>' +
-        '<div class="text-slate-500">ID type</div><div class="text-slate-800 font-medium">' + esc(k.idType || '—') + '</div>' +
-        '<div class="text-slate-500">ID number</div><div class="text-slate-800 font-medium">' + esc(idNum || '—') + '</div>' +
-        '<div class="text-slate-500">Submitted</div><div class="text-slate-800 font-medium">' + timeAgo(k.submittedAt) + '</div></div>' +
+        '<div class="text-slate-500 dark:text-neutral-400">Full name</div><div class="text-slate-800 dark:text-neutral-100 font-medium">' + esc(k.fullName || '—') + '</div>' +
+        '<div class="text-slate-500 dark:text-neutral-400">ID type</div><div class="text-slate-800 dark:text-neutral-100 font-medium">' + esc(k.idType || '—') + '</div>' +
+        '<div class="text-slate-500 dark:text-neutral-400">ID number</div><div class="text-slate-800 dark:text-neutral-100 font-medium">' + esc(idNum || '—') + '</div>' +
+        '<div class="text-slate-500 dark:text-neutral-400">Submitted</div><div class="text-slate-800 dark:text-neutral-100 font-medium">' + timeAgo(k.submittedAt) + '</div></div>' +
         '<div class="flex gap-2 mb-4">' +
-        (k.idImageUrl ? '<a href="' + esc(k.idImageUrl) + '" target="_blank" rel="noopener" class="flex-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-center px-3 py-2 text-xs font-semibold text-slate-700">View ID</a>' : '') +
-        (k.selfieUrl ? '<a href="' + esc(k.selfieUrl) + '" target="_blank" rel="noopener" class="flex-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-center px-3 py-2 text-xs font-semibold text-slate-700">View selfie</a>' : '') +
-        '<button onclick="showKyc(\'' + esc(u.uid) + '\')" class="flex-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-center px-3 py-2 text-xs font-semibold text-slate-700">Inspect</button></div>' +
+        (k.idImageUrl ? '<a href="' + esc(k.idImageUrl) + '" target="_blank" rel="noopener" class="flex-1 rounded-xl bg-slate-100 dark:bg-neutral-800 hover:bg-slate-200 text-center px-3 py-2 text-xs font-semibold text-slate-700 dark:text-neutral-200">View ID</a>' : '') +
+        (k.selfieUrl ? '<a href="' + esc(k.selfieUrl) + '" target="_blank" rel="noopener" class="flex-1 rounded-xl bg-slate-100 dark:bg-neutral-800 hover:bg-slate-200 text-center px-3 py-2 text-xs font-semibold text-slate-700 dark:text-neutral-200">View selfie</a>' : '') +
+        '<button onclick="showKyc(\'' + esc(u.uid) + '\')" class="flex-1 rounded-xl bg-slate-100 dark:bg-neutral-800 hover:bg-slate-200 text-center px-3 py-2 text-xs font-semibold text-slate-700 dark:text-neutral-200">Inspect</button></div>' +
         '<div class="flex gap-2">' +
         '<button onclick="reviewKyc(\'' + esc(u.uid) + '\', true)" class="flex-1 px-3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold">Approve</button>' +
         '<button onclick="reviewKyc(\'' + esc(u.uid) + '\', false)" class="flex-1 px-3 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold">Reject</button>' +
@@ -1704,17 +1760,17 @@ function renderKyc() {
       var pill = st === 'approved' ? statusPill('Approved', 'bg-emerald-100 text-emerald-700')
         : st === 'pending' ? statusPill('Pending', 'bg-amber-100 text-amber-700')
         : st === 'rejected' ? statusPill('Rejected', 'bg-rose-100 text-rose-700')
-        : statusPill('Revoked', 'bg-slate-100 text-slate-600');
-      return '<tr class="hover:bg-slate-50 transition">' +
+        : statusPill('Revoked', 'bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-300');
+      return '<tr class="hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 transition">' +
         '<td class="px-4 py-3"><div class="flex items-center gap-2">' + avatar(u.displayName, 'w-7 h-7 text-xs') +
-        '<div><p class="font-medium text-slate-800">' + esc(u.displayName || '—') + '</p>' +
-        '<p class="text-xs text-slate-400">' + esc(u.phone || '') + '</p></div></div></td>' +
-        '<td class="px-4 py-3 text-slate-600">' + esc(k.fullName || '—') + '</td>' +
-        '<td class="px-4 py-3 text-slate-600">' + esc(k.idType || '—') + '</td>' +
+        '<div><p class="font-medium text-slate-800 dark:text-neutral-100">' + esc(u.displayName || '—') + '</p>' +
+        '<p class="text-xs text-slate-400 dark:text-neutral-500">' + esc(u.phone || '') + '</p></div></div></td>' +
+        '<td class="px-4 py-3 text-slate-600 dark:text-neutral-300">' + esc(k.fullName || '—') + '</td>' +
+        '<td class="px-4 py-3 text-slate-600 dark:text-neutral-300">' + esc(k.idType || '—') + '</td>' +
         '<td class="px-4 py-3">' + pill + '</td>' +
         '<td class="px-4 py-3">' + timeAgo(k.submittedAt) + '</td>' +
         '<td class="px-4 py-3"><div class="flex gap-1.5">' +
-        '<button onclick="showKyc(\'' + esc(u.uid) + '\')" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50">View</button>' +
+        '<button onclick="showKyc(\'' + esc(u.uid) + '\')" class="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-neutral-700 text-xs font-semibold text-slate-600 dark:text-neutral-300 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800">View</button>' +
         (st === 'approved' ? '<button onclick="revokeKyc(\'' + esc(u.uid) + '\')" class="px-2.5 py-1.5 rounded-lg border border-orange-200 text-xs font-semibold text-orange-600 hover:bg-orange-50">Revoke</button>' : '') +
         '<button onclick="deleteKyc(\'' + esc(u.uid) + '\')" class="px-2.5 py-1.5 rounded-lg border border-rose-200 text-xs font-semibold text-rose-600 hover:bg-rose-50">Delete</button>' +
         '</div></td></tr>';
@@ -1774,13 +1830,13 @@ function showKyc(userId) {
   var k = u.kyc || {};
   var st = k.status || 'none';
   var body = '<div class="flex items-center gap-3 mb-5">' + avatar(u.displayName, 'w-12 h-12') +
-    '<div><p class="font-bold text-slate-800 text-lg">' + esc(u.displayName || '—') + '</p>' +
-    '<p class="text-sm text-slate-500">' + esc(u.phone || '') + ' · ' + esc(u.email || '') + '</p></div></div>' +
-    '<div class="rounded-xl bg-slate-50 p-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">' +
+    '<div><p class="font-bold text-slate-800 dark:text-neutral-100 text-lg">' + esc(u.displayName || '—') + '</p>' +
+    '<p class="text-sm text-slate-500 dark:text-neutral-400">' + esc(u.phone || '') + ' · ' + esc(u.email || '') + '</p></div></div>' +
+    '<div class="rounded-xl bg-slate-50 dark:bg-neutral-800 p-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">' +
     [['KYC status', st], ['Full name', k.fullName], ['ID type', k.idType], ['ID number', k.idNumber], ['Submitted', fmtDateTime(k.submittedAt)], ['Reviewed', fmtDateTime(k.reviewedAt)], ['Review notes', k.reviewNotes]].map(function (r) {
-      return '<div class="text-slate-500">' + esc(r[0]) + '</div><div class="text-slate-800 font-medium">' + esc(r[1] || '—') + '</div>';
+      return '<div class="text-slate-500 dark:text-neutral-400">' + esc(r[0]) + '</div><div class="text-slate-800 dark:text-neutral-100 font-medium">' + esc(r[1] || '—') + '</div>';
     }).join('') + '</div>' +
-    '<div class="mt-5"><p class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Documents (' + kycDocs(k).length + ')</p><div class="grid grid-cols-2 gap-3">' + kycDocs(k).map(docCard).join('') + '</div></div>';
+    '<div class="mt-5"><p class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-neutral-400 mb-2">Documents (' + kycDocs(k).length + ')</p><div class="grid grid-cols-2 gap-3">' + kycDocs(k).map(docCard).join('') + '</div></div>';
   $('kycModalBody').innerHTML = body;
   openModal('kycModal');
 }
@@ -1809,9 +1865,9 @@ function kycDocs(k) {
 
 function docCard(d) {
   if (d.label === 'Selfie') {
-    return '<a href="' + esc(d.url) + '" target="_blank" rel="noopener" class="rounded-xl border border-slate-200 overflow-hidden"><img src="' + esc(d.url) + '" class="w-full h-40 object-cover" onerror="this.style.display=\'none\'" onload="this.onerror=null"><span class="block px-3 py-2 text-xs font-semibold text-indigo-600">Selfie ↗</span></a>';
+    return '<a href="' + esc(d.url) + '" target="_blank" rel="noopener" class="rounded-xl border border-slate-200 dark:border-neutral-700 overflow-hidden"><img src="' + esc(d.url) + '" class="w-full h-40 object-cover" onerror="this.style.display=\'none\'" onload="this.onerror=null"><span class="block px-3 py-2 text-xs font-semibold text-green-600">Selfie ↗</span></a>';
   }
-  return '<a href="' + esc(d.url) + '" target="_blank" rel="noopener" class="rounded-xl border border-slate-200 overflow-hidden"><img src="' + esc(d.url) + '" class="w-full h-40 object-cover" onerror="this.style.display=\'none\'" onload="this.onerror=null"><span class="block px-3 py-2 text-xs font-semibold text-indigo-600">' + esc(d.label) + ' ↗</span></a>';
+  return '<a href="' + esc(d.url) + '" target="_blank" rel="noopener" class="rounded-xl border border-slate-200 dark:border-neutral-700 overflow-hidden"><img src="' + esc(d.url) + '" class="w-full h-40 object-cover" onerror="this.style.display=\'none\'" onload="this.onerror=null"><span class="block px-3 py-2 text-xs font-semibold text-green-600">' + esc(d.label) + ' ↗</span></a>';
 }
 
 /* ============ USERS ============ */
@@ -1838,27 +1894,27 @@ function renderUsers() {
     var w = Number(u.policyWarnings) || 0;
     var badges = [];
     if (u.isSuspended === true) badges.push(statusPill('Suspended', 'bg-rose-100 text-rose-700'));
-    if (u.isAdmin === true) badges.push(statusPill('Admin', 'bg-slate-900 text-white'));
+    if (u.isAdmin === true) badges.push(statusPill('Admin', 'bg-neutral-950 text-white'));
     if (w >= 3) badges.push(statusPill('Blocked', 'bg-orange-100 text-orange-700'));
     else if (w > 0) badges.push(statusPill(w + '/3', 'bg-orange-100 text-orange-700'));
     var kyc = (u.kyc || {}).status;
     if (kyc === 'approved') badges.push(statusPill('KYC', 'bg-emerald-100 text-emerald-700'));
     else if (kyc === 'pending') badges.push(statusPill('KYC?', 'bg-amber-100 text-amber-700'));
     else if (kyc === 'rejected' || kyc === 'revoked') badges.push(statusPill('KYC!', 'bg-rose-100 text-rose-700'));
-    if (!badges.length) badges.push(statusPill('Active', 'bg-slate-100 text-slate-600'));
-    return '<tr class="hover:bg-slate-50 transition">' +
+    if (!badges.length) badges.push(statusPill('Active', 'bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-300'));
+    return '<tr class="hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 transition">' +
       '<td class="px-4 py-3"><div class="flex items-center gap-3">' + avatar(u.displayName || u.name, 'w-9 h-9 text-sm') +
-      '<div><p class="font-semibold text-slate-800">' + esc(u.displayName || u.name || '—') + '</p>' +
-      '<p class="text-xs text-slate-400">' + esc(u.email || '') + '</p></div></div></td>' +
-      '<td class="px-4 py-3 text-slate-600">' + esc(u.phone || '—') + '</td>' +
+      '<div><p class="font-semibold text-slate-800 dark:text-neutral-100">' + esc(u.displayName || u.name || '—') + '</p>' +
+      '<p class="text-xs text-slate-400 dark:text-neutral-500">' + esc(u.email || '') + '</p></div></div></td>' +
+      '<td class="px-4 py-3 text-slate-600 dark:text-neutral-300">' + esc(u.phone || '—') + '</td>' +
       '<td class="px-4 py-3"><div class="flex flex-wrap gap-1">' + badges.join('') + '</div></td>' +
-      '<td class="px-4 py-3 font-semibold text-slate-800">' + fmtTZ(u.sellerBalance) + '</td>' +
-      '<td class="px-4 py-3 text-slate-500">' + fmtDate(u.createdAt) + '</td>' +
+      '<td class="px-4 py-3 font-semibold text-slate-800 dark:text-neutral-100">' + fmtTZ(u.sellerBalance) + '</td>' +
+      '<td class="px-4 py-3 text-slate-500 dark:text-neutral-400">' + fmtDate(u.createdAt) + '</td>' +
       '<td class="px-4 py-3"><div class="flex gap-1.5 flex-wrap">' +
-      '<button onclick="showUser(\'' + esc(u.uid) + '\')" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50">Detail</button>' +
+      '<button onclick="showUser(\'' + esc(u.uid) + '\')" class="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-neutral-700 text-xs font-semibold text-slate-600 dark:text-neutral-300 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800">Detail</button>' +
       '<button onclick="toggleSuspend(\'' + esc(u.uid) + '\')" class="px-2.5 py-1.5 rounded-lg border ' + (u.isSuspended === true ? 'border-emerald-200 text-emerald-600 hover:bg-emerald-50' : 'border-rose-200 text-rose-600 hover:bg-rose-50') + ' text-xs font-semibold">' + (u.isSuspended === true ? 'Unsuspend' : 'Suspend') + '</button>' +
       (w < 3 ? '<button onclick="warnUser(\'' + esc(u.uid) + '\')" class="px-2.5 py-1.5 rounded-lg border border-orange-200 text-xs font-semibold text-orange-600 hover:bg-orange-50">Warn</button>' : '') +
-      '<button onclick="messageUser(\'' + esc(u.uid) + '\')" class="px-2.5 py-1.5 rounded-lg border border-indigo-200 text-xs font-semibold text-indigo-600 hover:bg-indigo-50">Message</button>' +
+      '<button onclick="messageUser(\'' + esc(u.uid) + '\')" class="px-2.5 py-1.5 rounded-lg border border-green-200 text-xs font-semibold text-green-600 hover:bg-green-50">Message</button>' +
       '<button onclick="deleteUser(\'' + esc(u.uid) + '\')" class="px-2.5 py-1.5 rounded-lg border border-rose-200 text-xs font-semibold text-rose-600 hover:bg-rose-50">Delete</button>' +
       '</div></td></tr>';
   }).join('');
@@ -1922,45 +1978,45 @@ function showUser(uid) {
     var w = Number(u.policyWarnings) || 0;
     var balances = [['Seller balance', u.sellerBalance], ['Pending escrow', u.pendingEscrow], ['Coins', u.coins], ['Total sales', u.totalSales], ['Gross volume', u.grossSalesVolume], ['Ad views', u.totalAdViews]];
     var orderRows = (d.orders || []).slice(0, 20).map(function (o) {
-      return '<tr class="border-b border-slate-100"><td class="px-3 py-2 text-xs font-mono text-slate-500">' + esc(o.id || '') + '</td>' +
-        '<td class="px-3 py-2 text-slate-700">' + esc((o.items || []).map(function (i) { return i.name; }).join(', ') || '—') + '</td>' +
+      return '<tr class="border-b border-slate-100 dark:border-neutral-800"><td class="px-3 py-2 text-xs font-mono text-slate-500 dark:text-neutral-400">' + esc(o.id || '') + '</td>' +
+        '<td class="px-3 py-2 text-slate-700 dark:text-neutral-200">' + esc((o.items || []).map(function (i) { return i.name; }).join(', ') || '—') + '</td>' +
         '<td class="px-3 py-2 font-semibold">' + fmtTZ(o.totalAmount) + '</td>' +
         '<td class="px-3 py-2">' + statusBadge(o.status) + '</td></tr>';
     }).join('');
     var wdRows = (d.withdrawals || []).slice(0, 20).map(function (wd) {
-      return '<tr class="border-b border-slate-100"><td class="px-3 py-2 font-semibold">' + fmtTZ(wd.amount) + '</td>' +
-        '<td class="px-3 py-2 text-slate-600">' + esc(wd.phone || '—') + '</td>' +
+      return '<tr class="border-b border-slate-100 dark:border-neutral-800"><td class="px-3 py-2 font-semibold">' + fmtTZ(wd.amount) + '</td>' +
+        '<td class="px-3 py-2 text-slate-600 dark:text-neutral-300">' + esc(wd.phone || '—') + '</td>' +
         '<td class="px-3 py-2">' + statusBadge(wd.status) + '</td>' +
-        '<td class="px-3 py-2 text-xs text-slate-500">' + timeAgo(wd.createdAt) + '</td></tr>';
+        '<td class="px-3 py-2 text-xs text-slate-500 dark:text-neutral-400">' + timeAgo(wd.createdAt) + '</td></tr>';
     }).join('');
     var revRows = (d.revenueTransactions || []).slice(0, 20).map(function (r) {
-      return '<tr class="border-b border-slate-100"><td class="px-3 py-2">' + esc(r.type || '—') + '</td>' +
+      return '<tr class="border-b border-slate-100 dark:border-neutral-800"><td class="px-3 py-2">' + esc(r.type || '—') + '</td>' +
         '<td class="px-3 py-2 font-semibold ' + ((Number(r.amount) || 0) < 0 ? 'text-rose-600' : 'text-emerald-600') + '">' + fmtTZ(r.amount) + '</td>' +
-        '<td class="px-3 py-2 text-xs text-slate-500">' + esc(r.description || '') + '</td>' +
-        '<td class="px-3 py-2 text-xs text-slate-500">' + timeAgo(r.timestamp) + '</td></tr>';
+        '<td class="px-3 py-2 text-xs text-slate-500 dark:text-neutral-400">' + esc(r.description || '') + '</td>' +
+        '<td class="px-3 py-2 text-xs text-slate-500 dark:text-neutral-400">' + timeAgo(r.timestamp) + '</td></tr>';
     }).join('');
     body.innerHTML =
       '<div class="flex items-center gap-4 mb-5">' + avatar(u.displayName || u.name, 'w-14 h-14 text-lg') +
-      '<div><p class="text-lg font-bold text-slate-800">' + esc(u.displayName || u.name || '—') + '</p>' +
-      '<p class="text-sm text-slate-500">' + esc(u.email || '') + ' · ' + esc(u.phone || '') + '</p>' +
-      '<p class="text-xs text-slate-400">' + esc(u.uid || '') + '</p></div>' +
+      '<div><p class="text-lg font-bold text-slate-800 dark:text-neutral-100">' + esc(u.displayName || u.name || '—') + '</p>' +
+      '<p class="text-sm text-slate-500 dark:text-neutral-400">' + esc(u.email || '') + ' · ' + esc(u.phone || '') + '</p>' +
+      '<p class="text-xs text-slate-400 dark:text-neutral-500">' + esc(u.uid || '') + '</p></div>' +
       '<div class="ml-auto flex gap-2">' +
-      '<button onclick="toggleSuspend(\'' + esc(u.uid) + '\')" class="px-3 py-2 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50">' + (u.isSuspended === true ? 'Unsuspend' : 'Suspend') + '</button>' +
-      '<button onclick="messageUser(\'' + esc(u.uid) + '\')" class="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold">Message</button>' +
+      '<button onclick="toggleSuspend(\'' + esc(u.uid) + '\')" class="px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 text-xs font-semibold text-slate-600 dark:text-neutral-300 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800">' + (u.isSuspended === true ? 'Unsuspend' : 'Suspend') + '</button>' +
+      '<button onclick="messageUser(\'' + esc(u.uid) + '\')" class="px-3 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-semibold">Message</button>' +
       '</div></div>' +
       '<div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">' + balances.map(function (b) {
-        return '<div class="rounded-xl bg-slate-50 px-4 py-3"><p class="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">' + esc(b[0]) + '</p>' +
-          '<p class="text-lg font-extrabold text-slate-800">' + (typeof b[1] === 'number' && b[0].toLowerCase().indexOf('sales') === -1 && b[0].toLowerCase().indexOf('volume') === -1 ? fmtTZ(b[1]) : (b[1] != null ? Number(b[1]).toLocaleString() : '—')) + '</p></div>';
+        return '<div class="rounded-xl bg-slate-50 dark:bg-neutral-800 px-4 py-3"><p class="text-[11px] text-slate-400 dark:text-neutral-500 font-semibold uppercase tracking-wider">' + esc(b[0]) + '</p>' +
+          '<p class="text-lg font-extrabold text-slate-800 dark:text-neutral-100">' + (typeof b[1] === 'number' && b[0].toLowerCase().indexOf('sales') === -1 && b[0].toLowerCase().indexOf('volume') === -1 ? fmtTZ(b[1]) : (b[1] != null ? Number(b[1]).toLocaleString() : '—')) + '</p></div>';
       }).join('') + '</div>' +
-      '<div class="rounded-xl bg-slate-50 px-4 py-3 mb-5 flex flex-wrap gap-x-8 gap-y-1 text-sm">' +
-      '<span class="text-slate-500">Status</span><span class="text-slate-800 font-semibold">' + (u.isSuspended === true ? 'Suspended' : 'Active') + '</span>' +
-      '<span class="text-slate-500">Warnings</span><span class="text-slate-800 font-semibold">' + w + '/3</span>' +
-      '<span class="text-slate-500">Admin</span><span class="text-slate-800 font-semibold">' + (u.isAdmin === true ? 'Yes' : 'No') + '</span>' +
-      '<span class="text-slate-500">KYC</span><span class="text-slate-800 font-semibold">' + esc(kyc.status || 'none') + '</span>' +
-      '<span class="text-slate-500">Joined</span><span class="text-slate-800 font-semibold">' + fmtDate(u.createdAt) + '</span></div>' +
-      '<h4 class="font-bold text-slate-800 mb-2 mt-5">Orders (last 20)</h4>' + (orderRows ? tableShell(['Order', 'Items', 'Amount', 'Status'], orderRows, '520') : emptyRow('No orders')) +
-      '<h4 class="font-bold text-slate-800 mb-2 mt-5">Withdrawals (last 20)</h4>' + (wdRows ? tableShell(['Amount', 'Phone', 'Status', 'Date'], wdRows, '520') : emptyRow('No withdrawals')) +
-      '<h4 class="font-bold text-slate-800 mb-2 mt-5">Revenue transactions (last 20)</h4>' + (revRows ? tableShell(['Type', 'Amount', 'Description', 'Date'], revRows, '640') : emptyRow('No revenue transactions'));
+      '<div class="rounded-xl bg-slate-50 dark:bg-neutral-800 px-4 py-3 mb-5 flex flex-wrap gap-x-8 gap-y-1 text-sm">' +
+      '<span class="text-slate-500 dark:text-neutral-400">Status</span><span class="text-slate-800 dark:text-neutral-100 font-semibold">' + (u.isSuspended === true ? 'Suspended' : 'Active') + '</span>' +
+      '<span class="text-slate-500 dark:text-neutral-400">Warnings</span><span class="text-slate-800 dark:text-neutral-100 font-semibold">' + w + '/3</span>' +
+      '<span class="text-slate-500 dark:text-neutral-400">Admin</span><span class="text-slate-800 dark:text-neutral-100 font-semibold">' + (u.isAdmin === true ? 'Yes' : 'No') + '</span>' +
+      '<span class="text-slate-500 dark:text-neutral-400">KYC</span><span class="text-slate-800 dark:text-neutral-100 font-semibold">' + esc(kyc.status || 'none') + '</span>' +
+      '<span class="text-slate-500 dark:text-neutral-400">Joined</span><span class="text-slate-800 dark:text-neutral-100 font-semibold">' + fmtDate(u.createdAt) + '</span></div>' +
+      '<h4 class="font-bold text-slate-800 dark:text-neutral-100 mb-2 mt-5">Orders (last 20)</h4>' + (orderRows ? tableShell(['Order', 'Items', 'Amount', 'Status'], orderRows, '520') : emptyRow('No orders')) +
+      '<h4 class="font-bold text-slate-800 dark:text-neutral-100 mb-2 mt-5">Withdrawals (last 20)</h4>' + (wdRows ? tableShell(['Amount', 'Phone', 'Status', 'Date'], wdRows, '520') : emptyRow('No withdrawals')) +
+      '<h4 class="font-bold text-slate-800 dark:text-neutral-100 mb-2 mt-5">Revenue transactions (last 20)</h4>' + (revRows ? tableShell(['Type', 'Amount', 'Description', 'Date'], revRows, '640') : emptyRow('No revenue transactions'));
     refreshIcons();
   }).catch(function (e) {
     body.innerHTML = emptyRow('Failed to load user: ' + e.message);
@@ -1980,19 +2036,19 @@ function renderProducts() {
     var img = p.images && p.images.length ? p.images[0] : '';
     var boostPill = '';
     if (p.boostTier) {
-      var bCls = p.boostTier === 'gold' ? 'bg-amber-100 text-amber-700' : p.boostTier === 'silver' ? 'bg-slate-100 text-slate-600' : 'bg-orange-100 text-orange-700';
+      var bCls = p.boostTier === 'gold' ? 'bg-amber-100 text-amber-700' : p.boostTier === 'silver' ? 'bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-300' : 'bg-orange-100 text-orange-700';
       boostPill = statusPill(p.boostTier + ' boost', bCls);
     }
-    return '<tr class="hover:bg-slate-50 transition">' +
-      '<td class="px-4 py-3">' + (img ? '<img src="' + esc(img) + '" class="w-11 h-11 rounded-xl object-cover border border-slate-200" onerror="this.style.display=\'none\'">' : '<div class="w-11 h-11 rounded-xl bg-slate-100"></div>') + '</td>' +
-      '<td class="px-4 py-3"><p class="font-semibold text-slate-800">' + esc(p.name) + '</p>' +
-      '<p class="text-xs text-slate-400">' + esc(p.category || '') + (p.isActive === false ? ' · inactive' : '') + '</p></td>' +
-      '<td class="px-4 py-3 font-semibold text-slate-800">' + fmtTZ(p.price) + '</td>' +
-      '<td class="px-4 py-3 text-slate-600">' + esc(p.sellerName || '—') + '</td>' +
-      '<td class="px-4 py-3">' + (boostPill || '<span class="text-slate-400 text-xs">—</span>') + '</td>' +
-      '<td class="px-4 py-3 text-slate-500">' + timeAgo(p.createdAt) + '</td>' +
+    return '<tr class="hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 transition">' +
+      '<td class="px-4 py-3">' + (img ? '<img src="' + esc(img) + '" class="w-11 h-11 rounded-xl object-cover border border-slate-200 dark:border-neutral-700" onerror="this.style.display=\'none\'">' : '<div class="w-11 h-11 rounded-xl bg-slate-100 dark:bg-neutral-800"></div>') + '</td>' +
+      '<td class="px-4 py-3"><p class="font-semibold text-slate-800 dark:text-neutral-100">' + esc(p.name) + '</p>' +
+      '<p class="text-xs text-slate-400 dark:text-neutral-500">' + esc(p.category || '') + (p.isActive === false ? ' · inactive' : '') + '</p></td>' +
+      '<td class="px-4 py-3 font-semibold text-slate-800 dark:text-neutral-100">' + fmtTZ(p.price) + '</td>' +
+      '<td class="px-4 py-3 text-slate-600 dark:text-neutral-300">' + esc(p.sellerName || '—') + '</td>' +
+      '<td class="px-4 py-3">' + (boostPill || '<span class="text-slate-400 dark:text-neutral-500 text-xs">—</span>') + '</td>' +
+      '<td class="px-4 py-3 text-slate-500 dark:text-neutral-400">' + timeAgo(p.createdAt) + '</td>' +
       '<td class="px-4 py-3"><div class="flex gap-1.5">' +
-      '<button onclick="toggleProduct(\'' + esc(p.id) + '\')" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50">' + (p.isActive === false ? 'Activate' : 'Hide') + '</button>' +
+      '<button onclick="toggleProduct(\'' + esc(p.id) + '\')" class="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-neutral-700 text-xs font-semibold text-slate-600 dark:text-neutral-300 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800">' + (p.isActive === false ? 'Activate' : 'Hide') + '</button>' +
       '<button onclick="featureProduct(\'' + esc(p.id) + '\')" class="px-2.5 py-1.5 rounded-lg border border-amber-200 text-xs font-semibold text-amber-600 hover:bg-amber-50">' + (p.isFeatured === true ? 'Unfeature' : 'Feature') + '</button>' +
       '<button onclick="deleteProduct(\'' + esc(p.id) + '\')" class="px-2.5 py-1.5 rounded-lg border border-rose-200 text-xs font-semibold text-rose-600 hover:bg-rose-50">Delete</button>' +
       '</div></td></tr>';
@@ -2038,13 +2094,13 @@ function deleteProduct(id) {
 
 /* ============ TRANSACTIONS ============ */
 var TX_TYPE = {
-  sale: ['Sale', 'bg-slate-100 text-slate-600'], boost: ['Boost', 'bg-purple-100 text-purple-700'],
+  sale: ['Sale', 'bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-300'], boost: ['Boost', 'bg-purple-100 text-purple-700'],
   viewer: ['Viewer Purchase', 'bg-sky-100 text-sky-700'], view: ['Viewer Purchase', 'bg-sky-100 text-sky-700'],
   seller_withdraw: ['Withdrawal', 'bg-orange-100 text-orange-700'], admin_withdraw: ['Withdrawal', 'bg-orange-100 text-orange-700'],
   refund: ['Refund', 'bg-fuchsia-100 text-fuchsia-700']
 };
-function txTypeLabel(t) { var m = TX_TYPE[t.type] || (t.type ? [t.type, 'bg-slate-100 text-slate-600'] : TX_TYPE.sale); return m[0]; }
-function txTypeClass(t) { var m = TX_TYPE[t.type] || (t.type ? [t.type, 'bg-slate-100 text-slate-600'] : TX_TYPE.sale); return m[1]; }
+function txTypeLabel(t) { var m = TX_TYPE[t.type] || (t.type ? [t.type, 'bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-300'] : TX_TYPE.sale); return m[0]; }
+function txTypeClass(t) { var m = TX_TYPE[t.type] || (t.type ? [t.type, 'bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-300'] : TX_TYPE.sale); return m[1]; }
 
 function renderTransactions() {
   var wrap = $('transactionsWrap');
@@ -2067,15 +2123,15 @@ function renderTransactions() {
   if (!list.length) { wrap.innerHTML = emptyRow('No transactions match.'); return; }
   var rows = list.slice(0, 300).map(function (t) {
     var buyer = t.buyerName || t.sellerName || '—';
-    return '<tr class="hover:bg-slate-50 transition">' +
-      '<td class="px-4 py-3"><p class="font-semibold text-slate-800">' + esc(t.productName || '—') + '</p>' +
-      '<p class="text-xs font-mono text-slate-400">' + esc(t.id || '') + '</p></td>' +
+    return '<tr class="hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 transition">' +
+      '<td class="px-4 py-3"><p class="font-semibold text-slate-800 dark:text-neutral-100">' + esc(t.productName || '—') + '</p>' +
+      '<p class="text-xs font-mono text-slate-400 dark:text-neutral-500">' + esc(t.id || '') + '</p></td>' +
       '<td class="px-4 py-3"><span class="text-[11px] font-bold px-2 py-0.5 rounded-full ' + txTypeClass(t) + '">' + esc(txTypeLabel(t)) + '</span></td>' +
-      '<td class="px-4 py-3 text-slate-600">' + esc(buyer) + '</td>' +
-      '<td class="px-4 py-3 font-semibold text-slate-800">' + fmtTZ(t.totalAmount) + '</td>' +
+      '<td class="px-4 py-3 text-slate-600 dark:text-neutral-300">' + esc(buyer) + '</td>' +
+      '<td class="px-4 py-3 font-semibold text-slate-800 dark:text-neutral-100">' + fmtTZ(t.totalAmount) + '</td>' +
       '<td class="px-4 py-3">' + statusBadge(t.status) + '</td>' +
-      '<td class="px-4 py-3 text-slate-500">' + timeAgo(t.createdAt) + '</td>' +
-      '<td class="px-4 py-3"><button onclick="showTx(\'' + esc(t.id) + '\')" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50">Detail</button></td></tr>';
+      '<td class="px-4 py-3 text-slate-500 dark:text-neutral-400">' + timeAgo(t.createdAt) + '</td>' +
+      '<td class="px-4 py-3"><button onclick="showTx(\'' + esc(t.id) + '\')" class="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-neutral-700 text-xs font-semibold text-slate-600 dark:text-neutral-300 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800">Detail</button></td></tr>';
   }).join('');
   wrap.innerHTML = tableShell(['Item', 'Type', 'Party', 'Amount', 'Status', 'Date', ''], rows, '900');
   refreshIcons();
@@ -2101,9 +2157,9 @@ function showTx(id) {
   var t = S.transactions.find(function (x) { return x.id === id; });
   if (!t) { toast('Transaction not found', 'err'); return; }
   var body = '<div class="flex items-center justify-between mb-5 flex-wrap gap-2">' +
-    '<div><p class="font-bold text-slate-800 text-lg">' + esc(t.productName || 'Transaction') + '</p>' +
-    '<p class="text-xs font-mono text-slate-400">' + esc(t.id || '') + '</p></div>' + statusBadge(t.status) + '</div>' +
-    '<div class="rounded-xl bg-slate-50 p-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">';
+    '<div><p class="font-bold text-slate-800 dark:text-neutral-100 text-lg">' + esc(t.productName || 'Transaction') + '</p>' +
+    '<p class="text-xs font-mono text-slate-400 dark:text-neutral-500">' + esc(t.id || '') + '</p></div>' + statusBadge(t.status) + '</div>' +
+    '<div class="rounded-xl bg-slate-50 dark:bg-neutral-800 p-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">';
   TX_FIELDS.forEach(function (f) {
     var v = t[f[0]];
     if (v === undefined || v === null || v === '') return;
@@ -2113,18 +2169,18 @@ function showTx(id) {
     else if (f[2] === 'bool') disp = v === true ? 'Yes' : 'No';
     else if (f[2] === 'mono') disp = '<span class="font-mono">' + esc(String(v)) + '</span>';
     else disp = esc(String(v));
-    body += '<div class="text-slate-500">' + esc(f[1]) + '</div><div class="text-slate-800 font-medium">' + disp + '</div>';
+    body += '<div class="text-slate-500 dark:text-neutral-400">' + esc(f[1]) + '</div><div class="text-slate-800 dark:text-neutral-100 font-medium">' + disp + '</div>';
   });
   if (t.disputeInfo) {
     var di = t.disputeInfo;
-    body += '<div class="text-slate-500">Dispute reason</div><div class="text-slate-800 font-medium">' + esc(di.reason || '—') + '</div>';
-    if (di.raisedAt) body += '<div class="text-slate-500">Dispute raised</div><div class="text-slate-800 font-medium">' + fmtDateTime(di.raisedAt) + '</div>';
+    body += '<div class="text-slate-500 dark:text-neutral-400">Dispute reason</div><div class="text-slate-800 dark:text-neutral-100 font-medium">' + esc(di.reason || '—') + '</div>';
+    if (di.raisedAt) body += '<div class="text-slate-500 dark:text-neutral-400">Dispute raised</div><div class="text-slate-800 dark:text-neutral-100 font-medium">' + fmtDateTime(di.raisedAt) + '</div>';
   }
   if (t.dispatchProof) {
     var dp = t.dispatchProof;
-    if (dp.trackingNumber) body += '<div class="text-slate-500">Tracking</div><div class="text-slate-800 font-medium">' + esc(dp.trackingNumber) + '</div>';
-    if (dp.receiptUrl) body += '<div class="text-slate-500">Receipt</div><div class="text-slate-800 font-medium"><a href="' + esc(dp.receiptUrl) + '" target="_blank" rel="noopener" class="text-indigo-600 hover:underline">' + esc(dp.receiptUrl) + '</a></div>';
-    if (dp.dispatchedAt) body += '<div class="text-slate-500">Dispatched</div><div class="text-slate-800 font-medium">' + fmtDateTime(dp.dispatchedAt) + '</div>';
+    if (dp.trackingNumber) body += '<div class="text-slate-500 dark:text-neutral-400">Tracking</div><div class="text-slate-800 dark:text-neutral-100 font-medium">' + esc(dp.trackingNumber) + '</div>';
+    if (dp.receiptUrl) body += '<div class="text-slate-500 dark:text-neutral-400">Receipt</div><div class="text-slate-800 dark:text-neutral-100 font-medium"><a href="' + esc(dp.receiptUrl) + '" target="_blank" rel="noopener" class="text-green-600 hover:underline">' + esc(dp.receiptUrl) + '</a></div>';
+    if (dp.dispatchedAt) body += '<div class="text-slate-500 dark:text-neutral-400">Dispatched</div><div class="text-slate-800 dark:text-neutral-100 font-medium">' + fmtDateTime(dp.dispatchedAt) + '</div>';
   }
   body += '</div>';
   if (t.type === 'boost' && (t.status === 'completed' || t.status === 'paid')) {
@@ -2190,34 +2246,34 @@ function openOrderModal(id) {
   if (!t) { toast('Transaction not found', 'err'); return; }
   var total = orderTotal(t);
   $('orderModalHeader').querySelector('div').innerHTML =
-    '<div class="flex items-center gap-3"><div class="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center"><i data-lucide="package" class="w-5 h-5"></i></div>' +
-    '<div><p class="font-bold text-slate-800 text-lg leading-tight">' + esc(t.id || '') + ' — ' + esc(t.productName || '') + '</p><p class="text-xs text-slate-500">Placed ' + fmtDateTime(t.createdAt) + '</p></div></div>';
+    '<div class="flex items-center gap-3"><div class="w-11 h-11 rounded-xl bg-green-50 text-green-600 flex items-center justify-center"><i data-lucide="package" class="w-5 h-5"></i></div>' +
+    '<div><p class="font-bold text-slate-800 dark:text-neutral-100 text-lg leading-tight">' + esc(t.id || '') + ' — ' + esc(t.productName || '') + '</p><p class="text-xs text-slate-500 dark:text-neutral-400">Placed ' + fmtDateTime(t.createdAt) + '</p></div></div>';
 
   var steps = orderTimeline(t).map(function (s, i, arr) {
     var last = i === arr.length - 1;
-    var iconCls = s.done ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400';
+    var iconCls = s.done ? 'bg-green-600 text-white' : 'bg-slate-100 dark:bg-neutral-800 text-slate-400 dark:text-neutral-500';
     return '<li class="relative pl-12">' +
       (last ? '' : '<span class="absolute left-[19px] top-10 bottom-[-16px] w-0.5 bg-slate-200"></span>') +
       '<div class="absolute left-0 top-0 w-10 h-10 rounded-full flex items-center justify-center ' + iconCls + '"><i data-lucide="' + s.icon + '" class="w-4 h-4"></i></div>' +
-      '<div class="pb-6"><div class="flex flex-wrap items-center justify-between gap-2"><p class="font-semibold text-slate-800">' + s.title + '</p><span class="text-xs text-slate-400 font-medium whitespace-nowrap">' + (s.time ? fmtDateTime(s.time) : '—') + '</span></div>' +
-      '<p class="text-sm text-slate-500 mt-0.5">' + s.desc + '</p></div></li>';
+      '<div class="pb-6"><div class="flex flex-wrap items-center justify-between gap-2"><p class="font-semibold text-slate-800 dark:text-neutral-100">' + s.title + '</p><span class="text-xs text-slate-400 dark:text-neutral-500 font-medium whitespace-nowrap">' + (s.time ? fmtDateTime(s.time) : '—') + '</span></div>' +
+      '<p class="text-sm text-slate-500 dark:text-neutral-400 mt-0.5">' + s.desc + '</p></div></li>';
   }).join('');
 
   var dp = t.dispatchProof || {};
   var showShipping = dp.receiptUrl || dp.trackingNumber || t.busName;
   $('orderModalBody').innerHTML =
     '<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">' +
-    '<div class="rounded-xl bg-slate-50 border border-slate-100 p-3"><p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Product Price</p><p class="font-bold text-slate-800">' + fmtTZ(t.productPrice || 0) + '</p></div>' +
-    '<div class="rounded-xl bg-slate-50 border border-slate-100 p-3"><p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Shipping Fee</p><p class="font-bold text-slate-800">' + (t.shippingCost ? fmtTZ(t.shippingCost) : 'Pending') + '</p></div>' +
-    '<div class="rounded-xl bg-indigo-50 border border-indigo-100 p-3"><p class="text-[11px] uppercase tracking-wide text-indigo-400 font-semibold">Escrow Total</p><p class="font-bold text-indigo-700">' + fmtTZ(total) + '</p></div>' +
-    '<div class="rounded-xl bg-slate-50 border border-slate-100 p-3"><p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Status</p><p class="mt-1">' + statusBadge(t.status) + '</p></div>' +
+    '<div class="rounded-xl bg-slate-50 dark:bg-neutral-800 border border-slate-100 dark:border-neutral-800 p-3"><p class="text-[11px] uppercase tracking-wide text-slate-400 dark:text-neutral-500 font-semibold">Product Price</p><p class="font-bold text-slate-800 dark:text-neutral-100">' + fmtTZ(t.productPrice || 0) + '</p></div>' +
+    '<div class="rounded-xl bg-slate-50 dark:bg-neutral-800 border border-slate-100 dark:border-neutral-800 p-3"><p class="text-[11px] uppercase tracking-wide text-slate-400 dark:text-neutral-500 font-semibold">Shipping Fee</p><p class="font-bold text-slate-800 dark:text-neutral-100">' + (t.shippingCost ? fmtTZ(t.shippingCost) : 'Pending') + '</p></div>' +
+    '<div class="rounded-xl bg-green-50 border border-green-100 p-3"><p class="text-[11px] uppercase tracking-wide text-green-400 font-semibold">Escrow Total</p><p class="font-bold text-green-700">' + fmtTZ(total) + '</p></div>' +
+    '<div class="rounded-xl bg-slate-50 dark:bg-neutral-800 border border-slate-100 dark:border-neutral-800 p-3"><p class="text-[11px] uppercase tracking-wide text-slate-400 dark:text-neutral-500 font-semibold">Status</p><p class="mt-1">' + statusBadge(t.status) + '</p></div>' +
     '</div>' +
     '<div class="grid grid-cols-2 gap-3">' +
-    '<div class="rounded-xl border border-slate-100 p-3"><p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold flex items-center gap-1"><i data-lucide="user" class="w-3 h-3"></i> Buyer</p><p class="font-semibold text-slate-800 mt-1">' + esc(t.buyerName || '—') + '</p><p class="text-xs text-slate-400">' + esc(t.buyerPhone || '') + '</p></div>' +
-    '<div class="rounded-xl border border-slate-100 p-3"><p class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold flex items-center gap-1"><i data-lucide="store" class="w-3 h-3"></i> Seller</p><p class="font-semibold text-slate-800 mt-1">' + esc(t.sellerName || '—') + '</p><p class="text-xs text-slate-400">Receives ' + fmtTZ(t.sellerReceives) + '</p></div>' +
+    '<div class="rounded-xl border border-slate-100 dark:border-neutral-800 p-3"><p class="text-[11px] uppercase tracking-wide text-slate-400 dark:text-neutral-500 font-semibold flex items-center gap-1"><i data-lucide="user" class="w-3 h-3"></i> Buyer</p><p class="font-semibold text-slate-800 dark:text-neutral-100 mt-1">' + esc(t.buyerName || '—') + '</p><p class="text-xs text-slate-400 dark:text-neutral-500">' + esc(t.buyerPhone || '') + '</p></div>' +
+    '<div class="rounded-xl border border-slate-100 dark:border-neutral-800 p-3"><p class="text-[11px] uppercase tracking-wide text-slate-400 dark:text-neutral-500 font-semibold flex items-center gap-1"><i data-lucide="store" class="w-3 h-3"></i> Seller</p><p class="font-semibold text-slate-800 dark:text-neutral-100 mt-1">' + esc(t.sellerName || '—') + '</p><p class="text-xs text-slate-400 dark:text-neutral-500">Receives ' + fmtTZ(t.sellerReceives) + '</p></div>' +
     '</div>' +
-    (showShipping ? '<div class="rounded-xl border border-slate-100 p-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm"><span class="text-slate-400 flex items-center gap-1.5"><i data-lucide="truck" class="w-4 h-4"></i> Courier</span><span class="font-medium text-slate-700">' + courierLabel(t) + '</span><span class="text-slate-300">·</span><span class="text-slate-400 flex items-center gap-1.5"><i data-lucide="paperclip" class="w-4 h-4"></i> Receipt</span>' + (dp.receiptUrl ? '<a href="' + esc(dp.receiptUrl) + '" target="_blank" rel="noopener" class="font-medium text-indigo-600 hover:text-indigo-800">' + esc(dp.receiptUrl.split('/').pop()) + '</a>' : '<span class="text-slate-300">—</span>') + '</div>' : '') +
-    '<div><p class="font-bold text-slate-800 mb-3 flex items-center gap-2"><i data-lucide="history" class="w-4 h-4 text-indigo-600"></i> Order Timeline</p><ol>' + steps + '</ol></div>';
+    (showShipping ? '<div class="rounded-xl border border-slate-100 dark:border-neutral-800 p-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm"><span class="text-slate-400 dark:text-neutral-500 flex items-center gap-1.5"><i data-lucide="truck" class="w-4 h-4"></i> Courier</span><span class="font-medium text-slate-700 dark:text-neutral-200">' + courierLabel(t) + '</span><span class="text-slate-300 dark:text-neutral-300">·</span><span class="text-slate-400 dark:text-neutral-500 flex items-center gap-1.5"><i data-lucide="paperclip" class="w-4 h-4"></i> Receipt</span>' + (dp.receiptUrl ? '<a href="' + esc(dp.receiptUrl) + '" target="_blank" rel="noopener" class="font-medium text-green-600 hover:text-green-800">' + esc(dp.receiptUrl.split('/').pop()) + '</a>' : '<span class="text-slate-300 dark:text-neutral-300">—</span>') + '</div>' : '') +
+    '<div><p class="font-bold text-slate-800 dark:text-neutral-100 mb-3 flex items-center gap-2"><i data-lucide="history" class="w-4 h-4 text-green-600"></i> Order Timeline</p><ol>' + steps + '</ol></div>';
   refreshIcons();
   openModal('orderModal');
 }
@@ -2227,11 +2283,11 @@ function closeOrderModal() {
 
 /* ============ FINANCE ============ */
 function metricCard(icon, iconCls, label, value, sub) {
-  return '<div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">' +
+  return '<div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">' +
     '<div class="flex items-start justify-between">' +
-    '<div><p class="text-xs font-medium text-slate-500">' + esc(label) + '</p>' +
-    '<p class="text-2xl font-extrabold text-slate-800 mt-1 tracking-tight">' + value + '</p>' +
-    (sub ? '<p class="text-xs text-slate-500 mt-1">' + sub + '</p>' : '') + '</div>' +
+    '<div><p class="text-xs font-medium text-slate-500 dark:text-neutral-400">' + esc(label) + '</p>' +
+    '<p class="text-2xl font-extrabold text-slate-800 dark:text-neutral-100 mt-1 tracking-tight">' + value + '</p>' +
+    (sub ? '<p class="text-xs text-slate-500 dark:text-neutral-400 mt-1">' + sub + '</p>' : '') + '</div>' +
     '<div class="w-11 h-11 rounded-xl flex items-center justify-center ' + iconCls + '">' +
     '<i data-lucide="' + icon + '" class="w-5 h-5"></i></div></div></div>';
 }
@@ -2240,16 +2296,19 @@ function renderFinance() {
   el.innerHTML = spinner('Loading finance…');
   Promise.all([loadFinance(), loadRevenue(), loadAdViews(), loadUsers()]).then(function () {
     var f = S.finance || {};
+    var pct = ((f.platformCommissionPercent || 0) * 100).toLocaleString() + '%';
+    var perView = 'TZS ' + ((f.adRevenuePerView || 0)).toLocaleString() + ' / view';
+    var withdrawable = f.availableBalance || 0;
     var grid =
       '<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">' +
-      metricCard('lock', 'bg-indigo-50 text-indigo-600', 'ClickPesa Balance', fmtTZ(f.actualClickPesaBalance), 'live wallet') +
-      metricCard('wallet', 'bg-emerald-50 text-emerald-600', 'Available Balance', fmtTZ(f.availableBalance), 'withdrawable') +
-      metricCard('banknote', 'bg-emerald-50 text-emerald-600', 'Total Processed', fmtTZ(f.totalProcessed), 'lifetime volume') +
+      metricCard('lock', 'bg-green-50 text-green-600', 'ClickPesa Balance', fmtTZ(f.actualClickPesaBalance), 'live wallet') +
+      metricCard('banknote', 'bg-emerald-50 text-emerald-600', 'Withdrawable (Boost + Commission)', fmtTZ(withdrawable), 'commissions + boosts, minus paid out') +
+      metricCard('banknote', 'bg-green-50 text-green-600', 'Total Processed', fmtTZ(f.totalProcessed), 'lifetime volume') +
       metricCard('send', 'bg-orange-50 text-orange-600', 'Total Payouts', fmtTZ(f.totalPayouts), fmtTZ(f.totalUserPaidOut) + ' users') +
-      metricCard('percent', 'bg-indigo-50 text-indigo-600', 'Commissions', fmtTZ(f.totalCommissions), '3.5% platform fee') +
+      metricCard('percent', 'bg-green-50 text-green-600', 'Commissions', fmtTZ(f.totalCommissions), 'platform fee ' + pct) +
       metricCard('rocket', 'bg-purple-50 text-purple-600', 'Boost Revenue', fmtTZ(f.totalBoostRevenue), 'bronze/silver/gold') +
-      metricCard('trending-up', 'bg-cyan-50 text-cyan-600', 'Ad Revenue (est.)', fmtTZ(f.estimatedAdRevenue), 'TZS 15 / view') +
-      metricCard('target', 'bg-slate-50 text-slate-600', 'Ad Revenue (actual)', fmtTZ(f.actualAdRevenue), 'AdMob entry') +
+      metricCard('trending-up', 'bg-cyan-50 text-cyan-600', 'Ad Revenue (est.)', fmtTZ(f.estimatedAdRevenue), perView) +
+      metricCard('target', 'bg-slate-50 dark:bg-neutral-800 text-slate-600 dark:text-neutral-300', 'Ad Revenue (actual)', fmtTZ(f.actualAdRevenue), 'AdMob entry') +
       '</div>';
     el.innerHTML = grid;
     refreshIcons();
@@ -2258,6 +2317,9 @@ function renderFinance() {
     sel.innerHTML = adminUsers.length
       ? adminUsers.map(function (u) { return '<option value="' + esc(u.uid) + '">' + esc(u.displayName || u.email || u.uid) + '</option>'; }).join('')
       : '<option value="">No admin user found</option>';
+    $('wdBalance').textContent = fmtTZ(withdrawable);
+    var rateEl = $('rateInput');
+    if (rateEl && typeof f.platformCommissionPercent === 'number') rateEl.value = (f.platformCommissionPercent * 100).toFixed(1);
   }).catch(function (e) {
     el.innerHTML = emptyRow('Failed to load finance: ' + e.message);
   });
@@ -2269,11 +2331,11 @@ function renderRevenue() {
   if (!loaded.revenue) { loadRevenue().then(renderRevenue).catch(function () {}); return; }
   if (!S.revenue.length) { wrap.innerHTML = emptyRow('No revenue transactions.'); return; }
   var rows = S.revenue.slice(0, 100).map(function (r) {
-    return '<tr class="border-b border-slate-100 hover:bg-slate-50 transition">' +
-      '<td class="px-4 py-3"><span class="text-[11px] font-bold px-2 py-0.5 rounded-full ' + (r.type === 'boost' ? 'bg-purple-100 text-purple-700' : 'bg-indigo-100 text-indigo-700') + '">' + esc(r.type || '—') + '</span></td>' +
+    return '<tr class="border-b border-slate-100 dark:border-neutral-800 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 transition">' +
+      '<td class="px-4 py-3"><span class="text-[11px] font-bold px-2 py-0.5 rounded-full ' + (r.type === 'boost' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700') + '">' + esc(r.type || '—') + '</span></td>' +
       '<td class="px-4 py-3 font-semibold ' + ((Number(r.amount) || 0) < 0 ? 'text-rose-600' : 'text-emerald-600') + '">' + fmtTZ(r.amount) + '</td>' +
-      '<td class="px-4 py-3 text-xs text-slate-500 max-w-[220px] truncate">' + esc(r.description || '') + '</td>' +
-      '<td class="px-4 py-3 text-xs text-slate-500">' + timeAgo(r.timestamp) + '</td></tr>';
+      '<td class="px-4 py-3 text-xs text-slate-500 dark:text-neutral-400 max-w-[220px] truncate">' + esc(r.description || '') + '</td>' +
+      '<td class="px-4 py-3 text-xs text-slate-500 dark:text-neutral-400">' + timeAgo(r.timestamp) + '</td></tr>';
   }).join('');
   wrap.innerHTML = tableShell(['Type', 'Amount', 'Description', 'Date'], rows, '620');
 }
@@ -2282,10 +2344,10 @@ function renderAdViews() {
   if (!loaded.adViews) { loadAdViews().then(renderAdViews).catch(function () {}); return; }
   if (!S.adViews.length) { wrap.innerHTML = emptyRow('No ad views recorded.'); return; }
   var rows = S.adViews.slice(0, 100).map(function (v) {
-    return '<tr class="border-b border-slate-100 hover:bg-slate-50 transition">' +
-      '<td class="px-4 py-3 text-slate-700">' + esc(v.userId || v.uid || '—') + '</td>' +
-      '<td class="px-4 py-3 text-slate-500">' + esc(v.productName || '—') + '</td>' +
-      '<td class="px-4 py-3 text-xs text-slate-500">' + timeAgo(v.createdAt) + '</td></tr>';
+    return '<tr class="border-b border-slate-100 dark:border-neutral-800 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 transition">' +
+      '<td class="px-4 py-3 text-slate-700 dark:text-neutral-200">' + esc(v.userId || v.uid || '—') + '</td>' +
+      '<td class="px-4 py-3 text-slate-500 dark:text-neutral-400">' + esc(v.productName || '—') + '</td>' +
+      '<td class="px-4 py-3 text-xs text-slate-500 dark:text-neutral-400">' + timeAgo(v.createdAt) + '</td></tr>';
   }).join('');
   wrap.innerHTML = tableShell(['User', 'Product', 'Viewed'], rows, '560');
 }
@@ -2295,6 +2357,11 @@ function submitAdmob() {
   api('/api/admin/admob-revenue', { method: 'POST', body: JSON.stringify({ amount: amount, month: $('admobMonth').value.trim() || undefined }) })
     .then(function (d) { toast(d.message || 'AdMob revenue saved', 'ok'); $('admobAmount').value = ''; $('admobMonth').value = ''; loadFinance(true).then(renderFinance); })
     .catch(function (e) { toast(e.message, 'err'); });
+}
+function setWithdrawAll() {
+  var uid = $('wdAdminUser').value;
+  if (!uid) { toast('Select an admin user', 'err'); return; }
+  $('wdAmount').value = (S.finance && S.finance.availableBalance) ? S.finance.availableBalance : '';
 }
 function submitWithdraw() {
   var uid = $('wdAdminUser').value;
@@ -2319,13 +2386,13 @@ function renderWithdrawals() {
   if (!loaded.withdrawals) { wrap.innerHTML = spinner('Loading withdrawals…'); loadWithdrawals().then(function () { renderWithdrawals(); }).catch(function () {}); return; }
   if (!S.withdrawals.length) { wrap.innerHTML = emptyRow('No withdrawals yet.'); return; }
   var rows = S.withdrawals.map(function (w) {
-    return '<tr class="hover:bg-slate-50 transition">' +
-      '<td class="px-4 py-3 font-semibold text-slate-800">' + fmtTZ(w.amount) + '</td>' +
-      '<td class="px-4 py-3 text-slate-600">' + fmtTZ(w.netAmount) + ' <span class="text-xs text-slate-400">(fee ' + fmtTZ(w.fee) + ')</span></td>' +
-      '<td class="px-4 py-3 text-slate-600">' + esc(w.phone || '—') + '</td>' +
+    return '<tr class="hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 transition">' +
+      '<td class="px-4 py-3 font-semibold text-slate-800 dark:text-neutral-100">' + fmtTZ(w.amount) + '</td>' +
+      '<td class="px-4 py-3 text-slate-600 dark:text-neutral-300">' + fmtTZ(w.netAmount) + ' <span class="text-xs text-slate-400 dark:text-neutral-500">(fee ' + fmtTZ(w.fee) + ')</span></td>' +
+      '<td class="px-4 py-3 text-slate-600 dark:text-neutral-300">' + esc(w.phone || '—') + '</td>' +
       '<td class="px-4 py-3">' + statusBadge(w.status) + '</td>' +
-      '<td class="px-4 py-3 text-xs font-mono text-slate-500">' + esc(w.payoutId || w.id || '') + '</td>' +
-      '<td class="px-4 py-3 text-slate-500">' + timeAgo(w.createdAt) + '</td></tr>';
+      '<td class="px-4 py-3 text-xs font-mono text-slate-500 dark:text-neutral-400">' + esc(w.payoutId || w.id || '') + '</td>' +
+      '<td class="px-4 py-3 text-slate-500 dark:text-neutral-400">' + timeAgo(w.createdAt) + '</td></tr>';
   }).join('');
   wrap.innerHTML = tableShell(['Amount', 'Net', 'Phone', 'Status', 'Payout ref', 'Date'], rows, '820');
   refreshIcons();
@@ -2342,16 +2409,16 @@ function renderReports() {
   if (!S.reports.length) { wrap.innerHTML = emptyRow('No reports.'); return; }
   wrap.innerHTML = S.reports.map(function (r) {
     var pill = r.status === 'pending' ? statusPill('Pending', 'bg-amber-100 text-amber-700') : statusPill('Resolved', 'bg-emerald-100 text-emerald-700');
-    return '<div class="rounded-2xl border border-slate-200 p-4 mb-3">' +
+    return '<div class="rounded-2xl border border-slate-200 dark:border-neutral-700 p-4 mb-3">' +
       '<div class="flex items-center justify-between mb-2">' +
-      '<p class="font-bold text-slate-800">' + esc(r.reporterName || 'Anonymous') + ' <span class="font-normal text-slate-400">reported</span> ' + esc(r.reportedUserName || 'user') + '</p>' + pill + '</div>' +
-      '<p class="text-xs text-slate-500 mb-2">Reason: <span class="font-semibold text-slate-600">' + esc(r.reason || '—') + '</span></p>' +
-      (r.description ? '<p class="text-sm text-slate-600 mb-2">' + esc(r.description) + '</p>' : '') +
-      '<div class="flex items-center gap-2 text-xs text-slate-400 mb-3">' +
+      '<p class="font-bold text-slate-800 dark:text-neutral-100">' + esc(r.reporterName || 'Anonymous') + ' <span class="font-normal text-slate-400 dark:text-neutral-500">reported</span> ' + esc(r.reportedUserName || 'user') + '</p>' + pill + '</div>' +
+      '<p class="text-xs text-slate-500 dark:text-neutral-400 mb-2">Reason: <span class="font-semibold text-slate-600 dark:text-neutral-300">' + esc(r.reason || '—') + '</span></p>' +
+      (r.description ? '<p class="text-sm text-slate-600 dark:text-neutral-300 mb-2">' + esc(r.description) + '</p>' : '') +
+      '<div class="flex items-center gap-2 text-xs text-slate-400 dark:text-neutral-500 mb-3">' +
       (r.productName ? '<span>Product: ' + esc(r.productName) + '</span> · ' : '') + '<span>' + timeAgo(r.createdAt) + '</span></div>' +
-      (r.adminNote ? '<p class="text-xs text-slate-500 mb-3">Admin note: ' + esc(r.adminNote) + '</p>' : '') +
+      (r.adminNote ? '<p class="text-xs text-slate-500 dark:text-neutral-400 mb-3">Admin note: ' + esc(r.adminNote) + '</p>' : '') +
       (r.status === 'pending' ? '<div class="flex gap-2"><button onclick="resolveReport(\'' + esc(r.id) + '\')" class="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold">Resolve</button>' +
-        '<button onclick="messageUser(\'' + esc(r.reporterId) + '\')" class="px-3 py-2 rounded-lg border border-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-50">Message reporter</button></div>' : '') +
+        '<button onclick="messageUser(\'' + esc(r.reporterId) + '\')" class="px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 text-slate-600 dark:text-neutral-300 text-xs font-semibold hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800">Message reporter</button></div>' : '') +
       '</div>';
   }).join('');
 }
@@ -2369,15 +2436,15 @@ function renderFraud() {
   if (!S.fraud.length) { wrap.innerHTML = emptyRow('No fraud alerts.'); return; }
   wrap.innerHTML = S.fraud.map(function (a) {
     var sev = a.severity || 'low';
-    var pill = a.resolved ? statusPill('Resolved', 'bg-slate-100 text-slate-500')
+    var pill = a.resolved ? statusPill('Resolved', 'bg-slate-100 dark:bg-neutral-800 text-slate-500 dark:text-neutral-400')
       : sev === 'high' ? statusPill('High', 'bg-rose-100 text-rose-700')
       : sev === 'medium' ? statusPill('Medium', 'bg-orange-100 text-orange-700')
       : statusPill('Low', 'bg-amber-100 text-amber-700');
-    return '<div class="rounded-2xl border border-slate-200 p-4 mb-3">' +
-      '<div class="flex items-center justify-between mb-2"><p class="font-bold text-slate-800">' + esc(a.sellerName || 'Unknown seller') + '</p>' + pill + '</div>' +
-      '<p class="text-sm text-slate-600 mb-1">' + esc(a.description || '') + '</p>' +
-      '<div class="flex items-center gap-2 text-xs text-slate-400 mb-3"><span class="font-semibold uppercase">' + esc(a.type || '') + '</span> · <span>' + timeAgo(a.detectedAt) + '</span></div>' +
-      (!a.resolved ? '<button onclick="dismissFraud(\'' + esc(a.id) + '\')" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold">Dismiss alert</button>' : '') +
+    return '<div class="rounded-2xl border border-slate-200 dark:border-neutral-700 p-4 mb-3">' +
+      '<div class="flex items-center justify-between mb-2"><p class="font-bold text-slate-800 dark:text-neutral-100">' + esc(a.sellerName || 'Unknown seller') + '</p>' + pill + '</div>' +
+      '<p class="text-sm text-slate-600 dark:text-neutral-300 mb-1">' + esc(a.description || '') + '</p>' +
+      '<div class="flex items-center gap-2 text-xs text-slate-400 dark:text-neutral-500 mb-3"><span class="font-semibold uppercase">' + esc(a.type || '') + '</span> · <span>' + timeAgo(a.detectedAt) + '</span></div>' +
+      (!a.resolved ? '<button onclick="dismissFraud(\'' + esc(a.id) + '\')" class="px-3 py-2 rounded-lg bg-slate-800 dark:bg-neutral-800 hover:bg-slate-700 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-white text-xs font-semibold">Dismiss alert</button>' : '') +
       '</div>';
   }).join('');
 }
@@ -2417,13 +2484,13 @@ function renderAudit() {
   if (!loaded.audit) { wrap.innerHTML = spinner('Loading audit log…'); loadAudit().then(function () { renderAudit(); }).catch(function () {}); return; }
   if (!S.audit.length) { wrap.innerHTML = emptyRow('No audit entries.'); return; }
   var rows = S.audit.map(function (l) {
-    return '<tr class="hover:bg-slate-50 transition">' +
-      '<td class="px-4 py-3"><span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">' + esc(l.type || '—') + '</span></td>' +
-      '<td class="px-4 py-3 font-mono text-xs text-slate-500">' + esc(l.userId || '—') + '</td>' +
+    return '<tr class="hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 transition">' +
+      '<td class="px-4 py-3"><span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-300">' + esc(l.type || '—') + '</span></td>' +
+      '<td class="px-4 py-3 font-mono text-xs text-slate-500 dark:text-neutral-400">' + esc(l.userId || '—') + '</td>' +
       '<td class="px-4 py-3 font-semibold ' + ((Number(l.amount) || 0) < 0 ? 'text-rose-600' : 'text-emerald-600') + '">' + (l.amount != null ? fmtTZ(l.amount) : '—') + '</td>' +
-      '<td class="px-4 py-3 text-xs text-slate-500 max-w-[240px] truncate" title="' + esc(l.reason || '') + '">' + esc(l.reason || '—') + '</td>' +
-      '<td class="px-4 py-3 text-xs font-mono text-slate-400">' + esc(l.relatedId || '—') + '</td>' +
-      '<td class="px-4 py-3 text-slate-500">' + timeAgo(l.timestamp) + '</td></tr>';
+      '<td class="px-4 py-3 text-xs text-slate-500 dark:text-neutral-400 max-w-[240px] truncate" title="' + esc(l.reason || '') + '">' + esc(l.reason || '—') + '</td>' +
+      '<td class="px-4 py-3 text-xs font-mono text-slate-400 dark:text-neutral-500">' + esc(l.relatedId || '—') + '</td>' +
+      '<td class="px-4 py-3 text-slate-500 dark:text-neutral-400">' + timeAgo(l.timestamp) + '</td></tr>';
   }).join('');
   wrap.innerHTML = tableShell(['Type', 'User', 'Amount', 'Reason', 'Related', 'When'], rows, '900');
   refreshIcons();
@@ -2458,11 +2525,11 @@ function refreshBadges() {
   if (pendingReports) items.push({ icon: 'flag', text: pendingReports + ' pending report' + (pendingReports > 1 ? 's' : ''), tab: 'moderation', cls: 'text-orange-600 bg-orange-50' });
   if (openFraud) items.push({ icon: 'shield-alert', text: openFraud + ' open fraud alert' + (openFraud > 1 ? 's' : ''), tab: 'moderation', cls: 'text-red-600 bg-red-50' });
   var escrowCount = txs.filter(function (t) { return isEscrow(t.status) || t.status === 'dispatched' || t.status === 'in_transit'; }).length;
-  if (escrowCount) items.push({ icon: 'lock', text: escrowCount + ' order' + (escrowCount > 1 ? 's' : '') + ' in escrow', tab: 'orders', cls: 'text-indigo-600 bg-indigo-50' });
+  if (escrowCount) items.push({ icon: 'lock', text: escrowCount + ' order' + (escrowCount > 1 ? 's' : '') + ' in escrow', tab: 'orders', cls: 'text-green-600 bg-green-50' });
   menu.innerHTML = items.length ? items.map(function (i) {
-    return '<button onclick="switchTab(\'' + i.tab + '\'); document.getElementById(\'notifMenu\').classList.add(\'hidden\')" class="w-full flex items-center gap-3 px-4 py-3 border-b border-slate-100 hover:bg-slate-50 text-left ' + i.cls + '">' +
+    return '<button onclick="switchTab(\'' + i.tab + '\'); document.getElementById(\'notifMenu\').classList.add(\'hidden\')" class="w-full flex items-center gap-3 px-4 py-3 border-b border-slate-100 dark:border-neutral-800 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 text-left ' + i.cls + '">' +
       '<i data-lucide="' + i.icon + '" class="w-4 h-4 shrink-0"></i><span class="text-sm font-medium">' + esc(i.text) + '</span></button>';
-  }).join('') : '<div class="px-4 py-6 text-center text-sm text-slate-400">All clear — nothing needs attention.</div>';
+  }).join('') : '<div class="px-4 py-6 text-center text-sm text-slate-400 dark:text-neutral-500">All clear — nothing needs attention.</div>';
   refreshIcons();
 }
 
@@ -2474,7 +2541,9 @@ function copyWebhook() {
   navigator.clipboard.writeText(inp.value).then(function () { toast('Webhook URL copied to clipboard', 'success'); });
 }
 function saveSettings() {
-  toast('Settings saved — commission rate is ' + $('rateInput').value + '%', 'ok');
+  var rate = $('rateInput').value;
+  if (rate) toast('Commission rate is ' + rate + '% (server-side). Platform fees and rates are live — edit PLATFORM_COMMISSION_PERCENT on the server to change.', 'ok');
+  else toast('Rates are configured server-side — this screen is read-only.', 'ok');
 }
 
 /* ============ INIT ============ */
@@ -2497,6 +2566,7 @@ function init() {
 }
 
 (function () {
+  initTheme();
   if (sessionStorage.getItem(SECRET_KEY)) {
     api('/api/admin/stats').then(function () {
       $('gate').classList.add('hidden');
@@ -2513,6 +2583,8 @@ function init() {
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 ::-webkit-scrollbar-track { background: transparent; }
+html.dark ::-webkit-scrollbar-thumb { background: #3f3f46; }
+html.dark ::-webkit-scrollbar-thumb:hover { background: #52525b; }
 </style>
 
 </body>

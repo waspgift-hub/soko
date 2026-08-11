@@ -46,6 +46,15 @@ class SellerEarningsService {
     });
   }
 
+  Stream<double> streamPendingEscrow() {
+    final uid = _uid;
+    if (uid == null) return Stream.value(0);
+    return _db.collection('users').doc(uid).snapshots().map((snap) {
+      if (!snap.exists) return 0;
+      return (snap.data()?['pendingEscrow'] as num? ?? 0).toDouble();
+    });
+  }
+
   Future<double> getSellerBalance() async {
     final uid = _uid;
     if (uid == null) return 0;

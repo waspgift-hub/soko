@@ -1259,6 +1259,7 @@ class LocalizationService {
       'product_featured_for_days': 'Bidhaa imeangaziwa kwa siku {days}',
       'admin': 'Msimamizi',
       'pending_escrow': 'Escrow Inasubiri',
+      'escrow_awaiting_confirmation': 'Escrow: TZS {0} (inasubiri uthibitisho wa mteja)',
 
       'otp_code_hint': 'Ingiza Msimbo wa OTP',
       'verify': 'Thibitisha',
@@ -3026,6 +3027,7 @@ class LocalizationService {
       'product_featured_for_days': 'Product featured for {days} days',
       'admin': 'Admin',
       'pending_escrow': 'Pending Escrow',
+      'escrow_awaiting_confirmation': 'Escrow: TZS {0} (awaiting buyer confirmation)',
 
       'otp_code_hint': 'Enter OTP Code',
       'verify': 'Verify',
