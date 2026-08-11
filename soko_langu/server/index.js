@@ -633,6 +633,21 @@ const BOOST_TIERS = {
 const PLATFORM_COMMISSION_PERCENT = 0.035; // 3.5% platform commission
 const MIN_WITHDRAWAL = 5000;          // Minimum withdrawal TZS 5,000
 
+// Transaction statuses that mean money really came in. Used everywhere a
+// transaction record is counted as a payment (buyer statement, seller
+// statement, dashboards) so a single source of truth prevents drift.
+const PAID_STATUSES = new Set([
+  'escrow_hold',
+  'paid_escrow_hold',
+  'paid_escrow_held',
+  'dispatched',
+  'delivered',
+  'delivery_confirmed',
+  'confirmed',
+  'completed',
+  'refunded',
+]);
+
 // DEFAULT_PAYOUT_FEE (2000 TZS estimate) — actual ClickPesa payout fee varies by amount; use clickpesaPayoutPreview for exact fee
 
 function generatePayoutReference(prefix = 'po') {
@@ -4376,7 +4391,7 @@ app.get('/api/admin/analytics', async (req, res) => {
     // Transactions — revenue
     const txSnap = await db.collection('transactions').get();
     let totalRevenue = 0, revenueToday = 0, revenueThisMonth = 0;
-    const completedStatuses = new Set(['completed', 'delivered', 'delivery_confirmed']);
+    const completedStatuses = PAID_STATUSES;
     for (const doc of txSnap.docs) {
       const d = doc.data();
       const status = d.status || '';
@@ -4541,7 +4556,7 @@ app.get('/api/seller-analytics/:sellerId', async (req, res) => {
     let totalOrders = 0, successfulOrders = 0, failedOrders = 0;
     let totalTransactions = 0, successfulTransactions = 0, failedTransactions = 0;
     let monthlyEarnings = 0;
-    const completedStatuses = new Set(['completed', 'delivered', 'delivery_confirmed']);
+    const completedStatuses = PAID_STATUSES;
     const monthlySales = [];
 
     for (let i = 0; i < 12; i++) {
@@ -4674,7 +4689,7 @@ app.get('/api/seller-statement/:sellerId', async (req, res) => {
       return t != null && t >= twelveMonthsAgo;
     });
 
-    const paidStatuses = new Set(['completed', 'delivered', 'delivery_confirmed']);
+    const paidStatuses = PAID_STATUSES;
     const entries = [];
     let runningBalance = 0;
 
@@ -4853,7 +4868,7 @@ app.get('/api/buyer-statement/:buyerId', async (req, res) => {
     // Payments made by the buyer (money out). 'paid' is intentionally excluded:
     // it is set client-side the moment a USSD push is sent, BEFORE payment is
     // actually confirmed, so counting it here would show unpaid orders as paid.
-    const paidStatuses = new Set(['escrow_hold', 'paid_escrow_hold', 'paid_escrow_held', 'dispatched', 'delivered', 'delivery_confirmed', 'confirmed', 'completed', 'refunded']);
+    const paidStatuses = PAID_STATUSES;
     const entries = [];
     let runningBalance = 0;
 
@@ -5081,7 +5096,7 @@ app.get('/api/admin/finance-summary', async (req, res) => {
     // 5. Total money ever processed (only REAL completed/paid transactions)
     const txSnap = await db.collection('transactions').get();
     let totalProcessed = 0;
-    const paidStatuses = new Set(['completed', 'delivered', 'delivery_confirmed']);
+    const paidStatuses = PAID_STATUSES;
     txSnap.docs.forEach(doc => {
       const d = doc.data();
       if (paidStatuses.has(d.status)) {

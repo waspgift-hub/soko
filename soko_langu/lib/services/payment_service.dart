@@ -93,11 +93,14 @@ class PaymentService {
   Future<double> getTotalPlatformEarnings() async {
     final snap = await _db
         .collection('transactions')
-        .where('status', isEqualTo: 'completed')
         .get();
     return snap.docs.fold<double>(
       0,
-      (total, doc) => total + ((doc.data()['sokovibeCommission'] ?? doc.data()['sokovibeCommission'] ?? doc.data()['platformFee'] ?? 0).toDouble()),
+      (total, doc) {
+        final d = doc.data();
+        if (!_isPaidStatus(d['status'] as String? ?? '')) return total;
+        return total + ((d['sokovibeCommission'] ?? d['platformFee'] ?? 0).toDouble());
+      },
     );
   }
 
@@ -107,13 +110,13 @@ class PaymentService {
     final monthStart = DateTime(now.year, now.month, 1);
     final all = await _db
         .collection('transactions')
-        .where('status', isEqualTo: 'completed')
         .get();
     double total = 0, today = 0, monthly = 0;
     int count = 0;
     for (var doc in all.docs) {
       final d = doc.data();
-      final pf = (d['sokovibeCommission'] ?? d['sokovibeCommission'] ?? d['platformFee'] ?? 0).toDouble();
+      if (!_isPaidStatus(d['status'] as String? ?? '')) continue;
+      final pf = (d['sokovibeCommission'] ?? d['platformFee'] ?? 0).toDouble();
       total += pf;
       final ts = d['createdAt'] as Timestamp?;
       if (ts != null) {
@@ -129,5 +132,17 @@ class PaymentService {
       'monthlyEarnings': monthly,
       'totalTransactions': count.toDouble(),
     };
+  }
+
+  bool _isPaidStatus(String status) {
+    return status == 'escrow_hold' ||
+        status == 'paid_escrow_hold' ||
+        status == 'paid_escrow_held' ||
+        status == 'dispatched' ||
+        status == 'delivered' ||
+        status == 'delivery_confirmed' ||
+        status == 'confirmed' ||
+        status == 'completed' ||
+        status == 'refunded';
   }
 }

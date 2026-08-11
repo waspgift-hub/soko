@@ -456,9 +456,15 @@ class AnalyticsService {
         final status = data['status'] as String? ?? '';
         final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
 
-        if (status == 'completed' ||
+        if (status == 'escrow_hold' ||
+            status == 'paid_escrow_hold' ||
+            status == 'paid_escrow_held' ||
+            status == 'dispatched' ||
             status == 'delivered' ||
-            status == 'delivery_confirmed') {
+            status == 'delivery_confirmed' ||
+            status == 'confirmed' ||
+            status == 'completed' ||
+            status == 'refunded') {
           successfulOrders++;
           successfulTransactions++;
           if (createdAt != null) {
