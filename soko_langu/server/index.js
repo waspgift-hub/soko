@@ -3541,8 +3541,11 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
       if (!withinLimit) return res.status(400).json({ error: `Daily purchase limit of TZS ${MAX_DAILY_SALE_AMOUNT.toLocaleString()} exceeded` });
     }
 
-    // Use existing transaction ID if provided, otherwise generate new one
-    const order_id = existingTransactionId || `p${Date.now().toString(36)}${buyerId ? buyerId.substring(0, 4) : 'x'}`;
+    // Use existing transaction ID if provided, otherwise generate new one.
+    // ClickPesa requires orderReference to be alphanumeric-only, so strip any
+    // base64url chars (e.g. '-'/'_') from the buyer UID fragment.
+    const orderIdSuffix = (buyerId ? buyerId.replace(/[^A-Za-z0-9]/g, '').substring(0, 4) : '') || 'x';
+    const order_id = existingTransactionId || `p${Date.now().toString(36)}${orderIdSuffix}`;
 
     const isBillPay = (paymentMethod || 'ussd_push') === 'billpay';
 
