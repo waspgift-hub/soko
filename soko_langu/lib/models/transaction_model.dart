@@ -31,8 +31,10 @@ class TransactionFeeBreakdown {
     : processingFee = getUssdPushFee(productPrice),
       platformFee = productPrice * platformCommissionPercent,
       payoutFee = 0,
-      totalFees = (productPrice * platformCommissionPercent) + getUssdPushFee(productPrice),
-      totalAmount = productPrice + (productPrice * platformCommissionPercent) + getUssdPushFee(productPrice),
+      // processingFee is what ClickPesa charges the customer ON TOP of the amount
+      // (not pre-added to what we send), so totalAmount excludes it.
+      totalFees = productPrice * platformCommissionPercent,
+      totalAmount = productPrice + (productPrice * platformCommissionPercent),
       sellerReceives = productPrice;
 
   Map<String, dynamic> toMap() => {

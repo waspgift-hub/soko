@@ -833,12 +833,15 @@ app.post('/api/boost-product', async (req, res) => {
       return res.status(400).json({ error: 'Invalid boost tier' });
     }
 
-    // Gateway fee added on top so Soko Vibe receives the full tier price
-    const gatewayFee = calcGatewayFee(paymentMethod || 'ussd_push', tierConfig.price);
-    const totalToCollect = tierConfig.price + gatewayFee;
+    // BillPay fee (1%) is deducted from the collected amount, so we add it on top
+    // so Soko Vibe still receives the full tier price. USSD Push fee is charged to
+    // the customer by ClickPesa on top of the amount, so we send the real tier price
+    // (never pre-added) to avoid charging the processing fee twice.
+    const isBillPay = (paymentMethod || 'ussd_push') === 'billpay';
+    const gatewayFee = calcGatewayFee(isBillPay ? 'billpay' : 'ussd_push', tierConfig.price);
+    const totalToCollect = isBillPay ? tierConfig.price + gatewayFee : tierConfig.price;
 
     const order_id = `boost${Date.now()}`;
-    const isBillPay = (paymentMethod || 'ussd_push') === 'billpay';
 
     if (isBillPay) {
       // ── BillPay flow ──
@@ -932,7 +935,7 @@ app.post('/api/boost-product', async (req, res) => {
 
       res.json({
         order_id, amount: tierConfig.price, gatewayFee, totalAmount: totalToCollect,
-        message: `Jumla TZS ${totalToCollect.toLocaleString()} (Boost TZS ${tierConfig.price.toLocaleString()} + Ada TZS ${gatewayFee.toLocaleString()}). Tuma PIN yako kwenye simu.`,
+        message: `Jumla TZS ${totalToCollect.toLocaleString()} (Boost TZS ${tierConfig.price.toLocaleString()}). Ada ya ClickPesa inaongezwa kwenye malipo yako. Tuma PIN yako kwenye simu.`,
       });
     }
   } catch (e) {
@@ -3561,7 +3564,10 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
 
     // Include shipping + platform commission + gateway fee in total sent to ClickPesa
     const commission = Math.round(Math.round(productPrice) * PLATFORM_COMMISSION_PERCENT);
-    const gatewayFee = isBillPay ? calcGatewayFee('billpay', productPrice) : getUssdPushFee(productPrice);
+    // BillPay 1% fee is deducted from collected amount (add it on top so seller still
+    // gets full total). USSD Push fee is charged to the customer by ClickPesa on top,
+    // so never pre-add it or the processing fee is charged twice.
+    const gatewayFee = isBillPay ? calcGatewayFee('billpay', productPrice) : 0;
     const totalAmount = Math.round(productPrice) + Math.round(shippingCost || 0) + commission + gatewayFee;
 
     if (isBillPay) {
@@ -3660,7 +3666,7 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
 
       res.json({
         order_id, gatewayFee, totalAmount,
-        message: 'Tuma PIN yako kwenye simu ili kukamilisha malipo.',
+        message: `Malipo ya TZS ${totalAmount.toLocaleString()} yanatuma USSD push kwa simu yako. Ada ya ClickPesa inaongezwa kwenye malipo yako.`,
       });
     }
   } catch (e) {
@@ -7182,10 +7188,12 @@ app.post('/api/transactions/create', asyncHandler(async (req, res) => {
   }
 
   const price = Number(productPrice);
-  const processingFee = getUssdPushFee(price);
+  // USSD Push fee is charged to the customer by ClickPesa on top of the amount, so
+  // we don't pre-add it here — totalAmount reflects what is actually sent to ClickPesa.
+  const processingFee = 0;
   const platformFee = Math.round(price * PLATFORM_COMMISSION_PERCENT);
-  // Buyer (payer) bears processing fee + commission; seller receives the full price.
-  const totalAmount = price + processingFee + platformFee;
+  // Buyer (payer) bears commission; seller receives the full price.
+  const totalAmount = price + platformFee;
   const sellerReceives = price;
 
   const txRef = await db.collection('transactions').doc();
@@ -7684,8 +7692,10 @@ app.post('/api/wallet/deposit', async (req, res) => {
       });
     } else {
       // ── USSD Push flow ──
-      const processingFee = getUssdPushFee(amount);
-      const totalCharge = amount + processingFee;
+      // ClickPesa charges its USSD fee to the customer on top of the amount, so we
+      // send the real deposit amount (never pre-add the fee) to avoid double-charging.
+      const processingFee = 0;
+      const totalCharge = Math.round(amount);
 
       const phoneDigits = phone.replace(/\D/g, '');
       const normalizedPhone = phoneDigits.startsWith('0')
@@ -7721,7 +7731,7 @@ app.post('/api/wallet/deposit', async (req, res) => {
 
       res.json({
         success: true, depositRef, method: 'ussd',
-        message: `USSD push sent to ${normalizedPhone}. Total charge: TZS ${totalCharge.toLocaleString()} (amount TZS ${amount.toLocaleString()} + fee TZS ${processingFee.toLocaleString()})`,
+        message: `Malipo ya TZS ${totalCharge.toLocaleString()} yanatuma USSD push kwa ${normalizedPhone}. Ada ya ClickPesa inaongezwa kwenye malipo yako.`,
       });
     }
   } catch (e) {
