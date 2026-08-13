@@ -173,7 +173,7 @@ class _AdminAdRevenueScreenState extends State<AdminAdRevenueScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '15 coins × ${_monthAdminCoins ~/ 15} ads',
+                      context.trParams('coins_ads_count', {'count': '${_monthAdminCoins ~/ 15}'}),
                       style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 12),
                     ),
                   ],

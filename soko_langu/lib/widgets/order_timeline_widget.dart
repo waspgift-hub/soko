@@ -1,5 +1,6 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import '../extensions/context_tr.dart';
 import '../widgets/soko_vibe_loading.dart';
 
 class OrderTimelineStep {
@@ -171,7 +172,9 @@ class OrderTimelineWidget extends StatelessWidget {
                                         : cs.onSurface.withValues(alpha: 0.06),
                                   ),
                                   child: Text(
-                                    step.label.isNotEmpty ? step.label : 'STEP ${step.stepNumber}',
+                                    step.label.isNotEmpty
+                                        ? step.label
+                                        : context.trParams('order_step_no_label', {'stepNumber': '${step.stepNumber}'}),
                                     style: TextStyle(
                                       fontSize: 9,
                                       fontWeight: FontWeight.w700,

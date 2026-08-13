@@ -42,18 +42,6 @@ class ReceiptPdfService {
 
     String t(String sw, String en) => isSw ? sw : en;
 
-    final statusLabels = {
-      'paid_escrow_held': t('Imehifadhiwa Escrow', 'Secured in Escrow'),
-      'escrow_hold': t('Imehifadhiwa Escrow', 'Secured in Escrow'),
-      'dispatched': t('Imesafirishwa', 'Dispatched'),
-      'delivered': t('Imefikishwa', 'Delivered'),
-      'delivery_confirmed': t('Imethibitishwa', 'Confirmed'),
-      'completed': t('Imekamilika', 'Completed'),
-      'failed': t('Imeshindwa', 'Failed'),
-      'refunded': t('Imerejeshwa', 'Refunded'),
-    };
-    final statusLabel = statusLabels[status] ?? status;
-
     final qrData = jsonEncode({
       'type': 'soko_vibe_receipt',
       'orderId': orderId,
@@ -71,7 +59,6 @@ class ReceiptPdfService {
         'commission': platformFee, 'processingFee': clickpesaFee, 'sellerReceives': sellerReceives,
         'method': paymentMethod, 'reference': transactionReference,
       },
-      'status': status,
     });
 
     pdf.addPage(
@@ -123,16 +110,6 @@ class ReceiptPdfService {
               pw.SizedBox(height: 16),
               _buildDivider(),
               pw.SizedBox(height: 16),
-              _buildSectionTitle(t('Hali', 'Status')),
-              pw.SizedBox(height: 8),
-              pw.Container(
-                padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: pw.BoxDecoration(
-                  color: _primaryColor,
-                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
-                ),
-                child: pw.Text(statusLabel, style: pw.TextStyle(color: PdfColors.white, fontSize: 11)),
-              ),
               if (deliveryAddress != null) ...[
                 pw.SizedBox(height: 16),
                 _buildDivider(),

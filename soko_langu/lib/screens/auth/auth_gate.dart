@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../extensions/context_tr.dart';
 import '../../notifiers/auth_notifier.dart';
 import '../../widgets/soko_vibe_loading.dart';
 import '../../widgets/bottom_nav_bar.dart';
@@ -50,13 +51,13 @@ class _SuspendedPage extends StatelessWidget {
               Icon(Icons.block, size: 80, color: cs.error),
               const SizedBox(height: 24),
               Text(
-                'Akaunti Yako Imesimamishwa',
+                context.tr('account_suspended_title', 'Akaunti Yako Imesimamishwa'),
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: cs.onSurface),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 12),
               Text(
-                'Akaunti yako imesitishwa kwa muda. Tafadhali wasiliana na usaidizi kwa maelezo zaidi.',
+                context.tr('account_suspended_message', 'Akaunti yako imesitishwa kwa muda. Tafadhali wasiliana na usaidizi kwa maelezo zaidi.'),
                 style: TextStyle(fontSize: 15, color: cs.onSurfaceVariant),
                 textAlign: TextAlign.center,
               ),

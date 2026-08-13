@@ -349,7 +349,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                           if (tx.platformFee > 0)
                             Padding(
                               padding: const EdgeInsets.only(top: 2),
-                              child: Text('Comm: -TZS ${tx.platformFee.toStringAsFixed(0)}',
+                              child: Text('${context.tr('comm', 'Comm:')} -TZS ${tx.platformFee.toStringAsFixed(0)}',
                                   style: TextStyle(fontSize: 10, color: cs.error)),
                             ),
                         ],

@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'google_loading.dart';
+import '../extensions/context_tr.dart';
 import '../services/api_config.dart';
 import '../theme/app_colors.dart';
 import 'ds/ds.dart';
@@ -311,10 +312,8 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
   late final AnimationController _ctrl;
   late final Animation<double> _fade;
   bool _done = false;
-  bool _timedOut = false;
   String _errorMsg = '';
   Timer? _pollTimer;
-  Timer? _timeoutTimer;
 
   @override
   void initState() {
@@ -325,23 +324,16 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
     );
     _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeIn);
     _ctrl.forward();
+    // Keep listening to ClickPesa (Firestore stream + status poll) until a
+    // real status lands. No timeout: a slow USSD/PIN confirm is still valid,
+    // and the service only unlocks after payment is confirmed server-side.
     _startPolling();
-    // Safety net: never let a stuck payment banner block the whole app —
-    // surface it as a failed state (with retry) instead of vanishing silently.
-    _timeoutTimer = Timer(const Duration(minutes: 1), () {
-      if (mounted && !_done) {
-        setState(() => _timedOut = true);
-        widget.onError?.call('Payment timed out. Please try again.');
-        _finish();
-      }
-    });
   }
 
   @override
   void dispose() {
     _ctrl.dispose();
     _pollTimer?.cancel();
-    _timeoutTimer?.cancel();
     super.dispose();
   }
 
@@ -368,8 +360,9 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
         if (result['success'] == true) {
           final status = result['status'] as String? ?? 'pending';
           if (status == 'failed' || status == 'cancelled') {
-            final reason = result['failureReason'] as String? ?? 'Payment failed';
             if (mounted && !_done) {
+              final reason = result['failureReason'] as String? ??
+                  context.tr('payment_failed_fallback', 'Payment failed');
               widget.onError?.call(reason);
               _finish();
             }
@@ -421,7 +414,7 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
         final status = data?['status'] as String? ?? 'pending';
 
         final isOk = widget.successStatuses.contains(status);
-        final isFail = (status == 'failed' || status == 'cancelled') || _timedOut;
+        final isFail = status == 'failed' || status == 'cancelled';
         final isLoading = !isOk && !isFail;
 
         if (isOk && !_done) {
@@ -432,10 +425,10 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
             _finish();
           });
         }
-        if (isFail && !_done && !_timedOut) {
+        if (isFail && !_done) {
           final reason = data?['failureReason'] as String? ??
               data?['errorMessage'] as String? ??
-              'Payment failed';
+              context.tr('payment_failed_fallback', 'Payment failed');
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _errorMsg = reason;
             widget.onError?.call(reason);

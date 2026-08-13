@@ -22,7 +22,7 @@ if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
 const {
   clickpesaCollect, clickpesaPayout, clickpesaBalance, clickpesaPayoutPreview,
   clickpesaCreateBillPayOrder, clickpesaRawBalances, clickpesaQueryPayments,
-  clickpesaQueryPayouts,
+  clickpesaQueryPayouts, clickpesaPaymentStatus,
   getUssdPushFee, getPayoutFee, calcGatewayFee, ALL_PAYMENT_METHODS,
   canonicalize, createPayloadChecksum,
 } = require('./clickpesa');
@@ -2188,26 +2188,13 @@ app.post('/api/escrow/release', async (req, res) => {
 // ============================================================
 // ClickPesa calls this when a USSD push payment is completed, failed,
 // or when a payout status changes.
-app.post('/api/clickpesa/webhook', verifyWebhook, async (req, res) => {
+// Shared processor: applies a confirmed ClickPesa payment status to a deposit,
+// boost, or purchase. Used by the webhook AND by the ClickPesa status poller so
+// slow/lost webhooks never leave a payment stuck in pending.
+async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
   try {
-    let payload = req.body;
-    if (payload.data && typeof payload.data === 'object') {
-      payload = payload.data;
-    }
-
-    const orderId = payload.orderReference || payload.order_id || payload.externalId || '';
-    const rawStatus = (payload.status || payload.paymentStatus || payload.event || '').toString().toLowerCase();
-    const paymentStatus = rawStatus === 'completed' || rawStatus === 'payment_received' || rawStatus === 'payment_completed' || rawStatus === 'success'
-      ? 'success'
-      : rawStatus === 'failed' || rawStatus === 'cancelled' || rawStatus === 'expired'
-        ? 'failed'
-        : rawStatus;
-
-    if (!orderId || !paymentStatus) {
-      return res.status(200).json({ received: true });
-    }
-
-    if (!db) return res.status(200).json({ received: true });
+    if (!orderId || !paymentStatus) return;
+    if (!db) return;
 
     // Check if this is a deposit (wallet top-up)
     const depDoc = orderId.startsWith('dep')
@@ -2217,7 +2204,7 @@ app.post('/api/clickpesa/webhook', verifyWebhook, async (req, res) => {
     if (depDoc?.exists) {
       const dep = depDoc.data();
       if (dep.status === 'completed') {
-        return res.status(200).json({ received: true });
+        return;
       }
       if (paymentStatus === 'success') {
         const amount = dep.amount || 0;
@@ -2226,7 +2213,7 @@ app.post('/api/clickpesa/webhook', verifyWebhook, async (req, res) => {
         });
         await depDoc.ref.update({
           status: 'completed',
-          clickpesaReference: payload.id || '',
+          clickpesaReference: extra.clickpesaReference || '',
           completedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
         console.log(`Wallet deposit: TZS ${amount} credited to ${dep.userId} (ref: ${orderId})`);
@@ -2248,28 +2235,28 @@ app.post('/api/clickpesa/webhook', verifyWebhook, async (req, res) => {
         const failAmount = dep.amount || 0;
         await depDoc.ref.update({
           status: 'failed',
-          failureReason: payload.message || 'Payment failed',
+          failureReason: extra.failureReason || 'Payment failed',
           completedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
         sendOneSignalNotification(dep.userId, 'Deposit Imeshindikana', `Malipo ya TZS ${failAmount.toLocaleString()} hayakukamilika.`, { type: 'deposit_failed', depositRef: orderId }).catch(() => {});
       }
-      return res.status(200).json({ received: true });
+      return;
     }
 
     const txDoc = await db.collection('transactions').doc(orderId).get();
     if (!txDoc.exists) {
-      console.warn(`ClickPesa webhook: transaction ${orderId} not found`);
-      return res.status(200).json({ received: false });
+      console.warn(`ClickPesa: transaction ${orderId} not found`);
+      return;
     }
 
     const tx = txDoc.data();
 
     // Prevent double-processing — skip if already finalized
     if (tx.status === 'completed' || tx.status === 'escrow_hold' || tx.status === 'failed') {
-      return res.status(200).json({ received: true });
+      return;
     }
 
-    const clickpesaRef = payload.id || payload.transactionId || payload.reference || tx.clickpesaReference || '';
+    const clickpesaRef = extra.clickpesaReference || tx.clickpesaReference || '';
 
     if (paymentStatus === 'success') {
 
@@ -2448,28 +2435,29 @@ app.post('/api/clickpesa/webhook', verifyWebhook, async (req, res) => {
         } catch (_) {}
       }
     } else if (paymentStatus === 'failed') {
+      const failureReason = extra.failureReason || 'payment failed';
       await txDoc.ref.update({
         status: 'failed',
         clickpesaReference: clickpesaRef,
-        failureReason: payload.message || payload.error || 'payment failed',
+        failureReason,
         completedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
       // Keep the mirrored orders doc in sync on failure too.
       db.collection('orders').doc(orderId).update({
         status: 'failed',
-        failureReason: payload.message || payload.error || 'payment failed',
+        failureReason,
         completedAt: admin.firestore.FieldValue.serverTimestamp(),
       }).catch(() => {});
 
       // Boost failure — SMS + push + in-app to the boost user (buyerId === userId)
       if (tx.type === 'boost') {
-        await notifyBoostPaymentFailed(tx, payload.message || payload.error || 'payment failed');
+        await notifyBoostPaymentFailed(tx, failureReason);
       } else if (tx.buyerId) {
         await db.collection('notifications').add({
           userId: tx.buyerId,
           title: 'Malipo Yameshindikana',
-          body: `Malipo ya ${tx.productName || 'Bidhaa'} hayakukamilika. Jaribu tena au wasiliana nasi. Sababu: ${payload.message || payload.error || 'payment failed'}`,
+          body: `Malipo ya ${tx.productName || 'Bidhaa'} hayakukamilika. Jaribu tena au wasiliana nasi. Sababu: ${failureReason}`,
           isRead: false,
           type: 'payment_failed',
           transactionId: orderId,
@@ -2488,10 +2476,41 @@ app.post('/api/clickpesa/webhook', verifyWebhook, async (req, res) => {
       }
     }
 
-    res.status(200).json({ received: true });
+  } catch (e) {
+    console.error('applyClickPesaPayment error:', e);
+  }
+}
+
+// ============================================================
+// CLICKPESA WEBHOOK — real-time payment callbacks from ClickPesa
+//     (statuses also polled by the ClickPesa poller below as backup)
+// ============================================================
+app.post('/api/clickpesa/webhook', verifyWebhook, async (req, res) => {
+  try {
+    let payload = req.body;
+    if (payload.data && typeof payload.data === 'object') {
+      payload = payload.data;
+    }
+
+    const orderId = payload.orderReference || payload.order_id || payload.externalId || '';
+    const rawStatus = (payload.status || payload.paymentStatus || payload.event || '').toString().toLowerCase();
+    const paymentStatus = rawStatus === 'completed' || rawStatus === 'payment_received' || rawStatus === 'payment_completed' || rawStatus === 'success'
+      ? 'success'
+      : rawStatus === 'failed' || rawStatus === 'cancelled' || rawStatus === 'expired'
+        ? 'failed'
+        : rawStatus;
+
+    console.log(`ClickPesa webhook: order ${orderId} status=${paymentStatus} (raw=${rawStatus})`);
+
+    await applyClickPesaPayment(orderId, paymentStatus, {
+      clickpesaReference: payload.id || payload.transactionId || payload.reference || '',
+      failureReason: payload.message || payload.error || '',
+    });
+
+    return res.status(200).json({ received: true });
   } catch (e) {
     console.error('ClickPesa webhook error:', e);
-    res.status(200).json({ received: true });
+    return res.status(200).json({ received: true });
   }
 });
 
@@ -6837,14 +6856,82 @@ async function failStalePendingBoosts() {
   }
 }
 
+// ─── ClickPesa payment status poller — resolve pending USSD payments even when the
+// webhook is delayed or lost. ClickPesa only fires the webhook when the mobile-money
+// operator reports (M-Pesa/Tigo/Airtel PIN timeouts take ~10-15 min, Mixx ~2s), so we
+// poll the status API every 45s and apply the result ourselves.
+let clickPesaPollInFlight = false;
+
+/** Maps raw /payments/all rows to 'success' | 'failed' | '' (still pending/unknown). */
+function clickPesaStatusFrom(resp, orderId) {
+  let rows = [];
+  if (resp && Array.isArray(resp.data)) rows = resp.data;
+  else if (Array.isArray(resp)) rows = resp;
+  else if (resp && resp.data && Array.isArray(resp.data.rows)) rows = resp.data.rows;
+  const match = rows.find((r) => (r.orderReference || r.order_id || r.externalId || '') === orderId) || rows[0] || {};
+  const raw = String(match.status || match.paymentStatus || resp?.status || '').toLowerCase();
+  if (/success|completed|payment_received|paid/.test(raw)) return 'success';
+  if (/fail|cancel|expire|reject|declin|error/.test(raw)) return 'failed';
+  return '';
+}
+
+async function pollPendingClickPesaPayments() {
+  if (!db) return;
+  if (clickPesaPollInFlight) return;
+  clickPesaPollInFlight = true;
+  try {
+    // Only transactions inside the operator session window are worth polling.
+    const since = new Date(Date.now() - 30 * 60 * 1000);
+
+    const txSnap = await db.collection('transactions').where('status', '==', 'pending').limit(30).get();
+    const depSnap = await db.collection('deposits').where('status', '==', 'pending').limit(20).get();
+
+    const candidates = [];
+    for (const doc of txSnap.docs) {
+      const t = doc.data();
+      if (t.paymentMethod !== 'ClickPesa' && t.paymentMethod !== 'ussd_push') continue;
+      if ((t.createdAt?.toDate?.() || new Date(0)).getTime() < since.getTime()) continue;
+      if (t.ussdFailed) continue;
+      candidates.push({ id: doc.id, kind: 'tx' });
+    }
+    for (const doc of depSnap.docs) {
+      const t = doc.data();
+      if (t.paymentMethod !== 'ClickPesa' && t.paymentMethod !== 'ussd_push') continue;
+      if ((t.createdAt?.toDate?.() || new Date(0)).getTime() < since.getTime()) continue;
+      if (t.ussdFailed) continue;
+      candidates.push({ id: doc.id, kind: 'dep' });
+    }
+
+    for (const c of candidates) {
+      try {
+        const resp = await clickpesaPaymentStatus(c.id);
+        const status = clickPesaStatusFrom(resp, c.id);
+        if (!status) continue;
+        console.log(`[CP-POLL] ${c.id} -> ${status}`);
+        await applyClickPesaPayment(c.id, status, {});
+      } catch (e) {
+        console.warn(`[CP-POLL] ${c.id}: ${e.message}`);
+      }
+    }
+  } catch (e) {
+    console.error('pollPendingClickPesaPayments error:', e.message);
+  } finally {
+    clickPesaPollInFlight = false;
+  }
+}
+
 // Run every hour as fallback (cron-job.org can also call the endpoint)
 setInterval(releaseExpiredEscrows, 60 * 60 * 1000);
 setInterval(deactivateExpiredFlashSales, 60 * 60 * 1000);
 setInterval(failStalePendingBoosts, 5 * 60 * 1000);
+// ClickPesa status poller — every 45s so successes/failures surface within seconds
+// even when the webhook is slow (operator session timeouts) or lost.
+setInterval(pollPendingClickPesaPayments, 45 * 1000);
 // Also run once on startup
 setTimeout(releaseExpiredEscrows, 60 * 1000);
 setTimeout(deactivateExpiredFlashSales, 60 * 1000);
 setTimeout(failStalePendingBoosts, 60 * 1000);
+setTimeout(pollPendingClickPesaPayments, 15 * 1000);
 
 // ============================================================
 // 💰 CLICKPESA BALANCE — Check ClickPesa wallet balance

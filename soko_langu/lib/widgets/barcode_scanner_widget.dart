@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../extensions/context_tr.dart';
+
 class BarcodeScannerWidget extends StatefulWidget {
   const BarcodeScannerWidget({super.key});
 
@@ -35,13 +37,12 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
-        title: const Text('Scan Barcode / QR'),
+        title: Text(context.tr('scan_barcode_qr', 'Scan Barcode / QR')),
         actions: [
           IconButton(
             icon: const Icon(Icons.flash_on),

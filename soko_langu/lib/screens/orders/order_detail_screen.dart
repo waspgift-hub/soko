@@ -177,6 +177,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       status == 'delivery_confirmed' ||
       status == 'completed';
 
+  bool get _isCompletedState =>
+      status == 'delivered' ||
+      status == 'delivery_confirmed' ||
+      status == 'confirmed' ||
+      status == 'completed';
+
   String _nf(num n) => NumberFormat('#,###', 'en').format(n);
 
   int _currentStep() {
@@ -184,24 +190,24 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       case 'pending':
         return 0;
       case 'awaiting_shipping_quote':
-        return 1;
-      case 'quoted':
-      case 'awaiting_payment':
-      case 'paid':
-        return 2;
-      case 'paid_escrow_hold':
-      case 'escrow_hold':
-        return 3;
-      case 'dispatched':
-        return 4;
-      case 'delivered':
-      case 'delivery_confirmed':
-      case 'confirmed':
-        return 5;
-      case 'completed':
-        return 6;
-      default:
         return 0;
+      case 'quoted':
+        case 'awaiting_payment':
+        case 'paid':
+          return 1;
+        case 'paid_escrow_hold':
+        case 'escrow_hold':
+          return 2;
+        case 'dispatched':
+          return 3;
+        case 'delivered':
+        case 'delivery_confirmed':
+        case 'confirmed':
+          return 4;
+        case 'completed':
+          return 5;
+        default:
+          return 0;
     }
   }
 
@@ -216,7 +222,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   }
 
   String _formatRelative(Duration d) {
-    if (d.inSeconds < 10) return 'sasa';
+    if (d.inSeconds < 10) return context.tr('just_now');
     if (d.inMinutes < 1) return '${d.inSeconds}s';
     return '${d.inMinutes}m';
   }
@@ -627,11 +633,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   Widget _buildTimeline(BuildContext context, ColorScheme cs) {
     final steps = [
       _StepData(
-        context.tr('step_received'),
-        Icons.access_time_rounded,
-        cs.onSurfaceVariant,
-      ),
-      _StepData(
         context.tr('step_shipping_quote'),
         Icons.local_shipping_outlined,
         Colors.orange,
@@ -944,39 +945,40 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                 ),
               ),
               const Spacer(),
-              GestureDetector(
-                onTap: () =>
-                    context.push('${AppRoutes.receipt}/${widget.docId}'),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: cs.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.receipt_outlined,
-                        size: 13,
-                        color: cs.primary,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        context.tr('receipt'),
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
+              if (_isCompletedState)
+                GestureDetector(
+                  onTap: () =>
+                      context.push('${AppRoutes.receipt}/${widget.docId}'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: cs.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.receipt_outlined,
+                          size: 13,
                           color: cs.primary,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 4),
+                        Text(
+                          context.tr('receipt'),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: cs.primary,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -1060,7 +1062,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                     ),
                   _tableRow(
                     cs,
-                    'Soko Vibe Commission',
+                    context.tr('soko_vibe_commission'),
                     'TZS ${_nf(platformFee.toInt())}',
                   ),
                   _tableRow(
@@ -1409,7 +1411,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       children.add(
         _addrRow(
           cs,
-          'Soko Vibe Commission',
+          context.tr('soko_vibe_commission'),
           '-TZS ${_nf(platformFee.toInt())}',
         ),
       );
@@ -1516,7 +1518,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Agizo limewasilishwa kwa muuzaji. Subiri muuzaji kutoa gharama ya usafirishaji.',
+                context.tr('order_submitted_to_seller', 'Agizo limewasilishwa kwa muuzaji. Subiri muuzaji kutoa gharama ya usafirishaji.'),
                 style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant, height: 1.35),
               ),
             ),
@@ -1559,7 +1561,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                   child: Icon(Icons.payments_outlined, color: cs.primary, size: 18),
                 ),
                 const SizedBox(width: 10),
-                Text('Malipo', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: cs.onSurface)),
+                Text(context.tr('payment_title', 'Malipo'), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: cs.onSurface)),
               ],
             ),
             const SizedBox(height: 14),
@@ -1574,21 +1576,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
               ),
               child: Column(
                 children: [
-                  _feeRow2(cs, 'Bei ya bidhaa', 'TZS ${_nf(price.toInt())}', cs.onSurface),
+                  _feeRow2(cs, context.tr('product_price'), 'TZS ${_nf(price.toInt())}', cs.onSurface),
                   if (shipping > 0) ...[
                     const SizedBox(height: 6),
-                    _feeRow2(cs, 'Gharama ya usafirishaji', 'TZS ${_nf(shipping.toInt())}', cs.tertiary),
+                    _feeRow2(cs, context.tr('shipping_cost'), 'TZS ${_nf(shipping.toInt())}', cs.tertiary),
                   ],
                   const SizedBox(height: 6),
-                  _feeRow2(cs, 'Commission (3.5%)', 'TZS ${_nf(platformFee.toInt())}', cs.onSurfaceVariant),
+                  _feeRow2(cs, context.tr('commission_3_5', 'Commission (3.5%)'), 'TZS ${_nf(platformFee.toInt())}', cs.onSurfaceVariant),
                   if (_gatewayFee > 0) ...[
                     const SizedBox(height: 6),
-                    _feeRow2(cs, 'Ada ya malipo', 'TZS ${_nf(_gatewayFee.toInt())}', cs.secondary),
+                    _feeRow2(cs, context.tr('gateway_fee'), 'TZS ${_nf(_gatewayFee.toInt())}', cs.secondary),
                   ],
                   const SizedBox(height: 8),
                   Container(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)),
                   const SizedBox(height: 8),
-                  _feeRow2(cs, 'Jumla', 'TZS ${_nf(total.toInt())}', cs.primary, bold: true),
+                  _feeRow2(cs, context.tr('total'), 'TZS ${_nf(total.toInt())}', cs.primary, bold: true),
                 ],
               ),
             ),
@@ -1603,7 +1605,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                     ? SokoVibeThreeDotLoader(size: 20, dotSize: 5, color: cs.surface)
                     : const Icon(Icons.payment, size: 20),
                 label: Text(
-                  _paying ? 'Inachakata...' : 'Lipa TZS ${_nf(total.toInt())}',
+                  _paying ? context.tr('processing_label') : context.tr('pay_amount_tzs').replaceAll('{0}', _nf(total)),
                   style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: cs.primary,
@@ -1746,7 +1748,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     final sellerId = d['sellerId'] as String? ?? '';
     final sellerName = d['sellerName'] as String? ?? '';
     final showTracking = status == 'dispatched';
-    final showReceipt = status != 'pending' && status != 'quoted';
+    final showReceipt = _isCompletedState;
 
     return Container(
       padding: EdgeInsets.only(
@@ -1769,15 +1771,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         top: false,
         child: Row(
           children: [
-            Expanded(
-              child: SizedBox(
-                height: 48,
-                child: CallSellerButton(
-                  phone: d['sellerPhone'] as String? ?? '',
-                  height: 48,
-                  fontSize: 12,
-                ),
-              ),
+            CallSellerButton(
+              phone: d['sellerPhone'] as String? ?? '',
+              iconOnly: true,
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -2094,7 +2090,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       );
 
       if (result == null || result['order_id'] == null) {
-        final errMsg = result?['error'] as String? ?? 'Payment initiation failed';
+        final errMsg = result?['error'] as String? ?? context.tr('payment_initiation_failed');
         if (mounted) _showError(errMsg);
         setState(() => _paying = false);
         return;

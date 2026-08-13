@@ -108,7 +108,7 @@ class _CreateFlashSaleScreenState extends State<CreateFlashSaleScreen> {
         title: Text(product.name,
             style: const TextStyle(fontWeight: FontWeight.w600)),
         subtitle: Text(
-          'TSh ${product.price.toStringAsFixed(0)} | Stock: ${product.stock}',
+          'TSh ${product.price.toStringAsFixed(0)} | ${context.tr('stock', 'Stock')}: ${product.stock}',
           style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
         ),
         trailing: Radio<String>(

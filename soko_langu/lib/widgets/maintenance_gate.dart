@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../extensions/context_tr.dart';
 
 /// Blocks non-admin users when maintenance mode is enabled in Firestore.
 class MaintenanceGate extends StatefulWidget {
@@ -40,7 +41,7 @@ class _MaintenanceGateState extends State<MaintenanceGate> {
       }
 
       _maintenanceMessage = (doc.data()?['message'] as String?) ??
-          'App iko kwenye matengenezo. Tafadhali rudi baadaye.';
+          context.tr('maintenance_underway', 'App iko kwenye matengenezo. Tafadhali rudi baadaye.');
       if (mounted) setState(() => _showChild = false);
     } catch (_) {}
   }

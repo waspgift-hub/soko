@@ -144,12 +144,12 @@ class _KycScreenState extends State<KycScreen> {
       final selfieUrl = await _uploadImage(_selfieFile!, 'selfie');
 
       if (idImageUrl == null) {
-        _showError('Imeshindwa kupakia picha ya kitambulisho. Angalia muunganisho wako na ujaribu tena.');
+        _showError(context.tr('kyc_id_image_upload_failed', 'Failed to upload the ID image. Check your connection and try again.'));
         setState(() => _submitting = false);
         return;
       }
       if (selfieUrl == null) {
-        _showError('Imeshindwa kupakia selfie yako. Angalia muunganisho wako na ujaribu tena.');
+        _showError(context.tr('kyc_selfie_upload_failed', 'Failed to upload your selfie. Check your connection and try again.'));
         setState(() => _submitting = false);
         return;
       }
@@ -176,7 +176,7 @@ class _KycScreenState extends State<KycScreen> {
         _showError(result?['error'] ?? context.tr('failed_to_submit_kyc'));
       }
     } catch (e) {
-      _showError('Imeshindwa: ${e.toString()}');
+      _showError(context.trParams('imeshindwa', {'0': e.toString()}));
     }
 
     setState(() => _submitting = false);

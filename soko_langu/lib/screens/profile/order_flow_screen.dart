@@ -1,7 +1,6 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../../extensions/context_tr.dart';
-import '../../main.dart' show AppConfig;
 
 class OrderFlowScreen extends StatefulWidget {
   const OrderFlowScreen({super.key});
@@ -50,15 +49,13 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
       body: AnimatedBuilder(
         animation: _pulse,
         builder: (context, _) {
-          final isEn = AppConfig.of(context).langCode == 'en';
-          final details = isEn ? flowDetails : flowDetailsSW;
           return ListView(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
             children: [
               // ── Order Flow Timeline ──
               _SectionHeader(
                 icon: Icons.route_outlined,
-                title: isEn ? 'Order Flow' : 'Mlolongo wa Oda',
+                title: context.tr('order_flow', 'Order Flow'),
                 cs: cs,
               ),
               const SizedBox(height: 8),
@@ -71,7 +68,6 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                   isLast: isLast,
                   cs: cs,
                   pulse: _pulse.value,
-                  detail: details[index],
                 );
               }),
               const SizedBox(height: 32),
@@ -79,7 +75,7 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
               // ── Fee Sections (kept from original) ──
               _SectionHeader(
                 icon: Icons.payments_outlined,
-                title: isEn ? 'ClickPesa Collection Fees' : 'Ada za Kukusanya za ClickPesa',
+                title: context.tr('clickpesa_collection_fees', 'ClickPesa Collection Fees'),
                 cs: cs,
               ),
               const SizedBox(height: 8),
@@ -88,10 +84,10 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _SubHeader(cs: cs, text: isEn ? 'USSD Push (M-Pesa, Airtel, Tigo, HaloPesa)' : 'USSD Push (M-Pesa, Airtel, Tigo, HaloPesa)'),
+                    _SubHeader(cs: cs, text: context.tr('ussd_push_subtitle', 'USSD Push (M-Pesa, Airtel, Tigo, HaloPesa)')),
                     const SizedBox(height: 4),
                     Text(
-                      isEn ? 'Charged to the customer on top of MNO fees.' : 'Inatozwa kwa mteja juu ya ada za MNO.',
+                      context.tr('ussd_push_charge_note', 'Charged to the customer on top of MNO fees.'),
                       style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.6)),
                     ),
                     const SizedBox(height: 12),
@@ -102,7 +98,7 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
               const SizedBox(height: 20),
               _SectionHeader(
                 icon: Icons.payments_outlined,
-                title: isEn ? 'ClickPesa Payout Fees' : 'Ada za Kutoa za ClickPesa',
+                title: context.tr('clickpesa_payout_fees', 'ClickPesa Payout Fees'),
                 cs: cs,
               ),
               const SizedBox(height: 8),
@@ -111,27 +107,27 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _SubHeader(cs: cs, text: isEn ? 'Mobile Money Payouts (M-Pesa, Airtel, Tigo)' : 'Malipo ya Pesa kwa Simu (M-Pesa, Airtel, Tigo)'),
+                    _SubHeader(cs: cs, text: context.tr('mobile_money_payouts', 'Mobile Money Payouts (M-Pesa, Airtel, Tigo)')),
                     const SizedBox(height: 4),
                     Text(
-                      isEn ? 'Charged to the business. Can be passed to the recipient.' : 'Inatozwa kwa biashara. Inaweza kupitishwa kwa mpokeaji.',
+                      context.tr('payout_charge_note', 'Charged to the business. Can be passed to the recipient.'),
                       style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.6)),
                     ),
                     const SizedBox(height: 12),
                     _FeeTiersTable(cs: cs, tiers: payoutTiers),
                     const SizedBox(height: 10),
-                    _SubHeader(cs: cs, text: isEn ? 'Bank EFT / ACH' : 'Benki EFT / ACH'),
-                    _PctRow(cs: cs, label: isEn ? 'Flat fee (0 \u2013 20,000,000 TZS)' : 'Ada isiyobadilika (0 \u2013 20,000,000 TZS)', value: 'TZS 2,360'),
+                    _SubHeader(cs: cs, text: context.tr('bank_eft_ach', 'Bank EFT / ACH')),
+                    _PctRow(cs: cs, label: context.tr('bank_eft_ach_flat_fee', 'Flat fee (0 \u2013 20,000,000 TZS)'), value: 'TZS 2,360'),
                     const SizedBox(height: 10),
-                    _SubHeader(cs: cs, text: isEn ? 'Bank TISS (TZS)' : 'Benki TISS (TZS)'),
-                    _PctRow(cs: cs, label: isEn ? 'Flat fee (0 \u2013 1,000,000,000 TZS)' : 'Ada isiyobadilika (0 \u2013 1,000,000,000 TZS)', value: 'TZS 11,800'),
+                    _SubHeader(cs: cs, text: context.tr('bank_tiss', 'Bank TISS (TZS)')),
+                    _PctRow(cs: cs, label: context.tr('bank_tiss_flat_fee', 'Flat fee (0 \u2013 1,000,000,000 TZS)'), value: 'TZS 11,800'),
                   ],
                 ),
               ),
               const SizedBox(height: 20),
               _SectionHeader(
                 icon: Icons.store_outlined,
-                title: isEn ? 'Soko Vibe Fees' : 'Ada za Soko Vibe',
+                title: context.tr('soko_vibe_fees', 'Soko Vibe Fees'),
                 cs: cs,
               ),
               const SizedBox(height: 8),
@@ -140,28 +136,26 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _SubHeader(cs: cs, text: isEn ? 'Platform Commission' : 'Ada ya Tovuti'),
-                    _PctRow(cs: cs, label: isEn ? 'Charged per completed sale' : 'Inatozwa kwa kila mauzo yaliyokamilika', value: '3.5%'),
+                    _SubHeader(cs: cs, text: context.tr('platform_commission', 'Platform Commission')),
+                    _PctRow(cs: cs, label: context.tr('charged_per_sale', 'Charged per completed sale'), value: '3.5%'),
                     const SizedBox(height: 6),
                     Text(
-                      isEn
-                        ? 'The 3.5% commission is deducted from the seller\'s payout and recorded as Soko Vibe revenue.'
-                        : 'Ada ya 3.5% inakatwa kutoka kwa malipo ya muuzaji na kurekodiwa kama mapato ya Soko Vibe.',
+                      context.tr('commission_breakdown_note', 'The 3.5% commission is deducted from the seller\'s payout and recorded as Soko Vibe revenue.'),
                       style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.6)),
                     ),
                     const SizedBox(height: 10),
-                    _SubHeader(cs: cs, text: isEn ? 'Account & Channel Setup' : 'Ufunguzi wa Akaunti na Njia'),
+                    _SubHeader(cs: cs, text: context.tr('account_channel_setup', 'Account & Channel Setup')),
                     const SizedBox(height: 4),
-                    _FeeRow(cs: cs, label: isEn ? 'Account Creation (100,000 TZS limit)' : 'Ufunguzi wa Akaunti (kiwango 100,000 TZS)', value: 'Free'),
-                    _FeeRow(cs: cs, label: isEn ? 'KYC Search and Onboarding' : 'Utafutaji wa KYC', value: 'TZS 25,000'),
-                    _FeeRow(cs: cs, label: isEn ? 'M-Pesa Channel Setup' : 'Ufunguzi wa Njia ya M-Pesa', value: 'TZS 250,000'),
+                    _FeeRow(cs: cs, label: context.tr('account_creation_fee', 'Account Creation (100,000 TZS limit)'), value: 'Free'),
+                    _FeeRow(cs: cs, label: context.tr('kyc_search_fee', 'KYC Search and Onboarding'), value: 'TZS 25,000'),
+                    _FeeRow(cs: cs, label: context.tr('mpesa_channel_setup_fee', 'M-Pesa Channel Setup'), value: 'TZS 250,000'),
                   ],
                 ),
               ),
               const SizedBox(height: 20),
               _SectionHeader(
                 icon: Icons.receipt_long_outlined,
-                title: isEn ? 'Fee Breakdown by Method' : 'Mgawanyo wa Ada kwa Njia',
+                title: context.tr('fee_breakdown_by_method', 'Fee Breakdown by Method'),
                 cs: cs,
               ),
               const SizedBox(height: 8),
@@ -170,19 +164,19 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _SubHeader(cs: cs, text: isEn ? 'USSD Push' : 'USSD Push'),
-                    _PctRow(cs: cs, label: isEn ? 'Gateway fee (tiered)' : 'Ada ya malipo (kwa viwango)', value: 'TZS 54 \u2013 7,960'),
-                    _PctRow(cs: cs, label: isEn ? 'Soko Vibe commission' : 'Ada ya Soko Vibe', value: '3.5%'),
+                    _SubHeader(cs: cs, text: context.tr('ussd_push_method', 'USSD Push')),
+                    _PctRow(cs: cs, label: context.tr('gateway_fee_tiered', 'Gateway fee (tiered)'), value: 'TZS 54 \u2013 7,960'),
+                    _PctRow(cs: cs, label: context.tr('soko_commission_label', 'Soko Vibe commission'), value: '3.5%'),
                     const SizedBox(height: 16),
-                    _SubHeader(cs: cs, text: isEn ? 'Seller Withdrawal (payout)' : 'Muuzaji Kutoa Pesa'),
-                    _PctRow(cs: cs, label: isEn ? 'Payout fee (tiered)' : 'Ada ya kutoa (kwa viwango)', value: 'TZS 52 \u2013 9,890'),
+                    _SubHeader(cs: cs, text: context.tr('seller_withdrawal_payout', 'Seller Withdrawal (payout)')),
+                    _PctRow(cs: cs, label: context.tr('payout_fee_tiered', 'Payout fee (tiered)'), value: 'TZS 52 \u2013 9,890'),
                   ],
                 ),
               ),
               const SizedBox(height: 20),
               _SectionHeader(
                 icon: Icons.calculate_outlined,
-                title: isEn ? 'Example: TZS 100,000 via USSD Push' : 'Mfano: TZS 100,000 kwa USSD Push',
+                title: context.tr('example_ussd_push', 'Example: TZS 100,000 via USSD Push'),
                 cs: cs,
               ),
               const SizedBox(height: 8),
@@ -191,16 +185,16 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _SubHeader(cs: cs, text: isEn ? 'USSD Push' : 'USSD Push'),
-                    _CalcRow(cs: cs, label: isEn ? 'Product Price' : 'Bei ya Bidhaa', value: 'TZS 100,000'),
-                    _CalcRow(cs: cs, label: isEn ? 'ClickPesa Gateway Fee (tiered)' : 'Ada ya ClickPesa (kwa viwango)', value: 'TZS 3,240'),
-                    _CalcRow(cs: cs, label: isEn ? 'Soko Vibe Commission (3.5%)' : 'Ada ya Soko Vibe (3.5%)', value: 'TZS 3,500'),
+                    _SubHeader(cs: cs, text: context.tr('ussd_push_method', 'USSD Push')),
+                    _CalcRow(cs: cs, label: context.tr('product_price', 'Product Price'), value: 'TZS 100,000'),
+                    _CalcRow(cs: cs, label: context.tr('clickpesa_gateway_fee_tiered', 'ClickPesa Gateway Fee (tiered)'), value: 'TZS 3,240'),
+                    _CalcRow(cs: cs, label: context.tr('soko_vibe_commission_calc', 'Soko Vibe Commission (3.5%)'), value: 'TZS 3,500'),
                     const Divider(height: 20),
-                    _CalcRow(cs: cs, label: isEn ? 'Total Buyer Pays' : 'Jumla Mnunuzi Analipa', value: 'TZS 106,740', bold: true, color: cs.primary),
+                    _CalcRow(cs: cs, label: context.tr('total_buyer_pays', 'Total Buyer Pays'), value: 'TZS 106,740', bold: true, color: cs.primary),
                     const SizedBox(height: 8),
-                    _CalcRow(cs: cs, label: isEn ? 'Seller Receives (before payout fee)' : 'Muuzaji Anapata (kabla ya ada ya kutoa)', value: 'TZS 96,500', bold: true, color: cs.tertiary),
+                    _CalcRow(cs: cs, label: context.tr('seller_receives_before_fee', 'Seller Receives (before payout fee)'), value: 'TZS 96,500', bold: true, color: cs.tertiary),
                     const SizedBox(height: 4),
-                    _CalcRow(cs: cs, label: isEn ? 'Payout Fee (estimated)' : 'Ada ya Kutoa (makadirio)', value: 'TZS 1,868 \u2013 9,890'),
+                    _CalcRow(cs: cs, label: context.tr('payout_fee_estimated', 'Payout Fee (estimated)'), value: 'TZS 1,868 \u2013 9,890'),
                   ],
                 ),
               ),
@@ -213,9 +207,7 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                   color: cs.primary.withValues(alpha: 0.08),
                 ),
                 child: Text(
-                  isEn
-                    ? 'At checkout, USSD Push is the only payment method. You will receive a payment prompt on your phone \u2014 enter your PIN to complete the payment.'
-                    : 'Wakati wa checkout, USSD Push ndiyo njia pekee ya malipo. Utapokea kidokezo cha malipo kwenye simu yako \u2014 weka PIN kukamilisha malipo.',
+                  context.tr('checkout_ussd_note', 'At checkout, USSD Push is the only payment method. You will receive a payment prompt on your phone \u2014 enter your PIN to complete the payment.'),
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
@@ -481,28 +473,15 @@ final flowNodes = [
   _FlowNode(icon: Icons.emoji_events_outlined, titleKey: 'flow_complete', color: const Color(0xFFEC4899)),
 ];
 
-final flowDetails = [
-  ('Order is placed', 'Seller will confirm'),
-  ('Seller sets shipping cost', ''),
-  ('Buyer pays via USSD Push', ''),
-  ('Funds held securely in escrow', ''),
-  ('Seller dispatches via courier', ''),
-  ('Buyer confirms receipt', ''),
-  ('Seller receives payout to mobile money', ''),
-];
-
-final flowDetailsSW = [
-  ('Oda imewekwa', 'Muuzaji atathibitisha'),
-  ('Muuzaji anaweka gharama ya usafiri', ''),
-  ('Mnunuzi analipa kwa USSD Push', ''),
-  ('Fedha zinalindwa kwenye escrow', ''),
-  ('Muuzaji anasafirisha bidhaa', ''),
-  ('Mnunuzi anathibitisha upokeaji', ''),
-  ('Muuzaji anapokea malipo kwenye simu yake', ''),
-];
+final flowDescKeys = ['order_placed', 'seller_sets_shipping', 'buyer_pays_ussd', 'funds_held_escrow', 'seller_dispatches', 'buyer_confirms_receipt', 'seller_payout'];
+final flowDescFallbacks = ['Order is placed', 'Seller sets shipping cost', 'Buyer pays via USSD Push', 'Funds held securely in escrow', 'Seller dispatches via courier', 'Buyer confirms receipt', 'Seller receives payout to mobile money'];
+final flowNoteKeys = ['seller_will_confirm', '', '', '', '', '', ''];
+final flowNoteFallbacks = ['Seller will confirm', '', '', '', '', '', ''];
 
 final flowLabels = ['ORDER', 'QUOTE', 'PAYMENT', 'ESCROW', 'DISPATCH', 'CONFIRM', 'COMPLETE'];
 final phaseLabels = ['INITIATION', 'PRICING', 'TRANSACTION', 'HOLD', 'LOGISTICS', 'VERIFICATION', 'SETTLEMENT'];
+final flowLabelKeys = ['flow_label_order', 'flow_label_quote', 'flow_label_payment', 'flow_label_escrow', 'flow_label_dispatch', 'flow_label_confirm', 'flow_label_complete'];
+final phaseLabelKeys = ['phase_label_initiation', 'phase_label_pricing', 'phase_label_transaction', 'phase_label_hold', 'phase_label_logistics', 'phase_label_verification', 'phase_label_settlement'];
 
 final ussdPushTiers = <(int, int, int)>[
   (500, 899, 54), (900, 1999, 92), (2000, 2999, 124), (3000, 3999, 230),
@@ -532,7 +511,6 @@ class _FlowNodeCard extends StatelessWidget {
   final bool isLast;
   final ColorScheme cs;
   final double pulse;
-  final (String, String) detail;
 
   const _FlowNodeCard({
     required this.node,
@@ -540,7 +518,6 @@ class _FlowNodeCard extends StatelessWidget {
     required this.isLast,
     required this.cs,
     required this.pulse,
-    required this.detail,
   });
 
   @override
@@ -626,7 +603,7 @@ class _FlowNodeCard extends StatelessWidget {
                               children: [
                                 Icon(node.icon, size: 12, color: node.color),
                                 const SizedBox(width: 5),
-                                Text(flowLabels[index], style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: node.color, letterSpacing: 0.6)),
+                                Text(context.tr(flowLabelKeys[index], flowLabels[index]), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: node.color, letterSpacing: 0.6)),
                               ],
                             ),
                           ),
@@ -638,17 +615,17 @@ class _FlowNodeCard extends StatelessWidget {
                               color: node.color.withValues(alpha: 0.1),
                               border: Border.all(color: node.color.withValues(alpha: 0.25), width: 0.5),
                             ),
-                            child: Text(phaseLabels[index], style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: node.color, letterSpacing: 0.8)),
+                            child: Text(context.tr(phaseLabelKeys[index], phaseLabels[index]), style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: node.color, letterSpacing: 0.8)),
                           ),
                         ],
                       ),
                       const SizedBox(height: 12),
-                      Text(
-                        context.tr(node.titleKey),
-                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: cs.onSurface, height: 1.2),
-                      ),
-                      const SizedBox(height: 10),
-                      _buildDataRow(detail.$1, detail.$2, node.color, cs),
+                          Text(
+                            context.tr(node.titleKey),
+                            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: cs.onSurface, height: 1.2),
+                          ),
+                          const SizedBox(height: 10),
+                          _buildDataRow(context, index, node.color, cs),
                     ],
                   ),
                 ),
@@ -660,7 +637,7 @@ class _FlowNodeCard extends StatelessWidget {
     );
   }
 
-  Widget _buildDataRow(String left, String right, Color color, ColorScheme cs) {
+  Widget _buildDataRow(BuildContext context, int index, Color color, ColorScheme cs) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -671,8 +648,14 @@ class _FlowNodeCard extends StatelessWidget {
         children: [
           Icon(Icons.circle, size: 6, color: color.withValues(alpha: 0.6)),
           const SizedBox(width: 8),
-          Expanded(child: Text(left, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.onSurface.withValues(alpha: 0.8)))),
-          Text(right, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color)),
+          Expanded(
+            child: Text(
+              context.tr(flowDescKeys[index], flowDescFallbacks[index]),
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.onSurface.withValues(alpha: 0.8)),
+            ),
+          ),
+          if (flowNoteKeys[index].isNotEmpty)
+            Text(context.tr(flowNoteKeys[index], flowNoteFallbacks[index]), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color)),
         ],
       ),
     );

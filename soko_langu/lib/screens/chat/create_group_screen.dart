@@ -9,7 +9,7 @@ class CreateGroupScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(context.tr('create_group'))),
+      appBar: AppBar(title: Text(context.tr('create_group', 'Create Group'))),
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -31,7 +31,7 @@ class CreateGroupScreen extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               Text(
-                context.tr('create_group'),
+                context.tr('create_group', 'Create Group'),
                 style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
@@ -39,7 +39,7 @@ class CreateGroupScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                context.tr('create_group_description'),
+                context.tr('create_group_description', 'Create a group on WhatsApp'),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
@@ -60,18 +60,18 @@ class CreateGroupScreen extends StatelessWidget {
                   ),
                   icon: const Icon(Icons.open_in_new),
                   label: Text(
-                    context.tr('open_whatsapp'),
+                    context.tr('open_whatsapp', 'Open WhatsApp'),
                     style: const TextStyle(fontSize: 16),
                   ),
                   onPressed: () {
                     WhatsAppService().openWhatsApp(
                       phoneNumber: '',
-                      message: context.tr('group_whatsapp_message'),
+                      message: context.tr('group_whatsapp_message', 'I am creating a Soko Vibe group. Please add me.'),
                       onError: () {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text(context.tr('whatsapp_open_failed')),
+                              content: Text(context.tr('whatsapp_open_failed', 'Cannot open WhatsApp')),
                               backgroundColor: Theme.of(context).colorScheme.error,
                             ),
                           );
@@ -83,7 +83,7 @@ class CreateGroupScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               Text(
-                context.tr('after_create_group_share'),
+                context.tr('after_create_group_share', 'After creating the group, share the WhatsApp link'),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),

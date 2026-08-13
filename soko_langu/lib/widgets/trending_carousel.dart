@@ -58,7 +58,7 @@ class _TrendingCarouselState extends State<TrendingCarousel> {
                   Icon(Icons.trending_up, color: Theme.of(context).colorScheme.trendingOrange, size: 20),
                   const SizedBox(width: 6),
                   Text(
-                    'Trending',
+                    context.tr('trending'),
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,

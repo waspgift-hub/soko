@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../extensions/context_tr.dart';
 import '../theme/app_dimens.dart';
 import '../models/transaction_model.dart';
 
@@ -53,7 +54,7 @@ class OrderTimeline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final steps = _buildSteps();
+    final steps = _buildSteps(context);
     final currentStep = _currentStepIndex();
 
     return Column(
@@ -81,9 +82,9 @@ class OrderTimeline extends StatelessWidget {
         }),
         if (busName != null || plateNumber != null || trackingNumber != null) ...[
           const SizedBox(height: 8),
-          if (busName != null) _infoRow('Bus', busName!, cs),
-          if (plateNumber != null) _infoRow('Plate', plateNumber!, cs),
-          if (trackingNumber != null) _infoRow('Tracking', trackingNumber!, cs),
+          if (busName != null) _infoRow(context.tr('order_bus', 'Bus'), busName!, cs),
+          if (plateNumber != null) _infoRow(context.tr('order_plate', 'Plate'), plateNumber!, cs),
+          if (trackingNumber != null) _infoRow(context.tr('order_tracking', 'Tracking'), trackingNumber!, cs),
         ],
       ],
     );
@@ -103,8 +104,16 @@ class OrderTimeline extends StatelessWidget {
     }
   }
 
-  List<String> _buildSteps() {
-    return ['Ordered', 'Quote', 'Payment', 'Escrow', 'Dispatched', 'Confirmed', 'Delivered'];
+  List<String> _buildSteps(BuildContext context) {
+    return [
+      context.tr('order_step_ordered', 'Ordered'),
+      context.tr('order_step_quote', 'Quote'),
+      context.tr('order_step_payment', 'Payment'),
+      context.tr('order_step_escrow', 'Escrow'),
+      context.tr('order_step_dispatched', 'Dispatched'),
+      context.tr('order_step_confirmed', 'Confirmed'),
+      context.tr('order_step_delivered', 'Delivered'),
+    ];
   }
 
   Widget _infoRow(String label, String value, ColorScheme cs) {

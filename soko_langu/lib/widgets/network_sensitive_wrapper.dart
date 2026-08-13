@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
+import '../extensions/context_tr.dart';
+
 class NetworkSensitiveWrapper extends StatefulWidget {
   final Widget child;
   const NetworkSensitiveWrapper({super.key, required this.child});
@@ -139,7 +141,7 @@ class _SokoVibeOfflineBannerState extends State<_SokoVibeOfflineBanner>
           Icon(Icons.wifi_off_rounded, size: 18, color: cs.surface),
           const SizedBox(width: 10),
           Text(
-            'Hakuna mtandao — unajaribu kuunganisha',
+            context.tr('offline_reconnecting', 'Hakuna mtandao — unajaribu kuunganisha'),
             style: TextStyle(color: cs.surface, fontSize: 13, fontWeight: FontWeight.w500),
           ),
           const SizedBox(width: 8),

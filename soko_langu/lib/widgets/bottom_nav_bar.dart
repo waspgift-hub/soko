@@ -183,7 +183,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                           3,
                           Icons.chat_outlined,
                           Icons.chat_rounded,
-                          'Chat',
+                          context.tr('chat'),
                           cs,
                         ),
                         _buildProfileTab(cs),
@@ -323,7 +323,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
               Icon(Icons.add_circle_outline, color: cs.primary, size: 24),
               const SizedBox(height: 2),
               Text(
-                'Sell',
+                context.tr('sell'),
                 style: TextStyle(
                   fontSize: 10,
                   color: cs.primary,
@@ -351,7 +351,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         context.tr('discovery'),
         1,
       ),
-      _NavItem(Icons.chat_outlined, Icons.chat_rounded, 'Chat', 3),
+      _NavItem(Icons.chat_outlined, Icons.chat_rounded, context.tr('chat'), 3),
       _NavItem(
         Icons.person_outline,
         Icons.person_rounded,
@@ -508,7 +508,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                             ),
                             const SizedBox(width: 12),
                             Text(
-                              'Sell',
+                              context.tr('sell'),
                               style: TextStyle(
                                 color: cs.onSurface,
                                 fontWeight: FontWeight.w600,

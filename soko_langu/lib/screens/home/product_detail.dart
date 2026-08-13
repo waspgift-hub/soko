@@ -165,9 +165,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }
 
   void _shareProduct(Product product) {
+    final price =
+        '${LocalizationService.supportedCurrencies[product.currency]?['symbol'] ?? 'TSh'} ${product.price.toStringAsFixed(0)}';
     final text =
         "${product.name}\n"
-        "Price: ${LocalizationService.supportedCurrencies[product.currency]?['symbol'] ?? 'TSh'} ${product.price.toStringAsFixed(0)}\n"
+        "${context.trParams('share_price_line', {'price': price})}\n"
         "${context.tr('check_out_on')}";
     SharePlus.instance.share(ShareParams(text: text));
   }
@@ -893,12 +895,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           ),
         ),
         const SizedBox(width: 8),
-        Expanded(
-          child: CallSellerButton(
-            phone: _sellerProfile?.phone ?? '',
-            height: 46,
-            fontSize: 12,
-          ),
+        CallSellerButton(
+          phone: _sellerProfile?.phone ?? '',
+          iconOnly: true,
         ),
         const SizedBox(width: 8),
         Expanded(

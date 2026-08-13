@@ -390,29 +390,14 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
               const SizedBox(height: AppInsets.sm),
-              // Buyer requests quick actions
+              // Buyer requests quick action — browsing lives on the seller dashboard
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _quickActionChip(
-                        cs,
-                        Icons.lightbulb_outline_rounded,
-                        context.tr('buyer_requests_title'),
-                        () => context.push(AppRoutes.buyerRequests),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _quickActionChip(
-                        cs,
-                        Icons.add_circle_outline_rounded,
-                        context.tr('post_request'),
-                        () => context.push(AppRoutes.postBuyerRequest),
-                      ),
-                    ),
-                  ],
+                child: _quickActionChip(
+                  cs,
+                  Icons.add_circle_outline_rounded,
+                  context.tr('post_request'),
+                  () => context.push(AppRoutes.postBuyerRequest),
                 ),
               ),
               const SizedBox(height: AppInsets.sm),

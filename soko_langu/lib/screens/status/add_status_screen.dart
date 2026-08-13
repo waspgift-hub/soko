@@ -10,7 +10,7 @@ class AddStatusScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(context.tr('add_status')),
+        title: Text(context.tr('add_status', 'Add Status')),
         leading: IconButton(
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.pop(context),
@@ -37,7 +37,7 @@ class AddStatusScreen extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               Text(
-                context.tr('add_status'),
+                context.tr('add_status', 'Add Status'),
                 style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
@@ -45,7 +45,7 @@ class AddStatusScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                context.tr('add_status_whatsapp'),
+                context.tr('add_status_whatsapp', 'Add a status on WhatsApp'),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
@@ -66,7 +66,7 @@ class AddStatusScreen extends StatelessWidget {
                   ),
                   icon: const Icon(Icons.open_in_new),
                   label: Text(
-                    context.tr('open_whatsapp'),
+                    context.tr('open_whatsapp', 'Open WhatsApp'),
                     style: const TextStyle(fontSize: 16),
                   ),
                   onPressed: () {
@@ -77,7 +77,7 @@ class AddStatusScreen extends StatelessWidget {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text(context.tr('whatsapp_open_failed')),
+                              content: Text(context.tr('whatsapp_open_failed', 'Cannot open WhatsApp')),
                               backgroundColor: Theme.of(context).colorScheme.error,
                             ),
                           );

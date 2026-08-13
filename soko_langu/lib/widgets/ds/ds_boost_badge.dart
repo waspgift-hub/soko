@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_dimens.dart';
 import '../../theme/app_typography.dart';
+import '../../extensions/context_tr.dart';
 
 /// Gold gradient pill for boosted listings only (spec §4.6).
 class DsBoostBadge extends StatelessWidget {
-  final String label;
+  final String? label;
 
-  const DsBoostBadge({super.key, this.label = 'BOOSTED'});
+  const DsBoostBadge({super.key, this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +37,7 @@ class DsBoostBadge extends StatelessWidget {
           const Icon(Icons.bolt, size: 12, color: Color(0xFF4A2C00)),
           const SizedBox(width: 3),
           Text(
-            label,
+            label ?? context.tr('boosted', 'BOOSTED'),
             style: AppTypography.statusChip(const Color(0xFF4A2C00)),
           ),
         ],

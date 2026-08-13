@@ -38,7 +38,7 @@ class StatusViewerScreen extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               Text(
-                context.tr('view_status_on_whatsapp'),
+                context.tr('view_status_on_whatsapp', 'View Status on WhatsApp'),
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.surface,
                   fontSize: 20,
@@ -61,7 +61,7 @@ class StatusViewerScreen extends StatelessWidget {
                 ),
                 icon: const Icon(Icons.open_in_new),
                 label: Text(
-                  context.tr('open_whatsapp'),
+                  context.tr('open_whatsapp', 'Open WhatsApp'),
                   style: const TextStyle(fontSize: 16),
                 ),
                 onPressed: () {
@@ -72,7 +72,7 @@ class StatusViewerScreen extends StatelessWidget {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text(context.tr('whatsapp_open_failed')),
+                            content: Text(context.tr('whatsapp_open_failed', 'Cannot open WhatsApp')),
                             backgroundColor: Theme.of(context).colorScheme.error,
                           ),
                         );
@@ -85,7 +85,7 @@ class StatusViewerScreen extends StatelessWidget {
               TextButton(
                 onPressed: () => Navigator.pop(context),
                 child: Text(
-                  context.tr('go_back'),
+                  context.tr('go_back', 'Go Back'),
                   style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.54), fontSize: 14),
                 ),
               ),

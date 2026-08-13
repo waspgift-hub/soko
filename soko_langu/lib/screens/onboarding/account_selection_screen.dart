@@ -47,7 +47,7 @@ class AccountSelectionScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'Jionee mwenyewe/Look for yourself',
+                context.tr('account_selection_subtitle', 'Jionee mwenyewe/Look for yourself'),
                 style: TextStyle(
                   fontSize: 14,
                   color: cs.onSurface.withValues(alpha: 0.5),

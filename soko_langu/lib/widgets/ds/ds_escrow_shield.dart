@@ -2,19 +2,20 @@ import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_dimens.dart';
 import '../../theme/app_motion.dart';
+import '../../extensions/context_tr.dart';
 
 /// Soko Vibe trust strip (spec §4.6): shield + animated lock. Rendered on
 /// every paid state, payment sheet, and receipt.
 ///
 /// [label] is caller-supplied so bilingual screens can pass `context.tr(...)`.
 class DsEscrowShield extends StatefulWidget {
-  final String label;
+  final String? label;
   final Color? color;
   final bool compact;
 
   const DsEscrowShield({
     super.key,
-    this.label = 'Fedha zako ziko salama Escrow',
+    this.label,
     this.color,
     this.compact = false,
   });
@@ -71,7 +72,7 @@ class _DsEscrowShieldState extends State<DsEscrowShield>
             const SizedBox(width: AppSpacing.s2),
             Flexible(
               child: Text(
-                widget.label,
+                widget.label ?? context.tr('escrow_safe_label', 'Fedha zako ziko salama Escrow'),
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
                       color: scheme.brandTextSecondary,
                       fontSize: 12,

@@ -314,7 +314,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        '~TZS ${_nf.format(tier.pricePerDay.toInt())}/day',
+                        '~TZS ${_nf.format(tier.pricePerDay.toInt())}${context.tr('per_day', '/day')}',
                         style: TextStyle(
                           fontSize: 12,
                           color: isDark

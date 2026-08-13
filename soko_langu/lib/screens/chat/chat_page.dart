@@ -118,14 +118,14 @@ class _ChatPageState extends State<ChatPage> {
   /// ever leaking the raw uid into the UI.
   String get _displayName {
     final name = _receiverName ?? widget.receiverName;
-    return (name.isNotEmpty) ? name : context.tr('member');
+    return (name.isNotEmpty) ? name : context.tr('member', 'Member');
   }
 
   void _openWhatsApp() {
     final phone = _receiverPhone;
     if (phone == null || phone.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('phone_not_found'))),
+        SnackBar(content: Text(context.tr('phone_not_found', 'Phone Not Found'))),
       );
       return;
     }
@@ -375,7 +375,7 @@ class _ChatPageState extends State<ChatPage> {
                                 ),
                               ),
                               const SizedBox(width: 4),
-                              Text(context.tr('online'),
+                              Text(context.tr('online', 'Online'),
                                   style: TextStyle(fontSize: 12, color: const Color(0xFF25D366))),
                             ],
                           )
@@ -391,7 +391,7 @@ class _ChatPageState extends State<ChatPage> {
                                 ),
                               ),
                               const SizedBox(width: 4),
-                              Text(context.tr('offline'),
+                              Text(context.tr('offline', 'Offline'),
                                   style: TextStyle(fontSize: 12, color: isDark ? Colors.white38 : const Color(0xFF78909C))),
                             ],
                           ),
@@ -407,7 +407,7 @@ class _ChatPageState extends State<ChatPage> {
           CallSellerButton(phone: _receiverPhone ?? '', iconOnly: true),
           IconButton(
             icon: const Icon(Icons.chat, color: Color(0xFF25D366)),
-            tooltip: context.tr('whatsapp'),
+            tooltip: context.tr('whatsapp', 'WhatsApp'),
             onPressed: _openWhatsApp,
           ),
           IconButton(
@@ -453,12 +453,12 @@ class _ChatPageState extends State<ChatPage> {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          context.tr('no_messages_yet'),
+                          context.tr('no_messages_yet', 'No messages yet'),
                           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: cs.onSurfaceVariant),
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          context.tr('send_first_message'),
+                          context.tr('send_first_message', 'Send the first message!'),
                           style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant.withValues(alpha: 0.7)),
                         ),
                         if (widget.productName.isNotEmpty) ...[
@@ -516,7 +516,7 @@ class _ChatPageState extends State<ChatPage> {
                                     _replyTo = msg.id;
                                     _replyToContent = msg.content;
                                     _replyToSender = isMe
-                                        ? (FirebaseAuth.instance.currentUser?.displayName ?? context.tr('you'))
+                                        ? (FirebaseAuth.instance.currentUser?.displayName ?? context.tr('you', 'You'))
                                         : _displayName;
                                     _focusNode.requestFocus();
                                     setState(() {});
@@ -604,7 +604,7 @@ class _ChatPageState extends State<ChatPage> {
                       onSubmitted: (_) => _sendMessage(),
                       style: TextStyle(color: cs.onSurface, fontSize: 14),
                       decoration: InputDecoration(
-                        hintText: context.tr('type_message'),
+                        hintText: context.tr('type_message', 'Type a message...'),
                         hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.4), fontSize: 14),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
@@ -649,9 +649,9 @@ class _ChatPageState extends State<ChatPage> {
     final now = DateTime.now();
     String label;
     if (_isSameDay(dt, now)) {
-      label = context.tr('today');
+      label = context.tr('today', 'Today');
     } else if (_isSameDay(dt, now.subtract(const Duration(days: 1)))) {
-      label = context.tr('yesterday');
+      label = context.tr('yesterday', 'Yesterday');
     } else {
       label = '${dt.day}/${dt.month}/${dt.year}';
     }
@@ -674,7 +674,7 @@ class _ChatPageState extends State<ChatPage> {
   Widget _buildMicButton(ColorScheme cs) {
     return GestureDetector(
       onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('coming_soon'))),
+        SnackBar(content: Text(context.tr('coming_soon', 'Coming soon'))),
       ),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
@@ -701,7 +701,7 @@ class _ChatPageState extends State<ChatPage> {
           children: [
             ListTile(
               leading: const Icon(Icons.person),
-              title: Text(context.tr('view_profile')),
+              title: Text(context.tr('view_profile', 'View Profile')),
               onTap: () {
                 Navigator.pop(ctx);
                 context.push('${AppRoutes.publicProfile}/${widget.receiverId}',
@@ -710,7 +710,7 @@ class _ChatPageState extends State<ChatPage> {
             ),
             ListTile(
               leading: const Icon(Icons.block),
-              title: Text(context.tr('block')),
+              title: Text(context.tr('block', 'Block')),
               onTap: () async {
                 Navigator.pop(ctx);
                 await _chatService.blockUser(widget.receiverId);
@@ -719,7 +719,7 @@ class _ChatPageState extends State<ChatPage> {
             ),
             ListTile(
               leading: const Icon(Icons.delete),
-              title: Text(context.tr('delete_conversation')),
+              title: Text(context.tr('delete_conversation', 'Delete Conversation')),
               onTap: () async {
                 Navigator.pop(ctx);
                 await _chatService.deleteConversation(widget.receiverId);
@@ -880,7 +880,7 @@ class _MessageBubble extends StatelessWidget {
                   ),
                 // Message content
                 if (isDeleted)
-                  Text(context.tr('message_deleted'),
+                  Text(context.tr('message_deleted', 'This message has been deleted'),
                       style: TextStyle(
                           fontSize: 14,
                           fontStyle: FontStyle.italic,
@@ -900,7 +900,7 @@ class _MessageBubble extends StatelessWidget {
                     if (message.isEdited && !isDeleted)
                       Padding(
                         padding: const EdgeInsets.only(right: 4),
-                        child: Text(context.tr('edited'),
+                        child: Text(context.tr('edited', 'edited'),
                             style: TextStyle(
                                 fontSize: 10, color: isMe ? cs.onPrimary.withValues(alpha: 0.7) : cs.onSurfaceVariant)),
                       ),

@@ -301,7 +301,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                   productId: productId,
                   sellerId: sellerId,
                   userId: user?.uid ?? '',
-                  userName: user?.displayName ?? user?.email ?? 'Anonymous',
+                  userName: user?.displayName ?? user?.email ?? context.tr('anonymous', 'Anonymous'),
                   userImage: user?.photoURL,
                   rating: rating,
                   comment: commentCtrl.text.trim(),
@@ -708,7 +708,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
   }
 
   String _formatRelative(Duration d) {
-    if (d.inSeconds < 10) return 'sasa';
+    if (d.inSeconds < 10) return context.tr('just_now');
     if (d.inMinutes < 1) return '${d.inSeconds}s';
     return '${d.inMinutes}m';
   }
@@ -1200,6 +1200,7 @@ class _OrderGlassCard extends StatelessWidget {
                         ),
                         if (status == 'delivered' ||
                             status == 'delivery_confirmed' ||
+                            status == 'confirmed' ||
                             status == 'completed')
                           _buildReceiptCard(
                             context,

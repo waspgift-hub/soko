@@ -47,7 +47,7 @@ class TermsOfServiceScreen extends StatelessWidget {
 
               const SizedBox(height: 32),
               Center(
-                child: Text('© 2026 Soko Vibe Limited. All rights reserved.',
+                child: Text(context.tr('copyright'),
                   style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.5))),
               ),
               const SizedBox(height: 16),

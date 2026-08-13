@@ -113,7 +113,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       final phoneResult = jsonDecode(phoneCheck.body);
       if (phoneResult['exists'] == true) {
         setState(() => _isLoading = false);
-        _showError('Namba hii tayari imesajiliwa. Tumia namba nyingine au ingia kwenye akaunti yako.');
+        _showError(context.tr('phone_already_registered', 'This phone number is already registered. Use a different number or log in to your account.'));
         return;
       }
       final emailCheck = await http.post(
@@ -124,7 +124,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       final emailResult = jsonDecode(emailCheck.body);
       if (emailResult['exists'] == true) {
         setState(() => _isLoading = false);
-        _showError('Barua pepe hii tayari imesajiliwa. Tumia barua pepe nyingine au ingia kwenye akaunti yako.');
+        _showError(context.tr('email_already_registered', 'This email is already registered. Use a different email or log in to your account.'));
         return;
       }
       await context.read<AuthNotifier>().sendPhoneOtp(_normalizedPhone!);
@@ -312,22 +312,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             text: TextSpan(
                               style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                               children: [
-                                TextSpan(text: 'I ACCEPT THE '),
+                                TextSpan(text: context.tr('accept_terms_prefix', 'I ACCEPT THE ')),
                                 WidgetSpan(
                                   child: GestureDetector(
                                     onTap: () => context.push(AppRoutes.termsOfService),
                                     child: Text(
-                                      'TERMS OF SERVICE',
+                                      context.tr('terms_of_service').toUpperCase(),
                                       style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600),
                                     ),
                                   ),
                                 ),
-                                TextSpan(text: ' AND '),
+                                TextSpan(text: context.tr('accept_terms_separator', ' AND ')),
                                 WidgetSpan(
                                   child: GestureDetector(
                                     onTap: () => context.push(AppRoutes.privacyPolicy),
                                     child: Text(
-                                      'PRIVACY POLICY',
+                                      context.tr('privacy_policy').toUpperCase(),
                                       style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600),
                                     ),
                                   ),

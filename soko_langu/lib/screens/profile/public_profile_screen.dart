@@ -338,7 +338,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                 const SizedBox(height: 16),
                 SizedBox(
                   width: 220,
-                  child: CallSellerButton(phone: profile!.phone, height: 46),
+                  child: CallSellerButton(phone: profile!.phone, iconOnly: true),
                 ),
               ],
               const SizedBox(height: 12),

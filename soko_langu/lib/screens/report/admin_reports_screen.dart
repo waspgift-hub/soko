@@ -228,7 +228,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                       border: Border.all(color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.20)),
                     ),
                     child: Text(
-                      'Admin: ${report.adminNote}',
+                      context.trParams('admin_note_label', {'note': report.adminNote!}),
                       style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.secondary),
                     ),
                   ),

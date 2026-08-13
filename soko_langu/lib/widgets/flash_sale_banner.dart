@@ -235,9 +235,9 @@ class _FlashSaleBannerState extends State<FlashSaleBanner>
                     color: Colors.white, size: 12),
               ),
               const SizedBox(width: 4),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'FLASH',
+                  context.tr('flash'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(

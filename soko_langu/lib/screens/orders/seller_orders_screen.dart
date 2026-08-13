@@ -395,7 +395,8 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                           ],
                           if (status == 'delivered' ||
                               status == 'completed' ||
-                              status == 'delivery_confirmed') ...[
+                              status == 'delivery_confirmed' ||
+                              status == 'confirmed') ...[
                             Expanded(
                               child: DsButton(
                                 label: context.tr('view_receipt'),
@@ -529,7 +530,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                 itemCount: pending.length,
                 itemBuilder: (_, i) {
                   final d = pending[i].data() as Map<String, dynamic>;
-                  final productName = d['productName'] ?? 'Product';
+                  final productName = d['productName'] ?? context.tr('product');
                   final productImage = d['productImage'] as String? ?? '';
                   final buyerName = d['buyerName'] ?? '';
                   final region = d['region'] as String? ?? '';

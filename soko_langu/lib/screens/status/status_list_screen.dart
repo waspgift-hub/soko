@@ -16,7 +16,7 @@ class StatusListScreen extends StatelessWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: Text(
-          context.tr('status'),
+          context.tr('status', 'Status'),
           style: TextStyle(
             color: cs.primary,
             fontWeight: FontWeight.w700,
@@ -54,7 +54,7 @@ class StatusListScreen extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               Text(
-                context.tr('status'),
+                context.tr('status', 'Status'),
                 style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
@@ -62,7 +62,7 @@ class StatusListScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                context.tr('view_share_status_whatsapp'),
+                context.tr('view_share_status_whatsapp', 'View & Share Status on WhatsApp'),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
@@ -83,7 +83,7 @@ class StatusListScreen extends StatelessWidget {
                   ),
                   icon: const Icon(Icons.open_in_new),
                   label: Text(
-                    context.tr('open_whatsapp_status'),
+                    context.tr('open_whatsapp_status', 'Open WhatsApp Status'),
                     style: const TextStyle(fontSize: 16),
                   ),
                   onPressed: () => _openWhatsAppStatus(context),
@@ -103,7 +103,7 @@ class StatusListScreen extends StatelessWidget {
                   ),
                   icon: const Icon(Icons.add_circle_outline),
                   label: Text(
-                    context.tr('add_status'),
+                    context.tr('add_status', 'Add Status'),
                     style: const TextStyle(fontSize: 16),
                   ),
                   onPressed: () => _openWhatsAppStatus(context),
@@ -124,7 +124,7 @@ class StatusListScreen extends StatelessWidget {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(context.tr('whatsapp_open_failed')),
+              content: Text(context.tr('whatsapp_open_failed', 'Cannot open WhatsApp')),
               backgroundColor: Theme.of(context).colorScheme.error,
             ),
           );
@@ -134,7 +134,7 @@ class StatusListScreen extends StatelessWidget {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(context.tr('whatsapp_not_installed')),
+              content: Text(context.tr('whatsapp_not_installed', 'WhatsApp not installed, opened website')),
             ),
           );
         }

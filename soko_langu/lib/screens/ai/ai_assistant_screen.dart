@@ -598,8 +598,8 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
           _infoRow(Icons.location_on_outlined, product.location, cs),
           if (product.rating > 0) _infoRow(Icons.star_outline, '${product.rating.toStringAsFixed(1)} (${product.reviewCount})', cs),
           if (product.condition != 'new') _infoRow(Icons.info_outline, '${context.tr('condition')}: ${product.condition}', cs),
-          if (product.stock > 0) _infoRow(Icons.inventory_2_outlined, 'Stock: ${product.stock}', cs),
-          if (product.soldCount > 0) _infoRow(Icons.trending_up, 'Imeuzwa: ${product.soldCount}', cs),
+          if (product.stock > 0) _infoRow(Icons.inventory_2_outlined, '${context.tr('stock')}: ${product.stock}', cs),
+          if (product.soldCount > 0) _infoRow(Icons.trending_up, '${context.tr('sold')}: ${product.soldCount}', cs),
           const SizedBox(height: 10),
           SizedBox(
             width: double.infinity,

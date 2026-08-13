@@ -393,7 +393,6 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
       _ActionItem(Icons.explore_rounded, context.tr('discovery'), () => context.push(AppRoutes.discovery)),
       _ActionItem(Icons.receipt_long_rounded, context.tr('my_purchases'), () => context.push(AppRoutes.myPurchases)),
       _ActionItem(Icons.account_balance_wallet_rounded, context.tr('buyer_statement'), () => context.push(AppRoutes.buyerStatement)),
-      _ActionItem(Icons.lightbulb_outline_rounded, context.tr('buyer_requests_title'), () => context.push(AppRoutes.buyerRequests)),
       _ActionItem(Icons.verified_rounded, context.tr('kyc'), () => context.push(AppRoutes.kyc)),
     ];
     if (isAdmin) {

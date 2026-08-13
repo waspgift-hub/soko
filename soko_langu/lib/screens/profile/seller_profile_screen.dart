@@ -197,7 +197,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
-                'Seller',
+                context.tr('seller', 'Seller'),
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.surface,
                   fontWeight: FontWeight.w600,

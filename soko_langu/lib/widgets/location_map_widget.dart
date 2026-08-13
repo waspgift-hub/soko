@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import '../extensions/context_tr.dart';
 import '../widgets/soko_vibe_loading.dart';
 
 class LocationMapWidget extends StatefulWidget {
@@ -92,7 +93,7 @@ class _LocationMapWidgetState extends State<LocationMapWidget> {
         position: targetPos,
         draggable: widget.draggablePin,
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-        infoWindow: InfoWindow(title: widget.targetLabel ?? 'Location'),
+        infoWindow: InfoWindow(title: widget.targetLabel ?? context.tr('map_location', 'Location')),
         onDragEnd: widget.draggablePin
             ? (pos) {
                 setState(() {
@@ -109,7 +110,7 @@ class _LocationMapWidgetState extends State<LocationMapWidget> {
         markerId: const MarkerId('me'),
         position: _myLocation!,
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-        infoWindow: const InfoWindow(title: 'You'),
+        infoWindow: InfoWindow(title: context.tr('map_you', 'You')),
       ));
     }
 
@@ -197,7 +198,7 @@ class _LocationMapWidgetState extends State<LocationMapWidget> {
                         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4)],
                       ),
                       child: IconButton(
-                        tooltip: 'My location',
+                        tooltip: context.tr('my_location', 'My location'),
                         icon: Icon(Icons.my_location, size: 18, color: cs.primary),
                         onPressed: () => _goToMyLocation(),
                       ),

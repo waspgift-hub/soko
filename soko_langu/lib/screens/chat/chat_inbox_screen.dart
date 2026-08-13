@@ -62,7 +62,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: AppBar(
-        title: Text(context.tr('chats')),
+        title: Text(context.tr('chats', 'Chats')),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
@@ -72,9 +72,9 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             child: Row(
               children: [
-                _buildFilterChip(context, context.tr('all'), !_showUnreadOnly, () => setState(() => _showUnreadOnly = false)),
+                _buildFilterChip(context, context.tr('all', 'All'), !_showUnreadOnly, () => setState(() => _showUnreadOnly = false)),
                 const SizedBox(width: 8),
-                _buildFilterChip(context, context.tr('unread'), _showUnreadOnly, () => setState(() => _showUnreadOnly = true)),
+                _buildFilterChip(context, context.tr('unread', 'Unread'), _showUnreadOnly, () => setState(() => _showUnreadOnly = true)),
               ],
             ),
           ),
@@ -116,7 +116,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
           if (rooms.isEmpty) {
             return SokoVibeEmptyState(
               icon: Icons.chat_bubble_outline,
-              title: context.tr('no_conversations'),
+              title: context.tr('no_conversations', 'No conversations yet'),
             );
           }
           return ListView.builder(
@@ -127,7 +127,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
               final otherId = room.participants.where((p) => p != uid).firstOrNull ?? '';
               if (otherId.isEmpty) return const SizedBox.shrink();
               _fetchUser(otherId);
-              final name = _userNames[otherId] ?? context.tr('member');
+              final name = _userNames[otherId] ?? context.tr('member', 'Member');
               final photo = _userPhotos[otherId] ?? '';
 
               final isBuyer = room.buyerId == uid;
@@ -254,7 +254,7 @@ class _ChatListTile extends StatelessWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              lastMessage ?? context.tr('no_messages'),
+                              lastMessage ?? context.tr('no_messages', 'No messages'),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant),
@@ -286,7 +286,7 @@ class _ChatListTile extends StatelessWidget {
     final now = DateTime.now();
     final diff = now.difference(dt);
     if (diff.inDays == 0) return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-    if (diff.inDays == 1) return context.tr('yesterday');
+    if (diff.inDays == 1) return context.tr('yesterday', 'Yesterday');
     return '${dt.day}/${dt.month}';
   }
 }

@@ -395,7 +395,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Unaweka agizo bila malipo. Muuzaji atakupa gharama ya usafirishaji, kisha utalipa.',
+              context.tr('checkout_trust_strip', 'Unaweka agizo bila malipo. Muuzaji atakupa gharama ya usafirishaji, kisha utalipa.'),
               style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant, height: 1.4),
             ),
           ),
@@ -635,7 +635,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       if (resp.statusCode != 200 || data['success'] != true) {
-        _showError(data['error'] ?? 'Failed to create order');
+        _showError(data['error'] ?? context.tr('failed_to_create_order', 'Failed to create order'));
         setState(() => _processing = false);
         return;
       }

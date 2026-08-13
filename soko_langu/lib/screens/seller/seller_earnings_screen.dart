@@ -597,7 +597,10 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Fee: -TZS ${nf.format(tx.processingFee)} | Soko Vibe: -TZS ${nf.format(tx.sokoLanguCommission)}',
+                        context.trParams('transaction_fee_breakdown', {
+                          'fee': nf.format(tx.processingFee),
+                          'commission': nf.format(tx.sokoLanguCommission),
+                        }),
                         style: TextStyle(fontSize: 11, color: cs.error.withValues(alpha: 0.7)),
                       ),
                     ],
@@ -669,8 +672,13 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                       const SizedBox(height: 2),
                       Text(
                         w.status == WithdrawalStatus.completed
-                            ? 'Fee: TZS ${nf.format(w.fee)} | ${DateFormat('MMM dd, yyyy HH:mm').format(w.createdAt)}'
-                            : 'Failed: ${w.failureReason ?? context.tr('unknown')}',
+                            ? context.trParams('withdrawal_fee_detail', {
+                                'fee': nf.format(w.fee),
+                                'date': DateFormat('MMM dd, yyyy HH:mm').format(w.createdAt),
+                              })
+                            : context.trParams('withdrawal_failed_detail', {
+                                'reason': w.failureReason ?? context.tr('unknown'),
+                              }),
                         style: TextStyle(
                           fontSize: 11,
                           color: w.status == WithdrawalStatus.completed

@@ -126,7 +126,10 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Notification hii itatumwa kwa watumiaji WOTE wa app. Hakikisha ujumbe ni sahihi.',
+                        context.tr(
+                          'broadcast_warning',
+                          'Notification hii itatumwa kwa watumiaji WOTE wa app. Hakikisha ujumbe ni sahihi.',
+                        ),
                         style: TextStyle(fontSize: 13, color: cs.onSurface),
                       ),
                     ),
@@ -177,7 +180,9 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
                   icon: _sending
                       ? const SokoVibeThreeDotLoader(size: 18, dotSize: 4.5, color: Colors.white)
                       : const Icon(Icons.send_rounded, size: 20),
-                  label: Text(_sending ? 'Sending...' : 'Send to All Users'),
+                  label: Text(_sending
+                      ? context.tr('sending', 'Sending...')
+                      : context.tr('send_to_all', 'Send to All Users')),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
                     foregroundColor: Colors.white,

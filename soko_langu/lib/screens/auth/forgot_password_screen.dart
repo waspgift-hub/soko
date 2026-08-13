@@ -48,9 +48,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   }
 
   String? _phoneValidator(String? v) {
-    if (v == null || v.trim().isEmpty) return 'Weka namba ya simu';
+    if (v == null || v.trim().isEmpty) return context.tr('phone_validator_empty');
     final digits = v.replaceAll(RegExp(r'\D'), '');
-    if (digits.length < 9) return 'Namba si sahihi';
+    if (digits.length < 9) return context.tr('phone_validator_invalid');
     return null;
   }
 
@@ -111,17 +111,17 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       );
       final result = jsonDecode(resp.body);
       if (resp.statusCode != 200 || result['sent'] != true) {
-        setState(() => _serverError = result['error'] ?? 'Imeshindwa kutuma OTP');
+        setState(() => _serverError = result['error'] ?? context.tr('failed_to_send_otp'));
         return;
       }
       if (mounted) {
         setState(() => _otpSent = true);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('OTP imetumwa kwa ${_phoneController.text.trim()}')),
+          SnackBar(content: Text(context.tr('otp_sent_to').replaceAll('{0}', _phoneController.text.trim()))),
         );
       }
     } catch (e) {
-      setState(() => _serverError = 'Mtandao dhaifu. Angalia muunganisho wako.');
+      setState(() => _serverError = context.tr('network_error_try_again'));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -129,11 +129,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   Future<void> _verifyOtpAndReset() async {
     if (_newPasswordController.text != _confirmPasswordController.text) {
-      setState(() => _serverError = context.tr('passwords_mismatch'));
+      setState(() => _serverError = context.tr('password_mismatch'));
       return;
     }
     if (_newPasswordController.text.length < 8) {
-      setState(() => _serverError = context.tr('password_min_length'));
+      setState(() => _serverError = context.tr('password_length'));
       return;
     }
     setState(() { _isLoading = true; _serverError = null; });
@@ -151,20 +151,20 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       );
       final result = jsonDecode(resp.body);
       if (resp.statusCode != 200 || result['success'] != true) {
-        setState(() => _serverError = result['error'] ?? 'Imeshindwa kubadilisha nenosiri');
+        setState(() => _serverError = result['error'] ?? context.tr('failed_to_reset_password'));
         return;
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: Theme.of(context).colorScheme.primary,
-            content: Text('Nenosiri limebadilishwa kwa mafanikio'),
+            content: Text(context.tr('password_changed')),
           ),
         );
         Navigator.pop(context);
       }
     } catch (e) {
-      setState(() => _serverError = 'Mtandao dhaifu. Angalia muunganisho wako.');
+      setState(() => _serverError = context.tr('network_error_try_again'));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -208,9 +208,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 Text(context.tr('enter_email_reset_hint'), textAlign: TextAlign.center, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14)),
                 const SizedBox(height: 24),
                 SegmentedButton<int>(
-                  segments: const [
-                    ButtonSegment(value: 0, label: Text('Barua pepe'), icon: Icon(Icons.email_outlined)),
-                    ButtonSegment(value: 1, label: Text('Namba ya simu'), icon: Icon(Icons.phone_android)),
+                  segments: [
+                    ButtonSegment(value: 0, label: Text(context.tr('email')), icon: Icon(Icons.email_outlined)),
+                    ButtonSegment(value: 1, label: Text(context.tr('phone')), icon: Icon(Icons.phone_android)),
                   ],
                   selected: {_methodIndex},
                   onSelectionChanged: (v) => setState(() {
@@ -245,7 +245,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       keyboardType: TextInputType.phone,
                       textInputAction: TextInputAction.done,
                       decoration: InputDecoration(
-                        hintText: 'Namba ya simu (e.g. 0712345678)',
+                        hintText: context.tr('phone_field_hint'),
                         prefixIcon: Icon(Icons.phone_android, color: cs.onSurface.withValues(alpha: 0.59)),
                         filled: true,
                         fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.50),
@@ -277,7 +277,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       obscureText: true,
                       textInputAction: TextInputAction.next,
                       decoration: InputDecoration(
-                        hintText: 'Nenosiri jipya',
+                        hintText: context.tr('new_password'),
                         prefixIcon: Icon(Icons.lock_outlined, color: cs.onSurface.withValues(alpha: 0.59)),
                         filled: true,
                         fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.50),
@@ -292,7 +292,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       obscureText: true,
                       textInputAction: TextInputAction.done,
                       decoration: InputDecoration(
-                        hintText: 'Rudia nenosiri',
+                        hintText: context.tr('repeat_new_password'),
                         prefixIcon: Icon(Icons.lock_outlined, color: cs.onSurface.withValues(alpha: 0.59)),
                         filled: true,
                         fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.50),
@@ -345,7 +345,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                             child: Text(
                               _methodIndex == 0
                                   ? context.tr('send_reset_link')
-                                  : (_otpSent ? 'Badilisha Nenosiri' : 'Tuma OTP'),
+                                  : (_otpSent ? context.tr('change_password', 'Change Password') : context.tr('send_otp')),
                               style: TextStyle(color: Theme.of(context).colorScheme.surface, fontSize: 16, fontWeight: FontWeight.bold),
                             ),
                           ),

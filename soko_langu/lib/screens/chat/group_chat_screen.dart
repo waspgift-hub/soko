@@ -11,7 +11,7 @@ class GroupChatScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(context.tr('group_chat'))),
+      appBar: AppBar(title: Text(context.tr('group_chat', 'Group Chat'))),
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -33,7 +33,7 @@ class GroupChatScreen extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               Text(
-                context.tr('group_chat_title'),
+                context.tr('group_chat_title', 'Group Chat'),
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
@@ -41,7 +41,7 @@ class GroupChatScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                context.tr('continue_group_chat_whatsapp'),
+                context.tr('continue_group_chat_whatsapp', 'Continue group chat on WhatsApp'),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
@@ -62,7 +62,7 @@ class GroupChatScreen extends StatelessWidget {
                   ),
                   icon: const Icon(Icons.open_in_new),
                   label: Text(
-                    context.tr('open_whatsapp'),
+                    context.tr('open_whatsapp', 'Open WhatsApp'),
                     style: TextStyle(fontSize: 16),
                   ),
                   onPressed: () {
@@ -73,7 +73,7 @@ class GroupChatScreen extends StatelessWidget {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text(context.tr('whatsapp_open_failed')),
+                              content: Text(context.tr('whatsapp_open_failed', 'Cannot open WhatsApp')),
                               backgroundColor: Theme.of(context).colorScheme.error,
                             ),
                           );

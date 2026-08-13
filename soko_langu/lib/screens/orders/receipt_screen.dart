@@ -8,7 +8,6 @@ import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
 import 'package:open_file/open_file.dart';
 import '../../services/receipt_pdf_service.dart';
-import '../../widgets/order_timeline.dart';
 import '../../models/transaction_model.dart';
 import '../../extensions/context_tr.dart';
 import '../../theme/app_colors.dart';
@@ -100,9 +99,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                         'landmarks': d['landmarks'],
                       }
                     : null);
-            final dispatchProof = d['dispatchProof'] as Map<String, dynamic>?;
             final createdAt = d['createdAt'] is Timestamp ? (d['createdAt'] as Timestamp).toDate() : DateTime.now();
-            final txStatus = MarketplaceTransaction.parseStatus(status);
             final productImage = d['productImage'] as String? ?? '';
             final paymentMethod = d['paymentMethod'] as String? ?? 'ClickPesa';
             final transactionReference = d['transactionReference'] as String? ?? d['transactionId'] as String?;
@@ -115,7 +112,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
               child: _buildReceiptCard(context, cs, d, status, productName, productDescription, productDetails,
                   price, shippingCost, platformFee, clickpesaFee, totalAmount,
                   buyerName, sellerName, buyerPhone, sellerPhone, sellerLocation,
-                  deliveryAddress, dispatchProof, createdAt, txStatus,
+                  deliveryAddress, createdAt,
                   productImage, paymentMethod, transactionReference,
                   courierName, driverPhone, trackingNumber),
             );
@@ -130,8 +127,8 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     String status, String productName, String productDescription, String productDetails,
     double price, double shippingCost, double platformFee, double clickpesaFee, double totalAmount,
     String buyerName, String sellerName, String buyerPhone, String sellerPhone, String sellerLocation,
-    Map<String, dynamic>? deliveryAddress, Map<String, dynamic>? dispatchProof,
-    DateTime createdAt, TransactionStatus txStatus, String productImage,
+    Map<String, dynamic>? deliveryAddress,
+    DateTime createdAt, String productImage,
     String paymentMethod, String? transactionReference,
     String? courierName, String? driverPhone, String? trackingNumber,
   ) {
@@ -170,8 +167,6 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildHeader(context, cs, widget.orderId, createdAt),
-                const SizedBox(height: 24),
-                _buildStatusBadge(context, cs, status),
                 const SizedBox(height: 24),
                 _divider(cs),
                 const SizedBox(height: 20),
@@ -252,32 +247,6 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                     deliveryAddress, createdAt, status, productImage, paymentMethod, transactionReference,
                     productDescription, productDetails),
                 const SizedBox(height: 24),
-                // Order Timeline
-                Text(context.tr( 'order_status', 'Hatua za Agizo'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: cs.onSurface)),
-                const SizedBox(height: 12),
-                OrderTimeline(
-                  status: txStatus,
-                  dispatchProof: dispatchProof,
-                  courierName: courierName,
-                  driverPhone: driverPhone,
-                  receiptImageUrl: d['receiptImageUrl'] as String?,
-                  trackingNumber: trackingNumber ?? dispatchProof?['trackingNumber'] as String?,
-                  shippingCost: shippingCost,
-                  deliveryAddress: deliveryAddress,
-                  orderId: widget.orderId,
-                  passengerName: d['passengerName'] as String?,
-                  busName: d['busName'] as String?,
-                  receiptNumber: d['receiptNumber'] as String?,
-                  departureTime: d['departureTime'] as String?,
-                  arrivalTime: d['arrivalTime'] as String?,
-                  originStation: d['originStation'] as String?,
-                  destinationStation: d['destinationStation'] as String?,
-                  travelDate: d['travelDate'] as String?,
-                  travelDay: d['travelDay'] as String?,
-                  shippingFare: (d['shippingFare'] as num?)?.toDouble(),
-                  plateNumber: d['plateNumber'] as String?,
-                ),
-                const SizedBox(height: 24),
                 _buildCloseButton(context, cs),
               ],
             ),
@@ -318,27 +287,6 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
           Text('${createdAt.day}/${createdAt.month}/${createdAt.year} ${createdAt.hour.toString().padLeft(2, '0')}:${createdAt.minute.toString().padLeft(2, '0')}',
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
         ],
-      ),
-    );
-  }
-
-  Widget _buildStatusBadge(BuildContext context, ColorScheme cs, String status) {
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        decoration: BoxDecoration(
-          color: _statusColor(status, cs).withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: _statusColor(status, cs).withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(_statusIcon(status), size: 16, color: _statusColor(status, cs)),
-            const SizedBox(width: 8),
-            Text(_statusLabel(status, context), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _statusColor(status, cs))),
-          ],
-        ),
       ),
     );
   }
@@ -409,50 +357,6 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
         ],
       ),
     );
-  }
-
-  Color _statusColor(String status, ColorScheme cs) {
-    switch (status) {
-      case 'quoted': return Colors.teal;
-      case 'paid': return Colors.indigo;
-      case 'paid_escrow_held': case 'escrow_hold': return cs.tertiary;
-      case 'dispatched': return Colors.orange;
-      case 'delivered': case 'delivery_confirmed': case 'completed': case 'confirmed': return cs.primary;
-      case 'cancelled': case 'failed': case 'refunded': return cs.error;
-      default: return cs.onSurfaceVariant;
-    }
-  }
-
-  IconData _statusIcon(String status) {
-    switch (status) {
-      case 'quoted': return Icons.request_quote;
-      case 'paid': return Icons.payments;
-      case 'paid_escrow_held': case 'escrow_hold': return Icons.lock;
-      case 'dispatched': return Icons.local_shipping;
-      case 'delivered': case 'delivery_confirmed': case 'completed': case 'confirmed': return Icons.check_circle;
-      case 'cancelled': return Icons.cancel;
-      case 'failed': return Icons.cancel;
-      case 'refunded': return Icons.money_off;
-      default: return Icons.hourglass_empty;
-    }
-  }
-
-  String _statusLabel(String status, BuildContext context) {
-    switch (status) {
-      case 'awaiting_shipping_quote': return context.tr('awaiting_shipping_quote_label');
-      case 'awaiting_payment': return context.tr('awaiting_payment_label');
-      case 'quoted': return context.tr('quoted_label', 'Nukuu Imepeanwa');
-      case 'paid': return context.tr('paid_label', 'Imelipwa');
-      case 'paid_escrow_held': case 'escrow_hold': return context.tr('paid_escrow_label');
-      case 'dispatched': return context.tr('shipped');
-      case 'delivery_confirmed': case 'confirmed': return context.tr('confirmed');
-      case 'delivered': case 'completed': return context.tr('completed');
-      case 'cancelled': return context.tr('cancelled_label', 'Imeghairiwa');
-      case 'disputed': return context.tr('disputed_label');
-      case 'refunded': return context.tr('refunded');
-      case 'failed': return context.tr('failed');
-      default: return context.tr('pending');
-    }
   }
 }
 
@@ -569,7 +473,7 @@ class _ReceiptDownloadButtonState extends State<_ReceiptDownloadButton> {
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/receipt_${widget.orderId}.pdf');
       await file.writeAsBytes(pdfBytes);
-      await Share.shareXFiles([XFile(file.path)], text: 'Soko Vibe Receipt #${widget.orderId}');
+      await Share.shareXFiles([XFile(file.path)], text: context.trParams('share_receipt_text', {'orderId': widget.orderId}));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${context.tr('error_label', 'Error')}: $e')));
@@ -597,7 +501,7 @@ class _ReceiptDownloadButtonState extends State<_ReceiptDownloadButton> {
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/receipt_${widget.orderId}.pdf');
       await file.writeAsBytes(pdfBytes);
-      await Share.shareXFiles([XFile(file.path)], text: 'Soko Vibe Receipt #${widget.orderId}');
+      await Share.shareXFiles([XFile(file.path)], text: context.trParams('share_receipt_text', {'orderId': widget.orderId}));
     }
   }
 }
