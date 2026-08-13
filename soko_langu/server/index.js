@@ -2499,7 +2499,7 @@ app.post('/api/clickpesa/webhook', verifyWebhook, async (req, res) => {
 
     const orderId = payload.orderReference || payload.order_id || payload.externalId || '';
     const rawStatus = (payload.status || payload.paymentStatus || payload.event || '').toString().toLowerCase();
-    const paymentStatus = rawStatus === 'completed' || rawStatus === 'payment_received' || rawStatus === 'payment_completed' || rawStatus === 'success'
+    const paymentStatus = rawStatus === 'completed' || rawStatus === 'payment_received' || rawStatus === 'payment_completed' || rawStatus === 'success' || rawStatus === 'settled'
       ? 'success'
       : rawStatus === 'failed' || rawStatus === 'cancelled' || rawStatus === 'expired'
         ? 'failed'
@@ -6900,7 +6900,7 @@ async function failStalePendingBoosts() {
 // poll the status API every 45s and apply the result ourselves.
 let clickPesaPollInFlight = false;
 
-/** Maps raw /payments/all rows to 'success' | 'failed' | '' (still pending/unknown). */
+/** Maps raw status rows (GET /payments/{orderReference}) to 'success' | 'failed' | '' (still pending/unknown). */
 function clickPesaStatusFrom(resp, orderId) {
   let rows = [];
   if (resp && Array.isArray(resp.data)) rows = resp.data;
@@ -6908,7 +6908,8 @@ function clickPesaStatusFrom(resp, orderId) {
   else if (resp && resp.data && Array.isArray(resp.data.rows)) rows = resp.data.rows;
   const match = rows.find((r) => (r.orderReference || r.order_id || r.externalId || '') === orderId) || rows[0] || {};
   const raw = String(match.status || match.paymentStatus || resp?.status || '').toLowerCase();
-  if (/success|completed|payment_received|paid/.test(raw)) return 'success';
+  // Docs statuses: SUCCESS, SETTLED, PROCESSING, PENDING, FAILED
+  if (/success|settled|completed|payment_received|paid/.test(raw)) return 'success';
   if (/fail|cancel|expire|reject|declin|error/.test(raw)) return 'failed';
   return '';
 }

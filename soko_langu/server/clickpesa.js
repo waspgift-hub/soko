@@ -246,7 +246,7 @@ async function clickpesaCollect({ amount, orderReference, phoneNumber, callbackU
 }
 
 async function clickpesaPaymentStatus(orderReference) {
-  return api('GET', `/payments/all?orderReference=${encodeURIComponent(orderReference)}`);
+  return api('GET', `/payments/${encodeURIComponent(orderReference)}`);
 }
 
 async function clickpesaPayout({ amount, orderReference, phoneNumber }) {
