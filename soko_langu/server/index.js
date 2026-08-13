@@ -1151,11 +1151,13 @@ async function notifyBoostPaymentFailed(tx, reason = '') {
     });
     await sendOneSignalNotification(tx.userId, title, body, { type: 'boost', status: 'failed', productId: tx.productId || '' });
     const userSnap = await db.collection('users').doc(tx.userId).get();
-    const phone = userSnap.data()?.phone;
+    const phone = userSnap.data()?.phone || tx.buyerPhone || '';
     if (phone) {
       const amount = tx.totalAmount || tx.amount || 0;
       const msg = `Soko Vibe: Malipo ya Boost ya TZS ${amount.toLocaleString()} hayakukamilika${reasonText}. Jaribu tena kwenye app.`;
       await sendSms(phone, msg);
+    } else {
+      console.error(`notifyBoostPaymentFailed: no phone for user ${tx.userId} (tx ${tx.buyerPhone || 'none'}) — SMS skipped`);
     }
   } catch (e) {
     console.error('notifyBoostPaymentFailed error:', e.message);
@@ -2233,12 +2235,20 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
         } catch (_) {}
       } else {
         const failAmount = dep.amount || 0;
+        const failReason = extra.failureReason || 'Payment failed';
         await depDoc.ref.update({
           status: 'failed',
-          failureReason: extra.failureReason || 'Payment failed',
+          failureReason: failReason,
           completedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
-        sendOneSignalNotification(dep.userId, 'Deposit Imeshindikana', `Malipo ya TZS ${failAmount.toLocaleString()} hayakukamilika.`, { type: 'deposit_failed', depositRef: orderId }).catch(() => {});
+        sendOneSignalNotification(dep.userId, 'Deposit Imeshindikana', `Malipo ya TZS ${failAmount.toLocaleString()} hayakukamilika. Sababu: ${failReason}`, { type: 'deposit_failed', depositRef: orderId, failureReason: failReason }).catch(() => {});
+        try {
+          const depUserSnap = await db.collection('users').doc(dep.userId).get();
+          const depPhone = depUserSnap.data()?.phone || dep.phone || '';
+          if (depPhone) {
+            sendSms(depPhone, `Soko Vibe: Malipo ya TZS ${failAmount.toLocaleString()} hayakukamilika. Sababu: ${failReason}. Jaribu tena kwenye app.`).catch(() => {});
+          }
+        } catch (_) {}
       }
       return;
     }
@@ -2473,9 +2483,9 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
         } catch (_) {}
         try {
           const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
-          const buyerPhone = buyerSnap.data()?.phone;
+          const buyerPhone = buyerSnap.data()?.phone || tx.buyerPhone || '';
           if (buyerPhone) {
-            sendSms(buyerPhone, `Soko Vibe: Malipo ya ${tx.productName || 'Bidhaa'} hayakukamilika. Tafadhali jaribu tena kwenye app.`).catch(() => {});
+            sendSms(buyerPhone, `Soko Vibe: Malipo ya ${tx.productName || 'Bidhaa'} hayakukamilika. Tafadhali jaribu tena kwenye app. Sababu: ${failureReason}`).catch(() => {});
           }
         } catch (_) {}
       }
@@ -6860,9 +6870,11 @@ async function failStalePendingBoosts() {
 
       // Ask ClickPesa for the real outcome before deciding to time out.
       let cpStatus = '';
+      let cpFailureReason = '';
       try {
         const resp = await clickpesaPaymentStatus(doc.id);
         cpStatus = clickPesaStatusFrom(resp, doc.id);
+        cpFailureReason = clickPesaFailureReasonFrom(resp, doc.id);
       } catch (_) {
         // Status API unreachable — fall through and let the poller keep trying.
       }
@@ -6873,7 +6885,7 @@ async function failStalePendingBoosts() {
         continue;
       }
       if (cpStatus === 'failed') {
-        const reason = 'Malipo ya ussd yameshindikana';
+        const reason = cpFailureReason || 'Malipo ya ussd yameshindikana';
         await doc.ref.update({
           status: 'failed',
           failureReason: reason,
@@ -6917,6 +6929,16 @@ function clickPesaStatusFrom(resp, orderId) {
   return '';
 }
 
+/** Extracts the human-readable failure reason from a GET /payments/{orderReference} response. */
+function clickPesaFailureReasonFrom(resp, orderId) {
+  let rows = [];
+  if (resp && Array.isArray(resp.data)) rows = resp.data;
+  else if (Array.isArray(resp)) rows = resp;
+  else if (resp && resp.data && Array.isArray(resp.data.rows)) rows = resp.data.rows;
+  const match = rows.find((r) => (r.orderReference || r.order_id || r.externalId || '') === orderId) || rows[0] || {};
+  return String(match.message || match.failureMessage || match.error || resp?.message || '').trim();
+}
+
 async function pollPendingClickPesaPayments() {
   if (!db) return;
   if (clickPesaPollInFlight) return;
@@ -6949,8 +6971,9 @@ async function pollPendingClickPesaPayments() {
         const resp = await clickpesaPaymentStatus(c.id);
         const status = clickPesaStatusFrom(resp, c.id);
         if (!status) continue;
-        console.log(`[CP-POLL] ${c.id} -> ${status}`);
-        await applyClickPesaPayment(c.id, status, {});
+        const failureReason = status === 'failed' ? clickPesaFailureReasonFrom(resp, c.id) : '';
+        console.log(`[CP-POLL] ${c.id} -> ${status}${failureReason ? ` (${failureReason})` : ''}`);
+        await applyClickPesaPayment(c.id, status, { failureReason });
       } catch (e) {
         console.warn(`[CP-POLL] ${c.id}: ${e.message}`);
       }
