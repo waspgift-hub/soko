@@ -1,0 +1,25 @@
+name: Keep Render Server Awake
+
+# Render free-tier web services sleep after ~15 minutes of inactivity.
+# This scheduled job pings the /health endpoint every 10 minutes so the
+# server stays hot for users at all times. No external service required.
+
+on:
+  schedule:
+    # Run every 10 minutes (Render sleeps after ~15 min without traffic)
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: keep-alive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping server health endpoint
+        run: curl -sf --max-time 20 "${{ vars.SERVER_HEALTH_URL }}" >/dev/null || exit 1
+        env:
+          SERVER_HEALTH_URL: ${{ vars.SERVER_HEALTH_URL || 'https://soko-langu-server.onrender.com/health' }}
