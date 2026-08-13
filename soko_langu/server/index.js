@@ -2251,8 +2251,13 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
 
     const tx = txDoc.data();
 
-    // Prevent double-processing — skip if already finalized
-    if (tx.status === 'completed' || tx.status === 'escrow_hold' || tx.status === 'failed') {
+    // Prevent double-processing — skip if already finalized, BUT a boost/order that
+    // was prematurely auto-failed by the stale-timeout sweeper must be recoverable
+    // when ClickPesa later confirms the payment actually succeeded (real money moved).
+    if (tx.status === 'completed' || tx.status === 'escrow_hold') {
+      return;
+    }
+    if (tx.status === 'failed' && paymentStatus !== 'success') {
       return;
     }
 
@@ -6828,6 +6833,12 @@ async function releaseExpiredEscrows() {
 }
 
 // ─── Fail stale pending boost payments (USSD push ignored/declined/expired) ───
+// IMPORTANT: before marking "muda wa malipo umeisha" we must ask ClickPesa for the
+// real status. M-Pesa/Tigo/Airtel PIN callbacks take ~10-15 min, so a boost that is
+// genuinely PAID can still be 'pending' here. If ClickPesa confirms success we apply
+// it (never overwrite a completed payment with a spurious timeout); we only fail the
+// boost for timeout when ClickPesa still reports it as unresolved and the session
+// window has passed.
 async function failStalePendingBoosts() {
   if (!db) return;
   try {
@@ -6843,6 +6854,33 @@ async function failStalePendingBoosts() {
       const createdAt = tx.createdAt?.toDate?.() || new Date(0);
       if (createdAt.getTime() > cutoff.getTime()) continue;
       if (tx.status !== 'pending') continue;
+
+      // Ask ClickPesa for the real outcome before deciding to time out.
+      let cpStatus = '';
+      try {
+        const resp = await clickpesaPaymentStatus(doc.id);
+        cpStatus = clickPesaStatusFrom(resp, doc.id);
+      } catch (_) {
+        // Status API unreachable — fall through and let the poller keep trying.
+      }
+
+      if (cpStatus === 'success') {
+        // Payment actually completed — apply it instead of failing.
+        await applyClickPesaPayment(doc.id, 'success', {});
+        continue;
+      }
+      if (cpStatus === 'failed') {
+        const reason = 'Malipo ya ussd yameshindikana';
+        await doc.ref.update({
+          status: 'failed',
+          failureReason: reason,
+          completedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        await notifyBoostPaymentFailed(tx, reason);
+        continue;
+      }
+
+      // Still unresolved (pending/unknown) and past the session window → timeout.
       const reason = 'muda wa malipo umeisha';
       await doc.ref.update({
         status: 'failed',
