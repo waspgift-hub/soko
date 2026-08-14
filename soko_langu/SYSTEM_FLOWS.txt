@@ -233,13 +233,13 @@ michakato ya nyuma (cron/listeners), na viunganishi (integrations) vya nje.
   - wallet        (pochi ya ndani)
   - ussd_push     (ClickPesa USSD push - anayeuziwa anapokea USSD)
   - billpay       (ClickPesa BillPay - order control number)
-  - HaloPesa, CRDB BillPay (1%), CRDB Direct Debit (flat 2,000) - menyu za
-    ClickPesa zilizopo
+  - HaloPesa BillPay (2%), CRDB BillPay (1%), CRDB Direct Debit (flat 2,000) -
+    provider inatumwa kwenye calcGatewayFee(methodId, amount, provider)
 
 4.2 Kadi za Ada (Fee Tables) — clickpesa.js + transaction_model.dart
 ------------------------------------------------
-  - Soko Vibe Commission: 3.5% ya bei ya bidhaa
-    (PLATFORM_COMMISSION_PERCENT = 0.035, index.js:535)
+  - Soko Vibe Commission: 3.5% ya bei ya bidhaa (salePrice kwa flash sale)
+    (PLATFORM_COMMISSION_PERCENT = 0.035, index.js:698)
   - ClickPesa USSD Push fee: tiers 54–7,960 TZS kutegemea kiasi
     (frontend ussdPushFeeTiers: 500-3,000,000; max 7,960)
   - Payout fee: TZS 2,000 (muuzaji analipa anapotoa pesa)
@@ -291,7 +291,8 @@ michakato ya nyuma (cron/listeners), na viunganishi (integrations) vya nje.
   yenye escrowExpiresAt <= sasa inabadilishwa kuwa delivered na pesa zinatolewa.
     - local   : siku 3  (ESCROW_LOCAL_DAYS = 3)
     - regional: siku 7  (ESCROW_REGIONAL_DAYS = 7)
-    - (env: ESCROW_AUTO_RELEASE_DAYS=14 inatumika kama mbadala)
+    - (env: ESCROW_AUTO_RELEASE_DAYS ni global override — ikiwa imewekwa (>0)
+      inatumika kwa local NA regional; default 0 = habadili tabia ya 3/7)
 
 4.5 Utoaji wa Pesa (Withdrawals & Payouts)
 ------------------------------------------------
@@ -370,10 +371,12 @@ michakato ya nyuma (cron/listeners), na viunganishi (integrations) vya nje.
         (deposits/{dep*}: status, clickpesaReference, billPayNumber,
          ussdSent/ussdFailed; webhook ikifaulu -> walletBalance += amount)
   - POST /api/wallet/purchase        : kununua kwa pochi
-        (inahitaji buyerWallet >= totalAmount (totalAmount inajumlisha 3.5%
-         commission); ina-punguza walletBalance, inaunda transaction
-         escrow_hold, pendingEscrow ya muuzaji += sellerReceives
-         (bei + shipping), totalSales++, grossSalesVolume += bei,
+        (commission 3.5% inakokotolewa server-side (haiaminiki serviceFeePercent
+         ya client); price inapitia resolveEffectivePrice() kwa flash sale;
+         committedTotal = price + shipping + commission inakokotolewa kwenye
+         server na kutoa walletBalance; inaunda transaction escrow_hold,
+         pendingEscrow ya muuzaji += sellerReceives (bei + shipping),
+         totalSales++, grossSalesVolume += bei,
          revenue_transactions type 'sale', arifa kwa mnunuzi)
   - GET  /api/wallet/balance/:userId : salio (walletBalance)
   - GET  /api/wallet/history/:userId : historia
@@ -911,8 +914,12 @@ michakato ya nyuma (cron/listeners), na viunganishi (integrations) vya nje.
   4. clickpesa_service.initiateMarketplacePayment() -> POST
      /api/create-marketplace-payment-link
   5. Server inathibitisha: si suspended, si duplicate, daily limit (TZS 5M),
-     rate limit
+     rate limit. Pia inakokotoa resolveEffectivePrice(): ikiwa flash sale ipo
+     active, inatumia salePrice (sio bei kamili kutoka client) kwa commission
+     na totalAmount.
   6. Server inaita ClickPesa initiate-ussd-push-request
+     (BillPay: calcGatewayFee kwa provider — M-Pesa/Airtel/Tigo 1%,
+     HaloPesa 2%, CRDB 1%)
   7. ClickPesa inasukuma USSD -> mnumuzi anaingiza PIN ya mobile money
   8. ClickPesa inatuma webhook /api/clickpesa/webhook (HMAC)
   9. Server inasasisha transaction: status -> escrow_hold
@@ -1038,7 +1045,7 @@ michakato ya nyuma (cron/listeners), na viunganishi (integrations) vya nje.
   Payout fee (seller)       : TZS 2,000
   Min withdrawal            : TZS 5,000
   Max daily sale            : TZS 5,000,000
-  Escrow days               : local 3 / regional 7 (ESCROW_AUTO_RELEASE_DAYS=14)
+  Escrow days               : local 3 / regional 7 (env override ikiwa imewekwa)
   Boost tiers               : Bronze 1,500/3d | Silver 3,000/7d | Gold 10,000/30d
   Product limit (no KYC)    : 5 bidhaa
   OTP expiry                : dakika 10 (SHA-256, matumizi moja)

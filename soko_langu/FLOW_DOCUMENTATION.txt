@@ -343,14 +343,18 @@ Files: lib/services/payment_service.dart, lib/services/clickpesa_service.dart,
        server/clickpesa.js (ClickPesa client), server/index.js (webhook/payment)
 Payment methods:
   - USSD Push (collect): buyer gets USSD prompt. Tiered fees (TZS 54..7,960).
-  - BillPay: generates control number; 1% gateway fee added for BillPay.
+  - BillPay: generates control number; 1% gateway fee (2% HaloPesa, 1% CRDB)
+    added on top via calcGatewayFee(methodId, amount, provider).
   - Wallet balance deduction.
 
 Purchase flow (escrow):
 1. POST /api/create-marketplace-payment-link
    - Verifies Firebase token; fraud checks (suspended, duplicate pending,
      daily limit).
-   - totalAmount = price + shipping + 3.5% commission + (1% billpay fee).
+   - resolveEffectivePrice(): if an active flash sale exists for the product,
+     the client-supplied full price is overridden with salePrice, so commission
+     and total are always computed on the real discounted price.
+   - totalAmount = price + shipping + 3.5% commission + gateway fee.
    - tx id = p{base36}{first4alphanum of buyerId}.
    - BillPay -> control number. USSD -> async ClickPesa Collect (ussdSent flag).
 2. Buyer completes payment on phone.
@@ -371,8 +375,11 @@ Purchase flow (escrow):
    (price+shipping-2000 fee), refunded status.
 8. Dispute: /api/escrow/dispute (funds stay held, alerts admins);
    admin-resolve-dispute (release or refund).
-9. Auto-release: cron /api/cron/release-escrows (ESCROW_AUTO_RELEASE_DAYS=14;
-   escrow_hold/dispatched + expired -> delivered + sellerBalance credit).
+9. Auto-release: cron /api/cron/release-escrows
+   (escrow_hold/dispatched + expired -> delivered + sellerBalance credit).
+   ESCROW_AUTO_RELEASE_DAYS is a single global override (default 0 = unset).
+   When set it applies to BOTH local and regional escrows; otherwise local
+   auto-release = 3 days, regional = 7 days (ESCROW_LOCAL_DAYS/REGIONAL_DAYS).
 
 Retry payment: POST /api/retry-payment (>=30s old, buyer/admin only).
 
@@ -386,7 +393,11 @@ ClickPesa webhook status mapping:
 Files: lib/services/* (balance_privacy_service), server routes
 - Deposit: POST /api/wallet/deposit (USSD or BillPay, depositRef=dep+base36).
 - Purchase from balance: POST /api/wallet/purchase (balance deduction ->
-  escrow_hold; mirrors tx on existing orderId; serviceFeePercent 0.035).
+  escrow_hold; mirrors tx on existing orderId). Server-side money math:
+  commission is always PLATFORM_COMMISSION_PERCENT (never trusted from a
+  client-supplied serviceFeePercent), prices go through resolveEffectivePrice()
+  for flash sales, and the deducted amount is recomputed server-side as
+  committedTotal = price + shipping + commission.
 - Balance: GET /api/wallet/balance/:userId.
 - History: GET /api/wallet/history/:userId; DELETE /api/wallet/delete-history.
 - Payment methods: GET /api/payment-methods, POST /api/payment-methods/calc-fee,
@@ -442,6 +453,12 @@ Files: lib/services/flash_sale_service.dart, lib/models/flash_sale_model.dart,
 - Deactivate expired: POST /api/flash-sales/deactivate-expired.
 - Flash sale screen: /flash-sale (banner + active deals).
 - Product cards + banner show flash sale price/discount.
+- Money enforcement: server helper resolveEffectivePrice(db, productId,
+  clientPrice) reads the active flash sale (isActive + endTime in future) and
+  overrides the client-supplied price with salePrice on order creation,
+  payment-link, wallet purchase, and legacy transaction create. This means a
+  buyer is never charged the stale full price and the 3.5% commission is
+  always computed on the real sale price.
 
 ================================================================================
 19. BUYER REQUESTS FLOW
@@ -687,7 +704,11 @@ Middleware & helpers:
 Rate limits: 30/min general, 5/min payments, 3 OTP per 15 min.
 Constants: PLATFORM_COMMISSION_PERCENT=0.035, AD_REVENUE_PER_VIEW=15,
            MIN_WITHDRAWAL=5000, DEFAULT_PAYOUT_FEE=2000,
-           ESCROW_AUTO_RELEASE_DAYS=14, local 3d, regional 7d.
+           resolveEffectivePrice (flash-sale salePrice override on orders),
+           ESCROW_AUTO_RELEASE_DAYS (default 0=unset override; local 3d,
+           regional 7d), MAX_DAILY_SALE_AMOUNT=5,000,000.
+Gateway providers: calcGatewayFee(methodId, amount, provider) — billpay 1%,
+           halopesa 2%, crdb 1%, crdb_direct_debit TZS 2000 flat.
 
 ================================================================================
 29. FIRESTORE COLLECTIONS & RULES
@@ -730,8 +751,10 @@ firestore.rules highlights:
 
 firestore.indexes.json (composite indexes):
   conversations (participants CONTAINS + lastMessageTime DESC)
-  transactions (buyerId+createdAt DESC, sellerId+createdAt DESC)
-  flash_sales (isActive+endTime ASC, sellerId+endTime ASC, productId+isActive ASC)
+  transactions (buyerId+createdAt DESC, sellerId+createdAt DESC,
+                sellerId+status ASC)
+  flash_sales (isActive+endTime ASC, sellerId+endTime ASC,
+               productId+isActive ASC, productId+isActive+endTime ASC)
   notifications (userId+isRead ASC)
 
 ================================================================================
@@ -771,7 +794,8 @@ CLICKPESA_CLIENT_ID, CLICKPESA_API_KEY, CLICKPESA_CHECKSUM_KEY,
 FIREBASE_SERVICE_ACCOUNT_JSON, ADMIN_SECRET, WEBHOOK_SECRET, WEBHOOK_URL,
 LIPA_TILL_NUMBER (5722554), LIPA_TILL_NAME (Soko Vibe Marketplace),
 PORT, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM,
-ESCROW_AUTO_RELEASE_DAYS (14), MAX_DAILY_SALE_AMOUNT (5000000),
+ESCROW_AUTO_RELEASE_DAYS (default 0 = unset; set to override BOTH local/regional
+escrow auto-release days), MAX_DAILY_SALE_AMOUNT (5000000),
 MESEJI_API_KEY, MESEJI_SENDER_ID,
 ONE_SIGNAL_APP_ID, ONE_SIGNAL_REST_API_KEY,
 CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET,
