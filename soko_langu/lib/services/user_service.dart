@@ -116,6 +116,13 @@ class UserService {
     await _db.collection('users').doc(profile.uid).set(profile.toMap(), SetOptions(merge: true));
   }
 
+  /// Persists the user's in-app language to their profile doc so the server
+  /// can localize push notifications to match what they chose in the app.
+  Future<void> setLanguage(String uid, String langCode) async {
+    if (uid.isEmpty) return;
+    await _db.collection('users').doc(uid).set({'langCode': langCode}, SetOptions(merge: true));
+  }
+
   Future<String> uploadProfileImage(String filePath) async {
     return CloudinaryService.uploadFromPath(filePath, folder: 'profiles');
   }

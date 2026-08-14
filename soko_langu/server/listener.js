@@ -20,6 +20,9 @@ admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 const db = admin.firestore();
 
 const notifPrefs = require('./notificationPrefs');
+const notifLangCache = require('./cache');
+const { localizeNotif } = require('./notif_lang');
+const NOTIF_LANG_TTL_MS = 5 * 60 * 1000;
 
 // ─── OneSignal helpers (adapted from index.js) ──────────────────
 const ONE_SIGNAL_APP_ID = process.env.ONE_SIGNAL_APP_ID;
@@ -36,6 +39,18 @@ function getChannelId(data = {}) {
   return 'general_notifications_v6';
 }
 
+async function getUserNotifLang(userId) {
+  if (!db) return 'sw';
+  const cached = notifLangCache.get(`notif_lang:${userId}`);
+  if (cached) return cached;
+  try {
+    const snap = await db.collection('users').doc(userId).get();
+    const lang = (snap.exists && snap.data().langCode) || 'sw';
+    notifLangCache.set(`notif_lang:${userId}`, lang, NOTIF_LANG_TTL_MS);
+    return lang;
+  } catch { return 'sw'; }
+}
+
 async function sendOsNotification(userId, title, body, data = {}) {
   if (!userId) { console.log('[LISTENER][OS] No userId'); return null; }
   if (!ONE_SIGNAL_APP_ID || !ONE_SIGNAL_REST_API_KEY) {
@@ -47,14 +62,18 @@ async function sendOsNotification(userId, title, body, data = {}) {
     console.log(`[LISTENER][OS] skipped push to ${userId} type=${notifType} (preferences)`);
     return null;
   }
+  const lang = await getUserNotifLang(userId);
+  const localized = localizeNotif(lang, title || '', body || '');
+  const localizedTitle = localized.title;
+  const localizedBody = localized.body;
   try {
     const axios = require('axios');
     const resp = await axios.post('https://onesignal.com/api/v1/notifications', {
       app_id: ONE_SIGNAL_APP_ID,
       include_external_user_ids: [userId],
       channel_for_external_user_ids: 'push',
-      headings: { en: title || '' },
-      contents: { en: body || '' },
+      headings: { en: localizedTitle, sw: localizedTitle },
+      contents: { en: localizedBody, sw: localizedBody },
       data: { ...(data || {}), type: (data && data.type) || 'general' },
       existing_android_channel_id: getChannelId(data),
       android_sound: 'soko_notification',

@@ -257,6 +257,30 @@ const CRITICAL_PUSH_TYPES = new Set([
   'deposit','deposit_failed','delivery_confirmed',
 ]);
 
+// Firestore read cache for each user's notification language. We read the
+// in-app language per user (the push must match what they chose, not the
+// device locale) but the read hits the Spark 50K/day limit if every push
+// re-fetches, so cache for 5 minutes — a stale language is only a cosmetic
+// concern on a single notification.
+const notifLangCache = require('./cache');
+const NOTIF_LANG_TTL_MS = 5 * 60 * 1000;
+const { localizeNotif } = require('./notif_lang');
+
+async function getUserNotifLang(userId) {
+  if (!db) return 'sw';
+  const cached = notifLangCache.get(`notif_lang:${userId}`);
+  if (cached) return cached;
+  try {
+    const snap = await db.collection('users').doc(userId).get();
+    const lang = (snap.exists && snap.data().langCode) || 'sw';
+    notifLangCache.set(`notif_lang:${userId}`, lang, NOTIF_LANG_TTL_MS);
+    return lang;
+  } catch (e) {
+    console.error(`[OS] lang lookup failed for ${userId}: ${e.message}`);
+    return 'sw';
+  }
+}
+
 async function sendOneSignalNotification(userId, title, body, data = {}, opts = {}) {
   if (!userId) { console.log('[OS] No userId'); return null; }
   if (!ONE_SIGNAL_APP_ID || !ONE_SIGNAL_REST_API_KEY) {
@@ -269,10 +293,23 @@ async function sendOneSignalNotification(userId, title, body, data = {}, opts = 
       return null;
     }
   }
-  // Server copy is already Swahili, so both language keys carry the same text —
-  // sw ensures Swahili-locale devices resolve it explicitly instead of en-only.
-  const headings = { en: title || '', sw: title || '' };
-  const contents = { en: body || '', sw: body || '' };
+  // Localize the Swahili server copy to the user's in-app language. The server
+  // strings are the source of truth; notif_lang falls back to Swahili when a
+  // message isn't in the translation table. Chat pushes carry user-generated
+  // text (sender name + message), never a server template, so skip them.
+  const lang = await getUserNotifLang(userId);
+  const isUserText = notifType === 'chat' || notifType === 'group_chat';
+  const localized = isUserText
+    ? { title: title || '', body: body || '' }
+    : localizeNotif(lang, title || '', body || '');
+  const localizedTitle = localized.title;
+  const localizedBody = localized.body;
+  // Both language keys carry the SAME localized text so the heading resolves to
+  // the user's in-app choice regardless of device locale. OneSignal needs an
+  // `en` fallback key or a Swahili-locale phone picks the first key; providing
+  // en+sw both set to the localized string covers every device.
+  const headings = { en: localizedTitle || '', sw: localizedTitle || '' };
+  const contents = { en: localizedBody || '', sw: localizedBody || '' };
 
   // Push-only targeting: accounts carry email aliases in OneSignal and email
   // sending is disabled on this app, so without channel_for_external_user_ids

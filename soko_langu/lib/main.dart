@@ -30,6 +30,7 @@ import 'services/app_lock_service.dart';
 import 'services/auth_service.dart';
 import 'services/exchange_rate_service.dart';
 import 'services/onboarding_service.dart';
+import 'services/user_service.dart';
 import 'services/magic_link_service.dart';
 import 'services/groq_service.dart';
 import 'services/localization_service.dart';
@@ -297,6 +298,13 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
       });
 
       await _authNotifier.initialize();
+      // Existing users may have chosen a language before this sync existed —
+      // push their saved choice to Firestore once on launch so the server can
+      // localize notifications for them too.
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        UserService().setLanguage(user.uid, _langCode).catchError((_) {});
+      }
       app_state.appStateNotifier.setAppInitialized();
       _trackSession();
 
@@ -482,6 +490,12 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
 
   void _setLanguage(String code) {
     setState(() => _langCode = code);
+    // Push the chosen language to the profile doc so the server localizes push
+    // notifications to match the in-app choice, not the device locale.
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      UserService().setLanguage(user.uid, code).catchError((_) {});
+    }
   }
 
   void _setCurrency(String code) {

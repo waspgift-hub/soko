@@ -8,7 +8,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'api_config.dart';
+import 'localization_service.dart';
 import 'local_notification_service.dart';
+import 'notification_lang.dart';
 
 class NotificationService {
   static const String _key = 'push_notifications_enabled';
@@ -422,7 +424,7 @@ class NotificationService {
         .collection('notifications')
         .where('userId', isEqualTo: user.uid)
         .snapshots()
-        .listen((snap) {
+        .listen((snap) async {
       for (final change in snap.docChanges) {
         if (change.type != DocumentChangeType.added) continue;
         final doc = change.doc;
@@ -442,9 +444,22 @@ class NotificationService {
           debugPrint('[OS] fallback: skipping heads-up — already viewing room $activeChatRoomId');
           continue;
         }
+        // Server stores the copy in Swahili; localize to the user's in-app
+        // language before showing. Chat text is user-generated, not a template.
+        var title = d['title']?.toString() ?? '';
+        var body = d['body']?.toString() ?? '';
+        if (dType != 'chat' && dType != 'group_chat') {
+          final localized = NotificationLang.localize(
+            await LocalizationService().getLanguage(),
+            title,
+            body,
+          );
+          title = localized.title;
+          body = localized.body;
+        }
         _showHeadsUpNotification(
-          d['title']?.toString() ?? '',
-          d['body']?.toString() ?? '',
+          title,
+          body,
           dType,
           dData,
         );

@@ -3,8 +3,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/notification_service.dart';
+import '../../services/notification_lang.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
+import '../../main.dart' show AppConfig;
 import '../../widgets/ds/ds.dart';
 import '../../widgets/ad_banner.dart';
 import '../../widgets/soko_vibe_states.dart';
@@ -202,11 +204,24 @@ class _NotificationScreenState extends State<NotificationScreen> {
   }
 
   Widget _buildTile(ColorScheme cs, String docId, Map<String, dynamic> data) {
-    final title = data['title'] as String? ?? '';
-    final body = data['body'] as String? ?? '';
+    var title = data['title'] as String? ?? '';
+    var body = data['body'] as String? ?? '';
     final isRead = data['isRead'] as bool? ?? false;
     final rawData = data['data'] is Map ? data['data'] as Map : null;
     final type = rawData?['type'] as String? ?? data['type'] as String? ?? '';
+
+    // Server stores notification copies as Swahili; localize them here to the
+    // user's in-app language. Chat messages are user-generated text, not
+    // templates, so keep them verbatim.
+    if (type != 'chat' && type != 'group_chat') {
+      final localized = NotificationLang.localize(
+        AppConfig.maybeOf(context)?.langCode ?? 'sw',
+        title,
+        body,
+      );
+      title = localized.title;
+      body = localized.body;
+    }
 
     IconData icon;
     Color color;
