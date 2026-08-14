@@ -202,7 +202,7 @@ class LocalizationService {
       'back_to_home': 'Rudi Nyumbani',
       'transaction_fee_agreement': 'Mkataba wa Ada ya Ununuzi',
       'fee_explanation':
-          'Ununuzi huu unajumuisha ada ya 5% (3% ada ya kuchakata + 2% ada ya jemala).',
+          'Ununuzi huu unajumuisha ada ya jemala ya 3.5% (inakokotolewa kwa bei ya bidhaa).',
       'allow_continue': 'Ruhusu na Endelea',
       'deny_cancel': 'Kataa na Ghairi',
       'transaction_cancelled':
@@ -323,7 +323,7 @@ class LocalizationService {
       'payment_confirmed_activating': 'Malipo yamethibitishwa! Inawasha...',
       'pay_mongike': 'Lipa kwa ClickPesa',
       'boost_listing': 'Kuza Matangazo',
-      'pay_boost': 'Lipa TZS 5,000',
+      'pay_boost': 'Lipa Kuza Matangazo (kutoka TZS 1,500)',
       'next_payout': 'Malipo Yajayo',
       'your_earnings_70': 'Mapato Yako (70%)',
       'platform_fee_30': 'Ada ya Jemala (30%)',
@@ -2140,7 +2140,7 @@ class LocalizationService {
       'back_to_home': 'Back to Home',
       'transaction_fee_agreement': 'Transaction Fee Agreement',
       'fee_explanation':
-          'This purchase includes a 5% fee (3% processing fee + 2% platform fee).',
+          'This purchase includes a 3.5% platform fee (calculated on the product price).',
       'allow_continue': 'Allow & Continue',
       'deny_cancel': 'Deny & Cancel',
       'transaction_cancelled': 'Purchase cancelled. No payment was charged.',
@@ -2241,7 +2241,7 @@ class LocalizationService {
       'payment_confirmed_activating': 'Payment confirmed! Activating...',
       'pay_mongike': 'Pay with ClickPesa',
       'boost_listing': 'Boost Listing',
-      'pay_boost': 'Pay TZS 5,000',
+      'pay_boost': 'Boost Listing (from TZS 1,500)',
       'next_payout': 'Next Payout',
       'your_earnings_70': 'Your Earnings (70%)',
       'platform_fee_30': 'Platform Fee (30%)',

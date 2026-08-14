@@ -9,10 +9,10 @@ class AppConstants {
     {'name': 'Gold', 'price': 10000, 'days': 30},
   ];
 
-  static const double adRevenuePerView = 10;
+  static const double adRevenuePerView = 15;
   static const double sellerAdShare = 0.0;
   static const double platformAdShare = 1.0;
 
-  static const double payoutFee = 4000;
+  static const double payoutFee = 2000;
   static const double payoutFeePlatform = 2000;
 }

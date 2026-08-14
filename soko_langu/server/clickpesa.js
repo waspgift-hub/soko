@@ -214,15 +214,22 @@ const ALL_PAYMENT_METHODS = [
   },
 ];
 
-/// Calculate gateway fee for a given payment method and amount
-function calcGatewayFee(methodId, amount) {
+/// Calculate gateway fee for a given payment method and amount.
+/// `provider` disambiguates BillPay collectors that charge different rates
+/// (HaloPesa 2%, CRDB 1%, standard M-Pesa/Airtel/Tigo 1%). Defaults to standard.
+function calcGatewayFee(methodId, amount, provider = '') {
   switch (methodId) {
     case 'wallet':
+    case 'wallet_balance':
       return 0;
     case 'ussd_push':
       return getUssdPushFee(amount);
     case 'billpay':
+      if (provider === 'halopesa') return calcHaloPesaBillPayFee(amount);
+      if (provider === 'crdb' || provider === 'crdb_billpay') return calcCrdbBillPayFee(amount);
       return calcBillPayFee(amount);
+    case 'crdb_direct_debit':
+      return CRDB_DIRECT_DEBIT_FEE;
     default:
       return getUssdPushFee(amount);
   }

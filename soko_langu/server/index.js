@@ -419,9 +419,11 @@ async function sendOneSignalBulk(userIds, title, body, data = {}, opts = {}) {
 
 const PORT = process.env.PORT || 3000;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || '';
-const ESCROW_AUTO_RELEASE_DAYS = parseInt(process.env.ESCROW_AUTO_RELEASE_DAYS) || 14;
-const ESCROW_LOCAL_DAYS = 3;
-const ESCROW_REGIONAL_DAYS = 7;
+// ESCROW_AUTO_RELEASE_DAYS is a single global override (default 0 = unset). When
+// set it applies to BOTH local and regional escrows; otherwise local=3, regional=7.
+const ESCROW_AUTO_RELEASE_DAYS = parseInt(process.env.ESCROW_AUTO_RELEASE_DAYS) || 0;
+const ESCROW_LOCAL_DAYS = ESCROW_AUTO_RELEASE_DAYS > 0 ? ESCROW_AUTO_RELEASE_DAYS : 3;
+const ESCROW_REGIONAL_DAYS = ESCROW_AUTO_RELEASE_DAYS > 0 ? ESCROW_AUTO_RELEASE_DAYS : 7;
 const MAX_DAILY_SALE_AMOUNT = parseInt(process.env.MAX_DAILY_SALE_AMOUNT) || 5000000;
 
 // ─── (All FCM helpers migrated to OneSignal helpers above) ───
@@ -605,6 +607,32 @@ function isFlashSaleStillActive(data, now = new Date()) {
   const end = parseFlashSaleEndTime(data);
   if (!end) return false;
   return end > now;
+}
+
+/**
+ * Resolve the price the buyer should actually be charged for a product.
+ * When an active flash sale exists for the product, the discounted salePrice
+ * wins over whatever the client sent, so the platform commission (and the
+ * amount the buyer pays) is always based on the real sale price, never the
+ * stale full price from the checkout screen.
+ */
+async function resolveEffectivePrice(db, productId, clientPrice) {
+  try {
+    const snap = await db.collection('flash_sales')
+      .where('productId', '==', productId)
+      .where('isActive', '==', true)
+      .limit(1)
+      .get();
+    if (!snap.empty) {
+      const fs = snap.docs[0].data();
+      if (isFlashSaleStillActive(fs) && Number(fs.salePrice) > 0) {
+        return Math.round(Number(fs.salePrice));
+      }
+    }
+  } catch (e) {
+    console.error('resolveEffectivePrice error:', e.message);
+  }
+  return Math.round(Number(clientPrice));
 }
 
 /** Accept x-admin-secret OR Firebase Bearer token from an admin user. */
@@ -875,7 +903,7 @@ app.post('/api/boost-product', async (req, res) => {
     // the customer by ClickPesa on top of the amount, so we send the real tier price
     // (never pre-added) to avoid charging the processing fee twice.
     const isBillPay = (paymentMethod || 'ussd_push') === 'billpay';
-    const gatewayFee = calcGatewayFee(isBillPay ? 'billpay' : 'ussd_push', tierConfig.price);
+    const gatewayFee = calcGatewayFee(isBillPay ? 'billpay' : 'ussd_push', tierConfig.price, req.body.provider);
     const totalToCollect = isBillPay ? tierConfig.price + gatewayFee : tierConfig.price;
 
     const order_id = `boost${Date.now()}`;
@@ -3562,13 +3590,18 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
     let decoded;
     try { decoded = await admin.auth().verifyIdToken(token); } catch (_) { return res.status(403).json({ error: 'Invalid token' }); }
 
-    const { productPrice, productName, productId, sellerId, sellerName, email, phone, buyerId, deliveryType, shippingCost, existingTransactionId, paymentMethod } = req.body;
+    const { productPrice, productName, productId, sellerId, sellerName, email, phone, buyerId, deliveryType, shippingCost, existingTransactionId, paymentMethod, provider } = req.body;
     if (buyerId && decoded.uid !== buyerId) {
       return res.status(403).json({ error: 'Buyer ID mismatch' });
     }
     if (!productPrice || !productId || !sellerId || !phone) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
+
+    // Price the buyer is actually charged: an active flash sale overrides the
+    // client-supplied (stale full) price so commission + total are computed on
+    // the real sale price, and the buyer can't be overcharged at checkout.
+    const effectivePrice = await resolveEffectivePrice(db, productId, productPrice);
 
     // Resolve buyer name before ClickPesa call
     let buyerName = '';
@@ -3587,7 +3620,7 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
       const isDuplicate = await checkDuplicatePayment(productId, buyerId);
       if (isDuplicate) return res.status(400).json({ error: 'A pending payment already exists for this product' });
 
-      const withinLimit = await checkDailyLimit(buyerId, productPrice);
+      const withinLimit = await checkDailyLimit(buyerId, effectivePrice);
       if (!withinLimit) return res.status(400).json({ error: `Daily purchase limit of TZS ${MAX_DAILY_SALE_AMOUNT.toLocaleString()} exceeded` });
     }
 
@@ -3600,12 +3633,12 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
     const isBillPay = (paymentMethod || 'ussd_push') === 'billpay';
 
     // Include shipping + platform commission + gateway fee in total sent to ClickPesa
-    const commission = Math.round(Math.round(productPrice) * PLATFORM_COMMISSION_PERCENT);
+    const commission = Math.round(effectivePrice * PLATFORM_COMMISSION_PERCENT);
     // BillPay 1% fee is deducted from collected amount (add it on top so seller still
     // gets full total). USSD Push fee is charged to the customer by ClickPesa on top,
     // so never pre-add it or the processing fee is charged twice.
-    const gatewayFee = isBillPay ? calcGatewayFee('billpay', productPrice) : 0;
-    const totalAmount = Math.round(productPrice) + Math.round(shippingCost || 0) + commission + gatewayFee;
+    const gatewayFee = isBillPay ? calcGatewayFee('billpay', effectivePrice, provider) : 0;
+    const totalAmount = effectivePrice + Math.round(shippingCost || 0) + commission + gatewayFee;
 
     if (isBillPay) {
       // ── BillPay flow: create order control number ──
@@ -3636,7 +3669,7 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
           buyerPhone: phone,
           buyerId: buyerId || '',
           buyerName,
-          productPrice: Math.round(productPrice),
+          productPrice: effectivePrice,
           shippingCost: Math.round(shippingCost || 0),
           platformFee: commission,
           gatewayFee,
@@ -3674,7 +3707,7 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
         productId, productName: sanitize(productName), productImage: productImg,
         sellerId, sellerName: sanitize(sellerName), buyerPhone: normalizedPhone,
         buyerId: buyerId || '', buyerName,
-        productPrice: Math.round(productPrice), shippingCost: Math.round(shippingCost || 0),
+        productPrice: effectivePrice, shippingCost: Math.round(shippingCost || 0),
         platformFee: commission, processingFee: gatewayFee,
         totalAmount, status: 'pending', paymentMethod: 'ClickPesa',
         deliveryType: deliveryType || 'local',
@@ -7232,7 +7265,7 @@ app.post('/api/transactions/create', asyncHandler(async (req, res) => {
     return res.status(403).json({ error: 'Seller is suspended' });
   }
 
-  const price = Number(productPrice);
+  const price = await resolveEffectivePrice(db, productId, productPrice);
   // USSD Push fee is charged to the customer by ClickPesa on top of the amount, so
   // we don't pre-add it here — totalAmount reflects what is actually sent to ClickPesa.
   const processingFee = 0;
@@ -7604,11 +7637,11 @@ app.get('/api/payment-methods', (req, res) => {
 
 /// Calculate fee for a given method + amount
 app.post('/api/payment-methods/calc-fee', (req, res) => {
-  const { methodId, amount } = req.body;
+  const { methodId, amount, provider } = req.body;
   if (!methodId || amount == null) {
     return res.status(400).json({ error: 'methodId and amount are required' });
   }
-  const fee = calcGatewayFee(methodId, Number(amount));
+  const fee = calcGatewayFee(methodId, Number(amount), provider);
   const method = ALL_PAYMENT_METHODS.find(m => m.id === methodId);
   res.json({
     success: true,
@@ -7652,11 +7685,11 @@ app.get('/api/wallet/deposit/methods', (req, res) => {
 /// Calculate gateway fee for a payment method and amount (no API keys exposed to client)
 app.post('/api/gateway-fee', (req, res) => {
   try {
-    const { method, amount } = req.body;
+    const { method, amount, provider } = req.body;
     if (!method || !amount) {
       return res.status(400).json({ error: 'method and amount are required' });
     }
-    const fee = calcGatewayFee(method, Math.round(amount));
+    const fee = calcGatewayFee(method, Math.round(amount), provider);
     res.json({ fee, method, amount: Math.round(amount) });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -7697,7 +7730,7 @@ app.post('/api/wallet/deposit', async (req, res) => {
 
     if (depMethod === 'billpay') {
       // ── BillPay flow: create order control number ──
-      const gatewayFee = calcGatewayFee('billpay', Math.round(amount));
+      const gatewayFee = calcGatewayFee('billpay', Math.round(amount), req.body.provider);
       const totalCharge = Math.round(amount) + gatewayFee;
 
       await db.collection('deposits').doc(depositRef).set({
@@ -7818,9 +7851,6 @@ app.post('/api/wallet/purchase', async (req, res) => {
       return res.status(403).json({ error: 'Account is suspended' });
     }
     const balance = buyerData.walletBalance || 0;
-    if (balance < totalAmount) {
-      return res.status(400).json({ error: 'Insufficient wallet balance' });
-    }
 
     // Guard against paying the same order twice — only awaiting_payment orders
     // can still be paid (post-quote); anything already escrowed is a duplicate.
@@ -7837,18 +7867,25 @@ app.post('/api/wallet/purchase', async (req, res) => {
       return res.status(403).json({ error: 'Seller is suspended' });
     }
 
-    const price = Number(productPrice);
-    const fee = Number(processingFee) || 0;
-    const commissionPercent = Number(serviceFeePercent) || 0.035;
-    const commission = Math.round(price * commissionPercent);
+    const price = await resolveEffectivePrice(db, productId, productPrice);
     const shipping = Math.round(Number(shippingCost) || 0);
+    // Commission is always the platform rate — never trust serviceFeePercent from
+    // the client, otherwise a buyer could set it to 0 and skip the platform fee.
+    const commissionPercent = PLATFORM_COMMISSION_PERCENT;
+    const commission = Math.round(price * commissionPercent);
     // Buyer already pays commission in totalAmount (see order_detail_screen).
-    // Seller receives the full product price + shipping reimbursement from escrow.
+    // sellerReceives must be computed server-side so a client-supplied totalAmount
+    // can't overcredit the seller or deduct a different amount than was quoted.
     const sellerReceives = price + shipping;
+
+    const committedTotal = price + shipping + commission;
+    if (balance < committedTotal) {
+      return res.status(400).json({ error: `Insufficient wallet balance: requires TZS ${committedTotal.toLocaleString()}` });
+    }
 
     // Deduct from buyer wallet
     await db.collection('users').doc(buyerId).set({
-      walletBalance: admin.firestore.FieldValue.increment(-totalAmount),
+      walletBalance: admin.firestore.FieldValue.increment(-committedTotal),
     }, { merge: true });
 
     const escrowDeliveryType = deliveryType || 'local';
@@ -7868,11 +7905,11 @@ app.post('/api/wallet/purchase', async (req, res) => {
       productId, productName,
       productImage: productImage || '',
       productPrice: price,
-      processingFee: fee,
+      processingFee: 0,
       platformFee: commission,
       sokovibeCommission: commission,
       serviceFeePercent: commissionPercent,
-      totalAmount: Number(totalAmount),
+      totalAmount: committedTotal,
       sellerReceives,
       shippingCost: shipping,
       region, district, street,
@@ -8058,14 +8095,15 @@ app.post('/api/orders/create', async (req, res) => {
       return res.status(403).json({ error: 'Buyer ID mismatch' });
     }
 
-    const platformFee = Math.round(Number(productPrice) * PLATFORM_COMMISSION_PERCENT);
-    const totalAmount = Math.round(Number(productPrice)) + Math.round(Number(shippingCost) || 0) + platformFee;
+    const effectivePrice = await resolveEffectivePrice(db, productId, productPrice);
+    const platformFee = Math.round(effectivePrice * PLATFORM_COMMISSION_PERCENT);
+    const totalAmount = effectivePrice + Math.round(Number(shippingCost) || 0) + platformFee;
 
     const result = await orderEngine.createOrder(db, {
       buyerId, buyerName: buyerName || '', buyerPhone: buyerPhone || '',
       sellerId, sellerName: sellerName || '',
       productId, productName, productImage: productImage || '',
-      productPrice: Math.round(Number(productPrice)),
+      productPrice: effectivePrice,
       shippingCost: Math.round(Number(shippingCost) || 0),
       platformFee,
       totalAmount,
@@ -8090,7 +8128,7 @@ app.post('/api/orders/create', async (req, res) => {
         productId, productName, productImage: productImage || '',
         sellerId, sellerName: sellerName || '',
         buyerId, buyerName: buyerName || '', buyerPhone: buyerPhone || '',
-        productPrice: Math.round(Number(productPrice)),
+        productPrice: effectivePrice,
         shippingCost: Math.round(Number(shippingCost) || 0),
         platformFee,
         totalAmount,
