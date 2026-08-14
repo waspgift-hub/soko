@@ -95,7 +95,6 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
         stream: FirebaseFirestore.instance
             .collection('transactions')
             .where('sellerId', isEqualTo: user.uid)
-            .where('status', whereIn: ['escrow_hold', 'paid_escrow_held', 'dispatched'])
             .snapshots(),
         builder: (context, snap) {
           if (snap.hasError) {
@@ -106,8 +105,7 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
           }
 
           final docs = snap.data!.docs
-              .where((d) =>
-                  (d.data() as Map)['status'] == 'escrow_hold' ||
+              .where((d) => (d.data() as Map)['status'] == 'escrow_hold' ||
                   (d.data() as Map)['status'] == 'paid_escrow_held')
               .where((d) => (d.data() as Map)['deletedForSeller'] != true)
               .toList();

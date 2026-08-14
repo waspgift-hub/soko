@@ -105,7 +105,6 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
         stream: FirebaseFirestore.instance
             .collection('transactions')
             .where('sellerId', isEqualTo: user.uid)
-            .where('status', isEqualTo: 'awaiting_shipping_quote')
             .snapshots(),
         builder: (context, snap) {
           if (snap.hasError) {
@@ -116,6 +115,7 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
           }
 
           final docs = snap.data!.docs
+              .where((d) => (d.data() as Map)['status'] == 'awaiting_shipping_quote')
               .where((d) => (d.data() as Map)['deletedForSeller'] != true)
               .toList();
           docs.sort((a, b) {

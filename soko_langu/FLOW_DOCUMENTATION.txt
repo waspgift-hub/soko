@@ -1,0 +1,784 @@
+================================================================================
+SOKO VIBE (Soko Langu) - TECHNICAL FLOW DOCUMENTATION
+Marketplace app: Tanzanian marketplace (Swahili-first) - Flutter frontend + Node.js backend
+================================================================================
+Last updated: 14 Aug 2026
+App version: 1.0.1+2
+Backend: https://soko-langu-server.onrender.com (Render)
+Firebase project: sokonimoko-8c171-a8d14
+
+Table of contents
+-----------------
+1.  Architecture overview
+2.  Tech stack
+3.  App startup / bootstrap flow
+4.  Authentication flow
+5.  Onboarding flow
+6.  Account switching flow
+7.  Home / shop / discovery flow
+8.  Product detail flow
+9.  Search flow
+10. Reviews & ratings flow
+11. Chat flow
+12. Orders flow (buyer)
+13. Seller flow (orders / dispatch / earnings)
+14. Payments & escrow flow (ClickPesa)
+15. Wallet flow
+16. Withdrawal / payout flow
+17. Boost flow
+18. Flash sales flow
+19. Buyer requests flow
+20. Status (stories) flow
+21. Notifications flow
+22. Profile flow
+23. Admin flow
+24. AI assistant flow
+25. KYC flow
+26. Other features (wishlist, follow, reports, price drops, recent views, ads)
+27. Search engine (backend detail)
+28. Server route inventory
+29. Firestore collections & rules
+30. Background jobs / listeners
+31. Deployment & CI/CD
+32. Environment variables (names only)
+================================================================================
+
+================================================================================
+1. ARCHITECTURE OVERVIEW
+================================================================================
+- Frontend: Flutter app (lib/). Talks to Firebase (Auth, Firestore, Storage,
+  Functions, Crashlytics, Perf, App Check) AND a Node/Express REST API.
+- Backend: Single Node.js Express server (server/index.js, ~8,405 lines) running
+  on Render at https://soko-langu-server.onrender.com.
+- A standalone listener process (server/listener.js) handles Firestore-triggered
+  notifications + SMS. It is NOT required by index.js.
+- The old Firebase Functions directory (functions/) is DEPRECATED (reference only).
+  All webhooks + notification listeners now run on the Render Express server.
+- Payment provider: ClickPesa (Tanzania) - USSD Push, BillPay, Payouts.
+- Push notifications: OneSignal. SMS: Meseji (primary) + Notify Africa (fallback).
+- AI: Groq (chat + Whisper transcription).
+- Database: Firestore (NoSQL). Local cache: Hive + SharedPreferences + sqflite.
+
+Backend base URL is in lib/services/api_config.dart:
+    https://soko-langu-server.onrender.com
+
+================================================================================
+2. TECH STACK
+================================================================================
+Flutter / Dart (SDK ^3.11.5)
+  - firebase_core, firebase_auth, cloud_firestore, firebase_storage,
+    firebase_app_check, firebase_crashlytics, firebase_performance, cloud_functions
+  - provider (state mgmt), go_router (routing), google_sign_in
+  - google_mobile_ads (AdMob), onesignal_flutter, flutter_local_notifications
+  - hive + hive_flutter (local cache), flutter_secure_storage (secure creds)
+  - flutter_map + google_maps_flutter (maps), geolocator, geocoding
+  - cached_network_image, flutter_cache_manager
+  - image_picker, file_picker, mobile_scanner (QR), qr_flutter, pdf + printing
+  - video_player, speech_to_text, record, permission_handler
+  - url_launcher, share_plus, app_links (deep links), connectivity_plus
+  - intl, uuid, crypto, http, carousel_slider, google_fonts, path_provider, gal, open_file
+
+Node.js (>=18) / Express (^4.18.2)
+  - firebase-admin ^11, axios, compression, cors, dotenv, nodemailer
+  - Start script: node --optimize-for-size --expose-gc index.js
+
+================================================================================
+3. APP STARTUP / BOOTSTRAP FLOW
+================================================================================
+File: lib/main.dart (601 lines)
+1. Firebase.initializeApp() (uses lib/firebase_options.dart).
+2. Firestore settings: persistenceEnabled = true (offline support).
+3. Hive.init + LocalCacheService.init() (lib/services/local_cache_service.dart).
+4. Install Crashlytics + PlatformDispatcher error handlers.
+5. GoogleSignIn.init.
+6. LocalNotificationService.init (lib/services/local_notification_service.dart).
+7. runApp(SokoVibeApp()) wires:
+   - ProductFeedProvider (home feed)
+   - AuthRepository + AuthNotifier (auth state)
+   - OnboardingService
+   - MagicLinkService
+   - AppLockService
+   - AnalyticsService.trackUserSession (1-minute heartbeat to Firestore user_sessions)
+   - OneSignal notification tap callbacks -> navigate via deep-link routes
+   - MethodChannel('soko_lang/navigate') for native deep-link navigation
+   - _initBackgroundServices: Crashlytics/Perf/AppCheck/AdMob/SecurityService/
+     notificationService/ExchangeRateService/AiService.initialize(GroqService())
+8. App overlays (in build):
+   GradientBackground -> PremiumBackground -> ConnectivityWrapper ->
+   MaintenanceGate -> AppLockOverlay -> TransactionStatusWatcher -> AgeGateDialog.
+9. AppConfig InheritedWidget propagates langCode + currencyCode (locales: en/sw/zh).
+
+Auth status machine (lib/notifiers/auth_notifier.dart):
+   AuthStatus { loading, onboarding, unauthenticated, authenticated }
+   AuthGate (lib/screens/auth/auth_gate.dart):
+     - suspended  -> suspended screen
+     - needsProfileSetup -> ProfileSetupScreen
+     - else -> MainWindow (bottom nav)
+
+Routing (lib/app/routes.dart, AppRoutes) - see section 28 for full list.
+
+================================================================================
+4. AUTHENTICATION FLOW
+================================================================================
+Files: lib/screens/auth/*, lib/services/auth_service.dart,
+       lib/repositories/auth_repository.dart, lib/services/account_manager.dart
+
+Methods supported:
+  A) Phone OTP login
+     1. User enters phone number -> POST /api/auth/send-otp
+        (server hashes 6-digit OTP, stores in otp_codes/{phone}, 10-min expiry,
+         max 3 sends per 15 min, rate-limited)
+     2. User receives SMS -> enters code -> POST /api/auth/verify-otp
+     3. If phone not registered: POST /api/phone-login auto-creates a user:
+        email = phone_{clean}@soko-vibe.com, default doc with
+        coins=0, viewerCoins=0, sellerBalance=0, soldCount=0,
+        isAdmin=false, isSuspended=false
+     4. Server returns Firebase custom token -> app signs in.
+  B) Email/Password register & login (lib/screens/auth/login_screen.dart,
+     register_screen.dart). Saved account stored locally (SavedAccount).
+  C) Google sign-in (google_sign_in + Firebase Auth).
+  D) Magic link login (lib/services/magic_link_service.dart).
+  E) Forgot password: reset by phone or email (server reset-password-by-phone
+     requires 8+ chars, uses firebase auth updateUser).
+
+On successful login:
+  - AccountManager saves account locally (uid, email, displayName, photoUrl).
+  - AuthNotifier updates state -> AuthGate routes to MainWindow.
+  - AnalyticsService starts session heartbeat.
+
+Login via OTP screen: lib/screens/auth/otp_screen.dart
+Profile setup after first auth: lib/screens/auth/profile_setup_screen.dart
+  (collects full name, profile picture upload -> Firestore users doc)
+
+Security:
+  - lib/services/security_service.dart (app lock).
+  - lib/widgets/app_lock_overlay.dart (biometric/PIN overlay).
+  - lib/services/fraud_prevention_service.dart (risk scoring).
+
+================================================================================
+5. ONBOARDING FLOW
+================================================================================
+Files: lib/screens/onboarding/*, lib/services/onboarding_service.dart
+- Shown when AuthStatus == onboarding (first launch / no saved account).
+- Collects language preference (Swahili default), interests/categories maybe.
+- Marks onboarding complete in local storage + user doc.
+- After completion -> auth gate.
+
+================================================================================
+6. ACCOUNT SWITCHING FLOW
+================================================================================
+Files: lib/services/account_manager.dart, lib/widgets/account_switcher_sheet.dart
+- Multiple SavedAccount entries stored locally (Hive/SharedPreferences).
+- Profile screen / login screen can open account switcher sheet.
+- Switching swaps Firebase Auth sign-in (by saved credential/custom token) and
+  re-hydrates AuthNotifier + profile.
+- "Remove account" blocked if it's the last remaining account.
+
+================================================================================
+7. HOME / SHOP / DISCOVERY FLOW
+================================================================================
+Main shell: MainWindow (bottom nav) - lib/widgets/bottom_nav_bar.dart
+  5 tabs: 0 Home, 1 Discovery, 2 (placeholder/boost?), 3 ChatInbox, 4 Profile.
+
+Home feed (lib/screens/home/):
+  - ProductFeedProvider streams products from Firestore (submitted only).
+  - Product cards (lib/widgets/product_card.dart) show image, price (TSh),
+    title, location, verified badge, boost badge, flash-sale badge.
+  - Flash sale banner (lib/widgets/flash_sale_banner.dart) + banner rotator
+    (lib/widgets/banner_rotator.dart) - auto-slide 8s.
+  - Trending carousel, recently viewed row, price drop banner.
+  - Categories grid (category_service.dart).
+
+Discovery tab (lib/screens/home/discovery_screen.dart):
+  - Discovery/categories/curated lists.
+
+Add product (seller): lib/screens/home/add_product_screen.dart
+  - Images upload via lib/services/cloudinary_service.dart (Cloudinary signed URL
+    from POST /api/cloudinary/sign).
+  - Writes products doc to Firestore (status submitted).
+  - Product delete: DELETE /api/products/:id (owner-only, also deletes
+    flash_sales + images).
+
+Product list/search by category: lib/screens/home/category_products_screen.dart
+Shop customization (seller): /shop-customize
+My ads (seller): /my-ads (list of own products)
+
+================================================================================
+8. PRODUCT DETAIL FLOW
+================================================================================
+File: lib/screens/home/product_detail.dart
+- Shows gallery, price, seller info (avatar, verified badge), description,
+  condition, location, quantity/stock, flash-sale price if active.
+- Seller card -> tap opens seller profile (public_profile_screen.dart).
+- Actions:
+  - Chat with seller (opens chat_page).
+  - Buy now / Add to cart (cart in Firestore users/{uid}/cart).
+  - Add to wishlist (lib/services/wishlist_service.dart).
+  - Share (share_plus).
+  - Report product (lib/services/report_service.dart, lib/screens/report/).
+  - Boost CTA if seller.
+- Reviews section (widget review_section.dart) + link to full reviews screen
+  (product_reviews_screen.dart).
+- Recent view tracking: lib/services/recently_viewed_service.dart.
+- Related products / price drop alerts (price_drop_service.dart).
+- Follow seller (follow_service.dart).
+
+================================================================================
+9. SEARCH FLOW
+================================================================================
+Files: lib/services/search_service.dart, lib/services/product_search_service.dart,
+       lib/services/search_history_service.dart, lib/services/voice_search_service.dart,
+       lib/services/video_query_service.dart
+- Search screen (/search): text field + history + trending + voice input.
+- Two search paths:
+  A) ProductSearchService: Firestore client-side token match on products
+     (submitted-only). Offline-friendly.
+  B) SearchService: REST POST /api/search/global-search (server-side, see
+     section 27) - returns ranked products/users/categories.
+- Autocomplete: POST /api/search/autocomplete (90s cache).
+- Trending: GET /api/search/trending (5-min cache).
+- Click tracking: POST /api/search/record-click (viewCount++).
+- Most rated: GET /api/search/most-rated (10-min cache).
+
+================================================================================
+10. REVIEWS & RATINGS FLOW
+================================================================================
+Files: lib/services/review_service.dart, lib/services/rating_service.dart,
+       lib/screens/home/product_reviews_screen.dart, lib/widgets/review_section.dart,
+       lib/screens/profile/seller_profile_screen.dart
+- Reviews written directly to Firestore collection "reviews" by the client
+  (guarded by firestore.rules).
+- Self-rating blocked: firestore rule requires sellerId != request.auth.uid;
+  also server POST /api/products/:id/rating returns 403 if seller self-rates;
+  ReviewService.addReview throws.
+- Rating aggregate: server POST /api/products/:id/rating recomputes
+  product.rating + reviewCount from reviews collection (client blocked by rules
+  from writing rating directly).
+- Review model (lib/models/review_model.dart): userId, userName, userImage,
+  rating, comment, createdAt, likedBy[], helpfulCount, sellerId, sellerReply,
+  sellerReplyAt.
+- Like/unlike: ReviewService.toggleHelpful (likedBy array + helpfulCount).
+- Seller reply: ReviewService.replyToReview (sets sellerReply/sellerReplyAt).
+- Seller profile rating: seller_profile_screen shows average rating + star bars
+  breakdown (RatingService.getSellerRating / submitReview).
+- Public profile rating: public_profile_screen.dart (_submitSellerRating).
+
+================================================================================
+11. CHAT FLOW
+================================================================================
+Files: lib/screens/chat/chat_inbox_screen.dart, lib/screens/chat/chat_page.dart,
+       lib/services/chat_service.dart, lib/services/chat_typing.dart,
+       lib/models/chat_room.dart, lib/models/chat_message.dart,
+       lib/models/cached_chat_room.dart (Hive), lib/models/cached_message.dart
+- Room ID = sorted-uid join "_" (conversations/{convId}).
+- getOrCreateRoom: sets unread_counts map {uid:0} per participant.
+- sendMessage: writes to chat_rooms/{roomId}/messages subcollection + updates
+  room last_message/last_timestamp. Also REST POST /api/chat/send (server-side
+  writes + presence-aware OneSignal push + per-user unread_counts).
+- Unread per user: ChatRoom.unreadCounts map (unreadCountFor(uid));
+  legacy unread_count_buyer/seller kept for backward compat.
+- Typing indicators: typing_{uid} subcollections (chat_typing.dart).
+- Presence: activeChatRoom field + RECEIVER_FRESH_MS (2 min) - if receiver is
+  actively viewing the same room, no push notification is sent.
+- Inbox: chat_inbox_screen streams rooms, shows unread badge per user.
+- Product chat: chat_page can carry productId context.
+- Group chat: lib/services/group_service.dart, lib/models/group_model.dart,
+  /create-group, /group-chat.
+
+================================================================================
+12. ORDERS FLOW (BUYER)
+================================================================================
+Files: lib/screens/orders/my_purchases_screen.dart, lib/screens/buyer/*,
+       lib/models/payment_model.dart, lib/models/transaction_model.dart
+Order lifecycle statuses:
+  pending -> quoted -> paid -> escrow_hold -> dispatched -> confirmed -> completed
+  cancelled / refunded / disputed / failed
+
+Steps:
+1. Buyer adds item to cart / clicks Buy Now -> checkout screen (/checkout).
+2. Create order: POST /api/orders/create
+   (orderEngine.createOrder -> status pending; mirrors transaction status
+    "awaiting_shipping_quote" so payment is hidden until seller quotes).
+3. Seller quotes shipping (see section 13). Status -> quoted.
+4. Buyer pays (see section 14) -> escrow_hold.
+5. Buyer fills transport details (buyer_transport_sheet / buyer-transport):
+   bus/bodaboda/pikipiki details while escrow_hold; notifies seller.
+6. Seller dispatches (escrow/dispatch) -> dispatched.
+7. Buyer confirms receipt (escrow/release) -> delivered + completed;
+   funds released to seller.
+- My purchases (/my-purchases): list of buyer orders with status + timeline
+  (orderTimeline collection), order detail (/order-detail), order flow
+  (/order-flow), receipt PDF (/receipt) via lib/services/receipt_pdf_service.dart.
+- Payment result dialog: lib/widgets/payment_result_dialog.dart.
+- Transaction status watcher: lib/widgets/transaction_status_watcher.dart
+  (polls GET /api/transaction-status/:orderId).
+
+================================================================================
+13. SELLER FLOW (ORDERS / DISPATCH / EARNINGS)
+================================================================================
+Files: lib/screens/orders/seller_orders_screen.dart,
+       lib/screens/orders/seller_dispatch_screen.dart,
+       lib/screens/orders/seller_quote_screen.dart (implied /seller-quote),
+       lib/services/seller_earnings_service.dart, lib/screens/profile/seller_profile_screen.dart
+- Seller dashboard: /seller (sellerDashboard).
+- Seller orders list (role=seller, filterable by status).
+- Quote shipping: seller sets shippingCost/busName/plateNumber
+  (POST /api/orders/transition -> QUOTED parses note JSON).
+- Dispatch: POST /api/escrow/dispatch (seller token + tx.sellerId check +
+  escrow_hold + not released) with tracking/receipt/photo/note.
+- Earnings: seller_earnings_service reads sellerBalance/pendingEscrow,
+  totalSales, grossSalesVolume.
+- Seller analytics: GET /api/seller-analytics/:sellerId (product_analytics
+  views, boost_analytics impressions, monthly sales).
+- Seller statement: GET /api/seller-statement (running balance = credits
+  from released escrow - completed withdrawals - refunds).
+- Commission: PLATFORM_COMMISSION_PERCENT = 0.035 (3.5%). Buyer bears it;
+  seller receives full price (+ shipping reimbursement).
+- Dispatch screen: /seller-dispatch.
+
+================================================================================
+14. PAYMENTS & ESCROW FLOW (CLICKPESA)
+================================================================================
+Files: lib/services/payment_service.dart, lib/services/clickpesa_service.dart,
+       server/clickpesa.js (ClickPesa client), server/index.js (webhook/payment)
+Payment methods:
+  - USSD Push (collect): buyer gets USSD prompt. Tiered fees (TZS 54..7,960).
+  - BillPay: generates control number; 1% gateway fee added for BillPay.
+  - Wallet balance deduction.
+
+Purchase flow (escrow):
+1. POST /api/create-marketplace-payment-link
+   - Verifies Firebase token; fraud checks (suspended, duplicate pending,
+     daily limit).
+   - totalAmount = price + shipping + 3.5% commission + (1% billpay fee).
+   - tx id = p{base36}{first4alphanum of buyerId}.
+   - BillPay -> control number. USSD -> async ClickPesa Collect (ussdSent flag).
+2. Buyer completes payment on phone.
+3. ClickPesa webhook -> POST /api/clickpesa/webhook (verifyWebhook via
+   WEBHOOK_SECRET; always returns 200 {received:true}).
+4. applyClickPesaPayment():
+   - deposit: credits users.walletBalance.
+   - boost: marks tx completed, sets product isBoosted/boostedUntil/isFeatured.
+   - purchase: status escrow_hold; sellerReceives = price + shipping;
+     mirrors orders doc; records commission revenue; decrements flash-sale
+     stock; increments seller pendingEscrow/totalSales/grossSalesVolume.
+   - Guards: completed/escrow_hold skip double-processing.
+5. Release (buyer confirm): escrow/release -> checks suspended seller (funds
+   held), delivered + escrowReleased, pendingEscrow -> sellerBalance
+   (safe decrement), revenue_transactions + auditLog. Auto-payout if enabled.
+6. Admin force release: /api/escrow/admin-release (x-admin-secret).
+7. Cancel (buyer, pre-dispatch): /api/escrow/cancel -> ClickPesa refund
+   (price+shipping-2000 fee), refunded status.
+8. Dispute: /api/escrow/dispute (funds stay held, alerts admins);
+   admin-resolve-dispute (release or refund).
+9. Auto-release: cron /api/cron/release-escrows (ESCROW_AUTO_RELEASE_DAYS=14;
+   escrow_hold/dispatched + expired -> delivered + sellerBalance credit).
+
+Retry payment: POST /api/retry-payment (>=30s old, buyer/admin only).
+
+ClickPesa webhook status mapping:
+  completed/payment_received/payment_completed/success/settled -> success
+  failed/cancelled/expired -> failed
+
+================================================================================
+15. WALLET FLOW
+================================================================================
+Files: lib/services/* (balance_privacy_service), server routes
+- Deposit: POST /api/wallet/deposit (USSD or BillPay, depositRef=dep+base36).
+- Purchase from balance: POST /api/wallet/purchase (balance deduction ->
+  escrow_hold; mirrors tx on existing orderId; serviceFeePercent 0.035).
+- Balance: GET /api/wallet/balance/:userId.
+- History: GET /api/wallet/history/:userId; DELETE /api/wallet/delete-history.
+- Payment methods: GET /api/payment-methods, POST /api/payment-methods/calc-fee,
+  GET /api/wallet/deposit/methods, POST /api/gateway-fee.
+- Buyer statement: GET /api/buyer-statement (debits for PAID_STATUSES,
+  credits for refunds + deposits).
+
+================================================================================
+16. WITHDRAWAL / PAYOUT FLOW
+================================================================================
+- Seller balance: GET /api/seller/balance.
+- Withdraw: POST /api/seller/withdraw
+  - Firestore runTransaction atomic deduct (amount + payout fee tier).
+  - ClickPesa payout; reversal on failure; audit + notify.
+  - MIN_WITHDRAWAL = 5000. DEFAULT_PAYOUT_FEE = 2000 (estimate).
+- Admin: /api/admin/withdraw (admin balance = commissions + boost revenue only,
+  never AdMob), create-payout (duplicate-source guard), payouts list/status/retry.
+- Payout webhook: POST /api/clickpesa/payout-webhook (SUCCESS -> completed;
+  FAILED -> atomically reverse deducted amount back to seller wallet).
+
+================================================================================
+17. BOOST FLOW
+================================================================================
+Files: lib/services/boost_service.dart, lib/models/boost_tier.dart,
+       lib/models/boost_receipt.dart, lib/widgets/boost_promo_banner.dart,
+       lib/screens/boost/product_boost_screen.dart, /boost-receipt
+Boost tiers (server): bronze TZS1500/3d, silver TZS3000/7d, gold TZS10000/30d.
+Flow:
+1. Seller selects tier -> POST /api/boost-product
+   - verifies token; cancels stale pending boosts; normalizes phone to 255.
+   - BillPay adds 1% gateway fee; USSD sends tier price.
+   - writes transactions doc (type boost, status pending); fires ClickPesa.
+   - USSD failure -> failed + notifyBoostPaymentFailed (in-app + push + SMS).
+2. ClickPesa webhook -> applyClickPesaPayment boost branch:
+   tx completed, product isBoosted/boostedUntil/isFeatured, schedules broadcast.
+3. Boost notify: POST /api/boost/notify paginates users (500/batch),
+   OneSignal bulk + in-app notifications.
+4. Stale boosts fail: failStalePendingBoosts (cron).
+Boost analytics: boost_analytics/{pid}/impressions.
+
+================================================================================
+18. FLASH SALES FLOW
+================================================================================
+Files: lib/services/flash_sale_service.dart, lib/models/flash_sale_model.dart,
+       lib/widgets/flash_sale_banner.dart, lib/screens/flash_sale (create/screen)
+- FlashSale model: discountPercent (e.g. 30%), startTime/endTime, isActive,
+  stock, soldCount, productId, sellerId.
+- getActiveFlashSalesAtNow: active + within time window (includes upcoming,
+  matching product-detail behavior).
+- Create: POST /api/flash-sales (duplicate-active guard, deactivates expired).
+- Scan: auto-creates 30%/20% off for stale low-view products.
+- Notify: 24h OneSignal cooldown via app_settings/flash_sale_push_cooldown.
+- Deactivate expired: POST /api/flash-sales/deactivate-expired.
+- Flash sale screen: /flash-sale (banner + active deals).
+- Product cards + banner show flash sale price/discount.
+
+================================================================================
+19. BUYER REQUESTS FLOW
+================================================================================
+Files: lib/screens/requests/*, lib/services/buyer_request_service.dart,
+       lib/models/buyer_request_model.dart
+- Buyer posts a request (what they want to buy) -> Firestore buyer_requests.
+- Request fields: title, description, category, budget (num|string -> coerced),
+  status (open/filled), createdAt (Timestamp|string), unlockedBy (String list).
+- Sellers can view requests and respond/claim; request marked filled.
+- Robust parsing in BuyerRequest.fromFirestore (budget/createdAt/unlockedBy).
+
+================================================================================
+20. STATUS (STORIES) FLOW
+================================================================================
+Files: lib/screens/status/*, lib/services/status_service.dart,
+       lib/models/status_model.dart
+- Status = ephemeral product/seller posts (like stories).
+- StatusService posts/reads status docs with userImage/createdAt/expiresAt.
+- Status viewer screen renders full-screen with progress bars.
+
+================================================================================
+21. NOTIFICATIONS FLOW
+================================================================================
+Files: lib/services/notification_service.dart, lib/services/local_notification_service.dart,
+       lib/screens/notification/* (notification_screen, notification_preferences_screen)
+- In-app notifications stored in Firestore collection "notifications"
+  (isRead flag; index userId+isRead).
+- Push via OneSignal (server sendOneSignalNotification) with channel map
+  notifTypeToChannel (chat_messages_v6, system_alerts_v6, payments_notifications_v6, ...).
+- Channels & prefs: notification_preferences/{userId} (general/chat/marketing +
+  sms_enabled + district_new_products + interested_districts).
+  general=false suppresses ALL push (master switch).
+- Critical push types bypass prefs (payment/order/dispute/refund/escrow/kyc/deposit).
+- SMTP email fallback for critical types (Gmail SMTP via nodemailer).
+- Preferences endpoints: POST /api/notifications/preferences/get|set.
+- Notification tap -> deep link: /receipt/:orderId, /order-detail/:orderId,
+  /product/:productId, /chat/:receiverId, /flash-sale, /notifications.
+
+================================================================================
+22. PROFILE FLOW
+================================================================================
+Files: lib/screens/profile/* (profile_screen, edit_profile_screen,
+       public_profile_screen, seller_profile_screen, settings_screen),
+       lib/services/user_service.dart
+- Profile tab (profile_screen): user info, avatar (person icon if no photo),
+  balance/coins, my ads, orders, wallet, KYC status, settings, account switch.
+- Edit profile: update username/name/photo (upload via UserService ->
+  Firebase Storage URL stored in users/{uid}.profileImage).
+- Public profile (other users): rating, products, follow, chat, report.
+- Seller profile: rating breakdown, products, verification, location.
+- Settings: language, currency, notification prefs, app lock, privacy
+  (balance_privacy_service), logout.
+- UserService: read/update users doc, username uniqueness check
+  (isUsernameTaken), uploadProfileImage.
+
+================================================================================
+23. ADMIN FLOW
+================================================================================
+Files: lib/screens/admin/* (admin_dashboard_screen + subscreens),
+       lib/services/* (analytics_service)
+- /admin route; gated by isAdmin (users.isAdmin or admin emails).
+- Dashboard: stats (users/products/orders/withdrawals/ad_views/seller balances),
+  transactions, withdrawals, payouts, analytics (users/products/transactions,
+  7d revenue, location/age distribution, user_sessions active counts),
+  timeseries (30-90d money/commission/users), online presence buckets,
+  finance summary, ClickPesa transactions, AdMob revenue, revenue-transactions,
+  audit log, ad views, user detail/delete/unsuspend/warn/full-delete/patch,
+  product delete, order delete, delete-doc (allowlist), broadcast notification,
+  send notification, retro boost, KYC review (admin/kyc), reports (admin/reports).
+- Server admin auth: x-admin-secret header (ADMIN_SECRET env) OR Bearer admin token.
+- Setup admin: POST /api/setup-admin (x-admin-secret).
+
+================================================================================
+24. AI ASSISTANT FLOW
+================================================================================
+Files: lib/screens/ai/ai_assistant_screen.dart, lib/services/groq_service.dart,
+       lib/services/ai/ (AiService), lib/services/video_query_service.dart,
+       lib/services/voice_search_service.dart
+- AI assistant (/ai-assistant) chat over Groq (groqChat proxy).
+- Voice search + transcription via server groqTranscribe (Whisper-large-v3-turbo).
+- Video query service (AI over product videos).
+- Endpoints: POST /api/ai/chat, POST /api/ai/transcribe.
+
+================================================================================
+25. KYC FLOW
+================================================================================
+Files: lib/screens/kyc/kyc_screen.dart, lib/services/kyc_service.dart
+- POST /api/kyc/submit: validates full name >=2 parts, ID image + selfie
+  required, ID format checks (National ID 20 digits; Passport/Driver/Voters >=6).
+- Stores users/{uid}.kyc, audits, notifies admin + user.
+- Status: GET /api/kyc/status/:userId.
+- Admin review/revoke/delete/pending/all.
+- Approval propagates sellerKycApproved to all seller products.
+- NIDA + face-match microservice: TODO (not yet implemented).
+
+================================================================================
+26. OTHER FEATURES
+================================================================================
+- Wishlist: lib/services/wishlist_service.dart (/wishlist).
+- Follow seller: lib/services/follow_service.dart (following/followers subcollections).
+- Reports: lib/services/report_service.dart, /report, server /api/reports CRUD.
+- Price drops: lib/services/price_drop_service.dart + price_drop_banner.dart.
+- Recently viewed: recently_viewed_service.dart + recently_viewed_row.dart.
+- Ads: AdMob interstitial (interstitial_ad_service.dart), rewarded
+  (rewarded_ad_service.dart), ad_revenue_service.dart (ad_views tracking),
+  AD_REVENUE_PER_VIEW = 15 TZS. Payment banner + ad_banner widgets.
+- Exchange rates: exchange_rate_service.dart (USD/TSh).
+- Call seller: call_service.dart + call_seller_button.dart (WhatsApp/tel).
+- WhatsApp share: whatsapp_service.dart.
+- Local cache: soko_cache_manager.dart, local_cache_service.dart.
+- Barcode/QR scanner: barcode_scanner_widget.dart, qr_flutter.
+- Map/location: location_map_widget.dart, location_disclosure_dialog.dart,
+  blue_pulse_marker.dart, location_map_widget.
+- Receipts: receipt_pdf_service.dart (/receipt) - PDF + printing.
+- App lock: app_lock_service.dart, app_lock_overlay.dart.
+- Maintenance gate + connectivity wrapper (network_sensitive_wrapper.dart).
+- Premium/glass UI widgets: glassmorphism_card, premium_background, etc.
+- Boost receipt card: boost_receipt_card.dart.
+
+================================================================================
+27. SEARCH ENGINE (BACKEND DETAIL) - server/search.js (487 lines)
+================================================================================
+Collections: search_index_products, search_index_users, search_index_categories,
+             search_analytics, search_trending.
+- Trigram index: extractTrigrams (3-char n-grams, lowercase).
+- Keywords: extractKeywords (words >= 2 chars).
+- Fuzzy correction: levenshtein + fuzzyCorrect (min length 3).
+- Relevance score:
+    name exact           100
+    name startsWith       80
+    name includes         60
+    description includes  50
+    keywords any-word     40 + 5 x hitCount
+    trigram ratio        x30
+    popularity           x0.1
+    isBoosted           +50
+    isActive false      -100
+    kycApproved         +20
+    stock <= 0          -50   (floored at 0)
+- Distance-aware sorting (haversine, R=6371 km).
+- Routes: POST /global-search (auth, pagination, filters minPrice/maxPrice/
+  category/condition/verifiedOnly/nearby), /autocomplete (90s TTL),
+  /trending (5-min TTL), /record-click (viewCount++), /most-rated
+  (top by reviewCount + aggregated seller ratings, 10-min TTL).
+- Cache: cache.js in-memory TTL Map (500 max, lazy prune).
+
+================================================================================
+28. SERVER ROUTE INVENTORY (server/index.js, ~8,405 lines)
+================================================================================
+Auth & OTP
+  POST /api/auth/send-otp, /api/auth/verify-otp
+  POST /api/auth/check-phone, /api/auth/check-email
+  POST /api/auth/reset-password-by-phone
+  POST /api/phone-login
+  POST /api/setup-admin (x-admin-secret)
+Escrow
+  POST /api/escrow/dispatch, /api/escrow/buyer-transport,
+       /api/escrow/release, /api/escrow/admin-release (admin),
+       /api/escrow/cancel, /api/escrow/dispute,
+       /api/escrow/admin-resolve-dispute (admin)
+  POST /api/cron/release-escrows (x-cron-secret)
+Payments
+  POST /api/create-marketplace-payment-link, /api/retry-payment
+  POST /api/clickpesa/webhook, /api/clickpesa/payout-webhook
+  GET  /api/clickpesa/balance (admin), /api/clickpesa/payout-preview
+  GET  /api/clickpesa/transactions
+  GET  /api/transaction-status/:orderId, /api/gateway-fee
+  GET  /api/payment-methods, /api/payment-methods/calc-fee
+Seller
+  GET  /api/seller/balance, /api/seller-analytics/:sellerId,
+       /api/seller-statement
+  POST /api/seller/withdraw
+Wallet
+  POST /api/wallet/deposit, /api/wallet/purchase
+  GET  /api/wallet/balance/:userId, /api/wallet/history/:userId
+  POST /api/wallet/delete-history
+  GET  /api/wallet/deposit/methods
+Orders
+  POST /api/orders/create, /api/orders/transition
+  GET  /api/orders/:id/timeline, /api/orders/:id/status, /api/orders/:id/detail
+  GET  /api/orders/user/:userId?role=buyer|seller&status=
+Boost
+  POST /api/boost-product, /api/boost/notify
+Flash Sales
+  POST /api/flash-sales, /api/flash-sales/scan, /api/flash-sales/notify,
+       /api/flash-sales/deactivate-expired, /api/flash-sales/delete
+Search (server/search.js)
+  POST /api/search/global-search, /api/search/autocomplete
+  GET  /api/search/trending
+  POST /api/search/record-click
+  GET  /api/search/most-rated
+KYC
+  POST /api/kyc/submit
+  GET  /api/kyc/status/:userId
+  POST /api/admin/kyc/* (review/revoke/delete/pending/all)
+Products
+  DELETE /api/products/:id
+  POST   /api/products/:id/rating
+  POST   /api/categories/add-defaults, /api/categories/update
+Chat
+  POST /api/chat/send
+Notifications
+  POST /api/notifications/preferences/get, /api/notifications/preferences/set
+  POST /api/notifications/broadcast (admin)
+  POST /api/send-bulk-notification (admin)
+  POST /api/send-promo-sms (admin)
+  POST /api/clear-token, /api/test-fcm
+  GET  /api/fcm-check
+Admin
+  GET  /api/admin/stats, /api/admin/transactions, /api/admin/withdrawals,
+       /api/admin/analytics, /api/admin/timeseries, /api/admin/online,
+       /api/admin/finance-summary, /api/admin/admob-revenue,
+       /api/admin/revenue-transactions, /api/admin/audit-log,
+       /api/admin/ad-views, /api/admin/user-detail/:uid,
+       /api/admin/payouts, /api/admin/withdrawals
+  POST /api/admin/withdraw, /api/admin/create-payout, /api/admin/retro-boost,
+       /api/admin/delete-doc, /api/admin/broadcast-notification,
+       /api/admin/send-notification
+  (user delete/unsuspend/warn/full-delete/patch, product delete, order delete)
+Payments (legacy/misc)
+  POST /api/transactions/create
+AI
+  POST /api/ai/chat, /api/ai/transcribe
+SMS/WhatsApp
+  POST /api/sms/send, /api/whatsapp/send, /api/whatsapp/webhook
+Other
+  GET  /api/cloudinary/sign, /api/stats
+  GET  /health, /ping
+  GET  /api/payout-status/:id
+  POST /api/fraud/risk/:sellerId
+  POST /api/clickpesa/payout-preview
+  (Malipopay webhook: /api/malipopay/webhook)
+
+Middleware & helpers:
+  verifyAuthToken (Bearer Firebase ID token), requireUser, requireAdmin,
+  isOwnerOrAdmin, checkSuspended, checkDuplicatePayment, checkDailyLimit
+  (MAX_DAILY_SALE_AMOUNT = 5,000,000), auditLog, processPayout,
+  retryFailedPayout, updatePayoutStatus, notifyAdmins, sendSms,
+  sendOneSignalNotification, sendOneSignalBulk, postOneSignalWithRetry,
+  sendEmailSmtp, applyClickPesaPayment, releaseExpiredEscrows,
+  failStalePendingBoosts, deleteProductById.
+Rate limits: 30/min general, 5/min payments, 3 OTP per 15 min.
+Constants: PLATFORM_COMMISSION_PERCENT=0.035, AD_REVENUE_PER_VIEW=15,
+           MIN_WITHDRAWAL=5000, DEFAULT_PAYOUT_FEE=2000,
+           ESCROW_AUTO_RELEASE_DAYS=14, local 3d, regional 7d.
+
+================================================================================
+29. FIRESTORE COLLECTIONS & RULES
+================================================================================
+Key collections:
+  users/{uid} (coins, viewerCoins, sellerBalance, pendingEscrow, totalSales,
+              grossSalesVolume, totalWithdrawn, isAdmin, isSuspended,
+              kyc, autoPayout, profileImage, phone, username, ...)
+  users/{uid}/following, followers, admin_withdrawals, cart
+  products/{id} (status submitted/active, price, stock, sellerId, rating,
+                 reviewCount, isBoosted, boostedUntil, isFeatured, kycApproved)
+  product_analytics/{pid} (views, gender/location/age)
+  boost_analytics/{pid} (impressions)
+  reviews/{id} (userId, sellerId, rating, comment, likedBy, helpfulCount,
+                sellerReply, sellerReplyAt)
+  conversations/{convId} (participants, lastMessageTime) + messages
+  chat_rooms/{roomId} (participants, last_message, last_timestamp,
+                       unread_counts map, legacy unread_count_buyer/seller)
+  orders/{id}, orderTimeline/{entry}, transactions/{id},
+  deposits/{dep...}, payouts/{ref}, revenue_transactions, ad_views,
+  viewer_ad_views, audit_log
+  notifications/{id} (userId, isRead)
+  notification_preferences/{uid}
+  otp_codes/{phone}
+  user_sessions (analytics heartbeat: lastActive)
+  search_index_products/users/categories, search_analytics, search_trending
+  flash_sales/{id}, buyer_requests/{id}
+  reports, groups, status/{id}, app_settings (flash_sale_push_cooldown)
+  wishlist (users/{uid}/wishlist or top-level)
+
+firestore.rules highlights:
+  - isSignedIn, isOwner, isAdmin (email in {admin@soko-langu.com,
+    admin@soko-vibe.com} OR users.isAdmin == true), notSuspended.
+  - users: read signed-in; create isOwner; update/delete isOwner||isAdmin.
+  - following/followers/admin_withdrawals/cart: owner read+write.
+  - products: read public; writes restricted.
+  - reviews: create requires sellerId != request.auth.uid (blocks self-rating);
+    update: author can only update likedBy/helpfulCount; seller can only update
+    sellerReply/sellerReplyAt.
+
+firestore.indexes.json (composite indexes):
+  conversations (participants CONTAINS + lastMessageTime DESC)
+  transactions (buyerId+createdAt DESC, sellerId+createdAt DESC)
+  flash_sales (isActive+endTime ASC, sellerId+endTime ASC, productId+isActive ASC)
+  notifications (userId+isRead ASC)
+
+================================================================================
+30. BACKGROUND JOBS / LISTENERS
+================================================================================
+- server/listener.js (393 lines, standalone process):
+  - transactions.onSnapshot -> OneSignal/SMS on status transitions
+    (pending->escrow_hold, ->dispatched, ->delivered, ->failed, ->refunded).
+  - startProductListener: notifies prior chat partners on new products.
+  - startDistrictProductListener: notifies users whose
+    notification_preferences.interested_districts contains product district
+    (marketing-gated).
+  - Requires FIREBASE_SERVICE_ACCOUNT_JSON; exits 1 if missing.
+- Server self-ping every 10 min (RENDER_EXTERNAL_URL) to keep Render awake.
+- GitHub Actions keep-alive workflow also pings the server.
+- Cron endpoints called externally (e.g. cron-job.org) with x-cron-secret:
+  POST /api/cron/release-escrows.
+
+================================================================================
+31. DEPLOYMENT & CI/CD
+================================================================================
+- Render: web service from repo root; health path /health;
+  NODE_OPTIONS --optimize-for-size --expose-gc.
+- Dockerfile: node:20-alpine; npm ci; node index.js.
+- railway.json + .railwayignore (also deployable on Railway).
+- GitHub Actions: .github/workflows/build.yml (build) + keep-alive.yml
+  (keep server awake).
+- Flutter: build APK (flutter build apk --release); app-debug.apk /
+  app-release.apk in build/app/outputs/flutter-apk/.
+- Firebase hosting: sokonimoko-8c171-a8d14 (firebase.json).
+- firestore rules/indexes deploy via firebase deploy --only firestore:rules.
+
+================================================================================
+32. ENVIRONMENT VARIABLES (NAMES ONLY - server/.env.example)
+================================================================================
+CLICKPESA_CLIENT_ID, CLICKPESA_API_KEY, CLICKPESA_CHECKSUM_KEY,
+FIREBASE_SERVICE_ACCOUNT_JSON, ADMIN_SECRET, WEBHOOK_SECRET, WEBHOOK_URL,
+LIPA_TILL_NUMBER (5722554), LIPA_TILL_NAME (Soko Vibe Marketplace),
+PORT, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM,
+ESCROW_AUTO_RELEASE_DAYS (14), MAX_DAILY_SALE_AMOUNT (5000000),
+MESEJI_API_KEY, MESEJI_SENDER_ID,
+ONE_SIGNAL_APP_ID, ONE_SIGNAL_REST_API_KEY,
+CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET,
+GROQ_API_KEY (for AI chat/transcribe)
+
+(Do NOT commit real .env values - server/.env is git-ignored.)
+
+================================================================================
+END OF DOCUMENTATION
+================================================================================

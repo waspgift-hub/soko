@@ -294,9 +294,22 @@ class _NotificationScreenState extends State<NotificationScreen> {
           case 'shipping_quote':
           case 'disputed':
           case 'dispute_resolved':
-          case 'failed_retry':
-            context.push(AppRoutes.myPurchases);
+          case 'failed_retry': {
+            final orderId =
+                (rawData?['orderId'] ?? rawData?['transactionId']) as String?;
+            if (orderId != null && orderId.isNotEmpty) {
+              context.push('${AppRoutes.orderDetail}/$orderId');
+            } else {
+              // myPurchases lists only the buyer's transactions; a seller
+              // notification must land on the seller's orders screen instead.
+              // Order notifications carry the other party's id: to-buyer
+              // notifications include sellerId, to-seller ones include buyerId.
+              final myUid = FirebaseAuth.instance.currentUser?.uid;
+              final isBuyerRecipient = myUid != null && rawData?['sellerId'] != null;
+              context.push(isBuyerRecipient ? AppRoutes.myPurchases : AppRoutes.sellerOrders);
+            }
             break;
+          }
           case 'boost':
             context.push(AppRoutes.notifications);
             break;
