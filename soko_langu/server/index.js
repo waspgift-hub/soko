@@ -30,6 +30,7 @@ const orderEngine = require('./orders');
 const searchRouter = require('./search').router;
 const notificationRouter = require('./notification').router;
 const notifPrefs = require('./notificationPrefs');
+const { parseFlashSaleEndTime, isFlashSaleStillActive, resolveEffectivePrice } = require('./money');
 
 const DEFAULT_PAYOUT_FEE = 2000; // Estimated payout fee (actual varies by amount via clickpesaPayoutPreview)
 const { groqChat, groqTranscribe } = require('./groq');
@@ -588,52 +589,8 @@ function isValidAmount(amount) {
   return typeof amount === 'number' && amount > 0 && Number.isFinite(amount) && amount < 100_000_000;
 }
 
-/** Parse flash sale end/start time from Firestore Timestamp, ISO string, seconds, or legacy field names. */
-function parseFlashSaleEndTime(data) {
-  const raw = data?.endTime ?? data?.muda_wa_kuisha ?? data?.end_time;
-  if (!raw) return null;
-  if (raw.toDate && typeof raw.toDate === 'function') return raw.toDate();
-  if (raw._seconds != null) return new Date(raw._seconds * 1000);
-  if (raw.seconds != null) return new Date(raw.seconds * 1000);
-  if (typeof raw === 'number') {
-    // Treat values < 1e12 as seconds since epoch.
-    return new Date(raw < 1e12 ? raw * 1000 : raw);
-  }
-  const parsed = new Date(raw);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function isFlashSaleStillActive(data, now = new Date()) {
-  const end = parseFlashSaleEndTime(data);
-  if (!end) return false;
-  return end > now;
-}
-
-/**
- * Resolve the price the buyer should actually be charged for a product.
- * When an active flash sale exists for the product, the discounted salePrice
- * wins over whatever the client sent, so the platform commission (and the
- * amount the buyer pays) is always based on the real sale price, never the
- * stale full price from the checkout screen.
- */
-async function resolveEffectivePrice(db, productId, clientPrice) {
-  try {
-    const snap = await db.collection('flash_sales')
-      .where('productId', '==', productId)
-      .where('isActive', '==', true)
-      .limit(1)
-      .get();
-    if (!snap.empty) {
-      const fs = snap.docs[0].data();
-      if (isFlashSaleStillActive(fs) && Number(fs.salePrice) > 0) {
-        return Math.round(Number(fs.salePrice));
-      }
-    }
-  } catch (e) {
-    console.error('resolveEffectivePrice error:', e.message);
-  }
-  return Math.round(Number(clientPrice));
-}
+// Flash-sale helpers (parseFlashSaleEndTime, isFlashSaleStillActive,
+// resolveEffectivePrice) live in server/money.js so they are unit-testable.
 
 /** Accept x-admin-secret OR Firebase Bearer token from an admin user. */
 async function requireAdmin(req, res) {
