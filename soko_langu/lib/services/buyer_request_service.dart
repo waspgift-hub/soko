@@ -13,8 +13,13 @@ class BuyerRequestService {
         .collection(collection)
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snap) =>
-            snap.docs.map((doc) => BuyerRequest.fromFirestore(doc)).toList());
+        .map((snap) {
+      // BuyerRequest.fromFirestore tolerates legacy shapes (string budgets,
+      // missing timestamps), so the stream never dies on one bad document.
+      return snap.docs
+          .map((doc) => BuyerRequest.fromFirestore(doc))
+          .toList();
+    });
   }
 
   /// Posts a new request with the contact locked until a seller unlocks it.

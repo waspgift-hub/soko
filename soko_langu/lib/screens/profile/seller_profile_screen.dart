@@ -6,6 +6,7 @@ import '../../models/flash_sale_model.dart';
 import '../../services/product_service.dart';
 import '../../services/user_service.dart';
 import '../../services/flash_sale_service.dart';
+import '../../services/rating_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/google_loading.dart';
@@ -73,6 +74,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
             return CustomScrollView(
               slivers: [
                 SliverToBoxAdapter(child: _buildHeader(context, profile)),
+                SliverToBoxAdapter(child: _buildRatingSection(context)),
                 SliverToBoxAdapter(child: _buildActions(context)),
                 SliverToBoxAdapter(
                   child: Padding(
@@ -301,6 +303,124 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
           ],
           const SizedBox(height: 12),
           _buildStats(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRatingSection(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
+      child: StreamBuilder<SellerRating>(
+        stream: RatingService().streamSellerRating(widget.sellerId),
+        builder: (context, snap) {
+          final rating = snap.data;
+          if (rating == null || rating.totalReviews == 0) {
+            return Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerLow.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: cs.primary.withValues(alpha: 0.1)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.star_outline, size: 18, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+                  const SizedBox(width: 6),
+                  Text(
+                    context.tr('no_ratings_yet'),
+                    style: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 13),
+                  ),
+                ],
+              ),
+            );
+          }
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerLow.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: cs.primary.withValues(alpha: 0.15)),
+            ),
+            child: Row(
+              children: [
+                Column(
+                  children: [
+                    Text(
+                      rating.averageRating.toStringAsFixed(1),
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: cs.primary,
+                      ),
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: List.generate(5, (i) {
+                        final filled = i < rating.averageRating.round();
+                        return Icon(
+                          filled ? Icons.star : Icons.star_border,
+                          color: Colors.amber,
+                          size: 16,
+                        );
+                      }),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '(${rating.totalReviews})',
+                      style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Column(
+                    children: [
+                      _ratingRow(cs, 5, rating.fiveStar, rating.totalReviews),
+                      _ratingRow(cs, 4, rating.fourStar, rating.totalReviews),
+                      _ratingRow(cs, 3, rating.threeStar, rating.totalReviews),
+                      _ratingRow(cs, 2, rating.twoStar, rating.totalReviews),
+                      _ratingRow(cs, 1, rating.oneStar, rating.totalReviews),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _ratingRow(ColorScheme cs, int star, int count, int total) {
+    final pct = total > 0 ? count / total : 0.0;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1.5),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 28,
+            child: Text('$star', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: pct,
+                minHeight: 4,
+                backgroundColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                color: Colors.amber,
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          SizedBox(
+            width: 24,
+            child: Text('$count', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+          ),
         ],
       ),
     );

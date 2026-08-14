@@ -323,8 +323,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       );
     }
 
-    final user = FirebaseAuth.instance.currentUser;
-
     return Scaffold(
       appBar: AppBar(
         title: Text(context.tr('edit_profile')),
@@ -367,16 +365,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 : FileImage(File(_imagePath!)) as ImageProvider)
                           : null,
                       child: _imagePath == null
-                          ? Text(
-                              user?.displayName != null
-                                  ? user!.displayName![0].toUpperCase()
-                                  : user?.email != null
-                                  ? user!.email![0].toUpperCase()
-                                  : "U",
-                              style: TextStyle(
-                                fontSize: 40,
-                                color: Theme.of(context).colorScheme.surface,
-                              ),
+                          ? Icon(
+                              Icons.person_outline_rounded,
+                              size: 48,
+                              color: Theme.of(context).colorScheme.surface,
                             )
                           : null,
                     ),

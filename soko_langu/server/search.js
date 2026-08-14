@@ -61,10 +61,22 @@ function levenshtein(a, b) {
 function relevanceScore(doc, query, queryLower) {
   let score = 0;
   const name = (doc.name || '').toLowerCase();
+  const description = (doc.description || '').toLowerCase();
+
   if (name === queryLower) score += 100;
   else if (name.startsWith(queryLower)) score += 80;
   else if (name.includes(queryLower)) score += 60;
-  if (doc.keywords && doc.keywords.includes(queryLower)) score += 40;
+  // Match against description too so results like "best gaming pc" can find
+  // products whose description mentions the term without the title matching.
+  if (description.includes(queryLower)) score += 50;
+
+  // keywords is a per-word array, so match when ANY query keyword appears in it
+  // (the old `includes(queryLower)` never hit for multi-word queries).
+  if (doc.keywords && Array.isArray(doc.keywords)) {
+    const queryWords = extractKeywords(queryLower);
+    const hitCount = queryWords.filter((w) => doc.keywords.includes(w)).length;
+    if (hitCount > 0) score += 40 + hitCount * 5;
+  }
   if (doc.trigrams) {
     const queryTrigrams = extractTrigrams(query);
     const matchCount = queryTrigrams.filter(t => doc.trigrams.includes(t)).length;

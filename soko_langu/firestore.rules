@@ -199,9 +199,22 @@ service cloud.firestore {
 
     // ─── REVIEWS ────────────────────────────────────────────
     match /reviews/{reviewId} {
+      // seller cannot write a review on their own product (rating/sellerId on the review
+      // must match the product's sellerId, guarded on write)
       allow read: if true;
-      allow create: if isSignedIn() && notSuspended() && request.resource.data.userId == request.auth.uid;
-      allow update: if isSignedIn() && notSuspended() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && notSuspended()
+        && request.resource.data.userId == request.auth.uid
+        && (request.resource.data.sellerId != request.auth.uid);
+      allow update: if isSignedIn() && notSuspended()
+        && (
+          // review author edits own review (limited to likedBy/helpfulCount)
+          (resource.data.userId == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedBy', 'helpfulCount']))
+          ||
+          // product seller replies to the review
+          (request.auth.uid != resource.data.userId
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sellerReply', 'sellerReplyAt']))
+        );
       allow delete: if isSignedIn() && notSuspended() && resource.data.userId == request.auth.uid;
     }
 

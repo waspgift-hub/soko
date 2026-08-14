@@ -51,6 +51,11 @@ class ChatService {
       'participants': [user.uid, otherUserId],
       'last_message': '',
       'last_timestamp': FieldValue.serverTimestamp(),
+      'unread_counts': {
+        user.uid: 0,
+        otherUserId: 0,
+      },
+      // legacy role fields kept for backward-compat reads
       'unread_count_buyer': 0,
       'unread_count_seller': 0,
       if (productId != null) 'product_id': productId,
@@ -255,9 +260,13 @@ Stream<List<ChatRoom>> getRooms() {
     final userDoc = await _db.collection('users').doc(user.uid).get();
     final userData = userDoc.data();
     final isBuyer = userData?['isBuyer'] == true;
-    final field = isBuyer ? 'unread_count_buyer' : 'unread_count_seller';
+    final legacyField = isBuyer ? 'unread_count_buyer' : 'unread_count_seller';
 
-    await _db.collection('chat_rooms').doc(roomId).update({field: 0});
+    // Clear this user's unread (per-user map first, legacy field second).
+    await _db.collection('chat_rooms').doc(roomId).update({
+      'unread_counts.${user.uid}': 0,
+      legacyField: 0,
+    });
   }
 
   Future<void> addReaction({

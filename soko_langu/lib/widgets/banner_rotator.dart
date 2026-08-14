@@ -38,7 +38,9 @@ class _BannerRotatorState extends State<BannerRotator> {
 
   void _startTimer() {
     if (_timer != null) return;
-    _timer = Timer.periodic(const Duration(seconds: 5), (_) {
+    // 8s per banner so each section (flash deals / dynamic / boost promos)
+    // stays readable; 5s felt rushed for users scanning listings.
+    _timer = Timer.periodic(const Duration(seconds: 8), (_) {
       if (!mounted) return;
       final c = _banners().length;
       if (c <= 1) { _timer?.cancel(); _timer = null; return; }

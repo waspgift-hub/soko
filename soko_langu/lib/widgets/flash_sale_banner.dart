@@ -53,12 +53,14 @@ class _FlashSaleBannerState extends State<FlashSaleBanner>
   void _startAutoSlide(int itemCount) {
     _timer?.cancel();
     if (itemCount <= 1) return;
-    _timer = Timer.periodic(const Duration(seconds: 3), (_) {
+    // 8s per slide so users can actually read each flash-sale deal before it
+    // advances; 3s was too fast with many active sales.
+    _timer = Timer.periodic(const Duration(seconds: 8), (_) {
       if (!mounted) return;
       final nextPage = (_currentPage + 1) % itemCount;
       _pageController.animateToPage(
         nextPage,
-        duration: const Duration(milliseconds: 400),
+        duration: const Duration(milliseconds: 500),
         curve: Curves.easeInOut,
       );
     });
@@ -188,19 +190,30 @@ class _FlashSaleBannerState extends State<FlashSaleBanner>
             right: 0,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(sales.length, (i) {
-                final isActive = i == _currentPage;
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  margin: const EdgeInsets.symmetric(horizontal: 2),
-                  width: isActive ? 14 : 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: isActive ? Colors.white : Colors.white54,
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                );
-              }),
+              children: () {
+                // Render at most 10 dots even when there are thousands of
+                // sales; active dot reflects the current page relative window.
+                final total = sales.length;
+                final win = total > 10 ? 10 : total;
+                final active = total > 10
+                    ? (_currentPage % win)
+                    : _currentPage;
+                return [
+                  for (var i = 0; i < win; i++)
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      margin: const EdgeInsets.symmetric(horizontal: 2),
+                      width: active == i ? 14 : 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: active == i
+                            ? Colors.white
+                            : Colors.white54,
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                ];
+              }(),
             ),
           ),
       ],

@@ -270,10 +270,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
               CircleAvatar(
                 radius: 13,
                 backgroundColor: cs.primary.withValues(alpha: 0.12),
-                backgroundImage: _profilePhotoUrl != null
+                backgroundImage: _profilePhotoUrl != null &&
+                        _profilePhotoUrl!.isNotEmpty
                     ? NetworkImage(_profilePhotoUrl!)
                     : null,
-                child: _profilePhotoUrl == null
+                child: _profilePhotoUrl == null || _profilePhotoUrl!.isEmpty
                     ? Icon(
                         Icons.person_outline,
                         color: isSelected

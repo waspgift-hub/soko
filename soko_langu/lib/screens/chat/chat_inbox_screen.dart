@@ -85,10 +85,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
     // ignore: unused_local_variable
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
           final rooms = _showUnreadOnly
-              ? allRooms.where((r) {
-                  final isBuyer = r.buyerId == uid;
-                  return isBuyer ? r.unreadCountBuyer > 0 : r.unreadCountSeller > 0;
-                }).toList()
+              ? allRooms.where((r) => r.unreadCountFor(uid) > 0).toList()
               : allRooms;
           if (!snap.hasData) {
             return ListView.builder(
@@ -130,8 +127,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
               final name = _userNames[otherId] ?? context.tr('member', 'Member');
               final photo = _userPhotos[otherId] ?? '';
 
-              final isBuyer = room.buyerId == uid;
-              final unreadCount = isBuyer ? room.unreadCountBuyer : room.unreadCountSeller;
+              final unreadCount = room.unreadCountFor(uid);
 
               return _ChatListTile(
                 name: name,

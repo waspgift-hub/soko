@@ -23,6 +23,24 @@ class ProductReviewsScreen extends StatefulWidget {
 
 class _ProductReviewsScreenState extends State<ProductReviewsScreen> {
   final ReviewService _reviewService = ReviewService();
+  String? _currentUserId;
+  String? _productSellerId;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    _loadProductSellerId();
+  }
+
+  Future<void> _loadProductSellerId() async {
+    try {
+      final doc = await _reviewService.getProductSellerId(widget.productId);
+      if (mounted) setState(() => _productSellerId = doc);
+    } catch (_) {}
+  }
+
+  bool get _isSeller => _currentUserId != null && _productSellerId == _currentUserId;
 
   Future<void> _writeReview() async {
     final user = FirebaseAuth.instance.currentUser;
@@ -223,7 +241,11 @@ class _ProductReviewsScreenState extends State<ProductReviewsScreen> {
               const Divider(),
               ...reviews.map((r) => _ReviewTile(
                     review: r,
-                    onHelpful: () => _markHelpful(r.id),
+                    isSeller: _isSeller,
+                    onHelpful: () => _toggleHelpful(r),
+                    onReply: _isSeller
+                        ? () => _replyToReview(r)
+                        : null,
                   )),
             ],
           );
@@ -232,10 +254,54 @@ class _ProductReviewsScreenState extends State<ProductReviewsScreen> {
     );
   }
 
-  Future<void> _markHelpful(String reviewId) async {
+  Future<void> _toggleHelpful(Review review) async {
     try {
-      await _reviewService.markHelpful(reviewId);
+      await _reviewService.toggleHelpful(
+        review.id,
+        isLiked: review.hasLiked,
+      );
     } catch (_) {}
+  }
+
+  Future<void> _replyToReview(Review review) async {
+    final controller = TextEditingController(
+      text: review.sellerReply ?? '',
+    );
+    final reply = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('reply_label')),
+        content: TextField(
+          controller: controller,
+          maxLines: 4,
+          decoration: InputDecoration(
+            hintText: context.tr('write_reply_hint'),
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(context.tr('cancel')),
+          ),
+          ElevatedButton(
+            onPressed: () =>
+                Navigator.pop(ctx, controller.text.trim().isEmpty ? null : controller.text.trim()),
+            child: Text(context.tr('submit')),
+          ),
+        ],
+      ),
+    );
+    if (reply != null) {
+      try {
+        await _reviewService.replyToReview(review.id, reply);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(context.tr('reply_submitted'))),
+          );
+        }
+      } catch (_) {}
+    }
   }
 }
 
@@ -262,8 +328,15 @@ class _StarRow extends StatelessWidget {
 
 class _ReviewTile extends StatelessWidget {
   final Review review;
+  final bool isSeller;
   final VoidCallback onHelpful;
-  const _ReviewTile({required this.review, required this.onHelpful});
+  final VoidCallback? onReply;
+  const _ReviewTile({
+    required this.review,
+    required this.isSeller,
+    required this.onHelpful,
+    this.onReply,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -285,19 +358,11 @@ class _ReviewTile extends StatelessWidget {
                           width: 36,
                           height: 36,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => const SizedBox(),
+                          errorBuilder: (_, _, _) =>
+                              Icon(Icons.person, size: 24, color: cs.onPrimary),
                         ),
                       )
-                    : Text(
-                        review.userName.isNotEmpty
-                            ? review.userName[0].toUpperCase()
-                            : '?',
-                        style: TextStyle(
-                          color: cs.onPrimary,
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                    : Icon(Icons.person, size: 24, color: cs.onPrimary),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -342,6 +407,39 @@ class _ReviewTile extends StatelessWidget {
               height: 1.4,
             ),
           ),
+          if (review.sellerReply != null && review.sellerReply!.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    context.tr('seller_reply_label'),
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: cs.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    review.sellerReply!,
+                    style: TextStyle(
+                      color: cs.onSurface.withValues(alpha: 0.8),
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
           Row(
             children: [
@@ -350,6 +448,36 @@ class _ReviewTile extends StatelessWidget {
                 style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
               ),
               const Spacer(),
+              if (onReply != null) ...[
+                InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: onReply,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.reply_outlined,
+                          size: 15,
+                          color: cs.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          context.tr('reply_label'),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+              ],
               InkWell(
                 borderRadius: BorderRadius.circular(8),
                 onTap: onHelpful,
@@ -361,16 +489,22 @@ class _ReviewTile extends StatelessWidget {
                   child: Row(
                     children: [
                       Icon(
-                        Icons.thumb_up_outlined,
+                        review.hasLiked
+                            ? Icons.thumb_up_rounded
+                            : Icons.thumb_up_outlined,
                         size: 15,
-                        color: cs.onSurfaceVariant,
+                        color: review.hasLiked
+                            ? cs.primary
+                            : cs.onSurfaceVariant,
                       ),
                       const SizedBox(width: 4),
                       Text(
                         '${context.tr('helpful')}${review.helpfulCount > 0 ? ' (${review.helpfulCount})' : ''}',
                         style: TextStyle(
                           fontSize: 12,
-                          color: cs.onSurfaceVariant,
+                          color: review.hasLiked
+                              ? cs.primary
+                              : cs.onSurfaceVariant,
                         ),
                       ),
                     ],

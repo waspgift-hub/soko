@@ -28,17 +28,36 @@ class BuyerRequest {
 
   factory BuyerRequest.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+
+    // Legacy docs may store budget as a string ("50000") rather than a number;
+    // coerce any numeric-ish value without letting parse errors crash the whole stream.
+    double budget = 0;
+    final rawBudget = data['budget'];
+    if (rawBudget is num) {
+      budget = rawBudget.toDouble();
+    } else if (rawBudget is String) {
+      budget = double.tryParse(rawBudget.replaceAll(RegExp(r'[^\d.]'), '')) ?? 0;
+    }
+
+    DateTime createdAt = DateTime.now();
+    final rawCreated = data['createdAt'];
+    if (rawCreated is Timestamp) {
+      createdAt = rawCreated.toDate();
+    } else if (rawCreated is String) {
+      createdAt = DateTime.tryParse(rawCreated) ?? DateTime.now();
+    }
+
     return BuyerRequest(
       id: doc.id,
       buyerUid: data['buyerUid'] ?? '',
       buyerName: data['buyerName'] ?? '',
       title: data['title'] ?? '',
       description: data['description'] ?? '',
-      budget: (data['budget'] ?? 0).toDouble(),
+      budget: budget,
       whatsapp: data['whatsapp'] ?? '',
       isLocked: data['isLocked'] ?? true,
-      unlockedBy: (data['unlockedBy'] as List?)?.cast<String>() ?? const [],
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      unlockedBy: (data['unlockedBy'] as List?)?.whereType<String>().toList() ?? const [],
+      createdAt: createdAt,
     );
   }
 

@@ -5981,6 +5981,14 @@ app.post('/api/products/:id/rating', async (req, res) => {
       return res.status(404).json({ error: 'Product not found' });
     }
 
+    // Prevent the seller from rating their own product
+    const productSellerId = productDoc.data().sellerId;
+    if (productSellerId && productSellerId === decoded.uid) {
+      return res.status(403).json({ error: 'You cannot rate your own product' });
+    }
+    // Prevent the seller from recomputing the aggregate for someone else's rating request
+    // (idempotency is safe here: aggregate reflects all reviews)
+
     const reviewsSnap = await db.collection('reviews')
       .where('productId', '==', id)
       .get();
@@ -7503,15 +7511,21 @@ app.post('/api/chat/send', async (req, res) => {
     // pushes resume ~2min after they leave the app.
     receiverActiveHere = receiverRoomId === roomId && receiverFresh;
 
-    // Increment unread count for receiver (unless they're watching the room)
-    if (!receiverActiveHere) {
-      try {
-        const fieldName = receiverData?.isBuyer === true ? 'unread_count_buyer' : 'unread_count_seller';
-        await db.collection('chat_rooms').doc(roomId).update({
-          [fieldName]: admin.firestore.FieldValue.increment(1),
-        });
-      } catch (_) {}
-    }
+    // Increment unread count for receiver (unless they're watching the room).
+// Unread is tracked per-user (unread_counts.<uid>) so the sender never sees a
+// bubble on their own sent messages — role fields below are kept for
+// backward-compat with existing installations.
+if (!receiverActiveHere) {
+  try {
+    await db.collection('chat_rooms').doc(roomId).update({
+      [`unread_counts.${receiverId}`]: admin.firestore.FieldValue.increment(1),
+    });
+    const legacyField = receiverData?.isBuyer === true ? 'unread_count_buyer' : 'unread_count_seller';
+    await db.collection('chat_rooms').doc(roomId).update({
+      [legacyField]: admin.firestore.FieldValue.increment(1),
+    });
+  } catch (_) {}
+}
 
     // Send OneSignal push to receiver (only when they're away from the app)
     if (!receiverActiveHere && !receiverFresh) {

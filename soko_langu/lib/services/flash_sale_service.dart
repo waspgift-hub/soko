@@ -31,7 +31,6 @@ class FlashSaleService {
                 .map((doc) => FlashSale.fromFirestore(doc))
                 .where((s) =>
                     !s.isExpired &&
-                    !s.isUpcoming &&
                     s.endTime.isAfter(now.subtract(const Duration(hours: 1))))
                 .toList()
               ..sort((a, b) => a.endTime.compareTo(b.endTime));

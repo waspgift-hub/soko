@@ -5,6 +5,7 @@ class ChatRoom {
   final DateTime? lastTimestamp;
   final int unreadCountBuyer;
   final int unreadCountSeller;
+  final Map<String, int> unreadCounts;
   final String? productId;
   final String? productTitle;
   final String? buyerId;
@@ -17,6 +18,7 @@ class ChatRoom {
     this.lastTimestamp,
     this.unreadCountBuyer = 0,
     this.unreadCountSeller = 0,
+    this.unreadCounts = const {},
     this.productId,
     this.productTitle,
     this.buyerId,
@@ -24,17 +26,37 @@ class ChatRoom {
   });
 
   factory ChatRoom.fromMap(String id, Map<String, dynamic> data) {
+    // Per-user unread map is the source of truth; role fields are legacy.
+    final counts = <String, int>{};
+    final raw = data['unread_counts'];
+    if (raw is Map) {
+      raw.forEach((k, v) {
+        if (v is num) counts[k.toString()] = v.toInt();
+      });
+    }
+    final oldBuyer = (data['unread_count_buyer'] as num?)?.toInt() ?? 0;
+    final oldSeller = (data['unread_count_seller'] as num?)?.toInt() ?? 0;
     return ChatRoom(
       id: id,
       participants: List<String>.from(data['participants'] ?? []),
       lastMessage: data['last_message'] as String? ?? '',
       lastTimestamp: (data['last_timestamp'] as dynamic)?.toDate(),
-      unreadCountBuyer: (data['unread_count_buyer'] as num?)?.toInt() ?? 0,
-      unreadCountSeller: (data['unread_count_seller'] as num?)?.toInt() ?? 0,
+      unreadCountBuyer: oldBuyer,
+      unreadCountSeller: oldSeller,
+      unreadCounts: counts,
       productId: data['product_id'] as String?,
       productTitle: data['product_title'] as String?,
       buyerId: data['buyer_id'] as String?,
       sellerId: data['seller_id'] as String?,
     );
+  }
+
+  /// Unread count for a given participant.
+  /// The per-user `unread_counts` map is the source of truth; role fields are
+  /// only read for legacy rooms that predate the map.
+  int unreadCountFor(String uid) {
+    if (unreadCounts.isNotEmpty) return unreadCounts[uid] ?? 0;
+    final isBuyer = buyerId == uid;
+    return isBuyer ? unreadCountBuyer : unreadCountSeller;
   }
 }

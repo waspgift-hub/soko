@@ -13,6 +13,19 @@ class ReviewService {
   final NotificationService _notif = NotificationService();
 
   // =========================
+  // 🏷 GET PRODUCT SELLER ID
+  // =========================
+  Future<String?> getProductSellerId(String productId) async {
+    try {
+      final doc = await _db.collection('products').doc(productId).get();
+      if (!doc.exists) return null;
+      return doc.data()?['sellerId'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // =========================
   // 🔍 GET USER'S REVIEW FOR A PRODUCT
   // =========================
   Future<Review?> getUserReviewForProduct(String productId) async {
@@ -59,6 +72,14 @@ class ReviewService {
       final productData = productDoc.data();
       final sellerId = productData?['sellerId'] as String? ?? '';
 
+      // Sellers cannot review their own products
+      if (sellerId == user.uid) {
+        throw NetworkError(
+          message: "Cannot rate your own product",
+          userMessage: 'You cannot rate your own product',
+        );
+      }
+
       // Verified purchase = buyer has a delivered/completed order for this product.
       final isVerified = await _isVerifiedPurchase(productId, user.uid);
 
@@ -73,6 +94,7 @@ class ReviewService {
         'createdAt': FieldValue.serverTimestamp(),
         'images': images,
         'helpfulCount': 0,
+        'likedBy': [],
         'isVerifiedPurchase': isVerified,
       });
 
@@ -140,16 +162,55 @@ class ReviewService {
   }
 
   // =========================
-  // 👍 MARK HELPFUL
+  // 👍 TOGGLE HELPFUL (like/unlike)
   // =========================
-  Future<void> markHelpful(String reviewId) async {
+  Future<void> toggleHelpful(String reviewId, {required bool isLiked}) async {
     try {
+      final user = _auth.currentUser;
+      if (user == null) throw NetworkError(
+          message: "User not logged in",
+          userMessage: 'Please log in to continue.',
+        );
+
+      if (isLiked) {
+        // Unlike: remove uid from likedBy, decrement helpfulCount
+        await _db.collection("reviews").doc(reviewId).update({
+          'likedBy': FieldValue.arrayRemove([user.uid]),
+          'helpfulCount': FieldValue.increment(-1),
+        });
+      } else {
+        // Like: add uid to likedBy, increment helpfulCount
+        await _db.collection("reviews").doc(reviewId).update({
+          'likedBy': FieldValue.arrayUnion([user.uid]),
+          'helpfulCount': FieldValue.increment(1),
+        });
+      }
+    } catch (e) {
+      throw NetworkError(
+          message: "Failed to toggle helpful: $e",
+          userMessage: translateError(e),
+          originalError: e,
+        );
+    }
+  }
+
+  // =========================
+  // 💬 SELLER REPLY TO A REVIEW
+  // =========================
+  Future<void> replyToReview(String reviewId, String reply) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) throw NetworkError(
+          message: "User not logged in",
+          userMessage: 'Please log in to continue.',
+        );
       await _db.collection("reviews").doc(reviewId).update({
-        'helpfulCount': FieldValue.increment(1),
+        'sellerReply': reply,
+        'sellerReplyAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
       throw NetworkError(
-          message: "Failed to mark helpful: $e",
+          message: "Failed to reply to review: $e",
           userMessage: translateError(e),
           originalError: e,
         );

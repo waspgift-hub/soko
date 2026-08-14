@@ -329,19 +329,15 @@ class _CommentTile extends StatelessWidget {
               CircleAvatar(
                 radius: 16,
                 backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
-                backgroundImage: comment.userImage != null
-                    ? NetworkImage(comment.userImage!)
-                    : null,
-                child: comment.userImage == null
-                    ? Text(
-                        comment.userName.isNotEmpty
-                            ? comment.userName[0].toUpperCase()
-                            : '?',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
+                backgroundImage:
+                    comment.userImage != null && comment.userImage!.isNotEmpty
+                        ? NetworkImage(comment.userImage!)
+                        : null,
+                child: comment.userImage == null || comment.userImage!.isEmpty
+                    ? Icon(
+                        Icons.person,
+                        size: 16,
+                        color: Theme.of(context).colorScheme.primary,
                       )
                     : null,
               ),
@@ -496,19 +492,15 @@ class _CommentTile extends StatelessWidget {
                                   CircleAvatar(
                                     radius: 14,
                                     backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
-                                    backgroundImage: r.userImage != null
-                                        ? NetworkImage(r.userImage!)
-                                        : null,
-                                    child: r.userImage == null
-                                        ? Text(
-                                            r.userName.isNotEmpty
-                                                ? r.userName[0].toUpperCase()
-                                                : '?',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold,
-                                              color: Theme.of(context).colorScheme.primary,
-                                            ),
+                                    backgroundImage:
+                                        r.userImage != null && r.userImage!.isNotEmpty
+                                            ? NetworkImage(r.userImage!)
+                                            : null,
+                                    child: r.userImage == null || r.userImage!.isEmpty
+                                        ? Icon(
+                                            Icons.person,
+                                            size: 16,
+                                            color: Theme.of(context).colorScheme.primary,
                                           )
                                         : null,
                                   ),
