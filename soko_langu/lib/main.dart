@@ -139,15 +139,19 @@ void _setupGlobalErrorHandlers() {
 class AppConfig extends InheritedWidget {
   final String langCode;
   final String currencyCode;
+  final String smsLangCode;
   final LangCallback onSetLanguage;
   final CurrencyCallback onSetCurrency;
+  final LangCallback onSetSmsLanguage;
 
   const AppConfig({
     super.key,
     required this.langCode,
     required this.currencyCode,
+    required this.smsLangCode,
     required this.onSetLanguage,
     required this.onSetCurrency,
+    required this.onSetSmsLanguage,
     required super.child,
   });
 
@@ -164,7 +168,9 @@ class AppConfig extends InheritedWidget {
 
   @override
   bool updateShouldNotify(AppConfig old) =>
-      langCode != old.langCode || currencyCode != old.currencyCode;
+      langCode != old.langCode ||
+      currencyCode != old.currencyCode ||
+      smsLangCode != old.smsLangCode;
 }
 
 // ---------------------------------------------------------------------------
@@ -181,6 +187,7 @@ class SokoVibeApp extends StatefulWidget {
 class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
   String _langCode = 'en';
   String _currencyCode = 'TZS';
+  String _smsLangCode = 'sw';
   late final ProductFeedProvider _productFeedProvider;
   late final AuthRepository _authRepository;
   late final OnboardingService _onboardingService;
@@ -295,6 +302,11 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
             ? savedLang
             : 'sw';
         _currencyCode = prefs.getString('currency') ?? 'TZS';
+        final savedSmsLang = prefs.getString('sms_language');
+        _smsLangCode =
+            (savedSmsLang != null && LocalizationService.supportedLanguages.containsKey(savedSmsLang))
+                ? savedSmsLang
+                : '';
       });
 
       await _authNotifier.initialize();
@@ -304,6 +316,12 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         UserService().setLanguage(user.uid, _langCode).catchError((_) {});
+        // Only sync the SMS language when the user actually chose one; a user
+        // who never set it should keep getting SMS in their app language (the
+        // server falls back to langCode when smsLangCode is unset).
+        if (_smsLangCode.isNotEmpty) {
+          UserService().setSmsLanguage(user.uid, _smsLangCode).catchError((_) {});
+        }
       }
       app_state.appStateNotifier.setAppInitialized();
       _trackSession();
@@ -502,6 +520,16 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
     setState(() => _currencyCode = code);
   }
 
+  void _setSmsLanguage(String code) {
+    setState(() => _smsLangCode = code);
+    // SMS language is stored separately from the push/in-app language so the
+    // server can localize transactional SMS without touching push language.
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      UserService().setSmsLanguage(user.uid, code).catchError((_) {});
+    }
+  }
+
   // -----------------------------------------------------------------------
   // Build
   // -----------------------------------------------------------------------
@@ -572,8 +600,10 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
     return AppConfig(
       langCode: _langCode,
       currencyCode: _currencyCode,
+      smsLangCode: _smsLangCode,
       onSetLanguage: _setLanguage,
       onSetCurrency: _setCurrency,
+      onSetSmsLanguage: _setSmsLanguage,
       child: Stack(
         children: [
           Column(children: [Expanded(child: content)]),

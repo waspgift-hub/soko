@@ -2112,7 +2112,7 @@ class LocalizationService {
       'push_notifications': 'Push Notifications',
       'language': 'Language',
       'sms_language': 'SMS Language',
-      'select_sms_language': 'Select notification language for SMS',
+      'select_sms_language': 'Select the language for SMS notifications',
       'currency': 'Currency',
       'account': 'Account',
       'support': 'Support',

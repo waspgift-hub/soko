@@ -282,6 +282,27 @@ async function getUserNotifLang(userId) {
   }
 }
 
+// The SMS language is a SEPARATE user preference from the in-app language
+// (push/in-app follow `langCode`; SMS follows `smsLangCode`). The settings
+// screen writes it via /api/user/sms-language; without the split a user who
+// set SMS to English while the app is Swahili would still get Swahili SMS.
+// Users who never chose an SMS language keep their in-app language.
+async function getUserSmsLang(userId) {
+  if (!db) return 'sw';
+  const cached = notifLangCache.get(`sms_lang:${userId}`);
+  if (cached) return cached;
+  try {
+    const snap = await db.collection('users').doc(userId).get();
+    const data = snap.data() || {};
+    const lang = data.smsLangCode || data.langCode || 'sw';
+    notifLangCache.set(`sms_lang:${userId}`, lang, NOTIF_LANG_TTL_MS);
+    return lang;
+  } catch (e) {
+    console.error(`[SMS] lang lookup failed for ${userId}: ${e.message}`);
+    return 'sw';
+  }
+}
+
 async function sendOneSignalNotification(userId, title, body, data = {}, opts = {}) {
   if (!userId) { console.log('[OS] No userId'); return null; }
   if (!ONE_SIGNAL_APP_ID || !ONE_SIGNAL_REST_API_KEY) {
@@ -1080,7 +1101,7 @@ async function sendSms(phone, message) {
 // Resolves the recipient's in-app language, localizes the Swahili SMS template,
 // then sends. Keeps every SMS in a single language matching the app.
 async function sendLocalizedSms(phone, swMessage, userId) {
-  const lang = userId ? await getUserNotifLang(userId) : 'sw';
+  const lang = userId ? await getUserSmsLang(userId) : 'sw';
   return sendSms(phone, localizeSms(lang, swMessage));
 }
 
@@ -7432,6 +7453,23 @@ app.post('/api/user/language', asyncHandler(async (req, res) => {
   notifLangCache.del(`notif_lang:${auth.uid}`);
   console.log(`[lang] user ${auth.uid} → ${langCode} (cache invalidated)`);
   res.json({ ok: true, langCode });
+}));
+
+// SMS has its own language, independent of the in-app/push language.
+// AuthNotifier/UserService sends this from the settings picker; the SMS-only
+// option guarantees the user's transactional SMS is never mixed-language.
+app.post('/api/user/sms-language', asyncHandler(async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not configured' });
+  const auth = await requireUser(req, res);
+  if (!auth.ok) return;
+  const { smsLangCode } = req.body || {};
+  if (!['sw', 'en', 'zh'].includes(smsLangCode)) {
+    return res.status(400).json({ error: 'Invalid smsLangCode' });
+  }
+  await db.collection('users').doc(auth.uid).set({ smsLangCode }, { merge: true });
+  notifLangCache.del(`sms_lang:${auth.uid}`);
+  console.log(`[sms-lang] user ${auth.uid} → ${smsLangCode} (cache invalidated)`);
+  res.json({ ok: true, smsLangCode });
 }));
 
 // ─── Global error handler (catches unhandled errors, never leaks internals) ───

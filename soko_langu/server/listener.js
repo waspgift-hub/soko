@@ -51,6 +51,22 @@ async function getUserNotifLang(userId) {
   } catch { return 'sw'; }
 }
 
+// SMS uses its own preference (`smsLangCode`) so a user can keep the app (and
+// push/heads-up notifications) in one language while SMS goes out in another.
+// Falls back to the in-app language when the SMS preference was never chosen.
+async function getUserSmsLang(userId) {
+  if (!db) return 'sw';
+  const cached = notifLangCache.get(`sms_lang:${userId}`);
+  if (cached) return cached;
+  try {
+    const snap = await db.collection('users').doc(userId).get();
+    const data = snap.data() || {};
+    const lang = data.smsLangCode || data.langCode || 'sw';
+    notifLangCache.set(`sms_lang:${userId}`, lang, NOTIF_LANG_TTL_MS);
+    return lang;
+  } catch { return 'sw'; }
+}
+
 async function sendOsNotification(userId, title, body, data = {}) {
   if (!userId) { console.log('[LISTENER][OS] No userId'); return null; }
   if (!ONE_SIGNAL_APP_ID || !ONE_SIGNAL_REST_API_KEY) {
@@ -105,10 +121,10 @@ async function sendSms(phone, message, userId) {
     console.log(`[LISTENER][SMS] skipped to ${userId} (sms preferences)`);
     return;
   }
-  // Localize the Swahili template to the recipient's in-app language so one
-  // SMS is one language (SW matches the user, not the device).
-  const lang = userId ? await getUserNotifLang(userId) : 'sw';
-  const localized = localizeSms(lang, message);
+// Localize the Swahili template to the recipient's preferred SMS language
+// (`smsLangCode`), which may differ from the in-app language preference.
+const lang = userId ? await getUserSmsLang(userId) : 'sw';
+const localized = localizeSms(lang, message);
   const apiKey = process.env.MESEJI_API_KEY;
   if (!apiKey) {
     console.error('[LISTENER] MESEJI_API_KEY not configured');

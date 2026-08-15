@@ -146,6 +146,33 @@ class UserService {
     }
   }
 
+  /// Persists the user's SMS language separately from the in-app language.
+  /// SMS going out (OTP, transactional) follows `smsLangCode`; push and
+  /// in-app notifications keep following `langCode`.
+  Future<void> setSmsLanguage(String uid, String smsLangCode) async {
+    if (uid.isEmpty) return;
+    await _db
+        .collection('users')
+        .doc(uid)
+        .set({'smsLangCode': smsLangCode}, SetOptions(merge: true));
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      final token = await user?.getIdToken();
+      if (token == null) return;
+      await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/user/sms-language'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'smsLangCode': smsLangCode}),
+      );
+    } catch (_) {
+      // Firestore write is the source of truth; the server cache expires on
+      // its own, so a failed sync is non-fatal.
+    }
+  }
+
   Future<String> uploadProfileImage(String filePath) async {
     return CloudinaryService.uploadFromPath(filePath, folder: 'profiles');
   }
