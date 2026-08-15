@@ -19,9 +19,9 @@
 const bodyRules = [
   // ═══ Boost ═══
   {
-    re: /^Boost ya (.+) haikukamilika(\. Sababu: .*)?\. Jaribu tena kwenye app\.$/,
-    en: (m) => `Your boost for ${m[1]} did not complete${m[2] ? m[2] : ''}. Try again in the app.`,
-    zh: (m) => `您的商品${m[1]}的推广未完成${m[2] ? m[2] : ''}。请在应用中重试。`,
+    re: /^Boost ya (.+) haikukamilika(?:\. Sababu: (.+))?\. Jaribu tena kwenye app\.$/,
+    en: (m) => `Your boost for ${m[1]} did not complete${m[2] ? ` because ${m[2]}` : ''}. Try again in the app.`,
+    zh: (m) => `您的商品${m[1]}的推广未完成${m[2] ? `，因为${m[2]}` : ''}。请在应用中重试。`,
   },
   {
     re: /^Bidhaa yako imepandishwa kwa daraja la (.+) kwa siku (\d+)\.$/,
@@ -134,8 +134,8 @@ const bodyRules = [
   },
   {
     re: /^Malipo ya TZS (.+) hayakukamilika\. Sababu: (.+)$/,
-    en: (m) => `Your TZS ${m[1]} payment did not complete. Reason: ${m[2]}`,
-    zh: (m) => `您的 TZS ${m[1]} 付款未完成。原因：${m[2]}`,
+    en: (m) => `Your TZS ${m[1]} payment did not complete because ${m[2]}`,
+    zh: (m) => `您的 TZS ${m[1]} 付款未完成，因为${m[2]}`,
   },
   // ═══ Order / payment ═══
   {
@@ -181,8 +181,8 @@ const bodyRules = [
   },
   {
     re: /^Malipo ya (.+) hayakukamilika\. Jaribu tena au wasiliana nasi\. Sababu: (.+)$/,
-    en: (m) => `Payment for ${m[1]} did not complete. Try again or contact us. Reason: ${m[2]}`,
-    zh: (m) => `${m[1]} 的付款未完成。请重试或联系我们。原因：${m[2]}`,
+    en: (m) => `Payment for ${m[1]} did not complete because ${m[2]}. Try again or contact us.`,
+    zh: (m) => `${m[1]} 的付款未完成，因为${m[2]}。请重试或联系我们。`,
   },
   {
     re: /^Fedha za (.+) zimerudishwa kwenye akaunti yako\.$/,
@@ -250,13 +250,13 @@ const bodyRules = [
   },
   {
     re: /^KYC yako imekataliwa\. Sababu: (.+)\. Wasilisha tena baada ya kurekebisha\.$/,
-    en: (m) => `Your KYC was rejected. Reason: ${m[1]}. Resubmit after correcting it.`,
-    zh: (m) => `您的 KYC 被拒绝。原因：${m[1]}。请修改后重新提交。`,
+    en: (m) => `Your KYC was rejected because ${m[1]}. Resubmit after correcting it.`,
+    zh: (m) => `您的 KYC 被拒绝，因为${m[1]}。请修改后重新提交。`,
   },
   {
     re: /^KYC yako imefutwa na admin\. Sababu: (.+)\. Tuma tena KYC yako\.$/,
-    en: (m) => `Your KYC was revoked by an admin. Reason: ${m[1]}. Submit your KYC again.`,
-    zh: (m) => `您的 KYC 已被管理员撤销。原因：${m[1]}。请重新提交 KYC。`,
+    en: (m) => `Your KYC was revoked by an admin because ${m[1]}. Submit your KYC again.`,
+    zh: (m) => `您的 KYC 已被管理员撤销，因为${m[1]}。请重新提交 KYC。`,
   },
   // ═══ Account ═══
   {
@@ -430,8 +430,8 @@ const smsRules = [
   },
   {
     re: /^Soko Vibe: Malipo ya (.+) hayakukamilika\. Tafadhali jaribu tena kwenye app\. Sababu: (.+)$/,
-    en: (m) => `Soko Vibe: Your payment for ${m[1]} did not complete. Please try again in the app. Reason: ${m[2]}`,
-    zh: (m) => `Soko Vibe：您对${m[1]}的付款未完成。请在应用中重试。原因：${m[2]}`,
+    en: (m) => `Soko Vibe: Your payment for ${m[1]} did not complete because ${m[2]}. Please try again in the app.`,
+    zh: (m) => `Soko Vibe：您对${m[1]}的付款未完成，因为${m[2]}。请在应用中重试。`,
   },
   {
     re: /^Soko Vibe: Fedha za (.+) \(Oda #(.+)\) zimerudishwa kwenye akaunti yako\.$/,
@@ -439,14 +439,14 @@ const smsRules = [
     zh: (m) => `Soko Vibe：您${m[1]}（订单 #${m[2]}）的款项已退回您的账户。`,
   },
   {
-    re: /^Soko Vibe: Malipo ya Boost ya TZS (.+) hayakukamilika(\. Sababu: .*)?\. Jaribu tena kwenye app\.$/,
-    en: (m) => `Soko Vibe: Your boost payment of TZS ${m[1]} did not complete${m[2] ? m[2] : ''}. Try again in the app.`,
-    zh: (m) => `Soko Vibe：您的推广付款 TZS ${m[1]} 未完成${m[2] ? m[2] : ''}。请在应用中重试。`,
+    re: /^Soko Vibe: Malipo ya Boost ya TZS (.+) hayakukamilika(?:\. Sababu: (.+))?\. Jaribu tena kwenye app\.$/,
+    en: (m) => `Soko Vibe: Your boost payment of TZS ${m[1]} did not complete${m[2] ? ` because ${m[2]}` : ''}. Try again in the app.`,
+    zh: (m) => `Soko Vibe：您的推广付款 TZS ${m[1]} 未完成${m[2] ? `，因为${m[2]}` : ''}。请在应用中重试。`,
   },
   {
     re: /^Soko Vibe: Malipo ya TZS (.+) hayakukamilika\. Sababu: (.+)\. Jaribu tena kwenye app\.$/,
-    en: (m) => `Soko Vibe: Your payment of TZS ${m[1]} did not complete. Reason: ${m[2]}. Try again in the app.`,
-    zh: (m) => `Soko Vibe：您的 TZS ${m[1]} 付款未完成。原因：${m[2]}。请在应用中重试。`,
+    en: (m) => `Soko Vibe: Your payment of TZS ${m[1]} did not complete because ${m[2]}. Try again in the app.`,
+    zh: (m) => `Soko Vibe：您的 TZS ${m[1]} 付款未完成，因为${m[2]}。请在应用中重试。`,
   },
   {
     re: /^Soko Vibe: TZS (.+) zimetumwa kwa simu yako kwa mauzo ya (.+) \(fee TZS (.+)\)\.$/,

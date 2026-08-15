@@ -79,7 +79,29 @@ test('localizeSms: boost success to Chinese', () => {
 test('localizeSms: deposit fail to English', () => {
   const msg = 'Soko Vibe: Malipo ya TZS 10,000 hayakukamilika. Sababu: Sali AB1. Jaribu tena kwenye app.';
   const out = localizeSms('en', msg);
-  assert.ok(out.includes('Reason: Sali AB1'), out);
+  assert.ok(out.includes('because Sali AB1'), out);
+  assert.ok(!out.includes('Sababu'), 'no "Sababu" in English output');
+});
+
+test('localizeSms: deposit fail to Chinese', () => {
+  const msg = 'Soko Vibe: Malipo ya TZS 10,000 hayakukamilika. Sababu: Sali AB1. Jaribu tena kwenye app.';
+  const out = localizeSms('zh', msg);
+  assert.ok(out.includes('因为Sali AB1'), out);
+  assert.ok(!out.includes('Sababu'), 'no "Sababu" in Chinese output');
+});
+
+test('localizeSms: payment fail to English uses because', () => {
+  const msg = 'Soko Vibe: Malipo ya Bidhaa hayakukamilika. Tafadhali jaribu tena kwenye app. Sababu: payment failed';
+  const out = localizeSms('en', msg);
+  assert.ok(out.includes('because payment failed'), out);
+  assert.ok(!/Sababu|原因/.test(out), 'no Sababu/原因 in English output');
+});
+
+test('localizeSms: boost fail to Chinese uses because', () => {
+  const msg = 'Soko Vibe: Malipo ya Boost ya TZS 3,000 hayakukamilika. Sababu: malipo yameshindikana. Jaribu tena kwenye app.';
+  const out = localizeSms('zh', msg);
+  assert.ok(out.includes('因为malipo yameshindikana'), out);
+  assert.ok(!out.includes('Sababu'), 'no "Sababu" in Chinese output');
 });
 
 test('localizeSms: promo broadcast to Chinese', () => {
