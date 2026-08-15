@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/product_service.dart';
 import '../services/flash_sale_service.dart';
+import '../services/widget_service.dart';
 import '../models/product_model.dart';
 import '../models/flash_sale_model.dart';
 import '../extensions/context_tr.dart';
@@ -48,6 +49,8 @@ class _TrendingCarouselState extends State<TrendingCarousel> {
           return const SizedBox.shrink();
         }
         final products = snap.data!;
+        // hw: keep the home-screen flash-sales widget in sync with the trending feed
+        WidgetService.updateFlashSales(products: products, flashSales: _flashSales);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

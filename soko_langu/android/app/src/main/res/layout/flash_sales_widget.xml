@@ -1,0 +1,298 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_flash_bg"
+    android:padding="12dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🔥"
+            android:textSize="18sp" />
+
+        <TextView
+            android:id="@+id/flash_header_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:text="Moto Leo"
+            android:textColor="#FFFFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/flash_subheader_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="6dp"
+            android:text="Flash Sales"
+            android:textColor="#CCFFFFFF"
+            android:textSize="11sp"
+            android:ellipsize="end"
+            android:singleLine="true" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#33FFFFFF"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:id="@+id/flash_product_1"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="#33FFFFFF">
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:layout_margin="6dp">
+
+                <ImageView
+                    android:id="@+id/flash_img_1"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="centerCrop"
+                    android:contentDescription="Product 1" />
+
+                <TextView
+                    android:id="@+id/flash_discount_1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="top|start"
+                    android:layout_margin="4dp"
+                    android:paddingStart="5dp"
+                    android:paddingEnd="5dp"
+                    android:paddingTop="1dp"
+                    android:paddingBottom="1dp"
+                    android:text="-25%"
+                    android:textColor="#FFFFFFFF"
+                    android:textSize="9sp"
+                    android:textStyle="bold"
+                    android:background="#FFFF1744"
+                    android:visibility="gone" />
+            </FrameLayout>
+
+            <TextView
+                android:id="@+id/flash_name_1"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:maxLines="2"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
+                android:text="Product"
+                android:textColor="#FFFFFFFF"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/flash_price_1"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
+                android:text="TZS 0"
+                android:textColor="#FF52B788"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/flash_origprice_1"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
+                android:paddingBottom="4dp"
+                android:text="TZS 0"
+                android:textColor="#AAFFFFFF"
+                android:textSize="10sp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/flash_product_2"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="#33FFFFFF">
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:layout_margin="6dp">
+
+                <ImageView
+                    android:id="@+id/flash_img_2"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="centerCrop"
+                    android:contentDescription="Product 2" />
+
+                <TextView
+                    android:id="@+id/flash_discount_2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="top|start"
+                    android:layout_margin="4dp"
+                    android:paddingStart="5dp"
+                    android:paddingEnd="5dp"
+                    android:paddingTop="1dp"
+                    android:paddingBottom="1dp"
+                    android:text="-25%"
+                    android:textColor="#FFFFFFFF"
+                    android:textSize="9sp"
+                    android:textStyle="bold"
+                    android:background="#FFFF1744"
+                    android:visibility="gone" />
+            </FrameLayout>
+
+            <TextView
+                android:id="@+id/flash_name_2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:maxLines="2"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
+                android:text="Product"
+                android:textColor="#FFFFFFFF"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/flash_price_2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
+                android:text="TZS 0"
+                android:textColor="#FF52B788"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/flash_origprice_2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
+                android:paddingBottom="4dp"
+                android:text="TZS 0"
+                android:textColor="#AAFFFFFF"
+                android:textSize="10sp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/flash_product_3"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="#33FFFFFF">
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:layout_margin="6dp">
+
+                <ImageView
+                    android:id="@+id/flash_img_3"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="centerCrop"
+                    android:contentDescription="Product 3" />
+
+                <TextView
+                    android:id="@+id/flash_discount_3"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="top|start"
+                    android:layout_margin="4dp"
+                    android:paddingStart="5dp"
+                    android:paddingEnd="5dp"
+                    android:paddingTop="1dp"
+                    android:paddingBottom="1dp"
+                    android:text="-25%"
+                    android:textColor="#FFFFFFFF"
+                    android:textSize="9sp"
+                    android:textStyle="bold"
+                    android:background="#FFFF1744"
+                    android:visibility="gone" />
+            </FrameLayout>
+
+            <TextView
+                android:id="@+id/flash_name_3"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:maxLines="2"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
+                android:text="Product"
+                android:textColor="#FFFFFFFF"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/flash_price_3"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
+                android:text="TZS 0"
+                android:textColor="#FF52B788"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/flash_origprice_3"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
+                android:paddingBottom="4dp"
+                android:text="TZS 0"
+                android:textColor="#AAFFFFFF"
+                android:textSize="10sp"
+                android:visibility="gone" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

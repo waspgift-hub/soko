@@ -83,6 +83,19 @@ class MainActivity : FlutterActivity() {
                     }
                     result.success(true)
                 }
+                "updateFlashSales" -> {
+                    // hw: persist a local copy in case Dart prefs aren't flushed yet
+                    val trending = call.argument<String>("trendingJson") ?: ""
+                    if (trending.isNotEmpty()) WidgetDataStore.saveTrendingJson(this, trending)
+                    val manager = AppWidgetManager.getInstance(this)
+                    val ids = manager.getAppWidgetIds(
+                        android.content.ComponentName(this, FlashSalesWidgetProvider::class.java)
+                    )
+                    ids.forEach { id ->
+                        FlashSalesWidgetProvider.updateAppWidget(this, manager, id)
+                    }
+                    result.success(true)
+                }
                 else -> result.notImplemented()
             }
         }
