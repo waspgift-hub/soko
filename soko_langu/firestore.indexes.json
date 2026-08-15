@@ -112,6 +112,14 @@
         { "fieldPath": "isActive", "order": "ASCENDING" },
         { "fieldPath": "searchName", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isActive", "order": "ASCENDING" },
+        { "fieldPath": "reviewCount", "order": "DESCENDING" }
+      ]
     }
   ]
 }
