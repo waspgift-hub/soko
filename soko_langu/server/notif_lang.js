@@ -501,6 +501,21 @@ function localizeNotif(lang, title, body) {
   return { title: buildTitle(lang, title), body: buildBody(lang, body) };
 }
 
+// Gateway failure defaults the server falls back to when the provider returns
+// no cause. These are OUR strings baked into Swahili templates at the call
+// site, so they must be localized to the recipient's language up front or the
+// final message mixes languages (`Sababu: Payment failed`). Any real provider
+// reason is left untouched — it is the gateway's own text.
+function localizeDefaultReason(lang, reason) {
+  const map = {
+    'Payment failed': { sw: 'Malipo yameshindikana', en: 'Payment failed', zh: '付款失败' },
+    'payment failed': { sw: 'malipo yameshindikana', en: 'payment failed', zh: '付款失败' },
+  };
+  const entry = map[reason];
+  if (!entry || lang === 'sw') return reason;
+  return entry[lang] || reason;
+}
+
 /// Localizes a Swahili SMS message into `lang`. Keeps the "Soko Vibe:" brand
 /// prefix (a proper noun) but translates the rest so one SMS is one language.
 function localizeSms(lang, message) {
@@ -544,4 +559,4 @@ function localizeEmailOtp(lang) {
   return emailOtpCopy[lang] || emailOtpCopy.en;
 }
 
-module.exports = { localizeNotif, localizeSms, localizeEmailOtp };
+module.exports = { localizeNotif, localizeSms, localizeEmailOtp, localizeDefaultReason };

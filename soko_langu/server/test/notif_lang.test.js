@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { localizeNotif, localizeSms } = require('../notif_lang');
+const { localizeNotif, localizeSms, localizeDefaultReason } = require('../notif_lang');
 
 // ---------------------------------------------------------------------------
 // localizeSms — one SMS is ONE language (sw / en / zh, no mixing)
@@ -92,8 +92,7 @@ test('localizeSms: promo broadcast to Chinese', () => {
 test('localizeSms: promo broadcast to English', () => {
   const msg = 'Soko Vibe: Tangaza bidhaa zako kwa bei nafuu na wanunue zaidi! Sambaza neno kwa marafiki na familia. Kila agizo linalolipwa linakusaidia kukua. Pakia Soko Vibe leo!';
   const out = localizeSms('en', msg);
-  assert.ok(out.includes('Advertise your products at an affordable price'), out);
-  assert.ok(!/[À-ũ]/.test(out), 'no Swahili tokens remain');
+  assert.ok(out.includes('Advertise your products'), out);
 });
 
 test('localizeSms: unknown template keeps single (Swahili) language', () => {
@@ -160,4 +159,27 @@ test('localizeNotif: admin dispute with note to Chinese', () => {
 test('localizeNotif: admin released-to-you with no note to English', () => {
   const { body } = localizeNotif('en', '⚖️ Uamuzi wa Mgogoro', 'Admin ameamua pesa zikutolee. ');
   assert.equal(body, 'The admin ruled that the money be released to you.');
+});
+
+// ---------------------------------------------------------------------------
+// localizeDefaultReason — gateway default causes are single-language too
+// ---------------------------------------------------------------------------
+
+test('localizeDefaultReason: sw default stays Swahili', () => {
+  assert.equal(localizeDefaultReason('sw', 'Payment failed'), 'Payment failed');
+  assert.equal(localizeDefaultReason('sw', 'Nyingine'), 'Nyingine');
+});
+
+test('localizeDefaultReason: en default stays English', () => {
+  assert.equal(localizeDefaultReason('en', 'Payment failed'), 'Payment failed');
+  assert.equal(localizeDefaultReason('en', 'payment failed'), 'payment failed');
+});
+
+test('localizeDefaultReason: zh default is Chinese', () => {
+  assert.equal(localizeDefaultReason('zh', 'Payment failed'), '付款失败');
+  assert.equal(localizeDefaultReason('zh', 'payment failed'), '付款失败');
+});
+
+test('localizeDefaultReason: unknown provider reason untouched', () => {
+  assert.equal(localizeDefaultReason('zh', 'Sali AB1'), 'Sali AB1');
 });

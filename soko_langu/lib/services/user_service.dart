@@ -1,5 +1,10 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
+
+import 'api_config.dart';
 import 'cloudinary_service.dart';
 
 class UserProfile {
@@ -117,10 +122,28 @@ class UserService {
   }
 
   /// Persists the user's in-app language to their profile doc so the server
-  /// can localize push notifications to match what they chose in the app.
+  /// can localize push notifications to match what they chose in the app, and
+  /// pings the server so its per-user lang cache applies immediately (instead
+  /// of waiting for the 5-minute TTL).
   Future<void> setLanguage(String uid, String langCode) async {
     if (uid.isEmpty) return;
     await _db.collection('users').doc(uid).set({'langCode': langCode}, SetOptions(merge: true));
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      final token = await user?.getIdToken();
+      if (token == null) return;
+      await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/user/language'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'langCode': langCode}),
+      );
+    } catch (_) {
+      // Firestore write above is the source of truth; the server cache expires
+      // on its own, so a failed sync is non-fatal.
+    }
   }
 
   Future<String> uploadProfileImage(String filePath) async {

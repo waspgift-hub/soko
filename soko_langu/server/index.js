@@ -265,7 +265,7 @@ const CRITICAL_PUSH_TYPES = new Set([
 // concern on a single notification.
 const notifLangCache = require('./cache');
 const NOTIF_LANG_TTL_MS = 5 * 60 * 1000;
-const { localizeNotif, localizeSms, localizeEmailOtp } = require('./notif_lang');
+const { localizeNotif, localizeSms, localizeEmailOtp, localizeDefaultReason } = require('./notif_lang');
 
 async function getUserNotifLang(userId) {
   if (!db) return 'sw';
@@ -1169,8 +1169,11 @@ async function sendWhatsAppTemplate(phone, templateName, templateParameters) {
 async function notifyBoostPaymentFailed(tx, reason = '') {
   try {
     if (!tx || !tx.userId) return;
+    // The gateway may pass an English default; project it to the user's
+    // language so the boost-failure message stays a single language.
+    const reasonLang = await getUserNotifLang(tx.userId);
+    const reasonText = reason ? `. Sababu: ${localizeDefaultReason(reasonLang, reason)}` : '';
     const title = 'Malipo ya Boost Yameshindikana';
-    const reasonText = reason ? `. Sababu: ${reason}` : '';
     const body = `Boost ya ${tx.productName || 'bidhaa yako'} haikukamilika${reasonText}. Jaribu tena kwenye app.`;
     await db.collection('notifications').add({
       userId: tx.userId,
@@ -2274,7 +2277,8 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
         } catch (_) {}
       } else {
         const failAmount = dep.amount || 0;
-        const failReason = extra.failureReason || 'Payment failed';
+        const depLang = await getUserNotifLang(dep.userId);
+        const failReason = extra.failureReason || localizeDefaultReason(depLang, 'Payment failed');
         await depDoc.ref.update({
           status: 'failed',
           failureReason: failReason,
@@ -2489,7 +2493,8 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
         } catch (_) {}
       }
     } else if (paymentStatus === 'failed') {
-      const failureReason = extra.failureReason || 'payment failed';
+      const buyerLang = tx.buyerId ? await getUserNotifLang(tx.buyerId) : 'sw';
+      const failureReason = extra.failureReason || localizeDefaultReason(buyerLang, 'payment failed');
       await txDoc.ref.update({
         status: 'failed',
         clickpesaReference: clickpesaRef,
@@ -6639,7 +6644,10 @@ app.post('/api/flash-sale/notify', asyncHandler(async (req, res) => {
 
     if (!pushSkipped) {
       try {
-        const userIds = [];
+        // Group recipients by their in-app language and send a localized bulk
+        // push per group. The Swahili title/body are server templates; without
+        // this split an en/zh user would receive the raw Swahili copy.
+        const langBuckets = new Map();
         let lastPushId = null;
         while (true) {
           let query = db.collection('users');
@@ -6650,14 +6658,25 @@ app.post('/api/flash-sale/notify', asyncHandler(async (req, res) => {
           for (const doc of usersSnap.docs) {
             // The creator gets a dedicated confirmation push below, so skip
             // them here to avoid a duplicate broadcast to the seller.
-            if (doc.id && doc.id !== sellerId) userIds.push(doc.id);
+            if (doc.id && doc.id !== sellerId) {
+              const lang = (doc.data()?.langCode === 'en' || doc.data()?.langCode === 'zh') ? doc.data().langCode : 'sw';
+              if (!langBuckets.has(lang)) langBuckets.set(lang, []);
+              langBuckets.get(lang).push(doc.id);
+            }
           }
           lastPushId = usersSnap.docs[usersSnap.docs.length - 1].id;
         }
-        const osResult = await sendOneSignalBulk(userIds, `⚡ Flash Sale! -${discountPercent}%`, `${productName} sasa TSh ${salePrice} pekee!`, { type: 'flash_sale', productName: productName || '', image: productImage || '' });
-        sentCount = osResult.successCount;
+        const swTitle = `⚡ Flash Sale! -${discountPercent}%`;
+        const swBody = `${productName} sasa TSh ${salePrice} pekee!`;
+        sentCount = 0;
+        for (const [lang, ids] of langBuckets) {
+          const loc = localizeNotif(lang, swTitle, swBody);
+          const osResult = await sendOneSignalBulk(ids, loc.title, loc.body, { type: 'flash_sale', productName: productName || '', image: productImage || '' });
+          sentCount += osResult.successCount;
+          console.log(`[flash-sale] bulk push sent lang=${lang} users=${ids.length} sent=${osResult.successCount}`);
+        }
         await cooldownRef.set({ lastSentAt: admin.firestore.Timestamp.now() }, { merge: true });
-        console.log(`[flash-sale] bulk push sent (sentCount=${sentCount})`);
+        console.log(`[flash-sale] bulk push total sentCount=${sentCount}`);
       } catch (pushErr) {
         console.error('OneSignal push skipped for flash sale:', pushErr.message);
       }
@@ -7396,6 +7415,23 @@ app.post('/api/notifications/broadcast', asyncHandler(async (req, res) => {
   });
 
   res.json({ success: true, notifications: notifCount, pushSent: sent });
+}));
+
+// ─── User language sync — write langCode AND drop the per-user cache so a
+// language change applies to the very next SMS/push instead of waiting out the
+// 5-minute TTL. The app calls this whenever the user switches language. ───
+app.post('/api/user/language', asyncHandler(async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not configured' });
+  const auth = await requireUser(req, res);
+  if (!auth.ok) return;
+  const { langCode } = req.body || {};
+  if (!['sw', 'en', 'zh'].includes(langCode)) {
+    return res.status(400).json({ error: 'Invalid langCode' });
+  }
+  await db.collection('users').doc(auth.uid).set({ langCode }, { merge: true });
+  notifLangCache.del(`notif_lang:${auth.uid}`);
+  console.log(`[lang] user ${auth.uid} → ${langCode} (cache invalidated)`);
+  res.json({ ok: true, langCode });
 }));
 
 // ─── Global error handler (catches unhandled errors, never leaks internals) ───
