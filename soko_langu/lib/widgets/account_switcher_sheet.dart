@@ -6,7 +6,6 @@ import '../services/account_manager.dart';
 import '../app/routes.dart';
 import '../extensions/context_tr.dart';
 import 'google_loading.dart';
-import '../utils/network_error.dart';
 
 class AccountSwitcherSheet extends StatefulWidget {
   const AccountSwitcherSheet({super.key});
@@ -57,7 +56,7 @@ class _AccountSwitcherSheetState extends State<AccountSwitcherSheet> {
           context.go(AppRoutes.home);
         }
       } catch (e) {
-        if (mounted) _showError('${context.tr('wrong_password_switch_error')}: ${translateError(e)}');
+        if (mounted) _showError('${context.tr('wrong_password_switch_error')}: ${context.trError(e)}');
       }
     } else {
       if (!mounted) return;

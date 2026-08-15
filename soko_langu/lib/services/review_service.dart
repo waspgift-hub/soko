@@ -60,7 +60,7 @@ class ReviewService {
       final user = _auth.currentUser;
       if (user == null) throw NetworkError(
           message: "User not logged in",
-          userMessage: 'Please log in to continue.',
+          userMessage: 'auth_login_required',
         );
       await user.reload();
       await user.getIdToken(true);
@@ -169,7 +169,7 @@ class ReviewService {
       final user = _auth.currentUser;
       if (user == null) throw NetworkError(
           message: "User not logged in",
-          userMessage: 'Please log in to continue.',
+          userMessage: 'auth_login_required',
         );
 
       if (isLiked) {
@@ -202,7 +202,7 @@ class ReviewService {
       final user = _auth.currentUser;
       if (user == null) throw NetworkError(
           message: "User not logged in",
-          userMessage: 'Please log in to continue.',
+          userMessage: 'auth_login_required',
         );
       await _db.collection("reviews").doc(reviewId).update({
         'sellerReply': reply,

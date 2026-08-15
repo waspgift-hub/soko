@@ -8,7 +8,6 @@ import 'package:http/http.dart' as http;
 import '../../services/api_config.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
-import '../../utils/network_error.dart';
 import '../../widgets/ds/ds.dart';
 
 class SellerQuoteScreen extends StatefulWidget {
@@ -77,7 +76,7 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
       _shippingCostCtrl.clear();
       if (mounted) _showSuccess(context.tr('shipping_cost_submitted'));
     } catch (e) {
-      if (mounted) _showError(translateError(e));
+      if (mounted) _showError(context.trError(e));
     }
 
     setState(() => _quotingTxId = null);

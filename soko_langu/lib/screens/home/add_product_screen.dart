@@ -305,7 +305,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
       } else {
         messenger.showSnackBar(
           SnackBar(
-            content: Text(translateError(e)),
+            content: Text(context.trError(e)),
             duration: const Duration(seconds: 5),
           ),
         );

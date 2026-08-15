@@ -233,7 +233,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: context.tr('language'),
                 subtitle:
                     LocalizationService.supportedLanguages[config.langCode] ??
-                    'Swahili',
+                    context.tr('swahili'),
                 onTap: () => _showLanguagePicker(context, config),
               ),
               _buildTile(

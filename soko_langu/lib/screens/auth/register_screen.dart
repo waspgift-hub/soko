@@ -14,7 +14,6 @@ import '../../models/saved_account.dart';
 import '../../notifiers/auth_notifier.dart';
 import '../../services/account_manager.dart';
 import '../../services/api_config.dart';
-import '../../utils/network_error.dart';
 import '../../utils/phone_utils.dart'; // ignore: unused_import
 import '../../widgets/auth_form_widgets.dart';
 import 'otp_screen.dart';
@@ -140,7 +139,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       }
     } catch (e) {
       if (mounted) {
-        _showError(e is NetworkError ? e.userMessage : e.toString());
+        _showError(context.trError(e));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -168,7 +167,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (mounted) context.go(AppRoutes.home);
     } catch (e) {
       if (mounted) {
-        _showError(e is NetworkError ? e.userMessage : e.toString());
+        _showError(context.trError(e));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

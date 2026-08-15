@@ -20,7 +20,7 @@ class KycScreen extends StatefulWidget {
 class _KycScreenState extends State<KycScreen> {
   final _fullNameController = TextEditingController();
   final _idNumberController = TextEditingController();
-  String _idType = 'National ID';
+  String _idType = 'kyc_id_national';
   bool _submitting = false;
   String? _status;
   String? _reviewNotes;
@@ -29,7 +29,12 @@ class _KycScreenState extends State<KycScreen> {
   XFile? _idImageFile;
   XFile? _selfieFile;
 
-  final _idTypes = ['National ID', 'Passport', 'Drivers License', 'Voters ID'];
+  final _idTypes = [
+    'kyc_id_national',
+    'kyc_id_passport',
+    'kyc_id_drivers',
+    'kyc_id_voters',
+  ];
   final _picker = ImagePicker();
 
   @override
@@ -306,8 +311,10 @@ class _KycScreenState extends State<KycScreen> {
             border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.badge),
           ),
-          items: _idTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-          onChanged: (v) => setState(() => _idType = v ?? 'National ID'),
+          items: _idTypes
+              .map((t) => DropdownMenuItem(value: t, child: Text(context.tr(t))))
+              .toList(),
+          onChanged: (v) => setState(() => _idType = v ?? 'kyc_id_national'),
         ),
         const SizedBox(height: 16),
         TextField(

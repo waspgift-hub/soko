@@ -26,7 +26,7 @@ class MesejiService {
         debugPrint('MesejiService.sendOtp: body=$body');
         throw NetworkError(
           message: 'send-otp failed: ${body['error']}',
-          userMessage: body['error'] ?? 'Imeshindwa kutuma OTP. Jaribu tena.',
+          userMessage: body['error'] ?? 'auth_otp_send_failed',
         );
       }
     } on NetworkError {
@@ -35,7 +35,7 @@ class MesejiService {
       debugPrint('MesejiService.sendOtp error: $e');
       throw NetworkError(
         message: 'send-otp error: $e',
-        userMessage: 'Mtandao dhaifu. Angalia muunganisho wako.',
+        userMessage: ErrorKeys.poorNetwork,
       );
     }
   }

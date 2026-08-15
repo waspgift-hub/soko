@@ -65,6 +65,7 @@ import '../screens/buyer/buyer_statement_screen.dart';
 
 import '../screens/legal/privacy_policy_screen.dart';
 import '../screens/legal/terms_of_service_screen.dart';
+import '../extensions/context_tr.dart';
 import 'routes.dart';
 import 'app_state.dart' as app_state;
 
@@ -462,7 +463,7 @@ class _MissingRouteData extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(leading: BackButton()),
       body: Center(
-        child: Text('Data haipatikani. Rudi nyuma na ujaribu tena.'),
+        child: Text(context.tr('loading_error')),
       ),
     );
   }

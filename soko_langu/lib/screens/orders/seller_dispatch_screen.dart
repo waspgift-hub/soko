@@ -8,7 +8,6 @@ import '../../extensions/context_tr.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/location_map_widget.dart';
-import '../../utils/network_error.dart';
 import '../../widgets/ds/ds.dart';
 
 class SellerDispatchScreen extends StatefulWidget {
@@ -68,7 +67,7 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
         if (mounted) _showError(result['error'] ?? context.tr('dispatch_failed'));
       }
     } catch (e) {
-      if (mounted) _showError(translateError(e));
+      if (mounted) _showError(context.trError(e));
     }
 
     setState(() => _dispatchingTxId = null);

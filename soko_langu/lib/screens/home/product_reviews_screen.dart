@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/review_service.dart';
 import '../../models/review_model.dart';
 import '../../extensions/context_tr.dart';
-import '../../utils/network_error.dart';
 import '../../widgets/soko_vibe_states.dart';
 import '../../widgets/soko_vibe_loading.dart';
 
@@ -111,7 +110,7 @@ class _ProductReviewsScreenState extends State<ProductReviewsScreen> {
         if (mounted) {
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(SnackBar(content: Text(translateError(e))));
+          ).showSnackBar(SnackBar(content: Text(context.trError(e))));
         }
       }
     }

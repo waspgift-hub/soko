@@ -8,7 +8,6 @@ import 'package:geocoding/geocoding.dart';
 import '../../services/user_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../utils/helpers.dart';
-import '../../utils/network_error.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/location_disclosure_dialog.dart';
 
@@ -42,19 +41,35 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   List<MapEntry<TextEditingController, TextEditingController>> _paymentEntries =
       [];
 
-  static const List<String> _paymentMethodHints = ['Google Pay', 'Bank Name'];
+  static const List<(String, String)> _paymentMethodHints = [
+    ('google_pay', 'Google Pay'),
+    ('bank_name', 'Bank Name'),
+  ];
+
+  static const Map<String, String> _moodEmoji = {
+    'happy': '😊',
+    'sad': '😢',
+    'angry': '😡',
+    'tired': '😴',
+    'excited': '🤩',
+    'neutral': '😐',
+    'in_love': '❤️',
+    'grateful': '🙏',
+    'motivated': '🔥',
+    'celebrating': '🎉',
+  };
 
   static const List<String> _moodOptions = [
-    '😊 Happy',
-    '😢 Sad',
-    '😡 Angry',
-    '😴 Tired',
-    '🤩 Excited',
-    '😐 Neutral',
-    '❤️ In Love',
-    '🙏 Grateful',
-    '🔥 Motivated',
-    '🎉 Celebrating',
+    'happy',
+    'sad',
+    'angry',
+    'tired',
+    'excited',
+    'neutral',
+    'in_love',
+    'grateful',
+    'motivated',
+    'celebrating',
   ];
 
   @override
@@ -97,7 +112,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             profile?.email ?? FirebaseAuth.instance.currentUser?.email ?? '';
         _phoneController.text = profile?.phone ?? '';
         _locationController.text = profile?.location ?? '';
-        _moodController.text = profile?.mood ?? '';
+        _moodController.text = _moodDisplay(profile?.mood ?? '');
         _genderController.text = profile?.gender ?? '';
         _dobController.text = profile?.dateOfBirth ?? '';
         _latitude = profile?.latitude;
@@ -282,7 +297,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         email: _emailController.text.trim(),
         phone: _phoneController.text.trim(),
         location: _locationController.text.trim(),
-        mood: _moodController.text.trim(),
+        mood: _moodKeyFor(_moodController.text),
         latitude: _latitude,
         longitude: _longitude,
         profileImage: imageUrl,
@@ -307,11 +322,28 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(translateError(e))));
+        ).showSnackBar(SnackBar(content: Text(context.trError(e))));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  /// Maps a persisted mood value (localized or legacy English) to a stable key.
+  String _moodKeyFor(String stored) {
+    final t = stored.trim().toLowerCase();
+    for (final k in _moodOptions) {
+      if (t.contains(k) || t == '${_moodEmoji[k]} $k') {
+        return k;
+      }
+    }
+    return _moodOptions.contains(t) ? t : '';
+  }
+
+  String _moodDisplay(String stored) {
+    final key = _moodKeyFor(stored);
+    if (key.isEmpty) return stored;
+    return '${_moodEmoji[key]} ${context.tr('mood_$key')}';
   }
 
   @override
@@ -499,10 +531,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         Icons.arrow_drop_down,
                         color: Theme.of(context).colorScheme.primary,
                       ),
-                      onSelected: (v) => _moodController.text = v,
-                      itemBuilder: (_) => _moodOptions
-                          .map((m) => PopupMenuItem(value: m, child: Text(m)))
-                          .toList(),
+                      onSelected: (v) => _moodController.text = _moodDisplay(v),
+                      itemBuilder: (_) => _moodOptions.map((m) {
+                        final emoji = _moodEmoji[m] ?? '';
+                        return PopupMenuItem(
+                          value: m,
+                          child: Text('$emoji ${context.tr('mood_$m')}'),
+                        );
+                      }).toList(),
                     ),
                   ),
                 ),
@@ -586,15 +622,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       children: [
                         Expanded(
                           flex: 2,
-                          child: Autocomplete<String>(
+                          child: Autocomplete<(String, String)>(
                             optionsBuilder: (textEditingValue) {
                               if (textEditingValue.text.isEmpty) return [];
                               return _paymentMethodHints.where(
-                                (h) => h.toLowerCase().contains(
+                                (h) => h.$2.toLowerCase().contains(
                                   textEditingValue.text.toLowerCase(),
                                 ),
                               );
                             },
+                            displayStringForOption: (h) => context.tr(h.$1),
+                            onSelected: (h) => entry.key.text = h.$2,
                             fieldViewBuilder:
                                 (context, controller, focusNode, onSubmitted) {
                                   entry.key.text = controller.text;

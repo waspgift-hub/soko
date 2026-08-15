@@ -14,7 +14,6 @@ import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../widgets/location_map_widget.dart';
 import '../../widgets/soko_vibe_loading.dart';
-import '../../utils/network_error.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final Product product;
@@ -646,7 +645,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         context.push('${AppRoutes.orderDetail}/${orderData['orderId']}', extra: orderData);
       }
     } catch (e) {
-      final friendly = translateError(e);
+      final friendly = context.trError(e);
       _showError(friendly);
       setState(() => _processing = false);
     }

@@ -23,7 +23,6 @@ import '../../widgets/payment_result_dialog.dart';
 import '../../widgets/buyer_transport_sheet.dart';
 import '../../widgets/location_map_widget.dart';
 import '../../widgets/call_seller_button.dart';
-import '../../utils/network_error.dart';
 import '../../utils/phone_utils.dart';
 
 class OrderDetailScreen extends StatefulWidget {
@@ -1970,7 +1969,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(translateError(e)),
+            content: Text(context.trError(e)),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -2033,7 +2032,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(translateError(e)),
+            content: Text(context.trError(e)),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -2123,7 +2122,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         );
       }
     } catch (e) {
-      if (mounted) _showError(translateError(e));
+      if (mounted) _showError(context.trError(e));
       setState(() => _paying = false);
     }
   }

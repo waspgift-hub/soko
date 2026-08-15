@@ -8,6 +8,7 @@ import '../repositories/auth_repository.dart';
 import '../services/api_config.dart';
 import '../services/magic_link_service.dart';
 import '../services/meseji_service.dart';
+import '../services/localization_service.dart';
 import '../services/onboarding_service.dart';
 import '../utils/network_error.dart';
 import '../app/app_state.dart' as app_state;
@@ -209,7 +210,7 @@ class AuthNotifier extends ChangeNotifier {
       _syncAppState();
       notifyListeners();
     } catch (e) {
-      _error = e is NetworkError ? e.userMessage : e.toString();
+      _error = translateError(e);
       notifyListeners();
       rethrow;
     }
@@ -236,7 +237,7 @@ class AuthNotifier extends ChangeNotifier {
       _syncAppState();
       notifyListeners();
     } catch (e) {
-      _error = e.toString();
+      _error = translateError(e);
       notifyListeners();
       rethrow;
     }
@@ -255,7 +256,7 @@ class AuthNotifier extends ChangeNotifier {
       _syncAppState();
       notifyListeners();
     } catch (e) {
-      _error = e is NetworkError ? e.userMessage : e.toString();
+      _error = translateError(e);
       notifyListeners();
       rethrow;
     }
@@ -280,7 +281,7 @@ class AuthNotifier extends ChangeNotifier {
       _phoneOtpState = PhoneOtpState.sent;
       notifyListeners();
     } catch (e) {
-      _error = e is NetworkError ? e.userMessage : 'Imeshindwa kutuma OTP.';
+      _error = translateError(e);
       _phoneOtpState = PhoneOtpState.error;
       notifyListeners();
     }
@@ -305,13 +306,13 @@ class AuthNotifier extends ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        _error = body['error'] ?? 'OTP si sahihi.';
+        _error = body['error'] ?? 'auth_otp_invalid';
         _phoneOtpState = PhoneOtpState.error;
         notifyListeners();
         return false;
       }
     } catch (e) {
-      _error = 'Mtandao dhaifu. Angalia muunganisho wako.';
+      _error = translateError(e);
       _phoneOtpState = PhoneOtpState.error;
       notifyListeners();
       return false;
@@ -331,7 +332,7 @@ class AuthNotifier extends ChangeNotifier {
       _syncAppState();
       notifyListeners();
     } catch (e) {
-      _error = e is NetworkError ? e.userMessage : e.toString();
+      _error = translateError(e);
       notifyListeners();
       rethrow;
     }
@@ -358,7 +359,7 @@ class AuthNotifier extends ChangeNotifier {
       _syncAppState();
       notifyListeners();
     } catch (e) {
-      _error = e is NetworkError ? e.userMessage : e.toString();
+      _error = translateError(e);
       notifyListeners();
       rethrow;
     }
@@ -386,18 +387,21 @@ class AuthNotifier extends ChangeNotifier {
       final res = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/auth/send-email-otp'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email}),
+        body: jsonEncode({
+          'email': email,
+          'langCode': await LocalizationService().getLanguage(),
+        }),
       );
       if (res.statusCode == 200) {
         _emailOtpState = EmailOtpState.sent;
       } else {
         final body = jsonDecode(res.body);
-        _error = body['error'] ?? 'Imeshindwa kutuma OTP kwa barua pepe.';
+        _error = body['error'] ?? 'auth_otp_send_failed';
         _emailOtpState = EmailOtpState.error;
       }
       notifyListeners();
     } catch (e) {
-      _error = 'Mtandao dhaifu. Angalia muunganisho wako.';
+      _error = translateError(e);
       _emailOtpState = EmailOtpState.error;
       notifyListeners();
     }
@@ -420,13 +424,13 @@ class AuthNotifier extends ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        _error = body['error'] ?? 'OTP si sahihi.';
+        _error = body['error'] ?? 'auth_otp_invalid';
         _emailOtpState = EmailOtpState.error;
         notifyListeners();
         return false;
       }
     } catch (e) {
-      _error = 'Mtandao dhaifu. Angalia muunganisho wako.';
+      _error = translateError(e);
       _emailOtpState = EmailOtpState.error;
       notifyListeners();
       return false;
@@ -461,7 +465,7 @@ class AuthNotifier extends ChangeNotifier {
       _magicLinkState = MagicLinkState.sent;
       notifyListeners();
     } catch (e) {
-      _error = e is NetworkError ? e.userMessage : e.toString();
+      _error = translateError(e);
       _magicLinkState = MagicLinkState.error;
       notifyListeners();
     }
@@ -487,7 +491,7 @@ class AuthNotifier extends ChangeNotifier {
       _syncAppState();
       notifyListeners();
     } catch (e) {
-      _error = e is NetworkError ? e.userMessage : e.toString();
+      _error = translateError(e);
       _magicLinkState = MagicLinkState.error;
       notifyListeners();
     }

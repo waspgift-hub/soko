@@ -19,7 +19,6 @@ import '../../widgets/glass_container.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/premium_background.dart'; // ignore: unused_import
-import '../../utils/network_error.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 class ProductBoostScreen extends StatefulWidget {
@@ -602,7 +601,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
           context: context,
           type: PaymentBannerType.failed,
           title: context.tr('payment_failed'),
-          subtitle: translateError(e),
+          subtitle: context.trError(e),
         );
       }
     } finally {
@@ -647,7 +646,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
               productId: widget.product.id,
               boostPackageName: _selectedTier!.displayName,
               amountPaid: _selectedTier!.priceTzs.toDouble(),
-              paymentMethod: 'USSD Push',
+              paymentMethod: context.tr('ussd_push_method'),
               timestamp: DateTime.now(),
               boostExpiryDate: expiry,
               paymentStatus: PaymentStatus.completed,

@@ -3,10 +3,20 @@ import 'package:intl/intl.dart';
 import '../main.dart';
 import '../services/localization_service.dart';
 import '../services/exchange_rate_service.dart';
+import '../utils/network_error.dart';
 
 extension ContextTr on BuildContext {
   String tr(String key, [String? _]) {
     final config = AppConfig.of(this);
+    return LocalizationService.translate(key, config.langCode);
+  }
+
+  /// Renders a user-facing error in the app language. [translateError]
+  /// produces a translation key, which is resolved here against the app's
+  /// current language so Swahili/English/Chinese each see their own text.
+  String trError(dynamic error) {
+    final config = AppConfig.of(this);
+    final key = translateError(error);
     return LocalizationService.translate(key, config.langCode);
   }
 

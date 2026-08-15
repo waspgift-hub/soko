@@ -40,7 +40,7 @@ class _MagicLinkScreenState extends State<MagicLinkScreen> {
     if (!mounted) return;
 
     if (notifier.error != null) {
-      _showError(notifier.error!);
+      _showError(context.tr(notifier.error ?? 'error_generic'));
     }
   }
 

@@ -13,7 +13,7 @@ class DsPaymentStatusTimeline extends StatefulWidget {
   const DsPaymentStatusTimeline({
     super.key,
     required this.step,
-    this.labels = const ['Malipo', 'Imeshikiliwa', 'Imetolewa'],
+    required this.labels,
     this.color,
   });
 

@@ -254,7 +254,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      error,
+                                      context.tr(error),
                                       style: TextStyle(
                                         color: cs.error,
                                         fontSize: 13,

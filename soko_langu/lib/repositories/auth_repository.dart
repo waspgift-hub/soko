@@ -47,7 +47,7 @@ class AuthRepository {
       if (res.statusCode != 200 || body['success'] != true) {
         throw NetworkError(
           message: 'Phone login failed: ${body['error']}',
-          userMessage: body['error'] ?? 'Hakuna akaunti kwa namba hii',
+          userMessage: body['error'] ?? 'auth_no_account',
         );
       }
 
@@ -65,7 +65,7 @@ class AuthRepository {
     } catch (e) {
       throw NetworkError(
         message: 'Phone login error: $e',
-        userMessage: 'Mtandao dhaifu. Angalia muunganisho wako.',
+        userMessage: ErrorKeys.poorNetwork,
       );
     }
   }
@@ -143,7 +143,7 @@ class AuthRepository {
       if (googleAuth.idToken == null) {
         throw NetworkError(
           message: 'Google idToken is null',
-          userMessage: 'Google Sign-In imeshindwa. Tafadhali jaribu tena.',
+          userMessage: 'auth_google_failed',
         );
       }
 
@@ -165,8 +165,7 @@ class AuthRepository {
       debugPrint('GoogleSignIn error: $e');
       throw NetworkError(
         message: 'Google Sign-In failed: $e',
-        userMessage:
-            'Google Sign-In imeshindwa. Tafadhali hakikisha umechagua akaunti na jaribu tena.',
+        userMessage: 'auth_google_cancelled',
       );
     }
   }
@@ -311,45 +310,44 @@ class AuthRepository {
   String _mapError(String code) {
     switch (code) {
       case 'user-not-found':
-        return 'Hakuna akaunti iliyopatikana kwa barua pepe hii.';
+        return ErrorKeys.noAccount;
       case 'wrong-password':
-        return 'Nenosiri si sahihi. Tafadhali jaribu tena.';
+        return ErrorKeys.wrongPassword;
       case 'invalid-email':
-        return 'Barua pepe si sahihi.';
+        return ErrorKeys.invalidEmail;
       case 'user-disabled':
-        return 'Akaunti hii imezimwa. Wasiliana na msaada.';
+        return ErrorKeys.accountDisabled;
       case 'email-already-in-use':
-        return 'Akaunti yenye barua pepe hii tayari ipo. Jaribu kuingia.';
+        return ErrorKeys.emailInUse;
       case 'weak-password':
-        return 'Nenosiri ni fupi sana. Tumia angalau herufi 8.';
+        return ErrorKeys.weakPassword;
       case 'network-request-failed':
-        return 'Mtandao dhaifu. Angalia muunganisho wako.';
+        return ErrorKeys.poorNetwork;
       case 'too-many-requests':
-        return 'Umejaribu mara nyingi sana. Subiri kidogo kisha jaribu tena.';
+        return ErrorKeys.tooManyAttempts;
       case 'invalid-credential':
-        return 'Barua pepe au nenosiri si sahihi.';
+        return ErrorKeys.invalidCredentials;
       case 'account-exists-with-different-credential':
-        return 'Akaunti ipo kwa njia tofauti. Jaribu kuingia kwa kutumia Google.';
+        return ErrorKeys.emailInUse;
       case 'requires-recent-login':
-        return 'Tafadhali ingia tena kwa usalama kisha jaribu tena.';
+        return ErrorKeys.sessionExpired;
       case 'invalid-phone-number':
-        return 'Namba ya simu si sahihi. Tumia mfano 0712345678.';
-      case 'invalid-verification-code':
-        return 'OTP si sahihi. Angalia SMS na jaribu tena.';
-      case 'invalid-verification-id':
-        return 'OTP imeisha muda. Tuma OTP mpya.';
-      case 'session-expired':
-        return 'Muda wa OTP umeisha. Tuma OTP mpya.';
-      case 'quota-exceeded':
-        return 'Ujumbe mwingi umetumwa. Subiri kidogo kisha jaribu tena.';
       case 'missing-phone-number':
-        return 'Weka namba ya simu.';
+        return 'auth_wrong_phone';
+      case 'invalid-verification-code':
+        return 'auth_otp_invalid';
+      case 'invalid-verification-id':
+        return 'auth_otp_expired';
+      case 'session-expired':
+        return ErrorKeys.sessionExpired;
+      case 'quota-exceeded':
+        return 'auth_otp_rate_limited';
       case 'credential-already-in-use':
-        return 'Namba hii tayari inatumika na akaunti nyingine.';
+        return ErrorKeys.emailInUse;
       case 'provider-already-linked':
-        return 'Akaunti hii tayari imeunganishwa na mtandao huu.';
+        return ErrorKeys.alreadyExists;
       default:
-        return 'Kuna tatizo lililotokea. Tafadhali jaribu tena.';
+        return ErrorKeys.generic;
     }
   }
 }

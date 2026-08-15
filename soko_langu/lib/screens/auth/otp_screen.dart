@@ -70,7 +70,7 @@ class _OtpScreenState extends State<OtpScreen> {
       final notifier = context.read<AuthNotifier>();
       final ok = await notifier.verifyPhoneOtp(widget.phone, otp);
       if (!ok) {
-        setState(() { _error = notifier.error ?? context.tr('otp_invalid'); _isLoading = false; });
+        setState(() { _error = context.tr(notifier.error ?? 'otp_invalid'); _isLoading = false; });
         return;
       }
       await notifier.register(
@@ -98,7 +98,7 @@ class _OtpScreenState extends State<OtpScreen> {
       }
       if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
     } catch (e) {
-      setState(() { _error = e.toString(); _isLoading = false; });
+      setState(() { _error = context.trError(e); _isLoading = false; });
     }
   }
 
@@ -109,7 +109,7 @@ class _OtpScreenState extends State<OtpScreen> {
       await context.read<AuthNotifier>().sendPhoneOtp(widget.phone);
       _startResendTimer();
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = context.trError(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

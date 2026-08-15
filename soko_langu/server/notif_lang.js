@@ -500,4 +500,33 @@ function localizeSms(lang, message) {
   return message;
 }
 
-module.exports = { localizeNotif, localizeSms };
+/// Localizes a Swahili email-OTP email into `lang`. Emails are pre-auth, so
+/// the app tells us its language via langCode (same as send-otp).
+const emailOtpCopy = {
+  en: {
+    subject: 'Soko Vibe — Your OTP',
+    heading: 'Soko Vibe — Email Verification',
+    body: 'Your OTP is:',
+    expires: 'Expires in 10 minutes. Do not share it with anyone.',
+  },
+  zh: {
+    subject: 'Soko Vibe — 您的验证码',
+    heading: 'Soko Vibe — 邮箱验证',
+    body: '您的验证码是：',
+    expires: '10 分钟内有效。请勿与他人分享。',
+  },
+};
+
+function localizeEmailOtp(lang) {
+  if (!lang || lang === 'sw') {
+    return {
+      subject: 'Soko Vibe — OTP yako',
+      heading: 'Soko Vibe — Uthibitisho wa Barua Pepe',
+      body: 'OTP yako ni:',
+      expires: 'Inaisha kwa dakika 10. Usimshiriki mtu yeyote.',
+    };
+  }
+  return emailOtpCopy[lang] || emailOtpCopy.en;
+}
+
+module.exports = { localizeNotif, localizeSms, localizeEmailOtp };

@@ -112,7 +112,7 @@ class ProductService {
         if ((productCount.count ?? 0) >= 5) {
           throw NetworkError(
             message: "KYC required - product limit reached",
-            userMessage: "Umefikia kikomo cha bidhaa 5 bila KYC. Tafadhali kamilisha KYC verification kuweza kuongeza bidhaa zaidi.",
+            userMessage: 'product_limit_kyc_needed',
             originalError: Exception("KYC required - product limit reached"),
           );
         }

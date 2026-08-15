@@ -5,6 +5,10 @@ import 'package:google_sign_in/google_sign_in.dart';
 import '../utils/network_error.dart';
 import 'fraud_prevention_service.dart';
 
+// New locale keys; registered across language maps by the coordinator.
+const String _kAuthGoogleFailed = 'auth_google_failed';
+const String _kAuthGoogleCancelled = 'auth_google_cancelled';
+
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -40,7 +44,7 @@ class AuthService {
     } on FirebaseAuthException catch (e) {
       throw NetworkError(
         message: e.message ?? 'Registration failed',
-        userMessage: _swahiliAuthError(e.code),
+        userMessage: _authError(e.code),
         originalError: e,
       );
     }
@@ -57,7 +61,7 @@ class AuthService {
     } on FirebaseAuthException catch (e) {
       throw NetworkError(
         message: e.message ?? 'Login failed',
-        userMessage: _swahiliAuthError(e.code),
+        userMessage: _authError(e.code),
         originalError: e,
       );
     }
@@ -80,7 +84,7 @@ class AuthService {
       if (googleAuth.idToken == null) {
         throw NetworkError(
           message: 'Google idToken is null',
-          userMessage: 'Google Sign-In imeshindwa. Tafadhali jaribu tena.',
+          userMessage: _kAuthGoogleFailed,
         );
       }
 
@@ -97,15 +101,14 @@ class AuthService {
       if (e is FirebaseAuthException) {
         throw NetworkError(
           message: e.message ?? 'Google Sign-In failed',
-          userMessage: _swahiliAuthError(e.code),
+          userMessage: _authError(e.code),
           originalError: e,
         );
       }
       debugPrint('GoogleSignIn error: $e');
       throw NetworkError(
         message: 'Google Sign-In failed: $e',
-        userMessage:
-            'Google Sign-In imeshindwa. Tafadhali hakikisha umechagua akaunti na jaribu tena.',
+        userMessage: _kAuthGoogleCancelled,
         originalError: e,
       );
     }
@@ -133,7 +136,7 @@ class AuthService {
     }
     throw NetworkError(
       message: 'Invalid phone',
-      userMessage: 'Weka namba sahihi ya Tanzania (mfano 0712345678).',
+      userMessage: 'auth_wrong_phone',
     );
   }
 
@@ -281,50 +284,49 @@ class AuthService {
     }
   }
 
-  String _swahiliAuthError(String code) {
+  String _authError(String code) {
     switch (code) {
       case 'user-not-found':
-        return 'Hakuna akaunti iliyopatikana kwa barua pepe hii.';
+        return ErrorKeys.noAccount;
       case 'wrong-password':
-        return 'Nenosiri si sahihi. Tafadhali jaribu tena.';
+        return ErrorKeys.wrongPassword;
       case 'invalid-email':
-        return 'Barua pepe si sahihi. Tafadhali ingiza barua pepe sahihi.';
+        return ErrorKeys.invalidEmail;
       case 'user-disabled':
-        return 'Akaunti hii imezimwa. Wasiliana na msaada.';
+        return ErrorKeys.accountDisabled;
       case 'email-already-in-use':
-        return 'Akaunti yenye barua pepe hii tayari ipo. Jaribu kuingia au tumia barua pepe nyingine.';
+        return ErrorKeys.emailInUse;
       case 'operation-not-allowed':
-        return 'Njia hii ya kuingia haijawashwa. Jaribu tena baadaye.';
+        return ErrorKeys.operationNotAllowed;
       case 'weak-password':
-        return 'Nenosiri ni fupi sana. Tumia angalau herufi 8 au zaidi.';
+        return ErrorKeys.weakPassword;
       case 'network-request-failed':
-        return 'Mtandao dhaifu. Tafadhali angalia muunganisho wako wa intaneti.';
+        return ErrorKeys.poorNetwork;
       case 'too-many-requests':
-        return 'Umejaribu mara nyingi sana. Tafadhali subiri kidogo kisha jaribu tena.';
+        return ErrorKeys.tooManyAttempts;
       case 'invalid-credential':
-        return 'Barua pepe au nenosiri si sahihi. Jaribu "Continue with Google" au uunda akaunti mpya.';
+        return ErrorKeys.invalidCredentials;
       case 'account-exists-with-different-credential':
-        return 'Akaunti ipo kwa njia tofauti. Jaribu kuingia kwa kutumia Google au barua pepe nyingine.';
+        return ErrorKeys.emailInUse;
       case 'requires-recent-login':
-        return 'Tafadhali ingia tena kwa usalama kisha jaribu tena.';
+        return ErrorKeys.sessionExpired;
       case 'provider-already-linked':
-        return 'Akaunti hii tayari imeunganishwa na mtandao huu.';
+        return ErrorKeys.alreadyExists;
       case 'invalid-phone-number':
-        return 'Namba ya simu si sahihi. Tumia mfano 0712345678.';
-      case 'invalid-verification-code':
-        return 'OTP si sahihi. Angalia SMS na jaribu tena.';
-      case 'invalid-verification-id':
-        return 'OTP imeisha muda. Tuma OTP mpya.';
-      case 'session-expired':
-        return 'Muda wa OTP umeisha. Tuma OTP mpya.';
-      case 'quota-exceeded':
-        return 'Ujumbe mwingi umetumwa. Subiri kidogo kisha jaribu tena.';
       case 'missing-phone-number':
-        return 'Weka namba ya simu.';
+        return 'auth_wrong_phone';
+      case 'invalid-verification-code':
+        return 'auth_otp_invalid';
+      case 'invalid-verification-id':
+        return 'auth_otp_expired';
+      case 'session-expired':
+        return ErrorKeys.sessionExpired;
+      case 'quota-exceeded':
+        return 'auth_otp_rate_limited';
       case 'credential-already-in-use':
-        return 'Namba hii tayari inatumika na akaunti nyingine.';
+        return ErrorKeys.emailInUse;
       default:
-        return 'Kuna tatizo lililotokea. Tafadhali jaribu tena.';
+        return ErrorKeys.generic;
     }
   }
 }

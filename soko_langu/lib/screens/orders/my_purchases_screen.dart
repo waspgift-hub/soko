@@ -12,7 +12,6 @@ import '../../services/clickpesa_service.dart';
 import '../../services/rating_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
-import '../../utils/network_error.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../chat/chat_navigation.dart';
@@ -188,7 +187,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
           context: context,
           type: PaymentBannerType.failed,
           title: context.tr('payment_failed'),
-          subtitle: translateError(e),
+          subtitle: context.trError(e),
         );
       }
     }
@@ -352,7 +351,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
         _showError(result['error'] ?? context.tr('dispute_failed'));
       }
     } catch (e) {
-      _showError(translateError(e));
+      _showError(context.trError(e));
     }
     setState(() => _disputingTxId = null);
   }
@@ -396,7 +395,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
         _showError(result['error'] ?? context.tr('cancel_order_failed'));
       }
     } catch (e) {
-      _showError(translateError(e));
+      _showError(context.trError(e));
     }
     setState(() => _cancellingTxId = null);
   }
@@ -431,7 +430,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
           .update({'deletedForBuyer': true});
       if (mounted) _showSuccess(context.tr('order_deleted'));
     } catch (e) {
-      if (mounted) _showError(translateError(e));
+      if (mounted) _showError(context.trError(e));
     }
   }
 
@@ -476,7 +475,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
       if (mounted) _showSuccess(context.tr('orders_deleted'));
     } catch (e) {
       setState(() => _isDeletingSelected = false);
-      if (mounted) _showError(translateError(e));
+      if (mounted) _showError(context.trError(e));
     }
   }
 

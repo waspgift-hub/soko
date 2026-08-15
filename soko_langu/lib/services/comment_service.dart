@@ -22,7 +22,7 @@ class CommentService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw NetworkError(
         message: 'Not logged in',
-        userMessage: 'Please log in to continue.',
+        userMessage: 'auth_login_required',
       );
     await user.reload();
     await user.getIdToken(true);
@@ -46,7 +46,7 @@ class CommentService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw NetworkError(
         message: 'Not logged in',
-        userMessage: 'Please log in to continue.',
+        userMessage: 'auth_login_required',
       );
     await user.reload();
     await user.getIdToken(true);
@@ -123,14 +123,14 @@ class CommentService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw NetworkError(
         message: 'Not logged in',
-        userMessage: 'Please log in to continue.',
+        userMessage: 'auth_login_required',
       );
     final commentSnap = await _commentsRef(productId).doc(commentId).get();
     final commentData = commentSnap.data() as Map<String, dynamic>?;
     if (commentData == null || commentData['userId'] != user.uid) {
       throw NetworkError(
         message: 'Cannot delete another user\'s comment',
-        userMessage: 'You can only delete your own comments.',
+        userMessage: 'comment_edit_own_only',
       );
     }
     final replies = await _repliesRef(productId, commentId).get();
@@ -150,7 +150,7 @@ class CommentService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw NetworkError(
         message: 'Not logged in',
-        userMessage: 'Please log in to continue.',
+        userMessage: 'auth_login_required',
       );
     final replySnap = await _repliesRef(
       productId,
@@ -160,7 +160,7 @@ class CommentService {
     if (replyData == null || replyData['userId'] != user.uid) {
       throw NetworkError(
         message: 'Cannot delete another user\'s reply',
-        userMessage: 'You can only delete your own replies.',
+        userMessage: 'comment_edit_own_only',
       );
     }
     await _repliesRef(productId, commentId).doc(replyId).delete();

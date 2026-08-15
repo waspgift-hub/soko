@@ -265,7 +265,7 @@ const CRITICAL_PUSH_TYPES = new Set([
 // concern on a single notification.
 const notifLangCache = require('./cache');
 const NOTIF_LANG_TTL_MS = 5 * 60 * 1000;
-const { localizeNotif, localizeSms } = require('./notif_lang');
+const { localizeNotif, localizeSms, localizeEmailOtp } = require('./notif_lang');
 
 async function getUserNotifLang(userId) {
   if (!db) return 'sw';
@@ -1244,7 +1244,7 @@ function otpPhoneRateLimit(req, res, next) {
   hits.push(now);
   otpPhoneHits.set(phone, hits);
   if (hits.length > OTP_PHONE_MAX) {
-    return res.status(429).json({ error: 'Umejaribu mara nyingi. Subiri dakika 15.' });
+    return res.status(429).json({ error: 'auth_otp_rate_limited' });
   }
   next();
 }
@@ -1263,7 +1263,7 @@ function otpVerifyRateLimit(req, res, next) {
   hits.push(now);
   otpVerifyHits.set(key, hits);
   if (hits.length > OTP_VERIFY_MAX) {
-    return res.status(429).json({ error: 'Majibujibu mengi. Simu imefungwa kwa dakika 15.' });
+    return res.status(429).json({ error: 'auth_otp_rate_limited' });
   }
   next();
 }
@@ -1304,13 +1304,13 @@ app.post('/api/auth/send-otp', otpPhoneRateLimit, async (req, res) => {
 
     if (!sent) {
       console.error('/api/auth/send-otp: sendSms returned false for', cleanPhone);
-      return res.status(502).json({ error: 'Imeshindwa kutuma OTP. Jaribu tena.' });
+      return res.status(502).json({ error: 'auth_otp_send_failed' });
     }
 
     res.json({ sent: true, message: 'OTP imetumwa kwa simu yako' });
   } catch (e) {
     console.error('/api/auth/send-otp error:', e.message);
-    res.status(500).json({ error: 'Imeshindwa kutuma OTP. Jaribu tena.' });
+    res.status(500).json({ error: 'auth_otp_send_failed' });
   }
 });
 
@@ -1325,14 +1325,14 @@ app.post('/api/auth/verify-otp', otpVerifyRateLimit, async (req, res) => {
 
     const cleanPhone = phone.replace(/\D/g, '');
     const doc = await db.collection('otp_codes').doc(cleanPhone).get();
-    if (!doc.exists) return res.status(400).json({ error: 'Hakuna OTP. Tuma mpya.' });
+    if (!doc.exists) return res.status(400).json({ error: 'auth_otp_expired' });
 
     const data = doc.data();
-    if (data.used) return res.status(400).json({ error: 'OTP tayari imetumika' });
-    if (Date.now() > data.expiresAt) return res.status(400).json({ error: 'OTP imeisha muda. Tuma mpya.' });
+    if (data.used) return res.status(400).json({ error: 'auth_otp_invalid' });
+    if (Date.now() > data.expiresAt) return res.status(400).json({ error: 'auth_otp_expired' });
 
     const hashed = crypto.createHash('sha256').update(otp).digest('hex');
-    if (hashed !== data.otpHash) return res.status(400).json({ error: 'OTP si sahihi' });
+    if (hashed !== data.otpHash) return res.status(400).json({ error: 'auth_otp_invalid' });
 
     // Mark as used
     await doc.ref.update({ used: true });
@@ -1349,7 +1349,7 @@ app.post('/api/auth/verify-otp', otpVerifyRateLimit, async (req, res) => {
 // ============================================================
 app.post('/api/auth/send-email-otp', async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, langCode } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required' });
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
@@ -1366,10 +1366,14 @@ app.post('/api/auth/send-email-otp', async (req, res) => {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
+    // Pre-auth, so the app tells us its language via langCode (same as send-otp).
+    const lang = ['sw', 'en', 'zh'].includes(langCode) ? langCode : 'sw';
+    const copy = localizeEmailOtp(lang);
+
     // SMTP directly to the address (unlike sendEmailSmtp, the email may
     // not be a registered Firebase user yet at this stage)
-    const subject = 'Soko Vibe — OTP yako';
-    const html = `<html><body style="font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto"><h2 style="color:#40916C">Soko Vibe — Uthibitisho wa Barua Pepe</h2><p>OTP yako ni:</p><p style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#40916C">${otp}</p><p>Inaisha kwa dakika 10. Usimshiriki mtu yeyote.</p><hr style="border:none;border-top:1px solid #e0e0e0;margin:20px 0"/><p style="color:#999;font-size:12px">Soko Vibe</p></body></html>`;
+    const subject = copy.subject;
+    const html = `<html><body style="font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto"><h2 style="color:#40916C">${copy.heading}</h2><p>${copy.body}</p><p style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#40916C">${otp}</p><p>${copy.expires}</p><hr style="border:none;border-top:1px solid #e0e0e0;margin:20px 0"/><p style="color:#999;font-size:12px">Soko Vibe</p></body></html>`;
 
     try {
       await smtpTransporter.sendMail({
@@ -1381,13 +1385,13 @@ app.post('/api/auth/send-email-otp', async (req, res) => {
       console.log(`[SMTP] email OTP sent to ${cleanEmail}`);
     } catch (e) {
       console.error('/api/auth/send-email-otp SMTP error:', e.message);
-      return res.status(502).json({ error: 'Imeshindwa kutuma OTP kwa barua pepe. Jaribu tena.' });
+      return res.status(502).json({ error: 'auth_otp_send_failed' });
     }
 
     res.json({ sent: true, message: 'OTP imetumwa kwa barua pepe yako' });
   } catch (e) {
     console.error('/api/auth/send-email-otp error:', e.message);
-    res.status(500).json({ error: 'Imeshindwa kutuma OTP. Jaribu tena.' });
+    res.status(500).json({ error: 'auth_otp_send_failed' });
   }
 });
 
@@ -1402,14 +1406,14 @@ app.post('/api/auth/verify-email-otp', otpVerifyRateLimit, async (req, res) => {
 
     const cleanEmail = email.trim().toLowerCase();
     const doc = await db.collection('otp_codes').doc(cleanEmail).get();
-    if (!doc.exists) return res.status(400).json({ error: 'Hakuna OTP. Tuma mpya.' });
+    if (!doc.exists) return res.status(400).json({ error: 'auth_otp_expired' });
 
     const data = doc.data();
-    if (data.used) return res.status(400).json({ error: 'OTP tayari imetumika' });
-    if (Date.now() > data.expiresAt) return res.status(400).json({ error: 'OTP imeisha muda. Tuma mpya.' });
+    if (data.used) return res.status(400).json({ error: 'auth_otp_invalid' });
+    if (Date.now() > data.expiresAt) return res.status(400).json({ error: 'auth_otp_expired' });
 
     const hashed = crypto.createHash('sha256').update(otp).digest('hex');
-    if (hashed !== data.otpHash) return res.status(400).json({ error: 'OTP si sahihi' });
+    if (hashed !== data.otpHash) return res.status(400).json({ error: 'auth_otp_invalid' });
 
     await doc.ref.update({ used: true });
 
@@ -1489,14 +1493,14 @@ app.post('/api/auth/reset-password-by-phone', otpVerifyRateLimit, async (req, re
 
     // Verify OTP
     const otpDoc = await db.collection('otp_codes').doc(cleanPhone).get();
-    if (!otpDoc.exists) return res.status(400).json({ error: 'Hakuna OTP. Tuma mpya.' });
+    if (!otpDoc.exists) return res.status(400).json({ error: 'auth_otp_expired' });
 
     const otpData = otpDoc.data();
-    if (otpData.used) return res.status(400).json({ error: 'OTP tayari imetumika' });
-    if (Date.now() > otpData.expiresAt) return res.status(400).json({ error: 'OTP imeisha muda. Tuma mpya.' });
+    if (otpData.used) return res.status(400).json({ error: 'auth_otp_invalid' });
+    if (Date.now() > otpData.expiresAt) return res.status(400).json({ error: 'auth_otp_expired' });
 
     const hashed = crypto.createHash('sha256').update(otp).digest('hex');
-    if (hashed !== otpData.otpHash) return res.status(400).json({ error: 'OTP si sahihi' });
+    if (hashed !== otpData.otpHash) return res.status(400).json({ error: 'auth_otp_invalid' });
 
     await otpDoc.ref.update({ used: true });
 
@@ -1507,7 +1511,7 @@ app.post('/api/auth/reset-password-by-phone', otpVerifyRateLimit, async (req, re
       .get();
 
     if (usersSnap.empty) {
-      return res.status(404).json({ error: 'Hakuna akaunti yenye namba hii.' });
+      return res.status(404).json({ error: 'auth_no_account' });
     }
 
     const uid = usersSnap.docs[0].id;
@@ -1516,7 +1520,7 @@ app.post('/api/auth/reset-password-by-phone', otpVerifyRateLimit, async (req, re
     try {
       await admin.auth().updateUser(uid, { password: newPassword });
     } catch (authErr) {
-      return res.status(500).json({ error: 'Imeshindwa kubadilisha nenosiri. Jaribu tena.' });
+      return res.status(500).json({ error: 'failed_to_reset_password' });
     }
 
     res.json({ success: true, message: 'Nenosiri limebadilishwa kwa mafanikio.' });
@@ -1539,14 +1543,14 @@ app.post('/api/phone-login', async (req, res) => {
 
     // Verify OTP
     const otpDoc = await db.collection('otp_codes').doc(cleanPhone).get();
-    if (!otpDoc.exists) return res.status(400).json({ error: 'Hakuna OTP. Tuma mpya.' });
+    if (!otpDoc.exists) return res.status(400).json({ error: 'auth_otp_expired' });
 
     const otpData = otpDoc.data();
-    if (otpData.used) return res.status(400).json({ error: 'OTP tayari imetumika' });
-    if (Date.now() > otpData.expiresAt) return res.status(400).json({ error: 'OTP imeisha muda. Tuma mpya.' });
+    if (otpData.used) return res.status(400).json({ error: 'auth_otp_invalid' });
+    if (Date.now() > otpData.expiresAt) return res.status(400).json({ error: 'auth_otp_expired' });
 
     const hashed = crypto.createHash('sha256').update(otp).digest('hex');
-    if (hashed !== otpData.otpHash) return res.status(400).json({ error: 'OTP si sahihi' });
+    if (hashed !== otpData.otpHash) return res.status(400).json({ error: 'auth_otp_invalid' });
 
     await otpDoc.ref.update({ used: true });
 

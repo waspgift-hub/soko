@@ -8,7 +8,6 @@ import 'package:go_router/go_router.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/order_status_config.dart';
-import '../../utils/network_error.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/ds/ds.dart';
@@ -481,7 +480,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${context.tr('error')}: ${translateError(e)}')),
+          SnackBar(content: Text('${context.tr('error')}: ${context.trError(e)}')),
         );
       }
     }

@@ -181,21 +181,23 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
 
       final comments = await _fetchCommentsForProduct(products[i].productId);
       if (comments.isNotEmpty) {
-        buffer.writeln('${context.tr('buyer_reviews')} (in-app):');
+        buffer.writeln(context.tr('ai_reviews_in_app'));
         for (int j = 0; j < comments.length; j++) {
           final c = comments[j];
-          buffer.writeln('  ${j + 1}. ${c['userName'] ?? 'Mtu'}: "${c['text'] ?? ''}"');
+          buffer.writeln(
+            '  ${j + 1}. ${c['userName'] ?? context.tr('ai_unknown_user')}: "${c['text'] ?? ''}"',
+          );
         }
       }
 
       final reviews = await _fetchReviewsForProduct(products[i].productId);
       if (reviews.isNotEmpty) {
-        buffer.writeln('Ukadiriaji (ndani ya app):');
+        buffer.writeln(context.tr('ai_ratings_in_app'));
         for (int j = 0; j < reviews.length; j++) {
           final r = reviews[j];
           final stars = r['rating'] ?? 0;
           buffer.writeln(
-            '  ${j + 1}. ${r['userName'] ?? 'Mtu'} — $stars/5: "${r['comment'] ?? ''}"',
+            '  ${j + 1}. ${r['userName'] ?? context.tr('ai_unknown_user')} — $stars/5: "${r['comment'] ?? ''}"',
           );
         }
       }

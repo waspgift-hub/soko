@@ -112,7 +112,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       );
       final result = jsonDecode(resp.body);
       if (resp.statusCode != 200 || result['sent'] != true) {
-        setState(() => _serverError = result['error'] ?? context.tr('failed_to_send_otp'));
+        setState(() => _serverError = context.tr(result['error'] ?? 'failed_to_send_otp'));
         return;
       }
       if (mounted) {
@@ -152,7 +152,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       );
       final result = jsonDecode(resp.body);
       if (resp.statusCode != 200 || result['success'] != true) {
-        setState(() => _serverError = result['error'] ?? context.tr('failed_to_reset_password'));
+        setState(() => _serverError = context.tr(result['error'] ?? 'failed_to_reset_password'));
         return;
       }
       if (mounted) {

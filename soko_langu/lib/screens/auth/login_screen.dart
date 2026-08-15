@@ -9,7 +9,6 @@ import '../../extensions/context_tr.dart';
 import '../../models/saved_account.dart';
 import '../../notifiers/auth_notifier.dart';
 import '../../services/account_manager.dart';
-import '../../utils/network_error.dart';
 import '../../utils/phone_utils.dart';
 import '../../widgets/account_switcher_sheet.dart';
 import '../../widgets/auth_form_widgets.dart';
@@ -118,7 +117,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await _saveCurrentAccount();
       await _finishLogin();
     } catch (e) {
-      if (mounted) _showError(e is NetworkError ? e.userMessage : e.toString());
+      if (mounted) _showError(context.trError(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -131,7 +130,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await _saveCurrentGoogleAccount();
       await _finishLogin();
     } catch (e) {
-      if (mounted) _showError(e is NetworkError ? e.userMessage : e.toString());
+      if (mounted) _showError(context.trError(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -151,7 +150,7 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } catch (e) {
-      if (mounted) _showError(e is NetworkError ? e.userMessage : e.toString());
+      if (mounted) _showError(context.trError(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -169,7 +168,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await _saveCurrentPhoneAccount();
       await _finishLogin();
     } catch (e) {
-      if (mounted) _showError(e is NetworkError ? e.userMessage : e.toString());
+      if (mounted) _showError(context.trError(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
