@@ -82,6 +82,20 @@ test('localizeSms: deposit fail to English', () => {
   assert.ok(out.includes('Reason: Sali AB1'), out);
 });
 
+test('localizeSms: promo broadcast to Chinese', () => {
+  const msg = 'Soko Vibe: Tangaza bidhaa zako kwa bei nafuu na wanunue zaidi! Sambaza neno kwa marafiki na familia. Kila agizo linalolipwa linakusaidia kukua. Pakia Soko Vibe leo!';
+  const out = localizeSms('zh', msg);
+  assert.ok(out.includes('推广您的商品'), out);
+  assert.ok(/[À-ũ]/.test(out) === false, 'no Swahili tokens remain');
+});
+
+test('localizeSms: promo broadcast to English', () => {
+  const msg = 'Soko Vibe: Tangaza bidhaa zako kwa bei nafuu na wanunue zaidi! Sambaza neno kwa marafiki na familia. Kila agizo linalolipwa linakusaidia kukua. Pakia Soko Vibe leo!';
+  const out = localizeSms('en', msg);
+  assert.ok(out.includes('Advertise your products at an affordable price'), out);
+  assert.ok(!/[À-ũ]/.test(out), 'no Swahili tokens remain');
+});
+
 test('localizeSms: unknown template keeps single (Swahili) language', () => {
   const msg = 'Soko Vibe: Ujumbe wa kipekee usiorahisishwa.';
   assert.equal(localizeSms('zh', msg), msg);
@@ -121,4 +135,29 @@ test('localizeNotif: current listener template to English (escrow hold)', () => 
 test('localizeNotif: unmatched body keeps original single language', () => {
   const { body } = localizeNotif('en', 'T', 'Ujumbe wa kipekee usiorahisishwa.');
   assert.equal(body, 'Ujumbe wa kipekee usiorahisishwa.');
+});
+
+test('localizeNotif: payout in-app variant to English', () => {
+  const { body } = localizeNotif('en', 'Pesa Zimetumwa Moja kwa Moja!', 'Bidhaa — TZS 45,500 zimetumwa kwa simu yako. Fee ya TZS 4,500 imekatwa.');
+  assert.ok(body.includes('A fee of TZS 4,500 was deducted'), body);
+});
+
+test('localizeNotif: payout in-app variant to Chinese', () => {
+  const { body } = localizeNotif('zh', 'Pesa Zimetumwa Moja kwa Moja!', 'Bidhaa — TZS 45,500 zimetumwa kwa simu yako. Fee ya TZS 4,500 imekatwa.');
+  assert.ok(body.includes('已扣除 TZS 4,500'), body);
+});
+
+test('localizeNotif: admin dispute with empty note to English', () => {
+  const { body } = localizeNotif('en', '⚖️ Uamuzi wa Mgogoro', 'Admin ameamua pesa zitolewe kwa muuzaji. ');
+  assert.equal(body, 'The admin ruled that the money be released to the seller.');
+});
+
+test('localizeNotif: admin dispute with note to Chinese', () => {
+  const { body } = localizeNotif('zh', '⚖️ Uamuzi wa Mgogoro', 'Admin ameamua pesa zitolewe kwa muuzaji. Tumeamua kuwa muuzaji ni sahihi.');
+  assert.ok(body.includes('管理员裁定款项将释放给卖家。Tumeamua kuwa muuzaji ni sahihi.'), body);
+});
+
+test('localizeNotif: admin released-to-you with no note to English', () => {
+  const { body } = localizeNotif('en', '⚖️ Uamuzi wa Mgogoro', 'Admin ameamua pesa zikutolee. ');
+  assert.equal(body, 'The admin ruled that the money be released to you.');
 });

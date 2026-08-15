@@ -13,6 +13,7 @@
 require('dotenv').config();
 const axios = require('axios');
 const admin = require('firebase-admin');
+const { localizeSms } = require('./notif_lang');
 
 const DRY_RUN = process.argv.includes('--dry-run');
 const DELAY_MS = 1200; // Meseji is not a fan of bursts — space sends out.
@@ -134,11 +135,17 @@ async function main() {
   // Respect SMS opt-out. A user has opted out only if their prefs doc explicitly
   // sets sms_enabled to false — missing doc / missing flag means allowed.
   const optedOut = new Set();
+  const userLang = new Map();
   if (!DRY_RUN) {
     const prefsSnap = await db.collection('notification_preferences').get();
     for (const doc of prefsSnap.docs) {
       if (doc.data()?.sms_enabled === false) optedOut.add(doc.id);
     }
+  }
+  // Every broadcast SMS is one language: resolve each recipient's in-app
+  // language (default Swahili) and localize the default message before send.
+  for (const doc of usersSnap.docs) {
+    userLang.set(doc.id, doc.data()?.langCode || 'sw');
   }
 
   const recipients = [];
@@ -172,7 +179,10 @@ async function main() {
     const r = recipients[i];
     process.stdout.write(`[${i + 1}/${recipients.length}] ${r.phone} ... `);
     try {
-      const result = await sendSms(r.phone, message);
+      // Localize the broadcast to this recipient's in-app language so one SMS
+      // is one language. Custom --message text stays verbatim (no rule match).
+      const lang = userLang.get(r.uids[0]) || 'sw';
+      const result = await sendSms(r.phone, localizeSms(lang, message));
       if (result.ok) { sent++; results.push({ phone: r.phone, status: 'sent', provider: result.provider }); }
       else { failed++; results.push({ phone: r.phone, status: 'failed' }); }
       console.log(result.ok ? `sent (${result.provider})` : 'FAILED');

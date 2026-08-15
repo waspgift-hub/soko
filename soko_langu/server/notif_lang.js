@@ -69,6 +69,13 @@ const bodyRules = [
     zh: (m) => `TZS ${m[1]} 已发送到您的手机（手续费 TZS ${m[2]}）。`,
   },
   {
+    // index.js:2170 stores this variant (with "Fee ya ... imekatwa" wording)
+    // in the Firestore in-app copy while the push uses the "(fee)" form above.
+    re: /^(.+) — TZS (.+) zimetumwa kwa simu yako\. Fee ya TZS (.+) imekatwa\.$/,
+    en: (m) => `${m[1]} — TZS ${m[2]} has been sent to your phone. A fee of TZS ${m[3]} was deducted.`,
+    zh: (m) => `${m[1]} — TZS ${m[2]} 已发送到您的手机。已扣除 TZS ${m[3]} 的手续费。`,
+  },
+  {
     re: /^TZS (.+) zimetumwa kwenye mobile money yako\.$/,
     en: (m) => `TZS ${m[1]} has been sent to your mobile money.`,
     zh: (m) => `TZS ${m[1]} 已发送到您的手机钱包。`,
@@ -204,14 +211,16 @@ const bodyRules = [
     zh: (m) => `我们已收到您对${m[1]}的争议。管理员将进行审核并作出裁决。`,
   },
   {
-    re: /^Admin ameamua pesa zitolewe kwa muuzaji\. (.+)$/,
-    en: (m) => `The admin ruled that the money be released to the seller. ${m[1]}`,
-    zh: (m) => `管理员裁定款项将释放给卖家。${m[1]}`,
+    // note is optional — index.js emits `muuzaji. ${note || ''}`, which leaves
+    // a trailing space when the note is empty.
+    re: /^Admin ameamua pesa zitolewe kwa muuzaji\. ?(.+)?$/,
+    en: (m) => `The admin ruled that the money be released to the seller.${m[1] ? ` ${m[1]}` : ''}`,
+    zh: (m) => `管理员裁定款项将释放给卖家。${m[1] ? m[1] : ''}`,
   },
   {
-    re: /^Admin ameamua pesa zikutolee\. (.+)$/,
-    en: (m) => `The admin ruled that the money be released to you. ${m[1]}`,
-    zh: (m) => `管理员裁定款项将释放给您。${m[1]}`,
+    re: /^Admin ameamua pesa zikutolee\. ?(.+)?$/,
+    en: (m) => `The admin ruled that the money be released to you.${m[1] ? ` ${m[1]}` : ''}`,
+    zh: (m) => `管理员裁定款项将释放给您。${m[1] ? m[1] : ''}`,
   },
   {
     re: /^Refund kamili ya TZS (.+) kwa (.+) imetumwa kwa namba yako\.$/,
@@ -453,6 +462,12 @@ const smsRules = [
     re: /^Soko Vibe: OTP yako ni (.+)\. Inaisha kwa dakika 10\.$/,
     en: (m) => `Soko Vibe: Your OTP is ${m[1]}. It expires in 10 minutes.`,
     zh: (m) => `Soko Vibe：您的验证码是 ${m[1]}，10分钟内有效。`,
+  },
+  {
+    // Bulk promotional broadcast (send_promo_sms.js default).
+    re: /^Soko Vibe: Tangaza bidhaa zako kwa bei nafuu na wanunue zaidi! Sambaza neno kwa marafiki na familia\. Kila agizo linalolipwa linakusaidia kukua\. Pakia Soko Vibe leo!$/,
+    en: (m) => `Soko Vibe: Advertise your products at an affordable price and sell more! Spread the word to friends and family. Every paid order helps you grow. Download Soko Vibe today!`,
+    zh: (m) => `Soko Vibe：以实惠的价格推广您的商品，卖出更多！向亲友传播这个消息。每一笔已付款的订单都能帮您成长。立即下载 Soko Vibe！`,
   },
 ];
 
