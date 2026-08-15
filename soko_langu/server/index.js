@@ -265,7 +265,7 @@ const CRITICAL_PUSH_TYPES = new Set([
 // concern on a single notification.
 const notifLangCache = require('./cache');
 const NOTIF_LANG_TTL_MS = 5 * 60 * 1000;
-const { localizeNotif } = require('./notif_lang');
+const { localizeNotif, localizeSms } = require('./notif_lang');
 
 async function getUserNotifLang(userId) {
   if (!db) return 'sw';
@@ -1077,6 +1077,13 @@ async function sendSms(phone, message) {
   }
 }
 
+// Resolves the recipient's in-app language, localizes the Swahili SMS template,
+// then sends. Keeps every SMS in a single language matching the app.
+async function sendLocalizedSms(phone, swMessage, userId) {
+  const lang = userId ? await getUserNotifLang(userId) : 'sw';
+  return sendSms(phone, localizeSms(lang, swMessage));
+}
+
 // ─── Notify Africa — SMS + WhatsApp (WABA) helpers ───
 const NOTIFY_SMS_BASE = 'https://api.notify.africa';
 const NOTIFY_WABA_BASE = 'https://notify-web-assistant-api.beagile.africa';
@@ -1180,7 +1187,7 @@ async function notifyBoostPaymentFailed(tx, reason = '') {
     if (phone) {
       const amount = tx.totalAmount || tx.amount || 0;
       const msg = `Soko Vibe: Malipo ya Boost ya TZS ${amount.toLocaleString()} hayakukamilika${reasonText}. Jaribu tena kwenye app.`;
-      await sendSms(phone, msg);
+      await sendLocalizedSms(phone, msg, tx.userId);
     } else {
       console.error(`notifyBoostPaymentFailed: no phone for user ${tx.userId} (tx ${tx.buyerPhone || 'none'}) — SMS skipped`);
     }
@@ -1284,7 +1291,10 @@ app.post('/api/auth/send-otp', otpPhoneRateLimit, async (req, res) => {
 
     // Send OTP via Meseji SMS — reuse shared sendSms helper
     const message = `Soko Vibe: OTP yako ni ${otp}. Inaisha kwa dakika 10.`;
-    const sent = await sendSms(cleanPhone, message);
+    // send-otp runs pre-auth, so the app tells us its language via langCode
+    // (defaults to Swahili for clients that don't send it).
+    const langCode = ['sw', 'en', 'zh'].includes(req.body.langCode) ? req.body.langCode : 'sw';
+    const sent = await sendSms(cleanPhone, localizeSms(langCode, message));
 
     // Save send status to the same OTP document for debugging
     await db.collection('otp_codes').doc(cleanPhone).update({
@@ -2194,7 +2204,7 @@ app.post('/api/escrow/release', async (req, res) => {
         const sellerMsg = autoPaidOut
           ? `Soko Vibe: TZS ${(sellerReceives - getPayoutFee(sellerReceives)).toLocaleString()} zimetumwa kwa simu yako kwa mauzo ya ${productName} (fee TZS ${getPayoutFee(sellerReceives).toLocaleString()}).`
           : `Soko Vibe: Mteja amethibitisha kupokea mzigo #${orderId}. TZS ${sellerReceives.toLocaleString()} zimetolewa Escrow na kuwekwa kwenye pochi yako.`;
-        sendSms(sellerPhone, sellerMsg);
+        sendLocalizedSms(sellerPhone, sellerMsg, sellerId);
       }
     } catch (_) {}
 
@@ -2271,7 +2281,7 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
           const depUserSnap = await db.collection('users').doc(dep.userId).get();
           const depPhone = depUserSnap.data()?.phone || dep.phone || '';
           if (depPhone) {
-            sendSms(depPhone, `Soko Vibe: Malipo ya TZS ${failAmount.toLocaleString()} hayakukamilika. Sababu: ${failReason}. Jaribu tena kwenye app.`).catch(() => {});
+            sendLocalizedSms(depPhone, `Soko Vibe: Malipo ya TZS ${failAmount.toLocaleString()} hayakukamilika. Sababu: ${failReason}. Jaribu tena kwenye app.`, dep.userId).catch(() => {});
           }
         } catch (_) {}
       }
@@ -2357,7 +2367,7 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
           if (sellerPhone) {
             const expiryStr = new Date(Date.now() + tierConfig.days * 24 * 60 * 60 * 1000).toLocaleDateString('sw-TZ');
             const msg = `Soko Vibe: Malipo ya Boost ya TZS ${boostAmount.toLocaleString()} yamefanikiwa! Bidhaa yako sasa inaonyeshwa kipaumbele hadi ${expiryStr}.`;
-            sendSms(sellerPhone, msg);
+            sendLocalizedSms(sellerPhone, msg, tx.userId);
           }
         }).catch(() => {});
 
@@ -2461,7 +2471,7 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
         // SMS notifications for escrow_hold
         try {
           const buyerMsg = `Soko Vibe: Malipo ya TZS ${productPrice.toLocaleString()} kwa Oda #${orderId} yamepokelewa na kuwekwa salama Escrow. Muuzaji anajiandaa kutuma mzigo wako.`;
-          if (tx.buyerPhone) sendSms(tx.buyerPhone, buyerMsg);
+          if (tx.buyerPhone) sendLocalizedSms(tx.buyerPhone, buyerMsg, tx.buyerId);
         } catch (_) {}
         try {
           if (tx.sellerId) {
@@ -2469,7 +2479,7 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
             const sellerPhone = sellerSnap.data()?.phone;
             if (sellerPhone) {
               const sellerMsg = `Soko Vibe: Oda #${orderId} imelipiwa! Fedha ipo salama Escrow. Tafadhali kamilisha usafirishaji stendi na ujaze risiti ya basi kwenye app.`;
-              sendSms(sellerPhone, sellerMsg);
+              sendLocalizedSms(sellerPhone, sellerMsg, tx.sellerId);
             }
           }
         } catch (_) {}
@@ -2510,7 +2520,7 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
           const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
           const buyerPhone = buyerSnap.data()?.phone || tx.buyerPhone || '';
           if (buyerPhone) {
-            sendSms(buyerPhone, `Soko Vibe: Malipo ya ${tx.productName || 'Bidhaa'} hayakukamilika. Tafadhali jaribu tena kwenye app. Sababu: ${failureReason}`).catch(() => {});
+            sendLocalizedSms(buyerPhone, `Soko Vibe: Malipo ya ${tx.productName || 'Bidhaa'} hayakukamilika. Tafadhali jaribu tena kwenye app. Sababu: ${failureReason}`, tx.buyerId).catch(() => {});
           }
         } catch (_) {}
       }

@@ -3,19 +3,21 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../utils/network_error.dart';
 import 'api_config.dart';
+import 'localization_service.dart';
 
 class MesejiService {
   /// OTP is generated + stored + verified server-side.
   /// Client just delegates: POST /api/auth/send-otp
   Future<void> sendOtp(String phone) async {
     final url = '${ApiConfig.baseUrl}/api/auth/send-otp';
+    final lang = await LocalizationService().getLanguage();
     debugPrint('MesejiService.sendOtp: POST $url phone=$phone');
     try {
       final res = await http
           .post(
             Uri.parse(url),
             headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'phone': phone}),
+            body: jsonEncode({'phone': phone, 'langCode': lang}),
           )
           .timeout(const Duration(seconds: 30));
       debugPrint('MesejiService.sendOtp: status ${res.statusCode}');

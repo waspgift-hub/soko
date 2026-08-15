@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../../widgets/google_loading.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/api_config.dart';
+import '../../services/localization_service.dart';
 import '../../app/routes.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -107,7 +108,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/auth/send-otp'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'phone': normalized}),
+        body: jsonEncode({'phone': normalized, 'langCode': await LocalizationService().getLanguage()}),
       );
       final result = jsonDecode(resp.body);
       if (resp.statusCode != 200 || result['sent'] != true) {

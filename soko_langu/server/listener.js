@@ -21,7 +21,7 @@ const db = admin.firestore();
 
 const notifPrefs = require('./notificationPrefs');
 const notifLangCache = require('./cache');
-const { localizeNotif } = require('./notif_lang');
+const { localizeNotif, localizeSms } = require('./notif_lang');
 const NOTIF_LANG_TTL_MS = 5 * 60 * 1000;
 
 // ─── OneSignal helpers (adapted from index.js) ──────────────────
@@ -105,6 +105,10 @@ async function sendSms(phone, message, userId) {
     console.log(`[LISTENER][SMS] skipped to ${userId} (sms preferences)`);
     return;
   }
+  // Localize the Swahili template to the recipient's in-app language so one
+  // SMS is one language (SW matches the user, not the device).
+  const lang = userId ? await getUserNotifLang(userId) : 'sw';
+  const localized = localizeSms(lang, message);
   const apiKey = process.env.MESEJI_API_KEY;
   if (!apiKey) {
     console.error('[LISTENER] MESEJI_API_KEY not configured');
@@ -116,7 +120,7 @@ async function sendSms(phone, message, userId) {
     const axios = require('axios');
     const resp = await axios.post('https://meseji.co.tz/api/v1/sms/send', {
       sender_id: process.env.MESEJI_SENDER_ID || 'MESEJI',
-      message,
+      message: localized,
       contacts: normalized,
     }, {
       headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
@@ -174,8 +178,8 @@ function startListener() {
 
           // Notify buyer via OneSignal
           if (buyerId) {
-            const title = 'Payment Received – Escrow Held';
-            const body = `Your payment for ${productName} is held in escrow.`;
+            const title = 'Malipo Yamekamilika!';
+            const body = `Malipo ya ${productName} yamepokelewa na kuwekwa escrow salama.`;
             sendOsNotification(buyerId, title, body, { type: 'payment', orderId, status: newStatus })
               .then(() => console.log(`[LISTENER] ${orderId}: push sent to buyer ${buyerId}`))
               .catch((err) => console.error(`[LISTENER] ${orderId}: push failed for buyer:`, err.message));
