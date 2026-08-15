@@ -385,7 +385,23 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
         final orderId =
             data?['orderId'] as String? ?? data?['transactionId'] as String?;
         if (orderId != null) {
-          _pushIfNotCurrent('/order-detail/$orderId', ctx, data ?? {});
+          // Order notifications carry the OTHER party's id: to-buyer ones
+          // include sellerId, to-seller ones include buyerId. A seller who
+          // just got "set the shipping cost for this new order" goes to the
+          // quote screen; other seller order notices (quote sent, paid, …)
+          // keep the order detail so they can act where the order lives.
+          // New-order requests are the only to-seller order notifications
+          // that carry productId, so that discriminates them uniquely.
+          final myUid = FirebaseAuth.instance.currentUser?.uid;
+          final isNewOrderForSeller = myUid != null &&
+              data?['sellerId'] == null &&
+              data?['buyerId'] != null &&
+              data?['productId'] != null;
+          if (isNewOrderForSeller) {
+            _pushIfNotCurrent('/seller-quote', ctx);
+          } else {
+            _pushIfNotCurrent('/order-detail/$orderId', ctx, data ?? {});
+          }
         } else {
           _pushIfNotCurrent('/notifications', ctx);
         }

@@ -313,7 +313,21 @@ class _NotificationScreenState extends State<NotificationScreen> {
             final orderId =
                 (rawData?['orderId'] ?? rawData?['transactionId']) as String?;
             if (orderId != null && orderId.isNotEmpty) {
-              context.push('${AppRoutes.orderDetail}/$orderId');
+              // Order notifications carry the OTHER party's id: to-buyer
+              // notifications include sellerId, to-seller ones include buyerId.
+              // A seller who got "set the shipping cost for this new order"
+              // (the only to-seller order notice carrying productId) lands on
+              // the quote screen; other seller notices act on order detail.
+              final myUid = FirebaseAuth.instance.currentUser?.uid;
+              final isNewOrderForSeller = myUid != null &&
+                  rawData?['sellerId'] == null &&
+                  rawData?['buyerId'] != null &&
+                  rawData?['productId'] != null;
+              if (isNewOrderForSeller) {
+                context.push(AppRoutes.sellerQuote);
+              } else {
+                context.push('${AppRoutes.orderDetail}/$orderId');
+              }
             } else {
               // myPurchases lists only the buyer's transactions; a seller
               // notification must land on the seller's orders screen instead.
