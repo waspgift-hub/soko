@@ -675,7 +675,6 @@ const BOOST_TIERS = {
 
 const PLATFORM_COMMISSION_PERCENT = 0.035; // 3.5% platform commission
 const AD_REVENUE_PER_VIEW = 15;        // TZS per ad view (estimate only)
-const MIN_WITHDRAWAL = 5000;          // Minimum withdrawal TZS 5,000
 
 // Transaction statuses that mean money really came in. Used everywhere a
 // transaction record is counted as a payment (buyer statement, admin
@@ -4051,8 +4050,8 @@ app.post('/api/seller/withdraw', async (req, res) => {
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const withdrawAmount = Math.round(amount);
-    if (withdrawAmount < MIN_WITHDRAWAL) {
-      return res.status(400).json({ error: `Minimum withdrawal is TZS ${MIN_WITHDRAWAL.toLocaleString()}` });
+    if (withdrawAmount <= 0) {
+      return res.status(400).json({ error: 'Withdrawal amount must be greater than zero' });
     }
 
     // Real ClickPesa payout fee tier — not the old flat 2000 estimate

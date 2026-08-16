@@ -400,13 +400,11 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
   }
 
   Widget _buildWithdrawalCard(ColorScheme cs, NumberFormat nf) {
-    const minWithdraw = 5000;
-
     return StreamBuilder<double>(
       stream: _service.streamSellerBalance(),
       builder: (context, snap) {
         final balance = snap.data ?? 0;
-        final canWithdraw = balance >= minWithdraw;
+        final canWithdraw = balance > 0;
 
         return DsCard(
           radius: 16,
@@ -474,7 +472,7 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
-                    context.tr('minimum_balance_required'),
+                    context.tr('insufficient_balance'),
                     style: TextStyle(color: cs.error, fontSize: 12),
                   ),
                 ),

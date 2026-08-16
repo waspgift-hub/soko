@@ -123,11 +123,9 @@ class SellerEarningsService {
     final uid = _uid;
     if (uid == null) return 'Not logged in';
 
-    const minWithdraw = 5000;
-
     final balance = await getSellerBalance();
-    if (balance < minWithdraw) {
-      return 'Minimum balance for withdrawal is TZS 5,000';
+    if (balance <= 0) {
+      return 'No balance to withdraw';
     }
 
     try {
