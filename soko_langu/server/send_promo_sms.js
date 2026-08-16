@@ -13,7 +13,7 @@
 require('dotenv').config();
 const axios = require('axios');
 const admin = require('firebase-admin');
-const { localizeSms } = require('./notif_lang');
+const { smsSafeForGateway } = require('./notif_lang');
 
 const DRY_RUN = process.argv.includes('--dry-run');
 const DELAY_MS = 1200; // Meseji is not a fan of bursts — space sends out.
@@ -182,7 +182,7 @@ async function main() {
       // Localize the broadcast to this recipient's in-app language so one SMS
       // is one language. Custom --message text stays verbatim (no rule match).
       const lang = userLang.get(r.uids[0]) || 'sw';
-      const result = await sendSms(r.phone, localizeSms(lang, message));
+      const result = await sendSms(r.phone, smsSafeForGateway(lang, message));
       if (result.ok) { sent++; results.push({ phone: r.phone, status: 'sent', provider: result.provider }); }
       else { failed++; results.push({ phone: r.phone, status: 'failed' }); }
       console.log(result.ok ? `sent (${result.provider})` : 'FAILED');

@@ -265,7 +265,7 @@ const CRITICAL_PUSH_TYPES = new Set([
 // concern on a single notification.
 const notifLangCache = require('./cache');
 const NOTIF_LANG_TTL_MS = 5 * 60 * 1000;
-const { localizeNotif, localizeSms, localizeEmailOtp, localizeDefaultReason } = require('./notif_lang');
+const { localizeNotif, localizeEmailOtp, localizeDefaultReason, smsSafeForGateway } = require('./notif_lang');
 
 async function getUserNotifLang(userId) {
   if (!db) return 'sw';
@@ -1102,7 +1102,7 @@ async function sendSms(phone, message) {
 // then sends. Keeps every SMS in a single language matching the app.
 async function sendLocalizedSms(phone, swMessage, userId) {
   const lang = userId ? await getUserSmsLang(userId) : 'sw';
-  return sendSms(phone, localizeSms(lang, swMessage));
+  return sendSms(phone, smsSafeForGateway(lang, swMessage));
 }
 
 // ─── Notify Africa — SMS + WhatsApp (WABA) helpers ───
@@ -1318,7 +1318,7 @@ app.post('/api/auth/send-otp', otpPhoneRateLimit, async (req, res) => {
     // send-otp runs pre-auth, so the app tells us its language via langCode
     // (defaults to Swahili for clients that don't send it).
     const langCode = ['sw', 'en', 'zh'].includes(req.body.langCode) ? req.body.langCode : 'sw';
-    const sent = await sendSms(cleanPhone, localizeSms(langCode, message));
+    const sent = await sendSms(cleanPhone, smsSafeForGateway(langCode, message));
 
     // Save send status to the same OTP document for debugging
     await db.collection('otp_codes').doc(cleanPhone).update({
@@ -1895,7 +1895,7 @@ app.post('/api/send-bulk-notification', async (req, res) => {
 // ============================================================
 app.post('/api/escrow/dispatch', async (req, res) => {
   try {
-    const { orderId, userId, trackingNumber, receiptUrl, photoUrl, note } = req.body;
+    const { orderId, userId, courierName, trackingNumber, driverPhone, notes, receiptUrl, photoUrl, note } = req.body;
     if (!orderId || !userId) {
       return res.status(400).json({ error: 'Missing orderId or userId' });
     }
@@ -1932,10 +1932,12 @@ app.post('/api/escrow/dispatch', async (req, res) => {
     }
 
     const dispatchProof = {
+      courierName: courierName || '',
       trackingNumber: trackingNumber || '',
+      driverPhone: driverPhone || '',
       receiptUrl: receiptUrl || '',
       photoUrl: photoUrl || '',
-      note: note || '',
+      note: note || notes || '',
       dispatchedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 

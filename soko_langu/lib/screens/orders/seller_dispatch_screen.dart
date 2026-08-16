@@ -45,7 +45,10 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
     try {
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/escrow/dispatch'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${await user.getIdToken()}',
+        },
         body: jsonEncode({
           'orderId': txId,
           'userId': user.uid,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'app_transitions.dart';
 import '../models/product_model.dart';
 import '../screens/auth/auth_gate.dart';
@@ -189,7 +190,14 @@ GoRouter buildRouter() {
       GoRoute(
         path: '${AppRoutes.productDetail}/:id',
         pageBuilder: (context, state) {
-          return _premiumPage(ProductDetailPage(product: state.extra as Product));
+          final extra = state.extra;
+          // Deep links (e.g. notification taps) arrive with only the :id and no
+          // Product object, so load from Firestore instead of casting null.
+          return _premiumPage(
+            extra is Product
+                ? ProductDetailPage(product: extra)
+                : _ProductDetailLoader(productId: state.pathParameters['id'] ?? ''),
+          );
         },
       ),
       GoRoute(
@@ -352,7 +360,7 @@ GoRouter buildRouter() {
       ),
       GoRoute(
         path: AppRoutes.boostReceipt,
-        pageBuilder: (context, state) => _premiumPage(BoostReceiptScreen(data: state.extra as Map<String, dynamic>)),
+        pageBuilder: (context, state) => _premiumPage(BoostReceiptScreen(data: state.extra as Map<String, dynamic>? ?? const {})),
       ),
       GoRoute(
         path: AppRoutes.discovery,
@@ -465,6 +473,46 @@ class _MissingRouteData extends StatelessWidget {
       body: Center(
         child: Text(context.tr('loading_error')),
       ),
+    );
+  }
+}
+
+class _ProductDetailLoader extends StatefulWidget {
+  const _ProductDetailLoader({required this.productId});
+
+  final String productId;
+
+  @override
+  State<_ProductDetailLoader> createState() => _ProductDetailLoaderState();
+}
+
+class _ProductDetailLoaderState extends State<_ProductDetailLoader> {
+  late final Future<Product?> _future = _load();
+
+  Future<Product?> _load() async {
+    try {
+      final doc =
+          await FirebaseFirestore.instance.collection('products').doc(widget.productId).get();
+      return doc.exists ? Product.fromFirestore(doc) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Product?>(
+      future: _future,
+      builder: (context, snapshot) {
+        final product = snapshot.data;
+        if (product != null) return ProductDetailPage(product: product);
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        return const _MissingRouteData();
+      },
     );
   }
 }

@@ -213,8 +213,12 @@ class ClickPesaService {
 
   static Future<int> getBalance() async {
     try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return 0;
+      final token = await user.getIdToken();
       final resp = await http.get(
         Uri.parse('${ApiConfig.baseUrl}/api/clickpesa/balance'),
+        headers: {'Authorization': 'Bearer $token'},
       );
       if (resp.statusCode != 200) return 0;
       final data = jsonDecode(resp.body) as Map<String, dynamic>;

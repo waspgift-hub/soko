@@ -201,7 +201,10 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     try {
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/escrow/release'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${await user.getIdToken()}',
+        },
         body: jsonEncode({'orderId': txId, 'userId': user.uid}),
       );
       final result = jsonDecode(resp.body);
@@ -341,7 +344,10 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     try {
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/escrow/dispute'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${await user.getIdToken()}',
+        },
         body: jsonEncode({'orderId': txId, 'userId': user.uid}),
       );
       final result = jsonDecode(resp.body);
@@ -385,7 +391,10 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
     try {
       final resp = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/escrow/cancel'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${await user.getIdToken()}',
+        },
         body: jsonEncode({'orderId': txId, 'userId': user.uid}),
       );
       final result = jsonDecode(resp.body);

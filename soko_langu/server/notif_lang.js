@@ -530,6 +530,31 @@ function localizeSms(lang, message) {
   return message;
 }
 
+// GSM-7 is the 7-bit charset SMS gateways (Meseji, Notify Africa) encode to a
+// single 160-char segment. Any character outside it — CJK, emoji, Cyrillic —
+// is rewritten to `?` before delivery, so a Chinese SMS arrives as `?????`.
+// Keep the handful of GSM-7 non-ASCII chars that some templates use.
+const GSM7_EXTRA = new Set(['@', '£', '$', '¥', 'è', 'é', 'ù', 'ì', 'ò', 'Ç', 'Ø', 'ø', 'Å', 'å', 'Δ', 'Φ', 'Γ', 'Λ', 'Ω', 'Π', 'Ψ', 'Σ', 'Θ', 'Ξ', 'Æ', 'æ', 'ß', 'É', 'Ä', 'Ö', 'Ñ', 'Ü', '§', '¿', 'ä', 'ö', 'ñ', 'ü', 'à', '^', '{', '}', '[', ']', '~', '|', '€']);
+
+function isGsm7Char(ch) {
+  const c = ch.codePointAt(0);
+  return (c >= 0x20 && c <= 0x7E) || GSM7_EXTRA.has(ch);
+}
+
+// Localizes `message` to `lang`, but returns the English template instead when
+// the localized copy contains characters the gateway would mangle. English SMS
+// templates are ASCII-only, so they always survive the 7-bit encode.
+function smsSafeForGateway(lang, message) {
+  const localized = localizeSms(lang, message);
+  for (const ch of localized) {
+    if (!isGsm7Char(ch)) {
+      console.log(`[sms] ${lang} SMS has non-GSM-7 char U+${ch.codePointAt(0).toString(16).toUpperCase()} — falling back to English`);
+      return localizeSms('en', message);
+    }
+  }
+  return localized;
+}
+
 /// Localizes a Swahili email-OTP email into `lang`. Emails are pre-auth, so
 /// the app tells us its language via langCode (same as send-otp).
 const emailOtpCopy = {
@@ -559,4 +584,4 @@ function localizeEmailOtp(lang) {
   return emailOtpCopy[lang] || emailOtpCopy.en;
 }
 
-module.exports = { localizeNotif, localizeSms, localizeEmailOtp, localizeDefaultReason };
+module.exports = { localizeNotif, localizeSms, localizeEmailOtp, localizeDefaultReason, smsSafeForGateway };

@@ -21,7 +21,7 @@ const db = admin.firestore();
 
 const notifPrefs = require('./notificationPrefs');
 const notifLangCache = require('./cache');
-const { localizeNotif, localizeSms } = require('./notif_lang');
+const { localizeNotif, smsSafeForGateway } = require('./notif_lang');
 const NOTIF_LANG_TTL_MS = 5 * 60 * 1000;
 
 // ─── OneSignal helpers (adapted from index.js) ──────────────────
@@ -124,7 +124,7 @@ async function sendSms(phone, message, userId) {
 // Localize the Swahili template to the recipient's preferred SMS language
 // (`smsLangCode`), which may differ from the in-app language preference.
 const lang = userId ? await getUserSmsLang(userId) : 'sw';
-const localized = localizeSms(lang, message);
+const localized = smsSafeForGateway(lang, message);
   const apiKey = process.env.MESEJI_API_KEY;
   if (!apiKey) {
     console.error('[LISTENER] MESEJI_API_KEY not configured');
