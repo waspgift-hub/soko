@@ -33,6 +33,7 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
   final WishlistService _wishlistService = WishlistService();
   UserProfile? _profile;
   String? _localImagePath;
+  bool _avatarError = false;
   int _wishlistCount = 0;
   double _avgRating = 0;
   bool _isLoading = true;
@@ -96,7 +97,7 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
 
   Future<void> _loadProfile() async {
     if (!mounted) return;
-    setState(() => _isLoading = true);
+    setState(() { _isLoading = true; _avatarError = false; });
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) { if (mounted) setState(() => _isLoading = false); return; }
     var profile = await _userService.getProfile(user.uid);
@@ -113,7 +114,7 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
         source: ImageSource.gallery, maxWidth: 512, imageQuality: 80,
       );
       if (image != null) {
-        setState(() => _localImagePath = image.path);
+        setState(() { _localImagePath = image.path; _avatarError = false; });
         final oldUrl = _profile?.profileImage ?? '';
         final url = await _userService.uploadProfileImage(image.path);
         await _userService.updateProfileImage(url);
@@ -217,10 +218,24 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                               child: CircleAvatar(
                                 radius: 49,
                                 backgroundColor: cs.surface,
-                                backgroundImage: imageUrl != null
-                                    ? (imageUrl.startsWith('http') ? NetworkImage(imageUrl) as ImageProvider : FileImage(File(imageUrl)))
+                                // Empty string (default) or a failed load must
+                                // fall back to the person icon, not a blank ring.
+                                backgroundImage: (imageUrl != null &&
+                                        imageUrl.isNotEmpty &&
+                                        !_avatarError)
+                                    ? (imageUrl.startsWith('http')
+                                        ? NetworkImage(imageUrl) as ImageProvider
+                                        : FileImage(File(imageUrl)))
                                     : null,
-                                child: imageUrl == null
+                                onBackgroundImageError:
+                                    (imageUrl != null && imageUrl.isNotEmpty)
+                                        ? (_, _) {
+                                            if (mounted) {
+                                              setState(() => _avatarError = true);
+                                            }
+                                          }
+                                        : null,
+                                child: (imageUrl == null || imageUrl.isEmpty || _avatarError)
                                     ? Icon(
                                         Icons.person_outline_rounded,
                                         color: cs.primary,
