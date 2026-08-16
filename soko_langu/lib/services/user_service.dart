@@ -181,6 +181,26 @@ class UserService {
     await _profileDoc().update({'profileImage': url});
   }
 
+  /// Deletes the previous profile image from Cloudinary after it has been
+  /// replaced. Best-effort: the profile already points at the new image, so a
+  /// cleanup failure is swallowed instead of surfacing an error.
+  Future<void> deleteProfileImage(String imageUrl) async {
+    if (imageUrl.isEmpty || !imageUrl.contains('res.cloudinary.com')) return;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      final token = await user.getIdToken();
+      await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/cloudinary/delete'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'imageUrl': imageUrl}),
+      );
+    } catch (_) {}
+  }
+
   Future<bool> isUsernameTaken(String username, String currentUid) async {
     if (username.trim().isEmpty) return false;
     final snap = await _db

@@ -38,13 +38,25 @@ class _BannerRotatorState extends State<BannerRotator> {
 
   void _startTimer() {
     if (_timer != null) return;
-    // 8s per banner so each section (flash deals / dynamic / boost promos)
-    // stays readable; 5s felt rushed for users scanning listings.
-    _timer = Timer.periodic(const Duration(seconds: 8), (_) {
+    _scheduleNext();
+  }
+
+  // Self-rescheduling so the dwell time can differ per section. The flash
+  // section stays up until every flash sale has had its 30s (30s × count);
+  // the dynamic/boost sections each get a flat 30s.
+  void _scheduleNext() {
+    _timer?.cancel();
+    final banners = _banners();
+    if (banners.length <= 1) {
+      _timer = null;
+      return;
+    }
+    final isFlashSection = _current == 0 && widget.flashSales.isNotEmpty;
+    final seconds = isFlashSection ? 30 * widget.flashSales.length : 30;
+    _timer = Timer(Duration(seconds: seconds), () {
       if (!mounted) return;
-      final c = _banners().length;
-      if (c <= 1) { _timer?.cancel(); _timer = null; return; }
-      setState(() => _current = (_current + 1) % c);
+      setState(() => _current = (_current + 1) % banners.length);
+      _scheduleNext();
     });
   }
 

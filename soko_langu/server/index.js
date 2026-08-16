@@ -5898,6 +5898,59 @@ app.post('/api/cloudinary/sign', async (req, res) => {
   }
 });
 
+// Deletes an uploaded Cloudinary image (e.g. the old profile picture when a
+// user replaces it). Uploads are unsigned so clients can't self-delete; the
+// delete requires basic auth with the server-only API key/secret.
+app.post('/api/cloudinary/delete', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Missing or invalid token' });
+    }
+    try {
+      await admin.auth().verifyIdToken(authHeader.split(' ')[1]);
+    } catch {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    const apiKey = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+    if (!apiKey || !apiSecret) {
+      return res.status(500).json({ error: 'Cloudinary not configured on server' });
+    }
+
+    const { imageUrl } = req.body;
+    if (!imageUrl || !/res\.cloudinary\.com/.test(imageUrl)) {
+      return res.json({ success: false, skipped: true });
+    }
+    const match = imageUrl.match(/\/v\d+\/(.+)\.\w+$/);
+    if (!match) return res.json({ success: false, skipped: true });
+    const publicId = match[1];
+
+    const resp = await axios.post(
+      'https://api.cloudinary.com/v1_1/dgbsohnl4/image/destroy',
+      new URLSearchParams({
+        public_id: publicId,
+        timestamp: String(Math.floor(Date.now() / 1000)),
+      }),
+      {
+        auth: { username: apiKey, password: apiSecret },
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        timeout: 15000,
+      },
+    );
+    const result = resp.data || {};
+    if (result.result === 'ok' || result.result === 'not found') {
+      res.json({ success: true, publicId, result: result.result });
+    } else {
+      res.status(502).json({ error: `Cloudinary delete failed: ${result.result}` });
+    }
+  } catch (e) {
+    console.error('Cloudinary delete error:', e.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ============================================================
 // 🤖 GROQ AI — Secure proxy (API key stays server-side)
 // ============================================================

@@ -114,8 +114,10 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
       );
       if (image != null) {
         setState(() => _localImagePath = image.path);
+        final oldUrl = _profile?.profileImage ?? '';
         final url = await _userService.uploadProfileImage(image.path);
         await _userService.updateProfileImage(url);
+        await _userService.deleteProfileImage(oldUrl);
         await _loadProfile();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('photo_updated'))));

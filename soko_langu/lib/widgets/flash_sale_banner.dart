@@ -53,9 +53,9 @@ class _FlashSaleBannerState extends State<FlashSaleBanner>
   void _startAutoSlide(int itemCount) {
     _timer?.cancel();
     if (itemCount <= 1) return;
-    // 8s per slide so users can actually read each flash-sale deal before it
-    // advances; 3s was too fast with many active sales.
-    _timer = Timer.periodic(const Duration(seconds: 8), (_) {
+    // 30s per slide so every active flash-sale deal gets a full read before
+    // the next one advances; 8s felt rushed with many sales on screen.
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (!mounted) return;
       final nextPage = (_currentPage + 1) % itemCount;
       _pageController.animateToPage(

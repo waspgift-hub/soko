@@ -256,6 +256,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       final uid = FirebaseAuth.instance.currentUser!.uid;
       String imageUrl = _profile?.profileImage ?? '';
+      final oldImageUrl = _profile?.profileImage ?? '';
 
       if (_imagePath != null && (_profile?.profileImage != _imagePath)) {
         if (_imagePath!.startsWith('http')) {
@@ -307,6 +308,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       );
 
       await _userService.saveProfile(profile);
+
+      if (oldImageUrl.isNotEmpty && oldImageUrl != imageUrl) {
+        await _userService.deleteProfileImage(oldImageUrl);
+      }
 
       await FirebaseAuth.instance.currentUser?.updateDisplayName(
         profile.displayName,
