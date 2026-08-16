@@ -137,10 +137,10 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _SubHeader(cs: cs, text: context.tr('platform_commission', 'Platform Commission')),
-                    _PctRow(cs: cs, label: context.tr('charged_per_sale', 'Charged per completed sale'), value: '3.5%'),
+                    _PctRow(cs: cs, label: context.tr('charged_per_sale', 'Charged to the buyer at purchase'), value: '3.5%'),
                     const SizedBox(height: 6),
                     Text(
-                      context.tr('commission_breakdown_note', 'The 3.5% commission is deducted from the seller\'s payout and recorded as Soko Vibe revenue.'),
+                      context.tr('commission_breakdown_note', 'The 3.5% commission is added to the buyer\'s total; the seller receives full proceeds with no deduction.'),
                       style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.6)),
                     ),
                     const SizedBox(height: 10),
