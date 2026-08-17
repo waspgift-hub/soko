@@ -19,7 +19,7 @@ const DRY_RUN = process.argv.includes('--dry-run');
 const DELAY_MS = 1200; // Meseji is not a fan of bursts — space sends out.
 
 const DEFAULT_MESSAGE =
-  'Soko Vibe: Tangaza bidhaa zako kwa bei nafuu na wanunue zaidi! Sambaza neno kwa marafiki na familia. Kila agizo linalolipwa linakusaidia kukua. Pakia Soko Vibe leo!';
+  'Tangaza bidhaa zako kwa bei nafuu na wanunue zaidi! Sambaza neno kwa marafiki na familia. Kila agizo linalolipwa linakusaidia kukua. Pakia Soko Vibe leo!';
 
 const MESEJI_API_KEY = process.env.MESEJI_API_KEY;
 const MESEJI_SENDER_ID = process.env.MESEJI_SENDER_ID || 'MESEJI';

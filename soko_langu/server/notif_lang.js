@@ -404,70 +404,70 @@ const titlePatterns = [
 // ─── SMS templates (Swahili → en + zh) ────────────────────────────────
 const smsRules = [
   {
-    re: /^Soko Vibe: Malipo ya TZS (.+) kwa Oda #(.+) yamepokelewa na kuwekwa salama Escrow\. Muuzaji anajiandaa kutuma mzigo wako\.$/,
-    en: (m) => `Soko Vibe: Your payment of TZS ${m[1]} for Order #${m[2]} has been received and safely held in escrow. The seller is preparing to send your goods.`,
-    zh: (m) => `Soko Vibe：您订单 #${m[2]} 的 TZS ${m[1]} 付款已收到并安全托管。卖家正在准备发货。`,
+    re: /^Malipo ya TZS (.+) kwa Oda #(.+) yamepokelewa na kuwekwa salama Escrow\. Muuzaji anajiandaa kutuma mzigo wako\.$/,
+    en: (m) => `Your payment of TZS ${m[1]} for Order #${m[2]} has been received and safely held in escrow. The seller is preparing to send your goods.`,
+    zh: (m) => `您订单 #${m[2]} 的 TZS ${m[1]} 付款已收到并安全托管。卖家正在准备发货。`,
   },
   {
-    re: /^Soko Vibe: Oda #(.+) imelipiwa! Fedha ipo salama Escrow\. Tafadhali kamilisha usafirishaji stendi na ujaze risiti ya basi kwenye app\.$/,
-    en: (m) => `Soko Vibe: Order #${m[1]} has been paid! The money is safely held in escrow. Please complete dispatch and fill in the bus receipt in the app.`,
-    zh: (m) => `Soko Vibe：订单 #${m[1]} 已付款！款项已安全托管。请在应用中完成发货并填写巴士收据。`,
+    re: /^Oda #(.+) imelipiwa! Fedha ipo salama Escrow\. Tafadhali kamilisha usafirishaji stendi na ujaze risiti ya basi kwenye app\.$/,
+    en: (m) => `Order #${m[1]} has been paid! The money is safely held in escrow. Please complete dispatch and fill in the bus receipt in the app.`,
+    zh: (m) => `订单 #${m[1]} 已付款！款项已安全托管。请在应用中完成发货并填写巴士收据。`,
   },
   {
-    re: /^Soko Vibe: Mzigo wa Oda #(.+) umesafirishwa kupitia basi la (.+) \((.+)\)\. Fungua app kuona risiti yako ya kidijitali\.$/,
-    en: (m) => `Soko Vibe: Your order #${m[1]} has been shipped via bus ${m[2]} (${m[3]}). Open the app to see your digital receipt.`,
-    zh: (m) => `Soko Vibe：您的订单 #${m[1]} 已通过巴士 ${m[2]}（${m[3]}）发货。请打开应用查看您的电子收据。`,
+    re: /^Mzigo wa Oda #(.+) umesafirishwa kupitia basi la (.+) \((.+)\)\. Fungua app kuona risiti yako ya kidijitali\.$/,
+    en: (m) => `Your order #${m[1]} has been shipped via bus ${m[2]} (${m[3]}). Open the app to see your digital receipt.`,
+    zh: (m) => `您的订单 #${m[1]} 已通过巴士 ${m[2]}（${m[3]}）发货。请打开应用查看您的电子收据。`,
   },
   {
-    re: /^Soko Vibe: Mteja amethibitisha kupokea mzigo #(.+)\. TZS (.+) zimetolewa Escrow na kuwekwa kwenye pochi yako\.$/,
-    en: (m) => `Soko Vibe: The customer confirmed receiving shipment #${m[1]}. TZS ${m[2]} has been released from escrow into your wallet.`,
-    zh: (m) => `Soko Vibe：客户已确认收到货物 #${m[1]}。TZS ${m[2]} 已从托管释放到您的钱包。`,
+    re: /^Mteja amethibitisha kupokea mzigo #(.+)\. TZS (.+) zimetolewa Escrow na kuwekwa kwenye pochi yako\.$/,
+    en: (m) => `The customer confirmed receiving shipment #${m[1]}. TZS ${m[2]} has been released from escrow into your wallet.`,
+    zh: (m) => `客户已确认收到货物 #${m[1]}。TZS ${m[2]} 已从托管释放到您的钱包。`,
   },
   {
-    re: /^Soko Vibe: Malipo ya (.+) hayakukamilika\. Tafadhali fungua app na ujaribu tena\.$/,
-    en: (m) => `Soko Vibe: Your payment for ${m[1]} did not complete. Please open the app and try again.`,
-    zh: (m) => `Soko Vibe：您对${m[1]}的付款未完成。请打开应用重试。`,
+    re: /^Malipo ya (.+) hayakukamilika\. Tafadhali fungua app na ujaribu tena\.$/,
+    en: (m) => `Your payment for ${m[1]} did not complete. Please open the app and try again.`,
+    zh: (m) => `您对${m[1]}的付款未完成。请打开应用重试。`,
   },
   {
-    re: /^Soko Vibe: Malipo ya (.+) hayakukamilika\. Tafadhali jaribu tena kwenye app\. Sababu: (.+)$/,
-    en: (m) => `Soko Vibe: Your payment for ${m[1]} did not complete because ${m[2]}. Please try again in the app.`,
-    zh: (m) => `Soko Vibe：您对${m[1]}的付款未完成，因为${m[2]}。请在应用中重试。`,
+    re: /^Malipo ya (.+) hayakukamilika\. Tafadhali jaribu tena kwenye app\. Sababu: (.+)$/,
+    en: (m) => `Your payment for ${m[1]} did not complete because ${m[2]}. Please try again in the app.`,
+    zh: (m) => `您对${m[1]}的付款未完成，因为${m[2]}。请在应用中重试。`,
   },
   {
-    re: /^Soko Vibe: Fedha za (.+) \(Oda #(.+)\) zimerudishwa kwenye akaunti yako\.$/,
-    en: (m) => `Soko Vibe: Your funds for ${m[1]} (Order #${m[2]}) have been returned to your account.`,
-    zh: (m) => `Soko Vibe：您${m[1]}（订单 #${m[2]}）的款项已退回您的账户。`,
+    re: /^Fedha za (.+) \(Oda #(.+)\) zimerudishwa kwenye akaunti yako\.$/,
+    en: (m) => `Your funds for ${m[1]} (Order #${m[2]}) have been returned to your account.`,
+    zh: (m) => `您${m[1]}（订单 #${m[2]}）的款项已退回您的账户。`,
   },
   {
-    re: /^Soko Vibe: Malipo ya Boost ya TZS (.+) hayakukamilika(?:\. Sababu: (.+))?\. Jaribu tena kwenye app\.$/,
-    en: (m) => `Soko Vibe: Your boost payment of TZS ${m[1]} did not complete${m[2] ? ` because ${m[2]}` : ''}. Try again in the app.`,
-    zh: (m) => `Soko Vibe：您的推广付款 TZS ${m[1]} 未完成${m[2] ? `，因为${m[2]}` : ''}。请在应用中重试。`,
+    re: /^Malipo ya Boost ya TZS (.+) hayakukamilika(?:\. Sababu: (.+))?\. Jaribu tena kwenye app\.$/,
+    en: (m) => `Your boost payment of TZS ${m[1]} did not complete${m[2] ? ` because ${m[2]}` : ''}. Try again in the app.`,
+    zh: (m) => `您的推广付款 TZS ${m[1]} 未完成${m[2] ? `，因为${m[2]}` : ''}。请在应用中重试。`,
   },
   {
-    re: /^Soko Vibe: Malipo ya TZS (.+) hayakukamilika\. Sababu: (.+)\. Jaribu tena kwenye app\.$/,
-    en: (m) => `Soko Vibe: Your payment of TZS ${m[1]} did not complete because ${m[2]}. Try again in the app.`,
-    zh: (m) => `Soko Vibe：您的 TZS ${m[1]} 付款未完成，因为${m[2]}。请在应用中重试。`,
+    re: /^Malipo ya TZS (.+) hayakukamilika\. Sababu: (.+)\. Jaribu tena kwenye app\.$/,
+    en: (m) => `Your payment of TZS ${m[1]} did not complete because ${m[2]}. Try again in the app.`,
+    zh: (m) => `您的 TZS ${m[1]} 付款未完成，因为${m[2]}。请在应用中重试。`,
   },
   {
-    re: /^Soko Vibe: TZS (.+) zimetumwa kwa simu yako kwa mauzo ya (.+) \(fee TZS (.+)\)\.$/,
-    en: (m) => `Soko Vibe: TZS ${m[1]} has been sent to your phone for the sale of ${m[2]} (fee TZS ${m[3]}).`,
-    zh: (m) => `Soko Vibe：已就${m[2]}的销售向您的手机发送 TZS ${m[1]}（手续费 TZS ${m[3]}）。`,
+    re: /^TZS (.+) zimetumwa kwa simu yako kwa mauzo ya (.+) \(fee TZS (.+)\)\.$/,
+    en: (m) => `TZS ${m[1]} has been sent to your phone for the sale of ${m[2]} (fee TZS ${m[3]}).`,
+    zh: (m) => `已就${m[2]}的销售向您的手机发送 TZS ${m[1]}（手续费 TZS ${m[3]}）。`,
   },
   {
-    re: /^Soko Vibe: Malipo ya Boost ya TZS (.+) yamefanikiwa! Bidhaa yako sasa inaonyeshwa kipaumbele hadi (.+)\.$/,
-    en: (m) => `Soko Vibe: Your boost payment of TZS ${m[1]} was successful! Your product is now prioritized until ${m[2]}.`,
-    zh: (m) => `Soko Vibe：您的推广付款 TZS ${m[1]} 已成功！您的商品现在优先展示，截至 ${m[2]}。`,
+    re: /^Malipo ya Boost ya TZS (.+) yamefanikiwa! Bidhaa yako sasa inaonyeshwa kipaumbele hadi (.+)\.$/,
+    en: (m) => `Your boost payment of TZS ${m[1]} was successful! Your product is now prioritized until ${m[2]}.`,
+    zh: (m) => `您的推广付款 TZS ${m[1]} 已成功！您的商品现在优先展示，截至 ${m[2]}。`,
   },
   {
-    re: /^Soko Vibe: OTP yako ni (.+)\. Inaisha kwa dakika 10\.$/,
-    en: (m) => `Soko Vibe: Your OTP is ${m[1]}. It expires in 10 minutes.`,
-    zh: (m) => `Soko Vibe：您的验证码是 ${m[1]}，10分钟内有效。`,
+    re: /^OTP yako ni (.+)\. Inaisha kwa dakika 10\.$/,
+    en: (m) => `Your OTP is ${m[1]}. It expires in 10 minutes.`,
+    zh: (m) => `您的验证码是 ${m[1]}，10分钟内有效。`,
   },
   {
     // Bulk promotional broadcast (send_promo_sms.js default).
-    re: /^Soko Vibe: Tangaza bidhaa zako kwa bei nafuu na wanunue zaidi! Sambaza neno kwa marafiki na familia\. Kila agizo linalolipwa linakusaidia kukua\. Pakia Soko Vibe leo!$/,
-    en: (m) => `Soko Vibe: Advertise your products at an affordable price and sell more! Spread the word to friends and family. Every paid order helps you grow. Download Soko Vibe today!`,
-    zh: (m) => `Soko Vibe：以实惠的价格推广您的商品，卖出更多！向亲友传播这个消息。每一笔已付款的订单都能帮您成长。立即下载 Soko Vibe！`,
+    re: /^Tangaza bidhaa zako kwa bei nafuu na wanunue zaidi! Sambaza neno kwa marafiki na familia\. Kila agizo linalolipwa linakusaidia kukua\. Pakia Soko Vibe leo!$/,
+    en: (m) => `Advertise your products at an affordable price and sell more! Spread the word to friends and family. Every paid order helps you grow. Download Soko Vibe today!`,
+    zh: (m) => `以实惠的价格推广您的商品，卖出更多！向亲友传播这个消息。每一笔已付款的订单都能帮您成长。立即下载 Soko Vibe！`,
   },
 ];
 
@@ -516,17 +516,14 @@ function localizeDefaultReason(lang, reason) {
   return entry[lang] || reason;
 }
 
-/// Localizes a Swahili SMS message into `lang`. Keeps the "Soko Vibe:" brand
-/// prefix (a proper noun) but translates the rest so one SMS is one language.
+/// Localizes a Swahili SMS message into `lang`. Translates the message body
+/// so one SMS is one language.
 function localizeSms(lang, message) {
   if (!lang || lang === 'sw') return message;
   for (const rule of smsRules) {
     const match = message.match(rule.re);
     if (match && rule[lang]) return rule[lang](match);
   }
-  // Unknown template — transform the leading prefix for en/zh so the message
-  // is still coherent, then leave the template body intact (single language).
-  if (lang === 'en') return message.replace(/^Soko Vibe: /, 'Soko Vibe: ');
   return message;
 }
 

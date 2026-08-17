@@ -204,8 +204,8 @@ function startListener() {
           // SMS buyer + seller
           const grandTotal = (after.productPrice || 0) + (after.shippingCost || 0);
           Promise.all([
-            getUserPhone(buyerId).then(phone => phone && sendSms(phone, `Soko Vibe: Malipo ya TZS ${grandTotal.toLocaleString()} kwa Oda #${orderId} yamepokelewa na kuwekwa salama Escrow. Muuzaji anajiandaa kutuma mzigo wako.`, buyerId)),
-            getUserPhone(sellerId).then(phone => phone && sendSms(phone, `Soko Vibe: Oda #${orderId} imelipiwa! Fedha ipo salama Escrow. Tafadhali kamilisha usafirishaji stendi na ujaze risiti ya basi kwenye app.`, sellerId)),
+            getUserPhone(buyerId).then(phone => phone && sendSms(phone, `Malipo ya TZS ${grandTotal.toLocaleString()} kwa Oda #${orderId} yamepokelewa na kuwekwa salama Escrow. Muuzaji anajiandaa kutuma mzigo wako.`, buyerId)),
+            getUserPhone(sellerId).then(phone => phone && sendSms(phone, `Oda #${orderId} imelipiwa! Fedha ipo salama Escrow. Tafadhali kamilisha usafirishaji stendi na ujaze risiti ya basi kwenye app.`, sellerId)),
           ]);
         }
 
@@ -218,7 +218,7 @@ function startListener() {
 
           // SMS buyer
           getUserPhone(buyerId).then(phone => {
-            if (phone) sendSms(phone, `Soko Vibe: Mzigo wa Oda #${orderId} umesafirishwa kupitia basi la ${busName} (${plateNumber}). Fungua app kuona risiti yako ya kidijitali.`, buyerId);
+            if (phone) sendSms(phone, `Mzigo wa Oda #${orderId} umesafirishwa kupitia basi la ${busName} (${plateNumber}). Fungua app kuona risiti yako ya kidijitali.`, buyerId);
           });
         }
 
@@ -230,7 +230,7 @@ function startListener() {
 
           // SMS seller
           getUserPhone(sellerId).then(phone => {
-            if (phone) sendSms(phone, `Soko Vibe: Mteja amethibitisha kupokea mzigo #${orderId}. TZS ${sellerReceives.toLocaleString()} zimetolewa Escrow na kuwekwa kwenye pochi yako.`, sellerId);
+            if (phone) sendSms(phone, `Mteja amethibitisha kupokea mzigo #${orderId}. TZS ${sellerReceives.toLocaleString()} zimetolewa Escrow na kuwekwa kwenye pochi yako.`, sellerId);
           });
         }
 
@@ -248,7 +248,7 @@ function startListener() {
 
           // SMS buyer
           getUserPhone(buyerId).then(phone => {
-            if (phone) sendSms(phone, `Soko Vibe: Malipo ya ${productName} hayakukamilika. Tafadhali fungua app na ujaribu tena.`, buyerId);
+            if (phone) sendSms(phone, `Malipo ya ${productName} hayakukamilika. Tafadhali fungua app na ujaribu tena.`, buyerId);
           });
 
           // Push + SMS to seller
@@ -260,7 +260,7 @@ function startListener() {
             sendOsNotification(sellerId, 'Malipo ya Mteja Yameshindikana', sellerBody, { type: 'payment_failed', orderId, status: 'failed' })
               .catch((err) => console.error(`[LISTENER] ${orderId}: push failed for seller:`, err.message));
             getUserPhone(sellerId).then(phone => {
-              if (phone) sendSms(phone, `Soko Vibe: ${sellerBody}`, sellerId);
+              if (phone) sendSms(phone, `${sellerBody}`, sellerId);
             });
           }
         }
@@ -278,7 +278,7 @@ function startListener() {
 
           // SMS buyer
           getUserPhone(buyerId).then(phone => {
-            if (phone) sendSms(phone, `Soko Vibe: Fedha za ${productName} (Oda #${orderId}) zimerudishwa kwenye akaunti yako.`, buyerId);
+            if (phone) sendSms(phone, `Fedha za ${productName} (Oda #${orderId}) zimerudishwa kwenye akaunti yako.`, buyerId);
           });
         }
       });

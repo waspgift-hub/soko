@@ -1217,7 +1217,7 @@ async function notifyBoostPaymentFailed(tx, reason = '') {
     const phone = userSnap.data()?.phone || tx.buyerPhone || '';
     if (phone) {
       const amount = tx.totalAmount || tx.amount || 0;
-      const msg = `Soko Vibe: Malipo ya Boost ya TZS ${amount.toLocaleString()} hayakukamilika${reasonText}. Jaribu tena kwenye app.`;
+      const msg = `Malipo ya Boost ya TZS ${amount.toLocaleString()} hayakukamilika${reasonText}. Jaribu tena kwenye app.`;
       await sendLocalizedSms(phone, msg, tx.userId);
     } else {
       console.error(`notifyBoostPaymentFailed: no phone for user ${tx.userId} (tx ${tx.buyerPhone || 'none'}) — SMS skipped`);
@@ -1321,7 +1321,7 @@ app.post('/api/auth/send-otp', otpPhoneRateLimit, async (req, res) => {
     });
 
     // Send OTP via Meseji SMS — reuse shared sendSms helper
-    const message = `Soko Vibe: OTP yako ni ${otp}. Inaisha kwa dakika 10.`;
+    const message = `OTP yako ni ${otp}. Inaisha kwa dakika 10.`;
     // send-otp runs pre-auth, so the app tells us its language via langCode
     // (defaults to Swahili for clients that don't send it).
     const langCode = ['sw', 'en', 'zh'].includes(req.body.langCode) ? req.body.langCode : 'sw';
@@ -2239,8 +2239,8 @@ app.post('/api/escrow/release', async (req, res) => {
       const sellerPhone = sellerUser.data()?.phone;
       if (sellerPhone) {
         const sellerMsg = autoPaidOut
-          ? `Soko Vibe: TZS ${(sellerReceives - getPayoutFee(sellerReceives)).toLocaleString()} zimetumwa kwa simu yako kwa mauzo ya ${productName} (fee TZS ${getPayoutFee(sellerReceives).toLocaleString()}).`
-          : `Soko Vibe: Mteja amethibitisha kupokea mzigo #${orderId}. TZS ${sellerReceives.toLocaleString()} zimetolewa Escrow na kuwekwa kwenye pochi yako.`;
+          ? `TZS ${(sellerReceives - getPayoutFee(sellerReceives)).toLocaleString()} zimetumwa kwa simu yako kwa mauzo ya ${productName} (fee TZS ${getPayoutFee(sellerReceives).toLocaleString()}).`
+          : `Mteja amethibitisha kupokea mzigo #${orderId}. TZS ${sellerReceives.toLocaleString()} zimetolewa Escrow na kuwekwa kwenye pochi yako.`;
         sendLocalizedSms(sellerPhone, sellerMsg, sellerId);
       }
     } catch (_) {}
@@ -2319,7 +2319,7 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
           const depUserSnap = await db.collection('users').doc(dep.userId).get();
           const depPhone = depUserSnap.data()?.phone || dep.phone || '';
           if (depPhone) {
-            sendLocalizedSms(depPhone, `Soko Vibe: Malipo ya TZS ${failAmount.toLocaleString()} hayakukamilika. Sababu: ${failReason}. Jaribu tena kwenye app.`, dep.userId).catch(() => {});
+            sendLocalizedSms(depPhone, `Malipo ya TZS ${failAmount.toLocaleString()} hayakukamilika. Sababu: ${failReason}. Jaribu tena kwenye app.`, dep.userId).catch(() => {});
           }
         } catch (_) {}
       }
@@ -2404,7 +2404,7 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
           const sellerPhone = sellerSnap.data()?.phone;
           if (sellerPhone) {
             const expiryStr = new Date(Date.now() + tierConfig.days * 24 * 60 * 60 * 1000).toLocaleDateString('sw-TZ');
-            const msg = `Soko Vibe: Malipo ya Boost ya TZS ${boostAmount.toLocaleString()} yamefanikiwa! Bidhaa yako sasa inaonyeshwa kipaumbele hadi ${expiryStr}.`;
+            const msg = `Malipo ya Boost ya TZS ${boostAmount.toLocaleString()} yamefanikiwa! Bidhaa yako sasa inaonyeshwa kipaumbele hadi ${expiryStr}.`;
             sendLocalizedSms(sellerPhone, msg, tx.userId);
           }
         }).catch(() => {});
@@ -2508,7 +2508,7 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
 
         // SMS notifications for escrow_hold
         try {
-          const buyerMsg = `Soko Vibe: Malipo ya TZS ${productPrice.toLocaleString()} kwa Oda #${orderId} yamepokelewa na kuwekwa salama Escrow. Muuzaji anajiandaa kutuma mzigo wako.`;
+          const buyerMsg = `Malipo ya TZS ${productPrice.toLocaleString()} kwa Oda #${orderId} yamepokelewa na kuwekwa salama Escrow. Muuzaji anajiandaa kutuma mzigo wako.`;
           if (tx.buyerPhone) sendLocalizedSms(tx.buyerPhone, buyerMsg, tx.buyerId);
         } catch (_) {}
         try {
@@ -2516,7 +2516,7 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
             const sellerSnap = await db.collection('users').doc(tx.sellerId).get();
             const sellerPhone = sellerSnap.data()?.phone;
             if (sellerPhone) {
-              const sellerMsg = `Soko Vibe: Oda #${orderId} imelipiwa! Fedha ipo salama Escrow. Tafadhali kamilisha usafirishaji stendi na ujaze risiti ya basi kwenye app.`;
+              const sellerMsg = `Oda #${orderId} imelipiwa! Fedha ipo salama Escrow. Tafadhali kamilisha usafirishaji stendi na ujaze risiti ya basi kwenye app.`;
               sendLocalizedSms(sellerPhone, sellerMsg, tx.sellerId);
             }
           }
@@ -2559,7 +2559,7 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
           const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
           const buyerPhone = buyerSnap.data()?.phone || tx.buyerPhone || '';
           if (buyerPhone) {
-            sendLocalizedSms(buyerPhone, `Soko Vibe: Malipo ya ${tx.productName || 'Bidhaa'} hayakukamilika. Tafadhali jaribu tena kwenye app. Sababu: ${failureReason}`, tx.buyerId).catch(() => {});
+            sendLocalizedSms(buyerPhone, `Malipo ya ${tx.productName || 'Bidhaa'} hayakukamilika. Tafadhali jaribu tena kwenye app. Sababu: ${failureReason}`, tx.buyerId).catch(() => {});
           }
         } catch (_) {}
 
@@ -2587,7 +2587,7 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
             const sellerSnap = await db.collection('users').doc(tx.sellerId).get();
             const sellerPhone = sellerSnap.data()?.phone || '';
             if (sellerPhone) {
-              sendLocalizedSms(sellerPhone, `Soko Vibe: ${sellerBody}`, tx.sellerId).catch(() => {});
+              sendLocalizedSms(sellerPhone, `${sellerBody}`, tx.sellerId).catch(() => {});
             }
           } catch (_) {}
         }
@@ -3679,7 +3679,7 @@ app.post('/api/create-marketplace-payment-link', paymentRateLimit, async (req, r
       // ── BillPay flow: create order control number ──
       const billResult = await clickpesaCreateBillPayOrder({
         billAmount: totalAmount,
-        billDescription: `Soko Vibe: ${sanitize(productName || 'Product')}`,
+        billDescription: `${sanitize(productName || 'Product')}`,
         billPaymentMode: 'EXACT',
         billReference: order_id,
       });
