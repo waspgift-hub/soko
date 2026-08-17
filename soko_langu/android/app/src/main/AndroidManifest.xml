@@ -103,6 +103,7 @@
         </receiver>
         <receiver
             android:name=".SokoVibeWidgetProvider"
+            android:label="Soko Dashboard"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -113,6 +114,7 @@
         </receiver>
         <receiver
             android:name=".FlashSalesWidgetProvider"
+            android:label="Flash Sales"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
