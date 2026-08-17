@@ -312,18 +312,123 @@ Stream<List<ChatRoom>> getRooms() {
     });
   }
 
+  Future<void> unblockUser(String userId) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    await _db.collection('users').doc(uid).update({
+      'blockedUsers': FieldValue.arrayRemove([userId])
+    });
+  }
+
+  Future<void> toggleMute(String roomId) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    final doc = await _db.collection('chat_rooms').doc(roomId).get();
+    if (!doc.exists) return;
+    final data = doc.data()!;
+    final muted = List<String>.from(data['muted_by'] ?? []);
+    if (muted.contains(uid)) {
+      await doc.reference.update({'muted_by': FieldValue.arrayRemove([uid])});
+    } else {
+      await doc.reference.update({'muted_by': FieldValue.arrayUnion([uid])});
+    }
+  }
+
+  Future<void> togglePin(String roomId) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    final doc = await _db.collection('chat_rooms').doc(roomId).get();
+    if (!doc.exists) return;
+    final data = doc.data()!;
+    final pinned = List<String>.from(data['pinned_by'] ?? []);
+    if (pinned.contains(uid)) {
+      await doc.reference.update({'pinned_by': FieldValue.arrayRemove([uid])});
+    } else {
+      await doc.reference.update({'pinned_by': FieldValue.arrayUnion([uid])});
+    }
+  }
+
+  Future<void> toggleArchive(String roomId) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    final doc = await _db.collection('chat_rooms').doc(roomId).get();
+    if (!doc.exists) return;
+    final data = doc.data()!;
+    final archived = List<String>.from(data['archived_by'] ?? []);
+    if (archived.contains(uid)) {
+      await doc.reference.update({'archived_by': FieldValue.arrayRemove([uid])});
+    } else {
+      await doc.reference.update({'archived_by': FieldValue.arrayUnion([uid])});
+    }
+  }
+
+  Future<void> toggleFavourite(String roomId) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    final doc = await _db.collection('chat_rooms').doc(roomId).get();
+    if (!doc.exists) return;
+    final data = doc.data()!;
+    final fav = List<String>.from(data['favourited_by'] ?? []);
+    if (fav.contains(uid)) {
+      await doc.reference.update({'favourited_by': FieldValue.arrayRemove([uid])});
+    } else {
+      await doc.reference.update({'favourited_by': FieldValue.arrayUnion([uid])});
+    }
+  }
+
   Future<void> deleteConversation(String userId) async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return;
-    final roomsSnap = await _db
-        .collection('conversations')
-        .where('participants', arrayContains: uid)
+    final roomId = roomIdFor(uid, userId);
+    await deleteAllMessages(roomId);
+    await deleteForMe(roomId);
+  }
+
+  Future<void> deleteAllMessages(String roomId) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    final msgs = await _db
+        .collection('chat_rooms')
+        .doc(roomId)
+        .collection('messages')
         .get();
-    for (final room in roomsSnap.docs) {
-      final participants = List<String>.from(room['participants'] ?? []);
-      if (participants.contains(userId)) {
-        await room.reference.delete();
-      }
+    if (msgs.docs.isEmpty) return;
+    final batch = _db.batch();
+    for (final doc in msgs.docs) {
+      batch.delete(doc.reference);
     }
+    await batch.commit();
+  }
+
+  Future<void> deleteForMe(String roomId) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    final doc = _db.collection('chat_rooms').doc(roomId);
+    await doc.update({
+      'deleted_by': FieldValue.arrayUnion([uid]),
+    });
+  }
+
+  Future<void> addShortcut(String roomId) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    await _db.collection('users').doc(uid).update({
+      'chat_shortcuts': FieldValue.arrayUnion([roomId]),
+    });
+  }
+
+  Future<ChatRoom?> getRoomDoc(String roomId) async {
+    final doc = await _db.collection('chat_rooms').doc(roomId).get();
+    if (!doc.exists) return null;
+    return ChatRoom.fromMap(doc.id, doc.data()!);
+  }
+
+  Future<bool> isBlocked(String userId) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return false;
+    final doc = await _db.collection('users').doc(uid).get();
+    if (!doc.exists) return false;
+    final blocked = List<String>.from(doc.data()!['blockedUsers'] ?? []);
+    return blocked.contains(userId);
   }
 }

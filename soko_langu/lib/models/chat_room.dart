@@ -10,6 +10,10 @@ class ChatRoom {
   final String? productTitle;
   final String? buyerId;
   final String? sellerId;
+  final List<String> pinnedBy;
+  final List<String> mutedBy;
+  final List<String> archivedBy;
+  final List<String> favouritedBy;
 
   ChatRoom({
     required this.id,
@@ -23,10 +27,18 @@ class ChatRoom {
     this.productTitle,
     this.buyerId,
     this.sellerId,
+    this.pinnedBy = const [],
+    this.mutedBy = const [],
+    this.archivedBy = const [],
+    this.favouritedBy = const [],
   });
 
+  bool isPinned(String uid) => pinnedBy.contains(uid);
+  bool isMuted(String uid) => mutedBy.contains(uid);
+  bool isArchived(String uid) => archivedBy.contains(uid);
+  bool isFavourited(String uid) => favouritedBy.contains(uid);
+
   factory ChatRoom.fromMap(String id, Map<String, dynamic> data) {
-    // Per-user unread map is the source of truth; role fields are legacy.
     final counts = <String, int>{};
     final raw = data['unread_counts'];
     if (raw is Map) {
@@ -48,12 +60,13 @@ class ChatRoom {
       productTitle: data['product_title'] as String?,
       buyerId: data['buyer_id'] as String?,
       sellerId: data['seller_id'] as String?,
+      pinnedBy: List<String>.from(data['pinned_by'] ?? []),
+      mutedBy: List<String>.from(data['muted_by'] ?? []),
+      archivedBy: List<String>.from(data['archived_by'] ?? []),
+      favouritedBy: List<String>.from(data['favourited_by'] ?? []),
     );
   }
 
-  /// Unread count for a given participant.
-  /// The per-user `unread_counts` map is the source of truth; role fields are
-  /// only read for legacy rooms that predate the map.
   int unreadCountFor(String uid) {
     if (unreadCounts.isNotEmpty) return unreadCounts[uid] ?? 0;
     final isBuyer = buyerId == uid;
