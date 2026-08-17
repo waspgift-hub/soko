@@ -5,7 +5,7 @@ import 'app_themes.dart';
 class ThemeManager extends ChangeNotifier {
   static const String _darkKey = 'app_dark_mode';
   static const String _seedKey = 'theme_seed_color';
-  static const int _defaultSeed = 0xFF0B6E5F;
+  static const int _defaultSeed = 0xFF1B5E20;
 
   bool _isDark = false;
   Color _seedColor = const Color(_defaultSeed);
