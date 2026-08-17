@@ -2566,11 +2566,14 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
         // Notify seller that buyer payment failed
         if (tx.sellerId) {
           const buyerName = tx.buyerName || 'Mteja';
+          const buyerLocation = [tx.region, tx.district, tx.ward].filter(Boolean).join(', ');
+          const buyerPhone = tx.buyerPhone || '';
+          const sellerBody = `Hela zotingine haijaingia Escrow. Mteja ${buyerName}${buyerLocation ? ` anaye kaa ${buyerLocation}` : ''}${buyerPhone ? ` mwenye namba ya simu ${buyerPhone}` : ''} ameshindwa kufanikisha malipo ya order ${orderId}. Wasiliana nae kwa mazungumzo zaidi.`;
           try {
             await db.collection('notifications').add({
               userId: tx.sellerId,
               title: 'Malipo ya Mteja Yameshindikana',
-              body: `Mteja ${buyerName} ameshindik kulipia ${tx.productName || 'bidhaa'}. Oda #${orderId} imeshindikana. Sababu: ${failureReason}`,
+              body: sellerBody,
               isRead: false,
               type: 'payment_failed',
               transactionId: orderId,
@@ -2578,13 +2581,13 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
             });
           } catch (_) {}
           try {
-            await sendOneSignalNotification(tx.sellerId, 'Malipo ya Mteja Yameshindikana', `Mteja ${buyerName} ameshindik kulipia ${tx.productName || 'bidhaa'}. Oda #${orderId} imeshindikana.`, { type: 'payment_failed', productId: tx.productId || '', transactionId: orderId });
+            await sendOneSignalNotification(tx.sellerId, 'Malipo ya Mteja Yameshindikana', sellerBody, { type: 'payment_failed', productId: tx.productId || '', transactionId: orderId });
           } catch (_) {}
           try {
             const sellerSnap = await db.collection('users').doc(tx.sellerId).get();
             const sellerPhone = sellerSnap.data()?.phone || '';
             if (sellerPhone) {
-              sendLocalizedSms(sellerPhone, `Soko Vibe: Mteja ${buyerName} ameshindik kulipia ${tx.productName || 'bidhaa'}. Oda #${orderId} imeshindikana.`, tx.sellerId).catch(() => {});
+              sendLocalizedSms(sellerPhone, `Soko Vibe: ${sellerBody}`, tx.sellerId).catch(() => {});
             }
           } catch (_) {}
         }
