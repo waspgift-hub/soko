@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_soko_dashboard_name">Soko Dashboard</string>
+    <string name="widget_soko_dashboard_desc">View your sales, pending orders, and wallet balance at a glance</string>
+    <string name="widget_flash_sales_name">Flash Sales</string>
+    <string name="widget_flash_sales_desc">Browse today\'s trending flash sale products</string>
+</resources>
