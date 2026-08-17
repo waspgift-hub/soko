@@ -39,4 +39,31 @@ class MesejiService {
       );
     }
   }
+
+  /// Verifies a 6-digit OTP against the server. Returns true if valid.
+  Future<bool> verifyOtp(String phone, String otp) async {
+    final url = '${ApiConfig.baseUrl}/api/auth/verify-otp';
+    try {
+      final res = await http
+          .post(
+            Uri.parse(url),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'phone': phone, 'otp': otp}),
+          )
+          .timeout(const Duration(seconds: 30));
+      final body = jsonDecode(res.body);
+      if (res.statusCode == 200 && body['valid'] == true) return true;
+      throw NetworkError(
+        message: 'verify-otp failed: ${body['error']}',
+        userMessage: body['error'] ?? 'auth_otp_invalid',
+      );
+    } on NetworkError {
+      rethrow;
+    } catch (e) {
+      throw NetworkError(
+        message: 'verify-otp error: $e',
+        userMessage: ErrorKeys.poorNetwork,
+      );
+    }
+  }
 }

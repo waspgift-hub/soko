@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 import '../../services/api_config.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
@@ -277,7 +278,31 @@ class _OrderQuoteCard extends StatelessWidget {
                     _DetailRow(icon: Icons.badge_outlined, label: context.tr('name'), value: buyerName),
                   if (buyerPhone.isNotEmpty) ...[
                     const SizedBox(height: 8),
-                    _DetailRow(icon: Icons.phone_outlined, label: context.tr('phone'), value: buyerPhone),
+                    Row(
+                      children: [
+                        Icon(Icons.phone_outlined, size: 16, color: cs.onSurfaceVariant),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(context.tr('phone'), style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+                              Text(buyerPhone, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: cs.onSurface)),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.call, color: cs.primary),
+                          tooltip: context.tr('call_buyer', 'Pigia mnunuzi'),
+                          onPressed: () async {
+                            final uri = Uri.parse('tel:$buyerPhone');
+                            if (await canLaunchUrl(uri)) {
+                              await launchUrl(uri, mode: LaunchMode.externalApplication);
+                            }
+                          },
+                        ),
+                      ],
+                    ),
                   ],
 
                   const SizedBox(height: 16),

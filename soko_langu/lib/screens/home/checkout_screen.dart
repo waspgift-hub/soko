@@ -14,6 +14,8 @@ import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../widgets/location_map_widget.dart';
 import '../../widgets/soko_vibe_loading.dart';
+import '../../utils/phone_utils.dart';
+import '../../services/user_service.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final Product product;
@@ -28,6 +30,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final _regionCtrl = TextEditingController();
   final _streetCtrl = TextEditingController();
   final _landmarksCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
   bool _processing = false;
   bool _detecting = false;
   double? _latitude;
@@ -38,10 +41,26 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   String? _selectedWard;
 
   @override
+  void initState() {
+    super.initState();
+    _loadBuyerPhone();
+  }
+
+  Future<void> _loadBuyerPhone() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final profile = await UserService().getProfile(user.uid);
+    if (mounted && profile?.phone?.isNotEmpty == true) {
+      _phoneCtrl.text = profile!.phone!;
+    }
+  }
+
+  @override
   void dispose() {
     _regionCtrl.dispose();
     _streetCtrl.dispose();
     _landmarksCtrl.dispose();
+    _phoneCtrl.dispose();
     super.dispose();
   }
 
@@ -238,6 +257,40 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 _buildLocationButton(context, cs),
                 const SizedBox(height: 12),
                 _buildAddressForm(context, cs),
+                const SizedBox(height: 20),
+                _buildSectionTitle(context, cs, Icons.phone_outlined, context.tr('phone', 'Simu')),
+                const SizedBox(height: 4),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Text(
+                    context.tr('checkout_phone_hint', 'Namba ya simu ya muuzaji kukuangalia'),
+                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant.withValues(alpha: 0.7)),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: TextField(
+                    controller: _phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    decoration: InputDecoration(
+                      hintText: '07XX XXX XXX',
+                      hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+                      prefixIcon: Icon(Icons.phone_android, color: cs.primary.withValues(alpha: 0.7)),
+                      filled: true,
+                      fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.15),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: cs.primary, width: 1.5),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    ),
+                  ),
+                ),
                 if (_latitude != null && _longitude != null) ...[
                   const SizedBox(height: 16),
                   _buildSectionTitle(context, cs, Icons.map_outlined, context.tr('view_map')),
@@ -614,7 +667,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         body: jsonEncode({
           'buyerId': user.uid,
           'buyerName': user.displayName ?? '',
-          'buyerPhone': user.phoneNumber ?? '',
+          'buyerPhone': _phoneCtrl.text.trim().isNotEmpty ? PhoneUtils.toE164(_phoneCtrl.text.trim()) : (user.phoneNumber ?? ''),
           'sellerId': p.sellerId,
           'sellerName': p.sellerName,
           'productId': p.id,

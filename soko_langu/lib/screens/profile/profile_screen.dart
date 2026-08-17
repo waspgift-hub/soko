@@ -19,6 +19,7 @@ import '../../widgets/verified_badge.dart';
 import '../../widgets/premium_widgets.dart';
 import '../../widgets/google_loading.dart';
 import '../../app/routes.dart';
+import '../../utils/phone_utils.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -288,6 +289,13 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                         ),
                       const SizedBox(height: AppInsets.xs),
                       Text(user?.email ?? context.tr('no_email'), style: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6), fontSize: AppFontSize.sm)),
+                      if (_profile?.phone?.isNotEmpty == true) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          PhoneUtils.formatForDisplay(_profile!.phone!),
+                          style: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6), fontSize: AppFontSize.sm),
+                        ),
+                      ],
                       const SizedBox(height: AppInsets.lg),
                       // Stats
                       Padding(

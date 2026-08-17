@@ -73,6 +73,13 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/ic_notification" />
+        <!-- Notification accent color (tints the small icon) -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_accent" />
+        <meta-data
+            android:name="com.onesignal.NotificationAccentColor.default"
+            android:resource="@color/notification_accent" />
         <!-- audio_service notification channel ID for persistent media playback -->
         <meta-data
             android:name="android.media.metadata.NOTIFICATION_CHANNEL_ID"

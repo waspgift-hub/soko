@@ -1,14 +1,18 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import '../../services/user_service.dart';
+import '../../services/meseji_service.dart';
+import '../../utils/phone_utils.dart';
 import '../../extensions/context_tr.dart';
 import '../../utils/helpers.dart';
 import '../../widgets/google_loading.dart';
+import '../../widgets/soko_vibe_loading.dart';
 import '../../widgets/location_disclosure_dialog.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -38,6 +42,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? _imagePath;
   double? _latitude;
   double? _longitude;
+  String _originalPhone = '';
+  bool _phoneChanged = false;
+  bool _otpSent = false;
+  bool _otpSending = false;
+  bool _verifying = false;
+  final _otpController = TextEditingController();
   List<MapEntry<TextEditingController, TextEditingController>> _paymentEntries =
       [];
 
@@ -85,6 +95,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _bioController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
+    _otpController.dispose();
     _locationController.dispose();
     _moodController.dispose();
     _genderController.dispose();
@@ -111,6 +122,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _emailController.text =
             profile?.email ?? FirebaseAuth.instance.currentUser?.email ?? '';
         _phoneController.text = profile?.phone ?? '';
+        _originalPhone = profile?.phone ?? '';
         _locationController.text = profile?.location ?? '';
         _moodController.text = _moodDisplay(profile?.mood ?? '');
         _genderController.text = profile?.gender ?? '';
@@ -248,8 +260,74 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     setState(() => _paymentEntries.removeAt(index));
   }
 
+  Future<void> _sendPhoneOtp() async {
+    final raw = _phoneController.text.trim();
+    if (raw.isEmpty) {
+      _showError(context.tr('phone_validator_empty'));
+      return;
+    }
+    final digits = raw.replaceAll(RegExp(r'\D'), '');
+    if (digits.length < 9) {
+      _showError(context.tr('phone_validator_invalid'));
+      return;
+    }
+    setState(() => _otpSending = true);
+    try {
+      final normalized = PhoneUtils.toE164(raw);
+      await MesejiService().sendOtp(normalized);
+      if (mounted) {
+        setState(() {
+          _otpSending = false;
+          _otpSent = true;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('otp_sent_to').replaceAll('{0}', PhoneUtils.formatForDisplay(normalized)))),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _otpSending = false);
+        _showError(context.trError(e));
+      }
+    }
+  }
+
+  Future<bool> _verifyPhoneOtp() async {
+    final raw = _phoneController.text.trim();
+    final otp = _otpController.text.trim();
+    if (otp.length != 6) {
+      _showError(context.tr('otp_invalid_length', 'OTP lazima iwe na nambari 6'));
+      return false;
+    }
+    setState(() => _verifying = true);
+    try {
+      final normalized = PhoneUtils.toE164(raw);
+      final resp = await MesejiService().verifyOtp(normalized, otp);
+      if (mounted) setState(() => _verifying = false);
+      return resp;
+    } catch (e) {
+      if (mounted) {
+        setState(() => _verifying = false);
+        _showError(context.trError(e));
+      }
+      return false;
+    }
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (_phoneChanged && _originalPhone.isNotEmpty) {
+      if (!_otpSent) {
+        _showError(context.tr('phone_otp_required', 'Thibitisha namba ya simu kwanza'));
+        return;
+      }
+      final verified = await _verifyPhoneOtp();
+      if (!verified) {
+        _showError(context.tr('auth_otp_invalid'));
+        return;
+      }
+    }
 
     setState(() => _saving = true);
 
@@ -349,6 +427,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final key = _moodKeyFor(stored);
     if (key.isEmpty) return stored;
     return '${_moodEmoji[key]} ${context.tr('mood_$key')}';
+  }
+
+  void _showError(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: Theme.of(context).colorScheme.error),
+    );
   }
 
   @override
@@ -489,9 +574,64 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     labelText: context.tr('phone'),
                     hintText: context.tr('phone_hint_example'),
                     border: const OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.phone, color: Theme.of(context).colorScheme.primary),
                   ),
                   keyboardType: TextInputType.phone,
+                  onChanged: (v) {
+                    final changed = v.trim() != _originalPhone;
+                    if (changed != _phoneChanged) {
+                      setState(() {
+                        _phoneChanged = changed;
+                        _otpSent = false;
+                        _otpController.clear();
+                      });
+                    }
+                  },
                 ),
+                if (_phoneChanged && _originalPhone.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  if (!_otpSent)
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _otpSending ? null : _sendPhoneOtp,
+                        icon: _otpSending
+                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.sms_outlined, size: 18),
+                        label: Text(_otpSending ? context.tr('sending_otp', 'Inatuma OTP...') : context.tr('send_otp', 'Tuma OTP')),
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                  if (_otpSent) ...[
+                    TextFormField(
+                      controller: _otpController,
+                      keyboardType: TextInputType.number,
+                      maxLength: 6,
+                      decoration: InputDecoration(
+                        labelText: context.tr('otp_code_hint', 'Weka Msimbo wa OTP'),
+                        border: const OutlineInputBorder(),
+                        prefixIcon: const Icon(Icons.lock_outline),
+                        counterText: '',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _otpSending ? null : _sendPhoneOtp,
+                        icon: const Icon(Icons.refresh, size: 18),
+                        label: Text(context.tr('resend_otp', 'Tuma OTP Tena')),
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _locationController,

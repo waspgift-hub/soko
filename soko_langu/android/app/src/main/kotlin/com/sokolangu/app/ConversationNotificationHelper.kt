@@ -56,7 +56,7 @@ object ConversationNotificationHelper {
         }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_email)
+            .setSmallIcon(R.drawable.ic_notification)
             .setStyle(style)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)

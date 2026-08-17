@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/chat_service.dart';
 import '../../services/user_service.dart';
 import '../../services/local_cache_service.dart';
@@ -23,14 +24,30 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
   final Map<String, String> _userNames = {};
   final Map<String, String> _userPhotos = {};
   final Map<String, bool> _userKyc = {};
-  bool _showUnreadOnly = false;
+  int _activeTab = 0;
   bool _selectMode = false;
   final Set<String> _selectedIds = {};
+  Set<String> _hiddenUsers = {};
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     _loadCached();
+    _loadHiddenUsers();
+  }
+
+  Future<void> _loadHiddenUsers() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final snap = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    final data = snap.data();
+    if (data != null && mounted) {
+      final list = data['hidden_users'];
+      if (list is List) {
+        setState(() => _hiddenUsers = list.cast<String>().toSet());
+      }
+    }
   }
 
   void _loadCached() {
@@ -177,12 +194,35 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
         children: [
           if (!_selectMode)
             Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+              child: TextField(
+                onChanged: (v) => setState(() => _searchQuery = v),
+                decoration: InputDecoration(
+                  hintText: context.tr('search_users', 'Tafuta mtumiaji...'),
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  isDense: true,
+                  filled: true,
+                  fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                ),
+              ),
+            ),
+          if (!_selectMode)
+            Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               child: Row(
                 children: [
-                  _buildFilterChip(context, context.tr('all', 'All'), !_showUnreadOnly, () => setState(() => _showUnreadOnly = false)),
-                  const SizedBox(width: 8),
-                  _buildFilterChip(context, context.tr('unread', 'Unread'), _showUnreadOnly, () => setState(() => _showUnreadOnly = true)),
+                  _buildTabChip(context, context.tr('all', 'All'), 0),
+                  const SizedBox(width: 6),
+                  _buildTabChip(context, context.tr('unread', 'Unread'), 1),
+                  const SizedBox(width: 6),
+                  _buildTabChip(context, context.tr('favourited', 'Favourite'), 2),
+                  const SizedBox(width: 6),
+                  _buildTabChip(context, context.tr('archived', 'Archive'), 3),
                 ],
               ),
             ),
@@ -192,10 +232,27 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
               builder: (context, snap) {
                 final allRooms = snap.data ?? [];
                 final myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+
                 final rooms = allRooms.where((r) {
-                  if (r.archivedBy.contains(myUid)) return false;
-                  if (_showUnreadOnly) return r.unreadCountFor(myUid) > 0;
-                  return true;
+                  final otherId = r.participants.where((p) => p != myUid).firstOrNull ?? '';
+
+                  if (_searchQuery.isNotEmpty) {
+                    final name = _userNames[otherId]?.toLowerCase() ?? '';
+                    return name.contains(_searchQuery.toLowerCase());
+                  }
+
+                  if (_hiddenUsers.contains(otherId)) return false;
+
+                  switch (_activeTab) {
+                    case 1:
+                      return r.unreadCountFor(myUid) > 0 && !r.archivedBy.contains(myUid);
+                    case 2:
+                      return r.isFavourited(myUid) && !r.archivedBy.contains(myUid);
+                    case 3:
+                      return r.archivedBy.contains(myUid);
+                    default:
+                      return !r.archivedBy.contains(myUid);
+                  }
                 }).toList();
 
                 // Sort: favourited first, then pinned, then by timestamp
@@ -291,14 +348,22 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
   }
 
   void _selectAllFromStream() {
-    // Trigger re-build with all selected
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
     _chatService.getRooms().first.then((rooms) {
       if (!mounted) return;
       final visible = rooms.where((r) {
-        if (r.archivedBy.contains(uid)) return false;
-        if (_showUnreadOnly) return r.unreadCountFor(uid) > 0;
-        return true;
+        final otherId = r.participants.where((p) => p != uid).firstOrNull ?? '';
+        if (_hiddenUsers.contains(otherId)) return false;
+        switch (_activeTab) {
+          case 1:
+            return r.unreadCountFor(uid) > 0 && !r.archivedBy.contains(uid);
+          case 2:
+            return r.isFavourited(uid) && !r.archivedBy.contains(uid);
+          case 3:
+            return r.archivedBy.contains(uid);
+          default:
+            return !r.archivedBy.contains(uid);
+        }
       }).toList();
       setState(() {
         _selectedIds.addAll(visible.map((r) => r.id));
@@ -343,9 +408,13 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
           title: context.tr('delete_user'),
           content: context.tr('delete_user_confirm', name),
           onConfirm: () async {
-            await _chatService.deleteAllMessages(room.id);
-            await _chatService.deleteForMe(room.id);
-            _showSnack(context.tr('user_deleted'));
+            final myUid = FirebaseAuth.instance.currentUser?.uid;
+            if (myUid == null) return;
+            await FirebaseFirestore.instance.collection('users').doc(myUid).update({
+              'hidden_users': FieldValue.arrayUnion([otherId]),
+            });
+            setState(() => _hiddenUsers.add(otherId));
+            _showSnack(context.tr('user_hidden', 'Mtumiaji amefichwa'));
           },
           isDestructive: true,
         );
@@ -435,12 +504,16 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
     _showSnack(context.tr('action_completed'));
   }
 
-  Widget _buildFilterChip(BuildContext context, String label, bool selected, VoidCallback onTap) {
+  Widget _buildTabChip(BuildContext context, String label, int index) {
     final cs = Theme.of(context).colorScheme;
+    final selected = _activeTab == index;
     return GestureDetector(
-      onTap: onTap,
+      onTap: () => setState(() {
+        _activeTab = index;
+        _searchQuery = '';
+      }),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           color: selected ? cs.primary : cs.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(20),

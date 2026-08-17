@@ -56,6 +56,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   double _gatewayFee = 0;
   bool _gatewayFeeFetching = false;
   Timer? _gatewayFeeDebounce;
+  final _phoneController = TextEditingController();
+  String? _phoneError;
 
   @override
   void initState() {
@@ -161,6 +163,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       _pulseController.stop();
     } else if (state == AppLifecycleState.resumed) {
       _pulseController.repeat(reverse: true);
+      if (mounted) setState(() => _lastAutoRefresh = DateTime.now());
     }
   }
 
@@ -173,6 +176,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     _gatewayFeeDebounce?.cancel();
     _orderSub?.cancel();
     _txSub?.cancel();
+    _phoneController.dispose();
     super.dispose();
   }
 
@@ -1612,6 +1616,39 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
             ),
             const SizedBox(height: 16),
 
+            Text(
+              context.tr('phone_field_hint', 'Nambari ya simu'),
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cs.onSurface),
+            ),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: _phoneController,
+              keyboardType: TextInputType.phone,
+              style: TextStyle(color: cs.onSurface),
+              decoration: InputDecoration(
+                hintText: '07XX XXX XXX',
+                hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+                prefixIcon: Icon(Icons.phone_android, color: cs.onSurface.withValues(alpha: 0.59)),
+                errorText: _phoneError,
+                filled: true,
+                fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.15),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: cs.primary, width: 1.5),
+                ),
+                errorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: cs.error, width: 1),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              ),
+            ),
+            const SizedBox(height: 16),
+
             SizedBox(
               width: double.infinity,
               height: 52,
@@ -2093,10 +2130,20 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   Future<void> _payQuotedOrder() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    setState(() => _paying = true);
+
+    final raw = _phoneController.text.trim();
+    if (raw.isEmpty) {
+      setState(() => _phoneError = context.tr('phone_validator_empty'));
+      return;
+    }
+    final digits = raw.replaceAll(RegExp(r'\D'), '');
+    if (digits.length < 9) {
+      setState(() => _phoneError = context.tr('phone_validator_invalid'));
+      return;
+    }
+    setState(() { _phoneError = null; _paying = true; });
     try {
-      final phone = user.phoneNumber ?? '';
-      final normalizedPhone = PhoneUtils.toE164(phone);
+      final normalizedPhone = PhoneUtils.toE164(raw);
 
       final result = await ClickPesaService.initiateMarketplacePayment(
         productPrice: _quotedProductPrice,
