@@ -2568,7 +2568,7 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
           const buyerName = tx.buyerName || 'Mteja';
           const buyerLocation = [tx.region, tx.district, tx.ward].filter(Boolean).join(', ');
           const buyerPhone = tx.buyerPhone || '';
-          const sellerBody = `Hela zotingine haijaingia Escrow. Mteja ${buyerName}${buyerLocation ? ` anaye kaa ${buyerLocation}` : ''}${buyerPhone ? ` mwenye namba ya simu ${buyerPhone}` : ''} ameshindwa kufanikisha malipo ya order ${orderId}. Wasiliana nae kwa mazungumzo zaidi.`;
+          const sellerBody = `Mteja ${buyerName}${buyerLocation ? ` anaye kaa ${buyerLocation}` : ''}${buyerPhone ? ` mwenye namba ya simu ${buyerPhone}` : ''} ameshindwa kufanikisha malipo ya order ${orderId}. Wasiliana nae kwa mazungumzo zaidi.`;
           try {
             await db.collection('notifications').add({
               userId: tx.sellerId,

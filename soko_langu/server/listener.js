@@ -256,7 +256,7 @@ function startListener() {
             const buyerName = after.buyerName || 'Mteja';
             const buyerLocation = [after.region, after.district, after.ward].filter(Boolean).join(', ');
             const buyerPhone = after.buyerPhone || '';
-            const sellerBody = `Hela zotingine haijaingia Escrow. Mteja ${buyerName}${buyerLocation ? ` anaye kaa ${buyerLocation}` : ''}${buyerPhone ? ` mwenye namba ya simu ${buyerPhone}` : ''} ameshindwa kufanikisha malipo ya order ${orderId}. Wasiliana nae kwa mazungumzo zaidi.`;
+            const sellerBody = `Mteja ${buyerName}${buyerLocation ? ` anaye kaa ${buyerLocation}` : ''}${buyerPhone ? ` mwenye namba ya simu ${buyerPhone}` : ''} ameshindwa kufanikisha malipo ya order ${orderId}. Wasiliana nae kwa mazungumzo zaidi.`;
             sendOsNotification(sellerId, 'Malipo ya Mteja Yameshindikana', sellerBody, { type: 'payment_failed', orderId, status: 'failed' })
               .catch((err) => console.error(`[LISTENER] ${orderId}: push failed for seller:`, err.message));
             getUserPhone(sellerId).then(phone => {
