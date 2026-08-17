@@ -112,7 +112,11 @@ app.post('/api/whatsapp/webhook', async (req, res) => {
     const body = req.body || {};
     const signature = req.headers['x-notify-signature'] || '';
     const secret = process.env.WHATSAPP_WEBHOOK_SECRET;
-    if (secret && signature) {
+    if (!secret) {
+      console.error('[WA-WEBHOOK] WHATSAPP_WEBHOOK_SECRET not set — rejecting for security');
+      return res.status(503).json({ error: 'Webhook verification not configured' });
+    }
+    if (signature) {
       const raw = JSON.stringify(body);
       const expected = crypto.createHmac('sha256', secret).update(raw).digest('hex');
       const provided = String(signature).replace(/^sha256=/, '');
@@ -150,7 +154,11 @@ app.post('/api/malipopay/webhook', async (req, res) => {
   try {
     const signature = req.headers['x-malipopay-signature'] || '';
     const secret = process.env.MALIPOPAY_WEBHOOK_SECRET;
-    if (secret && signature) {
+    if (!secret) {
+      console.error('[MALIPOPAY-WEBHOOK] MALIPOPAY_WEBHOOK_SECRET not set — rejecting for security');
+      return res.status(503).json({ error: 'Webhook verification not configured' });
+    }
+    if (signature) {
       const raw = req.rawBody || Buffer.from(JSON.stringify(req.body));
       const expected = crypto.createHmac('sha256', secret).update(raw).digest('hex');
       const provided = String(signature).replace(/^sha256=/, '');
@@ -505,9 +513,9 @@ function paymentRateLimit(req, res, next) {
 function verifyWebhook(req, res, next) {
   const secret = process.env.CLICKPESA_CHECKSUM_KEY;
   if (!secret) {
-    // Manual/dev mode — no secret configured, accept but log loudly.
-    console.warn('[WEBHOOK] CLICKPESA_CHECKSUM_KEY not set — webhook checksum NOT verified');
-    return next();
+    // No secret configured — reject in production to prevent forged callbacks
+    console.error('[WEBHOOK] CLICKPESA_CHECKSUM_KEY not set — rejecting webhook for security');
+    return res.status(503).json({ error: 'Webhook verification not configured' });
   }
   const body = req.body || {};
   const provided = typeof body.checksum === 'string' ? body.checksum : '';
@@ -8008,10 +8016,23 @@ app.post('/api/wallet/purchase', async (req, res) => {
       return res.status(400).json({ error: `Insufficient wallet balance: requires TZS ${committedTotal.toLocaleString()}` });
     }
 
-    // Deduct from buyer wallet
-    await db.collection('users').doc(buyerId).set({
-      walletBalance: admin.firestore.FieldValue.increment(-committedTotal),
-    }, { merge: true });
+    // Atomic: read balance + deduct inside a transaction to prevent double-spend
+    try {
+      await db.runTransaction(async (tx) => {
+        const buyerRef = db.collection('users').doc(buyerId);
+        const snap = await tx.get(buyerRef);
+        if (!snap.exists) throw new Error('Buyer not found');
+        const currentBalance = snap.data().walletBalance || 0;
+        if (currentBalance < committedTotal) {
+          throw new Error(`Insufficient wallet balance: requires TZS ${committedTotal.toLocaleString()}, available TZS ${currentBalance.toLocaleString()}`);
+        }
+        tx.update(buyerRef, {
+          walletBalance: admin.firestore.FieldValue.increment(-committedTotal),
+        });
+      });
+    } catch (txErr) {
+      return res.status(400).json({ error: txErr.message });
+    }
 
     const escrowDeliveryType = deliveryType || 'local';
     const autoReleaseDays = escrowDeliveryType === 'regional' ? ESCROW_REGIONAL_DAYS : ESCROW_LOCAL_DAYS;
@@ -8345,6 +8366,12 @@ app.post('/api/orders/transition', async (req, res) => {
     const isAdmin = userDoc.exists && userDoc.data().isAdmin === true;
     if (!isBuyer && !isSeller && !isAdmin) {
       return res.status(403).json({ error: 'Not authorized to transition this order' });
+    }
+
+    // Role-based transition enforcement: buyer can't dispatch, seller can't confirm, etc.
+    const actorRole = isAdmin ? 'admin' : isSeller ? 'seller' : 'buyer';
+    if (!orderEngine.canActorTransition(actorRole, newStatus)) {
+      return res.status(403).json({ error: `Role '${actorRole}' cannot transition order to '${newStatus}'` });
     }
 
     const result = await orderEngine.transitionOrder(db, orderId, newStatus, decoded.uid, { note });

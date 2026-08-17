@@ -50,6 +50,21 @@ function isValidTransition(from, to) {
   return transitions[from]?.includes(to) ?? false;
 }
 
+// Role-based transition enforcement: only certain actors can trigger certain transitions.
+// 'system' is used by webhooks/listeners (paid→escrow_hold, paid→failed).
+const ROLE_ALLOWED_TRANSITIONS = {
+  seller: [ORDER_STATUS.QUOTED, ORDER_STATUS.DISPATCHED, ORDER_STATUS.CANCELLED],
+  buyer:  [ORDER_STATUS.PAID, ORDER_STATUS.DISPUTED, ORDER_STATUS.CONFIRMED, ORDER_STATUS.CANCELLED],
+  admin:  [ORDER_STATUS.REFUNDED, ORDER_STATUS.COMPLETED, ORDER_STATUS.CANCELLED],
+  system: [ORDER_STATUS.ESCROW_HOLD, ORDER_STATUS.FAILED],
+};
+
+function canActorTransition(actorRole, newStatus) {
+  const allowed = ROLE_ALLOWED_TRANSITIONS[actorRole];
+  if (!allowed) return false;
+  return allowed.includes(newStatus);
+}
+
 function getOrderStepNumber(status) {
   const steps = [
     ORDER_STATUS.PENDING, ORDER_STATUS.QUOTED, ORDER_STATUS.PAID,
@@ -164,6 +179,7 @@ module.exports = {
   ESCROW_STATUS,
   STATUS_COLORS,
   isValidTransition,
+  canActorTransition,
   getOrderStepNumber,
   addTimelineEntry,
   createOrder,
