@@ -69,12 +69,20 @@ class CategoryScreen extends StatelessWidget {
                 final cat = categories[index];
                 final config = AppConfig.of(context);
                 final cs = Theme.of(context).colorScheme;
-                return GestureDetector(
+                return Semantics(
+                  button: true,
+                  label: cat.name,
                   onTap: () => context.push(
                     '${AppRoutes.categoryProducts}/${cat.name}',
                     extra: cat,
                   ),
-                  child: Container(
+                  child: GestureDetector(
+                    excludeFromSemantics: true,
+                    onTap: () => context.push(
+                      '${AppRoutes.categoryProducts}/${cat.name}',
+                      extra: cat,
+                    ),
+                    child: Container(
                     decoration: BoxDecoration(
                       color: cs.surface,
                       borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -120,6 +128,7 @@ class CategoryScreen extends StatelessWidget {
                       ],
                     ),
                   ),
+                ),
                 );
               },
             );

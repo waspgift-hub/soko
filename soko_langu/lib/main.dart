@@ -44,7 +44,6 @@ import 'services/security_service.dart';
 import 'theme/theme_manager.dart';
 import 'utils/responsive.dart';
 import 'widgets/app_lock_overlay.dart';
-import 'widgets/gradient_background.dart';
 import 'widgets/maintenance_gate.dart';
 import 'widgets/connectivity_wrapper.dart';
 import 'widgets/transaction_status_watcher.dart';
@@ -600,10 +599,6 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
       );
     }
 
-    // App-wide animated gradient background
-    content = GradientBackground(child: content);
-
-    // Premium animated background with floating particles
     content = PremiumBackground(child: content);
 
     // Cross-cutting overlays

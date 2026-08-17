@@ -193,22 +193,20 @@ class _CommentSectionState extends State<CommentSection> {
                 ),
               );
             }
-            return ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: comments.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (context, i) {
-                final c = comments[i];
-                return _AnimatedCommentTile(
-                  key: ValueKey(c.id),
-                  child: _CommentTile(
-                    comment: c,
-                    productId: widget.productId,
-                    onReply: () => _showReplySheet(c.id),
+            return Column(
+              children: [
+                for (int i = 0; i < comments.length; i++) ...[
+                  if (i > 0) const Divider(height: 1),
+                  _AnimatedCommentTile(
+                    key: ValueKey(comments[i].id),
+                    child: _CommentTile(
+                      comment: comments[i],
+                      productId: widget.productId,
+                      onReply: () => _showReplySheet(comments[i].id),
+                    ),
                   ),
-                );
-              },
+                ],
+              ],
             );
           },
         ),

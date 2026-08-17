@@ -10,13 +10,14 @@ class OrderFlowScreen extends StatefulWidget {
 }
 
 class _OrderFlowScreenState extends State<OrderFlowScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late AnimationController _pulseCtrl;
   late Animation<double> _pulse;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _pulseCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2000),
@@ -26,7 +27,17 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+      _pulseCtrl.stop();
+    } else if (state == AppLifecycleState.resumed) {
+      _pulseCtrl.repeat(reverse: true);
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pulseCtrl.dispose();
     super.dispose();
   }

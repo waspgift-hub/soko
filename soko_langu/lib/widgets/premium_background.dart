@@ -1,23 +1,28 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 
-/// High-performance aurora background with mesh-gradient glow.
-///
-/// - Single [CustomPainter] renders everything (base gradient, aurora blobs,
-///   floating particles) in one GPU pass.
-/// - Wrapped in [RepaintBoundary] so background repaints never cause content
-///   flicker when text inputs change or data loads.
-/// - Animates on a 35 s loop; blobs drift slowly with sine-based motion.
+/// Decorative aurora background that stays static unless animation is opted in.
 class PremiumBackground extends StatelessWidget {
   final Widget child;
-  const PremiumBackground({super.key, required this.child});
+  final bool animate;
+
+  const PremiumBackground({
+    super.key,
+    required this.child,
+    this.animate = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        RepaintBoundary(
-          child: _AuroraPanels(child: const _AuroraRender()),
+        Positioned.fill(
+          child: RepaintBoundary(
+            child: _AuroraPanels(
+              animate: animate && !MediaQuery.disableAnimationsOf(context),
+              child: const _AuroraRender(),
+            ),
+          ),
         ),
         Positioned.fill(child: child),
       ],
@@ -25,14 +30,11 @@ class PremiumBackground extends StatelessWidget {
   }
 }
 
-/// Wraps [child] in an [AnimatedBuilder] driven by a shared controller so the
-/// painter receives the current [progress] value.
-///
-/// It is separated from the [PremiumBackground] to guarantee the
-/// [AnimationController] is disposed correctly (StatefulWidget).
 class _AuroraPanels extends StatefulWidget {
   final Widget child;
-  const _AuroraPanels({required this.child});
+  final bool animate;
+
+  const _AuroraPanels({required this.child, required this.animate});
 
   @override
   State<_AuroraPanels> createState() => _AuroraPanelsState();
@@ -48,7 +50,8 @@ class _AuroraPanelsState extends State<_AuroraPanels>
     _ctrl = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 35),
-    )..repeat();
+    );
+    if (widget.animate) _ctrl.repeat();
   }
 
   @override
@@ -59,10 +62,12 @@ class _AuroraPanelsState extends State<_AuroraPanels>
 
   @override
   Widget build(BuildContext context) {
+    if (!widget.animate) {
+      return _AuroraProgress(value: 0, child: widget.child);
+    }
     return AnimatedBuilder(
       animation: _ctrl,
       builder: (ctx, _) {
-        // Propagate progress to descendants via a trivial InheritedWidget.
         return _AuroraProgress(value: _ctrl.value, child: widget.child);
       },
     );
@@ -84,38 +89,27 @@ class _AuroraProgress extends InheritedWidget {
   bool updateShouldNotify(_AuroraProgress old) => old.value != value;
 }
 
-/// The actual renderer — a [CustomPaint] whose [CustomPainter] draws the
-/// base gradient, soft aurora blobs, and particles in one paint pass.
-///
-/// The widget itself is const; only the painter receives changing [progress].
 class _AuroraRender extends StatelessWidget {
   const _AuroraRender();
 
   @override
   Widget build(BuildContext context) {
-    return Positioned.fill(
-      child: CustomPaint(
-        painter: _AuroraPainter(context: context),
-        size: Size.infinite,
-      ),
+    return CustomPaint(
+      painter: _AuroraPainter(context: context),
+      size: Size.infinite,
     );
   }
 }
 
-/// ---------------------------------------------------------------------------
-/// Single painter — one canvas pass for ALL visual layers.
-/// ---------------------------------------------------------------------------
 class _AuroraPainter extends CustomPainter {
   final BuildContext context;
 
   _AuroraPainter({required this.context});
 
-  // ---- Cached data (re‑built only when context changes) -------------------
   bool get _isDark => Theme.of(context).brightness == Brightness.dark;
   ColorScheme get _cs => Theme.of(context).colorScheme;
   late final double _progress = _AuroraProgress.of(context);
 
-  // ---- Aurora blob definitions (deterministic, seeded) --------------------
   static final _blobs = List<_Blob>.generate(4, (i) {
     final rng = Random(42 + i);
     return _Blob(
@@ -130,7 +124,6 @@ class _AuroraPainter extends CustomPainter {
     );
   });
 
-  // ---- Particle definitions (deterministic, seeded) -----------------------
   static final _particles = List<_Particle>.generate(8, (i) {
     final rng = Random(42 + i);
     return _Particle(
@@ -144,15 +137,12 @@ class _AuroraPainter extends CustomPainter {
     );
   });
 
-  // ---- Painters -----------------------------------------------------------
   @override
   void paint(Canvas canvas, Size size) {
     final progress = _progress;
 
-    // 1. Base gradient
     _drawBaseGradient(canvas, size);
 
-    // 2. Aurora blobs
     final blobPaint = Paint()..maskFilter = const MaskFilter.blur(BlurStyle.normal, 80);
     for (final b in _blobs) {
       final t = (progress * b.speed + b.delay) % 1.0;
@@ -168,7 +158,6 @@ class _AuroraPainter extends CustomPainter {
       canvas.drawCircle(Offset(cx, cy), b.radius, blobPaint);
     }
 
-    // 3. Floating particles (very soft blurred ovals)
     final particlePaint = Paint()
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 30);
     for (final p in _particles) {
@@ -205,18 +194,14 @@ class _AuroraPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_AuroraPainter oldDelegate) {
-    // Rebuild only when the InheritedWidget's progress changes.
-    // Using context + InheritedWidget is cheaper than storing progress locally.
     return oldDelegate._progress != _progress ||
         oldDelegate._isDark != _isDark;
   }
 }
 
-// ---- Data classes (const) --------------------------------------------------
-
 class _Blob {
-  final double nx; // normalized x (0..1)
-  final double ny; // normalized y (0..1)
+  final double nx;
+  final double ny;
   final double radius;
   final double speed;
   final double driftX;

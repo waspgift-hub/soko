@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -121,7 +120,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   Widget _buildGlassNavBar(ColorScheme cs) {
     final isDark = cs.brightness == Brightness.dark;
     final navBg = isDark
-        ? const Color(0xFF121729).withValues(alpha: 0.75)
+        ? const Color(0xFF0D1A18).withValues(alpha: 0.82)
         : const Color(0xFFFFFFFF).withValues(alpha: 0.82);
     final navBorder = isDark
         ? const Color(0x2AFFFFFF)
@@ -135,67 +134,49 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       padding: EdgeInsets.fromLTRB(16, 0, 16, bottomInset + 12),
       child: RepaintBoundary(
         child: SizedBox(
-        height: 72 + 30,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            // Glass nav bar background
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(40),
-                child: BackdropFilter(
-                  filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-                  child: Container(
-                    height: 72,
-                    decoration: BoxDecoration(
-                      color: navBg,
-                      borderRadius: BorderRadius.circular(40),
-                      border: Border.all(color: navBorder),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.06),
-                          blurRadius: 32,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        _buildTab(
-                          0,
-                          Icons.storefront_outlined,
-                          Icons.storefront_rounded,
-                          context.tr('home'),
-                          cs,
-                        ),
-                        _buildTab(
-                          1,
-                          Icons.diamond_outlined,
-                          Icons.diamond_rounded,
-                          context.tr('discovery'),
-                          cs,
-                        ),
-                        _buildSellTab(cs),
-                        _buildTab(
-                          3,
-                          Icons.chat_outlined,
-                          Icons.chat_rounded,
-                          context.tr('chat'),
-                          cs,
-                        ),
-                        _buildProfileTab(cs),
-                      ],
-                    ),
-                  ),
+          height: 72,
+          child: Container(
+            decoration: BoxDecoration(
+              color: navBg,
+              borderRadius: BorderRadius.circular(40),
+              border: Border.all(color: navBorder),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.06),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
                 ),
-              ),
+              ],
             ),
-          ],
+            child: Row(
+              children: [
+                _buildTab(
+                  0,
+                  Icons.storefront_outlined,
+                  Icons.storefront_rounded,
+                  context.tr('home'),
+                  cs,
+                ),
+                _buildTab(
+                  1,
+                  Icons.diamond_outlined,
+                  Icons.diamond_rounded,
+                  context.tr('discovery'),
+                  cs,
+                ),
+                _buildSellTab(cs),
+                _buildTab(
+                  3,
+                  Icons.chat_outlined,
+                  Icons.chat_rounded,
+                  context.tr('chat'),
+                  cs,
+                ),
+                _buildProfileTab(cs),
+              ],
+            ),
+          ),
         ),
-      ),
       ),
     );
   }
@@ -209,40 +190,52 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   ) {
     final isSelected = _currentIndex == index;
     return Expanded(
-      child: GestureDetector(
+      child: Semantics(
+        button: true,
+        selected: isSelected,
+        label: label,
         onTap: () => _selectTab(index),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? cs.primary.withValues(alpha: 0.15)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                isSelected ? activeIcon : icon,
-                color: isSelected
-                    ? cs.primary
-                    : cs.onSurface.withValues(alpha: 0.45),
-                size: 24,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: isSelected
-                      ? cs.primary
-                      : cs.onSurface.withValues(alpha: 0.45),
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+        child: GestureDetector(
+          excludeFromSemantics: true,
+          onTap: () => _selectTab(index),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? cs.primary.withValues(alpha: 0.15)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                AnimatedScale(
+                  duration: const Duration(milliseconds: 180),
+                  scale: isSelected ? 1 : 0.9,
+                  child: Icon(
+                    isSelected ? activeIcon : icon,
+                    color: isSelected
+                        ? cs.primary
+                        : cs.onSurface.withValues(alpha: 0.45),
+                    size: 24,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: isSelected
+                        ? cs.primary
+                        : cs.onSurface.withValues(alpha: 0.45),
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -252,47 +245,108 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   Widget _buildProfileTab(ColorScheme cs) {
     final isSelected = _currentIndex == 4;
     return Expanded(
-      child: GestureDetector(
+      child: Semantics(
+        button: true,
+        selected: isSelected,
+        label: context.tr('profile'),
         onTap: () => _selectTab(4),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? cs.primary.withValues(alpha: 0.15)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(24),
+        child: GestureDetector(
+          excludeFromSemantics: true,
+          onTap: () => _selectTab(4),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? cs.primary.withValues(alpha: 0.15)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                AnimatedScale(
+                  duration: const Duration(milliseconds: 180),
+                  scale: isSelected ? 1 : 0.9,
+                  child: CircleAvatar(
+                    radius: 13,
+                    backgroundColor: cs.primary.withValues(alpha: 0.12),
+                    backgroundImage: _profilePhotoUrl != null &&
+                            _profilePhotoUrl!.isNotEmpty
+                        ? NetworkImage(_profilePhotoUrl!)
+                        : null,
+                    child: _profilePhotoUrl == null || _profilePhotoUrl!.isEmpty
+                        ? Icon(
+                            Icons.person_outline,
+                            color: isSelected
+                                ? cs.primary
+                                : cs.onSurface.withValues(alpha: 0.45),
+                            size: 16,
+                          )
+                        : null,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  context.tr('profile'),
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: isSelected
+                        ? cs.primary
+                        : cs.onSurface.withValues(alpha: 0.45),
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                ),
+              ],
+            ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSellTab(ColorScheme cs) {
+    return Expanded(
+      child: Semantics(
+        button: true,
+        label: context.tr('sell'),
+        onTap: _openAddProduct,
+        child: GestureDetector(
+          excludeFromSemantics: true,
+          onTap: _openAddProduct,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              CircleAvatar(
-                radius: 13,
-                backgroundColor: cs.primary.withValues(alpha: 0.12),
-                backgroundImage: _profilePhotoUrl != null &&
-                        _profilePhotoUrl!.isNotEmpty
-                    ? NetworkImage(_profilePhotoUrl!)
-                    : null,
-                child: _profilePhotoUrl == null || _profilePhotoUrl!.isEmpty
-                    ? Icon(
-                        Icons.person_outline,
-                        color: isSelected
-                            ? cs.primary
-                            : cs.onSurface.withValues(alpha: 0.45),
-                        size: 16,
-                      )
-                    : null,
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [cs.primary, cs.primary.withValues(alpha: 0.72)],
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: cs.primary.withValues(alpha: 0.32),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Icon(Icons.add_rounded, color: cs.onPrimary, size: 26),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 1),
               Text(
-                context.tr('profile'),
+                context.tr('sell'),
                 style: TextStyle(
                   fontSize: 10,
-                  color: isSelected
-                      ? cs.primary
-                      : cs.onSurface.withValues(alpha: 0.45),
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                  color: cs.primary,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
@@ -302,40 +356,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildSellTab(ColorScheme cs) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          Navigator.of(
-            context,
-          ).push(buildAppRoute(builder: (_) => const AddProductScreen()));
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-          decoration: BoxDecoration(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.add_circle_outline, color: cs.primary, size: 24),
-              const SizedBox(height: 2),
-              Text(
-                context.tr('sell'),
-                style: TextStyle(
-                  fontSize: 10,
-                  color: cs.primary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  void _openAddProduct() {
+    HapticFeedback.mediumImpact();
+    Navigator.of(
+      context,
+    ).push(buildAppRoute(builder: (_) => const AddProductScreen()));
   }
 
   Widget _buildSidebar(ColorScheme cs) {

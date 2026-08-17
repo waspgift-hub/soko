@@ -173,7 +173,25 @@ class ProductCard extends StatelessWidget {
           ),
         );
 
-        return GestureDetector(onTap: onTap, child: card);
+        final displayPrice = flashSale?.salePrice ?? product.price;
+        final semanticsLabel = [
+          product.name,
+          context.formatPrice(displayPrice),
+          if (product.location.isNotEmpty) product.location,
+          if (product.rating > 0)
+            '${product.rating.toStringAsFixed(1)} ${context.tr('rating')}',
+        ].join(', ');
+
+        return Semantics(
+          button: true,
+          label: semanticsLabel,
+          onTap: onTap,
+          child: AnimatedPress(
+            onTap: onTap,
+            pressedScale: 0.98,
+            child: card,
+          ),
+        );
       },
     );
   }

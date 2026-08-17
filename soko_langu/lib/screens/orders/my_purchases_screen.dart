@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -1113,11 +1112,7 @@ class _OrderGlassCard extends StatelessWidget {
               width: isSelected ? 1.5 : 1,
             ),
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: BackdropFilter(
-              filter: ui.ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-              child: Stack(
+          child: Stack(
                 children: [
                   // Status accent rail (left edge)
                   Positioned(
@@ -1221,8 +1216,6 @@ class _OrderGlassCard extends StatelessWidget {
                   ),
                 ],
               ),
-            ),
-          ),
         ),
       ),
     );
@@ -1260,11 +1253,7 @@ class _OrderGlassCard extends StatelessWidget {
               width: isSelected ? 1.5 : 1,
             ),
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: BackdropFilter(
-              filter: ui.ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-              child: Column(
+          child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (isSelectionMode)
@@ -1410,8 +1399,6 @@ class _OrderGlassCard extends StatelessWidget {
                   ],
                 ],
               ),
-            ),
-          ),
         ),
       ),
     );

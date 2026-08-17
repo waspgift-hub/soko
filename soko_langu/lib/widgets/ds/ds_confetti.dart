@@ -53,12 +53,14 @@ class _DsConfettiState extends State<DsConfetti>
       child: AnimatedBuilder(
         animation: _controller,
         builder: (context, _) {
-          return CustomPaint(
-            painter: _ConfettiPainter(
-              particles: _particles,
-              progress: _controller.value,
+          return RepaintBoundary(
+            child: CustomPaint(
+              painter: _ConfettiPainter(
+                particles: _particles,
+                progress: _controller.value,
+              ),
+              size: Size.infinite,
             ),
-            size: Size.infinite,
           );
         },
       ),

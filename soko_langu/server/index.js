@@ -6546,7 +6546,16 @@ app.get('/api/fraud/risk/:sellerId', asyncHandler(async (req, res) => {
 // ─── FLASH SALE: CREATE ────────────────────────────────
 app.post('/api/flash-sale/create', asyncHandler(async (req, res) => {
   try {
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    let decoded;
+    try {
+      decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
+    } catch {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
 
     const {
       productId, productName, productImage, originalPrice, salePrice,
@@ -6557,20 +6566,11 @@ app.post('/api/flash-sale/create', asyncHandler(async (req, res) => {
     if (!productId || !sellerId || !productName) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
+    if (decoded.uid !== sellerId) {
+      return res.status(403).json({ error: 'Seller ID does not match authenticated user' });
+    }
 
-    // Verify Firebase Auth token
-    const authHeader = req.headers['authorization'];
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-    try {
-      const decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
-      if (decoded.uid !== sellerId) {
-        return res.status(403).json({ error: 'Seller ID does not match authenticated user' });
-      }
-    } catch {
-      return res.status(401).json({ error: 'Invalid token' });
-    }
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     // Check if user is suspended
     const userDoc = await db.collection('users').doc(sellerId).get();

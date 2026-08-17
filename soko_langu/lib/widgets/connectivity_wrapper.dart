@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert'; // ignore: unused_import
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../extensions/context_tr.dart';
@@ -13,32 +12,14 @@ class ConnectivityWrapper extends StatefulWidget {
   State<ConnectivityWrapper> createState() => _ConnectivityWrapperState();
 }
 
-class _ConnectivityWrapperState extends State<ConnectivityWrapper>
-    with SingleTickerProviderStateMixin {
+class _ConnectivityWrapperState extends State<ConnectivityWrapper> {
   bool _offline = false;
   bool _initialized = false;
   Timer? _retryTimer;
 
-  late AnimationController _bannerCtrl;
-  // ignore: unused_field
-  late Animation<Offset> _bannerSlide;
-
   @override
   void initState() {
     super.initState();
-
-    _bannerCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 350),
-    );
-    _bannerSlide = Tween<Offset>(
-      begin: const Offset(0, -1),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _bannerCtrl,
-      curve: Curves.easeOutCubic,
-    ));
-
     _checkServer();
   }
 
@@ -62,7 +43,7 @@ class _ConnectivityWrapperState extends State<ConnectivityWrapper>
 
   void _startRetryTimer() {
     _retryTimer?.cancel();
-    _retryTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
+    _retryTimer = Timer.periodic(const Duration(seconds: 15), (_) async {
       final offline = await _isServerReachable();
       if (!mounted) return;
       if (!offline) {
@@ -86,96 +67,69 @@ class _ConnectivityWrapperState extends State<ConnectivityWrapper>
   @override
   void dispose() {
     _retryTimer?.cancel();
-    _bannerCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_initialized) return const SizedBox();
+    if (!_initialized || !_offline) return widget.child;
 
-    if (_offline) {
-      return _OfflineFallback(
-        onRetry: () {
-          _retryTimer?.cancel();
-          _checkServer();
-        },
-      );
-    }
-
-    return widget.child;
+    return Stack(
+      children: [
+        widget.child,
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: SafeArea(
+            bottom: false,
+            child: _OfflineBanner(
+              onRetry: () {
+                _retryTimer?.cancel();
+                _checkServer();
+              },
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
-class _OfflineFallback extends StatelessWidget {
+class _OfflineBanner extends StatelessWidget {
   final VoidCallback onRetry;
-  const _OfflineFallback({required this.onRetry});
+  const _OfflineBanner({required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Scaffold(
-      backgroundColor: cs.surface,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Spacer(flex: 2),
-              Image.asset(
-                'assets/app_icon.png',
-                width: 96,
-                height: 96,
-                errorBuilder: (_, _, _) => Icon(
-                  Icons.wifi_off,
-                  size: 80,
-                  color: cs.onSurface.withValues(alpha: 0.3),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                context.tr('no_internet_connection'),
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: cs.onSurface,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                context.tr('check_connection_try_again'),
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: cs.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: onRetry,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: cs.primary,
-                    foregroundColor: cs.onPrimary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 0,
-                  ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Material(
+        color: cs.errorContainer,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: onRetry,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            child: Row(
+              children: [
+                Icon(Icons.cloud_off_rounded, color: cs.onErrorContainer),
+                const SizedBox(width: 10),
+                Expanded(
                   child: Text(
-                    context.tr('try_again'),
+                    context.tr('no_internet_connection'),
                     style: TextStyle(
-                      fontSize: 16,
+                      color: cs.onErrorContainer,
+                      fontSize: 13,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
-              ),
-              const Spacer(flex: 3),
-            ],
+                Icon(Icons.refresh_rounded, color: cs.onErrorContainer, size: 20),
+              ],
+            ),
           ),
         ),
       ),

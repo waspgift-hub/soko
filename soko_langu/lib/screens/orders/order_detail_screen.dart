@@ -36,7 +36,7 @@ class OrderDetailScreen extends StatefulWidget {
 }
 
 class _OrderDetailScreenState extends State<OrderDetailScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late AnimationController _pulseController;
   late Animation<double> _pulseAnim;
   Timer? _countdownTimer;
@@ -60,6 +60,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -155,7 +156,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+      _pulseController.stop();
+    } else if (state == AppLifecycleState.resumed) {
+      _pulseController.repeat(reverse: true);
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pulseController.dispose();
     _countdownTimer?.cancel();
     _autoRefreshTimer?.cancel();
@@ -945,36 +956,42 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
               ),
               const Spacer(),
               if (_isCompletedState)
-                GestureDetector(
-                  onTap: () =>
-                      context.push('${AppRoutes.receipt}/${widget.docId}'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: cs.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.receipt_outlined,
-                          size: 13,
-                          color: cs.primary,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          context.tr('receipt'),
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
+                Semantics(
+                  button: true,
+                  label: context.tr('view_receipt'),
+                  onTap: () => context.push('${AppRoutes.receipt}/${widget.docId}'),
+                  child: GestureDetector(
+                    excludeFromSemantics: true,
+                    onTap: () =>
+                        context.push('${AppRoutes.receipt}/${widget.docId}'),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: cs.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.receipt_outlined,
+                            size: 13,
                             color: cs.primary,
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 4),
+                          Text(
+                            context.tr('receipt'),
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: cs.primary,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

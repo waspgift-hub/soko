@@ -152,45 +152,44 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
       (context.tr('sales'), '${_data!.successfulOrders}', Icons.shopping_bag_outlined, cs.successGreen),
       (context.tr('earnings'), '${context.currencySymbol()} ${_formatAmount(_data!.monthlyEarnings)}', Icons.monetization_on_outlined, cs.trendingOrange),
     ];
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 1.6,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-      ),
-      itemCount: items.length,
-      itemBuilder: (_, i) {
-        final item = items[i];
-        return DsCard(
-          radius: 20,
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: item.$4.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
+    final screenWidth = MediaQuery.of(context).size.width;
+    final tileWidth = (screenWidth - 32 - 12) / 2;
+    final tileHeight = tileWidth / 1.6;
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: items.map((item) {
+        return SizedBox(
+          width: tileWidth,
+          height: tileHeight,
+          child: DsCard(
+            radius: 20,
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: item.$4.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(item.$3, color: item.$4, size: 18),
                 ),
-                child: Icon(item.$3, color: item.$4, size: 18),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                item.$2,
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20, color: cs.onSurface),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              Text(item.$1, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-            ],
+                const SizedBox(height: 8),
+                Text(
+                  item.$2,
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20, color: cs.onSurface),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(item.$1, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+              ],
+            ),
           ),
         );
-      },
+      }).toList(),
     );
   }
 

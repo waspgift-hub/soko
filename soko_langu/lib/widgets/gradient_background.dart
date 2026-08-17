@@ -1,3 +1,4 @@
+// Unused — retained for reference. See premium_background.dart for the active implementation.
 import 'package:flutter/material.dart';
 
 /// Animated full-screen gradient background.

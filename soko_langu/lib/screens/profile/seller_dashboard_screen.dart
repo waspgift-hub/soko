@@ -224,17 +224,22 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       children: [
         _buildSectionTitle(context, cs, Icons.bolt_outlined, context.tr('actions_title')),
         const SizedBox(height: 12),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            childAspectRatio: 1.05,
-          ),
-          itemCount: actions.length,
-          itemBuilder: (_, i) => _buildQuickActionTile(cs, isDark, actions[i]),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final tileWidth = (constraints.maxWidth - 20) / 3;
+            final tileHeight = tileWidth / 1.05;
+            return Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: actions.map((action) {
+                return SizedBox(
+                  width: tileWidth,
+                  height: tileHeight,
+                  child: _buildQuickActionTile(cs, isDark, action),
+                );
+              }).toList(),
+            );
+          },
         ),
       ],
     );

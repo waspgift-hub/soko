@@ -246,9 +246,14 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                             ),
                           ),
                           Positioned(bottom: 2, right: 2,
-                            child: GestureDetector(
+                            child: Semantics(
+                              button: true,
+                              label: context.tr('change_profile_picture'),
                               onTap: _pickImage,
-                              child: Container(
+                              child: GestureDetector(
+                                excludeFromSemantics: true,
+                                onTap: _pickImage,
+                                child: Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
                                   color: cs.primary,
@@ -257,6 +262,7 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                                 ),
                                 child: Icon(Icons.camera_alt, color: cs.onPrimary, size: 18),
                               ),
+                            ),
                             ),
                           ),
                         ],
@@ -414,37 +420,37 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
     if (isAdmin) {
       actions.add(_ActionItem(Icons.admin_panel_settings_rounded, context.tr('admin_dashboard'), () => context.push(AppRoutes.admin)));
     }
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3, childAspectRatio: 1.0, crossAxisSpacing: 10, mainAxisSpacing: 10,
-      ),
-      itemCount: actions.length,
-      itemBuilder: (context, index) {
-        final item = actions[index];
-        return GlassCard(
-          onTap: item.onTap,
-          padding: const EdgeInsets.symmetric(vertical: AppInsets.lg, horizontal: AppInsets.sm),
-          borderColor: cs.primary.withValues(alpha: 0.35),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: cs.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
+    final tileWidth = (MediaQuery.of(context).size.width - 32 - 20) / 3;
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: actions.map((item) {
+        return SizedBox(
+          width: tileWidth,
+          height: tileWidth,
+          child: GlassCard(
+            onTap: item.onTap,
+            padding: const EdgeInsets.symmetric(vertical: AppInsets.lg, horizontal: AppInsets.sm),
+            borderColor: cs.primary.withValues(alpha: 0.35),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: cs.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(item.icon, color: cs.primary, size: 24),
                 ),
-                child: Icon(item.icon, color: cs.primary, size: 24),
-              ),
-              const SizedBox(height: AppInsets.sm),
-              Text(item.label, style: TextStyle(fontSize: AppFontSize.sm, color: cs.onSurface, fontWeight: FontWeight.w500),
-                textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
-            ],
+                const SizedBox(height: AppInsets.sm),
+                Text(item.label, style: TextStyle(fontSize: AppFontSize.sm, color: cs.onSurface, fontWeight: FontWeight.w500),
+                  textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
+              ],
+            ),
           ),
         );
-      },
+      }).toList(),
     );
   }
 }

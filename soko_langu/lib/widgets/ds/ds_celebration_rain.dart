@@ -53,12 +53,14 @@ class _DsCelebrationRainState extends State<DsCelebrationRain>
       child: AnimatedBuilder(
         animation: _controller,
         builder: (context, _) {
-          return CustomPaint(
-            painter: _CelebrationRainPainter(
-              particles: _particles,
-              progress: _controller.value,
+          return RepaintBoundary(
+            child: CustomPaint(
+              painter: _CelebrationRainPainter(
+                particles: _particles,
+                progress: _controller.value,
+              ),
+              size: Size.infinite,
             ),
-            size: Size.infinite,
           );
         },
       ),

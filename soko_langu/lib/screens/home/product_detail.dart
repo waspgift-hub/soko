@@ -239,13 +239,22 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                             setState(() => _currentImageIndex = index);
                           },
                           itemBuilder: (context, index) {
-                            return GestureDetector(
+                            return Semantics(
+                              button: true,
+                              label: context.tr('view_full_image'),
                               onTap: () => _showFullScreenImage(
                                 context,
                                 product.images,
                                 index,
                               ),
-                              child: CachedNetworkImage(
+                              child: GestureDetector(
+                                excludeFromSemantics: true,
+                                onTap: () => _showFullScreenImage(
+                                  context,
+                                  product.images,
+                                  index,
+                                ),
+                                child: CachedNetworkImage(
                                 imageUrl: product.images[index],
                                 fit: BoxFit.cover,
                                 placeholder: (context, url) => Container(
@@ -268,6 +277,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                           ),
                                         ),
                               ),
+                            ),
                             );
                           },
                         ),

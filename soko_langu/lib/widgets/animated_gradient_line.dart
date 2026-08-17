@@ -32,7 +32,6 @@ class _AnimatedGradientLineState extends State<AnimatedGradientLine>
     super.initState();
     _controller = AnimationController(vsync: this, duration: widget.duration)
       ..repeat();
-    _controller.addListener(() => setState(() {}));
   }
 
   @override
@@ -43,23 +42,27 @@ class _AnimatedGradientLineState extends State<AnimatedGradientLine>
 
   @override
   Widget build(BuildContext context) {
-    final themeColors = [
-      Theme.of(context).colorScheme.primary,
-      Theme.of(context).colorScheme.secondary,
-      Theme.of(context).colorScheme.tertiary,
-      Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
-    ];
-
-    return Container(
-      height: widget.height,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(widget.borderRadius),
-        gradient: LinearGradient(
-          begin: Alignment(-1 + _controller.value * 2, 0),
-          end: Alignment(1 - _controller.value * 2, 0),
-          colors: themeColors,
-        ),
-      ),
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final themeColors = [
+          Theme.of(context).colorScheme.primary,
+          Theme.of(context).colorScheme.secondary,
+          Theme.of(context).colorScheme.tertiary,
+          Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
+        ];
+        return Container(
+          height: widget.height,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(widget.borderRadius),
+            gradient: LinearGradient(
+              begin: Alignment(-1 + _controller.value * 2, 0),
+              end: Alignment(1 - _controller.value * 2, 0),
+              colors: themeColors,
+            ),
+          ),
+        );
+      },
     );
   }
 }
