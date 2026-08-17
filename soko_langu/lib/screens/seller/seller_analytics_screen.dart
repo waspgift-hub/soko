@@ -80,11 +80,11 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
     final nf = NumberFormat('#,###', 'en');
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(context.tr('analytics')),
         centerTitle: true,
-        backgroundColor: Colors.transparent,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
         actions: [
           IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load),

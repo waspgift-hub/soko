@@ -1,4 +1,3 @@
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../../extensions/context_tr.dart';
 
@@ -47,14 +46,14 @@ class _OrderFlowScreenState extends State<OrderFlowScreen>
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
           context.tr('how_it_works'),
           style: TextStyle(fontWeight: FontWeight.w700, color: cs.onSurface),
         ),
         centerTitle: true,
-        backgroundColor: Colors.transparent,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
       ),
       body: AnimatedBuilder(
@@ -297,16 +296,10 @@ class _InfoCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        color: cs.surface.withValues(alpha: 0.55),
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.4),
         border: Border.all(color: cs.primary.withValues(alpha: 0.1), width: 0.5),
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-          child: child,
-        ),
-      ),
+      child: child,
     );
   }
 }
@@ -590,14 +583,10 @@ class _FlowNodeCard extends StatelessWidget {
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(22),
-                color: cs.surface.withValues(alpha: 0.55),
+                color: cs.surfaceContainerHighest.withValues(alpha: 0.4),
                 border: Border.all(color: node.color.withValues(alpha: 0.15), width: 0.5),
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(22),
-                child: BackdropFilter(
-                  filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-                  child: Column(
+              child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -639,10 +628,8 @@ class _FlowNodeCard extends StatelessWidget {
                           _buildDataRow(context, index, node.color, cs),
                     ],
                   ),
-                ),
               ),
             ),
-          ),
         ],
       ),
     );
