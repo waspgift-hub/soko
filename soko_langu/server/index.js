@@ -2554,6 +2554,32 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
             sendLocalizedSms(buyerPhone, `Soko Vibe: Malipo ya ${tx.productName || 'Bidhaa'} hayakukamilika. Tafadhali jaribu tena kwenye app. Sababu: ${failureReason}`, tx.buyerId).catch(() => {});
           }
         } catch (_) {}
+
+        // Notify seller that buyer payment failed
+        if (tx.sellerId) {
+          const buyerName = tx.buyerName || 'Mteja';
+          try {
+            await db.collection('notifications').add({
+              userId: tx.sellerId,
+              title: 'Malipo ya Mteja Yameshindikana',
+              body: `Mteja ${buyerName} ameshindik kulipia ${tx.productName || 'bidhaa'}. Oda #${orderId} imeshindikana. Sababu: ${failureReason}`,
+              isRead: false,
+              type: 'payment_failed',
+              transactionId: orderId,
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+          } catch (_) {}
+          try {
+            await sendOneSignalNotification(tx.sellerId, 'Malipo ya Mteja Yameshindikana', `Mteja ${buyerName} ameshindik kulipia ${tx.productName || 'bidhaa'}. Oda #${orderId} imeshindikana.`, { type: 'payment_failed', productId: tx.productId || '', transactionId: orderId });
+          } catch (_) {}
+          try {
+            const sellerSnap = await db.collection('users').doc(tx.sellerId).get();
+            const sellerPhone = sellerSnap.data()?.phone || '';
+            if (sellerPhone) {
+              sendLocalizedSms(sellerPhone, `Soko Vibe: Mteja ${buyerName} ameshindik kulipia ${tx.productName || 'bidhaa'}. Oda #${orderId} imeshindikana.`, tx.sellerId).catch(() => {});
+            }
+          } catch (_) {}
+        }
       }
     }
 

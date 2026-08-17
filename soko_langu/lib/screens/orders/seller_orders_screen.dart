@@ -495,8 +495,10 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
       builder: (context, snap) {
         if (!snap.hasData) return const SizedBox.shrink();
         final pending = snap.data!.docs.where((doc) {
-          final s = (doc.data() as Map)['status'] as String? ?? '';
-          return s == 'pending';
+          final data = doc.data() as Map;
+          final s = data['status'] as String? ?? '';
+          final shippingCost = (data['shippingCost'] as num?)?.toDouble() ?? 0;
+          return s == 'pending' && shippingCost <= 0;
         }).toList();
         if (pending.isEmpty) return const SizedBox.shrink();
 

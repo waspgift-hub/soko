@@ -250,6 +250,16 @@ function startListener() {
           getUserPhone(buyerId).then(phone => {
             if (phone) sendSms(phone, `Soko Vibe: Malipo ya ${productName} hayakukamilika. Tafadhali fungua app na ujaribu tena.`, buyerId);
           });
+
+          // Push + SMS to seller
+          if (sellerId) {
+            const buyerName = after.buyerName || 'Mteja';
+            sendOsNotification(sellerId, 'Malipo ya Mteja Yameshindikana', `Mteja ${buyerName} ameshindik kulipia ${productName}. Oda #${orderId} imeshindikana.`, { type: 'payment_failed', orderId, status: 'failed' })
+              .catch((err) => console.error(`[LISTENER] ${orderId}: push failed for seller:`, err.message));
+            getUserPhone(sellerId).then(phone => {
+              if (phone) sendSms(phone, `Soko Vibe: Mteja ${buyerName} ameshindik kulipia ${productName}. Oda #${orderId} imeshindikana.`, sellerId);
+            });
+          }
         }
 
         // ── any → refunded ──
