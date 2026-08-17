@@ -20,6 +20,10 @@
 -keepattributes Signature
 -keepattributes Exceptions
 
+-keep class com.sokolangu.app.SokoVibeWidgetProvider { *; }
+-keep class com.sokolangu.app.FlashSalesWidgetProvider { *; }
+-keep class com.sokolangu.app.WidgetDataStore { *; }
+
 -dontwarn io.flutter.**
 -dontwarn com.google.firebase.**
 -dontwarn com.google.android.gms.**
