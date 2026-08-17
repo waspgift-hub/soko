@@ -3,7 +3,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#FF1B4332"
+    android:background="@color/widget_flash_bg"
     android:padding="12dp">
 
     <LinearLayout
@@ -17,7 +17,7 @@
             android:layout_width="20dp"
             android:layout_height="20dp"
             android:src="@mipmap/ic_launcher"
-            android:contentDescription="Soko Vibe"
+            android:contentDescription="@string/widget_flash_sales_desc"
             android:layout_marginEnd="6dp" />
 
         <TextView
@@ -26,7 +26,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="Flash Sales"
-            android:textColor="#FFFFFFFF"
+            android:textColor="@color/widget_text_primary"
             android:textSize="13sp"
             android:textStyle="bold"
             android:singleLine="true" />
@@ -36,7 +36,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Moto Leo"
-            android:textColor="#CCFFFFFF"
+            android:textColor="@color/widget_text_secondary"
             android:textSize="11sp"
             android:singleLine="true" />
     </LinearLayout>
@@ -44,7 +44,7 @@
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:background="#33FFFFFF"
+        android:background="@color/widget_divider"
         android:layout_marginBottom="8dp" />
 
     <LinearLayout
@@ -61,7 +61,7 @@
             android:layout_marginEnd="4dp"
             android:orientation="vertical"
             android:gravity="center"
-            android:background="#33FFFFFF">
+            android:background="@color/widget_flash_product_bg">
 
             <FrameLayout
                 android:layout_width="match_parent"
@@ -74,7 +74,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:scaleType="centerCrop"
-                    android:contentDescription="Product 1" />
+                    android:contentDescription="@string/widget_flash_sales_desc" />
 
                 <TextView
                     android:id="@+id/flash_discount_1"
@@ -87,10 +87,10 @@
                     android:paddingTop="1dp"
                     android:paddingBottom="1dp"
                     android:text="-25%"
-                    android:textColor="#FFFFFFFF"
+                    android:textColor="@color/widget_text_primary"
                     android:textSize="9sp"
                     android:textStyle="bold"
-                    android:background="#FFFF1744"
+                    android:background="@color/widget_flash_discount"
                     android:visibility="gone" />
             </FrameLayout>
 
@@ -104,7 +104,7 @@
                 android:paddingStart="4dp"
                 android:paddingEnd="4dp"
                 android:text="Product"
-                android:textColor="#FFFFFFFF"
+                android:textColor="@color/widget_text_primary"
                 android:textSize="11sp" />
 
             <TextView
@@ -115,7 +115,7 @@
                 android:paddingStart="4dp"
                 android:paddingEnd="4dp"
                 android:text="TZS 0"
-                android:textColor="#FF52B788"
+                android:textColor="@color/widget_flash_price"
                 android:textSize="13sp"
                 android:textStyle="bold" />
 
@@ -128,7 +128,7 @@
                 android:paddingEnd="4dp"
                 android:paddingBottom="4dp"
                 android:text="TZS 0"
-                android:textColor="#AAFFFFFF"
+                android:textColor="@color/widget_flash_orig_price"
                 android:textSize="10sp"
                 android:visibility="gone" />
         </LinearLayout>
@@ -142,7 +142,7 @@
             android:layout_marginEnd="4dp"
             android:orientation="vertical"
             android:gravity="center"
-            android:background="#33FFFFFF">
+            android:background="@color/widget_flash_product_bg">
 
             <FrameLayout
                 android:layout_width="match_parent"
@@ -155,7 +155,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:scaleType="centerCrop"
-                    android:contentDescription="Product 2" />
+                    android:contentDescription="@string/widget_flash_sales_desc" />
 
                 <TextView
                     android:id="@+id/flash_discount_2"
@@ -168,10 +168,10 @@
                     android:paddingTop="1dp"
                     android:paddingBottom="1dp"
                     android:text="-25%"
-                    android:textColor="#FFFFFFFF"
+                    android:textColor="@color/widget_text_primary"
                     android:textSize="9sp"
                     android:textStyle="bold"
-                    android:background="#FFFF1744"
+                    android:background="@color/widget_flash_discount"
                     android:visibility="gone" />
             </FrameLayout>
 
@@ -185,7 +185,7 @@
                 android:paddingStart="4dp"
                 android:paddingEnd="4dp"
                 android:text="Product"
-                android:textColor="#FFFFFFFF"
+                android:textColor="@color/widget_text_primary"
                 android:textSize="11sp" />
 
             <TextView
@@ -196,7 +196,7 @@
                 android:paddingStart="4dp"
                 android:paddingEnd="4dp"
                 android:text="TZS 0"
-                android:textColor="#FF52B788"
+                android:textColor="@color/widget_flash_price"
                 android:textSize="13sp"
                 android:textStyle="bold" />
 
@@ -209,7 +209,7 @@
                 android:paddingEnd="4dp"
                 android:paddingBottom="4dp"
                 android:text="TZS 0"
-                android:textColor="#AAFFFFFF"
+                android:textColor="@color/widget_flash_orig_price"
                 android:textSize="10sp"
                 android:visibility="gone" />
         </LinearLayout>
@@ -222,7 +222,7 @@
             android:layout_marginStart="4dp"
             android:orientation="vertical"
             android:gravity="center"
-            android:background="#33FFFFFF">
+            android:background="@color/widget_flash_product_bg">
 
             <FrameLayout
                 android:layout_width="match_parent"
@@ -235,7 +235,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:scaleType="centerCrop"
-                    android:contentDescription="Product 3" />
+                    android:contentDescription="@string/widget_flash_sales_desc" />
 
                 <TextView
                     android:id="@+id/flash_discount_3"
@@ -248,10 +248,10 @@
                     android:paddingTop="1dp"
                     android:paddingBottom="1dp"
                     android:text="-25%"
-                    android:textColor="#FFFFFFFF"
+                    android:textColor="@color/widget_text_primary"
                     android:textSize="9sp"
                     android:textStyle="bold"
-                    android:background="#FFFF1744"
+                    android:background="@color/widget_flash_discount"
                     android:visibility="gone" />
             </FrameLayout>
 
@@ -265,7 +265,7 @@
                 android:paddingStart="4dp"
                 android:paddingEnd="4dp"
                 android:text="Product"
-                android:textColor="#FFFFFFFF"
+                android:textColor="@color/widget_text_primary"
                 android:textSize="11sp" />
 
             <TextView
@@ -276,7 +276,7 @@
                 android:paddingStart="4dp"
                 android:paddingEnd="4dp"
                 android:text="TZS 0"
-                android:textColor="#FF52B788"
+                android:textColor="@color/widget_flash_price"
                 android:textSize="13sp"
                 android:textStyle="bold" />
 
@@ -289,7 +289,7 @@
                 android:paddingEnd="4dp"
                 android:paddingBottom="4dp"
                 android:text="TZS 0"
-                android:textColor="#AAFFFFFF"
+                android:textColor="@color/widget_flash_orig_price"
                 android:textSize="10sp"
                 android:visibility="gone" />
         </LinearLayout>

@@ -3,29 +3,29 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="12dp"
-    android:background="#FF1B5E20">
+    android:background="@color/widget_dashboard_bg"
+    android:padding="12dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:layout_marginBottom="4dp">
+        android:layout_marginBottom="8dp">
 
         <ImageView
             android:layout_width="20dp"
             android:layout_height="20dp"
             android:src="@mipmap/ic_launcher"
-            android:contentDescription="Soko Vibe"
+            android:contentDescription="@string/widget_soko_dashboard_desc"
             android:layout_marginEnd="6dp" />
 
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Soko Dashboard"
-            android:textColor="#FFFFFFFF"
+            android:text="@string/widget_soko_dashboard_name"
+            android:textColor="@color/widget_text_primary"
             android:textSize="13sp"
             android:textStyle="bold"
             android:singleLine="true" />
@@ -50,7 +50,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Sales Today"
-                android:textColor="#CCFFFFFF"
+                android:textColor="@color/widget_text_secondary"
                 android:textSize="11sp" />
 
             <TextView
@@ -58,7 +58,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="TZS 0"
-                android:textColor="#FFFFFFFF"
+                android:textColor="@color/widget_text_primary"
                 android:textSize="18sp"
                 android:textStyle="bold"
                 android:layout_marginTop="2dp" />
@@ -76,7 +76,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Pending"
-                android:textColor="#CCFFFFFF"
+                android:textColor="@color/widget_text_secondary"
                 android:textSize="11sp" />
 
             <TextView
@@ -84,7 +84,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="0"
-                android:textColor="#FFFFFFFF"
+                android:textColor="@color/widget_text_primary"
                 android:textSize="18sp"
                 android:textStyle="bold"
                 android:layout_marginTop="2dp" />
@@ -102,7 +102,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Balance"
-                android:textColor="#CCFFFFFF"
+                android:textColor="@color/widget_text_secondary"
                 android:textSize="11sp" />
 
             <TextView
@@ -110,7 +110,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="TZS 0"
-                android:textColor="#FFFFFFFF"
+                android:textColor="@color/widget_text_primary"
                 android:textSize="18sp"
                 android:textStyle="bold"
                 android:layout_marginTop="2dp" />
@@ -120,7 +120,7 @@
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:background="#33FFFFFF"
+        android:background="@color/widget_divider"
         android:layout_marginVertical="8dp" />
 
     <LinearLayout
@@ -137,8 +137,8 @@
             android:layout_margin="2dp"
             android:text="Chat"
             android:textSize="12sp"
-            android:textColor="#FFFFFFFF"
-            android:background="#4CAF50"
+            android:textColor="@color/widget_text_primary"
+            android:background="@color/widget_button"
             android:gravity="center"
             android:singleLine="true" />
 
@@ -150,8 +150,8 @@
             android:layout_margin="2dp"
             android:text="Orders"
             android:textSize="12sp"
-            android:textColor="#FFFFFFFF"
-            android:background="#4CAF50"
+            android:textColor="@color/widget_text_primary"
+            android:background="@color/widget_button"
             android:gravity="center"
             android:singleLine="true" />
 
@@ -163,8 +163,8 @@
             android:layout_margin="2dp"
             android:text="Boost"
             android:textSize="12sp"
-            android:textColor="#FFFFFFFF"
-            android:background="#4CAF50"
+            android:textColor="@color/widget_text_primary"
+            android:background="@color/widget_button"
             android:gravity="center"
             android:singleLine="true" />
     </LinearLayout>

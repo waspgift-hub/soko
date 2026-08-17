@@ -1,6 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="splash_background">#2D6A4F</color>
-	<color name="ic_launcher_background">#FFFFFF</color>
+    <color name="ic_launcher_background">#FFFFFF</color>
     <color name="notification_accent">#1B5E20</color>
+
+    <!-- Widget: Dashboard (light) -->
+    <color name="widget_dashboard_bg">#FF1B5E20</color>
+    <color name="widget_text_primary">#FFFFFFFF</color>
+    <color name="widget_text_secondary">#CCFFFFFF</color>
+    <color name="widget_button">#FF4CAF50</color>
+    <color name="widget_divider">#33FFFFFF</color>
+
+    <!-- Widget: Flash Sales (light) -->
+    <color name="widget_flash_bg">#FF1B4332</color>
+    <color name="widget_flash_product_bg">#33FFFFFF</color>
+    <color name="widget_flash_price">#FF52B788</color>
+    <color name="widget_flash_orig_price">#AAFFFFFF</color>
+    <color name="widget_flash_discount">#FFFF1744</color>
 </resources>
