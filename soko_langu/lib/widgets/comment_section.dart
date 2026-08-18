@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/comment_model.dart';
 import '../services/comment_service.dart';
+import '../services/profanity_filter.dart';
 import '../extensions/context_tr.dart';
 import '../theme/app_motion.dart';
 import 'google_loading.dart';
@@ -41,6 +42,22 @@ class _CommentSectionState extends State<CommentSection> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(context.tr('login_required'))),
       );
+      return;
+    }
+    final check = await ProfanityFilter().check(text);
+    if (!check.clean) {
+      if (mounted) {
+        if (check.banned) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(check.message ?? 'Account deleted for profanity'), backgroundColor: Theme.of(context).colorScheme.error),
+          );
+          await _auth.signOut();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(check.message ?? 'Profanity detected'), backgroundColor: Theme.of(context).colorScheme.error),
+          );
+        }
+      }
       return;
     }
     try {
@@ -103,6 +120,16 @@ class _CommentSectionState extends State<CommentSection> {
                               final text = replyController.text.trim();
                               if (text.isEmpty) return;
                               setSheetState(() => sending = true);
+                              final check = await ProfanityFilter().check(text);
+                              if (!check.clean) {
+                                setSheetState(() => sending = false);
+                                if (ctx.mounted) {
+                                  ScaffoldMessenger.of(ctx).showSnackBar(
+                                    SnackBar(content: Text(check.message ?? 'Profanity detected'), backgroundColor: Theme.of(ctx).colorScheme.error),
+                                  );
+                                }
+                                return;
+                              }
                               try {
                                 await _commentService.addReply(
                                   productId: widget.productId,
@@ -593,6 +620,15 @@ class _CommentTile extends StatelessWidget {
                         onPressed: () async {
                           final text = replyController.text.trim();
                           if (text.isEmpty) return;
+                          final check = await ProfanityFilter().check(text);
+                          if (!check.clean) {
+                            if (ctx.mounted) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
+                                SnackBar(content: Text(check.message ?? 'Profanity detected'), backgroundColor: Theme.of(ctx).colorScheme.error),
+                              );
+                            }
+                            return;
+                          }
                           try {
                             await CommentService().addReply(
                               productId: productId,

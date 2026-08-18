@@ -16,6 +16,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:provider/provider.dart';
+import 'package:safe_text/safe_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // --- App modules ---
@@ -72,6 +73,8 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await themeManager.load();
+
+  await SafeTextFilter.init(language: Language.swahili);
 
   // --- Firebase initialization (blocking — required before any Firestore call) ---
   try {

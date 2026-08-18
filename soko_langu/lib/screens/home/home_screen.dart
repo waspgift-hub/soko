@@ -17,6 +17,7 @@ import '../../widgets/banner_rotator.dart';
 import '../../widgets/premium_widgets.dart';
 import '../../widgets/animated_gradient_line.dart';
 import '../../widgets/recently_viewed_row.dart';
+import '../../widgets/trending_carousel.dart';
 import '../../widgets/staggered_fade_in.dart';
 import '../../widgets/ds/ds.dart';
 import '../../theme/app_typography.dart';
@@ -565,6 +566,8 @@ class _HomeScreenState extends State<HomeScreen>
               ),
               const SizedBox(height: AppInsets.sm),
               const RecentlyViewedRow(),
+              const SizedBox(height: AppInsets.sm),
+              const TrendingCarousel(),
               const SizedBox(height: AppInsets.md),
             ],
                   ),

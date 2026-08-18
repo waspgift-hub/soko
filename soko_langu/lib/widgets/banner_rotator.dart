@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../models/flash_sale_model.dart';
 import 'flash_sale_banner.dart';
 import 'dynamic_banner.dart';
-import 'boost_promo_banner.dart';
 
 class BannerRotator extends StatefulWidget {
   final List<FlashSale> flashSales;
@@ -72,7 +71,6 @@ class _BannerRotatorState extends State<BannerRotator> {
       list.add(FlashSaleBanner(key: const ValueKey('flash_banner'), sales: widget.flashSales));
     }
     list.add(const DynamicBanner(key: ValueKey('dynamic_banner')));
-    list.add(const BoostPromoBanner(key: ValueKey('boost_promo_banner')));
     return list;
   }
 

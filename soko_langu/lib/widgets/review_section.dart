@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import '../services/review_service.dart';
+import '../services/profanity_filter.dart';
 import '../models/review_model.dart';
 import '../extensions/context_tr.dart';
 import '../app/routes.dart';
@@ -208,6 +209,25 @@ class _ReviewDialogState extends State<_ReviewDialog> {
   bool _submitting = false;
 
   Future<void> _submit() async {
+    final text = _commentController.text;
+    if (text.trim().isNotEmpty) {
+      final check = await ProfanityFilter().check(text);
+      if (!check.clean) {
+        if (mounted) {
+          if (check.banned) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(check.message ?? 'Account deleted for profanity'), backgroundColor: Theme.of(context).colorScheme.error),
+            );
+            await FirebaseAuth.instance.signOut();
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(check.message ?? 'Profanity detected'), backgroundColor: Theme.of(context).colorScheme.error),
+            );
+          }
+        }
+        return;
+      }
+    }
     setState(() => _submitting = true);
     try {
       await ReviewService().addReview(

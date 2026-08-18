@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/review_service.dart';
+import '../../services/profanity_filter.dart';
 import '../../models/review_model.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/soko_vibe_states.dart';
@@ -95,6 +96,23 @@ class _ProductReviewsScreenState extends State<ProductReviewsScreen> {
     );
 
     if (result == true) {
+      final text = commentController.text;
+      final check = await ProfanityFilter().check(text);
+      if (!check.clean) {
+        if (mounted) {
+          if (check.banned) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(check.message ?? 'Account deleted for profanity'), backgroundColor: Theme.of(context).colorScheme.error),
+            );
+            await FirebaseAuth.instance.signOut();
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(check.message ?? 'Profanity detected'), backgroundColor: Theme.of(context).colorScheme.error),
+            );
+          }
+        }
+        return;
+      }
       try {
         await _reviewService.addReview(
           productId: widget.productId,
@@ -292,6 +310,22 @@ class _ProductReviewsScreenState extends State<ProductReviewsScreen> {
       ),
     );
     if (reply != null) {
+      final result = await ProfanityFilter().check(reply);
+      if (!result.clean) {
+        if (mounted) {
+          if (result.banned) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(result.message ?? 'Account deleted for profanity'), backgroundColor: Theme.of(context).colorScheme.error),
+            );
+            await FirebaseAuth.instance.signOut();
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(result.message ?? 'Profanity detected'), backgroundColor: Theme.of(context).colorScheme.error),
+            );
+          }
+        }
+        return;
+      }
       try {
         await _reviewService.replyToReview(review.id, reply);
         if (mounted) {
@@ -299,7 +333,13 @@ class _ProductReviewsScreenState extends State<ProductReviewsScreen> {
             SnackBar(content: Text(context.tr('reply_submitted'))),
           );
         }
-      } catch (_) {}
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Reply failed: $e'), backgroundColor: Theme.of(context).colorScheme.error),
+          );
+        }
+      }
     }
   }
 }

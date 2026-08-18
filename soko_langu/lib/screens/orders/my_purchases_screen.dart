@@ -9,6 +9,7 @@ import '../../models/transaction_model.dart';
 import '../../services/api_config.dart';
 import '../../services/clickpesa_service.dart';
 import '../../services/rating_service.dart';
+import '../../services/profanity_filter.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
@@ -298,6 +299,18 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
             ElevatedButton(
               onPressed: () async {
                 Navigator.pop(ctx);
+                final commentText = commentCtrl.text.trim();
+                if (commentText.isNotEmpty) {
+                  final check = await ProfanityFilter().check(commentText);
+                  if (!check.clean) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(check.message ?? 'Profanity detected'), backgroundColor: Theme.of(context).colorScheme.error),
+                      );
+                    }
+                    return;
+                  }
+                }
                 await RatingService().submitReview(
                   productId: productId,
                   sellerId: sellerId,
@@ -305,7 +318,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                   userName: user?.displayName ?? user?.email ?? context.tr('anonymous', 'Anonymous'),
                   userImage: user?.photoURL,
                   rating: rating,
-                  comment: commentCtrl.text.trim(),
+                  comment: commentText,
                   isVerifiedPurchase: true,
                 );
                 if (mounted) _showSuccess(context.tr('rating_submitted'));

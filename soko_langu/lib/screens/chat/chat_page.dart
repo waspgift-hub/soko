@@ -8,6 +8,7 @@ import '../../services/notification_service.dart';
 import '../../services/user_service.dart';
 import '../../services/whatsapp_service.dart';
 import '../../services/shortcut_service.dart';
+import '../../services/profanity_filter.dart';
 import '../../models/message_model.dart';
 import '../../extensions/context_tr.dart';
 
@@ -169,9 +170,26 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
-  void _sendMessage() {
+  Future<void> _sendMessage() async {
     final text = _inputCtrl.text.trim();
     if (text.isEmpty) return;
+
+    final check = await ProfanityFilter().check(text);
+    if (!check.clean) {
+      if (mounted) {
+        if (check.banned) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(check.message ?? 'Account deleted for profanity'), backgroundColor: Theme.of(context).colorScheme.error),
+          );
+          await FirebaseAuth.instance.signOut();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(check.message ?? 'Profanity detected'), backgroundColor: Theme.of(context).colorScheme.error),
+          );
+        }
+      }
+      return;
+    }
 
     final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
     final optimistic = Message(

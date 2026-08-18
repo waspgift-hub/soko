@@ -1517,6 +1517,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.28.0"
+  safe_text:
+    dependency: "direct main"
+    description:
+      name: safe_text
+      sha256: "2a69742369fbeb44839e5d48aff901fc480498c1d454b36162b286edbf1468cc"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.1.7"
   sanitize_html:
     dependency: transitive
     description:
