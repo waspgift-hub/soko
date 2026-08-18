@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
 const axios = require('axios');
+const Redis = require('ioredis');
 
 // Firebase init — MUST be before any module that calls admin.firestore() at require time
 let db;
@@ -16,6 +17,27 @@ if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
     db = admin.firestore();
   } catch (e) {
     console.error('[FIREBASE] Init failed:', e.message);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Redis client — used for distributed idempotency locks and payment
+// reconciliation queue. Prevents double-processing when Render runs
+// multiple server instances behind the load balancer.
+// ---------------------------------------------------------------------------
+let redis = null;
+if (process.env.REDIS_URL) {
+  try {
+    redis = new Redis(process.env.REDIS_URL, {
+      maxRetriesPerRequest: null,
+      retryStrategy(times) { return Math.min(times * 200, 5000); },
+      lazyConnect: true,
+    });
+    redis.on('error', (e) => console.warn('[Redis] Connection error:', e.message));
+    redis.connect().catch(() => {});
+    console.log('[Redis] Client initialized');
+  } catch (e) {
+    console.warn('[Redis] Init failed:', e.message);
   }
 }
 
@@ -509,6 +531,91 @@ function paymentRateLimit(req, res, next) {
     return res.status(429).json({ error: 'Too many payment attempts. Please wait before trying again.' });
   }
   next();
+}
+
+// ---------------------------------------------------------------------------
+// Distributed Idempotency Lock (Redis SETNX)
+//
+// WHY: When Render runs multiple instances, the same ClickPesa webhook can
+// hit different instances simultaneously. Without this lock, two instances
+// could both read tx.status === 'pending' and both process it → double
+// credit, double boost, corrupted escrow.
+//
+// HOW: Redis SETNX is atomic — only ONE instance wins the race. The lock
+// auto-expires in 30s so a crashed instance doesn't permanently block.
+//
+// FALLBACK: If Redis is down, we skip the lock and rely on the Firestore
+// status check (line 2342). This is less safe but means the server still
+// works when Redis is unavailable.
+// ---------------------------------------------------------------------------
+const IDEMPOTENCY_LOCK_TTL = 30; // seconds
+
+async function acquireWebhookLock(orderId) {
+  if (!redis) return { acquired: true, skipped: true };
+  try {
+    const key = `webhook:lock:${orderId}`;
+    const result = await redis.set(key, '1', 'EX', IDEMPOTENCY_LOCK_TTL, 'NX');
+    return { acquired: result === 'OK', skipped: false };
+  } catch (e) {
+    console.warn('[Idempotency] Redis unavailable, proceeding without lock:', e.message);
+    return { acquired: true, skipped: true };
+  }
+}
+
+async function releaseWebhookLock(orderId) {
+  if (!redis) return;
+  try {
+    await redis.del(`webhook:lock:${orderId}`);
+  } catch (_) {}
+}
+
+// ---------------------------------------------------------------------------
+// Failed Boost Retry Queue
+//
+// WHY: When a boost product update fails (Firestore timeout, connection
+// error), the user has paid but their product isn't boosted. This queue
+// stores failed boost operations so a reconciliation cron can retry them.
+//
+// STORAGE: Redis list with JSON payloads. Each entry includes the full
+// context needed to retry the operation. The reconciliation cron processes
+// this queue every 5 minutes.
+// ---------------------------------------------------------------------------
+const BOOST_RETRY_KEY = 'boost:retry:queue';
+
+async function enqueueFailedBoost(orderId, txData, tier) {
+  if (!redis) {
+    console.error(`[BoostRetry] Redis unavailable — lost boost retry for ${orderId}`);
+    return;
+  }
+  try {
+    await redis.rpush(BOOST_RETRY_KEY, JSON.stringify({
+      orderId,
+      productId: txData.productId,
+      userId: txData.userId,
+      tier,
+      amount: txData.amount,
+      enqueuedAt: new Date().toISOString(),
+      retries: 0,
+    }));
+    console.log(`[BoostRetry] Enqueued failed boost for ${orderId}`);
+  } catch (e) {
+    console.error(`[BoostRetry] Failed to enqueue: ${e.message}`);
+  }
+}
+
+async function dequeueFailedBoosts(maxCount = 10) {
+  if (!redis) return [];
+  const items = [];
+  try {
+    for (let i = 0; i < maxCount; i++) {
+      const raw = await redis.lpop(BOOST_RETRY_KEY);
+      if (!raw) break;
+      items.push(JSON.parse(raw));
+    }
+  } catch (e) {
+    console.error(`[BoostRetry] Failed to dequeue: ${e.message}`);
+  }
+  return items;
 }
 
 // Verify webhook checksum to prevent forged payment callbacks.
@@ -2356,21 +2463,45 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
         const tierConfig = BOOST_TIERS[tier] || BOOST_TIERS.bronze;
         const boostedUntil = new Date(Date.now() + tierConfig.days * 24 * 60 * 60 * 1000);
 
-        // Mark transaction as completed FIRST so the UI updates immediately
-        await txDoc.ref.update({
+        // ── ATOMIC BATCH: transaction status + product boost ──
+        // Using Firestore batch ensures BOTH writes succeed or NEITHER does.
+        // This prevents: user pays, transaction says "completed", but product
+        // isn't boosted (the exact bug that causes "hela imeingia lakini
+        // hamna service").
+        const batch = db.batch();
+        batch.update(txDoc.ref, {
           status: 'completed',
           clickpesaReference: clickpesaRef,
           completedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
+        if (tx.productId) {
+          batch.update(db.collection('products').doc(tx.productId), {
+            isBoosted: true,
+            boostedUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
+            boostTier: tier,
+            isFeatured: true,
+            featuredUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
+          });
+        }
 
-        // Update product boost — non-blocking, don't await
-        db.collection('products').doc(tx.productId).update({
-          isBoosted: true,
-          boostedUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
-          boostTier: tier,
-          isFeatured: true,
-          featuredUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
-        }).catch(err => console.error(`Boost product update failed: ${err.message}`));
+        try {
+          await batch.commit();
+          console.log(`[Boost] Atomic batch committed for ${orderId}`);
+        } catch (batchErr) {
+          // Batch failed — transaction update + product update both rolled back.
+          // Enqueue for retry so the reconciliation cron can fix it.
+          console.error(`[Boost] Batch commit failed for ${orderId}:`, batchErr.message);
+          await enqueueFailedBoost(orderId, tx, tier);
+
+          // Still mark the transaction as completed in a separate write so
+          // ClickPesa doesn't keep retrying. The product boost will be fixed
+          // by the reconciliation cron.
+          await txDoc.ref.update({
+            status: 'completed',
+            clickpesaReference: clickpesaRef,
+            completedAt: admin.firestore.FieldValue.serverTimestamp(),
+          }).catch(() => {});
+        }
 
         // Notify user — non-blocking
         if (tx.userId) {
@@ -2422,7 +2553,12 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
         const autoReleaseDays = tx.autoReleaseDays || (deliveryType === 'regional' ? ESCROW_REGIONAL_DAYS : ESCROW_LOCAL_DAYS);
         const escrowExpiry = new Date(Date.now() + autoReleaseDays * 24 * 60 * 60 * 1000);
 
-        await txDoc.ref.update({
+        // ── ATOMIC BATCH: transaction + orders mirror ──
+        // Ensures both collections stay in sync. If the orders update fails
+        // independently, the two collections drift and admin dashboards show
+        // wrong data. Batch commit guarantees both or neither.
+        const escrowBatch = db.batch();
+        escrowBatch.update(txDoc.ref, {
           processingFee,
           platformFee,
           sokoLanguCommission: platformFee,
@@ -2436,13 +2572,12 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
           escrowHeldAt: admin.firestore.FieldValue.serverTimestamp(),
           escrowExpiresAt: admin.firestore.Timestamp.fromDate(escrowExpiry),
         });
-
-        // Keep the mirrored orders doc in sync so both collections agree.
-        db.collection('orders').doc(orderId).update({
+        escrowBatch.update(db.collection('orders').doc(orderId), {
           status: 'escrow_hold',
           escrowStatus: 'held',
           escrowHeldAt: admin.firestore.FieldValue.serverTimestamp(),
-        }).catch(() => {});
+        });
+        await escrowBatch.commit();
 
         // Everything below is non-critical — fire-and-forget for speed
         db.collection('revenue_transactions').add({
@@ -2606,6 +2741,7 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
 //     (statuses also polled by the ClickPesa poller below as backup)
 // ============================================================
 app.post('/api/clickpesa/webhook', verifyWebhook, async (req, res) => {
+  const webhookStart = Date.now();
   try {
     let payload = req.body;
     if (payload.data && typeof payload.data === 'object') {
@@ -2622,12 +2758,29 @@ app.post('/api/clickpesa/webhook', verifyWebhook, async (req, res) => {
 
     console.log(`ClickPesa webhook: order ${orderId} status=${paymentStatus} (raw=${rawStatus})`);
 
-    await applyClickPesaPayment(orderId, paymentStatus, {
-      clickpesaReference: payload.id || payload.transactionId || payload.reference || '',
-      failureReason: payload.message || payload.error || '',
-    });
+    // ── Distributed idempotency lock ──
+    // Prevents double-processing when Render load-balances the same
+    // webhook to multiple server instances simultaneously.
+    const lock = await acquireWebhookLock(orderId);
+    if (!lock.acquired) {
+      console.log(`[Idempotency] Rejected duplicate webhook for ${orderId}`);
+      return res.status(200).json({ received: true, duplicate: true });
+    }
 
-    return res.status(200).json({ received: true });
+    try {
+      await applyClickPesaPayment(orderId, paymentStatus, {
+        clickpesaReference: payload.id || payload.transactionId || payload.reference || '',
+        failureReason: payload.message || payload.error || '',
+      });
+    } finally {
+      // Always release the lock after processing — even if applyClickPesaPayment
+      // throws, the lock auto-expires in 30s anyway (safety net for crashes).
+      if (!lock.skipped) await releaseWebhookLock(orderId);
+    }
+
+    const elapsed = Date.now() - webhookStart;
+    console.log(`ClickPesa webhook processed in ${elapsed}ms: order ${orderId}`);
+    return res.status(200).json({ received: true, elapsed });
   } catch (e) {
     console.error('ClickPesa webhook error:', e);
     return res.status(200).json({ received: true });
@@ -7177,10 +7330,116 @@ async function pollPendingClickPesaPayments() {
   }
 }
 
+// ─── Boost Reconciliation Cron ───
+// Processes the failed boost retry queue AND finds transactions that are
+// "completed" but their products aren't boosted (the "hela imeingia lakini
+// hamna service" bug). Runs every 5 minutes as a safety net.
+async function reconcileBoostPayments() {
+  if (!db) return;
+
+  try {
+    // ── Part 1: Process the Redis retry queue ──
+    const failedBoosts = await dequeueFailedBoosts(10);
+    for (const item of failedBoosts) {
+      try {
+        const productDoc = await db.collection('products').doc(item.productId).get();
+        if (!productDoc.exists) {
+          console.warn(`[BoostReconcile] Product ${item.productId} not found, skipping`);
+          continue;
+        }
+
+        const product = productDoc.data();
+        if (product.isBoosted) {
+          console.log(`[BoostReconcile] Product ${item.productId} already boosted, skipping`);
+          continue;
+        }
+
+        const tierConfig = BOOST_TIERS[item.tier] || BOOST_TIERS.bronze;
+        const boostedUntil = new Date(Date.now() + tierConfig.days * 24 * 60 * 60 * 1000);
+
+        await db.collection('products').doc(item.productId).update({
+          isBoosted: true,
+          boostedUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
+          boostTier: item.tier,
+          isFeatured: true,
+          featuredUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
+        });
+
+        console.log(`[BoostReconcile] Fixed boost for product ${item.productId} (tx ${item.orderId})`);
+
+        if (item.userId) {
+          sendOneSignalNotification(item.userId, '✅ Boost imewashwa!',
+            `Bidhaa yako imepandishwa kwa daraja la ${item.tier}.`,
+            { type: 'boost', productId: item.productId }).catch(() => {});
+        }
+      } catch (e) {
+        console.error(`[BoostReconcile] Failed to fix boost for ${item.orderId}:`, e.message);
+        // Re-enqueue if we haven't retried too many times
+        if ((item.retries || 0) < 3) {
+          item.retries = (item.retries || 0) + 1;
+          if (redis) {
+            await redis.rpush(BOOST_RETRY_KEY, JSON.stringify(item)).catch(() => {});
+          }
+        }
+      }
+    }
+
+    // ── Part 2: Scan for orphaned completed boosts (safety net) ──
+    // Find transactions completed in the last 24h where product isn't boosted.
+    // This catches edge cases the retry queue missed.
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const txSnap = await db.collection('transactions')
+      .where('type', '==', 'boost')
+      .where('status', '==', 'completed')
+      .where('completedAt', '>=', admin.firestore.Timestamp.fromDate(since))
+      .limit(50)
+      .get();
+
+    for (const doc of txSnap.docs) {
+      const tx = doc.data();
+      if (!tx.productId) continue;
+
+      try {
+        const productDoc = await db.collection('products').doc(tx.productId).get();
+        if (!productDoc.exists) continue;
+        const product = productDoc.data();
+        if (product.isBoosted) continue;
+
+        // Product not boosted despite completed payment — fix it
+        const tier = tx.tier || 'bronze';
+        const tierConfig = BOOST_TIERS[tier] || BOOST_TIERS.bronze;
+        const boostedUntil = new Date(Date.now() + tierConfig.days * 24 * 60 * 60 * 1000);
+
+        await db.collection('products').doc(tx.productId).update({
+          isBoosted: true,
+          boostedUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
+          boostTier: tier,
+          isFeatured: true,
+          featuredUntil: admin.firestore.Timestamp.fromDate(boostedUntil),
+        });
+
+        console.log(`[BoostReconcile] Orphaned boost fixed: product ${tx.productId} (tx ${doc.id})`);
+
+        if (tx.userId) {
+          sendOneSignalNotification(tx.userId, '✅ Boost imewashwa!',
+            `Bidhaa yako imepandishwa kwa daraja la ${tier}.`,
+            { type: 'boost', productId: tx.productId }).catch(() => {});
+        }
+      } catch (e) {
+        console.error(`[BoostReconcile] Failed to fix orphaned boost ${doc.id}:`, e.message);
+      }
+    }
+  } catch (e) {
+    console.error('reconcileBoostPayments error:', e.message);
+  }
+}
+
 // Run every hour as fallback (cron-job.org can also call the endpoint)
 setInterval(releaseExpiredEscrows, 60 * 60 * 1000);
 setInterval(deactivateExpiredFlashSales, 60 * 60 * 1000);
 setInterval(failStalePendingBoosts, 5 * 60 * 1000);
+// Boost reconciliation — every 5 min, fix orphaned completed boosts
+setInterval(reconcileBoostPayments, 5 * 60 * 1000);
 // ClickPesa status poller — every 45s so successes/failures surface within seconds
 // even when the webhook is slow (operator session timeouts) or lost.
 setInterval(pollPendingClickPesaPayments, 45 * 1000);
@@ -7188,6 +7447,7 @@ setInterval(pollPendingClickPesaPayments, 45 * 1000);
 setTimeout(releaseExpiredEscrows, 60 * 1000);
 setTimeout(deactivateExpiredFlashSales, 60 * 1000);
 setTimeout(failStalePendingBoosts, 60 * 1000);
+setTimeout(reconcileBoostPayments, 90 * 1000);
 setTimeout(pollPendingClickPesaPayments, 15 * 1000);
 
 // ============================================================
