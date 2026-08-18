@@ -706,6 +706,18 @@ tailwind.config = {
           <div id="adViewsWrap"></div>
         </div>
       </div>
+      <div class="mt-4 grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
+          <h3 class="font-bold text-slate-800 dark:text-neutral-100 mb-3">Monthly Income</h3>
+          <p class="text-xs text-slate-500 dark:text-neutral-400 mb-3">Revenue by month (line + bar)</p>
+          <div style="position:relative;height:280px"><canvas id="incomeMonthChart"></canvas></div>
+        </div>
+        <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
+          <h3 class="font-bold text-slate-800 dark:text-neutral-100 mb-3">Yearly Income (5 Years)</h3>
+          <p class="text-xs text-slate-500 dark:text-neutral-400 mb-3">Total revenue by year (bar + line)</p>
+          <div style="position:relative;height:280px"><canvas id="incomeYearChart"></canvas></div>
+        </div>
+      </div>
     </section>
 
     <!-- ============ TAB: WITHDRAWALS ============ -->
@@ -1526,6 +1538,118 @@ function refreshCharts() {
     charts.users.options.plugins.legend.labels.color = legend;
     charts.users.update();
   }
+  if (charts.incomeMonth) {
+    charts.incomeMonth.options.scales.x.ticks.color = tick;
+    charts.incomeMonth.options.scales.y.grid.color = grid;
+    charts.incomeMonth.options.scales.y1.grid.color = grid;
+    charts.incomeMonth.options.scales.y.ticks.color = tick;
+    charts.incomeMonth.options.scales.y1.ticks.color = tick;
+    charts.incomeMonth.options.plugins.legend.labels.color = legend;
+    charts.incomeMonth.update();
+  }
+  if (charts.incomeYear) {
+    charts.incomeYear.options.scales.x.ticks.color = tick;
+    charts.incomeYear.options.scales.y.grid.color = grid;
+    charts.incomeYear.options.scales.y1.grid.color = grid;
+    charts.incomeYear.options.scales.y.ticks.color = tick;
+    charts.incomeYear.options.scales.y1.ticks.color = tick;
+    charts.incomeYear.options.plugins.legend.labels.color = legend;
+    charts.incomeYear.update();
+  }
+}
+
+function initIncomeCharts() {
+  var dark = document.documentElement.classList.contains('dark');
+  var tick = dark ? '#9ca3af' : '#64748b';
+  var grid = dark ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)';
+  var legend = dark ? '#e5e7eb' : '#111827';
+
+  if (!charts.incomeMonth) {
+    charts.incomeMonth = new Chart($('incomeMonthChart').getContext('2d'), {
+      type: 'bar',
+      data: { labels: [], datasets: [
+        { type: 'bar', label: 'Revenue', data: [], backgroundColor: 'rgba(16,185,129,0.75)', borderRadius: 6, yAxisID: 'y' },
+        { type: 'line', label: 'Cumulative', data: [], borderColor: '#059669', backgroundColor: 'rgba(5,150,105,0.10)', fill: true, tension: 0.4, pointRadius: 3, pointBackgroundColor: '#059669', yAxisID: 'y1' }
+      ] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          x: { ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12, color: tick }, grid: { display: false } },
+          y: { beginAtZero: true, grid: { color: grid }, ticks: { callback: function (v) { return 'TZS ' + (v / 1e6).toFixed(1) + 'M'; }, color: tick } },
+          y1: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, ticks: { callback: function (v) { return 'TZS ' + (v / 1e6).toFixed(1) + 'M'; }, color: tick } }
+        },
+        plugins: { legend: { position: 'bottom', labels: { color: legend } } }
+      }
+    });
+  }
+
+  if (!charts.incomeYear) {
+    charts.incomeYear = new Chart($('incomeYearChart').getContext('2d'), {
+      type: 'bar',
+      data: { labels: [], datasets: [
+        { type: 'bar', label: 'Revenue', data: [], backgroundColor: 'rgba(34,197,94,0.80)', borderRadius: 6, yAxisID: 'y' },
+        { type: 'line', label: 'Cumulative', data: [], borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,0.10)', fill: true, tension: 0.4, pointRadius: 4, pointBackgroundColor: '#16a34a', yAxisID: 'y1' }
+      ] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          x: { ticks: { color: tick }, grid: { display: false } },
+          y: { beginAtZero: true, grid: { color: grid }, ticks: { callback: function (v) { return 'TZS ' + (v / 1e6).toFixed(1) + 'M'; }, color: tick } },
+          y1: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, ticks: { callback: function (v) { return 'TZS ' + (v / 1e6).toFixed(1) + 'M'; }, color: tick } }
+        },
+        plugins: { legend: { position: 'bottom', labels: { color: legend } } }
+      }
+    });
+  }
+}
+
+function renderIncomeCharts() {
+  initIncomeCharts();
+  var revs = S.revenue || [];
+  var monthMap = {};
+  var yearMap = {};
+
+  revs.forEach(function (r) {
+    var ts = r.timestamp;
+    if (!ts) return;
+    var dt = (ts.seconds) ? new Date(ts.seconds * 1000) : (ts instanceof Date ? ts : new Date(ts));
+    if (isNaN(dt.getTime())) return;
+    var amt = Math.abs(Number(r.amount) || 0);
+    var ym = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
+    var y = String(dt.getFullYear());
+    monthMap[ym] = (monthMap[ym] || 0) + amt;
+    yearMap[y] = (yearMap[y] || 0) + amt;
+  });
+
+  var monthKeys = Object.keys(monthMap).sort().slice(-12);
+  var monthLabels = monthKeys.map(function (k) {
+    var parts = k.split('-');
+    var names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return names[parseInt(parts[1]) - 1] + ' ' + parts[0].slice(2);
+  });
+  var monthVals = monthKeys.map(function (k) { return monthMap[k]; });
+  var monthCum = [];
+  monthVals.reduce(function (acc, v, i) { monthCum[i] = acc + v; return monthCum[i]; }, 0);
+
+  charts.incomeMonth.data.labels = monthLabels;
+  charts.incomeMonth.data.datasets[0].data = monthVals;
+  charts.incomeMonth.data.datasets[1].data = monthCum;
+  charts.incomeMonth.update();
+
+  var now = new Date();
+  var currentYear = now.getFullYear();
+  var yearKeys = [];
+  for (var y = currentYear - 4; y <= currentYear; y++) yearKeys.push(String(y));
+  var yearVals = yearKeys.map(function (y) { return yearMap[y] || 0; });
+  var yearCum = [];
+  yearVals.reduce(function (acc, v, i) { yearCum[i] = acc + v; return yearCum[i]; }, 0);
+
+  charts.incomeYear.data.labels = yearKeys;
+  charts.incomeYear.data.datasets[0].data = yearVals;
+  charts.incomeYear.data.datasets[1].data = yearCum;
+  charts.incomeYear.update();
 }
 
 function updateTimeseries() {
@@ -1614,6 +1738,7 @@ function setOrderFilter(s) {
 
 function renderOrders() {
   if (!loaded.transactions) {
+    $('ordersBody').innerHTML = '<tr><td colspan="9" class="px-5 py-12 text-center text-slate-400 dark:text-neutral-500">' + spinner('Loading orders…') + '</td></tr>';
     loadTransactions().then(function () { renderOrders(); refreshTotals(); }).catch(function (e) { $('ordersBody').innerHTML = '<tr><td colspan="9" class="px-5 py-12 text-center text-slate-400 dark:text-neutral-500">Failed to load: ' + esc(e.message) + '</td></tr>'; });
     return;
   }
@@ -1704,6 +1829,7 @@ function releaseEscrow(orderId) {
 /* ============ DISPUTES ============ */
 function renderDisputes() {
   if (!loaded.transactions) {
+    $('disputesGrid').innerHTML = '<div class="lg:col-span-2 rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-12 text-center text-slate-400 dark:text-neutral-500">' + spinner('Loading disputes…') + '</div>';
     loadTransactions().then(function () { renderDisputes(); }).catch(function () {});
     return;
   }
@@ -1790,6 +1916,7 @@ function resolveDispute(orderId, preset) {
 /* ============ BOOSTS ============ */
 function renderBoosts() {
   if (!loaded.transactions) {
+    $('boostsBody').innerHTML = '<tr><td colspan="7" class="px-5 py-12 text-center text-slate-400 dark:text-neutral-500">' + spinner('Loading boosts…') + '</td></tr>';
     loadTransactions().then(function () { renderBoosts(); }).catch(function () {});
     return;
   }
@@ -1824,6 +1951,9 @@ function renderBoosts() {
 
 /* ============ ANALYTICS ============ */
 function renderAnalytics() {
+  $('categoryBars').innerHTML = spinner('Loading analytics…');
+  $('locationWrap').innerHTML = '';
+  $('analyticsBody').innerHTML = '<tr><td colspan="4" class="px-5 py-12 text-center text-slate-400 dark:text-neutral-500">' + spinner('Loading…') + '</td></tr>';
   Promise.all([loadAnalytics(), loadTransactions()]).then(function () {
     var an = S.analytics || {};
     $('anaUsersToday').textContent = (an.newUsersToday || 0).toLocaleString('en-US');
@@ -2501,15 +2631,16 @@ function renderFinance() {
     $('wdBalance').textContent = fmtTZ(withdrawable);
     var rateEl = $('rateInput');
     if (rateEl && typeof f.platformCommissionPercent === 'number') rateEl.value = (f.platformCommissionPercent * 100).toFixed(1);
+    renderRevenue();
+    renderAdViews();
+    renderIncomeCharts();
   }).catch(function (e) {
     el.innerHTML = emptyRow('Failed to load finance: ' + e.message);
   });
-  renderRevenue();
-  renderAdViews();
 }
 function renderRevenue() {
   var wrap = $('revenueWrap');
-  if (!loaded.revenue) { loadRevenue().then(renderRevenue).catch(function () {}); return; }
+  if (!loaded.revenue) { wrap.innerHTML = spinner('Loading revenue…'); loadRevenue().then(renderRevenue).catch(function () {}); return; }
   if (!S.revenue.length) { wrap.innerHTML = emptyRow('No revenue transactions.'); return; }
   var rows = S.revenue.slice(0, 100).map(function (r) {
     return '<tr class="border-b border-slate-100 dark:border-neutral-800 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 transition">' +
@@ -2522,7 +2653,7 @@ function renderRevenue() {
 }
 function renderAdViews() {
   var wrap = $('adViewsWrap');
-  if (!loaded.adViews) { loadAdViews().then(renderAdViews).catch(function () {}); return; }
+  if (!loaded.adViews) { wrap.innerHTML = spinner('Loading ad views…'); loadAdViews().then(renderAdViews).catch(function () {}); return; }
   if (!S.adViews.length) { wrap.innerHTML = emptyRow('No ad views recorded.'); return; }
   var rows = S.adViews.slice(0, 100).map(function (v) {
     return '<tr class="border-b border-slate-100 dark:border-neutral-800 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 transition">' +
