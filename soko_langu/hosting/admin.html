@@ -2480,13 +2480,6 @@ function metricCard(icon, iconCls, label, value, sub) {
 function renderFinance() {
   var el = $('financeGrid');
   el.innerHTML = spinner('Loading finance…');
-  loadFinance().then(function () {
-    var f = S.finance || {};
-    var withdrawable = f.availableBalance || 0;
-    $('wdBalance').textContent = fmtTZ(withdrawable);
-    var rateEl = $('rateInput');
-    if (rateEl && typeof f.platformCommissionPercent === 'number') rateEl.value = (f.platformCommissionPercent * 100).toFixed(1);
-  }).catch(function () {});
   Promise.all([loadFinance(), loadRevenue(), loadAdViews(), loadUsers()]).then(function () {
     var f = S.finance || {};
     var pct = ((f.platformCommissionPercent || 0) * 100).toLocaleString() + '%';
@@ -2505,8 +2498,9 @@ function renderFinance() {
       '</div>';
     el.innerHTML = grid;
     refreshIcons();
-    var adminUsers = S.users.filter(function (u) { return u.isAdmin === true; });
     $('wdBalance').textContent = fmtTZ(withdrawable);
+    var rateEl = $('rateInput');
+    if (rateEl && typeof f.platformCommissionPercent === 'number') rateEl.value = (f.platformCommissionPercent * 100).toFixed(1);
   }).catch(function (e) {
     el.innerHTML = emptyRow('Failed to load finance: ' + e.message);
   });
