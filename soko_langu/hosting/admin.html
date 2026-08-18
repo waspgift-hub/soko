@@ -255,8 +255,8 @@ tailwind.config = {
       </div>
 
       <!-- Charts -->
-      <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div class="xl:col-span-2 rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
           <div class="flex items-center justify-between mb-4">
             <div>
               <h2 class="font-bold text-slate-800 dark:text-neutral-100">Escrow Volume &amp; Revenue</h2>
@@ -267,11 +267,13 @@ tailwind.config = {
           <div class="h-80"><canvas id="volumeChart"></canvas></div>
         </div>
         <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
-          <div class="mb-4">
-            <h2 class="font-bold text-slate-800 dark:text-neutral-100">Order Status Distribution</h2>
-            <p class="text-xs text-slate-500 dark:text-neutral-400">Live from Firestore order states</p>
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h2 class="font-bold text-slate-800 dark:text-neutral-100">Order Status Distribution</h2>
+              <p class="text-xs text-slate-500 dark:text-neutral-400">Live from Firestore order states</p>
+            </div>
           </div>
-          <div class="h-80 relative"><canvas id="distChart"></canvas></div>
+          <div class="h-80"><canvas id="distChart"></canvas></div>
         </div>
       </div>
 
@@ -1460,9 +1462,20 @@ function initCharts() {
 
   var dctx = $('distChart').getContext('2d');
   charts.dist = new Chart(dctx, {
-    type: 'doughnut',
-    data: { labels: [], datasets: [{ data: [], backgroundColor: [], borderWidth: 2, borderColor: '#ffffff' }] },
-    options: { responsive: true, maintainAspectRatio: false, cutout: '62%', plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, padding: 14, usePointStyle: true, pointStyle: 'circle' } } } }
+    type: 'bar',
+    data: { labels: [], datasets: [
+      { type: 'bar', label: 'Order Count', data: [], backgroundColor: [], borderRadius: 6, yAxisID: 'y' },
+      { type: 'line', label: 'Cumulative', data: [], borderColor: '#059669', backgroundColor: 'rgba(5,150,105,0.10)', fill: true, tension: 0.4, pointRadius: 3, pointBackgroundColor: '#059669', yAxisID: 'y1' }
+    ] },
+    options: {
+      responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12, color: '#64748b' }, grid: { display: false } },
+        y: { beginAtZero: true, grid: { color: 'rgba(15,23,42,0.06)' } },
+        y1: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false } }
+      },
+      plugins: { legend: { position: 'bottom' } }
+    }
   });
 
   var mctx = $('moneyChart').getContext('2d');
@@ -1516,7 +1529,11 @@ function refreshCharts() {
     charts.volume.update();
   }
   if (charts.dist) {
-    charts.dist.data.datasets[0].borderColor = dark ? '#171717' : '#ffffff';
+    charts.dist.options.scales.x.ticks.color = tick;
+    charts.dist.options.scales.y.grid.color = grid;
+    charts.dist.options.scales.y1.grid.color = grid;
+    charts.dist.options.scales.y.ticks.color = tick;
+    charts.dist.options.scales.y1.ticks.color = tick;
     charts.dist.options.plugins.legend.labels.color = legend;
     charts.dist.update();
   }
@@ -1714,13 +1731,14 @@ function updateCharts() {
   var counts = {};
   CHIP_KEYS.forEach(function (k) { counts[k] = 0; });
   txs.forEach(function (t) { counts[bucket(t.status)] = (counts[bucket(t.status)] || 0) + 1; });
-  var labels2 = [], data2 = [], colors2 = [];
+  var labels2 = [], data2 = [], colors2 = [], cumData = [], cum = 0;
   CHIP_KEYS.forEach(function (k) {
-    if (counts[k]) { labels2.push(STATUS[k].label); data2.push(counts[k]); colors2.push(STATUS[k].chart); }
+    if (counts[k]) { labels2.push(STATUS[k].label); data2.push(counts[k]); colors2.push(STATUS[k].chart); cum += counts[k]; cumData.push(cum); }
   });
   charts.dist.data.labels = labels2;
   charts.dist.data.datasets[0].data = data2;
   charts.dist.data.datasets[0].backgroundColor = colors2;
+  charts.dist.data.datasets[1].data = cumData;
   charts.dist.update();
 }
 

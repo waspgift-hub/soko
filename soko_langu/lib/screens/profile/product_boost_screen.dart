@@ -657,7 +657,7 @@ class _ProductBoostScreenState extends State<ProductBoostScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
-              if (mounted) context.go(AppRoutes.sellerDashboard);
+              if (mounted) context.go(AppRoutes.home);
             },
             child: Text(context.tr('continue')),
           ),

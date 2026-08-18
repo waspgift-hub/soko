@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <color name="splash_background">#FF0D0D0D</color>
     <!-- Widget: Dashboard (dark theme) -->
     <color name="widget_dashboard_bg">#FF0D2818</color>
     <color name="widget_text_primary">#FFFFFFFF</color>

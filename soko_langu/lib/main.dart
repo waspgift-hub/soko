@@ -71,6 +71,8 @@ typedef CurrencyCallback = void Function(String);
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  await themeManager.load();
+
   // --- Firebase initialization (blocking — required before any Firestore call) ---
   try {
     await Firebase.initializeApp(
@@ -257,6 +259,12 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
     }
   }
 
+  @override
+  void didChangePlatformBrightness() {
+    final brightness = WidgetsBinding.instance.platformDispatcher.platformBrightness;
+    themeManager.onSystemBrightnessChanged(brightness);
+  }
+
   Future<void> _onResume() async {
     await AppLockService.instance.onResume();
     _trackSession();
@@ -287,10 +295,8 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
   // App initialization
   // -----------------------------------------------------------------------
 
-  /// Loads theme and preferences, then fires background services.
+  /// Loads preferences and fires background services.
   Future<void> _initApp() async {
-    // Load theme (reads saved preference from SharedPreferences)
-    await themeManager.load();
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -577,7 +583,7 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
         ],
         theme: themeManager.lightTheme,
         darkTheme: themeManager.darkTheme,
-        themeMode: themeManager.isDark ? ThemeMode.dark : ThemeMode.light,
+        themeMode: themeManager.themeMode,
         builder: _appBuilder,
       ),
     );

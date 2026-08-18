@@ -779,10 +779,8 @@ async function processPayout({ payoutId, userId, phone, amount, fee, netAmount, 
 
   const result = await clickpesaPayout({
     amount: netAmount,
-    recipientPhone: phone,
-    recipientName: metadata?.sellerName || '',
-    narration: `Soko Vibe withdrawal: ${type || 'payout'}`,
-    externalReference: payoutId,
+    phoneNumber: phone,
+    orderReference: payoutId,
   });
 
   const clickpesaRef = result.id || result.orderReference || '';
