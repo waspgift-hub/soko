@@ -4190,21 +4190,25 @@ app.post('/api/admin/withdraw', async (req, res) => {
     const auth = await requireAdmin(req, res);
     if (!auth.ok) return;
 
-    const { userId, amount, phone } = req.body;
-    if (!userId || !amount || !phone) {
-      return res.status(400).json({ error: 'Missing userId, amount, or phone' });
-    }
-    if (auth.uid !== 'admin-secret' && auth.uid !== userId) {
-      return res.status(403).json({ error: 'Token does not match userId' });
+    let { userId, amount, phone } = req.body;
+    if (!amount || !phone) {
+      return res.status(400).json({ error: 'Missing amount or phone' });
     }
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-    const userDoc = await db.collection('users').doc(userId).get();
-    if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
-
-    const user = userDoc.data();
-    if (!user.isAdmin) return res.status(403).json({ error: 'Admin access required' });
-    if (user.isSuspended) return res.status(403).json({ error: 'Account suspended' });
+    if (auth.uid === 'admin-secret') {
+      if (!userId) userId = 'admin-secret';
+    } else {
+      if (!userId) return res.status(400).json({ error: 'Missing userId' });
+      if (auth.uid !== userId) {
+        return res.status(403).json({ error: 'Token does not match userId' });
+      }
+      const userDoc = await db.collection('users').doc(userId).get();
+      if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
+      const user = userDoc.data();
+      if (!user.isAdmin) return res.status(403).json({ error: 'Admin access required' });
+      if (user.isSuspended) return res.status(403).json({ error: 'Account suspended' });
+    }
 
     const revSnap = await db.collection('revenue_transactions').get();
     let totalCommissions = 0;
