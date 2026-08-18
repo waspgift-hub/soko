@@ -63,6 +63,13 @@ class ThemeManager extends ChangeNotifier {
 
   Future<void> toggleDark() async => setDark(!_isDark);
 
+  Future<void> setSeedColor(Color color) async {
+    _seedColor = color;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_seedKey, color.value);
+    notifyListeners();
+  }
+
   Future<void> setThemeMode(ThemeMode mode) async {
     _themeMode = mode;
     if (mode == ThemeMode.system) {
