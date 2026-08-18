@@ -126,15 +126,13 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                   ),
                 ),
                 StreamBuilder<List<Product>>(
-                  stream: productService.getProducts(),
+                  stream: productService.getProductsBySeller(widget.userId),
                   builder: (context, snap) {
                     if (!snap.hasData)
                       return const SliverFillRemaining(
                         child: GoogleLoadingPage(),
                       );
-                    final products = snap.data!
-                        .where((p) => p.sellerId == widget.userId)
-                        .toList();
+                    final products = snap.data!;
                     if (products.isEmpty) {
                       return SliverFillRemaining(
                         child: Center(
@@ -366,13 +364,9 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
             context,
             context.tr('products'),
             StreamBuilder<List<Product>>(
-              stream: ProductService().getProducts(),
+              stream: ProductService().getProductsBySeller(widget.userId),
               builder: (context, snap) {
-                final count =
-                    snap.data
-                        ?.where((p) => p.sellerId == widget.userId)
-                        .length ??
-                    0;
+                final count = snap.data?.length ?? 0;
                 return Text(
                   '$count',
                   style: const TextStyle(

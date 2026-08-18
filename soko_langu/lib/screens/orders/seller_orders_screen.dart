@@ -41,12 +41,6 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
   @override
   void initState() {
     super.initState();
-    // Poll the live stream every 5s so status changes appear without a manual
-    // pull-to-refresh; the StreamBuilder rebuild re-emits the latest snapshots.
-    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (!mounted) return;
-      setState(() => _lastAutoRefresh = DateTime.now());
-    });
   }
 
   @override

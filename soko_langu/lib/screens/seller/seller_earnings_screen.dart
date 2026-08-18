@@ -1,4 +1,3 @@
-import 'package:async/async.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
@@ -70,17 +69,13 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
   }
 
   Widget _buildBalanceCard(ColorScheme cs, NumberFormat nf) {
-    return StreamBuilder<List<dynamic>>(
-      stream: StreamZip([
-        _service.streamSellerBalance(),
-        _service.streamSellerTotalWithdrawn(),
-        _service.streamPendingEscrow(),
-      ]),
+    return StreamBuilder<SellerEarningsData>(
+      stream: _service.streamEarnings(),
       builder: (context, snap) {
-        final data = snap.data ?? [0, 0, 0];
-        final balance = (data[0] as num).toDouble();
-        final withdrawn = (data[1] as num).toDouble();
-        final escrow = (data[2] as num).toDouble();
+        final data = snap.data ?? const SellerEarningsData();
+        final balance = data.balance;
+        final withdrawn = data.totalWithdrawn;
+        final escrow = data.pendingEscrow;
         final totalEarned = balance + withdrawn;
         return Container(
           padding: const EdgeInsets.all(24),
@@ -216,40 +211,34 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
   }
 
   Widget _buildSalesRow(ColorScheme cs, NumberFormat nf) {
-    return Row(
-      children: [
-        Expanded(
-          child: StreamBuilder<int>(
-            stream: _service.streamTotalSales(),
-            builder: (context, snap) {
-              final count = snap.data ?? 0;
-              return _infoCard(
+    return StreamBuilder<SellerEarningsData>(
+      stream: _service.streamEarnings(),
+      builder: (context, snap) {
+        final data = snap.data ?? const SellerEarningsData();
+        return Row(
+          children: [
+            Expanded(
+              child: _infoCard(
                 icon: Icons.receipt_long_outlined,
                 label: context.tr('total_sales'),
-                value: '$count',
+                value: '${data.totalSales}',
                 color: cs.tertiary,
                 cs: cs,
-              );
-            },
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: StreamBuilder<double>(
-            stream: _service.streamGrossSalesVolume(),
-            builder: (context, snap) {
-              final volume = snap.data ?? 0;
-              return _infoCard(
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _infoCard(
                 icon: Icons.trending_up,
                 label: context.tr('gross_volume'),
-                value: 'TZS ${nf.format(volume)}',
+                value: 'TZS ${nf.format(data.grossSalesVolume)}',
                 color: cs.secondary,
                 cs: cs,
-              );
-            },
-          ),
-        ),
-      ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -400,10 +389,10 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
   }
 
   Widget _buildWithdrawalCard(ColorScheme cs, NumberFormat nf) {
-    return StreamBuilder<double>(
-      stream: _service.streamSellerBalance(),
+    return StreamBuilder<SellerEarningsData>(
+      stream: _service.streamEarnings(),
       builder: (context, snap) {
-        final balance = snap.data ?? 0;
+        final balance = snap.data?.balance ?? 0;
         final canWithdraw = balance > 0;
 
         return DsCard(

@@ -372,11 +372,12 @@ class ProductService {
   Stream<List<Product>> getProducts({int limitAmt = 30}) {
     return _db
         .collection("products")
+        .where('isActive', isEqualTo: true)
+        .limit(limitAmt + 10)
         .snapshots()
         .map((snapshot) {
       final products = snapshot.docs
           .map((doc) => Product.fromFirestore(doc))
-          .where((p) => p.isActive)
           .toList();
       products.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       _sortByBoost(products);
@@ -537,6 +538,21 @@ class ProductService {
     return _db
         .collection("products")
         .where("sellerId", isEqualTo: user.uid)
+        .snapshots()
+        .map((snapshot) {
+          final products = snapshot.docs
+              .map((doc) => Product.fromFirestore(doc))
+              .toList();
+          products.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return products;
+        });
+  }
+
+  Stream<List<Product>> getProductsBySeller(String sellerId) {
+    return _db
+        .collection("products")
+        .where("sellerId", isEqualTo: sellerId)
+        .where('isActive', isEqualTo: true)
         .snapshots()
         .map((snapshot) {
           final products = snapshot.docs

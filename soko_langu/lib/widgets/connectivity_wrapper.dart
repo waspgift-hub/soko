@@ -24,9 +24,9 @@ class _ConnectivityWrapperState extends State<ConnectivityWrapper> {
   }
 
   Future<void> _checkServer() async {
-    final offline = await _isServerReachable();
+    final reachable = await _isServerReachable();
     if (!mounted) return;
-    if (!offline) {
+    if (reachable) {
       setState(() {
         _offline = false;
         _initialized = true;
@@ -43,10 +43,10 @@ class _ConnectivityWrapperState extends State<ConnectivityWrapper> {
 
   void _startRetryTimer() {
     _retryTimer?.cancel();
-    _retryTimer = Timer.periodic(const Duration(seconds: 15), (_) async {
-      final offline = await _isServerReachable();
+    _retryTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
+      final reachable = await _isServerReachable();
       if (!mounted) return;
-      if (!offline) {
+      if (reachable) {
         _retryTimer?.cancel();
         setState(() => _offline = false);
       }
@@ -58,9 +58,9 @@ class _ConnectivityWrapperState extends State<ConnectivityWrapper> {
       final resp = await http.get(
         Uri.parse('${ApiConfig.baseUrl}/ping'),
       ).timeout(const Duration(seconds: 5));
-      return resp.statusCode != 200;
+      return resp.statusCode == 200;
     } catch (_) {
-      return true;
+      return false;
     }
   }
 

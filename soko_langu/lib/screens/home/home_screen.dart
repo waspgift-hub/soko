@@ -46,6 +46,9 @@ class _HomeScreenState extends State<HomeScreen>
   final _searchCtrl = TextEditingController();
   Map<String, FlashSale> _flashSales = {};
   StreamSubscription? _flashSub;
+  StreamSubscription? _notifSub;
+  int _unreadCount = 0;
+  late Stream<List<Category>> _categoryStream;
 
   // Filter state
   String _sortBy = 'newest';
@@ -104,7 +107,9 @@ class _HomeScreenState extends State<HomeScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _categoryStream = _categoryService.getCategories();
     _subscribeFlashSales();
+    _subscribeNotifications();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<ProductFeedProvider>();
       if (provider.products.isEmpty && !provider.isLoading) {
@@ -122,19 +127,32 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  void _subscribeNotifications() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    _notifSub?.cancel();
+    _notifSub = FirebaseFirestore.instance
+        .collection('notifications')
+        .where('userId', isEqualTo: uid)
+        .where('isRead', isEqualTo: false)
+        .snapshots()
+        .listen((snap) {
+      if (mounted) setState(() => _unreadCount = snap.docs.length);
+    }, onError: (e) { debugPrint('Notification stream error: $e'); });
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _searchCtrl.dispose();
     _flashSub?.cancel();
+    _notifSub?.cancel();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && mounted) {
-      _subscribeFlashSales();
-    }
+    // Firestore snapshots auto-reconnect — no need to recreate on resume
   }
 
   void _onBrandTap(String? brand) {
@@ -369,30 +387,20 @@ class _HomeScreenState extends State<HomeScreen>
             icon: Icon(Icons.monetization_on_outlined, color: cs.primary),
             onPressed: () => _showCurrencyPicker(context),
           ),
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('notifications')
-                .where('userId', isEqualTo: FirebaseAuth.instance.currentUser?.uid ?? '')
-                .where('isRead', isEqualTo: false)
-                .snapshots(),
-            builder: (context, snap) {
-              final count = snap.data?.docs.length ?? 0;
-              return Stack(
-                children: [
-                  IconButton(
-                    icon: Icon(Icons.notifications_outlined, color: cs.primary),
-                    onPressed: () => context.push(AppRoutes.notifications),
-                  ),
-                  if (count > 0)
-                    Positioned(right: 6, top: 6, child: Container(
-                      padding: EdgeInsets.all(count > 9 ? 4 : 6),
-                      decoration: BoxDecoration(color: cs.error, shape: BoxShape.circle),
-                      constraints: BoxConstraints(minWidth: 18, minHeight: 18),
-                      child: Text('$count', style: TextStyle(fontSize: 10, color: cs.surface, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-                    )),
-                ],
-              );
-            },
+          Stack(
+            children: [
+              IconButton(
+                icon: Icon(Icons.notifications_outlined, color: cs.primary),
+                onPressed: () => context.push(AppRoutes.notifications),
+              ),
+              if (_unreadCount > 0)
+                Positioned(right: 6, top: 6, child: Container(
+                  padding: EdgeInsets.all(_unreadCount > 9 ? 4 : 6),
+                  decoration: BoxDecoration(color: cs.error, shape: BoxShape.circle),
+                  constraints: BoxConstraints(minWidth: 18, minHeight: 18),
+                  child: Text('$_unreadCount', style: TextStyle(fontSize: 10, color: cs.surface, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                )),
+            ],
           ),
         ],
       ),
@@ -513,7 +521,7 @@ class _HomeScreenState extends State<HomeScreen>
               SizedBox(
                 height: 130,
                 child: StreamBuilder<List<Category>>(
-                  stream: _categoryService.getCategories(),
+                  stream: _categoryStream,
                   builder: (context, snapshot) {
                     final cats = snapshot.data ?? [];
                     if (cats.isEmpty) {

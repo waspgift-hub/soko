@@ -107,6 +107,19 @@ class UserService {
     return UserProfile.fromMap(uid, doc.data()!);
   }
 
+  Future<Map<String, UserProfile>> getProfiles(List<String> uids) async {
+    if (uids.isEmpty) return {};
+    final refs = uids.map((id) => _db.collection('users').doc(id)).toList();
+    final docs = await Future.wait(refs.map((r) => r.get()));
+    final result = <String, UserProfile>{};
+    for (final doc in docs) {
+      if (doc.exists) {
+        result[doc.id] = UserProfile.fromMap(doc.id, doc.data()!);
+      }
+    }
+    return result;
+  }
+
   Stream<UserProfile?> streamProfile(String uid) {
     return _db
         .collection('users')

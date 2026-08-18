@@ -55,10 +55,24 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
     final cached = LocalCacheService.getCachedRoomsForUser(uid);
+    final otherIds = <String>{};
     for (final room in cached) {
       final otherId = room.participants.where((p) => p != uid).firstOrNull;
-      if (otherId != null) _fetchUser(otherId);
+      if (otherId != null && !_userNames.containsKey(otherId)) {
+        otherIds.add(otherId);
+      }
     }
+    if (otherIds.isEmpty) return;
+    _userService.getProfiles(otherIds.toList()).then((profiles) {
+      if (!mounted) return;
+      setState(() {
+        for (final entry in profiles.entries) {
+          _userNames[entry.key] = entry.value.displayName;
+          _userPhotos[entry.key] = entry.value.profileImage;
+          _userKyc[entry.key] = entry.value.kycApproved;
+        }
+      });
+    });
   }
 
   Future<void> _fetchUser(String uid) async {

@@ -31,7 +31,7 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
   void initState() {
     super.initState();
     _load();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) => _load());
+    _refreshTimer = Timer.periodic(const Duration(seconds: 60), (_) => _load());
   }
 
   @override

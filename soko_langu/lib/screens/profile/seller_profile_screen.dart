@@ -89,12 +89,9 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
                   ),
                 ),
                 StreamBuilder<List<Product>>(
-                  stream: productService.getProducts(),
+                  stream: productService.getProductsBySeller(widget.sellerId),
                   builder: (context, prodSnap) {
-                    final all = prodSnap.data ?? [];
-                    final products = all
-                        .where((p) => p.sellerId == widget.sellerId)
-                        .toList();
+                    final products = prodSnap.data ?? [];
 
                     if (products.isEmpty) {
                       return SliverFillRemaining(

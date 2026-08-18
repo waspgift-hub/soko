@@ -72,12 +72,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     );
     _startCountdown();
     _initRealtimeListeners();
-    // Poll every 5s to force a rebuild so live statuses/amounts (quoted,
-    // dispatched, released) re-render even if a stream hiccups.
-    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (!mounted) return;
-      setState(() => _lastAutoRefresh = DateTime.now());
-    });
     Future.delayed(const Duration(milliseconds: 200), () {
       if (mounted) setState(() => _isLoading = false);
     });

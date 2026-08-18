@@ -22,12 +22,15 @@ class _TrendingCarouselState extends State<TrendingCarousel> {
   final PageController _pageCtrl = PageController(viewportFraction: 0.4);
   int _currentPage = 0;
   final FlashSaleService _flashSaleService = FlashSaleService();
+  final ProductService _productService = ProductService();
   Map<String, FlashSale> _flashSales = {};
   StreamSubscription? _flashSub;
+  late Stream<List<Product>> _featuredStream;
 
   @override
   void initState() {
     super.initState();
+    _featuredStream = _productService.getFeaturedProducts();
     _flashSub = _flashSaleService.getActiveFlashSalesMap().listen((map) {
       if (mounted) setState(() => _flashSales = map);
     });
@@ -43,7 +46,7 @@ class _TrendingCarouselState extends State<TrendingCarousel> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<Product>>(
-      stream: ProductService().getFeaturedProducts(),
+      stream: _featuredStream,
       builder: (context, snap) {
         if (!snap.hasData || snap.data!.isEmpty) {
           return const SizedBox.shrink();

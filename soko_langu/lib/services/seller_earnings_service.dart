@@ -4,79 +4,57 @@ import '../models/withdrawal_model.dart';
 import '../models/transaction_model.dart';
 import 'clickpesa_service.dart';
 
+class SellerEarningsData {
+  final double balance;
+  final int totalSales;
+  final double grossSalesVolume;
+  final double totalWithdrawn;
+  final double pendingEscrow;
+
+  const SellerEarningsData({
+    this.balance = 0,
+    this.totalSales = 0,
+    this.grossSalesVolume = 0,
+    this.totalWithdrawn = 0,
+    this.pendingEscrow = 0,
+  });
+}
+
 class SellerEarningsService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   String? get _uid => _auth.currentUser?.uid;
 
-  Stream<double> streamSellerBalance() {
+  Stream<SellerEarningsData> streamEarnings() {
     final uid = _uid;
-    if (uid == null) return Stream.value(0);
+    if (uid == null) return Stream.value(const SellerEarningsData());
     return _db.collection('users').doc(uid).snapshots().map((snap) {
-      if (!snap.exists) return 0;
-      return (snap.data()?['sellerBalance'] as num? ?? 0).toDouble();
+      if (!snap.exists) return const SellerEarningsData();
+      final d = snap.data()!;
+      return SellerEarningsData(
+        balance: (d['sellerBalance'] as num? ?? 0).toDouble(),
+        totalSales: (d['totalSales'] as num? ?? 0).toInt(),
+        grossSalesVolume: (d['grossSalesVolume'] as num? ?? 0).toDouble(),
+        totalWithdrawn: (d['totalWithdrawn'] as num? ?? 0).toDouble(),
+        pendingEscrow: (d['pendingEscrow'] as num? ?? 0).toDouble(),
+      );
     });
   }
 
-  Stream<int> streamTotalSales() {
+  Future<SellerEarningsData> getEarnings() async {
     final uid = _uid;
-    if (uid == null) return Stream.value(0);
-    return _db.collection('users').doc(uid).snapshots().map((snap) {
-      if (!snap.exists) return 0;
-      return (snap.data()?['totalSales'] as num? ?? 0).toInt();
-    });
-  }
-
-  Stream<double> streamGrossSalesVolume() {
-    final uid = _uid;
-    if (uid == null) return Stream.value(0);
-    return _db.collection('users').doc(uid).snapshots().map((snap) {
-      if (!snap.exists) return 0;
-      return (snap.data()?['grossSalesVolume'] as num? ?? 0).toDouble();
-    });
-  }
-
-  Stream<double> streamSellerTotalWithdrawn() {
-    final uid = _uid;
-    if (uid == null) return Stream.value(0);
-    return _db.collection('users').doc(uid).snapshots().map((snap) {
-      if (!snap.exists) return 0;
-      return (snap.data()?['totalWithdrawn'] as num? ?? 0).toDouble();
-    });
-  }
-
-  Stream<double> streamPendingEscrow() {
-    final uid = _uid;
-    if (uid == null) return Stream.value(0);
-    return _db.collection('users').doc(uid).snapshots().map((snap) {
-      if (!snap.exists) return 0;
-      return (snap.data()?['pendingEscrow'] as num? ?? 0).toDouble();
-    });
-  }
-
-  Future<double> getSellerBalance() async {
-    final uid = _uid;
-    if (uid == null) return 0;
+    if (uid == null) return const SellerEarningsData();
     final doc = await _db.collection('users').doc(uid).get();
-    if (!doc.exists) return 0;
-    return (doc.data()?['sellerBalance'] as num? ?? 0).toDouble();
-  }
-
-  Future<int> getTotalSales() async {
-    final uid = _uid;
-    if (uid == null) return 0;
-    final doc = await _db.collection('users').doc(uid).get();
-    if (!doc.exists) return 0;
-    return (doc.data()?['totalSales'] as num? ?? 0).toInt();
-  }
-
-  Future<double> getGrossSalesVolume() async {
-    final uid = _uid;
-    if (uid == null) return 0;
-    final doc = await _db.collection('users').doc(uid).get();
-    if (!doc.exists) return 0;
-    return (doc.data()?['grossSalesVolume'] as num? ?? 0).toDouble();
+    if (!doc.exists) return const SellerEarningsData();
+    final d = doc.data()!;
+    return SellerEarningsData(
+      balance: (d['sellerBalance'] as num? ?? 0).toDouble(),
+      totalSales: (d['totalSales'] as num? ?? 0).toInt(),
+      grossSalesVolume: (d['grossSalesVolume'] as num? ?? 0).toDouble(),
+      totalWithdrawn: (d['totalWithdrawn'] as num? ?? 0).toDouble(),
+      pendingEscrow: (d['pendingEscrow'] as num? ?? 0).toDouble(),
+    );
   }
 
   Stream<List<MarketplaceTransaction>> streamTransactions() {
@@ -123,15 +101,15 @@ class SellerEarningsService {
     final uid = _uid;
     if (uid == null) return 'Not logged in';
 
-    final balance = await getSellerBalance();
-    if (balance <= 0) {
+    final earnings = await getEarnings();
+    if (earnings.balance <= 0) {
       return 'No balance to withdraw';
     }
 
     try {
       await ClickPesaService.sellerWithdraw(
         userId: uid,
-        amount: balance.round(),
+        amount: earnings.balance.round(),
         phone: phone,
       );
 
