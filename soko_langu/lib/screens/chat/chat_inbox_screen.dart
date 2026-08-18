@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/chat_service.dart';
 import '../../services/user_service.dart';
 import '../../services/local_cache_service.dart';
+import '../../services/shortcut_service.dart';
 import '../../models/chat_room.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/verified_badge.dart';
@@ -451,8 +452,13 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
         if (mounted) setState(() {});
         break;
       case 'shortcut':
-        await _chatService.addShortcut(room.id);
-        _showSnack(context.tr('shortcut_added'));
+        final pinned = await pinChatShortcut(
+          receiverId: otherId,
+          receiverName: name,
+        );
+        _showSnack(pinned
+            ? context.tr('shortcut_added')
+            : context.tr('shortcut_not_supported', 'Shortcut haijaungana kwenye skrini ya nyumbani'));
         break;
       case 'view_profile':
         if (context.mounted) {

@@ -7,6 +7,7 @@ import '../../services/chat_typing.dart';
 import '../../services/notification_service.dart';
 import '../../services/user_service.dart';
 import '../../services/whatsapp_service.dart';
+import '../../services/shortcut_service.dart';
 import '../../models/message_model.dart';
 import '../../extensions/context_tr.dart';
 
@@ -706,6 +707,25 @@ class _ChatPageState extends State<ChatPage> {
                 Navigator.pop(ctx);
                 context.push('${AppRoutes.publicProfile}/${widget.receiverId}',
                     extra: _displayName);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.shortcut),
+              title: Text(context.tr('add_shortcut', 'Add Shortcut')),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final pinned = await pinChatShortcut(
+                  receiverId: widget.receiverId,
+                  receiverName: _displayName,
+                );
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(pinned
+                        ? context.tr('shortcut_added')
+                        : context.tr('shortcut_not_supported', 'Shortcut haijaungana kwenye skrini ya nyumbani')),
+                    duration: const Duration(seconds: 2),
+                  ));
+                }
               },
             ),
             ListTile(

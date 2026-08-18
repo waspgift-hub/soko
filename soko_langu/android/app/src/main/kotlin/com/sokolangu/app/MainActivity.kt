@@ -3,11 +3,16 @@ package com.sokolangu.app
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.ContentUris
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.appwidget.AppWidgetManager
 import android.util.Log
+import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -93,12 +98,66 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "soko_lang/shortcut",
+        ).setMethodCallHandler { call, result ->
+            if (call.method == "pinShortcut") {
+                val receiverId = call.argument<String>("receiverId") ?: ""
+                val receiverName = call.argument<String>("receiverName") ?: "Chat"
+                val success = pinShortcutToHomeScreen(receiverId, receiverName)
+                result.success(success)
+            } else {
+                result.notImplemented()
+            }
+        }
+        handleIntent(intent)
         pendingRoute?.let { route ->
             MethodChannel(
                 flutterEngine.dartExecutor.binaryMessenger,
                 "soko_lang/navigate",
             ).invokeMethod("navigate", route)
             pendingRoute = null
+        }
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        val uri = intent?.data ?: return
+        if (uri.scheme == "shortcut_soko_vibe" && uri.host == "chat") {
+            val receiverId = uri.lastPathSegment ?: return
+            val receiverName = uri.getQueryParameter("name") ?: ""
+            pendingRoute = "/chat/$receiverId"
+        }
+    }
+
+    private fun pinShortcutToHomeScreen(receiverId: String, receiverName: String): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+        return try {
+            val shortcutManager = getSystemService(android.content.pm.ShortcutManager::class.java)
+            if (!shortcutManager.isRequestPinShortcutSupported) return false
+            val intent = Intent(this, MainActivity::class.java).apply {
+                action = Intent.ACTION_VIEW
+                data = android.net.Uri.parse("shortcut_soko_vibe://chat/$receiverId?name=${android.net.Uri.encode(receiverName)}")
+                putExtra("route", "/chat/$receiverId")
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+            val appIcon = ContextCompat.getDrawable(this, R.mipmap.ic_launcher)
+            val bitmap = Bitmap.createBitmap(108, 108, Bitmap.Config.ARGB_8888).also { bmp ->
+                val canvas = Canvas(bmp)
+                appIcon?.setBounds(0, 0, 108, 108)
+                appIcon?.draw(canvas)
+            }
+            val shortcut = android.content.pm.ShortcutInfo.Builder(this, "chat_$receiverId")
+                .setShortLabel(receiverName.take(10))
+                .setLongLabel(receiverName.take(25))
+                .setIcon(Icon.createWithBitmap(bitmap))
+                .setIntent(intent)
+                .build()
+            shortcutManager.requestPinShortcut(shortcut, null)
+            true
+        } catch (e: Exception) {
+            Log.e("Shortcut", "Failed to pin shortcut: ${e.message}", e)
+            false
         }
     }
 
