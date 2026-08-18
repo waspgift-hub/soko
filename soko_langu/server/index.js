@@ -716,7 +716,7 @@ const SELLER_CREDIT_STATUSES = new Set([
 // DEFAULT_PAYOUT_FEE (2000 TZS estimate) — actual ClickPesa payout fee varies by amount; use clickpesaPayoutPreview for exact fee
 
 function generatePayoutReference(prefix = 'po') {
-  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 8)}`;
+  return `${prefix}${Date.now().toString(36)}${Math.random().toString(36).substring(2, 8)}`;
 }
 
 const PAYOUT_RETRY_MAX = 3;
@@ -2787,7 +2787,7 @@ app.post('/api/escrow/cancel', async (req, res) => {
       await clickpesaPayout({
         amount: refundAmount,
         phoneNumber: buyerPhone,
-        orderReference: `refund_${orderId}`,
+        orderReference: `refund${orderId}`.replace(/[^a-zA-Z0-9]/g, ''),
       });
     } catch (payoutErr) {
       return res.status(500).json({ error: `Refund failed: ${payoutErr.message}` });
@@ -3044,7 +3044,7 @@ app.post('/api/escrow/admin-resolve-dispute', async (req, res) => {
         await clickpesaPayout({
           amount: refundAmount,
           phoneNumber: buyerPhone,
-          orderReference: `dispute_refund_${orderId}`,
+          orderReference: `disputerefund${orderId}`.replace(/[^a-zA-Z0-9]/g, ''),
         });
       } catch (payoutErr) {
         return res.status(500).json({ error: `Refund payment failed: ${payoutErr.message}` });
@@ -8637,5 +8637,76 @@ app.get('/api/diag/fcm-token/:userId', async (req, res) => {
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 🚫 PROFANITY FILTER — Check text + enforce penalties
+// ============================================================
+const PROFANITY_LIST = [
+  'kuma','pussy','fuck','shit','bitch','ass','dick','cock','penis','vagina',
+  'nigger','nigga','faggot','retard','cunt','whore','slut','bastard','damn',
+  'wewe ni kuma','mtu wa kuma','mjinga','mshenzi','mbwa','zuzu','fala',
+  'chumbani','jogoo','kinyama','mavi','taka taka','kenyeje',
+  'uchafu','uchawi','ugomvi','upidifu','uzimu',
+  'punda','ng\'ombe','kondoo','mbuzi','kuku',
+  'mzezende','mjinga sana','kigogo','mshamba',
+  'figa','uchungu',
+  'tembo','kiboko','nyoka','mamba','fisi',
+];
+
+function containsProfanity(text) {
+  if (!text || typeof text !== 'string') return false;
+  const lower = text.toLowerCase().replace(/[0-9]/g, '');
+  const words = lower.split(/[\s,.\-!?;:'"()\/]+/).filter(Boolean);
+  for (const word of words) {
+    if (PROFANITY_LIST.includes(word)) return true;
+  }
+  const phrases = PROFANITY_LIST.filter(p => p.includes(' '));
+  for (const phrase of phrases) {
+    if (lower.includes(phrase)) return true;
+  }
+  return false;
+}
+
+app.post('/api/moderation/check-text', async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text) return res.json({ clean: true });
+    const clean = !containsProfanity(text);
+    if (!clean) {
+      const authHeader = req.headers['authorization'];
+      let uid = null;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        try { uid = (await admin.auth().verifyIdToken(authHeader.slice(7))).uid; } catch {}
+      }
+      if (uid && db) {
+        const userRef = db.collection('users').doc(uid);
+        const userDoc = await userRef.get();
+        if (userDoc.exists) {
+          const userData = userDoc.data();
+          const warnings = (userData.profanityWarnings || 0) + 1;
+          if (warnings >= 3) {
+            const balance = userData.balance || 0;
+            await userRef.update({ isSuspended: true, isDeleted: true, suspendedReason: 'Repeated profanity violations', profanityWarnings: warnings });
+            if (balance > 0) {
+              await db.collection('revenue_transactions').add({
+                userId: uid, type: 'profanity_seizure', amount: balance,
+                sokoLanguCommission: balance, description: `Balance seized: ${warnings} profanity violations`,
+                timestamp: admin.firestore.FieldValue.serverTimestamp(),
+              });
+              await userRef.update({ balance: 0 });
+            }
+            return res.json({ clean: false, banned: true, message: 'Account deleted due to repeated profanity violations' });
+          }
+          await userRef.update({ profanityWarnings: warnings });
+          return res.json({ clean: false, banned: false, warning: warnings, message: `Profanity detected (${warnings}/3 warnings before account deletion)` });
+        }
+      }
+      return res.json({ clean: false, banned: false, message: 'Profanity detected in text' });
+    }
+    res.json({ clean: true });
+  } catch (e) {
+    res.json({ clean: true });
   }
 });
