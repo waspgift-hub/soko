@@ -481,6 +481,10 @@ setInterval(() => {
 }, 5 * 60 * 1000).unref();
 
 function rateLimit(req, res, next) {
+  // Admin secret requests bypass the general rate limit so the dashboard
+  // (which fires ~15 parallel API calls on init) never gets blocked.
+  const adminSecret = req.headers['x-admin-secret'];
+  if (adminSecret && process.env.ADMIN_SECRET && adminSecret === process.env.ADMIN_SECRET) return next();
   const ip = req.ip || req.connection.remoteAddress || 'unknown';
   const now = Date.now();
   if (!rateHits.has(ip)) rateHits.set(ip, []);
