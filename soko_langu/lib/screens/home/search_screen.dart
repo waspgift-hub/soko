@@ -1015,18 +1015,31 @@ class _SearchScreenState extends State<SearchScreen>
               clipBehavior: Clip.none,
               children: [
                 CircleAvatar(
-                  radius: 32,
+                  radius: 34,
                   backgroundColor: cs.surfaceContainerHighest,
                   backgroundImage: r.image != null && r.image!.isNotEmpty
                       ? CachedNetworkImageProvider(r.image!)
                       : null,
                   child: (r.image == null || r.image!.isEmpty)
-                      ? Icon(Icons.storefront, color: cs.onSurfaceVariant)
+                      ? Icon(Icons.storefront, size: 30, color: cs.onSurfaceVariant)
                       : null,
+                ),
+                Positioned(
+                  right: -2,
+                  bottom: -2,
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      color: cs.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: cs.surface, width: 2),
+                    ),
+                    child: const Icon(Icons.storefront, size: 12, color: Colors.white),
+                  ),
                 ),
                 if (r.kycApproved)
                   Positioned(
-                    right: -2,
+                    left: -2,
                     bottom: -2,
                     child: Container(
                       padding: const EdgeInsets.all(2),
@@ -1036,13 +1049,13 @@ class _SearchScreenState extends State<SearchScreen>
                   ),
               ],
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Text(r.displayName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 2),
+            const SizedBox(height: 3),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
