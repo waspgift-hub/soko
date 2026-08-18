@@ -80,10 +80,10 @@ service cloud.firestore {
     // ─── CATEGORIES ─────────────────────────────────────────
     match /categories/{categoryId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow write: if isAdmin();
     }
 
-    // ─── ORDERS / TRANSACTIONS ──────────────────────────────
+    // ─── ORDERS ─────────────────────────────────────────────
     match /orders/{orderId} {
       allow read: if isSignedIn() && (
         resource.data.buyerId == request.auth.uid ||
@@ -99,6 +99,13 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ─── ORDER TIMELINE ─────────────────────────────────────
+    // Server-only (admin SDK writes). Clients never read or write directly.
+    match /orderTimeline/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ─── TRANSACTIONS ───────────────────────────────────────
     match /transactions/{txId} {
       allow read: if isSignedIn() && (
         resource.data.buyerId == request.auth.uid ||
@@ -106,10 +113,9 @@ service cloud.firestore {
         isAdmin()
       );
       allow create: if isSignedIn() && request.resource.data.buyerId == request.auth.uid;
-      // The server owns all status/amount mutations (webhook, escrow, orders
-      // transition). Clients may only soft-delete their own row (hide it from
-      // their list) or, for sellers, persist a previously missing shipping cost
-      // before dispatching.
+      // Server owns status/amount mutations (webhook, escrow, orders transition).
+      // Clients may only soft-delete their own row or, for sellers, persist a
+      // previously missing shipping cost before dispatching.
       allow update: if isSignedIn() && (
         (resource.data.buyerId == request.auth.uid && (
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedForBuyer'])
@@ -135,9 +141,13 @@ service cloud.firestore {
       }
     }
 
-    // ─── CONVERSATIONS & MESSAGES ───────────────────────────
+    // ─── CONVERSATIONS (typing indicators) ──────────────────
+    // Doc ID is `{uid1}_{uid2}` — only those two users may read/write.
     match /conversations/{convId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if isSignedIn() && (
+        convId.split('_').hasAny([request.auth.uid]) ||
+        isAdmin()
+      );
 
       match /messages/{msgId} {
         allow read, write: if isSignedIn();
@@ -146,7 +156,7 @@ service cloud.firestore {
 
     // ─── CHATS (legacy) ─────────────────────────────────────
     match /chats/{chatId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if isSignedIn() && isAdmin();
 
       match /messages/{msgId} {
         allow read, write: if isSignedIn();
@@ -155,10 +165,22 @@ service cloud.firestore {
 
     // ─── CHAT ROOMS ─────────────────────────────────────────
     match /chat_rooms/{roomId} {
-      allow read, write: if isSignedIn();
+      allow read: if isSignedIn() && (
+        resource.data.participants.hasAny([request.auth.uid]) ||
+        isAdmin()
+      );
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+        resource.data.participants.hasAny([request.auth.uid]) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
 
       match /messages/{msgId} {
-        allow read, write: if isSignedIn();
+        allow read: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update: if isSignedIn();
+        allow delete: if isSignedIn();
       }
     }
 
@@ -171,8 +193,6 @@ service cloud.firestore {
     }
 
     // ─── BUYER REQUESTS (Natafuta Bidhaa) ───────────────────
-    // Sellers read all requests; contact stays locked until they unlock it.
-    // Unlock only ever mutates unlockedBy (arrayUnion of the seller uid).
     match /BuyerRequests/{requestId} {
       allow read: if isSignedIn() && notSuspended();
       allow create: if isSignedIn() && notSuspended() && request.resource.data.buyerUid == request.auth.uid;
@@ -197,21 +217,23 @@ service cloud.firestore {
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
+    // ─── NOTIFICATION PREFERENCES ───────────────────────────
+    // Server reads/writes via admin SDK. Clients go through /api/notification/*.
+    match /notification_preferences/{userId} {
+      allow read, write: if isAdmin();
+    }
+
     // ─── REVIEWS ────────────────────────────────────────────
     match /reviews/{reviewId} {
-      // seller cannot write a review on their own product (rating/sellerId on the review
-      // must match the product's sellerId, guarded on write)
       allow read: if true;
       allow create: if isSignedIn() && notSuspended()
         && request.resource.data.userId == request.auth.uid
         && (request.resource.data.sellerId != request.auth.uid);
       allow update: if isSignedIn() && notSuspended()
         && (
-          // review author edits own review (limited to likedBy/helpfulCount)
           (resource.data.userId == request.auth.uid
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedBy', 'helpfulCount']))
           ||
-          // product seller replies to the review
           (request.auth.uid != resource.data.userId
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sellerReply', 'sellerReplyAt']))
         );
@@ -223,6 +245,57 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
+    }
+
+    // ─── PRODUCT ANALYTICS ──────────────────────────────────
+    // Client tracks views (any user/anonymous). Server reads for dashboards.
+    match /product_analytics/{productId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+
+      match /views/{viewId} {
+        allow read: if isAdmin();
+        allow create: if true;
+      }
+
+      match /daily_stats/{statId} {
+        allow read: if isAdmin();
+        allow write: if isAdmin();
+      }
+    }
+
+    // ─── BOOST ANALYTICS ────────────────────────────────────
+    // Client tracks impressions. Server reads for dashboards.
+    match /boost_analytics/{productId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+
+      match /impressions/{impId} {
+        allow read: if isAdmin();
+        allow create: if true;
+      }
+    }
+
+    // ─── USER SESSIONS ──────────────────────────────────────
+    // Client writes own session (lastActive). Admin reads all.
+    match /user_sessions/{uid} {
+      allow read: if isAdmin();
+      allow write: if isSignedIn() && uid == request.auth.uid;
+    }
+
+    // ─── PAYOUTS ────────────────────────────────────────────
+    // Server writes via admin SDK. Client streams own payouts.
+    match /payouts/{payoutId} {
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
+      allow write: if isAdmin();
+    }
+
+    // ─── PLATFORM EARNINGS ──────────────────────────────────
+    match /platform_earnings/{docId} {
+      allow read, write: if isAdmin();
     }
 
     // ─── ADMIN ADMOB EARNINGS ───────────────────────────────
@@ -256,12 +329,25 @@ service cloud.firestore {
 
     // ─── GROUPS ─────────────────────────────────────────────
     match /groups/{groupId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read: if isSignedIn() && (
+        resource.data.members.hasAny([request.auth.uid]) ||
+        isAdmin()
+      );
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+        resource.data.members.hasAny([request.auth.uid]) ||
+        isAdmin()
+      );
+      allow delete: if isSignedIn() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
 
       match /messages/{msgId} {
         allow read: if isSignedIn();
-        allow write: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update: if isSignedIn();
+        allow delete: if isSignedIn();
       }
     }
 
@@ -312,6 +398,56 @@ service cloud.firestore {
     match /audit_log/{logId} {
       allow read: if isAdmin();
       allow write: if isAdmin();
+    }
+
+    // ─── SEARCH INDEX (server-only) ─────────────────────────
+    match /search_index_products/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /search_index_users/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /search_index_categories/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ─── SEARCH ANALYTICS (server-only) ─────────────────────
+    match /search_analytics/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /search_trending/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ─── USER ANALYTICS (server-only) ───────────────────────
+    match /user_analytics/{docId} {
+      allow read, write: if isAdmin();
+
+      match /search_history/{historyId} {
+        allow read, write: if isAdmin();
+      }
+    }
+
+    // ─── SMS LOGS (server-only) ─────────────────────────────
+    match /sms_logs/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ─── OTP CODES (server-only) ────────────────────────────
+    match /otp_codes/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ─── WEBHOOK LOGS (server-only) ─────────────────────────
+    match /whatsapp_webhook_logs/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /malipay_webhook_logs/{docId} {
+      allow read, write: if isAdmin();
     }
   }
 }
