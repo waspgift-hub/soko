@@ -8,6 +8,8 @@ import '../../extensions/context_tr.dart';
 import '../../app/app_transitions.dart';
 import '../../services/search_service.dart';
 import '../../services/search_history_service.dart';
+import '../../services/flash_sale_service.dart';
+import '../../models/flash_sale_model.dart';
 import '../../app/routes.dart';
 import '../../models/product_model.dart';
 import '../../models/category_model.dart';
@@ -50,6 +52,11 @@ class _SearchScreenState extends State<SearchScreen>
   List<SearchResult> _mostRatedSellers = [];
   bool _loadingInitial = true;
 
+  // Flash sale stream
+  final FlashSaleService _flashSaleService = FlashSaleService();
+  StreamSubscription<Map<String, FlashSale>>? _flashSub;
+  Map<String, FlashSale> _flashSales = {};
+
   @override
   void initState() {
     super.initState();
@@ -70,6 +77,9 @@ class _SearchScreenState extends State<SearchScreen>
     _loadTrending();
     _loadDiscovery();
     _loadMostRated();
+    _flashSub = _flashSaleService.getActiveFlashSalesMap().listen((map) {
+      if (mounted) setState(() => _flashSales = map);
+    });
   }
 
   @override
@@ -80,6 +90,7 @@ class _SearchScreenState extends State<SearchScreen>
     _focusNode.dispose();
     _tabCtrl.dispose();
     _debounce?.cancel();
+    _flashSub?.cancel();
     _speech.stop();
     super.dispose();
   }
@@ -539,6 +550,7 @@ class _SearchScreenState extends State<SearchScreen>
     final isProduct = r.type == 'product';
     final isSeller = r.type == 'user' || r.type == 'seller';
     final isCategory = r.type == 'category';
+    final flash = isProduct ? _flashSales[r.id] : null;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -576,6 +588,25 @@ class _SearchScreenState extends State<SearchScreen>
                           imageUrl: r.image!,
                           fit: BoxFit.cover,
                         ),
+                        if (flash != null)
+                          Positioned(
+                            top: 2, right: 2,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: cs.error,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                '-${flash.discountPercent.toStringAsFixed(0)}%',
+                                style: TextStyle(
+                                  color: cs.surface,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
                         Positioned(
                           bottom: 2,
                           left: 2,
@@ -625,7 +656,18 @@ class _SearchScreenState extends State<SearchScreen>
                       Text(r.description!,
                           style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                           maxLines: 2, overflow: TextOverflow.ellipsis),
-                    if (isProduct && r.price != null)
+                    if (isProduct && flash != null) ...[
+                      Text('${context.currencySymbol()} ${flash.salePrice.toStringAsFixed(0)}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 15,
+                            color: cs.error,
+                          )),
+                      Text('${context.currencySymbol()} ${flash.originalPrice.toStringAsFixed(0)}',
+                          style: TextStyle(
+                            decoration: TextDecoration.lineThrough,
+                            fontSize: 12, color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                          )),
+                    ] else if (isProduct && r.price != null)
                       Text('${context.currencySymbol()} ${r.price!.toStringAsFixed(0)}',
                           style: TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 15,
@@ -869,6 +911,7 @@ class _SearchScreenState extends State<SearchScreen>
   }
 
   Widget _buildMostRatedProductCard(ColorScheme cs, SearchResult r) {
+    final flash = _flashSales[r.id];
     return SizedBox(
       width: 140,
       child: Card(
@@ -881,16 +924,40 @@ class _SearchScreenState extends State<SearchScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: r.image != null && r.image!.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: r.image!,
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                      )
-                    : Container(
-                        color: cs.surfaceContainerHighest,
-                        child: const Center(child: Icon(Icons.image_outlined, color: Colors.grey)),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    r.image != null && r.image!.isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl: r.image!,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                          )
+                        : Container(
+                            color: cs.surfaceContainerHighest,
+                            child: const Center(child: Icon(Icons.image_outlined, color: Colors.grey)),
+                          ),
+                    if (flash != null)
+                      Positioned(
+                        top: 4, right: 4,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: cs.error,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '-${flash.discountPercent.toStringAsFixed(0)}%',
+                            style: TextStyle(
+                              color: cs.surface,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
                       ),
+                  ],
+                ),
               ),
               Padding(
                 padding: const EdgeInsets.all(8),
@@ -902,7 +969,16 @@ class _SearchScreenState extends State<SearchScreen>
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 2),
-                    if (r.price != null)
+                    if (flash != null) ...[
+                      Text('${context.currencySymbol()} ${flash.salePrice.toStringAsFixed(0)}',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: cs.error)),
+                      Text('${context.currencySymbol()} ${flash.originalPrice.toStringAsFixed(0)}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            decoration: TextDecoration.lineThrough,
+                            color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                          )),
+                    ] else if (r.price != null)
                       Text('${context.currencySymbol()} ${r.price!.toStringAsFixed(0)}',
                           style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: cs.primary)),
                     Row(
