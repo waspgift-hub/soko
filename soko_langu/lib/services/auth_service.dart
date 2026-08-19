@@ -256,10 +256,9 @@ class AuthService {
         'longitude': null,
         'coins': 0,
         'viewerCoins': 0,
-        'sellerBalance': 0,
         'soldCount': 0,
-        'isAdmin': false,
-        'isSuspended': false,
+        // Trust/financial fields (isAdmin, isSuspended, sellerBalance,
+        // walletBalance, ...) are server-owned — rules reject client writes.
         'createdAt': FieldValue.serverTimestamp(),
       });
       await FraudPreventionService().checkNewSeller(uid, displayName);

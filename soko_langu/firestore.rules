@@ -31,26 +31,36 @@ service cloud.firestore {
     // privilege escalation, wallet tampering, and boost fraud.
     // Admin SDK bypasses these rules entirely (server-side trust boundary).
     function noSensitiveFieldChanges() {
-      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-        'walletBalance', 'sellerBalance', 'pendingEscrow',
-        'totalSales', 'grossSalesVolume', 'totalWithdrawn',
-        'isAdmin', 'isSuspended', 'kyc',
-        'isBoosted', 'boostedUntil', 'boostTier',
-        'createdAt', 'lastSaleAt', 'lastLoginAt', 'fcmToken'
-      ]);
+      // Allowing fcmToken to only ever be DELETED (set to null) lets the client
+      // clear its device token on logout without granting any write power.
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmToken'])
+          && request.resource.data.fcmToken == null
+          || !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'walletBalance', 'sellerBalance', 'pendingEscrow',
+            'totalSales', 'grossSalesVolume', 'totalWithdrawn',
+            'isAdmin', 'isSuspended', 'kyc',
+            'isBoosted', 'boostedUntil', 'boostTier',
+            'createdAt', 'lastSaleAt', 'lastLoginAt', 'fcmToken'
+          ]);
     }
 
     // For CREATE the doc doesn't exist yet (resource is null), so diff() is
-    // unreliable. Check the incoming keys directly instead: if the client
-    // tries to set any sensitive field at signup, reject the write.
+    // unreliable. Check the incoming keys directly instead: reject any attempt
+    // to bootstrap financial/trust state. isAdmin / isSuspended may only be
+    // false, sellerBalance may only be 0, and createdAt may be written as a
+    // timestamp (legacy client profile payload). Everything that carries real
+    // value or privilege stays server-only.
     function noSensitiveCreateFields() {
-      return !request.resource.data.keys().hasAny([
-        'walletBalance', 'sellerBalance', 'pendingEscrow',
-        'totalSales', 'grossSalesVolume', 'totalWithdrawn',
-        'isAdmin', 'isSuspended', 'kyc',
-        'isBoosted', 'boostedUntil', 'boostTier',
-        'createdAt', 'lastSaleAt', 'lastLoginAt', 'fcmToken'
-      ]);
+      let incoming = request.resource.data;
+      return !incoming.keys().hasAny([
+          'walletBalance', 'pendingEscrow',
+          'totalSales', 'grossSalesVolume', 'totalWithdrawn',
+          'kyc', 'isBoosted', 'boostedUntil', 'boostTier',
+          'lastSaleAt', 'lastLoginAt', 'fcmToken'
+        ])
+        && incoming.get('sellerBalance', 0) == 0
+        && incoming.get('isAdmin', false) != true
+        && incoming.get('isSuspended', false) != true;
     }
 
     // ─── USERS ──────────────────────────────────────────────

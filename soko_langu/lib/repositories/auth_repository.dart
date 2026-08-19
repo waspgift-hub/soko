@@ -295,10 +295,10 @@ class AuthRepository {
         'longitude': null,
         'coins': 0,
         'viewerCoins': 0,
-        'sellerBalance': 0,
         'soldCount': 0,
-        'isAdmin': false,
-        'isSuspended': false,
+        // Trust/financial fields (isAdmin, isSuspended, sellerBalance,
+        // walletBalance, ...) are intentionally NOT written by the client —
+        // Firestore rules reject them and the server owns them via Admin SDK.
         'createdAt': FieldValue.serverTimestamp(),
       });
       await FraudPreventionService().checkNewSeller(uid, displayName);

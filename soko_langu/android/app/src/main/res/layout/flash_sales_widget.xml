@@ -41,11 +41,11 @@
             android:singleLine="true" />
     </LinearLayout>
 
-    <View
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:background="@color/widget_divider"
-        android:layout_marginBottom="8dp" />
+        android:layout_marginBottom="8dp"
+        android:background="@color/widget_divider" />
 
     <LinearLayout
         android:layout_width="match_parent"
