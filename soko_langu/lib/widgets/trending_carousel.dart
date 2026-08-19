@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'product_cached_image.dart';
 import '../services/product_service.dart';
 import '../services/flash_sale_service.dart';
 import '../services/widget_service.dart';
@@ -154,10 +154,9 @@ class _TrendingCarouselState extends State<TrendingCarousel> {
                 color: Theme.of(context).colorScheme.surfaceContainerLow,
                 child: Stack(children: [
                   p.images.isNotEmpty
-                      ? CachedNetworkImage(
-                          imageUrl: p.images.first,
+                      ? ProductCachedImage(
+                          url: p.images.first,
                           fit: BoxFit.cover,
-                          width: double.infinity,
                         )
                       : Center(child: Icon(Icons.image, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6), size: 32)),
                   if (fs != null)

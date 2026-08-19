@@ -21,7 +21,7 @@ import '../../widgets/buyer_transport_sheet.dart';
 import '../../widgets/soko_vibe_loading.dart';
 import '../../widgets/order_status_config.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/product_cached_image.dart';
 
 class MyPurchasesScreen extends StatefulWidget {
   const MyPurchasesScreen({super.key});
@@ -1316,11 +1316,11 @@ class _OrderGlassCard extends StatelessWidget {
                             height: 56,
                             color: cs.surfaceContainerHighest,
                             child: image.isNotEmpty
-                                ? CachedNetworkImage(
-                                    imageUrl: image,
-                                    fit: BoxFit.cover,
+                                ? ProductCachedImage(
+                                    url: image,
                                     width: 56,
                                     height: 56,
+                                    fit: BoxFit.cover,
                                   )
                                 : Icon(
                                     Icons.image,
@@ -1438,12 +1438,11 @@ class _OrderGlassCard extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(15),
                 child: image.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: image,
-                        fit: BoxFit.cover,
+                    ? ProductCachedImage(
+                        url: image,
                         width: 68,
                         height: 68,
-                        errorWidget: (_, _, _) => _imgPlaceholder(cs),
+                        fit: BoxFit.cover,
                       )
                     : _imgPlaceholder(cs),
               ),

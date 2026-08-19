@@ -17,7 +17,7 @@ import '../../utils/phone_utils.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/soko_vibe_states.dart';
 import '../../widgets/ds/ds.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/product_cached_image.dart';
 
 class SellerDashboardScreen extends StatefulWidget {
   const SellerDashboardScreen({super.key});
@@ -541,7 +541,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                               height: 48,
                               color: Theme.of(context).colorScheme.outlineVariant,
                               child: p.images.isNotEmpty
-                                  ? CachedNetworkImage(imageUrl: p.images.first, fit: BoxFit.cover)
+                                  ? ProductCachedImage(url: p.images.first, fit: BoxFit.cover)
                                   : Icon(Icons.image, color: Theme.of(context).colorScheme.onSurfaceVariant),
                             ),
                           ),

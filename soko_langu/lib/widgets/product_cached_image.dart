@@ -2,16 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/soko_cache_manager.dart';
 
-/// Standardized product image widget with consistent caching, placeholders,
-/// and error handling across the entire app.
+/// Standardized image widget with consistent caching, shimmer placeholder,
+/// fade-in transition, memory optimization, and error handling.
 ///
 /// Usage:
 ///   ProductCachedImage(url: product.images.first, width: 120, height: 120)
 ///
 /// Features:
-/// - Uses SokoCacheManager (3-day disk cache, 400 objects max)
+/// - SokoCacheManager (3-day disk cache, 400 objects max)
 /// - Memory cache sized to display dimensions (saves RAM)
 /// - Shimmer skeleton placeholder while loading
+/// - 300ms fade-in transition from placeholder to loaded
 /// - Consistent error icon for broken images
 /// - Optional hero animation for product detail transitions
 class ProductCachedImage extends StatelessWidget {
@@ -52,6 +53,8 @@ class ProductCachedImage extends StatelessWidget {
           memCacheWidth: width?.toInt(),
           memCacheHeight: height?.toInt(),
           fit: fit,
+          fadeInDuration: const Duration(milliseconds: 300),
+          fadeOutDuration: const Duration(milliseconds: 100),
           placeholder: (_, _) => placeholder,
           errorWidget: (_, _, _) => errorWidget ?? _buildFallback(cs),
         ),
@@ -63,15 +66,15 @@ class ProductCachedImage extends StatelessWidget {
     return Container(
       width: width,
       height: height,
-      color: cs.surfaceContainerLow,
-      child: Center(
-        child: SizedBox(
-          width: 24,
-          height: 24,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: cs.onSurfaceVariant.withValues(alpha: 0.4),
-          ),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment(-1.0, -0.3),
+          end: Alignment(1.0, 0.3),
+          colors: [
+            cs.surfaceContainerLow,
+            cs.surfaceContainerHigh.withValues(alpha: 0.5),
+            cs.surfaceContainerLow,
+          ],
         ),
       ),
     );

@@ -10,7 +10,7 @@ import '../../widgets/ad_banner.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/chat_utils.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/product_cached_image.dart';
 import '../../services/product_service.dart';
 
 class FlashSaleScreen extends StatefulWidget {
@@ -375,25 +375,11 @@ class _FlashSaleScreenState extends State<FlashSaleScreen>
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: CachedNetworkImage(
-                    imageUrl: sale.productImage,
+                  child: ProductCachedImage(
+                    url: sale.productImage,
                     width: 90,
                     height: 90,
                     fit: BoxFit.cover,
-                    placeholder: (_, _) => Container(
-                      width: 90,
-                      height: 90,
-                      color: cs.outlineVariant,
-                      child: const Center(
-                        child: GoogleLoading(size: 20, strokeWidth: 2),
-                      ),
-                    ),
-                    errorWidget: (_, _, _) => Container(
-                      width: 90,
-                      height: 90,
-                      color: cs.outlineVariant,
-                      child: Icon(Icons.image, color: cs.onSurfaceVariant),
-                    ),
                   ),
                 ),
                 const SizedBox(width: 12),

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/product_cached_image.dart';
 import 'package:go_router/go_router.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
@@ -320,7 +320,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                               width: 48, height: 48,
                               color: cs.surfaceContainerHighest,
                               child: productImage.isNotEmpty
-                                  ? CachedNetworkImage(imageUrl: productImage, fit: BoxFit.cover, width: 48, height: 48)
+                                  ? ProductCachedImage(url: productImage, width: 48, height: 48, fit: BoxFit.cover)
                                   : Icon(Icons.image, size: 20, color: cs.onSurfaceVariant),
                             ),
                           ),
@@ -549,7 +549,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                                   width: 36, height: 36,
                                   color: cs.surfaceContainerHighest,
                                   child: productImage.isNotEmpty
-                                      ? CachedNetworkImage(imageUrl: productImage, fit: BoxFit.cover, width: 36, height: 36)
+                                      ? ProductCachedImage(url: productImage, width: 36, height: 36, fit: BoxFit.cover)
                                       : Icon(Icons.image, size: 16, color: cs.onSurfaceVariant),
                                 ),
                               ),

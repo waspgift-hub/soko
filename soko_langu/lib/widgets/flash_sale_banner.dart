@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'product_cached_image.dart';
 import '../models/flash_sale_model.dart';
 import '../extensions/context_tr.dart';
 import '../app/routes.dart';
@@ -157,10 +157,9 @@ class _FlashSaleBannerState extends State<FlashSaleBanner>
           itemBuilder: (context, index) {
             final sale = sales[index];
             return sale.productImage.isNotEmpty
-                ? CachedNetworkImage(
-                    imageUrl: sale.productImage,
+                ? ProductCachedImage(
+                    url: sale.productImage,
                     fit: BoxFit.cover,
-                    errorWidget: (_, _, _) => const _ImagePlaceholder(),
                   )
                 : const _ImagePlaceholder();
           },

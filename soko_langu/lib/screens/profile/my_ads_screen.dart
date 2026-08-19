@@ -8,7 +8,7 @@ import '../../providers/product_feed_provider.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../widgets/google_loading.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/product_cached_image.dart';
 import '../../utils/responsive.dart';
 
 class MyAdsScreen extends StatefulWidget {
@@ -153,10 +153,9 @@ class _MyAdsScreenState extends State<MyAdsScreen> {
                           child: Stack(
                             children: [
                               product.images.isNotEmpty
-                                  ? CachedNetworkImage(
-                                      imageUrl: product.images.first,
+                                  ? ProductCachedImage(
+                                      url: product.images.first,
                                       fit: BoxFit.cover,
-                                      width: double.infinity,
                                     )
                                   : Container(
                                       color: Theme.of(context).colorScheme.surfaceContainerHighest,

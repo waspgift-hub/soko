@@ -10,7 +10,7 @@ import '../../models/flash_sale_model.dart';
 import '../../app/routes.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/ad_banner.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/product_cached_image.dart';
 
 class WishlistScreen extends StatefulWidget {
   const WishlistScreen({super.key});
@@ -123,8 +123,8 @@ class _WishlistScreenState extends State<WishlistScreen> {
                       leading: product.images.isNotEmpty
                           ? ClipRRect(
                               borderRadius: BorderRadius.circular(8),
-                              child: CachedNetworkImage(
-                                imageUrl: product.images.first,
+                              child: ProductCachedImage(
+                                url: product.images.first,
                                 width: 60,
                                 height: 60,
                                 fit: BoxFit.cover,

@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/product_cached_image.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../constants/tanzania_districts.dart';
 import '../../models/product_model.dart';
@@ -345,13 +345,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 child: SizedBox(
                   width: 160,
                   height: 190,
-                  child: CachedNetworkImage(
-                    imageUrl: p.images.first,
+                  child: ProductCachedImage(
+                    url: p.images.first,
                     fit: BoxFit.cover,
-                    errorWidget: (_, _, _) => Container(
-                      color: cs.primary.withValues(alpha: 0.06),
-                      child: Icon(Icons.image_rounded, size: 40, color: cs.primary.withValues(alpha: 0.2)),
-                    ),
                   ),
                 ),
               ),

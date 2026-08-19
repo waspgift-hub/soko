@@ -7,7 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/product_cached_image.dart';
 import '../../extensions/context_tr.dart';
 import '../../models/transaction_model.dart';
 import '../../services/api_config.dart';
@@ -429,12 +429,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       child: Stack(
         children: [
           productImage.isNotEmpty
-              ? CachedNetworkImage(
-                  imageUrl: productImage,
-                  width: double.infinity,
+              ? ProductCachedImage(
+                  url: productImage,
                   height: 220,
                   fit: BoxFit.cover,
-                  errorWidget: (_, _, _) => _heroPlaceholder(cs, productName),
                 )
               : _heroPlaceholder(cs, productName),
           Positioned.fill(

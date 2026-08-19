@@ -10,7 +10,7 @@ import '../../services/category_service.dart';
 import '../../services/localization_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/product_cached_image.dart';
 import '../../widgets/ad_banner.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/review_section.dart';
@@ -254,28 +254,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                   product.images,
                                   index,
                                 ),
-                                child: CachedNetworkImage(
-                                imageUrl: product.images[index],
+                                child: ProductCachedImage(
+                                url: product.images[index],
                                 fit: BoxFit.cover,
-                                placeholder: (context, url) => Container(
-                                  color: cs.surfaceContainerLow,
-                                  child: const Center(
-                                    child: GoogleLoading(
-                                      size: 24,
-                                      strokeWidth: 2,
-                                    ),
-                                  ),
-                                ),
-                                errorWidget:
-                                    (context, error, stackTrace) =>
-                                        Container(
-                                          color:
-                                              cs.surfaceContainerHighest,
-                                          child: const Icon(
-                                            Icons.image,
-                                            size: 50,
-                                          ),
-                                        ),
                               ),
                             ),
                             );
@@ -1005,19 +986,9 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                   minScale: 1.0,
                   maxScale: 5.0,
                   child: Center(
-                    child: CachedNetworkImage(
-                      imageUrl: widget.images[index],
+                    child: ProductCachedImage(
+                      url: widget.images[index],
                       fit: BoxFit.contain,
-                      placeholder: (context, url) => const Center(
-                        child: GoogleLoading(size: 32, strokeWidth: 2),
-                      ),
-                      errorWidget: (context, error, stackTrace) => Center(
-                        child: Icon(
-                          Icons.broken_image,
-                          color: cs.surface,
-                          size: 80,
-                        ),
-                      ),
                     ),
                   ),
                 ),

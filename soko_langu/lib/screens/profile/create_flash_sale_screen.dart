@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/product_cached_image.dart';
 import '../../models/product_model.dart';
 import '../../models/flash_sale_model.dart';
 import '../../services/product_service.dart';
@@ -100,8 +100,8 @@ class _CreateFlashSaleScreenState extends State<CreateFlashSaleScreen> {
             height: 56,
             color: Theme.of(context).colorScheme.outlineVariant,
             child: product.images.isNotEmpty
-                ? CachedNetworkImage(
-                    imageUrl: product.images.first, fit: BoxFit.cover)
+                ? ProductCachedImage(
+                    url: product.images.first, fit: BoxFit.cover)
                 : Icon(Icons.image, color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
         ),

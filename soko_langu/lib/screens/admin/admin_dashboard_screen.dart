@@ -19,7 +19,7 @@ import 'admin_ads_management_screen.dart';
 import 'admin_transactions_tab.dart';
 import 'admin_clickpesa_screen.dart';
 import 'admin_kyc_document_view_screen.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/product_cached_image.dart';
 import 'package:intl/intl.dart';
 
 class BarEntry {
@@ -1961,8 +1961,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   height: 48,
                   color: Theme.of(context).colorScheme.outlineVariant,
                   child: p['images'] != null && (p['images'] as List).isNotEmpty
-                      ? CachedNetworkImage(
-                          imageUrl: (p['images'] as List).first,
+                      ? ProductCachedImage(
+                          url: (p['images'] as List).first,
                           fit: BoxFit.cover,
                         )
                       : Icon(

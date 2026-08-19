@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'product_cached_image.dart';
 import '../services/product_service.dart';
 import '../extensions/context_tr.dart';
 import '../app/routes.dart';
@@ -59,7 +59,7 @@ class BoostPromoBanner extends StatelessWidget {
                           height: 48,
                           color: cs.outlineVariant,
                           child: p.images.isNotEmpty
-                              ? CachedNetworkImage(imageUrl: p.images.first, fit: BoxFit.cover)
+                              ? ProductCachedImage(url: p.images.first, fit: BoxFit.cover)
                               : Icon(Icons.image, color: cs.onSurfaceVariant),
                         ),
                       ),

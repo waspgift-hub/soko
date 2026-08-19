@@ -310,7 +310,7 @@ router.post('/autocomplete', async (req, res) => {
 
     // Keystroke-by-keystroke calls hammer the index — 90s TTL on a per-query key.
     const cacheKey = `autocomplete:${queryLower}`;
-    const cached = cache.get(cacheKey);
+    const cached = await cache.get(cacheKey);
     if (cached) return res.json(cached);
 
     const prefixEnd = queryLower + '\uf8ff';
@@ -333,7 +333,7 @@ router.post('/autocomplete', async (req, res) => {
       matchMap.set(d.displayName + '_category', { text: d.displayName, type: 'category', image: d.image || d.icon || '', id: doc.id });
     }
     const suggestions = Array.from(matchMap.values()).slice(0, MAX_AUTOCOMPLETE);
-    cache.set(cacheKey, { suggestions }, 90 * 1000);
+    await cache.set(cacheKey, { suggestions }, 90 * 1000);
     res.json({ suggestions });
   } catch (e) {
     console.error('[SEARCH] autocomplete error:', e.message);
@@ -347,12 +347,12 @@ router.post('/autocomplete', async (req, res) => {
 router.post('/trending', async (req, res) => {
   try {
     const CACHE_KEY = 'trending:all';
-    const cached = cache.get(CACHE_KEY);
+    const cached = await cache.get(CACHE_KEY);
     if (cached) return res.json(cached);
     const snap = await db.collection(SEARCH_INDEX.trending).orderBy('count', 'desc').limit(MAX_TRENDING).get();
     const trending = snap.docs.map(doc => ({ text: doc.id, count: doc.data().count || 0 }));
     const payload = { trending };
-    cache.set(CACHE_KEY, payload, 5 * 60 * 1000);
+    await cache.set(CACHE_KEY, payload, 5 * 60 * 1000);
     res.json(payload);
   } catch (e) {
     console.error('[SEARCH] trending error:', e.message);
@@ -397,7 +397,7 @@ router.post('/most-rated', async (req, res) => {
     // Reads the whole `reviews` collection + per-seller user docs per request —
     // the single biggest read on the Spark free tier. Cache for 10 minutes.
     const cacheKey = `most-rated:${limit}`;
-    const cached = cache.get(cacheKey);
+    const cached = await cache.get(cacheKey);
     if (cached) return res.json(cached);
 
     // Top rated products — real reviewCount, active listings only
@@ -467,7 +467,7 @@ router.post('/most-rated', async (req, res) => {
     }
 
     const payload = { success: true, products, sellers };
-    cache.set(cacheKey, payload, 10 * 60 * 1000);
+    await cache.set(cacheKey, payload, 10 * 60 * 1000);
     res.json(payload);
   } catch (e) {
     console.error('[SEARCH] most-rated error:', e.message);

@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'product_cached_image.dart';
 import '../services/price_drop_service.dart';
 import '../extensions/context_tr.dart';
 
@@ -173,7 +173,7 @@ class _PriceDropBannerState extends State<PriceDropBanner> {
                         ),
                         child: ClipOval(
                           child: productImage.isNotEmpty
-                              ? CachedNetworkImage(imageUrl: productImage, fit: BoxFit.cover, errorWidget: (_, _, _) => Icon(Icons.image, color: cs.onSurface.withValues(alpha: 0.5), size: 24))
+                              ? ProductCachedImage(url: productImage, fit: BoxFit.cover)
                               : Container(color: cs.error.withValues(alpha: 0.1), child: Icon(Icons.image, color: cs.onSurface.withValues(alpha: 0.5), size: 24)),
                         ),
                       ),

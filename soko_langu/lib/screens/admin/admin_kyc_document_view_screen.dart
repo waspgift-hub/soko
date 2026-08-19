@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/product_cached_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -295,23 +295,11 @@ class _AdminKycDocumentViewScreenState
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(10),
-                child: CachedNetworkImage(
-                  imageUrl: doc.url,
+                child: ProductCachedImage(
+                  url: doc.url,
                   width: 64,
                   height: 64,
                   fit: BoxFit.cover,
-                  placeholder: (_, _) => Container(
-                    width: 64,
-                    height: 64,
-                    color: cs.surfaceContainerHighest,
-                    child: const Icon(Icons.image_outlined),
-                  ),
-                  errorWidget: (_, _, _) => Container(
-                    width: 64,
-                    height: 64,
-                    color: cs.surfaceContainerHighest,
-                    child: const Icon(Icons.broken_image),
-                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -357,13 +345,9 @@ class _AdminKycDocumentViewScreenState
             InteractiveViewer(
               maxScale: 5,
               child: Center(
-                child: CachedNetworkImage(
-                  imageUrl: url,
+                child: ProductCachedImage(
+                  url: url,
                   fit: BoxFit.contain,
-                  placeholder: (_, _) =>
-                      const Center(child: CircularProgressIndicator()),
-                  errorWidget: (_, _, _) =>
-                      const Icon(Icons.broken_image, color: Colors.white54, size: 64),
                 ),
               ),
             ),

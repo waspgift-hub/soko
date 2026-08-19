@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/product_cached_image.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/api_config.dart';
@@ -244,7 +244,7 @@ class _OrderQuoteCard extends StatelessWidget {
                           width: 64, height: 64,
                           color: cs.surfaceContainerHighest,
                           child: productImage.isNotEmpty
-                              ? CachedNetworkImage(imageUrl: productImage, fit: BoxFit.cover, width: 64, height: 64)
+                              ? ProductCachedImage(url: productImage, width: 64, height: 64, fit: BoxFit.cover)
                               : Icon(Icons.image, size: 28, color: cs.onSurfaceVariant),
                         ),
                       ),

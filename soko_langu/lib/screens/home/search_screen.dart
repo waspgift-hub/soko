@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../widgets/product_cached_image.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -481,8 +482,8 @@ class _SearchScreenState extends State<SearchScreen>
           leading: s.image != null && s.image!.isNotEmpty
               ? ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: CachedNetworkImage(
-                    imageUrl: s.image!,
+                  child: ProductCachedImage(
+                    url: s.image!,
                     width: 36, height: 36, fit: BoxFit.cover,
                   ),
                 )
@@ -584,8 +585,8 @@ class _SearchScreenState extends State<SearchScreen>
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        CachedNetworkImage(
-                          imageUrl: r.image!,
+                        ProductCachedImage(
+                          url: r.image!,
                           fit: BoxFit.cover,
                         ),
                         if (flash != null)
@@ -928,10 +929,9 @@ class _SearchScreenState extends State<SearchScreen>
                   fit: StackFit.expand,
                   children: [
                     r.image != null && r.image!.isNotEmpty
-                        ? CachedNetworkImage(
-                            imageUrl: r.image!,
+                        ? ProductCachedImage(
+                            url: r.image!,
                             fit: BoxFit.cover,
-                            width: double.infinity,
                           )
                         : Container(
                             color: cs.surfaceContainerHighest,

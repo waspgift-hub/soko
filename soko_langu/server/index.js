@@ -36,6 +36,9 @@ if (process.env.REDIS_URL) {
     redis.on('error', (e) => console.warn('[Redis] Connection error:', e.message));
     redis.connect().catch(() => {});
     console.log('[Redis] Client initialized');
+    // Wire Redis into the two-tier cache for distributed product caching
+    const cache = require('./cache');
+    cache.setRedisClient(redis);
   } catch (e) {
     console.warn('[Redis] Init failed:', e.message);
   }
@@ -8904,6 +8907,35 @@ app.get('/api/orders/user/:userId', async (req, res) => {
     } catch {
       res.status(500).json({ error: e.message || 'Internal server error' });
     }
+  }
+});
+
+// ════════════════════════════════════════════════════════════
+// POPULAR PRODUCTS — Redis-cached, 5-minute TTL
+// ════════════════════════════════════════════════════════════
+const cache = require('./cache');
+
+app.get('/api/popular-products', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+    const cacheKey = `popular-products:${limit}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) return res.json(cached);
+
+    const snap = await db.collection('products')
+      .where('isActive', '==', true)
+      .orderBy('createdAt', 'desc')
+      .orderBy('isBoosted', 'desc')
+      .limit(limit)
+      .get();
+
+    const products = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const payload = { products };
+    await cache.set(cacheKey, payload, 5 * 60 * 1000);
+    res.json(payload);
+  } catch (e) {
+    console.error('[POPULAR] Error:', e.message);
+    res.status(500).json({ error: 'Failed to fetch popular products' });
   }
 });
 

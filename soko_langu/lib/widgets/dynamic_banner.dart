@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'product_cached_image.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import '../services/product_service.dart';
 import '../models/product_model.dart';
@@ -205,12 +205,10 @@ class _BoostedCard extends StatelessWidget {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(12),
                   child: product.images.isNotEmpty
-                      ? CachedNetworkImage(
-                          imageUrl: product.images.first,
+                      ? ProductCachedImage(
+                          url: product.images.first,
                           height: 140,
-                          width: double.infinity,
                           fit: BoxFit.cover,
-                          errorWidget: (_, _, _) => _imagePlaceholder(cs),
                         )
                       : _imagePlaceholder(cs),
                 ),
