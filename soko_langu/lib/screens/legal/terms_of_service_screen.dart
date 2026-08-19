@@ -44,6 +44,8 @@ class TermsOfServiceScreen extends StatelessWidget {
               _section(cs, context.tr('tos_section_14_title'), context.tr('tos_section_14_body')),
               _section(cs, context.tr('tos_section_15_title'), context.tr('tos_section_15_body')),
               _section(cs, context.tr('tos_section_16_title'), context.tr('tos_section_16_body')),
+              _section(cs, context.tr('tos_section_chat_title'), context.tr('tos_section_chat_body')),
+              _section(cs, context.tr('tos_section_withhold_title'), context.tr('tos_section_withhold_body')),
 
               const SizedBox(height: 32),
               Center(

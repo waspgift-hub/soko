@@ -15,8 +15,10 @@ import '../services/local_cache_service.dart';
 class ProductRepository {
   final ProductService _remote;
   StreamSubscription<List<ConnectivityResult>>? _connectSub;
-  bool _wasOffline = false; // Used to detect recovery from offline state
-  dynamic _lastDoc; // Can be DocumentSnapshot or null
+  bool _wasOffline = false;
+  dynamic _lastDoc; // Cursor for main feed
+  dynamic _brandLastDoc; // Cursor for brand filter
+  dynamic _categoryLastDoc; // Cursor for category filter
 
   ProductRepository({ProductService? remote})
       : _remote = remote ?? ProductService();
@@ -58,39 +60,51 @@ class ProductRepository {
 
   dynamic get lastDoc => _lastDoc;
 
-  /// Load products for a specific brand.
+  /// Load products for a specific brand. Pass [startOver]=true for first page.
   Future<ProductResult<List<Product>>> loadByBrand(
     String brand, {
     int limit = 30,
+    bool startOver = false,
   }) async {
+    if (startOver) _brandLastDoc = null;
     final online = await isOnline;
     if (online) {
       try {
-        final products = await _remote.fetchProductsByBrand(brand, limit: limit);
-        await _updateCache(products);
-        return ProductResult.data(products, source: DataSource.network);
+        final result = await _remote.fetchProductsByBrand(
+          brand,
+          limit: limit,
+          startAfter: _brandLastDoc,
+        );
+        _brandLastDoc = result.$2;
+        await _updateCache(result.$1);
+        return ProductResult.data(result.$1, source: DataSource.network);
       } catch (_) {}
     }
     return _loadFromCache();
   }
 
   /// Load products for a specific category + optional subcategory.
+  /// Pass [startOver]=true for first page.
   Future<ProductResult<List<Product>>> loadProductsByCategory(
     String category, {
     String? subcategory,
     int limit = 30,
+    bool startOver = false,
   }) async {
+    if (startOver) _categoryLastDoc = null;
     final online = await isOnline;
 
     if (online) {
       try {
-        final products = await _remote.fetchProductsByCategory(
+        final result = await _remote.fetchProductsByCategory(
           category,
           subcategory: subcategory,
           limit: limit,
+          startAfter: _categoryLastDoc,
         );
-        await _updateCache(products);
-        return ProductResult.data(products, source: DataSource.network);
+        _categoryLastDoc = result.$2;
+        await _updateCache(result.$1);
+        return ProductResult.data(result.$1, source: DataSource.network);
       } catch (_) {}
     }
 

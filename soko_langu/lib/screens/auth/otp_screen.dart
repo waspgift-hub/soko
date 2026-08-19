@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../notifiers/auth_notifier.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/account_manager.dart';
+import '../../services/consent_recording_service.dart';
 import '../../models/saved_account.dart';
 import '../../widgets/soko_vibe_loading.dart';
 
@@ -95,6 +96,7 @@ class _OtpScreenState extends State<OtpScreen> {
             isActive: true,
           ),
         );
+        ConsentRecordingService.instance.recordConsent(user.uid);
       }
       if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
     } catch (e) {

@@ -53,8 +53,11 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")
-            isMinifyEnabled = false
-            isShrinkResources = false
+            // Enable R8 minification (tree-shaking) and obfuscation.
+            // Reduces APK size ~30-50% and renames classes/methods to
+            // single letters, making reverse engineering much harder.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

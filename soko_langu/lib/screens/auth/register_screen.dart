@@ -14,6 +14,7 @@ import '../../models/saved_account.dart';
 import '../../notifiers/auth_notifier.dart';
 import '../../services/account_manager.dart';
 import '../../services/api_config.dart';
+import '../../services/consent_recording_service.dart';
 import '../../utils/phone_utils.dart'; // ignore: unused_import
 import '../../widgets/auth_form_widgets.dart';
 import 'otp_screen.dart';
@@ -163,6 +164,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             isActive: true,
           ),
         );
+        ConsentRecordingService.instance.recordConsent(user.uid);
       }
       if (mounted) context.go(AppRoutes.home);
     } catch (e) {

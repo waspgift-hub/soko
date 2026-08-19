@@ -299,21 +299,31 @@ class ProductService {
   }
 
   /// Paginated query for a specific brand.
-  Future<List<Product>> fetchProductsByBrand(String brand, {int limit = 30}) async {
+  Future<(List<Product>, DocumentSnapshot<Map<String, dynamic>>?)> fetchProductsByBrand(
+    String brand, {
+    int limit = 30,
+    DocumentSnapshot<Map<String, dynamic>>? startAfter,
+  }) async {
     if (brand == 'Others') {
-      return fetchProductsByBrandOthers(limit: limit);
+      final products = await fetchProductsByBrandOthers(limit: limit);
+      return (products, null);
     }
-    final snapshot = await _db
+    var query = _db
         .collection("products")
         .where('isActive', isEqualTo: true)
         .where("brand", isEqualTo: brand)
-        .limit(limit)
-        .get();
+        .orderBy('createdAt', descending: true)
+        .limit(limit);
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
+    final snapshot = await query.get();
     final products = snapshot.docs
         .map((doc) => Product.fromFirestore(doc))
         .toList();
     _sortByBoost(products);
-    return products;
+    final lastDoc = snapshot.docs.isEmpty ? null : snapshot.docs.last;
+    return (products, lastDoc);
   }
 
   /// Catch-all for brands not in the known list.
@@ -333,10 +343,11 @@ class ProductService {
   }
 
   /// Paginated query for a category + optional subcategory.
-  Future<List<Product>> fetchProductsByCategory(
+  Future<(List<Product>, DocumentSnapshot<Map<String, dynamic>>?)> fetchProductsByCategory(
     String category, {
     String? subcategory,
     int limit = 30,
+    DocumentSnapshot<Map<String, dynamic>>? startAfter,
   }) async {
     var query = _db
         .collection("products")
@@ -347,8 +358,13 @@ class ProductService {
     if (subcategory != null) {
       query = query.where("subcategory", isEqualTo: subcategory);
     }
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
     final snapshot = await query.get();
-    return snapshot.docs.map((doc) => Product.fromFirestore(doc)).toList();
+    final products = snapshot.docs.map((doc) => Product.fromFirestore(doc)).toList();
+    final lastDoc = snapshot.docs.isEmpty ? null : snapshot.docs.last;
+    return (products, lastDoc);
   }
 
   /// Alias for [getProductById] — used by [ProductRepository].

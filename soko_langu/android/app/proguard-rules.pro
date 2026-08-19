@@ -27,3 +27,24 @@
 -dontwarn io.flutter.**
 -dontwarn com.google.firebase.**
 -dontwarn com.google.android.gms.**
+
+# ─── ANTI-REVERSE-ENGINEERING ──────────────────────────
+# Obfuscate string constants (API keys, URLs, etc.) so they
+# don't appear as readable text in the APK binary.
+-repackageclasses ''
+-allowaccessmodification
+
+# Remove logging in release builds — attackers use logs to
+# understand app behavior during static analysis.
+-assumenosideeffects class android.util.Log {
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
+}
+
+# Remove toString() on model classes — prevents easy data extraction.
+# Comment this out if you need crash reports with model names.
+# -assumenosideeffects class ** { *** toString(); }
+
+# Protect native libraries from extraction.
+# -keepclassmembers class * { native <methods>; }

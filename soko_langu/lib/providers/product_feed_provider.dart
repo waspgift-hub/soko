@@ -89,42 +89,18 @@ class ProductFeedProvider extends ChangeNotifier {
     );
   }
 
-  /// Load next page (Firestore pagination).
-  Future<void> loadNextPage() async {
-    if (_isLoading || !_hasMore) return;
-    _isLoading = true;
-    _error = null;
-    _errorKind = null;
-    notifyListeners();
-
-    final result = await _repo.loadProducts();
-    if (result.isError) {
-      _error = result.error;
-      _errorKind = FirestoreErrorKind.other;
-    } else {
-      final fresh = result.data ?? [];
-      for (final p in fresh) {
-        if (!_loadedIds.contains(p.id)) {
-          _loadedIds.add(p.id);
-          _products.add(p);
-        }
-      }
-      _hasMore = fresh.length >= 30;
-      _fromCache = result.isCache;
-    }
-
-    _isLoading = false;
-    notifyListeners();
-  }
-
   Future<void> loadByBrand(String brand) async {
     if (_isLoading) return;
     _isLoading = true;
     _error = null;
     _errorKind = null;
+    _hasMore = true;
+    _loadedIds.clear();
+    _currentFilter = 'brand';
+    _currentBrandFilter = brand;
     notifyListeners();
 
-    final result = await _repo.loadByBrand(brand);
+    final result = await _repo.loadByBrand(brand, startOver: true);
     if (result.isError) {
       _error = result.error;
       _errorKind = FirestoreErrorKind.other;
@@ -132,6 +108,8 @@ class ProductFeedProvider extends ChangeNotifier {
     } else {
       _products = result.data ?? [];
       _fromCache = result.isCache;
+      _loadedIds = _products.map((p) => p.id).toSet();
+      _hasMore = _products.length >= 15;
     }
 
     _isLoading = false;
@@ -143,11 +121,17 @@ class ProductFeedProvider extends ChangeNotifier {
     _isLoading = true;
     _error = null;
     _errorKind = null;
+    _hasMore = true;
+    _loadedIds.clear();
+    _currentFilter = 'category';
+    _currentCategoryFilter = category;
+    _currentSubcategoryFilter = subcategory;
     notifyListeners();
 
     final result = await _repo.loadProductsByCategory(
       category,
       subcategory: subcategory,
+      startOver: true,
     );
     if (result.isError) {
       _error = result.error;
@@ -155,6 +139,54 @@ class ProductFeedProvider extends ChangeNotifier {
       _products = [];
     } else {
       _products = result.data ?? [];
+      _fromCache = result.isCache;
+      _loadedIds = _products.map((p) => p.id).toSet();
+      _hasMore = _products.length >= 15;
+    }
+
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  // Filter state for paginated loadMore
+  String? _currentFilter;
+  String? _currentBrandFilter;
+  String? _currentCategoryFilter;
+  String? _currentSubcategoryFilter;
+
+  /// Load next page — works for main feed, brand, and category views.
+  Future<void> loadNextPage() async {
+    if (_isLoading || !_hasMore) return;
+    _isLoading = true;
+    _error = null;
+    _errorKind = null;
+    notifyListeners();
+
+    ProductResult<List<Product>> result;
+
+    if (_currentFilter == 'brand' && _currentBrandFilter != null) {
+      result = await _repo.loadByBrand(_currentBrandFilter!);
+    } else if (_currentFilter == 'category' && _currentCategoryFilter != null) {
+      result = await _repo.loadProductsByCategory(
+        _currentCategoryFilter!,
+        subcategory: _currentSubcategoryFilter,
+      );
+    } else {
+      result = await _repo.loadProducts();
+    }
+
+    if (result.isError) {
+      _error = result.error;
+      _errorKind = FirestoreErrorKind.other;
+    } else {
+      final fresh = result.data ?? [];
+      for (final p in fresh) {
+        if (!_loadedIds.contains(p.id)) {
+          _loadedIds.add(p.id);
+          _products.add(p);
+        }
+      }
+      _hasMore = fresh.length >= 15;
       _fromCache = result.isCache;
     }
 
@@ -180,6 +212,10 @@ class ProductFeedProvider extends ChangeNotifier {
     _products.clear();
     _loadedIds.clear();
     _hasMore = true;
+    _currentFilter = null;
+    _currentBrandFilter = null;
+    _currentCategoryFilter = null;
+    _currentSubcategoryFilter = null;
     await loadInitial();
   }
 

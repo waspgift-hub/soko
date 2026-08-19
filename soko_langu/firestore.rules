@@ -28,11 +28,29 @@ service cloud.firestore {
       );
     }
 
+    // ─── FIELD-LEVEL WRITE PROTECTION ──────────────────────
+    // Fields that only the backend admin SDK may write.
+    // A client-side user document update that touches any of these
+    // fields is silently rejected by Firestore rules, preventing
+    // privilege escalation, wallet tampering, and boost fraud.
+    // Admin SDK bypasses these rules entirely (server-side trust boundary).
+    function noSensitiveFieldChanges() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'walletBalance', 'sellerBalance', 'pendingEscrow',
+        'totalSales', 'grossSalesVolume', 'totalWithdrawn',
+        'isAdmin', 'isSuspended', 'kyc',
+        'isBoosted', 'boostedUntil', 'boostTier',
+        'createdAt', 'lastSaleAt', 'lastLoginAt', 'fcmToken'
+      ]);
+    }
+
     // ─── USERS ──────────────────────────────────────────────
     match /users/{userId} {
       allow read: if isSignedIn();
       allow create: if isOwner(userId);
-      allow update: if isOwner(userId) || isAdmin();
+      // Clients may update their own profile BUT NOT financial, trust,
+      // or boost fields. Only the admin SDK (server webhook) may touch those.
+      allow update: if (isOwner(userId) && noSensitiveFieldChanges()) || isAdmin();
       allow delete: if isOwner(userId) || isAdmin();
 
       match /following/{followingId} {
@@ -57,8 +75,10 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isSignedIn() && notSuspended() && request.resource.data.sellerId == request.auth.uid;
       allow update: if isSignedIn() && notSuspended() && (
-        // seller owns the product
-        resource.data.sellerId == request.auth.uid
+        // seller owns the product AND is not tampering with boost fields
+        (resource.data.sellerId == request.auth.uid && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'isBoosted', 'boostedUntil', 'boostTier', 'isFeatured', 'featuredUntil'
+        ]))
         // any signed-in user can bump viewCount
         || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount'])
         // any signed-in user can update rating/reviewCount (after leaving a review)

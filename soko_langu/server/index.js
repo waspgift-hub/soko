@@ -618,13 +618,64 @@ async function dequeueFailedBoosts(maxCount = 10) {
   return items;
 }
 
-// Verify webhook checksum to prevent forged payment callbacks.
+// ---------------------------------------------------------------------------
+// Webhook IP Whitelisting — Defense Layer 1
+//
+// Only ClickPesa's known outgoing IPs should reach this endpoint. Even if
+// an attacker discovers the URL, they cannot reach it from a different IP.
+//
+// SETUP: Add CLICKPESA_ALLOWED_IPS to .env as a comma-separated list:
+//   CLICKPESA_ALLOWED_IPS=203.0.113.1,203.0.113.2,198.51.100.0/24
+//
+// If the env var is empty or missing, IP checks are skipped (for local dev).
+// In production this MUST be set — the guard is explicit.
+// ---------------------------------------------------------------------------
+const ipRangeCheck = (() => {
+  try { return require('ip-range-check'); } catch { return null; }
+})();
+
+function webhookIpWhitelist(req, res, next) {
+  const allowedRaw = process.env.CLICKPESA_ALLOWED_IPS;
+  if (!allowedRaw) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[SECURITY] CLICKPESA_ALLOWED_IPS not set — rejecting webhook in production');
+      return res.status(503).json({ error: 'Webhook IP whitelist not configured' });
+    }
+    return next();
+  }
+
+  const clientIp = req.ip || req.connection.remoteAddress || '';
+  // Express trust proxy gives us the real IP; strip IPv6 prefix if present
+  const cleanIp = clientIp.replace(/^::ffff:/, '');
+
+  const allowed = allowedRaw.split(',').map(s => s.trim()).filter(Boolean);
+  if (ipRangeCheck) {
+    if (ipRangeCheck(cleanIp, allowed)) return next();
+  } else {
+    if (allowed.includes(cleanIp)) return next();
+  }
+
+  console.warn(`[SECURITY] Webhook from unauthorized IP: ${cleanIp}`);
+  return res.status(403).json({ error: 'IP not whitelisted' });
+}
+
+// ---------------------------------------------------------------------------
+// Webhook HMAC Signature Verification — Defense Layer 2
+//
 // ClickPesa signs the canonicalized JSON payload (sorted keys) with
-// HMAC-SHA256 using CLICKPESA_CHECKSUM_KEY and sends it as `checksum` in the body.
+// HMAC-SHA256 using CLICKPESA_CHECKSUM_KEY and sends it as `checksum`.
+//
+// This uses crypto.timingSafeEqual to prevent timing attacks where an
+// attacker measures response time to guess the checksum byte-by-byte.
+//
+// SECURITY LAYERS:
+//   1. IP whitelist (above)     — network-level rejection
+//   2. HMAC verification (this) — cryptographic proof of origin
+//   3. Idempotency lock (below) — double-processing prevention
+// ---------------------------------------------------------------------------
 function verifyWebhook(req, res, next) {
   const secret = process.env.CLICKPESA_CHECKSUM_KEY;
   if (!secret) {
-    // No secret configured — reject in production to prevent forged callbacks
     console.error('[WEBHOOK] CLICKPESA_CHECKSUM_KEY not set — rejecting webhook for security');
     return res.status(503).json({ error: 'Webhook verification not configured' });
   }
@@ -2740,7 +2791,7 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
 // CLICKPESA WEBHOOK — real-time payment callbacks from ClickPesa
 //     (statuses also polled by the ClickPesa poller below as backup)
 // ============================================================
-app.post('/api/clickpesa/webhook', verifyWebhook, async (req, res) => {
+app.post('/api/clickpesa/webhook', webhookIpWhitelist, verifyWebhook, async (req, res) => {
   const webhookStart = Date.now();
   try {
     let payload = req.body;
@@ -7490,7 +7541,7 @@ app.post('/api/clickpesa/payout-preview', async (req, res) => {
 // ClickPesa calls this when a payout status changes (SUCCESS or FAILED).
 // On SUCCESS: mark the Firestore payout record as completed.
 // On FAILED: atomically reverse the deducted amount back to the seller's wallet.
-app.post('/api/clickpesa/payout-webhook', verifyWebhook, async (req, res) => {
+app.post('/api/clickpesa/payout-webhook', webhookIpWhitelist, verifyWebhook, async (req, res) => {
   try {
     let payload = req.body;
     if (payload.data && typeof payload.data === 'object') {
@@ -8968,5 +9019,41 @@ app.post('/api/moderation/check-text', async (req, res) => {
     res.json({ clean: true });
   } catch (e) {
     res.json({ clean: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// CONSENT RECORDING — Clickwrap Agreement Evidence (PDPA 2022 §23)
+// ---------------------------------------------------------------------------
+app.post('/api/consent/record', async (req, res) => {
+  try {
+    const { userId, tosVersion, ppVersion, acceptedAt, ipAddress,
+            deviceInfo, platform, appVersion, explicitAction, deviceId } = req.body;
+
+    if (!userId || !tosVersion || !ppVersion) {
+      return res.status(400).json({ error: 'Missing required fields: userId, tosVersion, ppVersion' });
+    }
+
+    if (db) {
+      await db.collection('consentRecords').doc(userId).set({
+        userId,
+        deviceId: deviceId || null,
+        tosVersion,
+        ppVersion,
+        acceptedAt: acceptedAt || new Date().toISOString(),
+        ipAddress: ipAddress || req.ip || req.headers['x-forwarded-for'] || null,
+        explicitAction: explicitAction || 'Checked_Consent_Box_and_Clicked_Register',
+        deviceInfo: deviceInfo || 'unknown',
+        platform: platform || 'unknown',
+        appVersion: appVersion || 'unknown',
+        serverRecordedAt: admin.firestore.FieldValue.serverTimestamp(),
+        serverIp: req.ip || req.headers['x-forwarded-for'] || null,
+      });
+    }
+
+    res.json({ success: true, message: 'Consent recorded successfully' });
+  } catch (e) {
+    console.error('Consent recording error:', e.message);
+    res.status(500).json({ error: 'Failed to record consent' });
   }
 });
