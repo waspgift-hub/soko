@@ -3380,11 +3380,12 @@ app.post('/api/escrow/retry-payout', async (req, res) => {
 // ============================================================
 app.post('/api/kyc/submit', async (req, res) => {
   try {
-    const { userId, fullName, idType, idNumber, idImageUrl, selfieUrl } = req.body;
+    // Auth FIRST — never reveal field requirements to anonymous callers.
+    const { userId, fullName, idType, idNumber, idImageUrl, selfieUrl } = req.body || {};
+    if (!(await isOwnerOrAdmin(req, res, userId || ''))) return;
     if (!userId || !fullName || !idType || !idNumber) {
       return res.status(400).json({ error: 'Missing required KYC fields' });
     }
-    if (!(await isOwnerOrAdmin(req, res, userId))) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const userDoc = await db.collection('users').doc(userId).get();
@@ -5122,6 +5123,9 @@ app.get('/api/transaction-status/:orderId', async (req, res) => {
   try {
     const { orderId } = req.params;
     if (!orderId) return res.status(400).json({ error: 'Missing orderId' });
+    // Auth FIRST — a 404 before auth would let anyone probe which transaction
+    // IDs exist in the database.
+    if (!(await requireUser(req, res))) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const doc = await db.collection('transactions').doc(orderId).get();

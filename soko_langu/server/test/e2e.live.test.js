@@ -168,7 +168,7 @@ const PROTECTED_ENDPOINTS = [
   ['GET', '/api/buyer-statement/some-buyer', null],
   ['POST', '/api/admin/broadcast-notification', {}],
   ['POST', '/api/cron/release-escrows', {}],
-  ['POST', '/api/esco/release', {}],
+  ['POST', '/api/escrow/release', {}],
 ];
 
 for (const [method, path, body] of PROTECTED_ENDPOINTS) {
