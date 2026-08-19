@@ -110,6 +110,8 @@ final List<String> _adminOnlyRoutes = [
   AppRoutes.admin,
   AppRoutes.adminUserDetail,
   AppRoutes.adminReports,
+  AppRoutes.adminKyc,
+  AppRoutes.adminBroadcast,
 ];
 
 GoRouter buildRouter() {
@@ -127,12 +129,7 @@ GoRouter buildRouter() {
       // Admin-only routes
       if (_adminOnlyRoutes.any((r) => location == r || location.startsWith('$r/'))) {
         if (!isAuth) return AppRoutes.login;
-        if (!isAdmin) {
-          final user = FirebaseAuth.instance.currentUser;
-          if (user?.email?.toLowerCase() != 'admin@soko-langu.com') {
-            return AppRoutes.home;
-          }
-        }
+        if (!isAdmin) return AppRoutes.home;
       }
 
       // Auth-required routes

@@ -33,21 +33,18 @@ class _NotificationPreferencesScreenState
     'payments',
     'chat',
     'orders',
-    'rides',
     'marketing',
   ];
   static const _channelLabels = [
     'notification_payments',
     'notification_chat',
     'notification_orders',
-    'notification_rides',
     'notification_marketing',
   ];
   static const _channelIcons = [
     Icons.account_balance_wallet_outlined,
     Icons.chat_outlined,
     Icons.shopping_bag_outlined,
-    Icons.directions_car_outlined,
     Icons.campaign_outlined,
   ];
 

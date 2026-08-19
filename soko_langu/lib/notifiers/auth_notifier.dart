@@ -66,24 +66,15 @@ class AuthNotifier extends ChangeNotifier {
     try {
       final user = _authRepo.currentUser;
       if (user == null) { _isAdmin = false; return; }
+      // Admin is granted ONLY by the server via the isAdmin flag on the users
+      // document (set through /api/setup-admin or the admin SDK). Never derive
+      // admin from the email address — anyone can register any email.
       final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       final data = doc.data();
-      final isAdminEmail = user.email?.toLowerCase() == 'admin@soko-langu.com' ||
-          user.email?.toLowerCase() == 'admin@soko-vibe.com';
-      _isAdmin = data?['isAdmin'] == true || isAdminEmail;
-      // Auto-fix Firestore field for admin emails
-      if (isAdminEmail && data?['isAdmin'] != true) {
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
-          {'isAdmin': true},
-          SetOptions(merge: true),
-        );
-      }
-      debugPrint('[AUTH] Admin status for ${user.uid}: $_isAdmin');
+      _isAdmin = data?['isAdmin'] == true;
     } catch (e) {
-      debugPrint('[AUTH] Failed to fetch admin status: $e — checking email fallback');
-      final user = _authRepo.currentUser;
-      _isAdmin = user?.email?.toLowerCase() == 'admin@soko-langu.com' ||
-          user?.email?.toLowerCase() == 'admin@soko-vibe.com';
+      debugPrint('[AUTH] Failed to fetch admin status: $e');
+      _isAdmin = false;
     }
   }
 

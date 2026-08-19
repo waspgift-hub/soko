@@ -70,7 +70,7 @@ class LocalNotificationService {
     await android.createNotificationChannel(const AndroidNotificationChannel(
       'general_notifications_v6',
       'Soko Vibe',
-      description: 'Flash sale, announcements, alerts, ride notifications',
+      description: 'Flash sale, announcements, alerts',
       importance: Importance.max,
       enableVibration: true,
       playSound: true,
@@ -87,14 +87,6 @@ class LocalNotificationService {
       'chat_messages_v6',
       'Chat Messages',
       description: 'New message notifications from chats',
-      importance: Importance.max,
-      enableVibration: true,
-      playSound: true,
-    ));
-    await android.createNotificationChannel(const AndroidNotificationChannel(
-      'ride_notifications_v6',
-      'Ride Updates',
-      description: 'Ride requests, cancellations, trip updates',
       importance: Importance.max,
       enableVibration: true,
       playSound: true,
@@ -149,8 +141,6 @@ class LocalNotificationService {
         return 'Chat Messages';
       case 'payments_notifications_v6':
         return 'Payments';
-      case 'ride_notifications_v6':
-        return 'Ride Updates';
       case 'system_alerts_v6':
         return 'System Alerts';
       default:

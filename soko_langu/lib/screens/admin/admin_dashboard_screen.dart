@@ -86,10 +86,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         .doc(user.uid)
         .get();
     final data = doc.data();
-    final isAdminEmail =
-        user.email?.toLowerCase() == 'admin@soko-langu.com' ||
-        user.email?.toLowerCase() == 'admin@soko-vibe.com';
-    if (data?['isAdmin'] != true && !isAdminEmail) {
+    // Admin is server-granted only via the users.isAdmin flag. Never trust the
+    // email address — anyone can register any email.
+    if (data?['isAdmin'] != true) {
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(
@@ -97,12 +96,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         ).showSnackBar(SnackBar(content: Text(context.tr('access_denied'))));
       }
       return;
-    }
-    // Auto-fix Firestore isAdmin field for admin emails
-    if (isAdminEmail && data?['isAdmin'] != true) {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-        'isAdmin': true,
-      }, SetOptions(merge: true));
     }
     setState(() => _isAdmin = true);
     try {

@@ -8,7 +8,7 @@ const admin = require('firebase-admin');
 
 const db = admin.firestore();
 
-const CHANNELS = ['general', 'payments', 'orders', 'rides', 'chat', 'marketing'];
+const CHANNELS = ['general', 'payments', 'orders', 'chat', 'marketing'];
 
 // Map notification type -> preference channel. Unknown types fall back to
 // `general` so they are only gated by the master switch.
@@ -26,10 +26,6 @@ const CHANNEL_BY_TYPE = {
   // orders
   order: 'orders', order_placed: 'orders', order_dispatched: 'orders',
   order_delivered: 'orders', order_disputed: 'orders', dispatched: 'orders',
-  // rides
-  ride: 'rides', ride_driver_found: 'rides', ride_driver_accepted: 'rides',
-  ride_driver_arrived: 'rides', ride_trip_started: 'rides',
-  ride_trip_completed: 'rides', ride_cancelled: 'rides', ride_no_drivers: 'rides',
   // chat
   chat: 'chat', chat_message: 'chat', group_chat: 'chat', group_chat_message: 'chat',
   // marketing

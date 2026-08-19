@@ -55,12 +55,11 @@ const orderEngine = require('./orders');
 const searchRouter = require('./search').router;
 const notificationRouter = require('./notification').router;
 const notifPrefs = require('./notificationPrefs');
+const { verifyAdminSecret } = require('./middlewares/security');
 const { parseFlashSaleEndTime, isFlashSaleStillActive, resolveEffectivePrice } = require('./money');
 
 const DEFAULT_PAYOUT_FEE = 2000; // Estimated payout fee (actual varies by amount via clickpesaPayoutPreview)
 const { groqChat, groqTranscribe } = require('./groq');
-
-const ADMIN_EMAILS = ["admin@soko-langu.com", "admin@soko-vibe.com"];
 
 // Catch uncaught exceptions & rejections — log but don't exit
 process.on('uncaughtException', (err) => {
@@ -76,6 +75,12 @@ process.on('warning', (warning) => {
 });
 
 const app = express();
+
+// Trust the first proxy hop so req.ip resolves the real client IP through
+// Render/Railway's load balancer. Without this, every user shares the LB
+// address and the per-IP rate limiters become a global cap (one busy user
+// blocks everyone) and the webhook IP whitelist sees the proxy IP.
+app.set('trust proxy', 1);
 
 // gzip all responses — JSON payloads shrink ~70% on the mobile data plans most
 // users are on. Compress before the raw-body verify so webhook HMACs still see
@@ -106,11 +111,14 @@ const ALLOWED_ORIGINS = [
 ];
 app.use(cors({
   origin: (origin, cb) => {
-    if (!origin || ALLOWED_ORIGINS.some(o => origin.startsWith(o))) return cb(null, true);
+    // Exact match only — a prefix match lets look-alike origins (e.g.
+    // https://onrender.com.evil.com) pass the check.
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
     cb(null, false); // Reject unknown origins
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-secret', 'x-webhook-secret', 'x-notify-signature', 'x-malipopay-signature'],
+  credentials: false,
   maxAge: 86400,
 }));
 
@@ -141,18 +149,22 @@ app.post('/api/whatsapp/webhook', async (req, res) => {
       console.error('[WA-WEBHOOK] WHATSAPP_WEBHOOK_SECRET not set — rejecting for security');
       return res.status(503).json({ error: 'Webhook verification not configured' });
     }
-    if (signature) {
-      const raw = JSON.stringify(body);
-      const expected = crypto.createHmac('sha256', secret).update(raw).digest('hex');
-      const provided = String(signature).replace(/^sha256=/, '');
-      if (expected !== provided) {
-        console.warn(`[WA-WEBHOOK] invalid signature: got=${provided} expected=${expected}`);
-        return res.status(401).json({ error: 'invalid signature' });
-      }
+    // Signature is REQUIRED — never accept a callback that didn't sign its body.
+    if (!signature) {
+      console.warn('[WA-WEBHOOK] missing signature — rejecting forged callback');
+      return res.status(401).json({ error: 'invalid signature' });
+    }
+    const raw = JSON.stringify(body);
+    const expected = crypto.createHmac('sha256', secret).update(raw).digest('hex');
+    const provided = String(signature).replace(/^sha256=/, '');
+    if (expected !== provided) {
+      console.warn(`[WA-WEBHOOK] invalid signature: got=${provided} expected=${expected}`);
+      return res.status(401).json({ error: 'invalid signature' });
     }
     const status = body.status || body.event || body.eventType || body.type || 'unknown';
     const phone = body.phone || body.to || body.recipient || body.phoneNumber || '';
-    console.log(`[WA-WEBHOOK] status=${status} phone=${phone}`, JSON.stringify(body).slice(0, 500));
+    // Log only sanitized fields — PDPA 2022: avoid persisting full provider payloads.
+    console.log(`[WA-WEBHOOK] status=${status} phone=${phone.replace(/\d(?=\d{4})/g, '*')}`);
     if (db) {
       db.collection('whatsapp_webhook_logs').add({
         status,
@@ -183,22 +195,26 @@ app.post('/api/malipopay/webhook', async (req, res) => {
       console.error('[MALIPOPAY-WEBHOOK] MALIPOPAY_WEBHOOK_SECRET not set — rejecting for security');
       return res.status(503).json({ error: 'Webhook verification not configured' });
     }
-    if (signature) {
-      const raw = req.rawBody || Buffer.from(JSON.stringify(req.body));
-      const expected = crypto.createHmac('sha256', secret).update(raw).digest('hex');
-      const provided = String(signature).replace(/^sha256=/, '');
-      const a = Buffer.from(provided, 'hex');
-      const b = Buffer.from(expected, 'hex');
-      const valid = a.length === b.length && crypto.timingSafeEqual(a, b);
-      if (!valid) {
-        console.warn(`[MALIPOPAY-WEBHOOK] invalid signature: got=${provided} expected=${expected}`);
-        return res.status(401).json({ error: 'invalid signature' });
-      }
+    // Signature is REQUIRED — never accept a callback that didn't sign its body.
+    if (!signature) {
+      console.warn('[MALIPOPAY-WEBHOOK] missing signature — rejecting forged callback');
+      return res.status(401).json({ error: 'invalid signature' });
+    }
+    const raw = req.rawBody || Buffer.from(JSON.stringify(req.body));
+    const expected = crypto.createHmac('sha256', secret).update(raw).digest('hex');
+    const provided = String(signature).replace(/^sha256=/, '');
+    const a = Buffer.from(provided, 'hex');
+    const b = Buffer.from(expected, 'hex');
+    const valid = a.length === b.length && crypto.timingSafeEqual(a, b);
+    if (!valid) {
+      console.warn(`[MALIPOPAY-WEBHOOK] invalid signature: got=${provided} expected=${expected}`);
+      return res.status(401).json({ error: 'invalid signature' });
     }
     const body = req.body || {};
     const reference = body.reference || body.customerReference || '';
     const status = body.status || 'unknown';
-    console.log(`[MALIPOPAY-WEBHOOK] reference=${reference} status=${status}`, JSON.stringify(body).slice(0, 500));
+    // Log only sanitized fields — PDPA 2022.
+    console.log(`[MALIPOPAY-WEBHOOK] reference=${reference} status=${status}`);
     if (db && reference) {
       const refId = `mp_${String(reference).replace(/[^A-Za-z0-9_-]/g, '_')}`;
       const snap = await db.collection('malipopay_webhook_logs').doc(refId).get();
@@ -467,6 +483,15 @@ async function sendOneSignalBulk(userIds, title, body, data = {}, opts = {}) {
 }
 
 /** @deprecated Replaced by sendOneSignalNotification — kept for backward compat */
+
+const { auditLog: _auditLogFromHelpers, PAYOUT_STATUSES: _PAYOUT_STATUSES_FROM_HELPERS, generatePayoutReference: _generatePayoutReference, PAYOUT_RETRY_MAX: _PAYOUT_RETRY_MAX } = require('./helpers/payouts')({ admin, db });
+const payoutRoutes = require('./routes/payouts')({ admin, db, requireUser, requireAdmin, isOwnerOrAdmin, sendOneSignalNotification, webhookIpWhitelist, verifyWebhook });
+const { auditLog, PAYOUT_STATUSES, generatePayoutReference, PAYOUT_RETRY_MAX } = { auditLog: _auditLogFromHelpers, PAYOUT_STATUSES: _PAYOUT_STATUSES_FROM_HELPERS, generatePayoutReference: _generatePayoutReference, PAYOUT_RETRY_MAX: _PAYOUT_RETRY_MAX };
+
+// Mount must come AFTER payoutRoutes is defined (line above) — line 243 had a
+// TDZ ReferenceError that crashed the server at boot.
+app.use('/api', payoutRoutes.router);
+
 // sendFcmToToken moved to OneSignal helpers above
 
 
@@ -509,7 +534,7 @@ function rateLimit(req, res, next) {
   // Admin secret requests bypass the general rate limit so the dashboard
   // (which fires ~15 parallel API calls on init) never gets blocked.
   const adminSecret = req.headers['x-admin-secret'];
-  if (adminSecret && process.env.ADMIN_SECRET && adminSecret === process.env.ADMIN_SECRET) return next();
+  if (verifyAdminSecret(adminSecret)) return next();
   const ip = req.ip || req.connection.remoteAddress || 'unknown';
   const now = Date.now();
   if (!rateHits.has(ip)) rateHits.set(ip, []);
@@ -789,17 +814,13 @@ function isValidAmount(amount) {
 /** Accept x-admin-secret OR Firebase Bearer token from an admin user. */
 async function requireAdmin(req, res) {
   const secret = req.headers['x-admin-secret'];
-  if (secret && process.env.ADMIN_SECRET && secret === process.env.ADMIN_SECRET) {
+  if (verifyAdminSecret(secret)) {
     return { ok: true, uid: 'admin-secret' };
   }
   const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
   if (authHeader.startsWith('Bearer ')) {
     try {
       const decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
-      const email = decoded.email || '';
-      if (ADMIN_EMAILS.includes(email)) {
-        return { ok: true, uid: decoded.uid };
-      }
       if (db) {
         const userDoc = await db.collection('users').doc(decoded.uid).get();
         if (userDoc.exists && userDoc.data().isAdmin === true) {
@@ -874,100 +895,6 @@ const SELLER_CREDIT_STATUSES = new Set([
   'completed',
 ]);
 
-// DEFAULT_PAYOUT_FEE (2000 TZS estimate) — actual ClickPesa payout fee varies by amount; use clickpesaPayoutPreview for exact fee
-
-function generatePayoutReference(prefix = 'po') {
-  return `${prefix}${Date.now().toString(36)}${Math.random().toString(36).substring(2, 8)}`;
-}
-
-const PAYOUT_RETRY_MAX = 3;
-const PAYOUT_STATUSES = { PENDING: 'pending', PROCESSING: 'processing', SUCCESS: 'success', FAILED: 'failed', REFUNDED: 'refunded', REVERSED: 'reversed' };
-
-async function createPayoutRecord({ userId, phone, amount, fee, netAmount, source, type, metadata }) {
-  const payoutId = generatePayoutReference();
-  const now = admin.firestore.FieldValue.serverTimestamp();
-  const record = {
-    payoutId,
-    userId,
-    userPhone: phone,
-    amount: Math.round(amount),
-    fee: Math.round(fee),
-    netAmount: Math.round(netAmount),
-    status: PAYOUT_STATUSES.PENDING,
-    type,
-    source: source || '',
-    retryCount: 0,
-    maxRetries: PAYOUT_RETRY_MAX,
-    createdAt: now,
-    updatedAt: now,
-    metadata: metadata || {},
-  };
-  await db.collection('payouts').doc(payoutId).set(record);
-  return payoutId;
-}
-
-async function updatePayoutStatus(payoutId, status, extra = {}) {
-  if (!db || !payoutId) return;
-  const updates = { status, updatedAt: admin.firestore.FieldValue.serverTimestamp(), ...extra };
-  if (status === PAYOUT_STATUSES.SUCCESS || status === PAYOUT_STATUSES.FAILED) {
-    updates.completedAt = admin.firestore.FieldValue.serverTimestamp();
-  }
-  await db.collection('payouts').doc(payoutId).update(updates);
-}
-
-async function processPayout({ payoutId, userId, phone, amount, fee, netAmount, source, type, metadata }) {
-  if (!payoutId) {
-    payoutId = await createPayoutRecord({ userId, phone, amount, fee, netAmount, source, type, metadata });
-  }
-  await updatePayoutStatus(payoutId, PAYOUT_STATUSES.PROCESSING);
-
-  // Log a PENDING transaction record in the transactions collection for seller withdrawals
-  if (type === 'seller_withdrawal' && db) {
-    await db.collection('transactions').doc(payoutId).set({
-      type: 'seller_withdrawal',
-      userId,
-      userPhone: phone,
-      amount: Math.round(amount),
-      fee: Math.round(fee),
-      netAmount: Math.round(netAmount),
-      status: 'PENDING',
-      paymentMethod: 'ClickPesa',
-      source: source || '',
-      metadata: metadata || {},
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-  }
-
-  const result = await clickpesaPayout({
-    amount: netAmount,
-    phoneNumber: phone,
-    orderReference: payoutId,
-  });
-
-  const clickpesaRef = result.id || result.orderReference || '';
-  await updatePayoutStatus(payoutId, PAYOUT_STATUSES.SUCCESS, { clickpesaReference: clickpesaRef });
-
-  return { payoutId, clickpesaReference: clickpesaRef, netAmount, fee };
-}
-
-async function retryFailedPayout(payoutId) {
-  const doc = await db.collection('payouts').doc(payoutId).get();
-  if (!doc.exists) throw new Error('Payout not found');
-  const payout = doc.data();
-  if (payout.status !== PAYOUT_STATUSES.FAILED) throw new Error(`Cannot retry payout with status: ${payout.status}`);
-  if (payout.retryCount >= payout.maxRetries) throw new Error('Max retries reached');
-
-  await db.collection('payouts').doc(payoutId).update({
-    retryCount: admin.firestore.FieldValue.increment(1),
-    failureReason: '',
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
-  return processPayout({
-    payoutId, userId: payout.userId, phone: payout.userPhone,
-    amount: payout.amount, fee: payout.fee, netAmount: payout.netAmount,
-    source: payout.source, type: payout.type, metadata: payout.metadata,
-  });
-}
 
 // ─── Payout Configuration ───
 // Payouts use ClickPesa API. Fee is estimated at 2,000 TZS; actual fee from clickpesaPayoutPreview.
@@ -1842,7 +1769,7 @@ app.post('/api/send-notification', async (req, res) => {
 app.post('/api/setup-admin', async (req, res) => {
   try {
     const secret = req.headers['x-admin-secret'];
-    if (!secret || secret !== process.env.ADMIN_SECRET) {
+    if (!verifyAdminSecret(secret)) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     const { password } = req.body;
@@ -1889,7 +1816,7 @@ app.post('/api/setup-admin', async (req, res) => {
 app.get('/api/admin/users', async (req, res) => {
   try {
     const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) {
+    if (!verifyAdminSecret(secret)) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     if (!db) return res.status(503).json({ error: 'Database not configured' });
@@ -1914,7 +1841,7 @@ app.get('/api/admin/users', async (req, res) => {
 app.get('/api/admin/products', async (req, res) => {
   try {
     const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) {
+    if (!verifyAdminSecret(secret)) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     if (!db) return res.status(503).json({ error: 'Database not configured' });
@@ -1933,7 +1860,7 @@ app.get('/api/admin/products', async (req, res) => {
 app.put('/api/admin/users/:uid', async (req, res) => {
   try {
     const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) {
+    if (!verifyAdminSecret(secret)) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     if (!db) return res.status(503).json({ error: 'Database not configured' });
@@ -1960,7 +1887,7 @@ app.put('/api/admin/users/:uid', async (req, res) => {
 app.put('/api/admin/products/:id', async (req, res) => {
   try {
     const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) {
+    if (!verifyAdminSecret(secret)) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     if (!db) return res.status(503).json({ error: 'Database not configured' });
@@ -1987,7 +1914,7 @@ app.put('/api/admin/products/:id', async (req, res) => {
 app.put('/api/admin/orders/:id', async (req, res) => {
   try {
     const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) {
+    if (!verifyAdminSecret(secret)) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     if (!db) return res.status(503).json({ error: 'Database not configured' });
@@ -2011,7 +1938,7 @@ app.put('/api/admin/orders/:id', async (req, res) => {
 app.get('/api/admin/orders', async (req, res) => {
   try {
     const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) {
+    if (!verifyAdminSecret(secret)) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     if (!db) return res.status(503).json({ error: 'Database not configured' });
@@ -2326,35 +2253,78 @@ app.post('/api/escrow/release', async (req, res) => {
     });
 
     // Auto payout if seller enabled it (skip if payout method already set)
+    // Status is set to PENDING/PROCESSING — only the ClickPesa payout webhook
+    // marks it SUCCESS. Marking 'completed' here would falsely claim money was
+    // sent before the provider confirms it.
     let autoPaidOut = false;
-    try {
+    let payoutRef = '';
+    if (sellerDoc.exists && sellerDoc.data()?.autoPayout === true && !payoutMethod) {
       const sellerData = sellerDoc.data();
-      if (sellerData?.autoPayout === true && !payoutMethod) {
-        const sellerPhone = sellerData?.phone;
-        const payoutFee = getPayoutFee(sellerReceives);
-        if (sellerPhone && sellerReceives > payoutFee) {
-          const netPayout = sellerReceives - payoutFee;
-          const payoutRef = generatePayoutReference('ap');
-          await db.collection('users').doc(sellerId).update({
-            sellerBalance: admin.firestore.FieldValue.increment(-sellerReceives),
-          });
+      const sellerPhone = sellerData?.phone;
+      const payoutFee = getPayoutFee(sellerReceives);
+      if (sellerPhone && sellerReceives > payoutFee) {
+        const netPayout = sellerReceives - payoutFee;
+        payoutRef = generatePayoutReference('ap');
+        try {
           const mRef = await clickpesaPayout({
             amount: netPayout,
             phoneNumber: sellerPhone,
             orderReference: payoutRef,
           });
+          // ClickPesa accepted the payout request — now move the money out of
+          // the seller's wallet. If the API call threw, nothing was deducted
+          // and the seller keeps their balance (no money is lost).
+          await db.collection('users').doc(sellerId).update({
+            sellerBalance: admin.firestore.FieldValue.increment(-sellerReceives),
+          });
           await db.collection('payouts').doc(payoutRef).set({
+            payoutId: payoutRef,
             userId: sellerId, userPhone: sellerPhone,
             type: 'auto_payout', amount: sellerReceives, fee: payoutFee,
-            netAmount: netPayout, clickpesaReference: mRef.id || '',
-            status: 'completed', transactionId: orderId,
+            netAmount: netPayout, clickpesaReference: mRef.id || mRef.orderReference || '',
+            status: PAYOUT_STATUSES.PROCESSING,
+            retryCount: 0,
+            maxRetries: PAYOUT_RETRY_MAX,
+            transactionId: orderId,
+            metadata: { orderId, autoRelease: true },
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           });
           await ref.update({ payoutMethod: 'auto' });
           autoPaidOut = true;
+        } catch (payoutErr) {
+          // Payout request rejected — seller keeps their balance. Record the
+          // failure and notify so they can fix their phone or retry manually.
+          console.error(`[AUTO-PAYOUT] ClickPesa rejected payout for ${sellerId} (${payoutRef}): ${payoutErr.message}`);
+          try {
+            await db.collection('payouts').doc(payoutRef).set({
+              payoutId: payoutRef,
+              userId: sellerId, userPhone: sellerPhone,
+              type: 'auto_payout', amount: sellerReceives, fee: payoutFee,
+              netAmount: netPayout, clickpesaReference: '',
+              status: PAYOUT_STATUSES.FAILED,
+              retryCount: 0,
+              maxRetries: PAYOUT_RETRY_MAX,
+              transactionId: orderId,
+              failureReason: payoutErr.message || 'payout rejected',
+              metadata: { orderId, autoRelease: true },
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+          } catch (_) {}
+          try {
+            await db.collection('notifications').add({
+              userId: sellerId,
+              title: '⚠️ Utoaji wa Pesa Umeshindwa',
+              body: `Pesa zimefunguliwa kwenye salio lako bali kutumwa kwa simu kumeshindwa (${productName}). Angalia namba yako ya simu kisha utoe mwenyewe.`,
+              isRead: false,
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              data: { type: 'auto_payout', status: 'failed', transactionId: orderId },
+            });
+          } catch (_) {}
         }
       }
-    } catch (_) {}
+    }
 
     // Notify seller
     if (autoPaidOut) {
@@ -2848,7 +2818,7 @@ app.post('/api/clickpesa/webhook', webhookIpWhitelist, verifyWebhook, async (req
 app.post('/api/escrow/admin-release', async (req, res) => {
   try {
     const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) {
+    if (!verifyAdminSecret(secret)) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     const { orderId } = req.body;
@@ -4276,355 +4246,7 @@ app.get('/api/seller/balance', async (req, res) => {
   }
 });
 
-// ============================================================
-// 💰 SELLER WITHDRAW — Send seller balance to mobile money
-// ============================================================
-// 💰 SELLER WITHDRAW — Send seller balance to mobile money via ClickPesa
-// Deducts (amount + 2000 TZS fee) from seller balance atomically.
-// ============================================================
-app.post('/api/seller/withdraw', async (req, res) => {
-  try {
-    const auth = await requireUser(req, res);
-    if (!auth.ok) return;
-    const { userId, amount, phone } = req.body;
-    if (!userId || !amount || !phone) {
-      return res.status(400).json({ error: 'Missing userId, amount, or phone' });
-    }
-    if (auth.uid !== userId) {
-      return res.status(403).json({ error: 'Forbidden: cannot withdraw from another account' });
-    }
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-    const withdrawAmount = Math.round(amount);
-    if (withdrawAmount <= 0) {
-      return res.status(400).json({ error: 'Withdrawal amount must be greater than zero' });
-    }
-
-    // Real ClickPesa payout fee tier — not the old flat 2000 estimate
-    const payoutFee = getPayoutFee(withdrawAmount);
-    const totalCost = withdrawAmount + payoutFee;
-
-    // Atomic transaction: read balance, validate, deduct
-    let sellerName = '';
-    let balanceSnapshot = 0;
-    try {
-      await db.runTransaction(async (tx) => {
-        const userRef = db.collection('users').doc(userId);
-        const userSnap = await tx.get(userRef);
-        if (!userSnap.exists) throw new Error('User not found');
-
-        const userData = userSnap.data();
-        if (userData.isSuspended) throw new Error('Account suspended');
-
-        sellerName = userData.name || userData.displayName || '';
-        const currentBalance = userData.sellerBalance || 0;
-        balanceSnapshot = currentBalance;
-
-        if (currentBalance < totalCost) {
-          throw new Error(`Insufficient balance. You need TZS ${totalCost.toLocaleString()} (${withdrawAmount.toLocaleString()} withdrawal + ${payoutFee.toLocaleString()} fee). Available: TZS ${currentBalance.toLocaleString()}`);
-        }
-
-        tx.update(userRef, {
-          sellerBalance: admin.firestore.FieldValue.increment(-totalCost),
-        });
-      });
-    } catch (txErr) {
-      return res.status(400).json({ error: txErr.message });
-    }
-
-    // Balance deducted atomically — now call ClickPesa to send the withdrawal amount
-    const netAmount = withdrawAmount; // Seller receives the full withdrawal amount
-    let payoutResult;
-    try {
-      payoutResult = await processPayout({
-        userId,
-        phone,
-        amount: totalCost,       // total deducted from seller
-        fee: payoutFee,
-        netAmount,               // what seller actually receives
-        source: `seller_withdraw_${Date.now()}`,
-        type: 'seller_withdrawal',
-        metadata: { sellerName, balanceBefore: balanceSnapshot },
-      });
-    } catch (payoutErr) {
-      // ClickPesa call failed — reverse the deduction
-      try {
-        await db.collection('users').doc(userId).update({
-          sellerBalance: admin.firestore.FieldValue.increment(totalCost),
-        });
-      } catch (reverseErr) {
-        console.error(`CRITICAL: Failed to reverse seller balance for ${userId} after failed payout:`, reverseErr);
-      }
-      return res.status(502).json({ error: `Payout failed: ${payoutErr.message}` });
-    }
-
-    await auditLog({
-      userId, type: 'seller_withdraw', amount: -totalCost,
-      balanceBefore: balanceSnapshot, balanceAfter: balanceSnapshot - totalCost,
-      reason: `Seller withdrawal: TZS ${netAmount.toLocaleString()} to ${phone} (fee: TZS ${payoutFee.toLocaleString()})`,
-      relatedId: payoutResult.payoutId,
-      metadata: { phone, netAmount, fee: payoutFee, payoutId: payoutResult.payoutId },
-    });
-
-    // Notify seller about withdrawal initiation
-    try {
-      await db.collection('notifications').add({
-        userId,
-        title: '💰 Utoaji wa Pesa Umeanzishwa',
-        body: `TZS ${netAmount.toLocaleString()} zinaandaliwa kutuma kwa ${phone}.`,
-        isRead: false,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        data: { type: 'withdrawal', payoutId: payoutResult.payoutId },
-      });
-      await sendOneSignalNotification(userId, '💰 Utoaji wa Pesa Umeanzishwa', `TZS ${netAmount.toLocaleString()} zinaandaliwa kutuma kwa ${phone}.`, { type: 'withdrawal', payoutId: payoutResult.payoutId });
-    } catch (_) {}
-
-    res.json({
-      success: true,
-      netAmount,
-      fee: payoutFee,
-      payoutId: payoutResult.payoutId,
-      message: `TZS ${netAmount.toLocaleString()} zimetumwa kwa ${phone}`,
-    });
-  } catch (e) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ============================================================
-// 📊 ADMIN WITHDRAW — Send ad revenue to mobile money
-// ============================================================
-app.post('/api/admin/withdraw', async (req, res) => {
-  try {
-    const auth = await requireAdmin(req, res);
-    if (!auth.ok) return;
-
-    let { userId, amount, phone } = req.body;
-    if (!amount || !phone) {
-      return res.status(400).json({ error: 'Missing amount or phone' });
-    }
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
-
-    if (auth.uid === 'admin-secret') {
-      if (!userId) userId = 'admin-secret';
-    } else {
-      if (!userId) return res.status(400).json({ error: 'Missing userId' });
-      if (auth.uid !== userId) {
-        return res.status(403).json({ error: 'Token does not match userId' });
-      }
-      const userDoc = await db.collection('users').doc(userId).get();
-      if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
-      const user = userDoc.data();
-      if (!user.isAdmin) return res.status(403).json({ error: 'Admin access required' });
-      if (user.isSuspended) return res.status(403).json({ error: 'Account suspended' });
-    }
-
-    const revSnap = await db.collection('revenue_transactions').get();
-    let totalCommissions = 0;
-    let totalBoostRevenue = 0;
-    revSnap.docs.forEach(doc => {
-      const d = doc.data();
-      if (d.type === 'boost') {
-        totalBoostRevenue += (d.sokoLanguCommission || 0);
-      } else {
-        totalCommissions += (d.sokoLanguCommission || 0);
-      }
-    });
-    // Withdrawable balance = platform commissions + boost revenue only. AdMob
-    // revenue lives in Google's account, not the Soko Vibe ClickPesa wallet,
-    // so it must never be part of what the admin withdraws.
-    const totalAdminBalance = totalCommissions + totalBoostRevenue;
-
-    const withdrawnSnap = await db.collection('admin_withdrawals')
-      .where('userId', '==', userId)
-      .get();
-    let totalWithdrawn = 0;
-    withdrawnSnap.docs.forEach(doc => {
-      const d = doc.data();
-      if (d.status === 'completed') totalWithdrawn += (d.netAmount || d.amount || 0);
-    });
-    const availableBalance = totalAdminBalance - totalWithdrawn;
-
-    if (amount > availableBalance) {
-      return res.status(400).json({ error: `Insufficient admin balance. Available: TZS ${availableBalance.toLocaleString()}` });
-    }
-
-    const payoutFee = getPayoutFee(amount);
-    const netAmount = amount - payoutFee;
-    if (netAmount <= 0) {
-      return res.status(400).json({ error: `Amount too small after fee (min TZS ${payoutFee + 1})` });
-    }
-
-    let payoutId;
-    try {
-      const payout = await processPayout({
-        userId, phone, amount, fee: payoutFee, netAmount,
-        source: `admin_withdraw_${Date.now()}`,
-        type: 'admin_withdrawal',
-      });
-      payoutId = payout.payoutId;
-    } catch (payoutErr) {
-      return res.status(502).json({ error: `Payout failed: ${payoutErr.message}` });
-    }
-
-    await db.collection('admin_withdrawals').add({
-      userId,
-      amount,
-      fee: payoutFee,
-      netAmount,
-      phone,
-      payoutId,
-      status: 'completed',
-      paymentMethod: 'ClickPesa',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    await auditLog({
-      userId, type: 'admin_withdraw', amount: -amount,
-      reason: `Admin ad revenue withdrawal: TZS ${netAmount} to ${phone}`,
-      relatedId: payoutId,
-      metadata: { phone, netAmount, fee: payoutFee, payoutId },
-    });
-
-    res.json({
-      success: true,
-      netAmount,
-      fee: payoutFee,
-      payoutId,
-      message: `TZS ${netAmount.toLocaleString()} zimetumwa kwa ${phone}`,
-    });
-  } catch (e) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ============================================================
-// 💰 CREATE PAYOUT — Admin-initiated payout
-// ============================================================
-app.post('/api/create-payout', async (req, res) => {
-  try {
-    const auth = await requireAdmin(req, res);
-    if (!auth.ok) return;
-
-    const { userId, amount, phone, type, source } = req.body;
-    if (!userId || !amount || !phone) {
-      return res.status(400).json({ error: 'Missing userId, amount, or phone' });
-    }
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
-
-    // Check for duplicate payout (same source reference)
-    if (source) {
-      const dupSnap = await db.collection('payouts')
-        .where('source', '==', source)
-        .where('status', 'in', [PAYOUT_STATUSES.PROCESSING, PAYOUT_STATUSES.SUCCESS])
-        .limit(1).get();
-      if (!dupSnap.empty) {
-        const dup = dupSnap.docs[0].data();
-        return res.status(400).json({ error: 'Duplicate payout', existingPayoutId: dup.payoutId });
-      }
-    }
-
-    const payoutFee = getPayoutFee(amount);
-    const netAmount = amount - payoutFee;
-    if (netAmount <= 0) {
-      return res.status(400).json({ error: `Amount too small after fee (min TZS ${payoutFee + 1})` });
-    }
-
-    const payoutResult = await processPayout({
-      userId, phone, amount, fee: payoutFee, netAmount,
-      source: source || generatePayoutReference('src'),
-      type: type || 'manual',
-    });
-
-    await auditLog({
-      userId, type: 'admin_create_payout', amount: -amount,
-      reason: `Admin-created payout: TZS ${netAmount} to ${phone}`,
-      relatedId: payoutResult.payoutId,
-      metadata: { phone, netAmount, fee: payoutFee, source },
-    });
-
-    res.json({ success: true, ...payoutResult });
-  } catch (e) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ============================================================
-// 📊 GET PAYOUT STATUS — Check payout status by ID
-// ============================================================
-app.get('/api/payout-status/:id', async (req, res) => {
-  try {
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
-    const doc = await db.collection('payouts').doc(req.params.id).get();
-    if (!doc.exists) return res.status(404).json({ error: 'Payout not found' });
-    if (!(await isOwnerOrAdmin(req, res, doc.data().userId || ''))) return;
-    res.json({ id: doc.id, ...doc.data() });
-  } catch (e) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ============================================================
-// 📋 LIST PAYOUTS — Get payouts for a user or all
-// ============================================================
-app.get('/api/payouts', async (req, res) => {
-  try {
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
-    const { userId, limit: qLimit } = req.query;
-    // Only an admin may list all payouts; a user may list only their own.
-    if (userId) {
-      if (!(await isOwnerOrAdmin(req, res, userId))) return;
-    } else {
-      const adminAuth = await requireAdmin(req, res);
-      if (!adminAuth.ok) return;
-    }
-    let query = db.collection('payouts').orderBy('createdAt', 'desc');
-    if (userId) query = query.where('userId', '==', userId);
-    const snap = await query.limit(parseInt(qLimit) || 50).get();
-    const payouts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    res.json({ payouts });
-  } catch (e) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ============================================================
-// 🔁 RETRY PAYOUT — Retry a failed payout
-// ============================================================
-app.post('/api/payout/retry/:id', async (req, res) => {
-  try {
-    const auth = await requireAdmin(req, res);
-    if (!auth.ok) return;
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
-    const result = await retryFailedPayout(req.params.id);
-    res.json({ success: true, ...result });
-  } catch (e) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ============================================================
-// 📝 AUDIT LOG — Log every balance change for fraud prevention
-// ============================================================
-async function auditLog({ userId, type, amount, balanceBefore, balanceAfter, reason, relatedId, metadata }) {
-  if (!db) return;
-  try {
-    await db.collection('audit_log').add({
-      userId,
-      type,
-      amount,
-      balanceBefore: balanceBefore ?? 0,
-      balanceAfter: balanceAfter ?? 0,
-      reason: reason || '',
-      relatedId: relatedId || '',
-      metadata: metadata || {},
-      ip: '',
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
-    });
-  } catch (e) {
-    console.error('Audit log error:', e);
-  }
-}
 
 // ============================================================
 // 📊 ADMIN — Dashboard statistics
@@ -4632,7 +4254,7 @@ async function auditLog({ userId, type, amount, balanceBefore, balanceAfter, rea
 app.get('/api/admin/stats', async (req, res) => {
   try {
     const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!verifyAdminSecret(secret)) return res.status(401).json({ error: 'Unauthorized' });
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const [usersSnap, ordersSnap, withdrawalsSnap, adViewsSnap] = await Promise.all([
@@ -4673,7 +4295,7 @@ app.get('/api/admin/stats', async (req, res) => {
 app.get('/api/admin/transactions', async (req, res) => {
   try {
     const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!verifyAdminSecret(secret)) return res.status(401).json({ error: 'Unauthorized' });
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const limit = Math.min(parseInt(req.query.limit) || 100, 500);
@@ -4691,7 +4313,7 @@ app.get('/api/admin/transactions', async (req, res) => {
 app.get('/api/admin/withdrawals', async (req, res) => {
   try {
     const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!verifyAdminSecret(secret)) return res.status(401).json({ error: 'Unauthorized' });
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const limit = Math.min(parseInt(req.query.limit) || 100, 500);
@@ -4709,7 +4331,7 @@ app.get('/api/admin/withdrawals', async (req, res) => {
 app.get('/api/admin/analytics', async (req, res) => {
   try {
     const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) {
+    if (!verifyAdminSecret(secret)) {
       const authHeader = req.headers['authorization'];
       if (authHeader && authHeader.startsWith('Bearer ')) {
         try {
@@ -4844,7 +4466,7 @@ app.get('/api/admin/analytics', async (req, res) => {
 app.get('/api/admin/timeseries', async (req, res) => {
   try {
     const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!verifyAdminSecret(secret)) return res.status(401).json({ error: 'Unauthorized' });
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const days = Math.min(parseInt(req.query.days) || 30, 90);
@@ -4896,7 +4518,7 @@ app.get('/api/admin/timeseries', async (req, res) => {
 app.get('/api/admin/online', async (req, res) => {
   try {
     const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!verifyAdminSecret(secret)) return res.status(401).json({ error: 'Unauthorized' });
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const [sessionsSnap, usersCountSnap] = await Promise.all([
@@ -5525,7 +5147,7 @@ app.get('/api/admin/finance-summary', async (req, res) => {
   try {
     // Allow either admin secret OR Firebase Auth admin
     const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) {
+    if (!verifyAdminSecret(secret)) {
       const authHeader = req.headers['authorization'];
       if (authHeader && authHeader.startsWith('Bearer ')) {
         const token = authHeader.slice(7);
@@ -5752,7 +5374,7 @@ app.post('/api/admin/admob-revenue', async (req, res) => {
 app.get('/api/admin/revenue-transactions', async (req, res) => {
   try {
     const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!verifyAdminSecret(secret)) return res.status(401).json({ error: 'Unauthorized' });
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const limit = Math.min(parseInt(req.query.limit) || 100, 500);
@@ -5770,7 +5392,7 @@ app.get('/api/admin/revenue-transactions', async (req, res) => {
 app.get('/api/admin/audit-log', async (req, res) => {
   try {
     const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!verifyAdminSecret(secret)) return res.status(401).json({ error: 'Unauthorized' });
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const limit = Math.min(parseInt(req.query.limit) || 100, 500);
@@ -5788,7 +5410,7 @@ app.get('/api/admin/audit-log', async (req, res) => {
 app.get('/api/admin/ad-views', async (req, res) => {
   try {
     const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!verifyAdminSecret(secret)) return res.status(401).json({ error: 'Unauthorized' });
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const limit = Math.min(parseInt(req.query.limit) || 100, 500);
@@ -5806,7 +5428,7 @@ app.get('/api/admin/ad-views', async (req, res) => {
 app.get('/api/admin/user-detail/:uid', async (req, res) => {
   try {
     const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!verifyAdminSecret(secret)) return res.status(401).json({ error: 'Unauthorized' });
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const { uid } = req.params;
@@ -5891,7 +5513,7 @@ app.delete('/api/admin/users/:uid', async (req, res) => {
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) {
+    if (!verifyAdminSecret(secret)) {
       const authHeader = req.headers['authorization'];
       if (authHeader && authHeader.startsWith('Bearer ')) {
         const token = authHeader.slice(7);
@@ -5948,7 +5570,7 @@ app.post('/api/admin/users/:uid/unsuspend', async (req, res) => {
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) {
+    if (!verifyAdminSecret(secret)) {
       const authHeader = req.headers['authorization'];
       if (authHeader && authHeader.startsWith('Bearer ')) {
         const token = authHeader.slice(7);
@@ -6076,7 +5698,7 @@ app.post('/api/admin/users/:uid/warn', async (req, res) => {
 app.delete('/api/admin/orders/:id', async (req, res) => {
   try {
     const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!verifyAdminSecret(secret)) return res.status(401).json({ error: 'Unauthorized' });
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const { id } = req.params;
@@ -6390,7 +6012,7 @@ app.delete('/api/admin/products/:id', async (req, res) => {
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) {
+    if (!verifyAdminSecret(secret)) {
       const authHeader = req.headers['authorization'];
       if (authHeader && authHeader.startsWith('Bearer ')) {
         const token = authHeader.slice(7);
@@ -6425,7 +6047,7 @@ app.delete('/api/admin/users/:uid/full-delete', async (req, res) => {
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) {
+    if (!verifyAdminSecret(secret)) {
       const authHeader = req.headers['authorization'];
       if (authHeader && authHeader.startsWith('Bearer ')) {
         const token = authHeader.slice(7);
@@ -6496,7 +6118,7 @@ app.patch('/api/admin/users/:uid', async (req, res) => {
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) {
+    if (!verifyAdminSecret(secret)) {
       const authHeader = req.headers['authorization'];
       if (authHeader && authHeader.startsWith('Bearer ')) {
         const token = authHeader.slice(7);
@@ -6542,7 +6164,7 @@ app.patch('/api/admin/users/:uid', async (req, res) => {
 app.post('/api/admin/delete-doc', async (req, res) => {
   try {
     const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    if (!verifyAdminSecret(secret)) return res.status(401).json({ error: 'Unauthorized' });
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const { collection, docId } = req.body;
@@ -6581,7 +6203,7 @@ app.use((err, req, res, next) => {
 app.post('/api/cron/release-escrows', async (req, res) => {
   try {
     const secret = req.headers['x-cron-secret'];
-    if (secret !== process.env.ADMIN_SECRET) {
+    if (!verifyAdminSecret(secret)) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     await releaseExpiredEscrows();
@@ -7504,163 +7126,6 @@ setTimeout(failStalePendingBoosts, 60 * 1000);
 setTimeout(reconcileBoostPayments, 90 * 1000);
 setTimeout(pollPendingClickPesaPayments, 15 * 1000);
 
-// ============================================================
-// 💰 CLICKPESA BALANCE — Check ClickPesa wallet balance
-// ============================================================
-app.get('/api/clickpesa/balance', async (req, res) => {
-  try {
-    const auth = await requireAdmin(req, res);
-    if (!auth.ok) return;
-    const balance = await clickpesaBalance();
-    res.json({ success: true, balance });
-  } catch (e) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ============================================================
-// 🔍 PAYOUT PREVIEW — Validate payout details before sending
-// ============================================================
-app.post('/api/clickpesa/payout-preview', async (req, res) => {
-  try {
-    const { amount, phone } = req.body;
-    if (!amount || !phone) return res.status(400).json({ error: 'Missing amount or phone' });
-    const payoutFee = getPayoutFee(Math.round(amount));
-    const preview = {
-      amount: Math.round(amount),
-      fee: payoutFee,
-      netAmount: Math.round(amount) - payoutFee,
-      recipientPhone: phone,
-    };
-    res.json({ success: true, preview });
-  } catch (e) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ============================================================
-// 🔔 CLICKPESA PAYOUT WEBHOOK — Handle payout status updates
-// ============================================================
-// ClickPesa calls this when a payout status changes (SUCCESS or FAILED).
-// On SUCCESS: mark the Firestore payout record as completed.
-// On FAILED: atomically reverse the deducted amount back to the seller's wallet.
-app.post('/api/clickpesa/payout-webhook', webhookIpWhitelist, verifyWebhook, async (req, res) => {
-  try {
-    let payload = req.body;
-    if (payload.data && typeof payload.data === 'object') {
-      payload = payload.data;
-    }
-
-    const payoutRef = payload.orderReference || payload.externalId || payload.reference || '';
-    const rawStatus = (payload.status || payload.event || '').toString().toLowerCase();
-    const eventStatus = rawStatus === 'success' || rawStatus === 'completed' ? 'SUCCESS'
-      : rawStatus === 'failed' || rawStatus === 'cancelled' ? 'FAILED'
-      : rawStatus;
-
-    if (!payoutRef || !eventStatus) {
-      return res.status(200).json({ received: false });
-    }
-
-    if (!db) return res.status(200).json({ received: false });
-
-    const payoutDoc = await db.collection('payouts').doc(payoutRef).get();
-    if (!payoutDoc.exists) {
-      console.warn(`ClickPesa payout webhook: payout ${payoutRef} not found`);
-      return res.status(200).json({ received: false });
-    }
-
-    const payout = payoutDoc.data();
-    if (payout.status === PAYOUT_STATUSES.SUCCESS || payout.status === PAYOUT_STATUSES.FAILED) {
-      return res.status(200).json({ received: true });
-    }
-
-    const clickpesaTxId = payload.id || payload.transactionId || '';
-
-    if (eventStatus === 'SUCCESS') {
-      await updatePayoutStatus(payoutRef, PAYOUT_STATUSES.SUCCESS, { clickpesaReference: clickpesaTxId });
-
-      // Update the transactions collection record if it exists
-      try {
-        await db.collection('transactions').doc(payoutRef).update({
-          status: 'completed',
-          clickpesaReference: clickpesaTxId,
-          completedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      } catch (_) {}
-
-      if (payout.metadata?.sellerId) {
-        const sellerId = payout.metadata.sellerId;
-        await db.collection('notifications').add({
-          userId: sellerId,
-          title: 'Payout imefanikiwa!',
-          body: `TZS ${(payout.netAmount || payout.amount).toLocaleString()} zimetumwa kwenye mobile money yako.`,
-          isRead: false,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        try {
-          await sendOneSignalNotification(sellerId, 'Payout imefanikiwa!', `TZS ${(payout.netAmount || payout.amount).toLocaleString()} zimetumwa kwenye mobile money yako.`, { type: 'withdrawal', status: 'completed' });
-        } catch (_) {}
-      }
-    } else if (eventStatus === 'FAILED') {
-      await updatePayoutStatus(payoutRef, PAYOUT_STATUSES.FAILED, {
-        failureReason: payload.message || payload.error || 'payout failed',
-        clickpesaReference: clickpesaTxId,
-      });
-
-      // Update the transactions collection record to failed
-      try {
-        await db.collection('transactions').doc(payoutRef).update({
-          status: 'failed',
-          failureReason: payload.message || payload.error || 'payout failed',
-          clickpesaReference: clickpesaTxId,
-          completedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      } catch (_) {}
-
-      // Atomically reverse the deducted amount back to the seller's wallet
-      if (payout.userId && payout.amount) {
-        try {
-          await db.runTransaction(async (tx) => {
-            const userRef = db.collection('users').doc(payout.userId);
-            const userSnap = await tx.get(userRef);
-            if (!userSnap.exists) return;
-            tx.update(userRef, {
-              sellerBalance: admin.firestore.FieldValue.increment(payout.amount),
-            });
-          });
-          console.log(`ClickPesa payout reversed: ${payoutRef} — TZS ${payout.amount} returned to ${payout.userId}`);
-        } catch (reverseErr) {
-          console.error(`CRITICAL: Failed to reverse payout ${payoutRef} for user ${payout.userId}:`, reverseErr);
-        }
-      }
-
-      // Notify user about failed payout
-      if (payout.userId) {
-        try {
-          await db.collection('notifications').add({
-            userId: payout.userId,
-            title: '❌ Utoaji wa Pesa Umeshindwa',
-            body: `TZS ${(payout.netAmount || payout.amount).toLocaleString()} hazikutumwa. Pesa zimerudishwa kwenye pochi yako. Jaribu tena.`,
-            isRead: false,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            data: { type: 'withdrawal', status: 'failed', payoutId: payoutRef },
-          });
-          await sendOneSignalNotification(payout.userId, '❌ Utoaji wa Pesa Umeshindwa', `TZS ${(payout.netAmount || payout.amount).toLocaleString()} hazikutumwa. Pesa zimerudishwa kwenye pochi yako. Jaribu tena.`, { type: 'withdrawal', status: 'failed', payoutId: payoutRef });
-        } catch (_) {}
-      }
-
-      // Attempt auto-retry if under max retries
-      try {
-        await retryFailedPayout(payoutRef);
-      } catch (_) {}
-    }
-
-    res.status(200).json({ received: true });
-  } catch (e) {
-    console.error('ClickPesa payout webhook error:', e);
-    res.status(200).json({ received: false });
-  }
-});
 
 // ─── TRANSACTIONS: CREATE ───────────────────────────────────
 app.post('/api/transactions/create', asyncHandler(async (req, res) => {

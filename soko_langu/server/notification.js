@@ -9,7 +9,6 @@ const NOTIFICATION_CHANNELS = {
   payments: { id: 'payments_notifications_v6', name: 'Malipo' },
   chat: { id: 'chat_messages_v6', name: 'Chat Messages' },
   orders: { id: 'orders_notifications_v6', name: 'Orders' },
-  rides: { id: 'ride_notifications_v6', name: 'Rides' },
   marketing: { id: 'marketing_notifications_v6', name: 'Marketing' },
 };
 
@@ -28,13 +27,6 @@ const NOTIFICATION_TYPES = {
   order_disputed: { channel: 'orders' },
   dispute_resolved: { channel: 'orders' },
   delivery_confirmed: { channel: 'orders' },
-  ride_driver_found: { channel: 'rides' },
-  ride_driver_accepted: { channel: 'rides' },
-  ride_driver_arrived: { channel: 'rides' },
-  ride_trip_started: { channel: 'rides' },
-  ride_trip_completed: { channel: 'rides' },
-  ride_cancelled: { channel: 'rides' },
-  ride_no_drivers: { channel: 'rides' },
   chat_message: { channel: 'chat' },
   group_chat_message: { channel: 'chat' },
   flash_sale: { channel: 'marketing' },

@@ -12,12 +12,8 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() && (
-        request.auth.token.email == 'admin@soko-langu.com' ||
-        request.auth.token.email == 'admin@soko-vibe.com' ||
-        (
-          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true
-        )
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true
       );
     }
 
@@ -44,10 +40,25 @@ service cloud.firestore {
       ]);
     }
 
+    // For CREATE the doc doesn't exist yet (resource is null), so diff() is
+    // unreliable. Check the incoming keys directly instead: if the client
+    // tries to set any sensitive field at signup, reject the write.
+    function noSensitiveCreateFields() {
+      return !request.resource.data.keys().hasAny([
+        'walletBalance', 'sellerBalance', 'pendingEscrow',
+        'totalSales', 'grossSalesVolume', 'totalWithdrawn',
+        'isAdmin', 'isSuspended', 'kyc',
+        'isBoosted', 'boostedUntil', 'boostTier',
+        'createdAt', 'lastSaleAt', 'lastLoginAt', 'fcmToken'
+      ]);
+    }
+
     // ─── USERS ──────────────────────────────────────────────
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow create: if isOwner(userId);
+      // Create must also pass noSensitiveFieldChanges — otherwise a client could
+      // sign up and create their own doc with isAdmin:true, sellerBalance, etc.
+      allow create: if isOwner(userId) && noSensitiveCreateFields();
       // Clients may update their own profile BUT NOT financial, trust,
       // or boost fields. Only the admin SDK (server webhook) may touch those.
       allow update: if (isOwner(userId) && noSensitiveFieldChanges()) || isAdmin();
@@ -180,7 +191,10 @@ service cloud.firestore {
       );
 
       match /messages/{msgId} {
-        allow read, write: if isSignedIn();
+        allow read: if isSignedIn() && (convId.split('_').hasAny([request.auth.uid]) || isAdmin());
+        allow create: if isSignedIn() && (convId.split('_').hasAny([request.auth.uid]) || isAdmin());
+        allow update: if isSignedIn() && (resource.data.senderId == request.auth.uid || isAdmin());
+        allow delete: if isSignedIn() && (resource.data.senderId == request.auth.uid || isAdmin());
       }
     }
 
@@ -189,7 +203,10 @@ service cloud.firestore {
       allow read, write: if isSignedIn() && isAdmin();
 
       match /messages/{msgId} {
-        allow read, write: if isSignedIn();
+        allow read: if isSignedIn() && isAdmin();
+        allow create: if isSignedIn() && isAdmin();
+        allow update: if isSignedIn() && isAdmin();
+        allow delete: if isSignedIn() && isAdmin();
       }
     }
 
@@ -207,10 +224,16 @@ service cloud.firestore {
       allow delete: if isAdmin();
 
       match /messages/{msgId} {
-        allow read: if isSignedIn();
-        allow create: if isSignedIn();
-        allow update: if isSignedIn();
-        allow delete: if isSignedIn();
+        allow read: if isSignedIn() && (
+          get(/databases/$(database)/documents/chat_rooms/$(roomId)).data.participants.hasAny([request.auth.uid]) ||
+          isAdmin()
+        );
+        allow create: if isSignedIn() && (
+          get(/databases/$(database)/documents/chat_rooms/$(roomId)).data.participants.hasAny([request.auth.uid]) ||
+          isAdmin()
+        );
+        allow update: if isSignedIn() && (resource.data.senderId == request.auth.uid || isAdmin());
+        allow delete: if isSignedIn() && (resource.data.senderId == request.auth.uid || isAdmin());
       }
     }
 
@@ -377,10 +400,16 @@ service cloud.firestore {
       );
 
       match /messages/{msgId} {
-        allow read: if isSignedIn();
-        allow create: if isSignedIn();
-        allow update: if isSignedIn();
-        allow delete: if isSignedIn();
+        allow read: if isSignedIn() && (
+          get(/databases/$(database)/documents/groups/$(groupId)).data.members.hasAny([request.auth.uid]) ||
+          isAdmin()
+        );
+        allow create: if isSignedIn() && (
+          get(/databases/$(database)/documents/groups/$(groupId)).data.members.hasAny([request.auth.uid]) ||
+          isAdmin()
+        );
+        allow update: if isSignedIn() && (resource.data.senderId == request.auth.uid || isAdmin());
+        allow delete: if isSignedIn() && (resource.data.senderId == request.auth.uid || isAdmin());
       }
     }
 
