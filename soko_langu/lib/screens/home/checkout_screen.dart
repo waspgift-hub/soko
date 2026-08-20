@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -8,6 +9,8 @@ import '../../widgets/product_cached_image.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../constants/tanzania_districts.dart';
 import '../../models/product_model.dart';
+import '../../models/flash_sale_model.dart';
+import '../../services/flash_sale_service.dart';
 import '../../services/api_config.dart';
 import '../../widgets/input_field.dart';
 import '../../extensions/context_tr.dart';
@@ -40,10 +43,29 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   String? _selectedDistrict;
   String? _selectedWard;
 
+  final FlashSaleService _flashSaleService = FlashSaleService();
+  StreamSubscription<FlashSale?>? _flashSub;
+  FlashSale? _flashSale;
+
+  /// Price actually charged: active flash-sale price wins over product price.
+  double get _effectivePrice =>
+      _flashSale != null && _flashSale!.salePrice > 0
+          ? _flashSale!.salePrice
+          : widget.product.price;
+
   @override
   void initState() {
     super.initState();
     _loadBuyerPhone();
+    _subscribeFlashSale();
+  }
+
+  void _subscribeFlashSale() {
+    _flashSub = _flashSaleService
+        .streamFlashSaleByProductId(widget.product.id)
+        .listen((sale) {
+      if (mounted) setState(() => _flashSale = sale);
+    });
   }
 
   Future<void> _loadBuyerPhone() async {
@@ -57,6 +79,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   @override
   void dispose() {
+    _flashSub?.cancel();
     _regionCtrl.dispose();
     _streetCtrl.dispose();
     _landmarksCtrl.dispose();
@@ -412,13 +435,29 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    context.formatPrice(p.price),
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      color: cs.primary,
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        context.formatPrice(_effectivePrice),
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          color: cs.primary,
+                        ),
+                      ),
+                      if (_flashSale != null) ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          context.formatPrice(widget.product.price),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                            decoration: TextDecoration.lineThrough,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),
@@ -604,9 +643,23 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: cs.onSurface),
                 ),
                 const Spacer(),
-                Text(
-                  context.formatPrice(widget.product.price),
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: cs.primary),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      context.formatPrice(_effectivePrice),
+                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: cs.primary),
+                    ),
+                    if (_flashSale != null)
+                      Text(
+                        context.formatPrice(widget.product.price),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                          decoration: TextDecoration.lineThrough,
+                        ),
+                      ),
+                  ],
                 ),
               ],
             ),
@@ -669,7 +722,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           'productId': p.id,
           'productName': p.name,
           'productImage': p.images.isNotEmpty ? p.images.first : '',
-          'productPrice': p.price,
+          'productPrice': _effectivePrice,
           'region': region,
           'district': district,
           'ward': _selectedWard ?? '',

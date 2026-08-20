@@ -15,6 +15,22 @@
       },
       "oauth_client": [
         {
+          "client_id": "344682929526-1v40gci12o4dcq7ph43686i5bhorv6er.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sokolangu.app",
+            "certificate_hash": "f9166dc0bb80a053803734a912a58e0f2e44dbbb"
+          }
+        },
+        {
+          "client_id": "344682929526-22jvqeg04rbm7iejc1blihfjitggium1.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sokolangu.app",
+            "certificate_hash": "0b2d98f73d76b355bb3d991a73215b1e46bb61bc"
+          }
+        },
+        {
           "client_id": "344682929526-ik4onilm1bj7lug9ev13u3e63f0ka28h.apps.googleusercontent.com",
           "client_type": 3
         }
@@ -35,7 +51,7 @@
               "client_id": "344682929526-3mu6jrlpdp199f76j2bbdd8pb0e12tru.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.sokolangu.app"
+                "bundle_id": "com.example.sokoLangu"
               }
             }
           ]

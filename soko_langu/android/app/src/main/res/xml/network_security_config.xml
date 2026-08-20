@@ -1,26 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Network Security Configuration — SSL Pinning
-  =============================================
-  Prevents Man-in-the-Middle (MitM) attacks by verifying the server's
-  TLS certificate matches a pre-defined SHA-256 hash (pin).
+  SSL Pinning removed (2026-08-20)
+  ================================
+  The previous per-domain pin-sets broke all TLS connections to
+  soko-langu-server.onrender.com, firestore.googleapis.com and other hosts
+  because Render/Google rotate their leaf certificates, and a single pin-set
+  pinned multiple hosts to one SPKI that no longer matched.
 
-  HOW IT WORKS:
-  When the app connects to soko-langu-server.onrender.com, Android
-  normally trusts ANY certificate signed by a trusted CA. A hacker with
-  a rogue CA (e.g., compromised corporate proxy) can intercept traffic.
-
-  With pinning, Android rejects the connection unless the server's
-  certificate or public key matches the pin hash below — even if the
-  certificate is "valid" by CA standards.
-
-  MAINTENANCE:
-  - When Render rotates their TLS cert, you must update the pin hash.
-  - Always keep a backup pin (second hash) so the app doesn't break
-    during cert rotation.
-  - To get a pin hash: openssl s_client -connect host:443 | openssl
-    x509 -pubkey -noout | openssl pkey -pubin -outform der |
-    openssl dgst -sha256 -binary | base64
+  TODO(user): re-enable pinning before PRODUCTION with one pin-set per host
+  and a monthly cert-rotation check (certs rotate ~every 3 months).
 -->
 <network-security-config>
 
@@ -30,56 +18,5 @@
       <certificates src="system" />
     </trust-anchors>
   </base-config>
-
-  <!-- ─── SOKO VIBE API SERVER (Render) ──────────────────── -->
-  <domain-config cleartextTrafficPermitted="false">
-    <domain includeSubdomains="true">soko-langu-server.onrender.com</domain>
-
-    <pin-set expiration="2027-08-18">
-      <!-- Primary: Render server leaf cert SPKI -->
-      <pin digest="SHA-256">pM6kwRdvzRcJ1796oVd8K2L1dDL0P204JdcSfuPBrI4=</pin>
-      <!-- Backup: Google Trust Services WE1 intermediate -->
-      <pin digest="SHA-256">H7AMYAvicN2+UcFPBz3kJXCDmGrTItZh4ujUBK8hoWg=</pin>
-    </pin-set>
-  </domain-config>
-
-  <!-- ─── FIREBASE SERVICES ─────────────────────────────── -->
-  <domain-config>
-    <domain includeSubdomains="true">firebaseio.com</domain>
-    <domain includeSubdomains="true">firestore.googleapis.com</domain>
-    <domain includeSubdomains="true">firebaseapp.com</domain>
-    <domain includeSubdomains="true">firebase.google.com</domain>
-    <domain includeSubdomains="true">www.googleapis.com</domain>
-    <pin-set expiration="2027-08-18">
-      <!-- Primary: Firebase Auth / Firestore leaf cert SPKI -->
-      <pin digest="SHA-256">5QnK1tAtKmgBmCUYR50zSTaSyFUNKFYhSNTXAFBuaHk=</pin>
-      <!-- Backup: Google Trust Services WR4 intermediate -->
-      <pin digest="SHA-256">tu8EGU/z8EzQa/cXnnMEt0Q/ax5QEg7J+mnBjYQDnH0=</pin>
-    </pin-set>
-  </domain-config>
-
-  <!-- ─── CLOUDINARY (image uploads) ────────────────────── -->
-  <domain-config>
-    <domain includeSubdomains="true">cloudinary.com</domain>
-    <domain includeSubdomains="true">res.cloudinary.com</domain>
-    <pin-set expiration="2027-08-18">
-      <!-- Primary: Cloudinary leaf cert SPKI -->
-      <pin digest="SHA-256">AVnL3g3HTnMh/Uuet+nCPv3ZNyUViEAbJTHAUwAi7w8=</pin>
-      <!-- Backup: GoDaddy Secure CA G2 intermediate -->
-      <pin digest="SHA-256">ELCDXiiRYBPr8D8/CcbIhZ4hcU5AaONaiipRr+C0ACA=</pin>
-    </pin-set>
-  </domain-config>
-
-  <!-- ─── ONESIGNAL (push notifications) ────────────────── -->
-  <domain-config>
-    <domain includeSubdomains="true">onesignal.com</domain>
-    <domain includeSubdomains="true">api.onesignal.com</domain>
-    <pin-set expiration="2027-08-18">
-      <!-- Primary: OneSignal leaf cert SPKI -->
-      <pin digest="SHA-256">rVdbVVV6Q1HMT8QJMcXR+HcAkjn5LlLFZYDETaDyCnE=</pin>
-      <!-- Backup: Google Trust Services WE1 intermediate -->
-      <pin digest="SHA-256">H7AMYAvicN2+UcFPBz3kJXCDmGrTItZh4ujUBK8hoWg=</pin>
-    </pin-set>
-  </domain-config>
 
 </network-security-config>

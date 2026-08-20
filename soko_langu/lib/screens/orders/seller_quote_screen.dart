@@ -70,8 +70,14 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
         _showSuccess(context.tr('shipping_cost_submitted'));
         ctrl.clear();
       } else {
-        _showError(context.tr('quote_sync_warning'));
+        final body = jsonDecode(resp.body);
+        final serverError = body['error'] ?? body['message'] ?? '';
+        _showError(serverError.isEmpty
+            ? context.tr('quote_sync_warning')
+            : '${context.tr('quote_sync_warning')}\n$serverError');
       }
+    } on http.ClientException catch (e) {
+      _showError('${context.tr('quote_sync_warning')}\n${e.message}');
     } catch (_) {
       _showError(context.tr('quote_sync_warning'));
     }

@@ -37,7 +37,6 @@ import '../screens/notification/notification_screen.dart';
 import '../screens/notification/notification_preferences_screen.dart';
 import '../screens/onboarding/account_selection_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
-import '../screens/auth/magic_link_screen.dart';
 import '../screens/auth/verify_email_screen.dart';
 
 import '../screens/admin/admin_dashboard_screen.dart';
@@ -155,10 +154,6 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.forgotPassword,
         pageBuilder: (context, state) => _premiumPage(const ForgotPasswordScreen()),
-      ),
-      GoRoute(
-        path: AppRoutes.magicLink,
-        pageBuilder: (context, state) => _premiumPage(const MagicLinkScreen()),
       ),
       GoRoute(
         path: AppRoutes.verifyEmail,

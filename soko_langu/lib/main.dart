@@ -32,7 +32,6 @@ import 'services/auth_service.dart';
 import 'services/exchange_rate_service.dart';
 import 'services/onboarding_service.dart';
 import 'services/user_service.dart';
-import 'services/magic_link_service.dart';
 import 'services/groq_service.dart';
 import 'services/localization_service.dart';
 import 'services/local_cache_service.dart';
@@ -196,7 +195,6 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
   late final AuthRepository _authRepository;
   late final OnboardingService _onboardingService;
   late final AuthNotifier _authNotifier;
-  MagicLinkService? _magicLinkService;
   MethodChannel? _navigateChannel;
 
   // -----------------------------------------------------------------------
@@ -221,7 +219,6 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
 
   @override
   void dispose() {
-    _magicLinkService?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     themeManager.removeListener(_onThemeChange);
     _productFeedProvider.dispose();
@@ -333,9 +330,6 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
       }
       app_state.appStateNotifier.setAppInitialized();
       _trackSession();
-
-      _magicLinkService = MagicLinkService(_authNotifier);
-      unawaited(_magicLinkService!.initialize());
 
       // Sync phone from onboarding to Firestore if user is logged in
       final phone = prefs.getString('phone_number');

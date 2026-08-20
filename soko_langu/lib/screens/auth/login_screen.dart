@@ -10,10 +10,6 @@ import '../../models/saved_account.dart';
 import '../../notifiers/auth_notifier.dart';
 import '../../services/account_manager.dart';
 import '../../utils/phone_utils.dart';
-import '../../widgets/account_switcher_sheet.dart';
-import '../../widgets/auth_form_widgets.dart';
-import '../../widgets/premium_widgets.dart';
-import '../../theme/app_typography.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -28,9 +24,10 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   final _phoneController = TextEditingController();
   final _otpController = TextEditingController();
-  bool _isLoading = false;
   bool _obscurePassword = true;
-  bool _usePhoneLogin = false;
+  bool _keepSignedIn = false;
+  bool _isLoading = false;
+  bool _showPhoneLogin = false;
   bool _otpSent = false;
   String? _normalizedPhone;
 
@@ -76,7 +73,10 @@ class _LoginScreenState extends State<LoginScreen> {
   void _showError(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(backgroundColor: Theme.of(context).colorScheme.error, content: Text(msg)),
+      SnackBar(
+        backgroundColor: Theme.of(context).colorScheme.error,
+        content: Text(msg),
+      ),
     );
   }
 
@@ -85,36 +85,31 @@ class _LoginScreenState extends State<LoginScreen> {
     context.go(AppRoutes.home);
   }
 
-  Future<void> _saveCurrentAccount() async {
+  Future<void> _saveCurrentAccount(String provider) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     await AccountManager.instance.addOrUpdateAccount(
-      SavedAccount(uid: user.uid, email: user.email ?? '', displayName: user.displayName ?? context.tr('unknown_user'), photoUrl: user.photoURL, provider: 'email', addedAt: DateTime.now(), isActive: true),
+      SavedAccount(
+        uid: user.uid,
+        email: user.email ?? '',
+        displayName:
+            user.displayName ?? context.tr('unknown_user'),
+        photoUrl: user.photoURL,
+        provider: provider,
+        addedAt: DateTime.now(),
+        isActive: true,
+      ),
     );
   }
 
-  Future<void> _saveCurrentGoogleAccount() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    await AccountManager.instance.addOrUpdateAccount(
-      SavedAccount(uid: user.uid, email: user.email ?? '', displayName: user.displayName ?? context.tr('unknown_user'), photoUrl: user.photoURL, provider: 'google', addedAt: DateTime.now(), isActive: true),
-    );
-  }
-
-  Future<void> _saveCurrentPhoneAccount() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    await AccountManager.instance.addOrUpdateAccount(
-      SavedAccount(uid: user.uid, email: user.email ?? '', displayName: user.displayName ?? context.tr('unknown_user'), photoUrl: user.photoURL, provider: 'phone', addedAt: DateTime.now(), isActive: true),
-    );
-  }
-
-  Future<void> login() async {
+  Future<void> _onLogin() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
     try {
-      await context.read<AuthNotifier>().login(_emailController.text.trim(), _passwordController.text.trim());
-      await _saveCurrentAccount();
+      await context
+          .read<AuthNotifier>()
+          .login(_emailController.text.trim(), _passwordController.text.trim());
+      await _saveCurrentAccount('email');
       await _finishLogin();
     } catch (e) {
       if (mounted) _showError(context.trError(e));
@@ -123,11 +118,11 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> signInWithGoogle() async {
+  Future<void> _onGoogleLogin() async {
     setState(() => _isLoading = true);
     try {
       await context.read<AuthNotifier>().signInWithGoogle();
-      await _saveCurrentGoogleAccount();
+      await _saveCurrentAccount('google');
       await _finishLogin();
     } catch (e) {
       if (mounted) _showError(context.trError(e));
@@ -146,7 +141,13 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         setState(() => _otpSent = true);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.tr('otp_sent_to').replaceAll('{0}', PhoneUtils.formatForDisplay(_normalizedPhone!)))),
+          SnackBar(
+            content: Text(
+              context
+                  .tr('otp_sent_to')
+                  .replaceAll('{0}', PhoneUtils.formatForDisplay(_normalizedPhone!)),
+            ),
+          ),
         );
       }
     } catch (e) {
@@ -164,8 +165,10 @@ class _LoginScreenState extends State<LoginScreen> {
     }
     setState(() => _isLoading = true);
     try {
-      await context.read<AuthNotifier>().loginWithPhone(_normalizedPhone!, otp);
-      await _saveCurrentPhoneAccount();
+      await context
+          .read<AuthNotifier>()
+          .loginWithPhone(_normalizedPhone!, otp);
+      await _saveCurrentAccount('phone');
       await _finishLogin();
     } catch (e) {
       if (mounted) _showError(context.trError(e));
@@ -174,215 +177,399 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
+  InputDecoration _inputDecoration(IconData icon, {Widget? suffix}) {
     final cs = Theme.of(context).colorScheme;
-    return Scaffold(
-      body: PremiumScaffold(
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: AppInsets.xl),
-            child: Column(
-              children: [
-                const SizedBox(height: 48),
-                // Brand
-                Container(
-                  width: 84,
-                  height: 84,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: [cs.primary, cs.primary.withValues(alpha: 0.7)]),
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [BoxShadow(color: cs.primary.withValues(alpha: 0.35), blurRadius: 32, offset: const Offset(0, 10))],
-                  ),
-                  padding: const EdgeInsets.all(10),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Image.asset(
-                      'assets/app_icon.png',
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) =>
-                          Icon(Icons.store_rounded, color: cs.onPrimary, size: 36),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Text(context.tr('app_name'), style: AppTypography.brandTitle(cs.onSurface).copyWith(fontSize: 30)),
-                const SizedBox(height: 6),
-                Text(context.tr('welcome_back'), style: TextStyle(fontSize: AppFontSize.lg, color: cs.onSurfaceVariant)),
-                const SizedBox(height: 32),
-                // Switch account
-                FutureBuilder<int>(
-                  future: AccountManager.instance.accountCount(),
-                  builder: (context, snap) {
-                    if (snap.data != null && snap.data! > 0) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: AppInsets.lg),
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: () => AccountSwitcherSheet.show(context),
-                            icon: const Icon(Icons.swap_horiz_rounded, size: 18),
-                            label: Text(context.tr('switch_account')),
-                          ),
-                        ),
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  },
-                ),
-                // Login tabs
-                GlassCard(
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(child: _LoginTab(label: context.tr('login_tab_email'), selected: !_usePhoneLogin, onTap: () => setState(() { _usePhoneLogin = false; _otpSent = false; }))),
-                            const SizedBox(width: AppInsets.sm),
-                            Expanded(child: _LoginTab(label: context.tr('login_tab_phone'), selected: _usePhoneLogin, onTap: () => setState(() { _usePhoneLogin = true; _otpSent = false; }))),
-                          ],
-                        ),
-                        const SizedBox(height: AppInsets.xl),
-                        if (!_usePhoneLogin) ...[
-                          TextFormField(
-                            controller: _emailController,
-                            keyboardType: TextInputType.emailAddress,
-                            textInputAction: TextInputAction.next,
-                            autofillHints: const [AutofillHints.email],
-                            decoration: authInputDecoration(context, hint: context.tr('email'), icon: Icons.email_outlined),
-                            validator: _emailValidator,
-                          ),
-                          const SizedBox(height: 14),
-                          TextFormField(
-                            controller: _passwordController,
-                            obscureText: _obscurePassword,
-                            textInputAction: TextInputAction.done,
-                            autofillHints: const [AutofillHints.password],
-                            onFieldSubmitted: (_) => login(),
-                            decoration: authInputDecoration(context, hint: context.tr('password'), icon: Icons.lock_outlined, suffix: IconButton(
-                              icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: cs.onSurface.withValues(alpha: 0.55), size: 20),
-                              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                            )),
-                            validator: (v) { if (v == null || v.isEmpty) return context.tr('enter_password'); if (v.length < 8) return context.tr('password_length'); return null; },
-                          ),
-                          Align(alignment: Alignment.centerRight, child: TextButton(
-                            onPressed: _isLoading ? null : () => context.push(AppRoutes.forgotPassword),
-                            child: Text(context.tr('forgot_password')),
-                          )),
-                          const SizedBox(height: AppInsets.sm),
-                          PremiumButton(label: context.tr('login'), onPressed: login, isLoading: _isLoading),
-                        ],
-                        if (_usePhoneLogin) ...[
-                          TextFormField(
-                            controller: _phoneController,
-                            keyboardType: TextInputType.phone,
-                            textInputAction: TextInputAction.next,
-                            decoration: authInputDecoration(context, hint: context.tr('phone_field_hint'), icon: Icons.phone_android),
-                            validator: _phoneValidator,
-                          ),
-                          const SizedBox(height: 14),
-                          if (!_otpSent)
-                            PremiumButton(label: context.tr('send_otp'), onPressed: _sendPhoneOtp, isLoading: _isLoading),
-                          if (_otpSent) ...[
-                            TextFormField(
-                              controller: _otpController,
-                              keyboardType: TextInputType.number,
-                              maxLength: 6,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 8),
-                              decoration: InputDecoration(
-                                hintText: '000000', counterText: '', filled: true,
-                                fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: cs.primary, width: 2)),
-                              ),
-                            ),
-                            const SizedBox(height: AppInsets.lg),
-                            PremiumButton(label: context.tr('login_with_otp'), onPressed: _loginWithPhone, isLoading: _isLoading),
-                            Center(child: TextButton(
-                              onPressed: _isLoading ? null : _sendPhoneOtp,
-                              child: Text(context.tr('resend_otp')),
-                            )),
-                          ],
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppInsets.xl),
-                Row(
-                  children: [
-                    Expanded(child: Divider(color: cs.outlineVariant)),
-                    Padding(padding: const EdgeInsets.symmetric(horizontal: AppInsets.md), child: Text(context.tr('or'), style: TextStyle(color: cs.onSurfaceVariant))),
-                    Expanded(child: Divider(color: cs.outlineVariant)),
-                  ],
-                ),
-                const SizedBox(height: AppInsets.lg),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: _isLoading ? null : signInWithGoogle,
-                    icon: Image.asset('assets/google_logo.png', height: 20, errorBuilder: (_,_,_) => const Icon(Icons.g_mobiledata, size: 24)),
-                    label: Text(context.tr('continue_google')),
-                    style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-                  ),
-                ),
-                if (!_usePhoneLogin) ...[
-                  const SizedBox(height: AppInsets.md),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: _isLoading ? null : () => context.push(AppRoutes.magicLink),
-                      icon: const Icon(Icons.email_outlined, size: 18),
-                      label: Text(context.tr('send_magic_link_button')),
-                      style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: AppInsets.xxl),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(context.tr('no_account'), style: TextStyle(color: cs.onSurfaceVariant)),
-                    TextButton(
-                      onPressed: _isLoading ? null : () => context.push(AppRoutes.register),
-                      child: Text(context.tr('register'), style: TextStyle(fontWeight: FontWeight.w700)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppInsets.xxl),
-              ],
-            ),
-          ),
-        ),
+    OutlineInputBorder border() => OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: cs.outlineVariant),
+        );
+    return InputDecoration(
+      prefixIcon: Icon(icon),
+      suffixIcon: suffix,
+      border: border(),
+      enabledBorder: border(),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: cs.primary, width: 2),
       ),
     );
   }
-}
-
-class _LoginTab extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _LoginTab({required this.label, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: AppInsets.md),
-        decoration: BoxDecoration(
-          color: selected ? cs.primary.withValues(alpha: 0.1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: selected ? cs.primary : cs.outlineVariant, width: selected ? 1.5 : 1),
-        ),
+    final textTheme = Theme.of(context).textTheme;
+
+    return Scaffold(
+      body: SafeArea(
         child: Center(
-          child: Text(label, style: TextStyle(color: selected ? cs.primary : cs.onSurfaceVariant, fontWeight: selected ? FontWeight.w600 : FontWeight.w500, fontSize: 14)),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Brand
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: cs.primaryContainer,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Icon(Icons.shopping_bag,
+                              color: cs.primary, size: 30),
+                        ),
+                        const SizedBox(width: 14),
+                        Text(
+                          'Soko Vibe',
+                          style: textTheme.headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 28),
+
+                    // Hero image
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: Image.asset(
+                        'assets/images/shopping_hero.png',
+                        height: 210,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => Container(
+                          height: 210,
+                          color: cs.surfaceContainerHighest,
+                          child: Icon(
+                            Icons.shopping_cart,
+                            size: 96,
+                            color: cs.primary.withValues(alpha: 0.4),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 32),
+
+                    // Heading
+                    Text(
+                      'Welcome to Soko Vibe',
+                      textAlign: TextAlign.center,
+                      style: textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Log in to continue shopping',
+                      textAlign: TextAlign.center,
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+
+                    const SizedBox(height: 32),
+
+                    if (!_showPhoneLogin) ...[
+                      // Email or Phone
+                      TextFormField(
+                        controller: _emailController,
+                        textInputAction: TextInputAction.next,
+                        keyboardType: TextInputType.emailAddress,
+                        autofillHints: const [AutofillHints.email],
+                        decoration: _inputDecoration(Icons.alternate_email)
+                            .copyWith(labelText: 'Email or Phone'),
+                        validator: _emailValidator,
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Password
+                      TextFormField(
+                        controller: _passwordController,
+                        obscureText: _obscurePassword,
+                        textInputAction: TextInputAction.done,
+                        autofillHints: const [AutofillHints.password],
+                        onFieldSubmitted: (_) => _onLogin(),
+                        decoration: _inputDecoration(Icons.lock_outline,
+                            suffix: IconButton(
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                          ),
+                          onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword,
+                          ),
+                        )).copyWith(labelText: 'Password'),
+                        validator: (v) {
+                          if (v == null || v.isEmpty) {
+                            return context.tr('enter_password');
+                          }
+                          if (v.length < 8) return context.tr('password_length');
+                          return null;
+                        },
+                      ),
+
+                      const SizedBox(height: 8),
+
+                      // Keep me signed in / Forgot password
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Checkbox(
+                                  value: _keepSignedIn,
+                                  onChanged: (value) => setState(
+                                    () => _keepSignedIn = value ?? false,
+                                  ),
+                                ),
+                                const Text('Keep me signed in'),
+                              ],
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _isLoading
+                                ? null
+                                : () => context.push(AppRoutes.forgotPassword),
+                            child: const Text('Forgot Password?'),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 8),
+
+                      // Main action
+                      SizedBox(
+                        height: 54,
+                        child: ElevatedButton.icon(
+                          onPressed: _isLoading ? null : _onLogin,
+                          icon: _isLoading
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.login),
+                          label: Text(
+                            _isLoading ? 'Logging in...' : 'Log In',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: cs.primary,
+                            foregroundColor: cs.onPrimary,
+                            elevation: 2,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ] else ...[
+                      // Phone + OTP login
+                      TextFormField(
+                        controller: _phoneController,
+                        keyboardType: TextInputType.phone,
+                        textInputAction: TextInputAction.next,
+                        decoration: _inputDecoration(Icons.phone_android)
+                            .copyWith(labelText: 'Phone Number'),
+                        validator: _phoneValidator,
+                      ),
+                      const SizedBox(height: 16),
+                      if (!_otpSent)
+                        SizedBox(
+                          height: 54,
+                          child: ElevatedButton(
+                            onPressed: _isLoading ? null : _sendPhoneOtp,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: cs.primary,
+                              foregroundColor: cs.onPrimary,
+                              elevation: 2,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            child: Text(
+                              _isLoading ? 'Sending...' : 'Send OTP',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                      if (_otpSent) ...[
+                        TextFormField(
+                          controller: _otpController,
+                          keyboardType: TextInputType.number,
+                          maxLength: 6,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 8,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: '000000',
+                            counterText: '',
+                            filled: true,
+                            fillColor:
+                                cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide.none,
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide:
+                                  BorderSide(color: cs.primary, width: 2),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          height: 54,
+                          child: ElevatedButton(
+                            onPressed: _isLoading ? null : _loginWithPhone,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: cs.primary,
+                              foregroundColor: cs.onPrimary,
+                              elevation: 2,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            child: Text(
+                              _isLoading ? 'Verifying...' : 'Verify & Log In',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                        Center(
+                          child: TextButton(
+                            onPressed: _isLoading ? null : _sendPhoneOtp,
+                            child: Text(context.tr('resend_otp')),
+                          ),
+                        ),
+                      ],
+                      Center(
+                        child: TextButton(
+                          onPressed: _isLoading
+                              ? null
+                              : () => setState(() {
+                                    _showPhoneLogin = false;
+                                    _otpSent = false;
+                                  }),
+                          child: const Text('Use email & password instead'),
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 28),
+
+                    // Or continue with
+                    Row(
+                      children: [
+                        Expanded(child: Divider(color: cs.outlineVariant)),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Text(
+                            'Or Continue With',
+                            style: TextStyle(color: cs.onSurfaceVariant),
+                          ),
+                        ),
+                        Expanded(child: Divider(color: cs.outlineVariant)),
+                      ],
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Google
+                    SizedBox(
+                      height: 52,
+                      child: OutlinedButton.icon(
+                        onPressed: _isLoading ? null : _onGoogleLogin,
+                        icon: Image.asset(
+                          'assets/google_logo.png',
+                          height: 20,
+                          errorBuilder: (_, _, _) =>
+                              const Icon(Icons.g_mobiledata, size: 24),
+                        ),
+                        label: const Text(
+                          'Continue with Google',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: cs.onSurface,
+                          side: BorderSide(color: cs.outlineVariant),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    if (!_showPhoneLogin)
+                      TextButton(
+                        onPressed: _isLoading
+                            ? null
+                            : () => setState(() {
+                                  _showPhoneLogin = true;
+                                  _otpSent = false;
+                                }),
+                        child: const Text('Login with Phone & OTP'),
+                      )
+                    else
+                      const SizedBox.shrink(),
+
+                    const SizedBox(height: 16),
+
+                    // Footer
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          "Don't have an account? ",
+                          style: TextStyle(color: cs.onSurfaceVariant),
+                        ),
+                        GestureDetector(
+                          onTap: _isLoading
+                              ? null
+                              : () => context.push(AppRoutes.register),
+                          child: Text(
+                            'Sign Up',
+                            style: TextStyle(
+                              color: cs.primary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );

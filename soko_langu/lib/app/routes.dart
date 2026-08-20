@@ -45,7 +45,6 @@ class AppRoutes {
   static const String createFlashSale = '/create-flash-sale';
   static const String sellerDispatch = '/seller-dispatch';
   static const String sellerQuote = '/seller-quote';
-  static const String magicLink = '/magic-link';
 
   static const String aiAssistant = '/ai-assistant';
   static const String receipt = '/receipt';

@@ -173,16 +173,6 @@ class LocalizationService {
       'phone_field_hint': 'Namba ya simu (mfano 0712345678)',
       'login_with_otp': 'Ingia kwa OTP',
       'verify_otp_register': 'Thibitisha OTP na Sajili',
-      'send_link': 'Tuma Link',
-      'login_with_email_link': 'Ingia kwa link ya barua pepe',
-      'link_sent_to': 'Link imetumwa kwenye {0}',
-      'back_to_login': 'Rudi kwenye kuingia',
-      'check_your_email': 'Angalia barua pepe yako',
-      'magic_link_sent_body':
-          'Tumetuma link ya kuingia kwenye {0}. Bonyeza link kwenye barua pepe yako kuingia.',
-      'resend_link': 'Tuma Link Tena',
-      'change_email': 'Badilisha barua pepe',
-      'send_magic_link_button': 'Tuma Link kwenye Barua Pepe',
       'payment_failed': 'Malipo yameshindwa. Jaribu tena.',
       'help_payment_mongike':
           'Malipo yanafanywa kwa njia salama kupitia ClickPesa. Tuma malipo kwa kutumia M-Pesa, Airtel, Tigo, au Halopesa.',
@@ -2371,16 +2361,6 @@ class LocalizationService {
       'phone_field_hint': 'Phone number (e.g. 0712345678)',
       'login_with_otp': 'Login with OTP',
       'verify_otp_register': 'Verify OTP & Register',
-      'send_link': 'Send Link',
-      'login_with_email_link': 'Login with email link',
-      'link_sent_to': 'Link sent to {0}',
-      'back_to_login': 'Back to Login',
-      'check_your_email': 'Check your email',
-      'magic_link_sent_body':
-          'We sent a login link to {0}. Click the link in your email to log in.',
-      'resend_link': 'Resend Link',
-      'change_email': 'Change email',
-      'send_magic_link_button': 'Send Link via Email',
       'payment_failed': 'Payment failed. Please try again.',
       'help_payment_mongike':
           'Payments are made securely via ClickPesa. Send payment using M-Pesa, Airtel, Tigo, or Halopesa.',

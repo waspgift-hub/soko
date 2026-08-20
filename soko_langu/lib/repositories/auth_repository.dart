@@ -199,62 +199,6 @@ class AuthRepository {
     await _auth.sendPasswordResetEmail(email: email);
   }
 
-  // ---------------------------------------------------------------------------
-  // Passwordless Email Auth (Magic Link)
-  // ---------------------------------------------------------------------------
-
-  Future<void> sendSignInLink({
-    required String email,
-    required ActionCodeSettings actionCodeSettings,
-  }) async {
-    try {
-      await _auth.sendSignInLinkToEmail(
-        email: email,
-        actionCodeSettings: actionCodeSettings,
-      );
-    } on FirebaseAuthException catch (e) {
-      throw NetworkError(
-        message: e.message ?? 'Failed to send magic link',
-        userMessage: _mapError(e.code),
-        originalError: e,
-      );
-    }
-  }
-
-  static bool isSignInWithEmailLink(String link) {
-    return FirebaseAuth.instance.isSignInWithEmailLink(link);
-  }
-
-  Future<UserCredential> signInWithEmailLink({
-    required String email,
-    required String link,
-  }) async {
-    try {
-      final cred = await _auth.signInWithEmailLink(
-        email: email,
-        emailLink: link,
-      );
-      await _ensureProfileExists(cred.user);
-      return cred;
-    } on FirebaseAuthException catch (e) {
-      throw NetworkError(
-        message: e.message ?? 'Failed to sign in with magic link',
-        userMessage: _mapError(e.code),
-        originalError: e,
-      );
-    }
-  }
-
-  static ActionCodeSettings magicLinkSettings() {
-    return ActionCodeSettings(
-      url: 'https://sokonimoko-8c171-a8d14.web.app/magic-link',
-      handleCodeInApp: true,
-      androidPackageName: 'com.sokolangu.app',
-      iOSBundleId: 'com.sokolangu.app',
-      androidInstallApp: false,
-    );
-  }
-
   Future<void> _ensureProfileExists(User? user) async {
     if (user == null) return;
     try {

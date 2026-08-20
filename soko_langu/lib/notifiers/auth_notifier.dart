@@ -6,7 +6,6 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../repositories/auth_repository.dart';
 import '../services/api_config.dart';
-import '../services/magic_link_service.dart';
 import '../services/meseji_service.dart';
 import '../services/localization_service.dart';
 import '../services/onboarding_service.dart';
@@ -21,7 +20,6 @@ enum AuthStatus {
   authenticated,
 }
 
-enum MagicLinkState { idle, sending, sent, error }
 enum PhoneOtpState { idle, sending, sent, verifying, verified, error }
 enum EmailOtpState { idle, sending, sent, verifying, verified, error }
 
@@ -52,13 +50,6 @@ class AuthNotifier extends ChangeNotifier {
 
   String? _error;
   String? get error => _error;
-
-  // Magic Link
-  MagicLinkState _magicLinkState = MagicLinkState.idle;
-  MagicLinkState get magicLinkState => _magicLinkState;
-
-  String? _magicLinkEmail;
-  String? get magicLinkEmail => _magicLinkEmail;
 
   StreamSubscription<User?>? _authSub;
 
@@ -430,67 +421,6 @@ class AuthNotifier extends ChangeNotifier {
 
   void resetEmailOtp() {
     _emailOtpState = EmailOtpState.idle;
-    _error = null;
-    notifyListeners();
-  }
-
-  // ---------------------------------------------------------------------------
-  // Magic Link (Firebase Passwordless Email Auth)
-  // ---------------------------------------------------------------------------
-
-  Future<void> sendMagicLink(String email) async {
-    _magicLinkState = MagicLinkState.sending;
-    _magicLinkEmail = email;
-    _error = null;
-    notifyListeners();
-
-    try {
-      final settings = AuthRepository.magicLinkSettings();
-      await _authRepo.sendSignInLink(
-        email: email,
-        actionCodeSettings: settings,
-      );
-
-      await MagicLinkService.saveEmail(email);
-
-      _magicLinkState = MagicLinkState.sent;
-      notifyListeners();
-    } catch (e) {
-      _error = translateError(e);
-      _magicLinkState = MagicLinkState.error;
-      notifyListeners();
-    }
-  }
-
-  Future<void> completeMagicLinkSignIn(String email, String link) async {
-    _error = null;
-    notifyListeners();
-
-    try {
-      final cred = await _authRepo.signInWithEmailLink(
-        email: email,
-        link: link,
-      );
-      _user = cred.user;
-      _status = AuthStatus.authenticated;
-      _magicLinkState = MagicLinkState.idle;
-      _magicLinkEmail = null;
-      await MagicLinkService.clearEmail();
-      await _fetchAdminStatus();
-      await _checkSuspended();
-      await _checkProfileCompleteness();
-      _syncAppState();
-      notifyListeners();
-    } catch (e) {
-      _error = translateError(e);
-      _magicLinkState = MagicLinkState.error;
-      notifyListeners();
-    }
-  }
-
-  void resetMagicLink() {
-    _magicLinkState = MagicLinkState.idle;
-    _magicLinkEmail = null;
     _error = null;
     notifyListeners();
   }

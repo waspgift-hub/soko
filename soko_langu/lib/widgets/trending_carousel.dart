@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'product_cached_image.dart';
+import 'product_card.dart';
 import '../services/product_service.dart';
 import '../services/flash_sale_service.dart';
 import '../services/widget_service.dart';
@@ -80,7 +80,7 @@ class _TrendingCarouselState extends State<TrendingCarousel> {
               ),
             ),
             SizedBox(
-              height: 170,
+              height: 240,
               child: Column(
                 children: [
                   Expanded(
@@ -124,83 +124,14 @@ class _TrendingCarouselState extends State<TrendingCarousel> {
   }
 
   Widget _buildCard(Product p, FlashSale? fs) {
-    return GestureDetector(
-      onTap: () => context.push(
-        '${AppRoutes.productDetail}/${p.id}',
-        extra: p,
-      ),
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Theme.of(context).colorScheme.trendingOrange.withValues(alpha: 0.3)),
-          boxShadow: [
-            BoxShadow(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.06),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Image
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
-              child: Container(
-                height: 100,
-                color: Theme.of(context).colorScheme.surfaceContainerLow,
-                child: Stack(children: [
-                  p.images.isNotEmpty
-                      ? ProductCachedImage(
-                          url: p.images.first,
-                          fit: BoxFit.cover,
-                        )
-                      : Center(child: Icon(Icons.image, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6), size: 32)),
-                  if (fs != null)
-                    Positioned(
-                      top: 4, left: 4,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                        decoration: BoxDecoration(color: Colors.red.shade600, borderRadius: BorderRadius.circular(4)),
-                        child: Text('-${fs.discountPercent}%', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                ]),
-              ),
-            ),
-            // Name
-            Padding(
-              padding: const EdgeInsets.fromLTRB(6, 6, 6, 2),
-              child: Text(
-                p.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 11,
-                ),
-              ),
-            ),
-            // Price + featured star
-            Padding(
-              padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
-              child: Row(
-                children: [
-                  if (fs != null) ...[
-                    Text(context.formatPrice(fs.salePrice), style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
-                    const SizedBox(width: 4),
-                    Text(context.formatPrice(p.price), style: TextStyle(decoration: TextDecoration.lineThrough, color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 10)),
-                  ] else
-                    Text(context.formatPrice(p.price), style: TextStyle(color: Theme.of(context).colorScheme.trendingOrange, fontWeight: FontWeight.bold, fontSize: 12)),
-                  const Spacer(),
-                  Icon(Icons.star, color: Theme.of(context).colorScheme.trendingOrange, size: 12),
-                ],
-              ),
-            ),
-          ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+      child: ProductCard(
+        product: p,
+        flashSale: fs,
+        onTap: () => context.push(
+          '${AppRoutes.productDetail}/${p.id}',
+          extra: p,
         ),
       ),
     );
