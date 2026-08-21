@@ -15,7 +15,6 @@ import '../../services/consent_recording_service.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/rate_limiter.dart';
 import '../../utils/phone_utils.dart';
-import '../../widgets/auth/auth_countries.dart';
 import '../../widgets/auth/auth_phone_field.dart';
 import '../../widgets/auth/auth_scene.dart';
 import '../../widgets/auth/auth_text_field.dart';
@@ -45,7 +44,6 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _phoneFieldKey = GlobalKey<AuthPhoneFieldState>();
 
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -83,14 +81,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   String? _formatPhone(String? e164) {
     if (e164 == null || e164.isEmpty) return null;
-    final digits = e164.replaceAll(RegExp(r'\D'), '');
-    final dial = kAuthCountries
-        .firstWhere(
-          (c) => digits.startsWith(c.dial),
-          orElse: () => kAuthCountries.first,
-        )
-        .dial;
-    return PhoneUtils.displayWithDial(e164, dial);
+    return PhoneUtils.displayWithDial(e164, '255');
   }
 
   @override
@@ -157,8 +148,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
     final raw = _phoneController.text.trim();
-    final country = _phoneFieldKey.currentState?.selectedCountry ?? kAuthCountries.first;
-    _normalizedPhone = PhoneUtils.toE164WithDial(raw, country.dial);
+    _normalizedPhone = PhoneUtils.toE164WithDial(raw, '255');
     _displayPhone = _formatPhone(_normalizedPhone);
 
     setState(() => _isLoading = true);
@@ -344,7 +334,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const SizedBox(height: 14),
               if (!widget.otpVerified) ...[
                 AuthPhoneField(
-                  key: _phoneFieldKey,
                   controller: _phoneController,
                   validator: _phoneValidator,
                 ),

@@ -13,7 +13,6 @@ import '../../notifiers/auth_notifier.dart';
 import '../../services/account_manager.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/phone_utils.dart';
-import '../../widgets/auth/auth_countries.dart';
 import '../../widgets/auth/auth_phone_field.dart';
 import '../../widgets/auth/auth_scene.dart';
 import '../../widgets/auth/auth_text_field.dart';
@@ -28,7 +27,6 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _phoneFieldKey = GlobalKey<AuthPhoneFieldState>();
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -93,9 +91,8 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _onContinueWithPhone() async {
     if (!_formKey.currentState!.validate()) return;
     final raw = _phoneController.text.trim();
-    final country = _phoneFieldKey.currentState?.selectedCountry ?? kAuthCountries.first;
-    _normalizedPhone = PhoneUtils.toE164WithDial(raw, country.dial);
-    _displayPhone = _displayPhoneOf(_normalizedPhone!, country.dial);
+    _normalizedPhone = PhoneUtils.toE164WithDial(raw, '255');
+    _displayPhone = _displayPhoneOf(_normalizedPhone!, '255');
 
     setState(() => _isLoading = true);
     try {
@@ -232,7 +229,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   key: const ValueKey('phone-form'),
                   formKey: _formKey,
                   phoneController: _phoneController,
-                  phoneFieldKey: _phoneFieldKey,
                   isLoading: _isLoading,
                   onContinue: _onContinueWithPhone,
                   onGoogleLogin: _onGoogleLogin,
@@ -260,7 +256,6 @@ class _BackButton extends StatelessWidget {
 class _PhoneForm extends StatelessWidget {
   final GlobalKey<FormState> formKey;
   final TextEditingController phoneController;
-  final GlobalKey<AuthPhoneFieldState> phoneFieldKey;
   final bool isLoading;
   final VoidCallback onContinue;
   final VoidCallback onGoogleLogin;
@@ -270,7 +265,6 @@ class _PhoneForm extends StatelessWidget {
     super.key,
     required this.formKey,
     required this.phoneController,
-    required this.phoneFieldKey,
     required this.isLoading,
     required this.onContinue,
     required this.onGoogleLogin,
@@ -285,7 +279,6 @@ class _PhoneForm extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           AuthPhoneField(
-            key: phoneFieldKey,
             controller: phoneController,
             textInputAction: TextInputAction.done,
             onFieldSubmitted: (_) => onContinue(),
