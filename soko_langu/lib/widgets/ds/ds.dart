@@ -2,6 +2,7 @@
 library;
 
 export 'animated_press.dart';
+export 'ds_avatar.dart';
 export 'ds_badge.dart';
 export 'ds_boost_badge.dart';
 export 'ds_button.dart';
@@ -9,6 +10,7 @@ export 'ds_card.dart';
 export 'ds_celebration_rain.dart';
 export 'ds_chip.dart';
 export 'ds_confetti.dart';
+export 'ds_divider.dart';
 export 'ds_empty_state.dart';
 export 'ds_escrow_shield.dart';
 export 'ds_like_button.dart';

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'app_typography.dart';
 
 ThemeData buildLightTheme(Color seed) {
@@ -84,12 +83,12 @@ ThemeData _buildTheme(ColorScheme scheme) {
       foregroundColor: scheme.onSurface,
       elevation: 0,
       centerTitle: true,
-      titleTextStyle: GoogleFonts.inter(
+      titleTextStyle: const TextStyle(
+        fontFamily: 'Inter',
         fontSize: 17,
         fontWeight: FontWeight.w700,
         letterSpacing: -0.3,
-        color: scheme.onSurface,
-      ),
+      ).copyWith(color: scheme.onSurface),
       scrolledUnderElevation: 0,
       surfaceTintColor: Colors.transparent,
     ),

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
@@ -319,10 +320,13 @@ class _KycScreenState extends State<KycScreen> {
         const SizedBox(height: 16),
         TextField(
           controller: _idNumberController,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          maxLength: 20,
           decoration: InputDecoration(
             labelText: context.tr('id_number'),
             border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.numbers),
+            counterText: '',
           ),
         ),
         const SizedBox(height: 24),

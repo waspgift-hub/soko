@@ -247,7 +247,8 @@ class UserService {
   }
 
   Future<List<UserProfile>> searchUsers(String query) async {
-    final q = query.trim().toLowerCase();
+    var q = query.trim().toLowerCase();
+    if (q.length > 100) q = q.substring(0, 100);
     if (q.isEmpty) return [];
     final results = <String, UserProfile>{};
     try {

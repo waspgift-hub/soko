@@ -354,13 +354,15 @@ class NotificationService {
         var query = _db
             .collection('notifications')
             .where('userId', isEqualTo: user.uid)
-            .where('isRead', isEqualTo: false)
             .limit(500);
         if (lastDoc != null) query = query.startAfterDocument(lastDoc);
         final snap = await query.get();
         if (snap.docs.isEmpty) break;
         final batch = _db.batch();
         for (var doc in snap.docs) {
+          // isRead is absent on legacy rows; treat missing as unread so it is
+          // backfilled to false->true here rather than staying forever unread.
+          if ((doc.data()['isRead'] as bool?) == true) continue;
           batch.update(doc.reference, {'isRead': true});
         }
         await batch.commit();

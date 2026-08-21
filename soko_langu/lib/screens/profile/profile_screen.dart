@@ -13,6 +13,7 @@ import '../../services/wishlist_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/permission_service.dart';
 import '../../services/ai/ai_service.dart';
+import '../../services/account_tier_service.dart';
 import '../../widgets/account_switcher_sheet.dart';
 import '../../widgets/ad_banner.dart';
 import '../../widgets/verified_badge.dart';
@@ -39,6 +40,7 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
   double _avgRating = 0;
   bool _isLoading = true;
   StreamSubscription<User?>? _authSub;
+  String _accountTier = 'both';
 
   @override
   void initState() {
@@ -47,6 +49,7 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       _loadProfile();
+      _loadTier();
     }
     // Reactive auth: covers the cold-start race where currentUser is still
     // null in initState, and handles sign-in/sign-out without one-shot
@@ -54,7 +57,10 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
     _authSub = FirebaseAuth.instance.authStateChanges().listen((u) {
       if (!mounted) return;
       if (u != null) {
-        if (!_isLoading && _profile == null) _loadProfile();
+        if (!_isLoading && _profile == null) {
+          _loadProfile();
+          _loadTier();
+        }
       } else {
         setState(() {
           _profile = null;
@@ -65,6 +71,11 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
         });
       }
     });
+  }
+
+  Future<void> _loadTier() async {
+    final tier = await AccountTierService().getTier();
+    if (mounted) setState(() => _accountTier = tier);
   }
 
   @override
@@ -412,17 +423,23 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
       _ActionItem(Icons.swap_horiz_rounded, context.tr('accounts'), () => AccountSwitcherSheet.show(context)),
       _ActionItem(Icons.edit_rounded, context.tr('edit_profile'), () async { await context.push(AppRoutes.editProfile); _refreshProfile(); }),
       _ActionItem(Icons.favorite_rounded, context.tr('wishlist'), () => context.push(AppRoutes.wishlist)),
-      _ActionItem(Icons.shopping_bag_rounded, context.tr('my_ads'), () => context.push(AppRoutes.myAds)),
-      _ActionItem(Icons.store_rounded, context.tr('customize_shop'), () => context.push(AppRoutes.shopCustomization)),
-      _ActionItem(Icons.dashboard_rounded, context.tr('dashboard'), () => context.push(AppRoutes.sellerDashboard)),
-      _ActionItem(Icons.analytics_rounded, context.tr('analytics'), () {
-        final uid = FirebaseAuth.instance.currentUser?.uid;
-        if (uid != null) context.push(AppRoutes.sellerAnalytics, extra: uid);
-      }),
+      if (_accountTier != 'buyer')
+        _ActionItem(Icons.shopping_bag_rounded, context.tr('my_ads'), () => context.push(AppRoutes.myAds)),
+      if (_accountTier != 'buyer')
+        _ActionItem(Icons.store_rounded, context.tr('customize_shop'), () => context.push(AppRoutes.shopCustomization)),
+      if (_accountTier != 'buyer')
+        _ActionItem(Icons.dashboard_rounded, context.tr('dashboard'), () => context.push(AppRoutes.sellerDashboard)),
+      if (_accountTier != 'buyer')
+        _ActionItem(Icons.analytics_rounded, context.tr('analytics'), () {
+          final uid = FirebaseAuth.instance.currentUser?.uid;
+          if (uid != null) context.push(AppRoutes.sellerAnalytics, extra: uid);
+        }),
       _ActionItem(Icons.auto_awesome_rounded, context.tr('ai_assistant'), () => context.push(AppRoutes.aiAssistant)),
       _ActionItem(Icons.explore_rounded, context.tr('discovery'), () => context.push(AppRoutes.discovery)),
-      _ActionItem(Icons.receipt_long_rounded, context.tr('my_purchases'), () => context.push(AppRoutes.myPurchases)),
-      _ActionItem(Icons.account_balance_wallet_rounded, context.tr('buyer_statement'), () => context.push(AppRoutes.buyerStatement)),
+      if (_accountTier != 'seller')
+        _ActionItem(Icons.receipt_long_rounded, context.tr('my_purchases'), () => context.push(AppRoutes.myPurchases)),
+      if (_accountTier != 'seller')
+        _ActionItem(Icons.account_balance_wallet_rounded, context.tr('buyer_statement'), () => context.push(AppRoutes.buyerStatement)),
       _ActionItem(Icons.verified_rounded, context.tr('kyc'), () => context.push(AppRoutes.kyc)),
     ];
     if (isAdmin) {

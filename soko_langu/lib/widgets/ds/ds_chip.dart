@@ -3,15 +3,15 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_dimens.dart';
 import 'animated_press.dart';
 
-/// Design-system selectable pill chip (spec §4.2 SegmentedTabs).
-///
-/// Selected state fills with brand primary; label and icon inherit contrast.
+enum DsChipSize { sm, md }
+
 class DsChip extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback? onTap;
   final IconData? icon;
   final bool filled;
+  final DsChipSize chipSize;
 
   const DsChip({
     super.key,
@@ -20,6 +20,7 @@ class DsChip extends StatelessWidget {
     this.onTap,
     this.icon,
     this.filled = true,
+    this.chipSize = DsChipSize.md,
   });
 
   @override
@@ -35,10 +36,15 @@ class DsChip extends StatelessWidget {
         ? Border.all(color: scheme.primary, width: 1.5)
         : Border.all(color: scheme.brandBorder, width: 0.5);
 
+    final verticalPad = chipSize == DsChipSize.sm ? 6.0 : 10.0;
+    final fontSize = chipSize == DsChipSize.sm ? 12.0 : 14.0;
+    final iconSize = chipSize == DsChipSize.sm ? 14.0 : 16.0;
+    final gap = chipSize == DsChipSize.sm ? 3.0 : 4.0;
+
     final chip = Container(
-      padding: const EdgeInsets.symmetric(
+      padding: EdgeInsets.symmetric(
         horizontal: AppSpacing.s4,
-        vertical: 10,
+        vertical: verticalPad,
       ),
       decoration: BoxDecoration(
         color: bg,
@@ -49,13 +55,13 @@ class DsChip extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 16, color: fg),
-            const SizedBox(width: AppSpacing.s1),
+            Icon(icon, size: iconSize, color: fg),
+            SizedBox(width: gap),
           ],
           Text(
             label,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: fontSize,
               fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
               color: fg,
             ),
@@ -64,7 +70,12 @@ class DsChip extends StatelessWidget {
       ),
     );
 
-    if (onTap == null) return chip;
-    return AnimatedPress(onTap: onTap, child: chip);
+    if (onTap == null) return Semantics(label: label, child: chip);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '$label${selected ? ' (selected)' : ''}',
+      child: AnimatedPress(onTap: onTap, child: chip),
+    );
   }
 }

@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../theme/app_dimens.dart';
 import '../../theme/app_colors.dart';
 
 /// Design-system text field (spec §4.4): 12dp radius, surface fill, hairline
 /// border; focused gets a 2px primary border, error gets error chrome +
 /// helper text.
+///
+/// Security: input is sanitized before delivery via [onChanged] — control
+/// characters and zero-width joiners are stripped to prevent injection
+/// payloads in Firestore documents.  [inputFormatters] can be composed
+/// externally and are applied *after* the built-in sanitizer.
 class DsTextField extends StatelessWidget {
   final TextEditingController? controller;
   final String? label;
@@ -23,6 +29,10 @@ class DsTextField extends StatelessWidget {
   final int? maxLength;
   final bool readOnly;
   final String? Function(String?)? validator;
+  final List<TextInputFormatter>? inputFormatters;
+  final bool autocorrect;
+  final bool enableSuggestions;
+  final bool readOnlyForAutofill;
 
   const DsTextField({
     super.key,
@@ -43,7 +53,22 @@ class DsTextField extends StatelessWidget {
     this.maxLength,
     this.readOnly = false,
     this.validator,
+    this.inputFormatters,
+    this.autocorrect = true,
+    this.enableSuggestions = true,
+    this.readOnlyForAutofill = false,
   });
+
+  /// Strips control characters and zero-width joiners that could be used
+  /// to inject invisible data into Firestore documents.
+  static String _sanitize(String value) {
+    return value
+        .replaceAll(RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]'), '')
+        .replaceAll('\u200B', '')
+        .replaceAll('\u200C', '')
+        .replaceAll('\u200D', '')
+        .replaceAll('\uFEFF', '');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,11 +80,16 @@ class DsTextField extends StatelessWidget {
       obscureText: obscureText,
       keyboardType: keyboardType,
       textInputAction: textInputAction,
-      onChanged: onChanged,
+      onChanged: onChanged != null
+          ? (v) => onChanged!(_sanitize(v))
+          : null,
       readOnly: readOnly,
-      maxLines: maxLines,
+      maxLines: obscureText ? 1 : maxLines,
       maxLength: maxLength,
       validator: validator,
+      autocorrect: autocorrect,
+      enableSuggestions: enableSuggestions && !obscureText,
+      inputFormatters: inputFormatters,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,

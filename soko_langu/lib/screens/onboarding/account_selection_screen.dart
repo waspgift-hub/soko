@@ -147,14 +147,7 @@ class _AccountCard extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      color.withValues(alpha: 0.15),
-                      color.withValues(alpha: 0.05),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  color: color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(icon, color: color, size: 24),

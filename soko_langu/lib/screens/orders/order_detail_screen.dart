@@ -24,6 +24,7 @@ import '../../widgets/buyer_transport_sheet.dart';
 import '../../widgets/location_map_widget.dart';
 import '../../widgets/call_seller_button.dart';
 import '../../utils/phone_utils.dart';
+import '../../utils/rate_limiter.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final String docId;
@@ -2123,6 +2124,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
+    if (!await RateLimiter.canProceed(action: 'pay_order', cooldown: const Duration(seconds: 10))) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please wait before trying again')),
+      );
+      return;
+    }
+
     final raw = _phoneController.text.trim();
     if (raw.isEmpty) {
       setState(() => _phoneError = context.tr('phone_validator_empty'));
@@ -2160,6 +2168,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         return;
       }
 
+      await RateLimiter.record('pay_order');
       if (mounted) {
         setState(() => _paying = false);
         RealtimePaymentBanner.show(

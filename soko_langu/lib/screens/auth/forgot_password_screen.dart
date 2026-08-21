@@ -8,6 +8,8 @@ import '../../extensions/context_tr.dart';
 import '../../services/api_config.dart';
 import '../../services/localization_service.dart';
 import '../../app/routes.dart';
+import '../../utils/rate_limiter.dart';
+import '../../utils/validators.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -101,6 +103,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   Future<void> _sendPhoneOtp() async {
     if (!_formKey.currentState!.validate()) return;
+    if (!await RateLimiter.canProceed(action: 'forgot_password_otp', cooldown: const Duration(seconds: 45))) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please wait before requesting another code')),
+      );
+      return;
+    }
     setState(() { _isLoading = true; _serverError = null; });
 
     try {
@@ -117,6 +125,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       }
       if (mounted) {
         setState(() => _otpSent = true);
+        await RateLimiter.record('forgot_password_otp');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(context.tr('otp_sent_to').replaceAll('{0}', _phoneController.text.trim()))),
         );
@@ -129,6 +138,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   }
 
   Future<void> _verifyOtpAndReset() async {
+    if (!_formKey.currentState!.validate()) return;
     if (_newPasswordController.text != _confirmPasswordController.text) {
       setState(() => _serverError = context.tr('password_mismatch'));
       return;
@@ -277,6 +287,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       controller: _newPasswordController,
                       obscureText: true,
                       textInputAction: TextInputAction.next,
+                      validator: Validators.password,
                       decoration: InputDecoration(
                         hintText: context.tr('new_password'),
                         prefixIcon: Icon(Icons.lock_outlined, color: cs.onSurface.withValues(alpha: 0.59)),
@@ -292,6 +303,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       controller: _confirmPasswordController,
                       obscureText: true,
                       textInputAction: TextInputAction.done,
+                      validator: (v) {
+                        if (v != _newPasswordController.text) {
+                          return context.tr('password_mismatch');
+                        }
+                        return null;
+                      },
                       decoration: InputDecoration(
                         hintText: context.tr('repeat_new_password'),
                         prefixIcon: Icon(Icons.lock_outlined, color: cs.onSurface.withValues(alpha: 0.59)),

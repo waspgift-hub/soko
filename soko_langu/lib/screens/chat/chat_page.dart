@@ -173,6 +173,7 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _sendMessage() async {
     final text = _inputCtrl.text.trim();
     if (text.isEmpty) return;
+    if (text.length > 2000) return;
 
     final check = await ProfanityFilter().check(text);
     if (!check.clean) {
@@ -620,9 +621,11 @@ class _ChatPageState extends State<ChatPage> {
                       textInputAction: TextInputAction.send,
                       maxLines: 5,
                       minLines: 1,
+                      maxLength: 2000,
                       onSubmitted: (_) => _sendMessage(),
                       style: TextStyle(color: cs.onSurface, fontSize: 14),
                       decoration: InputDecoration(
+                        counterText: '',
                         hintText: context.tr('type_message', 'Type a message...'),
                         hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.4), fontSize: 14),
                         border: OutlineInputBorder(

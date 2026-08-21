@@ -301,6 +301,31 @@ class AuthNotifier extends ChangeNotifier {
     }
   }
 
+  /// Returns whether an account already exists for [phone]. Re-throws on
+  /// network/server errors so callers decide how to surface them.
+  Future<bool> checkPhoneExists(String phone) async {
+    final res = await http.post(
+      Uri.parse('${ApiConfig.baseUrl}/api/auth/check-phone'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'phone': phone}),
+    );
+    final body = jsonDecode(res.body);
+    return body['exists'] == true;
+  }
+
+  /// Returns whether an account already exists for [email]. Re-throws on
+  /// network/server errors so callers decide how to surface them.
+  Future<bool> checkEmailExists(String email) async {
+    if (email.trim().isEmpty) return false;
+    final res = await http.post(
+      Uri.parse('${ApiConfig.baseUrl}/api/auth/check-email'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email.trim()}),
+    );
+    final body = jsonDecode(res.body);
+    return body['exists'] == true;
+  }
+
   Future<void> loginWithPhone(String phone, String otp) async {
     _error = null;
     notifyListeners();

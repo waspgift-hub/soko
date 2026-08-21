@@ -236,7 +236,8 @@ class SearchService {
     String type = 'all',
     int pageSize = 30,
   }) async {
-    final q = query.trim().toLowerCase();
+    var q = query.trim().toLowerCase();
+    if (q.length > 100) q = q.substring(0, 100);
     final words = q.split(RegExp(r'\s+')).where((w) => w.length >= 2).toList();
     if (words.isEmpty) {
       return SearchResponse(results: [], sources: {}, total: 0, page: 0, hasMore: false, query: query);
@@ -284,7 +285,8 @@ class SearchService {
   }
 
   Future<List<SearchSuggestion>> _firestoreAutocomplete(String query) async {
-    final q = query.trim().toLowerCase();
+    var q = query.trim().toLowerCase();
+    if (q.length > 100) q = q.substring(0, 100);
     if (q.isEmpty) return [];
     try {
       final snap = await _db.collection('products')

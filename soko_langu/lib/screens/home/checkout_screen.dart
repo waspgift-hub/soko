@@ -296,6 +296,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   child: TextField(
                     controller: _phoneCtrl,
                     keyboardType: TextInputType.phone,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     decoration: InputDecoration(
                       hintText: '07XX XXX XXX',
                       hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.5)),

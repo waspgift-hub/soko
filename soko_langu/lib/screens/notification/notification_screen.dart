@@ -20,6 +20,7 @@ class NotificationScreen extends StatefulWidget {
 
 class _NotificationScreenState extends State<NotificationScreen> {
   final NotificationService _notifService = NotificationService();
+  DateTime? _lastTileTapAt;
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +45,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
         if (!snap.hasData) return _buildLoadingScaffold(cs);
 
         final docs = snap.data!.docs;
-        final unreadCount = docs.where((d) => d['isRead'] != true).length;
+        // Snapshot `[]` throws for fields absent from a doc; legacy rows
+        // predate isRead, so read through the Map which defaults to null.
+        final unreadCount =
+            docs.where((d) => ((d.data() as Map)['isRead'] as bool?) != true).length;
 
         return Scaffold(
           backgroundColor: cs.surface,
@@ -93,6 +97,96 @@ class _NotificationScreenState extends State<NotificationScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(context.tr('mark_all_read'))),
       );
+    }
+  }
+
+  /// Opens the destination for a tapped notification. A fast second tap on the
+  /// same tile races the first route transition and leaves duplicate page
+  /// entries whose teardown triggers the framework's element bookkeeping assert
+  /// (_InactiveElements), so re-entrant pushes are ignored for a short window.
+  void _openFromTile(BuildContext context, String type, Map? rawData) {
+    final tappedAt = DateTime.now();
+    if (_lastTileTapAt != null &&
+        tappedAt.difference(_lastTileTapAt!).inMilliseconds < 400) {
+      return;
+    }
+    _lastTileTapAt = tappedAt;
+
+    final senderId = rawData?['senderId'] as String?;
+    final groupId = rawData?['groupId'] as String?;
+    final myUid = FirebaseAuth.instance.currentUser?.uid;
+    switch (type) {
+      case 'chat':
+        if (senderId != null) {
+          context.push('/chat/$senderId', extra: {'name': rawData?['senderName'] ?? ''});
+        } else {
+          context.push(AppRoutes.chats);
+        }
+        break;
+      case 'group_chat':
+        if (groupId != null) {
+          context.push('/group-chat/$groupId');
+        } else {
+          context.push(AppRoutes.chats);
+        }
+        break;
+      case 'order':
+      case 'sale':
+      case 'payment':
+      case 'escrow_confirm':
+      case 'escrow_release':
+      case 'escrow_auto_release':
+      case 'delivery_confirmed':
+      case 'dispatched':
+      case 'buyer_transport':
+      case 'shipping_quote':
+      case 'disputed':
+      case 'dispute_resolved':
+      case 'failed_retry': {
+        final orderId =
+            (rawData?['orderId'] ?? rawData?['transactionId']) as String?;
+        if (orderId != null && orderId.isNotEmpty) {
+          // Order notifications carry the OTHER party's id: to-buyer
+          // notifications include sellerId, to-seller ones include buyerId.
+          // A seller who got "set the shipping cost for this new order"
+          // (the only to-seller order notice carrying productId) lands on
+          // the quote screen; other seller notices act on order detail.
+          final isNewOrderForSeller = myUid != null &&
+              rawData?['sellerId'] == null &&
+              rawData?['buyerId'] != null &&
+              rawData?['productId'] != null;
+          if (isNewOrderForSeller) {
+            context.push(AppRoutes.sellerQuote);
+          } else {
+            context.push('${AppRoutes.orderDetail}/$orderId');
+          }
+        } else {
+          // myPurchases lists only the buyer's transactions; a seller
+          // notification must land on the seller's orders screen instead.
+          // Order notifications carry the other party's id: to-buyer
+          // notifications include sellerId, to-seller ones include buyerId.
+          final isBuyerRecipient = myUid != null && rawData?['sellerId'] != null;
+          context.push(isBuyerRecipient ? AppRoutes.myPurchases : AppRoutes.sellerOrders);
+        }
+        break;
+      }
+      case 'boost':
+        break;
+      case 'comment':
+      case 'comment_reply': {
+        final pid = rawData?['productId'] as String?;
+        if (pid != null) {
+          context.push('/product/$pid');
+        }
+        break;
+      }
+      case 'flash_sale':
+        context.push(AppRoutes.flashSale);
+        break;
+      case 'product':
+        break;
+      default:
+        break;
     }
   }
 
@@ -280,87 +374,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
             ),
       onTap: () {
         if (!isRead) _notifService.markAsRead(docId);
-        final senderId = rawData?['senderId'] as String?;
-        final groupId = rawData?['groupId'] as String?;
-        switch (type) {
-          case 'chat':
-            if (senderId != null) {
-              context.push('/chat/$senderId', extra: {'name': rawData?['senderName'] ?? ''});
-            } else {
-              context.push(AppRoutes.chats);
-            }
-            break;
-          case 'group_chat':
-            if (groupId != null) {
-              context.push('/group-chat/$groupId');
-            } else {
-              context.push(AppRoutes.chats);
-            }
-            break;
-          case 'order':
-          case 'sale':
-          case 'payment':
-          case 'escrow_confirm':
-          case 'escrow_release':
-          case 'escrow_auto_release':
-          case 'delivery_confirmed':
-          case 'dispatched':
-          case 'buyer_transport':
-          case 'shipping_quote':
-          case 'disputed':
-          case 'dispute_resolved':
-          case 'failed_retry': {
-            final orderId =
-                (rawData?['orderId'] ?? rawData?['transactionId']) as String?;
-            if (orderId != null && orderId.isNotEmpty) {
-              // Order notifications carry the OTHER party's id: to-buyer
-              // notifications include sellerId, to-seller ones include buyerId.
-              // A seller who got "set the shipping cost for this new order"
-              // (the only to-seller order notice carrying productId) lands on
-              // the quote screen; other seller notices act on order detail.
-              final myUid = FirebaseAuth.instance.currentUser?.uid;
-              final isNewOrderForSeller = myUid != null &&
-                  rawData?['sellerId'] == null &&
-                  rawData?['buyerId'] != null &&
-                  rawData?['productId'] != null;
-              if (isNewOrderForSeller) {
-                context.push(AppRoutes.sellerQuote);
-              } else {
-                context.push('${AppRoutes.orderDetail}/$orderId');
-              }
-            } else {
-              // myPurchases lists only the buyer's transactions; a seller
-              // notification must land on the seller's orders screen instead.
-              // Order notifications carry the other party's id: to-buyer
-              // notifications include sellerId, to-seller ones include buyerId.
-              final myUid = FirebaseAuth.instance.currentUser?.uid;
-              final isBuyerRecipient = myUid != null && rawData?['sellerId'] != null;
-              context.push(isBuyerRecipient ? AppRoutes.myPurchases : AppRoutes.sellerOrders);
-            }
-            break;
-          }
-          case 'boost':
-            context.push(AppRoutes.notifications);
-            break;
-          case 'comment':
-          case 'comment_reply': {
-            final pid = rawData?['productId'] as String?;
-            if (pid != null) {
-              context.push('/product/$pid');
-            } else {
-              context.push(AppRoutes.notifications);
-            }
-            break;
-          }
-          case 'flash_sale':
-            context.push(AppRoutes.flashSale);
-            break;
-          case 'product':
-            context.push(AppRoutes.notifications);
-            break;
-          default:
-            context.push(AppRoutes.notifications);
-        }
+        _openFromTile(context, type, rawData);
       },
     );
   }

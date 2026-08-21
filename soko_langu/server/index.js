@@ -239,7 +239,7 @@ app.post('/api/malipopay/webhook', async (req, res) => {
 app.use('/api/', rateLimit);
 
 // ─── Mount routers ──────────────────────────────────────────
-app.use('/api/search', searchRouter);
+app.use('/api/search', searchRateLimit, searchRouter);
 app.use('/api/notification', notificationRouter);
 
 function asyncHandler(fn) {
@@ -490,7 +490,7 @@ const { auditLog, PAYOUT_STATUSES, generatePayoutReference, PAYOUT_RETRY_MAX } =
 
 // Mount must come AFTER payoutRoutes is defined (line above) — line 243 had a
 // TDZ ReferenceError that crashed the server at boot.
-app.use('/api', payoutRoutes.router);
+app.use('/api', payoutRateLimit, payoutRoutes.router);
 
 // sendFcmToToken moved to OneSignal helpers above
 
@@ -1389,6 +1389,85 @@ function otpVerifyRateLimit(req, res, next) {
   next();
 }
 
+const otpEmailHits = new Map();
+const OTP_EMAIL_WINDOW = 15 * 60 * 1000;
+const OTP_EMAIL_MAX = 3;
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, times] of otpEmailHits) {
+    const live = times.filter((t) => now - t < OTP_EMAIL_WINDOW);
+    if (live.length === 0) otpEmailHits.delete(key);
+    else otpEmailHits.set(key, live);
+  }
+}, 5 * 60 * 1000).unref();
+
+function otpEmailRateLimit(req, res, next) {
+  const email = (req.body?.email || '').trim().toLowerCase();
+  if (!email) return next();
+  const now = Date.now();
+  if (!otpEmailHits.has(email)) otpEmailHits.set(email, []);
+  const hits = otpEmailHits.get(email).filter(t => now - t < OTP_EMAIL_WINDOW);
+  hits.push(now);
+  otpEmailHits.set(email, hits);
+  if (hits.length > OTP_EMAIL_MAX) {
+    return res.status(429).json({ error: 'auth_otp_rate_limited' });
+  }
+  next();
+}
+
+const searchHits = new Map();
+const SEARCH_WINDOW = 60 * 1000;
+const SEARCH_MAX = 20;
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, times] of searchHits) {
+    const live = times.filter((t) => now - t < SEARCH_WINDOW);
+    if (live.length === 0) searchHits.delete(key);
+    else searchHits.set(key, live);
+  }
+}, 5 * 60 * 1000).unref();
+
+function searchRateLimit(req, res, next) {
+  const ip = req.ip || req.connection.remoteAddress || 'unknown';
+  const now = Date.now();
+  if (!searchHits.has(ip)) searchHits.set(ip, []);
+  const hits = searchHits.get(ip).filter(t => now - t < SEARCH_WINDOW);
+  hits.push(now);
+  searchHits.set(ip, hits);
+  if (hits.length > SEARCH_MAX) {
+    return res.status(429).json({ error: 'Too many search requests. Please slow down.' });
+  }
+  next();
+}
+
+const payoutHits = new Map();
+const PAYOUT_WINDOW = 60 * 1000;
+const PAYOUT_MAX = 10;
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, times] of payoutHits) {
+    const live = times.filter((t) => now - t < PAYOUT_WINDOW);
+    if (live.length === 0) payoutHits.delete(key);
+    else payoutHits.set(key, live);
+  }
+}, 5 * 60 * 1000).unref();
+
+function payoutRateLimit(req, res, next) {
+  const ip = req.ip || req.connection.remoteAddress || 'unknown';
+  const now = Date.now();
+  if (!payoutHits.has(ip)) payoutHits.set(ip, []);
+  const hits = payoutHits.get(ip).filter(t => now - t < PAYOUT_WINDOW);
+  hits.push(now);
+  payoutHits.set(ip, hits);
+  if (hits.length > PAYOUT_MAX) {
+    return res.status(429).json({ error: 'Too many payout requests. Please wait before trying again.' });
+  }
+  next();
+}
+
 app.post('/api/auth/send-otp', otpPhoneRateLimit, async (req, res) => {
   try {
     const { phone } = req.body;
@@ -1468,7 +1547,7 @@ app.post('/api/auth/verify-otp', otpVerifyRateLimit, async (req, res) => {
 // ============================================================
 // 🔐 EMAIL OTP — SEND (6-digit code sent to the email address)
 // ============================================================
-app.post('/api/auth/send-email-otp', async (req, res) => {
+app.post('/api/auth/send-email-otp', otpEmailRateLimit, async (req, res) => {
   try {
     const { email, langCode } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required' });

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'ai/ai_service.dart';
 import 'ai/ai_tool.dart';
 import 'api_config.dart';
+import '../utils/rate_limiter.dart';
 
 class GroqService implements AiService {
   // API key is NEVER stored in the Flutter app — all calls go through server proxy.
@@ -251,6 +252,10 @@ $richProductBlocks
     String? searchQuery,
     String locale = 'sw',
   }) async {
+    await RateLimiter.incrementAttempt('ai_chat', maxAttempts: 30, window: const Duration(minutes: 60));
+    if (!await RateLimiter.isWithinLimit('ai_chat', maxAttempts: 30)) {
+      throw Exception('Rate limit exceeded. Please try again later.');
+    }
     _chatHistory.add({'role': 'user', 'content': userMessage});
     if (_chatHistory.length > 40) {
       _chatHistory.removeRange(0, _chatHistory.length - 40);

@@ -22,6 +22,7 @@ import '../../services/user_service.dart';
 import '../../services/analytics_service.dart';
 import '../../services/flash_sale_service.dart';
 import '../../services/recently_viewed_service.dart';
+import '../../services/account_tier_service.dart';
 import '../../models/flash_sale_model.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
@@ -67,6 +68,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   Timer? _flashTimer;
   StreamSubscription<FlashSale?>? _flashStreamSub;
   bool _viewIncremented = false;
+  bool _canBuy = true;
 
   @override
   void initState() {
@@ -74,12 +76,18 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     _checkFav();
     _loadSellerProfile();
     _loadFlashSale();
+    _loadTier();
     if (!_viewIncremented) {
       _viewIncremented = true;
       ProductService().incrementViewCount(widget.product.id);
       AnalyticsService().trackProductView(widget.product.id);
     }
     RecentlyViewedService.instance.add(widget.product.id);
+  }
+
+  Future<void> _loadTier() async {
+    final canBuy = await AccountTierService().canBuy;
+    if (mounted) setState(() => _canBuy = canBuy);
   }
 
   String _lastDisplay = '';
@@ -732,28 +740,30 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 ),
               ),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              flex: 2,
-              child: DsButton(
-                label: context.tr('buy_now'),
-                icon: Icons.shopping_cart_checkout,
-                loading: _processing,
-                onPressed: () async {
-                  if (currentUser == null) {
-                    context.push(AppRoutes.login);
-                  } else if (currentUser.uid == sellerId) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(context.tr('cannot_buy_own')),
-                      ),
-                    );
-                  } else {
-                    await _processBuyNow();
-                  }
-                },
+            if (_canBuy) ...[
+              const SizedBox(width: 10),
+              Expanded(
+                flex: 2,
+                child: DsButton(
+                  label: context.tr('buy_now'),
+                  icon: Icons.shopping_cart_checkout,
+                  loading: _processing,
+                  onPressed: () async {
+                    if (currentUser == null) {
+                      context.push(AppRoutes.login);
+                    } else if (currentUser.uid == sellerId) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(context.tr('cannot_buy_own')),
+                        ),
+                      );
+                    } else {
+                      await _processBuyNow();
+                    }
+                  },
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),

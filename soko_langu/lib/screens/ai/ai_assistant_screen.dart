@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../utils/phone_utils.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -376,7 +375,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
               children: [
                 Icon(Icons.smart_toy_outlined, color: cs.primary, size: 22),
                 const SizedBox(width: 8),
-                Text(context.tr('ai_dalali'), style: GoogleFonts.spaceGrotesk(color: cs.onSurface, fontWeight: FontWeight.w600, fontSize: 18)),
+                Text(context.tr('ai_dalali'), style: const TextStyle(fontFamily: 'Space Grotesk', color: cs.onSurface, fontWeight: FontWeight.w600, fontSize: 18)),
               ],
             ),
             Row(
@@ -389,7 +388,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
                 const SizedBox(width: 5),
                 Text(
                   context.tr('online'),
-                  style: GoogleFonts.jetBrainsMono(color: cs.onSurfaceVariant, fontSize: 10, fontWeight: FontWeight.w500, letterSpacing: 0.3),
+                  style: const TextStyle(fontFamily: 'JetBrains Mono', color: cs.onSurfaceVariant, fontSize: 10, fontWeight: FontWeight.w500, letterSpacing: 0.3),
                 ),
               ],
             ),
@@ -554,7 +553,8 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
                     const SizedBox(width: 4),
                     Text(
                       context.tr('in_soko_langu'),
-                      style: GoogleFonts.jetBrainsMono(
+                      style: const TextStyle(
+                        fontFamily: 'JetBrains Mono',
                         color: cs.primary, fontSize: 10,
                         fontWeight: FontWeight.w600, letterSpacing: 0.3,
                       ),
@@ -578,11 +578,11 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(product.productName, style: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w600, fontSize: 15, color: cs.onSurface)),
+                    Text(product.productName, style: const TextStyle(fontFamily: 'Space Grotesk', fontWeight: FontWeight.w600, fontSize: 15, color: cs.onSurface)),
                     if (product.brand != null && product.brand!.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 2),
-                        child: Text(product.brand!, style: GoogleFonts.jetBrainsMono(color: cs.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 10, letterSpacing: 0.2)),
+                        child: Text(product.brand!, style: TextStyle(fontFamily: 'JetBrains Mono', color: cs.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 10, letterSpacing: 0.2)),
                       ),
                   ],
                 ),
@@ -717,7 +717,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
             children: [
               Icon(Icons.auto_awesome, size: 12, color: cs.primary),
               const SizedBox(width: 4),
-              Text(context.tr('ai_label'), style: GoogleFonts.jetBrainsMono(color: cs.primary, fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+              Text(context.tr('ai_label'), style: const TextStyle(fontFamily: 'JetBrains Mono', color: cs.primary, fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
             ],
           ),
           const SizedBox(height: 8),
@@ -747,7 +747,8 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
         final headerText = headerRegex.firstMatch(line)!.group(1)!;
         children.add(TextSpan(
           text: '$headerText\n',
-          style: GoogleFonts.spaceGrotesk(
+          style: const TextStyle(
+            fontFamily: 'Space Grotesk',
             fontSize: 15,
             fontWeight: FontWeight.w600,
             color: cs.onSurface,
@@ -845,7 +846,8 @@ class _TypingIndicatorState extends State<_TypingIndicator>
             padding: const EdgeInsets.only(left: 4, bottom: 4),
             child: Text(
               context.tr('ai_typing'),
-              style: GoogleFonts.jetBrainsMono(
+              style: const TextStyle(
+                fontFamily: 'JetBrains Mono',
                 color: cs.onSurfaceVariant.withValues(alpha: 0.5),
                 fontSize: 10,
                 letterSpacing: 0.3,

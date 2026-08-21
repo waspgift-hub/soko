@@ -149,7 +149,16 @@ GoRouter buildRouter() {
       ),
       GoRoute(
         path: AppRoutes.register,
-        pageBuilder: (context, state) => _premiumPage(const RegisterScreen()),
+        pageBuilder: (context, state) {
+          final extra = state.extra is Map<String, dynamic>
+              ? state.extra as Map<String, dynamic>
+              : <String, dynamic>{};
+          return _premiumPage(RegisterScreen(
+            initialPhone: extra['phone'] as String?,
+            displayPhone: extra['displayPhone'] as String?,
+            otpVerified: extra['otpVerified'] == true,
+          ));
+        },
       ),
       GoRoute(
         path: AppRoutes.forgotPassword,

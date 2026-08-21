@@ -71,6 +71,10 @@ typedef CurrencyCallback = void Function(String);
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Cap image cache at 200 MB to prevent OOM on low-RAM devices
+  // while keeping enough headroom for the product feed + chat images.
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 200 * 1024 * 1024;
+
   await themeManager.load();
 
   await SafeTextFilter.init(language: Language.swahili);

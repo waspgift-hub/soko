@@ -436,7 +436,8 @@ class ProductService {
   }
 
   Stream<List<Product>> searchProducts(String query) {
-    final q = query.trim().toLowerCase();
+    var q = query.trim().toLowerCase();
+    if (q.length > 100) q = q.substring(0, 100);
     if (q.isEmpty) return Stream.value([]);
     final words = q.split(RegExp(r'\s+')).where((w) => w.length >= 2).toList();
     if (words.isEmpty) return Stream.value([]);
@@ -468,7 +469,8 @@ class ProductService {
   }
 
   Stream<List<Product>> searchByNameStream(String query) {
-    final q = query.trim().toLowerCase();
+    var q = query.trim().toLowerCase();
+    if (q.length > 100) q = q.substring(0, 100);
     if (q.isEmpty) return Stream.value([]);
     return _db
         .collection("products")

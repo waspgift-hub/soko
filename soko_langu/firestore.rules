@@ -226,7 +226,7 @@ service cloud.firestore {
         resource.data.participants.hasAny([request.auth.uid]) ||
         isAdmin()
       );
-      allow create: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.participants.hasAny([request.auth.uid]);
       allow update: if isSignedIn() && (
         resource.data.participants.hasAny([request.auth.uid]) ||
         isAdmin()
@@ -321,7 +321,7 @@ service cloud.firestore {
 
       match /views/{viewId} {
         allow read: if isAdmin();
-        allow create: if true;
+        allow create: if isSignedIn();
       }
 
       match /daily_stats/{statId} {
@@ -338,7 +338,7 @@ service cloud.firestore {
 
       match /impressions/{impId} {
         allow read: if isAdmin();
-        allow create: if true;
+        allow create: if isSignedIn();
       }
     }
 
@@ -383,7 +383,9 @@ service cloud.firestore {
     // ─── PRICE DROPS ────────────────────────────────────────
     match /price_drops/{docId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasAll(['productId', 'userId', 'createdAt'])
+        && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isAdmin();
     }
 
@@ -454,7 +456,9 @@ service cloud.firestore {
         resource.data.reporterId == request.auth.uid ||
         isAdmin()
       );
-      allow create: if isSignedIn() && notSuspended();
+      allow create: if isSignedIn() && notSuspended()
+        && request.resource.data.keys().hasAll(['reporterId', 'reason'])
+        && request.resource.data.reporterId == request.auth.uid;
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
@@ -462,7 +466,7 @@ service cloud.firestore {
     // ─── FRAUD ALERTS ───────────────────────────────────────
     match /fraud_alerts/{alertId} {
       allow read: if isAdmin();
-      allow create: if isSignedIn();
+      allow create: if isAdmin();
       allow update, delete: if isAdmin();
     }
 

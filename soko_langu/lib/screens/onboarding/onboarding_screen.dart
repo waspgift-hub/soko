@@ -155,14 +155,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           width: 130,
                           height: 130,
                           decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                p.color.withValues(alpha: 0.15),
-                                p.color.withValues(alpha: 0.05),
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
+                            color: p.color.withValues(alpha: 0.12),
                             shape: BoxShape.circle,
                             border: Border.all(
                               color: p.color.withValues(alpha: 0.2),
@@ -219,15 +212,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   width: _currentPage == i ? 28 : 9,
                   height: 9,
                   decoration: BoxDecoration(
-                    gradient: _currentPage == i
-                        ? LinearGradient(
-                            colors: [
-                              pg[_currentPage].color,
-                              pg[_currentPage].color.withValues(alpha: 0.6),
-                            ],
-                          )
-                        : null,
-                    color: _currentPage == i ? null : cs.outline,
+                    color: _currentPage == i
+                        ? pg[_currentPage].color
+                        : cs.outline,
                     borderRadius: BorderRadius.circular(5),
                   ),
                 );

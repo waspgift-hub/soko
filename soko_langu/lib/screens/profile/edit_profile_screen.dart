@@ -9,6 +9,7 @@ import 'package:geocoding/geocoding.dart';
 import '../../services/user_service.dart';
 import '../../services/meseji_service.dart';
 import '../../utils/phone_utils.dart';
+import '../../utils/rate_limiter.dart';
 import '../../extensions/context_tr.dart';
 import '../../utils/helpers.dart';
 import '../../widgets/google_loading.dart';
@@ -271,6 +272,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _showError(context.tr('phone_validator_invalid'));
       return;
     }
+    if (!await RateLimiter.canProceed(action: 'profile_phone_otp', cooldown: const Duration(seconds: 60))) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please wait before requesting another code')),
+      );
+      return;
+    }
     setState(() => _otpSending = true);
     try {
       final normalized = PhoneUtils.toE164(raw);
@@ -280,6 +287,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           _otpSending = false;
           _otpSent = true;
         });
+        await RateLimiter.record('profile_phone_otp');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(context.tr('otp_sent_to').replaceAll('{0}', PhoneUtils.formatForDisplay(normalized)))),
         );
@@ -556,6 +564,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     border: const OutlineInputBorder(),
                   ),
                   maxLines: 3,
+                  maxLength: 500,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(

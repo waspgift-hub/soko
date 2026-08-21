@@ -391,7 +391,15 @@ class _HomeScreenState extends State<HomeScreen>
             children: [
               IconButton(
                 icon: Icon(Icons.notifications_outlined, color: cs.primary),
-                onPressed: () => context.push(AppRoutes.notifications),
+                onPressed: () {
+                  // Don't stack a second notification route on a fast double tap —
+                  // the resulting duplicate page entries crash element teardown.
+                  if (GoRouterState.of(context).matchedLocation ==
+                      AppRoutes.notifications) {
+                    return;
+                  }
+                  context.push(AppRoutes.notifications);
+                },
               ),
               if (_unreadCount > 0)
                 Positioned(right: 6, top: 6, child: Container(
