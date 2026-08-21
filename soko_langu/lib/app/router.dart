@@ -125,6 +125,15 @@ GoRouter buildRouter() {
       final isAuth = app_state.appStateNotifier.isAuthenticated;
       final isAdmin = app_state.appStateNotifier.isAdmin;
 
+      // Authenticated users should not be on login/register — redirect to home.
+      // This is the safety net that catches cases where the imperative
+      // onSuccess callback (Navigator.push from OtpScreen) fails to fire
+      // because the OtpScreen was discarded by a router rebuild.
+      final authScreens = [AppRoutes.login, AppRoutes.register];
+      if (isAuth && authScreens.any((r) => location == r || location.startsWith('$r/'))) {
+        return AppRoutes.home;
+      }
+
       // Admin-only routes
       if (_adminOnlyRoutes.any((r) => location == r || location.startsWith('$r/'))) {
         if (!isAuth) return AppRoutes.login;

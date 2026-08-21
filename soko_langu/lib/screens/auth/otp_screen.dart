@@ -136,7 +136,13 @@ class _OtpScreenState extends State<OtpScreen> {
       HapticFeedback.heavyImpact();
       setState(() => _success = true);
       Future.delayed(const Duration(milliseconds: 750), () {
-        if (mounted) widget.onSuccess(context);
+        if (mounted) {
+          widget.onSuccess(context);
+        } else {
+          // Screen was discarded by a router rebuild after auth state changed.
+          // The router redirect (router.dart) handles this case by sending
+          // authenticated users away from /login or /register.
+        }
       });
     } else {
       HapticFeedback.vibrate();
