@@ -51,3 +51,5 @@ app.*.map.json
 # Production secrets
 CREDENTIALS.txt
 server/last_push_id.txt
+server/server.err
+*.err

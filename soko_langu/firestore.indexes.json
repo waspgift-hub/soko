@@ -367,6 +367,15 @@
         { "fieldPath": "userId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "transactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "escrowReleased", "order": "ASCENDING" },
+        { "fieldPath": "dispatchedAt", "order": "ASCENDING" }
+      ]
     }
   ]
 }

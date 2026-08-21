@@ -148,6 +148,13 @@ service cloud.firestore {
         isAdmin()
       );
       allow delete: if isAdmin();
+
+      // Delivery OTP: plaintext visible ONLY to buyer; seller never reads this.
+      // The hash stays on the parent doc (readable by both parties — harmless).
+      match /delivery_otp/{otpDoc} {
+        allow read: if isSignedIn() && resource.data.buyerId == request.auth.uid;
+        allow write: if false;
+      }
     }
 
     // ─── ORDER TIMELINE ─────────────────────────────────────

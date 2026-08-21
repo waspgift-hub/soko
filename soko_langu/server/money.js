@@ -32,6 +32,10 @@ function isFlashSaleStillActive(data, now = new Date()) {
  * amount the buyer pays) is always based on the real sale price, never the
  * stale full price from the checkout screen.
  *
+ * SECURITY: If no flash sale, the server price from the product document is
+ * always used — client-supplied price is only a fallback when the product
+ * doc is unreachable (network error), preventing payment tampering.
+ *
  * `flashSalesQuery` is injectable for tests; defaults to a Firestore query.
  */
 async function resolveEffectivePrice(db, productId, clientPrice, flashSalesQuery) {
@@ -54,6 +58,16 @@ async function resolveEffectivePrice(db, productId, clientPrice, flashSalesQuery
     }
   } catch (e) {
     console.error('resolveEffectivePrice error:', e.message);
+  }
+  // SECURITY: always trust the server price over client input
+  try {
+    const productDoc = await db.collection('products').doc(productId).get();
+    if (productDoc.exists) {
+      const serverPrice = Number(productDoc.data().price);
+      if (serverPrice > 0) return Math.round(serverPrice);
+    }
+  } catch (e) {
+    console.error('resolveEffectivePrice: product doc fetch failed, using client price:', e.message);
   }
   return Math.round(Number(clientPrice));
 }

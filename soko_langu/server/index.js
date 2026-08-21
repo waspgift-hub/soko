@@ -157,7 +157,7 @@ app.post('/api/whatsapp/webhook', async (req, res) => {
     const raw = JSON.stringify(body);
     const expected = crypto.createHmac('sha256', secret).update(raw).digest('hex');
     const provided = String(signature).replace(/^sha256=/, '');
-    if (expected !== provided) {
+    if (!crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(provided, 'hex'))) {
       console.warn(`[WA-WEBHOOK] invalid signature: got=${provided} expected=${expected}`);
       return res.status(401).json({ error: 'invalid signature' });
     }
@@ -491,6 +491,23 @@ const { auditLog, PAYOUT_STATUSES, generatePayoutReference, PAYOUT_RETRY_MAX } =
 // Mount must come AFTER payoutRoutes is defined (line above) — line 243 had a
 // TDZ ReferenceError that crashed the server at boot.
 app.use('/api', payoutRateLimit, payoutRoutes.router);
+
+// ─── Delivery Verification OTP routes ───
+app.locals.admin = admin;
+app.locals.db = db;
+app.locals.redis = redis;
+app.locals.requireUser = requireUser;
+app.locals.sendOneSignalNotification = sendOneSignalNotification;
+app.locals.clickpesaPayout = clickpesaPayout;
+app.locals.getPayoutFee = getPayoutFee;
+app.locals.generatePayoutReference = generatePayoutReference;
+app.locals.PAYOUT_STATUSES = PAYOUT_STATUSES;
+app.locals.auditLog = auditLog;
+app.locals.checkSuspended = checkSuspended;
+app.locals.notifyAdmins = notifyAdmins;
+
+const deliveryOtpRouter = require('./routes/delivery_otp');
+app.use('/api/orders', deliveryOtpRouter);
 
 // sendFcmToToken moved to OneSignal helpers above
 
@@ -1400,6 +1417,11 @@ setInterval(() => {
     if (live.length === 0) otpEmailHits.delete(key);
     else otpEmailHits.set(key, live);
   }
+  for (const [key, times] of otpVerifyHits) {
+    const live = times.filter((t) => now - t < OTP_VERIFY_WINDOW);
+    if (live.length === 0) otpVerifyHits.delete(key);
+    else otpVerifyHits.set(key, live);
+  }
 }, 5 * 60 * 1000).unref();
 
 function otpEmailRateLimit(req, res, next) {
@@ -1475,7 +1497,7 @@ app.post('/api/auth/send-otp', otpPhoneRateLimit, async (req, res) => {
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     // Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otp = crypto.randomInt(100000, 1000000).toString();
     const hashed = crypto.createHash('sha256').update(otp).digest('hex');
     const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
 
@@ -1554,7 +1576,7 @@ app.post('/api/auth/send-email-otp', otpEmailRateLimit, async (req, res) => {
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const cleanEmail = email.trim().toLowerCase();
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otp = crypto.randomInt(100000, 1000000).toString();
     const hashed = crypto.createHash('sha256').update(otp).digest('hex');
     const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
 
@@ -1733,7 +1755,7 @@ app.post('/api/auth/reset-password-by-phone', otpVerifyRateLimit, async (req, re
 // ============================================================
 // 🔐 PHONE LOGIN — Login with phone + OTP, returns Firebase custom token
 // ============================================================
-app.post('/api/phone-login', async (req, res) => {
+app.post('/api/phone-login', otpVerifyRateLimit, async (req, res) => {
   try {
     const { phone, otp } = req.body;
     if (!phone || !otp) return res.status(400).json({ error: 'Phone and OTP are required' });
@@ -1764,7 +1786,8 @@ app.post('/api/phone-login', async (req, res) => {
     if (usersSnap.empty) {
       // No account — create one with phone-based email
       const email = `phone_${cleanPhone}@soko-vibe.com`;
-      const password = cleanPhone.slice(-6) + 'Sv!';
+      // SECURITY: random password — phone-derived scheme was trivially exploitable
+      const password = crypto.randomBytes(24).toString('base64url');
       const userRecord = await admin.auth().createUser({
         email,
         password,

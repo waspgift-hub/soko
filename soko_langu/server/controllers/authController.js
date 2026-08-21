@@ -51,7 +51,7 @@ module.exports = function ({ admin, db }) {
       if (!phone) return res.status(400).json({ error: 'Phone number is required' });
       if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const otp = crypto.randomInt(100000, 1000000).toString();
       const hashed = crypto.createHash('sha256').update(otp).digest('hex');
       const expiresAt = Date.now() + 10 * 60 * 1000;
 
@@ -118,7 +118,7 @@ module.exports = function ({ admin, db }) {
       if (!db) return res.status(503).json({ error: 'Database not configured' });
 
       const cleanEmail = email.trim().toLowerCase();
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const otp = crypto.randomInt(100000, 1000000).toString();
       const hashed = crypto.createHash('sha256').update(otp).digest('hex');
       const expiresAt = Date.now() + 10 * 60 * 1000;
 
@@ -303,7 +303,7 @@ module.exports = function ({ admin, db }) {
       let uid;
       if (usersSnap.empty) {
         const email = `phone_${cleanPhone}@soko-vibe.com`;
-        const password = cleanPhone.slice(-6) + 'Sv!';
+        const password = crypto.randomBytes(24).toString('base64url');
         const userRecord = await admin.auth().createUser({
           email,
           password,

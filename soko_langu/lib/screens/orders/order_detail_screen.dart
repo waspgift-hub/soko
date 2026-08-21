@@ -60,6 +60,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   final _phoneController = TextEditingController();
   String? _phoneError;
 
+  // Delivery OTP state
+  String _buyerOtp = '';
+  StreamSubscription? _otpSub;
+  final _sellerOtpController = TextEditingController();
+  bool _verifyingOtp = false;
+  String? _otpError;
+  int _otpAttemptsRemaining = 3;
+
   @override
   void initState() {
     super.initState();
@@ -94,6 +102,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       final txSnap = _txData;
       setState(() => _liveData = _mergeDocs(orderData, txSnap));
       _maybeInitQuotedPayment();
+      _maybeSubscribeToOtp();
     });
 
     _txSub = txRef.snapshots().listen((snap) {
@@ -101,6 +110,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       _txData = snap.exists ? snap.data() : null;
       setState(() => _liveData = _mergeDocs(_orderData, _txData));
       _maybeInitQuotedPayment();
+      _maybeSubscribeToOtp();
     });
   }
 
@@ -115,6 +125,24 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     _gatewayFeeDebounce = Timer(const Duration(milliseconds: 400), () {
       _gatewayFeeFetching = false;
       _fetchGatewayFee();
+    });
+  }
+
+  void _maybeSubscribeToOtp() {
+    if (_otpSub != null) return;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final isBuyer = d['buyerId'] == user.uid;
+    if (!isBuyer || status != 'dispatched') return;
+    final otpRef = FirebaseFirestore.instance
+        .collection('orders')
+        .doc(widget.docId)
+        .collection('delivery_otp')
+        .doc('buyer');
+    _otpSub = otpRef.snapshots().listen((snap) {
+      if (!mounted || !snap.exists) return;
+      final data = snap.data();
+      setState(() => _buyerOtp = data?['otp'] as String? ?? '');
     });
   }
 
@@ -171,7 +199,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     _gatewayFeeDebounce?.cancel();
     _orderSub?.cancel();
     _txSub?.cancel();
+    _otpSub?.cancel();
     _phoneController.dispose();
+    _sellerOtpController.dispose();
     super.dispose();
   }
 
@@ -1491,6 +1521,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   Widget _buildActions(BuildContext context, ColorScheme cs) {
     final user = FirebaseAuth.instance.currentUser;
     final isBuyer = user != null && d['buyerId'] == user.uid;
+    final isSeller = user != null && d['sellerId'] == user.uid;
     final canConfirm = status == 'delivered' || status == 'dispatched';
     final canFillTransport =
         (status == 'escrow_hold' || status == 'paid_escrow_held') &&
@@ -1703,7 +1734,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                 ),
               ),
             ),
-          if (canConfirm)
+          if (canConfirm && status == 'dispatched' && isBuyer)
+            _buildBuyerOtpCard(cs),
+          if (canConfirm && status == 'dispatched' && isSeller)
+            _buildSellerOtpForm(cs),
+          if (canConfirm && status != 'dispatched')
             SizedBox(
               width: double.infinity,
               height: 48,
@@ -1788,6 +1823,225 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         Text(value, style: TextStyle(fontSize: 15, fontWeight: bold ? FontWeight.w800 : FontWeight.w600, color: valueColor)),
       ],
     );
+  }
+
+  Widget _buildBuyerOtpCard(ColorScheme cs) {
+    final otp = _buyerOtp;
+    final productName = d['productName'] as String? ?? 'Bidhaa';
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: cs.surface.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: cs.error.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: cs.error.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: cs.error, size: 22),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    context.tr('otp_security_warning', 'USIJIGAWANIE NAMBARI HII MPAKA UPOKEE NA KUKAGUA BIDHAA YAKO.'),
+                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: cs.error, height: 1.35),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            context.tr('delivery_otp_label', 'Nambari ya Uthibitisho'),
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cs.onSurfaceVariant),
+          ),
+          const SizedBox(height: 8),
+          if (otp.isNotEmpty)
+            GestureDetector(
+              onTap: () {
+                Clipboard.setData(ClipboardData(text: otp));
+                HapticFeedback.mediumImpact();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(context.tr('otp_copied', 'OTP imek Copies')), behavior: SnackBarBehavior.floating),
+                );
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: cs.primary.withValues(alpha: 0.3)),
+                ),
+                child: Text(
+                  otp,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 36, fontWeight: FontWeight.w900, letterSpacing: 12, color: cs.primary),
+                ),
+              ),
+            )
+          else
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Text(
+                context.tr('otp_waiting', 'Subiri muuzaji atume nambari...'),
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant),
+              ),
+            ),
+          const SizedBox(height: 8),
+          Text(
+            context.tr('share_otp_with_seller', 'Mpa nambari hii muuzaji ili athibitishe utoaji'),
+            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant.withValues(alpha: 0.7)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSellerOtpForm(ColorScheme cs) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: cs.surface.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.1)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.pin_outlined, color: cs.primary, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  context.tr('enter_buyer_otp', 'Weka nambari ya uthibitisho kutoka kwa mnunuzi'),
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: cs.onSurface),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          TextFormField(
+            controller: _sellerOtpController,
+            keyboardType: TextInputType.number,
+            maxLength: 4,
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: 8, color: cs.onSurface),
+            textAlign: TextAlign.center,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: InputDecoration(
+              hintText: '0000',
+              hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.4), letterSpacing: 8),
+              counterText: '',
+              errorText: _otpError,
+              filled: true,
+              fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.15),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: cs.primary, width: 1.5),
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: cs.error, width: 1),
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            context.tr('otp_attempts_remaining', 'Majaribio yaliyobaki: {0}').replaceAll('{0}', '$_otpAttemptsRemaining'),
+            style: TextStyle(fontSize: 12, color: _otpAttemptsRemaining <= 1 ? cs.error : cs.onSurfaceVariant),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: _verifyingOtp || _sellerOtpController.text.length != 4
+                  ? null
+                  : _verifyDeliveryOtp,
+              icon: _verifyingOtp
+                  ? const GoogleLoading(size: 20, strokeWidth: 2)
+                  : const Icon(Icons.verified, size: 20),
+              label: Text(
+                _verifyingOtp
+                    ? context.tr('verifying_label')
+                    : context.tr('verify_and_release'),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: cs.successGreen,
+                foregroundColor: cs.surface,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _verifyDeliveryOtp() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final otp = _sellerOtpController.text.trim();
+    if (otp.length != 4) return;
+    setState(() { _verifyingOtp = true; _otpError = null; });
+    try {
+      final resp = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/orders/verify-delivery'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${await user.getIdToken()}',
+        },
+        body: jsonEncode({'orderId': widget.docId, 'otp': otp}),
+      );
+      final result = jsonDecode(resp.body);
+      if (resp.statusCode == 200 && result['success'] == true) {
+        if (mounted) {
+          HapticFeedback.mediumImpact();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(context.tr('otp_verified_success')), behavior: SnackBarBehavior.floating),
+          );
+          _sellerOtpController.clear();
+        }
+      } else {
+        if (mounted) {
+          final error = result['error'] ?? context.tr('otp_verification_failed');
+          final remaining = result['attemptsRemaining'] as int?;
+          setState(() {
+            _otpError = error;
+            if (remaining != null) _otpAttemptsRemaining = remaining;
+          });
+          HapticFeedback.heavyImpact();
+        }
+      }
+    } catch (e) {
+      if (mounted) setState(() => _otpError = context.tr('network_error'));
+    }
+    if (mounted) setState(() => _verifyingOtp = false);
   }
 
   Widget _buildBottomBar(BuildContext context, ColorScheme cs) {
