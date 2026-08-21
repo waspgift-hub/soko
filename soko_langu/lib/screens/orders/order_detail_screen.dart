@@ -2039,7 +2039,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         }
       }
     } catch (e) {
-      if (mounted) setState(() => _otpError = context.tr('network_error'));
+      if (mounted) setState(() => _otpError = context.tr('network_error').replaceAll('{error}', e.toString()));
     }
     if (mounted) setState(() => _verifyingOtp = false);
   }

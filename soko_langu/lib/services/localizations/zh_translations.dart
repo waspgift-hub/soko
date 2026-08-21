@@ -1786,7 +1786,6 @@ const Map<String, Map<String, String>> zhTranslations = {
     'verifying_label': '验证中...',
     'otp_verified_success': '验证码已确认。订单已完成。',
     'otp_verification_failed': '验证码错误，请重试。',
-    'network_error': '网络错误，请重试。',
     'customers': '客户',
     'date': '日期',
     'deactivate': '停用',
