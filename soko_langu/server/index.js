@@ -2494,20 +2494,16 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
       }
       if (paymentStatus === 'success') {
         const amount = dep.amount || 0;
-        await db.collection('users').doc(dep.userId).update({
-          walletBalance: admin.firestore.FieldValue.increment(amount),
-        });
-        await depDoc.ref.update({
-          status: 'completed',
-          clickpesaReference: extra.clickpesaReference || '',
-          completedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        console.log(`Wallet deposit: TZS ${amount} credited to ${dep.userId} (ref: ${orderId})`);
-        // Send push notification
-        sendOneSignalNotification(dep.userId, 'Deposit Imethibitishwa!', `TZS ${amount.toLocaleString()} zimeongezwa kwenye pochi yako.`, { type: 'deposit', depositRef: orderId }).catch(() => {});
-        // Write in-app notification
-        try {
-          await db.collection('notifications').add({
+        await Promise.all([
+          db.collection('users').doc(dep.userId).update({
+            walletBalance: admin.firestore.FieldValue.increment(amount),
+          }),
+          depDoc.ref.update({
+            status: 'completed',
+            clickpesaReference: extra.clickpesaReference || '',
+            completedAt: admin.firestore.FieldValue.serverTimestamp(),
+          }),
+          db.collection('notifications').add({
             userId: dep.userId,
             title: 'Deposit Imethibitishwa!',
             body: `TZS ${amount.toLocaleString()} zimeongezwa kwenye pochi yako.`,
@@ -2515,8 +2511,10 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
             data: { depositRef: orderId, amount },
             read: false,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-        } catch (_) {}
+          }).catch(() => {}),
+        ]);
+        console.log(`Wallet deposit: TZS ${amount} credited to ${dep.userId} (ref: ${orderId})`);
+        sendOneSignalNotification(dep.userId, 'Deposit Imethibitishwa!', `TZS ${amount.toLocaleString()} zimeongezwa kwenye pochi yako.`, { type: 'deposit', depositRef: orderId }).catch(() => {});
       } else {
         const failAmount = dep.amount || 0;
         const depLang = await getUserNotifLang(dep.userId);
@@ -2527,13 +2525,10 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
           completedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
         sendOneSignalNotification(dep.userId, 'Deposit Imeshindikana', `Malipo ya TZS ${failAmount.toLocaleString()} hayakukamilika. Sababu: ${failReason}`, { type: 'deposit_failed', depositRef: orderId, failureReason: failReason }).catch(() => {});
-        try {
-          const depUserSnap = await db.collection('users').doc(dep.userId).get();
-          const depPhone = depUserSnap.data()?.phone || dep.phone || '';
-          if (depPhone) {
-            sendLocalizedSms(depPhone, `Malipo ya TZS ${failAmount.toLocaleString()} hayakukamilika. Sababu: ${failReason}. Jaribu tena kwenye app.`, dep.userId).catch(() => {});
-          }
-        } catch (_) {}
+        db.collection('users').doc(dep.userId).get().then(snap => {
+          const depPhone = snap.data()?.phone || dep.phone || '';
+          if (depPhone) sendLocalizedSms(depPhone, `Malipo ya TZS ${failAmount.toLocaleString()} hayakukamilika. Sababu: ${failReason}. Jaribu tena kwenye app.`, dep.userId).catch(() => {});
+        }).catch(() => {});
       }
       return;
     }
@@ -2772,18 +2767,16 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
         completedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      // Keep the mirrored orders doc in sync on failure too.
       db.collection('orders').doc(orderId).update({
         status: 'failed',
         failureReason,
         completedAt: admin.firestore.FieldValue.serverTimestamp(),
       }).catch(() => {});
 
-      // Boost failure — SMS + push + in-app to the boost user (buyerId === userId)
       if (tx.type === 'boost') {
-        await notifyBoostPaymentFailed(tx, failureReason);
+        notifyBoostPaymentFailed(tx, failureReason).catch(() => {});
       } else if (tx.buyerId) {
-        await db.collection('notifications').add({
+        db.collection('notifications').add({
           userId: tx.buyerId,
           title: 'Malipo Yameshindikana',
           body: `Malipo ya ${tx.productName || 'Bidhaa'} hayakukamilika. Jaribu tena au wasiliana nasi. Sababu: ${failureReason}`,
@@ -2791,17 +2784,12 @@ async function applyClickPesaPayment(orderId, paymentStatus, extra = {}) {
           type: 'payment_failed',
           transactionId: orderId,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        try {
-          await sendOneSignalNotification(tx.buyerId, 'Malipo Yameshindikana', `Malipo ya ${tx.productName || 'Bidhaa'} hayakukamilika. Jaribu tena kwenye app.`, { type: 'payment_failed', productId: tx.productId || '', transactionId: orderId });
-        } catch (_) {}
-        try {
-          const buyerSnap = await db.collection('users').doc(tx.buyerId).get();
-          const buyerPhone = buyerSnap.data()?.phone || tx.buyerPhone || '';
-          if (buyerPhone) {
-            sendLocalizedSms(buyerPhone, `Malipo ya ${tx.productName || 'Bidhaa'} hayakukamilika. Tafadhali jaribu tena kwenye app. Sababu: ${failureReason}`, tx.buyerId).catch(() => {});
-          }
-        } catch (_) {}
+        }).catch(() => {});
+        sendOneSignalNotification(tx.buyerId, 'Malipo Yameshindikana', `Malipo ya ${tx.productName || 'Bidhaa'} hayakukamilika. Jaribu tena kwenye app.`, { type: 'payment_failed', productId: tx.productId || '', transactionId: orderId }).catch(() => {});
+        db.collection('users').doc(tx.buyerId).get().then(snap => {
+          const buyerPhone = snap.data()?.phone || tx.buyerPhone || '';
+          if (buyerPhone) sendLocalizedSms(buyerPhone, `Malipo ya ${tx.productName || 'Bidhaa'} hayakukamilika. Tafadhali jaribu tena kwenye app. Sababu: ${failureReason}`, tx.buyerId).catch(() => {});
+        }).catch(() => {});
 
         // Notify seller that buyer payment failed
         if (tx.sellerId) {

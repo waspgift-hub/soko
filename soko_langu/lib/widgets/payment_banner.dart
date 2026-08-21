@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
@@ -314,6 +315,8 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
   bool _done = false;
   String _errorMsg = '';
   Timer? _pollTimer;
+  Timer? _elapsedTimer;
+  int _elapsedSeconds = 0;
 
   @override
   void initState() {
@@ -324,21 +327,22 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
     );
     _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeIn);
     _ctrl.forward();
-    // Keep listening to ClickPesa (Firestore stream + status poll) until a
-    // real status lands. No timeout: a slow USSD/PIN confirm is still valid,
-    // and the service only unlocks after payment is confirmed server-side.
     _startPolling();
+    _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && !_done) setState(() => _elapsedSeconds++);
+    });
   }
 
   @override
   void dispose() {
     _ctrl.dispose();
     _pollTimer?.cancel();
+    _elapsedTimer?.cancel();
     super.dispose();
   }
 
   void _startPolling() {
-    _pollTimer = Timer.periodic(const Duration(seconds: 7), (_) => _checkStatus());
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) => _checkStatus());
   }
 
   Future<void> _checkStatus() async {
@@ -418,14 +422,14 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
         final isLoading = !isOk && !isFail;
 
         if (isOk && !_done) {
+          HapticFeedback.heavyImpact();
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            // Payment landed — fire the caller's success handler; celebration
-            // confetti belongs to PaymentBanner (success), not this overlay.
             widget.onSuccess?.call();
             _finish();
           });
         }
         if (isFail && !_done) {
+          HapticFeedback.heavyImpact();
           final reason = data?['failureReason'] as String? ??
               data?['errorMessage'] as String? ??
               context.tr('payment_failed_fallback', 'Payment failed');
@@ -444,7 +448,7 @@ class _RealtimeBannerState extends State<_RealtimeBanner>
                 ? widget.failedTitle
                 : widget.processingTitle;
         final subtitle = isLoading
-            ? widget.processingSubtitle
+            ? '${widget.processingSubtitle ?? ''} (${_elapsedSeconds}s)'
             : isOk
                 ? widget.successSubtitle
                 : _errorMsg.isNotEmpty ? _errorMsg : null;
