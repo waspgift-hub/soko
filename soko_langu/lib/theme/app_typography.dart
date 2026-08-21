@@ -9,78 +9,90 @@ class AppTypography {
 
   static TextTheme apply(TextTheme base, ColorScheme scheme) {
     return base.copyWith(
-      displayLarge: const TextStyle(
+      displayLarge: TextStyle(
         fontFamily: _spaceGrotesk,
         fontSize: 34,
         fontWeight: FontWeight.w700,
         letterSpacing: -1.2,
         height: 1.1,
+        color: scheme.onSurface,
       ),
-      displayMedium: const TextStyle(
+      displayMedium: TextStyle(
         fontFamily: _spaceGrotesk,
         fontSize: 28,
         fontWeight: FontWeight.w700,
         letterSpacing: -0.8,
         height: 1.15,
+        color: scheme.onSurface,
       ),
-      headlineLarge: const TextStyle(
+      headlineLarge: TextStyle(
         fontFamily: _spaceGrotesk,
         fontSize: 24,
         fontWeight: FontWeight.w600,
         letterSpacing: -0.6,
+        color: scheme.onSurface,
       ),
-      headlineMedium: const TextStyle(
+      headlineMedium: TextStyle(
         fontFamily: _spaceGrotesk,
         fontSize: 20,
         fontWeight: FontWeight.w600,
         letterSpacing: -0.4,
+        color: scheme.onSurface,
       ),
-      titleLarge: const TextStyle(
+      titleLarge: TextStyle(
         fontFamily: _spaceGrotesk,
         fontSize: 18,
         fontWeight: FontWeight.w600,
         letterSpacing: -0.3,
+        color: scheme.onSurface,
       ),
-      titleMedium: const TextStyle(
+      titleMedium: TextStyle(
         fontFamily: _inter,
         fontSize: 16,
         fontWeight: FontWeight.w600,
         letterSpacing: -0.2,
+        color: scheme.onSurface,
       ),
-      titleSmall: const TextStyle(
+      titleSmall: TextStyle(
         fontFamily: _inter,
         fontSize: 14,
         fontWeight: FontWeight.w600,
+        color: scheme.onSurface,
       ),
-      bodyLarge: const TextStyle(
+      bodyLarge: TextStyle(
         fontFamily: _inter,
         fontSize: 16,
         fontWeight: FontWeight.w400,
         height: 1.4,
+        color: scheme.onSurface,
       ),
-      bodyMedium: const TextStyle(
+      bodyMedium: TextStyle(
         fontFamily: _inter,
         fontSize: 14,
         fontWeight: FontWeight.w400,
         height: 1.35,
+        color: scheme.onSurface,
       ),
-      bodySmall: const TextStyle(
+      bodySmall: TextStyle(
         fontFamily: _inter,
         fontSize: 12,
         fontWeight: FontWeight.w400,
         height: 1.3,
+        color: scheme.onSurface,
       ),
-      labelLarge: const TextStyle(
+      labelLarge: TextStyle(
         fontFamily: _jetBrainsMono,
         fontSize: 13,
         fontWeight: FontWeight.w500,
         letterSpacing: 0.3,
+        color: scheme.onSurface,
       ),
-      labelMedium: const TextStyle(
+      labelMedium: TextStyle(
         fontFamily: _jetBrainsMono,
         fontSize: 11,
         fontWeight: FontWeight.w400,
         letterSpacing: 0.2,
+        color: scheme.onSurface,
       ),
       labelSmall: TextStyle(
         fontFamily: _jetBrainsMono,
