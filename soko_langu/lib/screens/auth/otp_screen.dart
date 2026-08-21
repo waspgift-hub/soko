@@ -45,8 +45,10 @@ class OtpScreen extends StatefulWidget {
 
 class _OtpScreenState extends State<OtpScreen> {
   final _otpKey = GlobalKey<AuthOtpFieldState>();
-  Timer? _timer;
-  int _secondsLeft = 0;
+  Timer? _resendTimer;
+  Timer? _expiryTimer;
+  int _resendLeft = 0;
+  int _expiryLeft = 0;
   bool _canResend = false;
   bool _resending = false;
   bool _verifying = false;
@@ -55,41 +57,61 @@ class _OtpScreenState extends State<OtpScreen> {
   int _errorTick = 0;
   String? _clipboardCode;
 
+  static const int _otpExpirySeconds = 300; // 5 minutes
+
   @override
   void initState() {
     super.initState();
-    _startCountdown();
+    _startTimers();
     _detectClipboardOtp();
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _resendTimer?.cancel();
+    _expiryTimer?.cancel();
     super.dispose();
   }
 
-  void _startCountdown() {
-    _timer?.cancel();
+  void _startTimers() {
+    _resendTimer?.cancel();
+    _expiryTimer?.cancel();
     setState(() {
       _canResend = false;
-      _secondsLeft = widget.resendSeconds;
+      _resendLeft = widget.resendSeconds;
+      _expiryLeft = _otpExpirySeconds;
     });
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       setState(() {
-        _secondsLeft--;
-        if (_secondsLeft <= 0) {
+        _resendLeft--;
+        if (_resendLeft <= 0) {
           _canResend = true;
-          _timer?.cancel();
+          _resendTimer?.cancel();
+        }
+      });
+    });
+    _expiryTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() {
+        _expiryLeft--;
+        if (_expiryLeft <= 0) {
+          _expiryTimer?.cancel();
         }
       });
     });
   }
 
   String get _resendLabel {
-    final mm = (_secondsLeft ~/ 60).toString().padLeft(2, '0');
-    final ss = (_secondsLeft % 60).toString().padLeft(2, '0');
+    final mm = (_resendLeft ~/ 60).toString().padLeft(2, '0');
+    final ss = (_resendLeft % 60).toString().padLeft(2, '0');
     return context.tr('resend_wait').replaceAll('{0}', '$mm:$ss');
+  }
+
+  String get _expiryLabel {
+    final mm = (_expiryLeft ~/ 60).toString().padLeft(2, '0');
+    final ss = (_expiryLeft % 60).toString().padLeft(2, '0');
+    return '$mm:$ss';
   }
 
   Future<void> _detectClipboardOtp() async {
@@ -159,7 +181,7 @@ class _OtpScreenState extends State<OtpScreen> {
     setState(() => _resending = true);
     try {
       await context.read<AuthNotifier>().sendPhoneOtp(widget.phone);
-      _startCountdown();
+      _startTimers();
       if (mounted) {
         _otpKey.currentState?.clear();
         setState(() => _errorMessage = null);
@@ -224,6 +246,19 @@ class _OtpScreenState extends State<OtpScreen> {
                               )
                             : const SizedBox(height: 2),
                       ),
+                      if (_expiryLeft > 0) ...[
+                        const SizedBox(height: AppSpacing.s2),
+                        Center(
+                          child: Text(
+                            context.tr('otp_expires_in').replaceAll('{0}', _expiryLabel),
+                            style: TextStyle(
+                              color: _expiryLeft < 60 ? cs.error : cs.onSurfaceVariant,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
                       if (_clipboardCode != null) ...[
                         const SizedBox(height: AppSpacing.s2),
                         Center(

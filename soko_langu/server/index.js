@@ -1477,7 +1477,7 @@ app.post('/api/auth/send-otp', otpPhoneRateLimit, async (req, res) => {
     // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const hashed = crypto.createHash('sha256').update(otp).digest('hex');
-    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
 
     const cleanPhone = phone.replace(/\D/g, '');
 
@@ -1490,7 +1490,7 @@ app.post('/api/auth/send-otp', otpPhoneRateLimit, async (req, res) => {
     });
 
     // Send OTP via Meseji SMS — reuse shared sendSms helper
-    const message = `OTP yako ni ${otp}. Inaisha kwa dakika 10.`;
+    const message = `OTP yako ni ${otp}. Inaisha kwa dakika 5.`;
     // send-otp runs pre-auth, so the app tells us its language via langCode
     // (defaults to Swahili for clients that don't send it).
     const langCode = ['sw', 'en', 'zh'].includes(req.body.langCode) ? req.body.langCode : 'sw';
@@ -1556,7 +1556,7 @@ app.post('/api/auth/send-email-otp', otpEmailRateLimit, async (req, res) => {
     const cleanEmail = email.trim().toLowerCase();
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const hashed = crypto.createHash('sha256').update(otp).digest('hex');
-    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
 
     // Same otp_codes collection as phone OTP, keyed by the email address
     await db.collection('otp_codes').doc(cleanEmail).set({

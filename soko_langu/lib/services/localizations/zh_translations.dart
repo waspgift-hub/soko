@@ -1131,6 +1131,7 @@ const Map<String, Map<String, String>> zhTranslations = {
     'otp_arrives_via_sms': '您将通过短信收到验证码',
     'verify': '验证',
     'resend_wait': '请等待 {0} 秒...',
+    'otp_expires_in': 'OTP 将在 {0} 后过期',
     'enter_otp_6_digits': '请输入 6 位 OTP',
     'select_gender': '请选择你的性别',
     'select_dob': '请选择你的出生日期',
