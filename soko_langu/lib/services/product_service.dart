@@ -556,13 +556,17 @@ class ProductService {
     return _db
         .collection("products")
         .where("sellerId", isEqualTo: user.uid)
-        .snapshots()
+        .snapshots(includeMetadataChanges: true)
         .map((snapshot) {
           final products = snapshot.docs
               .map((doc) => Product.fromFirestore(doc))
               .toList();
           products.sort((a, b) => b.createdAt.compareTo(a.createdAt));
           return products;
+        })
+        .handleError((e) {
+          debugPrint('getMyProducts error: $e');
+          return <Product>[];
         });
   }
 

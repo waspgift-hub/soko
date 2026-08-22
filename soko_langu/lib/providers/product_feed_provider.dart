@@ -41,7 +41,8 @@ class ProductFeedProvider extends ChangeNotifier {
     if (result.isError) {
       _error = result.error;
       _errorKind = FirestoreErrorKind.other;
-      _products = [];
+      // Don't wipe existing products on error — keeps realtime data visible
+      if (_products.isEmpty) _products = [];
     } else {
       _products = result.data ?? [];
       _fromCache = result.isCache;

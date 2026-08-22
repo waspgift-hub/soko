@@ -66,24 +66,30 @@ class _MyAdsScreenState extends State<MyAdsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      return Scaffold(body: Center(child: Text(context.tr('login_required'))));
-    }
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, authSnap) {
+        final user = authSnap.data ?? FirebaseAuth.instance.currentUser;
+        if (user == null) {
+          if (authSnap.connectionState == ConnectionState.waiting) {
+            return const Scaffold(body: GoogleLoadingPage());
+          }
+          return Scaffold(body: Center(child: Text(context.tr('login_required'))));
+        }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(context.tr('my_ads')),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () => context.push(AppRoutes.addProduct),
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(context.tr('my_ads')),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.add),
+                onPressed: () => context.push(AppRoutes.addProduct),
+              ),
+            ],
           ),
-        ],
-      ),
-      body: SafeArea(
-        child: StreamBuilder<List<Product>>(
-          stream: _productService.getMyProducts(),
+          body: SafeArea(
+            child: StreamBuilder<List<Product>>(
+              stream: _productService.getMyProducts(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const GoogleLoadingPage();
@@ -232,6 +238,8 @@ class _MyAdsScreenState extends State<MyAdsScreen> {
           },
         ),
       ),
+        );
+      },
     );
   }
 }

@@ -112,8 +112,16 @@ class _HomeScreenState extends State<HomeScreen>
     _subscribeNotifications();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<ProductFeedProvider>();
+      // Always ensure feed is fresh when coming to Home — previous logic
+      // skipped refresh if products.isNotEmpty, so a product created via
+      // latency compensation (visible via realtime) would disappear after
+      // app kill before server sync, because cached fetch missed it.
       if (provider.products.isEmpty && !provider.isLoading) {
         provider.refresh();
+      } else if (!provider.isLoading) {
+        // If we already have data, still trigger a background refresh
+        // without clearing the list, so new server-confirmed docs appear.
+        provider.loadInitial();
       }
     });
   }
@@ -152,7 +160,19 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Firestore snapshots auto-reconnect — no need to recreate on resume
+    if (state == AppLifecycleState.resumed && mounted) {
+      // Force refresh so seller's newly created product appears even if
+      // the initial paginated query missed it (serverTimestamp pending,
+      // offline cache, or index building). This fixes "bidhaa inaonekana
+      // kwangu tu, nikirudi siioni".
+      final provider = context.read<ProductFeedProvider>();
+      // Small delay lets Firestore persistence sync pending writes first
+      Future.delayed(const Duration(milliseconds: 600), () {
+        if (mounted) provider.refresh();
+      });
+      // Also re-subscribe notifications (auth may have refreshed)
+      _subscribeNotifications();
+    }
   }
 
   void _onBrandTap(String? brand) {
