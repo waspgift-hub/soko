@@ -323,6 +323,44 @@ router.post('/open-dispute', async function (req, res) {
   }
 });
 
+router.post('/set-shipping-cost', async function (req, res) {
+  try {
+    var locals = req.app.locals;
+    var admin = locals.admin;
+    var db = locals.db;
+    if (!db || !admin) return res.status(503).json({ error: 'Database not configured' });
+    var auth = locals.requireUser ? await locals.requireUser(req) : null;
+    if (!auth || !auth.uid) {
+      var token = (req.headers.authorization || '').replace('Bearer ', '');
+      if (!token) return res.status(401).json({ error: 'Unauthorized' });
+      try { var d = await admin.auth().verifyIdToken(token); auth = { uid: d.uid }; } catch (e) { return res.status(401).json({ error: 'Unauthorized' }); }
+    }
+    var orderId = req.body.orderId;
+    var shippingCost = Number(req.body.shippingCost);
+    if (!orderId || !shippingCost || shippingCost <= 0) return res.status(400).json({ error: 'Valid shippingCost required' });
+    var txRef = db.collection('transactions').doc(orderId);
+    var orderRef = db.collection('orders').doc(orderId);
+    var txSnap = await txRef.get();
+    var docSnap = txSnap.exists ? txSnap : await orderRef.get();
+    if (!docSnap.exists) return res.status(404).json({ error: 'Order not found' });
+    var data = docSnap.data();
+    if (data.sellerId !== auth.uid) return res.status(403).json({ error: 'Only seller can set shipping cost' });
+    if (data.status !== 'escrow_hold' && data.status !== 'paid_escrow_held' && data.status !== 'escrow_hold' ) return res.status(400).json({ error: 'Order not in escrow' });
+    if (data.shippingCost && data.shippingCost > 0) return res.status(400).json({ error: 'Shipping cost already set' });
+    var productPrice = Number(data.productPrice || 0);
+    var totalAmount = productPrice + shippingCost;
+    var batch = db.batch();
+    batch.set(txRef, { shippingCost: shippingCost, totalAmount: totalAmount, shippingCostSetAt: admin.firestore.FieldValue.serverTimestamp(), shippingCostSetBy: auth.uid }, { merge: true });
+    batch.set(orderRef, { shippingCost: shippingCost, totalAmount: totalAmount, shippingCostSetAt: admin.firestore.FieldValue.serverTimestamp(), shippingCostSetBy: auth.uid }, { merge: true });
+    batch.set(db.collection('notifications').doc(), { userId: data.buyerId, title: 'Gharama ya usafirishaji', body: 'Muuzaji ameweka gharama ya usafirishaji TZS ' + shippingCost + '. Tayarisha kupokea mzigo.', type: 'shipping_cost_set', orderId: orderId, isRead: false, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+    await batch.commit();
+    if (locals.sendOneSignalNotification && data.buyerId) {
+      try { await locals.sendOneSignalNotification(data.buyerId, 'Gharama ya usafirishaji: TZS ' + shippingCost, 'Muuzaji ameweka gharama ya usafirishaji'); } catch (e) {}
+    }
+    res.json({ success: true, shippingCost: shippingCost, totalAmount: totalAmount });
+  } catch (e) { log('SET-SHIPPING', e.message); res.status(500).json({ error: 'Internal server error' }); }
+});
+
 router.post('/cron/auto-release', async function (req, res) {
   try {
     var locals = req.app.locals;
@@ -357,7 +395,7 @@ router.post('/cron/auto-release', async function (req, res) {
       var tx = doc.data();
       var orderId = doc.id;
       if (tx.disputeInfo && tx.disputeInfo.resolved === false) continue;
-      if (!tx.buyerTransport && !tx.dispatchProof) continue;
+      if (!tx.shippingCost && !tx.dispatchProof && !tx.buyerTransport) continue;
       if (redis) {
         try {
           var lockResult = await redis.set('auto-release:lock:' + orderId, 'cron', 'EX', 60, 'NX');

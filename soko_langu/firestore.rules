@@ -179,7 +179,7 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedForBuyer'])
         )) ||
         (resource.data.sellerId == request.auth.uid && (
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedForSeller', 'shippingCost'])
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedForSeller', 'shippingCost', 'totalAmount'])
         )) ||
         isAdmin()
       );
