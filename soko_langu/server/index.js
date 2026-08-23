@@ -3042,12 +3042,15 @@ app.post('/api/escrow/cancel', async (req, res) => {
       return res.status(400).json({ error: 'Buyer phone not found for refund' });
     }
 
-    if (productPrice + shippingCost <= DEFAULT_PAYOUT_FEE) {
-      return res.status(400).json({ error: `Refund amount must exceed fee of TZS ${DEFAULT_PAYOUT_FEE.toLocaleString()}` });
+    const grossRefund = productPrice + shippingCost;
+    const cancelPayoutFee = getPayoutFee(grossRefund);
+
+    if (grossRefund <= cancelPayoutFee) {
+      return res.status(400).json({ error: `Refund amount must exceed fee of TZS ${cancelPayoutFee.toLocaleString()}` });
     }
 
-    // Refund includes the shipping cost the buyer paid, minus the payout fee
-    const refundAmount = productPrice + shippingCost - DEFAULT_PAYOUT_FEE;
+    // Refund includes the shipping cost the buyer paid, minus the actual ClickPesa payout fee
+    const refundAmount = grossRefund - cancelPayoutFee;
 
     // Refund minus payout fee to buyer via ClickPesa
     try {
@@ -3065,7 +3068,7 @@ app.post('/api/escrow/cancel', async (req, res) => {
       status: 'refunded',
       escrowReleased: true,
       cancellationType: 'buyer_cancel',
-      refundFee: DEFAULT_PAYOUT_FEE,
+      refundFee: cancelPayoutFee,
       cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
@@ -3087,8 +3090,8 @@ app.post('/api/escrow/cancel', async (req, res) => {
       amount: -refundAmount,
       type: 'refund',
       orderId,
-      fee: DEFAULT_PAYOUT_FEE,
-      description: `Buyer cancel: ${productName} - TZS ${refundAmount} (fee TZS ${DEFAULT_PAYOUT_FEE})`,
+      fee: cancelPayoutFee,
+      description: `Buyer cancel: ${productName} - TZS ${refundAmount} (fee TZS ${cancelPayoutFee})`,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
     });
 
@@ -3096,13 +3099,13 @@ app.post('/api/escrow/cancel', async (req, res) => {
     await db.collection('notifications').add({
       userId: tx.buyerId,
       title: '💰 Pesa Zimerudishwa',
-      body: `TZS ${refundAmount.toLocaleString()} zimerudishwa kwa ${productName}. Ada ya TZS ${DEFAULT_PAYOUT_FEE.toLocaleString()} imekatwa kwa gharama za payout.`,
+      body: `TZS ${refundAmount.toLocaleString()} zimerudishwa kwa ${productName}. Ada ya TZS ${cancelPayoutFee.toLocaleString()} imekatwa kwa gharama za payout.`,
       isRead: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       data: { type: 'refund', orderId },
     });
     try {
-      await sendOneSignalNotification(tx.buyerId, '💰 Pesa Zimerudishwa', `TZS ${refundAmount.toLocaleString()} zimerudishwa kwa ${productName}. Ada ya TZS ${DEFAULT_PAYOUT_FEE.toLocaleString()} imekatwa kwa gharama za payout.`, { type: 'refund', orderId });
+      await sendOneSignalNotification(tx.buyerId, '💰 Pesa Zimerudishwa', `TZS ${refundAmount.toLocaleString()} zimerudishwa kwa ${productName}. Ada ya TZS ${cancelPayoutFee.toLocaleString()} imekatwa kwa gharama za payout.`, { type: 'refund', orderId });
     } catch (_) {}
 
     // Notify seller
@@ -3120,7 +3123,7 @@ app.post('/api/escrow/cancel', async (req, res) => {
       } catch (_) {}
     }
 
-    res.json({ success: true, refundAmount, fee: DEFAULT_PAYOUT_FEE, message: `Oda imeghairiwa. TZS ${refundAmount.toLocaleString()} zimerudishwa kwa simu yako (ada TZS ${DEFAULT_PAYOUT_FEE.toLocaleString()}).` });
+    res.json({ success: true, refundAmount, fee: cancelPayoutFee, message: `Oda imeghairiwa. TZS ${refundAmount.toLocaleString()} zimerudishwa kwa simu yako (ada TZS ${cancelPayoutFee.toLocaleString()}).` });
   } catch (e) {
     console.error('Escrow cancel error:', e);
     res.status(500).json({ error: 'Internal server error' });
@@ -3304,7 +3307,7 @@ app.post('/api/escrow/admin-resolve-dispute', async (req, res) => {
       }
 
       const refundAmount = productPrice; // Full refund to buyer
-      const gatewayFee = DEFAULT_PAYOUT_FEE;
+      const gatewayFee = getPayoutFee(refundAmount);
 
       // Send full refund to buyer via ClickPesa
       try {
@@ -3421,7 +3424,8 @@ app.post('/api/escrow/retry-payout', async (req, res) => {
     if (!sellerPhone) return res.status(400).json({ error: 'Seller has no phone number for payout' });
 
     // Attempt payout
-    const netPayout = sellerReceives - DEFAULT_PAYOUT_FEE;
+    const retryPayoutFee = getPayoutFee(sellerReceives);
+    const netPayout = sellerReceives - retryPayoutFee;
 
     if (netPayout <= 0) {
       await txDoc.ref.update({
@@ -3436,7 +3440,7 @@ app.post('/api/escrow/retry-payout', async (req, res) => {
 
     await processPayout({
       userId: sellerId, phone: sellerPhone,
-      amount: sellerReceives, fee: DEFAULT_PAYOUT_FEE, netAmount: netPayout,
+      amount: sellerReceives, fee: retryPayoutFee, netAmount: netPayout,
       source: `retry_escrow_${orderId}`,
       type: 'escrow_retry_payout',
       metadata: { orderId, sellerId, productName },
@@ -4142,7 +4146,7 @@ app.post('/api/retry-payment', async (req, res) => {
     if (tx.type === 'purchase') {
       const productPrice = tx.productPrice || 0;
       const platformFee = Math.round(productPrice * PLATFORM_COMMISSION_PERCENT);
-      const payoutFee = DEFAULT_PAYOUT_FEE;
+      const payoutFee = getPayoutFee(productPrice);
       const processingFee = tx.processingFee || tx.clickpesaFee || 0;
       const sellerReceives = productPrice;
       const deliveryType = tx.deliveryType || 'local';
