@@ -4658,7 +4658,6 @@ app.get('/api/seller-analytics/:sellerId', async (req, res) => {
     const { sellerId } = req.params;
     if (!sellerId) return res.status(400).json({ error: 'sellerId required' });
 
-    // Auth: verify Firebase token, uid must match sellerId or be admin
     const authHeader = req.headers['authorization'];
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -4677,6 +4676,10 @@ app.get('/api/seller-analytics/:sellerId', async (req, res) => {
     }
 
     if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const analyticsCacheKey = `seller-analytics:${sellerId}`;
+    const cachedAnalytics = await cache.get(analyticsCacheKey);
+    if (cachedAnalytics) return res.json(cachedAnalytics);
 
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -4799,7 +4802,7 @@ app.get('/api/seller-analytics/:sellerId', async (req, res) => {
     }
     const averageRating = totalReviews > 0 ? totalRating / totalReviews : 0;
 
-    res.json({
+    const analyticsResult = {
       success: true,
       sellerId,
       totalProducts,
@@ -4823,7 +4826,9 @@ app.get('/api/seller-analytics/:sellerId', async (req, res) => {
       lastUpdated: now.toISOString(),
       topProducts: topProducts.slice(0, 10),
       monthlySales,
-    });
+    };
+    await cache.set(analyticsCacheKey, analyticsResult, 60_000);
+    res.json(analyticsResult);
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -5222,17 +5227,24 @@ app.get('/api/transaction-status/:orderId', async (req, res) => {
     if (!(await requireUser(req, res))) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
+    const cacheKey = `tx-status:${orderId}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) return res.json(cached);
+
     const doc = await db.collection('transactions').doc(orderId).get();
     if (!doc.exists) return res.status(404).json({ error: 'Transaction not found' });
 
     const data = doc.data();
     if (!(await isOwnerOrAdmin(req, res, data.buyerId || data.userId || ''))) return;
-    res.json({
+    const result = {
       success: true,
       status: data.status || 'pending',
       failureReason: data.failureReason || null,
       completedAt: data.completedAt || null,
-    });
+    };
+    // 3s TTL — this endpoint is polled rapidly during USSD payment confirmation
+    await cache.set(cacheKey, result, 3_000);
+    res.json(result);
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
   }

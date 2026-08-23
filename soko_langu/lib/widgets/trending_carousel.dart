@@ -19,8 +19,6 @@ class TrendingCarousel extends StatefulWidget {
 }
 
 class _TrendingCarouselState extends State<TrendingCarousel> {
-  final PageController _pageCtrl = PageController(viewportFraction: 0.4);
-  int _currentPage = 0;
   final FlashSaleService _flashSaleService = FlashSaleService();
   final ProductService _productService = ProductService();
   Map<String, FlashSale> _flashSales = {};
@@ -39,7 +37,6 @@ class _TrendingCarouselState extends State<TrendingCarousel> {
   @override
   void dispose() {
     _flashSub?.cancel();
-    _pageCtrl.dispose();
     super.dispose();
   }
 
@@ -52,7 +49,6 @@ class _TrendingCarouselState extends State<TrendingCarousel> {
           return const SizedBox.shrink();
         }
         final products = snap.data!;
-        // hw: keep the home-screen flash-sales widget in sync with the trending feed
         WidgetService.updateFlashSales(products: products, flashSales: _flashSales);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -80,60 +76,30 @@ class _TrendingCarouselState extends State<TrendingCarousel> {
               ),
             ),
             SizedBox(
-              height: 240,
-              child: Column(
-                children: [
-                  Expanded(
-                    child: PageView.builder(
-                      controller: _pageCtrl,
-                      itemCount: products.length,
-                      onPageChanged: (i) => setState(() => _currentPage = i),
-                      itemBuilder: (context, index) {
-                        final p = products[index];
-                        return _buildCard(p, _flashSales[p.id]);
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  if (products.length > 1)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(
-                        products.length > 7 ? 7 : products.length,
-                        (i) => AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          margin: const EdgeInsets.symmetric(horizontal: 2),
-                          width: _currentPage == i ? 8 : 6,
-                          height: _currentPage == i ? 8 : 6,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: _currentPage == i
-                                ? Theme.of(context).colorScheme.trendingOrange
-                                : Theme.of(context).colorScheme.outline,
-                          ),
-                        ),
+              height: 260,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: products.length,
+                itemBuilder: (context, index) {
+                  final p = products[index];
+                  return SizedBox(
+                    width: 160,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 10),
+                      child: ProductCard(
+                        product: p,
+                        flashSale: _flashSales[p.id],
+                        onTap: () => context.push('${AppRoutes.productDetail}/${p.id}', extra: p),
                       ),
                     ),
-                ],
+                  );
+                },
               ),
             ),
           ],
         );
       },
-    );
-  }
-
-  Widget _buildCard(Product p, FlashSale? fs) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
-      child: ProductCard(
-        product: p,
-        flashSale: fs,
-        onTap: () => context.push(
-          '${AppRoutes.productDetail}/${p.id}',
-          extra: p,
-        ),
-      ),
     );
   }
 }

@@ -62,9 +62,10 @@ class ProductCard extends StatelessWidget {
                                 memCacheWidth: 360,
                                 memCacheHeight: 360,
                                 fit: BoxFit.cover,
+                                fadeInDuration: Duration.zero,
+                                fadeOutDuration: Duration.zero,
                                 placeholder: (context, url) => Container(
                                   color: cs.surfaceContainerLow,
-                                  child: const DsSkeleton(),
                                 ),
                                 errorWidget: (context, url, error) => Container(
                                   color: cs.surfaceContainerLow,
