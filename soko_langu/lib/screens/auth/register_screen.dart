@@ -199,8 +199,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   void _afterRegistrationOtp(BuildContext ctx) {
+    Navigator.of(ctx).pop();
     _createAccount().then((err) {
-      if (err != null && ctx.mounted) _showError(err);
+      if (err != null && mounted) _showError(err);
     });
   }
 

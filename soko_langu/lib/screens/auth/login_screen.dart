@@ -143,10 +143,10 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _goAfterOtp(BuildContext ctx) {
-    if (!ctx.mounted) return;
+    if (!mounted) return;
+    Navigator.of(ctx).pop();
     if (_isNewUser) {
-      // OTP was verified once; Sign Up consumes it instead of re-asking.
-      ctx.push(
+      context.push(
         AppRoutes.register,
         extra: {
           'phone': _normalizedPhone,
@@ -155,7 +155,8 @@ class _LoginScreenState extends State<LoginScreen> {
         },
       );
     } else {
-      ctx.go(AppRoutes.home);
+      // Auth state already changed; router redirect detects
+      // authenticated user on /login and navigates to home.
     }
   }
 
