@@ -145,9 +145,12 @@ class _MyAdsScreenState extends State<MyAdsScreen> {
                   itemCount: products.length,
                   itemBuilder: (context, index) {
                     final product = products[index];
-                    return ProductCard(
-                      product: product,
-                      onTap: () => context.push('${AppRoutes.productDetail}/${product.id}', extra: product),
+                    return GestureDetector(
+                      onLongPress: () => _showOptions(product),
+                      child: ProductCard(
+                        product: product,
+                        onTap: () => context.push('${AppRoutes.productDetail}/${product.id}', extra: product),
+                      ),
                     );
                   },
                 );

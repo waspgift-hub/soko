@@ -461,6 +461,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
           productImage.isNotEmpty
               ? ProductCachedImage(
                   url: productImage,
+                  width: double.infinity,
                   height: 220,
                   fit: BoxFit.cover,
                 )

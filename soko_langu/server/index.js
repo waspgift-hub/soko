@@ -4275,7 +4275,8 @@ app.post('/api/admin/retro-boost', async (req, res) => {
         if (!productDoc.exists) { skipped++; continue; }
 
         const product = productDoc.data();
-        if (product.isBoosted) { skipped++; continue; }
+        const isActiveBoost = product.isBoosted && product.boostedUntil && product.boostedUntil.toDate() > new Date();
+        if (isActiveBoost) { skipped++; continue; }
 
         const tier = tx.tier || 'bronze';
         const tierConfig = BOOST_TIERS[tier] || BOOST_TIERS.bronze;
@@ -7135,8 +7136,9 @@ async function reconcileBoostPayments() {
         }
 
         const product = productDoc.data();
-        if (product.isBoosted) {
-          console.log(`[BoostReconcile] Product ${item.productId} already boosted, skipping`);
+        const isActiveBoost = product.isBoosted && product.boostedUntil && product.boostedUntil.toDate() > new Date();
+        if (isActiveBoost) {
+          console.log(`[BoostReconcile] Product ${item.productId} still actively boosted, skipping`);
           continue;
         }
 
@@ -7189,9 +7191,10 @@ async function reconcileBoostPayments() {
         const productDoc = await db.collection('products').doc(tx.productId).get();
         if (!productDoc.exists) continue;
         const product = productDoc.data();
-        if (product.isBoosted) continue;
+        const isActiveBoost = product.isBoosted && product.boostedUntil && product.boostedUntil.toDate() > new Date();
+        if (isActiveBoost) continue;
 
-        // Product not boosted despite completed payment — fix it
+        // Product not actively boosted despite completed payment — fix it
         const tier = tx.tier || 'bronze';
         const tierConfig = BOOST_TIERS[tier] || BOOST_TIERS.bronze;
         const boostedUntil = new Date(Date.now() + tierConfig.days * 24 * 60 * 60 * 1000);
