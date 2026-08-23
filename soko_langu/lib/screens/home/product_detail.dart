@@ -231,11 +231,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Pro-level image gallery with crop (cover)
               if (product.images.isNotEmpty)
                 Container(
                   width: double.infinity,
-                  height: MediaQuery.of(context).size.width * 0.75,
+                  height: MediaQuery.of(context).size.width,
                   child: Stack(
                     children: [
                       Hero(
