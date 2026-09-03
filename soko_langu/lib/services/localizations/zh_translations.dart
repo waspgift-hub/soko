@@ -1898,7 +1898,6 @@ const Map<String, Map<String, String>> zhTranslations = {
     'support_hours': '支持时间',
     'support_hours_value': '周一至周五，8:00 - 18:00',
     'call_support': '致电支持',
-    'contact_us': '联系我们',
     'contact_us_sub': '打电话或发邮件给我们',
     'thank_you_message': '感谢您使用 Soko Vibe，祝您购物愉快！',
     'this_month': '本月',

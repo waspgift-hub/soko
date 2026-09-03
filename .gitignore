@@ -1,5 +1,7 @@
 node_modules/
 .env
+.env.*
+!.env.example
 npm-debug.log
 *.apk
 build/
@@ -8,6 +10,13 @@ server.log
 server_push.log
 server_push_err.log
 mpesa_sandbox_key.txt
+CREDENTIALS.txt
+credentials*.txt
+*.jks
+*.keystore
+*.p12
+last_push_id.txt
+e2e_out.txt
 
 # Unrelated / junk
 wifi-billing/

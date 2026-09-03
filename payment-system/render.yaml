@@ -1,0 +1,142 @@
+# =============================================================================
+# Render Blueprint: Production Payment Webhook System
+#
+# Deploys THREE services at once:
+#   1. payment-api        — Express webhook endpoint (Web Service)
+#   2. payment-worker     — BullMQ background processor (Background Worker)
+#   3. payment-redis      — Managed Redis for queues and idempotency locks
+#   4. payment-db         — Managed PostgreSQL database
+#
+# HOW TO DEPLOY:
+#   1. Push this repo to GitHub
+#   2. Go to render.com → New → Blueprint
+#   3. Connect your GitHub repo
+#   4. Render reads this file and provisions all services
+#   5. Set environment variables (secrets) in Render Dashboard
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # SERVICE 1: Payment API (Web Service)
+  #
+  # This is the public-facing webhook endpoint. The payment gateway sends
+  # HTTP POST requests here. Render assigns it a public URL like:
+  # https://payment-api-xxxx.onrender.com
+  #
+  # SCALING:
+  # - Horizontal: Set "Instances" > 1 for multiple API replicas
+  # - Each instance handles webhooks independently
+  # - Idempotency locks in Redis prevent duplicate processing
+  # - Load balancer distributes incoming webhooks across instances
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: payment-api
+    runtime: node
+    plan: starter  # $7/mo — sufficient for most payment volumes
+    # Use "standard" ($85/mo) for 2+ CPU cores if you need faster HMAC verification
+    buildCommand: npm install && npx prisma generate
+    startCommand: node src/api/server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: payment-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: payment-redis
+          type: redis
+          property: connectionString
+      - key: WEBHOOK_SECRET
+        sync: false  # Set manually in Render Dashboard (secret)
+      - key: LOG_LEVEL
+        value: info
+
+  # ---------------------------------------------------------------------------
+  # SERVICE 2: Payment Worker (Background Worker)
+  #
+  # This service has NO public URL. It runs as a headless process that
+  # continuously polls the Redis queue for payment jobs.
+  #
+  # WHY A SEPARATE SERVICE?
+  # - Isolation: Worker crashes don't affect API availability
+  # - Scaling: Scale API (high traffic) and worker (DB capacity) independently
+  # - Resources: Workers don't need HTTP overhead, use less memory
+  # - Deploy: Can be deployed/restarted independently
+  #
+  # RENDER BACKGROUND WORKER:
+  # - No incoming HTTP requests (no URL assigned)
+  # - Process runs continuously (no sleep/cron)
+  # - Render auto-restarts on crash
+  # - Logs appear in Render Dashboard under service logs
+  # ---------------------------------------------------------------------------
+  - type: worker
+    name: payment-worker
+    runtime: node
+    plan: starter  # Same tier as API for consistent DB pool sizes
+    buildCommand: npm install && npx prisma generate
+    startCommand: node src/worker/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: payment-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: payment-redis
+          type: redis
+          property: connectionString
+      - key: LOG_LEVEL
+        value: info
+
+  # ---------------------------------------------------------------------------
+  # SERVICE 3: Redis (Managed Redis)
+  #
+  # Render's managed Redis provides:
+  # - Automatic failover and replication
+  # - Daily backups
+  # - Connection string auto-injected to dependent services
+  #
+  # WHAT REDIS STORES:
+  # 1. BullMQ job queue (payment webhooks waiting to be processed)
+  # 2. Idempotency locks (prevent duplicate processing across instances)
+  # 3. Job state tracking (active, completed, failed)
+  #
+  # MEMORY ESTIMATE:
+  # - Each job payload: ~1 KB
+  # - Each idempotency lock: ~50 bytes
+  # - 100K concurrent jobs = ~100 MB
+  # - Render free tier (25 MB) is NOT enough — starter ($7/mo, 256 MB) required
+  # ---------------------------------------------------------------------------
+  - type: redis
+    name: payment-redis
+    plan: starter  # 256 MB — sufficient for 100K+ concurrent jobs
+    # Use "standard" ($150/mo, 1 GB) for massive scale
+    ipAllowList: []  # No external access — only internal Render services
+
+  # ---------------------------------------------------------------------------
+  # SERVICE 4: PostgreSQL Database
+  #
+  # Managed PostgreSQL for payment records and audit logs.
+  #
+  # SCHEMA:
+  # - Payment: id, transactionId (unique), idempotencyKey (unique), status, etc.
+  # - PaymentAuditLog: append-only audit trail for compliance
+  #
+  # CONNECTION LIMITS:
+  # - Starter tier: 97 connections (Render default)
+  # - API instances: 3 connections each
+  # - Worker instances: 3 connections each (Prisma pool)
+  # - With 2 API + 2 worker instances: 12 connections used (safe margin)
+  # ---------------------------------------------------------------------------
+  - type: pgsql
+    name: payment-db
+    plan: starter  # $7/mo — 1 GB storage, sufficient for payment records
+    databaseName: payment_db
+    ipAllowList: []  # Internal only — no external access

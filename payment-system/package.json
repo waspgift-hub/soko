@@ -1,0 +1,27 @@
+{
+  "name": "payment-webhook-system",
+  "version": "1.0.0",
+  "description": "Production-ready payment webhook system with BullMQ workers, idempotency locks, and horizontal scaling on Render",
+  "private": true,
+  "scripts": {
+    "api:dev": "node src/api/server.js",
+    "worker:dev": "node src/worker/server.js",
+    "api:start": "node src/api/server.js",
+    "worker:start": "node src/worker/server.js",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate deploy"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "bullmq": "^5.25.0",
+    "express": "^4.21.0",
+    "ioredis": "^5.4.1",
+    "pino": "^9.4.0",
+    "pino-pretty": "^11.3.0",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0"
+  }
+}

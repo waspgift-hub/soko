@@ -1,0 +1,727 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// CORE IDENTITY TABLES
+// ============================================================
+
+model User {
+  id                String          @id @default(uuid()) @db.Uuid
+  firebaseUid       String          @unique @map("firebase_uid") @db.VarChar(128)
+  email             String?         @unique @db.VarChar(255)
+  phone             String?         @unique @db.VarChar(20)
+  displayName       String?         @map("display_name") @db.VarChar(100)
+  username          String?         @unique @db.VarChar(50)
+  avatarUrl         String?         @map("avatar_url") @db.Text
+  bio               String?         @db.Text
+  role              String          @default("buyer") @db.VarChar(20)
+  accountStatus     String          @default("pending") @map("account_status") @db.VarChar(20)
+  emailVerified     Boolean         @default(false) @map("email_verified")
+  phoneVerified     Boolean         @default(false) @map("phone_verified")
+  onboardingComplete Boolean        @default(false) @map("onboarding_complete")
+  preferredLanguage String          @default("sw") @map("preferred_language") @db.VarChar(5)
+  preferredCurrency String          @default("TZS") @map("preferred_currency") @db.VarChar(3)
+  timezone          String          @default("Africa/Dar_es_Salaam") @db.VarChar(50)
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+  deletedAt         DateTime?       @map("deleted_at")
+  lastLoginAt       DateTime?       @map("last_login_at")
+  metadata          Json            @default("{}")
+
+  // Relations
+  settings          UserSetting[]
+  devices           Device[]
+  addresses         Address[]
+  sellerProfile     SellerProfile?
+  orders            Order[]         @relation("BuyerOrders")
+  feedPosts         FeedPost[]
+  follows           Follow[]        @relation("Following")
+  followers         Follow[]        @relation("Followers")
+  likes             Like[]
+  comments          Comment[]
+  saves             Save[]
+  notifications     Notification[]
+  referrals         Referral[]      @relation("Referrer")
+  referredUsers     Referral[]      @relation("Referred")
+  moderationReports ModerationReport[]
+  auditLogs         AuditLog[]
+  disputes          Dispute[]
+  disputeEvidence   DisputeEvidence[]
+
+  @@map("users")
+}
+
+model UserSetting {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  domain    String   @db.VarChar(50)
+  settings  Json     @default("{}")
+  version   Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, domain])
+  @@map("user_settings")
+}
+
+model Device {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  deviceToken String?   @map("device_token") @db.Text
+  platform    String?   @db.VarChar(20)
+  appVersion  String?   @map("app_version") @db.VarChar(20)
+  lastActiveAt DateTime? @map("last_active_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("devices")
+}
+
+model Address {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  label         String?  @db.VarChar(50)
+  fullName      String?  @map("full_name") @db.VarChar(100)
+  phone         String?  @db.VarChar(20)
+  addressLine1  String   @map("address_line1") @db.Text
+  addressLine2  String?  @map("address_line2") @db.Text
+  city          String?  @db.VarChar(100)
+  region        String?  @db.VarChar(100)
+  country       String   @default("TZ") @db.VarChar(3)
+  postalCode    String?  @map("postal_code") @db.VarChar(20)
+  latitude      Decimal? @db.Decimal(10, 8)
+  longitude     Decimal? @db.Decimal(11, 8)
+  isDefault     Boolean  @default(false) @map("is_default")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("addresses")
+}
+
+// ============================================================
+// SELLER TABLES
+// ============================================================
+
+model SellerProfile {
+  id                       String   @id @default(uuid()) @db.Uuid
+  userId                   String   @unique @map("user_id") @db.Uuid
+  storeName                String   @map("store_name") @db.VarChar(100)
+  storeSlug                String   @unique @map("store_slug") @db.VarChar(100)
+  storeDescription         String?  @map("store_description") @db.Text
+  logoUrl                  String?  @map("logo_url") @db.Text
+  coverUrl                 String?  @map("cover_url") @db.Text
+  businessType             String?  @map("business_type") @db.VarChar(50)
+  businessRegistrationNumber String? @map("business_registration_number") @db.VarChar(100)
+  taxId                    String?  @map("tax_id") @db.VarChar(100)
+  verificationStatus       String   @default("pending") @map("verification_status") @db.VarChar(20)
+  sellerStatus             String   @default("not_seller") @map("seller_status") @db.VarChar(20)
+  reliabilityScore         Decimal  @default(0) @map("reliability_score") @db.Decimal(5, 2)
+  totalSales               Int      @default(0) @map("total_sales")
+  totalRevenue             BigInt   @default(0) @map("total_revenue")
+  disputeRate              Decimal  @default(0) @map("dispute_rate") @db.Decimal(5, 4)
+  onTimeDispatchRate       Decimal  @default(1) @map("on_time_dispatch_rate") @db.Decimal(5, 4)
+  avgShippingResponseHours Decimal? @map("avg_shipping_response_hours") @db.Decimal(5, 2)
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
+
+  user             User              @relation(fields: [userId], references: [id])
+  products         Product[]
+  orders           Order[]           @relation("SellerOrders")
+  wallets          Wallet[]
+  boosts           Boost[]
+  shippingQuotes   ShippingQuote[]
+  commissionTxs CommissionTransaction[]
+  withdrawals   Withdrawal[]
+
+  @@map("seller_profiles")
+}
+
+// ============================================================
+// PRODUCT TABLES
+// ============================================================
+
+model Category {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(100)
+  slug      String   @unique @db.VarChar(120)
+  parentId  String?  @map("parent_id") @db.Uuid
+  iconUrl   String?  @map("icon_url") @db.Text
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+
+  parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children  Category[] @relation("CategoryTree")
+  products  Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id                String    @id @default(uuid()) @db.Uuid
+  sellerId          String    @map("seller_id") @db.Uuid
+  title             String    @db.VarChar(200)
+  slug              String    @unique @db.VarChar(250)
+  description       String?   @db.Text
+  categoryId        String?   @map("category_id") @db.Uuid
+  price             BigInt    @db.BigInt
+  originalPrice     BigInt?   @map("original_price") @db.BigInt
+  currency          String    @default("TZS") @db.VarChar(3)
+  stock             Int       @default(0)
+  status            String    @default("draft") @db.VarChar(20)
+  condition         String    @default("new") @db.VarChar(20)
+  weightGrams       Int?      @map("weight_grams")
+  shippingRequired  Boolean   @default(true) @map("shipping_required")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
+  snapshot          Json
+
+  seller          SellerProfile @relation(fields: [sellerId], references: [id])
+  category        Category?     @relation(fields: [categoryId], references: [id])
+  media           ProductMedia[]
+  feedPosts       FeedPost[]
+  saves           Save[]
+  boosts          Boost[]
+
+  @@map("products")
+}
+
+model ProductMedia {
+  id              String   @id @default(uuid()) @db.Uuid
+  productId       String   @map("product_id") @db.Uuid
+  type            String   @db.VarChar(20)
+  r2Key           String   @map("r2_key") @db.Text
+  thumbnailR2Key  String?  @map("thumbnail_r2_key") @db.Text
+  variantUrls     Json?    @map("variant_urls")
+  width           Int?
+  height          Int?
+  durationSeconds Decimal? @map("duration_seconds") @db.Decimal(6, 2)
+  fileSizeBytes   BigInt?  @map("file_size_bytes")
+  sortOrder       Int      @default(0) @map("sort_order")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("product_media")
+}
+
+// ============================================================
+// ORDER & COMMERCE TABLES
+// ============================================================
+
+model Order {
+  id                     String    @id @default(uuid()) @db.Uuid
+  orderNumber            String    @unique @map("order_number") @db.VarChar(20)
+  buyerId                String    @map("buyer_id") @db.Uuid
+  sellerId               String    @map("seller_id") @db.Uuid
+  status                 String    @default("draft") @db.VarChar(30)
+  productSnapshot        Json      @map("product_snapshot")
+  shippingAddressSnapshot Json?   @map("shipping_address_snapshot")
+  shippingQuoteSnapshot  Json?     @map("shipping_quote_snapshot")
+  productPrice           BigInt    @map("product_price") @db.BigInt
+  shippingFee            BigInt    @default(0) @map("shipping_fee") @db.BigInt
+  platformCommission     BigInt    @default(0) @map("platform_commission") @db.BigInt
+  totalAmount            BigInt    @map("total_amount") @db.BigInt
+  currency               String    @default("TZS") @db.VarChar(3)
+  shippingMethod         String?   @map("shipping_method") @db.VarChar(50)
+  courierName            String?   @map("courier_name") @db.VarChar(100)
+  trackingNumber         String?   @map("tracking_number") @db.VarChar(100)
+  estimatedDelivery      DateTime? @map("estimated_delivery")
+  placedAt               DateTime? @map("placed_at")
+  paidAt                 DateTime? @map("paid_at")
+  dispatchedAt           DateTime? @map("dispatched_at")
+  deliveredAt            DateTime? @map("delivered_at")
+  completedAt            DateTime? @map("completed_at")
+  cancelledAt            DateTime? @map("cancelled_at")
+  statusChangedBy        String?   @map("status_changed_by") @db.Uuid
+  statusChangedAt        DateTime  @default(now()) @map("status_changed_at")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  buyer           User              @relation("BuyerOrders", fields: [buyerId], references: [id])
+  seller          SellerProfile     @relation("SellerOrders", fields: [sellerId], references: [id])
+  items           OrderItem[]
+  shippingQuotes  ShippingQuote[]
+  payments        Payment[]
+  escrowHold      EscrowHold?
+  commission      CommissionTransaction[]
+  refunds         Refund[]
+  disputes        Dispute[]
+  otpCredentials  OtpCredential[]
+  receipts        Receipt[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String @id @default(uuid()) @db.Uuid
+  orderId   String @map("order_id") @db.Uuid
+  productId String @map("product_id") @db.Uuid
+  quantity  Int    @default(1)
+  unitPrice BigInt @map("unit_price") @db.BigInt
+  totalPrice BigInt @map("total_price") @db.BigInt
+  snapshot  Json
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("order_items")
+}
+
+model ShippingQuote {
+  id            String    @id @default(uuid()) @db.Uuid
+  orderId       String    @map("order_id") @db.Uuid
+  sellerId      String    @map("seller_id") @db.Uuid
+  amount        BigInt    @db.BigInt
+  currency      String    @default("TZS") @db.VarChar(3)
+  status        String    @default("pending") @db.VarChar(20)
+  notes         String?   @db.Text
+  estimatedDays Int?      @map("estimated_days")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  reviewedAt    DateTime? @map("reviewed_at")
+  reviewedBy    String?   @map("reviewed_by") @db.Uuid
+
+  order  Order         @relation(fields: [orderId], references: [id])
+  seller SellerProfile @relation(fields: [sellerId], references: [id])
+
+  @@map("shipping_quotes")
+}
+
+// ============================================================
+// PAYMENT & FINANCIAL TABLES
+// ============================================================
+
+model Payment {
+  id                 String    @id @default(uuid()) @db.Uuid
+  orderId            String    @map("order_id") @db.Uuid
+  provider           String    @db.VarChar(50)
+  providerPaymentId  String?   @map("provider_payment_id") @db.VarChar(200)
+  providerReference  String?   @map("provider_reference") @db.VarChar(200)
+  amount             BigInt    @db.BigInt
+  currency           String    @default("TZS") @db.VarChar(3)
+  status             String    @default("pending") @db.VarChar(20)
+  idempotencyKey     String    @unique @map("idempotency_key") @db.VarChar(100)
+  webhookReceivedAt  DateTime? @map("webhook_received_at")
+  verifiedAt         DateTime? @map("verified_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  order          Order            @relation(fields: [orderId], references: [id])
+  attempts       PaymentAttempt[]
+  escrowHold     EscrowHold?
+  refunds        Refund[]
+
+  @@map("payments")
+}
+
+model PaymentAttempt {
+  id               String   @id @default(uuid()) @db.Uuid
+  paymentId        String   @map("payment_id") @db.Uuid
+  attemptNumber    Int      @map("attempt_number")
+  providerResponse Json?    @map("provider_response")
+  status           String   @db.VarChar(20)
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@map("payment_attempts")
+}
+
+model EscrowHold {
+  id         String    @id @default(uuid()) @db.Uuid
+  orderId    String    @unique @map("order_id") @db.Uuid
+  paymentId  String    @unique @map("payment_id") @db.Uuid
+  amount     BigInt    @db.BigInt
+  status     String    @default("holding") @db.VarChar(20)
+  releasedAt DateTime? @map("released_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  order        Order              @relation(fields: [orderId], references: [id])
+  payment      Payment            @relation(fields: [paymentId], references: [id])
+  transactions EscrowTransaction[]
+
+  @@map("escrow_holds")
+}
+
+model EscrowTransaction {
+  id            String   @id @default(uuid()) @db.Uuid
+  escrowHoldId  String   @map("escrow_hold_id") @db.Uuid
+  type          String   @db.VarChar(30)
+  amount        BigInt   @db.BigInt
+  referenceId   String?  @map("reference_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  escrowHold EscrowHold @relation(fields: [escrowHoldId], references: [id])
+
+  @@map("escrow_transactions")
+}
+
+model CommissionTransaction {
+  id        String   @id @default(uuid()) @db.Uuid
+  orderId   String   @map("order_id") @db.Uuid
+  sellerId  String   @map("seller_id") @db.Uuid
+  amount    BigInt   @db.BigInt
+  rate      Decimal  @db.Decimal(5, 4)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  order  Order         @relation(fields: [orderId], references: [id])
+  seller SellerProfile @relation(fields: [sellerId], references: [id])
+
+  @@map("commission_transactions")
+}
+
+model Refund {
+  id          String    @id @default(uuid()) @db.Uuid
+  orderId     String    @map("order_id") @db.Uuid
+  paymentId   String    @map("payment_id") @db.Uuid
+  amount      BigInt    @db.BigInt
+  reason      String?   @db.Text
+  status      String    @default("pending") @db.VarChar(20)
+  processedAt DateTime? @map("processed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  order   Order   @relation(fields: [orderId], references: [id])
+  payment Payment @relation(fields: [paymentId], references: [id])
+
+  @@map("refunds")
+}
+
+// ============================================================
+// WALLET TABLES
+// ============================================================
+
+model Wallet {
+  id                String   @id @default(uuid()) @db.Uuid
+  sellerId          String   @unique @map("seller_id") @db.Uuid
+  availableBalance  BigInt   @default(0) @map("available_balance") @db.BigInt
+  pendingBalance    BigInt   @default(0) @map("pending_balance") @db.BigInt
+  frozenBalance     BigInt   @default(0) @map("frozen_balance") @db.BigInt
+  totalEarned       BigInt   @default(0) @map("total_earned") @db.BigInt
+  totalWithdrawn    BigInt   @default(0) @map("total_withdrawn") @db.BigInt
+  currency          String   @default("TZS") @db.VarChar(3)
+  status            String   @default("active") @db.VarChar(20)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  seller          SellerProfile      @relation(fields: [sellerId], references: [id])
+  ledgerEntries   WalletLedgerEntry[]
+  withdrawals     Withdrawal[]
+
+  @@map("wallets")
+}
+
+model WalletLedgerEntry {
+  id             String   @id @default(uuid()) @db.Uuid
+  walletId       String   @map("wallet_id") @db.Uuid
+  type           String   @db.VarChar(30)
+  amount         BigInt   @db.BigInt
+  balanceAfter   BigInt   @map("balance_after") @db.BigInt
+  referenceType  String?  @map("reference_type") @db.VarChar(50)
+  referenceId    String?  @map("reference_id") @db.Uuid
+  idempotencyKey String   @unique @map("idempotency_key") @db.VarChar(100)
+  description    String?  @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  wallet Wallet @relation(fields: [walletId], references: [id])
+
+  @@map("wallet_ledger_entries")
+}
+
+model Withdrawal {
+  id               String    @id @default(uuid()) @db.Uuid
+  walletId         String    @map("wallet_id") @db.Uuid
+  sellerId         String    @map("seller_id") @db.Uuid
+  amount           BigInt    @db.BigInt
+  provider         String    @db.VarChar(50)
+  providerPayoutId String?   @map("provider_payout_id") @db.VarChar(200)
+  status           String    @default("pending") @db.VarChar(20)
+  idempotencyKey   String    @unique @map("idempotency_key") @db.VarChar(100)
+  processedAt      DateTime? @map("processed_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  wallet    Wallet            @relation(fields: [walletId], references: [id])
+  seller    SellerProfile     @relation(fields: [sellerId], references: [id])
+  payouts   PayoutTransaction[]
+
+  @@map("withdrawals")
+}
+
+model PayoutTransaction {
+  id               String   @id @default(uuid()) @db.Uuid
+  withdrawalId     String   @map("withdrawal_id") @db.Uuid
+  amount           BigInt   @db.BigInt
+  providerResponse Json?    @map("provider_response")
+  status           String   @db.VarChar(20)
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  withdrawal Withdrawal @relation(fields: [withdrawalId], references: [id])
+
+  @@map("payout_transactions")
+}
+
+model Receipt {
+  id          String   @id @default(uuid()) @db.Uuid
+  orderId     String   @map("order_id") @db.Uuid
+  purchaserId String   @map("purchaser_id") @db.Uuid
+  sellerId    String   @map("seller_id") @db.Uuid
+  amount      BigInt   @db.BigInt
+  currency    String   @default("TZS") @db.VarChar(3)
+  createdById String?  @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@map("receipts")
+}
+
+// ============================================================
+// OTP & HANDOVER TABLES
+// ============================================================
+
+model OtpCredential {
+  id            String    @id @default(uuid()) @db.Uuid
+  orderId       String    @map("order_id") @db.Uuid
+  credentialHash String  @map("credential_hash") @db.VarChar(256)
+  type          String    @default("otp") @db.VarChar(10)
+  attemptsUsed  Int       @default(0) @map("attempts_used")
+  maxAttempts   Int       @default(5) @map("max_attempts")
+  status        String    @default("active") @db.VarChar(20)
+  expiresAt     DateTime  @map("expires_at")
+  verifiedAt    DateTime? @map("verified_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@map("otp_credentials")
+}
+
+// ============================================================
+// DISPUTE & EVIDENCE TABLES
+// ============================================================
+
+model Dispute {
+  id          String    @id @default(uuid()) @db.Uuid
+  orderId     String    @map("order_id") @db.Uuid
+  filedBy     String    @map("filed_by") @db.Uuid
+  reason      String    @db.VarChar(50)
+  description String?   @db.Text
+  status      String    @default("open") @db.VarChar(20)
+  resolution  String?   @db.VarChar(50)
+  resolvedBy  String?   @map("resolved_by") @db.Uuid
+  resolvedAt  DateTime? @map("resolved_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  order    Order              @relation(fields: [orderId], references: [id])
+  filer    User               @relation(fields: [filedBy], references: [id])
+  evidence DisputeEvidence[]
+
+  @@map("disputes")
+}
+
+model DisputeEvidence {
+  id          String   @id @default(uuid()) @db.Uuid
+  disputeId   String   @map("dispute_id") @db.Uuid
+  submittedBy String   @map("submitted_by") @db.Uuid
+  type        String   @db.VarChar(30)
+  r2Key       String?  @map("r2_key") @db.Text
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  dispute    Dispute @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+  submitter  User    @relation(fields: [submittedBy], references: [id])
+
+  @@map("dispute_evidence")
+}
+
+// ============================================================
+// SOCIAL & FEED TABLES
+// ============================================================
+
+model FeedPost {
+  id              String   @id @default(uuid()) @db.Uuid
+  productId       String?  @map("product_id") @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  type            String   @default("product") @db.VarChar(20)
+  content         String?  @db.Text
+  engagementScore Decimal  @default(0) @map("engagement_score") @db.Decimal(10, 4)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  product Product? @relation(fields: [productId], references: [id])
+  user    User     @relation(fields: [userId], references: [id])
+
+  @@map("feed_posts")
+}
+
+model Follow {
+  id          String   @id @default(uuid()) @db.Uuid
+  followerId  String   @map("follower_id") @db.Uuid
+  followingId String   @map("following_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  follower  User @relation("Following", fields: [followerId], references: [id])
+  following User @relation("Followers", fields: [followingId], references: [id])
+
+  @@unique([followerId, followingId])
+  @@map("follows")
+}
+
+model Like {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  targetId   String   @map("target_id") @db.Uuid
+  targetType String   @map("target_type") @db.VarChar(20)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, targetId, targetType])
+  @@map("likes")
+}
+
+model Comment {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  targetId   String    @map("target_id") @db.Uuid
+  targetType String    @map("target_type") @db.VarChar(20)
+  content    String    @db.Text
+  parentId   String?   @map("parent_id") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at")
+  deletedAt  DateTime? @map("deleted_at")
+
+  user   User      @relation(fields: [userId], references: [id])
+  parent Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies Comment[] @relation("CommentReplies")
+
+  @@map("comments")
+}
+
+model Save {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([userId, productId])
+  @@map("saves")
+}
+
+// ============================================================
+// NOTIFICATION, REFERRAL, BOOST, MODERATION, AUDIT TABLES
+// ============================================================
+
+model Notification {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  type      String    @db.VarChar(50)
+  title     String?   @db.VarChar(200)
+  body      String?   @db.Text
+  data      Json      @default("{}")
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+model Referral {
+  id               String    @id @default(uuid()) @db.Uuid
+  referrerId       String    @map("referrer_id") @db.Uuid
+  referredId       String    @map("referred_id") @db.Uuid
+  code             String    @db.VarChar(20)
+  status           String    @default("pending") @db.VarChar(20)
+  rewardType       String?   @map("reward_type") @db.VarChar(30)
+  rewardAmount     BigInt    @default(0) @map("reward_amount") @db.BigInt
+  qualifyingAction String?   @map("qualifying_action") @db.VarChar(50)
+  completedAt      DateTime? @map("completed_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  referrer User @relation("Referrer", fields: [referrerId], references: [id])
+  referred User @relation("Referred", fields: [referredId], references: [id])
+
+  @@map("referrals")
+}
+
+model Boost {
+  id          String    @id @default(uuid()) @db.Uuid
+  productId   String    @map("product_id") @db.Uuid
+  sellerId    String    @map("seller_id") @db.Uuid
+  plan        String    @db.VarChar(50)
+  amount      BigInt    @db.BigInt
+  status      String    @default("pending") @db.VarChar(20)
+  startsAt    DateTime? @map("starts_at")
+  expiresAt   DateTime? @map("expires_at")
+  impressions Int       @default(0)
+  clicks      Int       @default(0)
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  product Product       @relation(fields: [productId], references: [id])
+  seller  SellerProfile @relation(fields: [sellerId], references: [id])
+
+  @@map("boosts")
+}
+
+model ModerationReport {
+  id          String    @id @default(uuid()) @db.Uuid
+  reporterId  String    @map("reporter_id") @db.Uuid
+  targetId    String    @map("target_id") @db.Uuid
+  targetType  String    @map("target_type") @db.VarChar(30)
+  reason      String    @db.VarChar(50)
+  description String?   @db.Text
+  status      String    @default("pending") @db.VarChar(20)
+  reviewedBy  String?   @map("reviewed_by") @db.Uuid
+  reviewedAt  DateTime? @map("reviewed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  reporter User @relation(fields: [reporterId], references: [id])
+
+  @@map("moderation_reports")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @map("actor_id") @db.Uuid
+  actorType  String   @map("actor_type") @db.VarChar(20)
+  action     String   @db.VarChar(100)
+  entityType String?  @map("entity_type") @db.VarChar(50)
+  entityId   String?  @map("entity_id") @db.Uuid
+  oldState   Json?    @map("old_state")
+  newState   Json?    @map("new_state")
+  requestId  String?  @map("request_id") @db.VarChar(100)
+  ipAddress  String?  @map("ip_address") @db.Inet
+  userAgent  String?  @map("user_agent") @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model Reconciliation {
+  id             String   @id @default(uuid()) @db.Uuid
+  periodStart    DateTime @map("period_start")
+  periodEnd      DateTime @map("period_end")
+  provider       String   @db.VarChar(50)
+  internalTotal  BigInt   @map("internal_total") @db.BigInt
+  providerTotal  BigInt   @map("provider_total") @db.BigInt
+  difference     BigInt   @db.BigInt
+  status         String   @default("pending") @db.VarChar(20)
+  notes          String?  @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("reconciliation")
+}

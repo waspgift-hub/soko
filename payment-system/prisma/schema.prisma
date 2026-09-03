@@ -1,0 +1,49 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Tracks every payment transaction with full lifecycle state.
+/// The idempotency_key column ensures no duplicate processing across
+/// horizontally scaled server instances — enforced at the DB level
+/// with a unique constraint.
+model Payment {
+  id             String   @id @default(uuid())
+  transactionId  String   @unique
+  idempotencyKey String   @unique
+  status         String   @default("pending") // pending | processing | completed | failed | refunded
+  amount         Decimal  @db.Decimal(12, 2)
+  currency       String   @default("USD")
+  payerId        String
+  payerEmail     String?
+  gatewayRef     String?  // reference ID from payment gateway
+  metadata       Json?    // raw webhook payload for audit trail
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([payerId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+/// Audit log for every state transition — append-only, never updated.
+/// This provides a complete traceability chain for compliance and debugging.
+model PaymentAuditLog {
+  id              String   @id @default(uuid())
+  paymentId       String
+  transactionId   String
+  previousStatus  String?
+  newStatus       String
+  workerId        String?  // which worker instance processed this
+  processingMs    Int?     // how long the DB write took
+  errorMessage    String?
+  createdAt       DateTime @default(now())
+
+  @@index([paymentId])
+  @@index([transactionId])
+  @@index([createdAt])
+}
