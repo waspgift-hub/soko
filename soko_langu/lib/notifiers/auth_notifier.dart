@@ -278,7 +278,7 @@ class AuthNotifier extends ChangeNotifier {
 
     try {
       final res = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/auth/verify-otp'),
+        Uri.parse(ApiConfig.v1('/auth/verify-otp')),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'phone': phone, 'otp': otp}),
       );
@@ -305,7 +305,7 @@ class AuthNotifier extends ChangeNotifier {
   /// network/server errors so callers decide how to surface them.
   Future<bool> checkPhoneExists(String phone) async {
     final res = await http.post(
-      Uri.parse('${ApiConfig.baseUrl}/api/auth/check-phone'),
+      Uri.parse(ApiConfig.v1('/auth/check-phone')),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'phone': phone}),
     );
@@ -318,7 +318,7 @@ class AuthNotifier extends ChangeNotifier {
   Future<bool> checkEmailExists(String email) async {
     if (email.trim().isEmpty) return false;
     final res = await http.post(
-      Uri.parse('${ApiConfig.baseUrl}/api/auth/check-email'),
+      Uri.parse(ApiConfig.v1('/auth/check-email')),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'email': email.trim()}),
     );
@@ -392,7 +392,7 @@ class AuthNotifier extends ChangeNotifier {
 
     try {
       final res = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/auth/send-email-otp'),
+        Uri.parse(ApiConfig.v1('/auth/send-email-otp')),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'email': email,
@@ -421,7 +421,7 @@ class AuthNotifier extends ChangeNotifier {
 
     try {
       final res = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/auth/verify-email-otp'),
+        Uri.parse(ApiConfig.v1('/auth/verify-email-otp')),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email, 'otp': otp}),
       );

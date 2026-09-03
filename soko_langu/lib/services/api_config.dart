@@ -1,6 +1,10 @@
 class ApiConfig {
   static const String baseUrl = 'https://soko-langu-server.onrender.com';
 
+  /// Backend v2 (Trust-Commerce) base: all new endpoints live under /api/v1.
+  /// Use v1('/auth/send-otp') instead of '$baseUrl/api/auth/send-otp'.
+  static String v1(String path) => '$baseUrl/api/v1$path';
+
   /// Master test mode — false = production for all features (fraud, etc.)
   static const bool kIsTestMode = false;
 

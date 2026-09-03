@@ -114,7 +114,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     try {
       final normalized = _normalizePhone(_phoneController.text.trim());
       final resp = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/auth/send-otp'),
+        Uri.parse(ApiConfig.v1('/auth/send-otp')),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'phone': normalized, 'langCode': await LocalizationService().getLanguage()}),
       );

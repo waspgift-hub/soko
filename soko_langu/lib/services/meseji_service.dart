@@ -9,7 +9,7 @@ class MesejiService {
   /// OTP is generated + stored + verified server-side.
   /// Client just delegates: POST /api/auth/send-otp
   Future<void> sendOtp(String phone) async {
-    final url = '${ApiConfig.baseUrl}/api/auth/send-otp';
+    final url = ApiConfig.v1('/auth/send-otp');
     final lang = await LocalizationService().getLanguage();
     debugPrint('MesejiService.sendOtp: POST $url phone=$phone');
     try {
@@ -42,7 +42,7 @@ class MesejiService {
 
   /// Verifies a 6-digit OTP against the server. Returns true if valid.
   Future<bool> verifyOtp(String phone, String otp) async {
-    final url = '${ApiConfig.baseUrl}/api/auth/verify-otp';
+    final url = ApiConfig.v1('/auth/verify-otp');
     try {
       final res = await http
           .post(

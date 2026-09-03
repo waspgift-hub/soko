@@ -5,11 +5,13 @@ const schemas = {
   // Auth schemas
   sendOtp: z.object({
     phone: z.string().regex(/^(\+255|0)[67]\d{8}$/, 'Invalid Tanzanian phone number'),
+    langCode: z.enum(['sw', 'en', 'zh']).optional(),
   }),
 
   verifyOtp: z.object({
     phone: z.string().regex(/^(\+255|0)[67]\d{8}$/, 'Invalid Tanzanian phone number'),
-    code: z.string().length(6, 'OTP must be 6 digits'),
+    otp: z.string().length(6, 'OTP must be 6 digits').optional(),
+    code: z.string().length(6, 'OTP must be 6 digits').optional(),
   }),
 
   // User schemas
