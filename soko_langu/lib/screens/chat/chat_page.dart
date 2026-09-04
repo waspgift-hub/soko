@@ -52,6 +52,8 @@ class _ChatPageState extends State<ChatPage> {
   String? _receiverPhone;
   String? _receiverPhoto;
   String? _receiverName;
+  bool _receiverKyc = false;
+  bool _trustDismissed = false;
   StreamSubscription<UserProfile?>? _profileSub;
 
   // Optimistic messages: tempId → Message
@@ -102,6 +104,7 @@ class _ChatPageState extends State<ChatPage> {
         _receiverPhone = profile.phone;
         _receiverPhoto = profile.profileImage;
         _receiverName = profile.displayName;
+        _receiverKyc = profile.kycApproved;
       });
     }
     _profileSub = _userService.streamProfile(widget.receiverId).listen((p) {
@@ -111,6 +114,7 @@ class _ChatPageState extends State<ChatPage> {
           _receiverPhone = p.phone;
           _receiverPhoto = p.profileImage;
           _receiverName = p.displayName;
+          _receiverKyc = p.kycApproved;
         }
       });
     });
@@ -335,6 +339,102 @@ class _ChatPageState extends State<ChatPage> {
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
+  Widget _productContextCard(
+      BuildContext context, ColorScheme cs, bool isDark) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1F2C33) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: cs.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(Icons.shopping_bag_outlined,
+                color: cs.primary, size: 24),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.productName.isNotEmpty
+                      ? widget.productName
+                      : 'Product conversation',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Icon(Icons.shield_outlined,
+                        size: 12, color: cs.primary),
+                    const SizedBox(width: 4),
+                    const Expanded(
+                      child: Text(
+                        'Protected by Soko Vibe escrow',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 11),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: widget.productId == null
+                ? null
+                : () => context.push(
+                    '${AppRoutes.productDetail}/${widget.productId}'),
+            child: const Text('View'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _trustBanner(
+      BuildContext context, ColorScheme cs, bool isDark) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: cs.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.lock_outline, size: 14, color: cs.primary),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text(
+              'Keep payments inside Soko Vibe. Never share your OTP.',
+              style: TextStyle(fontSize: 11),
+            ),
+          ),
+          GestureDetector(
+            onTap: () => setState(() => _trustDismissed = true),
+            child: Icon(Icons.close,
+                size: 14, color: cs.onSurfaceVariant),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -372,13 +472,24 @@ class _ChatPageState extends State<ChatPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(_displayName,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? Colors.white : const Color(0xFF111B21),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(_displayName,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? Colors.white : const Color(0xFF111B21),
+                              ),
+                              overflow: TextOverflow.ellipsis),
                         ),
-                        overflow: TextOverflow.ellipsis),
+                        if (_receiverKyc) ...[
+                          const SizedBox(width: 4),
+                          Icon(Icons.verified,
+                              size: 15, color: cs.primary),
+                        ],
+                      ],
+                    ),
                     Row(
                       children: [
                         if (_otherTyping)
@@ -438,6 +549,11 @@ class _ChatPageState extends State<ChatPage> {
       ),
       body: Column(
         children: [
+          if (widget.productId != null ||
+              widget.productName.isNotEmpty)
+            _productContextCard(context, cs, isDark),
+          if (!_trustDismissed)
+            _trustBanner(context, cs, isDark),
           // Messages
           Expanded(
             child: StreamBuilder<List<Message>>(
