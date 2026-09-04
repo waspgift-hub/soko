@@ -12,6 +12,7 @@ import '../app/app_transitions.dart';
 import '../extensions/context_tr.dart';
 import '../main.dart';
 import '../utils/responsive.dart';
+import 'auth_wall.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -49,6 +50,12 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   void _selectTab(int index) {
+    // Guest wall: Sell, Chat and Profile need an account.
+    if ((index == 2 || index == 3 || index == 4) &&
+        FirebaseAuth.instance.currentUser == null) {
+      requireAuth(context);
+      return;
+    }
     HapticFeedback.selectionClick();
     setState(() {
       _currentIndex = index;

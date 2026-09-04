@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../../services/follow_service.dart';
 import '../../theme/app_dimens.dart';
+import '../auth_wall.dart';
 
 /// Relationship-aware follow button: Follow / Following / Follow Back /
 /// Friends, with loading and error rollback. State comes from streams so
@@ -42,6 +43,10 @@ class _DsFollowButtonState extends State<DsFollowButton> {
 
   Future<void> _toggle(bool following) async {
     if (_busy) return;
+    if (FirebaseAuth.instance.currentUser == null) {
+      await requireAuth(context);
+      return;
+    }
     setState(() => _busy = true);
     try {
       if (following) {

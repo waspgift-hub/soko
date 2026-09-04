@@ -5,7 +5,6 @@ import '../../notifiers/auth_notifier.dart';
 import '../../widgets/soko_vibe_loading.dart';
 import '../../widgets/bottom_nav_bar.dart';
 import '../onboarding/onboarding_screen.dart' as onboarding;
-import 'login_screen.dart';
 import 'profile_setup_screen.dart';
 
 class AuthGate extends StatelessWidget {
@@ -21,7 +20,9 @@ class AuthGate extends StatelessWidget {
           case AuthStatus.onboarding:
             return const onboarding.OnboardingScreen();
           case AuthStatus.unauthenticated:
-            return const LoginScreen();
+            // Guest read-only mode: browse without an account. Write
+            // actions show an auth wall; protected routes redirect.
+            return const MainScreen();
           case AuthStatus.authenticated:
             if (notifier.isSuspended) return const _SuspendedPage();
             if (notifier.needsProfileSetup) {

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../models/product_model.dart';
 import '../../extensions/context_tr.dart';
 import '../../theme/app_dimens.dart';
+import '../auth_wall.dart';
 import '../../theme/app_typography.dart';
 import '../ds/ds.dart';
 
@@ -83,7 +85,21 @@ class _FeedPostCardState extends State<FeedPostCard> {
         .toUpperCase();
   }
 
+  bool get _guest => FirebaseAuth.instance.currentUser == null;
+
+  Future<bool> _guard() async {
+    if (_guest) {
+      await requireAuth(context);
+      return false;
+    }
+    return true;
+  }
+
   void _share() {
+    if (FirebaseAuth.instance.currentUser == null) {
+      requireAuth(context);
+      return;
+    }
     widget.onShare ??
         Share.share(
           '${widget.product.name} - ${widget.product.price} TZS kwenye Soko Vibe',
@@ -196,7 +212,8 @@ class _FeedPostCardState extends State<FeedPostCard> {
           ),
           if (widget.showFollowButton)
             TextButton(
-              onPressed: () {
+              onPressed: () async {
+                if (!await _guard()) return;
                 setState(() => _following = !_following);
                 widget.onFollow?.call(_following);
               },
@@ -217,7 +234,8 @@ class _FeedPostCardState extends State<FeedPostCard> {
       BuildContext context, ColorScheme cs, List<String> images) {
     return GestureDetector(
       onTap: widget.onTap,
-      onDoubleTap: () {
+      onDoubleTap: () async {
+        if (!await _guard()) return;
         setState(() => _liked = true);
         widget.onLike?.call(true);
       },
@@ -291,7 +309,8 @@ class _FeedPostCardState extends State<FeedPostCard> {
       children: [
         DsLikeButton(
           isLiked: _liked,
-          onPressed: () {
+          onPressed: () async {
+            if (!await _guard()) return;
             setState(() => _liked = !_liked);
             widget.onLike?.call(_liked);
           },
@@ -302,7 +321,12 @@ class _FeedPostCardState extends State<FeedPostCard> {
                   cs.onSurfaceVariant)),
         IconButton(
           icon: const Icon(Icons.mode_comment_outlined),
-          onPressed: widget.onComment,
+          onPressed: widget.onComment == null
+              ? null
+              : () async {
+                  if (!await _guard()) return;
+                  widget.onComment!();
+                },
         ),
         if (widget.commentCount > 0)
           Text('${widget.commentCount}',
@@ -312,7 +336,8 @@ class _FeedPostCardState extends State<FeedPostCard> {
           icon: Icon(_saved
               ? Icons.bookmark
               : Icons.bookmark_border),
-          onPressed: () {
+          onPressed: () async {
+            if (!await _guard()) return;
             setState(() => _saved = !_saved);
             widget.onSave?.call(_saved);
           },
@@ -333,7 +358,12 @@ class _FeedPostCardState extends State<FeedPostCard> {
           child: DsButton(
             label: context.tr('chat_seller', 'Chat Seller'),
             variant: DsButtonVariant.secondary,
-            onPressed: widget.onChat,
+            onPressed: widget.onChat == null
+                ? null
+                : () async {
+                    if (!await _guard()) return;
+                    widget.onChat!();
+                  },
           ),
         ),
         const SizedBox(width: AppSpacing.s2),
@@ -341,7 +371,12 @@ class _FeedPostCardState extends State<FeedPostCard> {
           child: DsButton(
             label: context.tr('buy_now', 'Buy Now'),
             variant: DsButtonVariant.primary,
-            onPressed: widget.onBuy,
+            onPressed: widget.onBuy == null
+                ? null
+                : () async {
+                    if (!await _guard()) return;
+                    widget.onBuy!();
+                  },
           ),
         ),
       ],
