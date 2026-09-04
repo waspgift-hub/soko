@@ -67,6 +67,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   Timer? _flashTimer;
   StreamSubscription<FlashSale?>? _flashStreamSub;
   bool _viewIncremented = false;
+  int _quantity = 1;
 
   @override
   void initState() {
@@ -602,6 +603,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                     onSelected: (sel) {
                                       setState(() {
                                         _selectedVariantId = sel ? v.id : null;
+                                        _clampQuantity();
                                       });
                                     },
                                   );
@@ -628,6 +630,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           ),
                         ),
                       ],
+                      const SizedBox(height: 8),
+                      _buildQuantitySection(context, cs),
                     ],
                     const SizedBox(height: 20),
                     GlassCard(
@@ -786,6 +790,54 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     return categoryName;
   }
 
+  /// Stock for the current selection (variant stock wins when present).
+  int get _availableStock {
+    final v = _getSelectedVariant();
+    return v?.stock ?? widget.product.stock;
+  }
+
+  int get _minQty {
+    final m = widget.product.minOrder;
+    return m < 1 ? 1 : m;
+  }
+
+  int get _maxQty {
+    final stock = _availableStock;
+    final cap = widget.product.maxOrder;
+    final byStock = stock < 0 ? 0 : stock;
+    if (cap == null || cap <= 0) return byStock;
+    return cap < byStock ? cap : byStock;
+  }
+
+  /// Unit price for the current quantity: flash deal wins, otherwise the
+  /// wholesale tier price (when applicable), plus variant adjustment.
+  double get _unitPrice {
+    final p = widget.product;
+    final flash = _flashSale;
+    if (flash != null && flash.salePrice > 0) return flash.salePrice;
+    final base = p.getWholesalePrice(_quantity);
+    return base + (_getSelectedVariant()?.priceAdjustment ?? 0);
+  }
+
+  void _clampQuantity() {
+    if (_quantity < _minQty) {
+      _quantity = _minQty;
+    } else if (_maxQty > 0 && _quantity > _maxQty) {
+      _quantity = _maxQty;
+    } else if (_maxQty <= 0) {
+      _quantity = _minQty;
+    }
+  }
+
+  void _onQtyLimit(bool atMin) {
+    final msg = atMin
+        ? 'Minimum order is $_minQty'
+        : 'Only $_maxQty available';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg)),
+    );
+  }
+
   ProductVariant? _getSelectedVariant() {
     if (_selectedVariantId == null) return null;
     final variants = widget.product.variants.where(
@@ -847,6 +899,93 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     );
   }
 
+  Widget _buildQuantitySection(BuildContext context, ColorScheme cs) {
+    final p = widget.product;
+    final stock = _availableStock;
+    final tiers = List<WholesaleTier>.from(p.wholesaleTiers)
+      ..sort((a, b) => a.minQuantity.compareTo(b.minQuantity));
+    final baseUnit = p.price +
+        (_getSelectedVariant()?.priceAdjustment ?? 0);
+    final unit = _unitPrice;
+    final subtotal = unit * _quantity;
+    final saved =
+        baseUnit > unit ? (baseUnit - unit) * _quantity : 0.0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'Quantity${p.unit.isNotEmpty ? ' (${p.unit})' : ''}',
+              style: const TextStyle(
+                  fontWeight: FontWeight.w600, fontSize: 14),
+            ),
+            const Spacer(),
+            DsStockIndicator(stock: stock),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            DsQuantitySelector(
+              value: _quantity,
+              min: _minQty,
+              max: _maxQty <= 0 ? _minQty : _maxQty,
+              onChanged: (v) => setState(() => _quantity = v),
+              onLimit: _onQtyLimit,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${_quantity} × ${context.formatPrice(unit)}',
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: cs.onSurfaceVariant),
+                  ),
+                  Text(
+                    context.formatPrice(subtotal),
+                    style: AppTypography.amount(cs.primary),
+                  ),
+                  if (saved > 0)
+                    Text(
+                      'You save ${context.formatPrice(saved)}',
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: cs.tertiary,
+                          fontWeight: FontWeight.w600),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        if (p.minOrder > 1)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'Minimum order is ${p.minOrder} ${p.unit}',
+              style: TextStyle(
+                  fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+          ),
+        if (tiers.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          ...tiers.map((t) => Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  '${t.minQuantity}+ : ${context.formatPrice(t.pricePerUnit)} / ${p.unit}',
+                  style: TextStyle(
+                      fontSize: 12, color: cs.onSurfaceVariant),
+                ),
+              )),
+        ],
+      ],
+    );
+  }
+
   Widget _buildDetailRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -891,7 +1030,19 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   Future<void> _processBuyNow() async {
     if (!mounted) return;
-    context.push(AppRoutes.checkout, extra: widget.product);
+    if (_availableStock <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Out of stock')),
+      );
+      return;
+    }
+    _clampQuantity();
+    context.push(AppRoutes.checkout, extra: {
+      'product': widget.product,
+      'quantity': _quantity,
+      'variantId': _selectedVariantId,
+      'unitPrice': _unitPrice,
+    });
   }
 
   void _chatWithSeller() {

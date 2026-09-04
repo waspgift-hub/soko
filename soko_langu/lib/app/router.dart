@@ -357,11 +357,34 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.checkout,
         pageBuilder: (context, state) {
-          final product = state.extra;
-          if (product == null || product is! Product) {
+          final extra = state.extra;
+          Product? product;
+          var quantity = 1;
+          String? variantId;
+          double? unitPrice;
+          if (extra is Product) {
+            product = extra;
+          } else if (extra is Map) {
+            final p = extra['product'];
+            if (p is Product) {
+              product = p;
+              final q = extra['quantity'];
+              if (q is int && q > 0) quantity = q;
+              final v = extra['variantId'];
+              if (v is String) variantId = v;
+              final u = extra['unitPrice'];
+              if (u is num) unitPrice = u.toDouble();
+            }
+          }
+          if (product == null) {
             return _premiumPage(const _MissingRouteData());
           }
-          return _premiumPage(CheckoutScreen(product: product));
+          return _premiumPage(CheckoutScreen(
+            product: product,
+            quantity: quantity,
+            variantId: variantId,
+            unitPrice: unitPrice,
+          ));
         },
       ),
       GoRoute(

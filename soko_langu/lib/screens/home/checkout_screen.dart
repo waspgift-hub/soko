@@ -22,8 +22,17 @@ import '../../services/user_service.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final Product product;
+  final int quantity;
+  final String? variantId;
+  final double? unitPrice;
 
-  const CheckoutScreen({super.key, required this.product});
+  const CheckoutScreen({
+    super.key,
+    required this.product,
+    this.quantity = 1,
+    this.variantId,
+    this.unitPrice,
+  });
 
   @override
   State<CheckoutScreen> createState() => _CheckoutScreenState();
@@ -47,11 +56,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   StreamSubscription<FlashSale?>? _flashSub;
   FlashSale? _flashSale;
 
-  /// Price actually charged: active flash-sale price wins over product price.
+  /// Price actually charged: active flash-sale price wins, otherwise the
+  /// unit price chosen on product details (wholesale aware), else base.
   double get _effectivePrice =>
       _flashSale != null && _flashSale!.salePrice > 0
           ? _flashSale!.salePrice
-          : widget.product.price;
+          : (widget.unitPrice != null && widget.unitPrice! > 0
+              ? widget.unitPrice!
+              : widget.product.price);
+
+  int get _quantity => widget.quantity < 1 ? 1 : widget.quantity;
+
+  double get _lineTotal => _effectivePrice * _quantity;
 
   @override
   void initState() {
@@ -440,7 +456,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        context.formatPrice(_effectivePrice),
+                        context.formatPrice(_lineTotal),
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w900,
@@ -450,7 +466,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       if (_flashSale != null) ...[
                         const SizedBox(width: 6),
                         Text(
-                          context.formatPrice(widget.product.price),
+                          context.formatPrice(widget.product.price * _quantity),
                           style: TextStyle(
                             fontSize: 13,
                             color: cs.onSurfaceVariant.withValues(alpha: 0.6),
@@ -460,6 +476,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       ],
                     ],
                   ),
+                  if (_quantity > 1)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        '$_quantity × ${context.formatPrice(_effectivePrice)}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -648,12 +675,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      context.formatPrice(_effectivePrice),
+                      context.formatPrice(_lineTotal),
                       style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: cs.primary),
                     ),
                     if (_flashSale != null)
                       Text(
-                        context.formatPrice(widget.product.price),
+                        context.formatPrice(widget.product.price * _quantity),
                         style: TextStyle(
                           fontSize: 12,
                           color: cs.onSurfaceVariant.withValues(alpha: 0.6),
@@ -723,7 +750,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           'productId': p.id,
           'productName': p.name,
           'productImage': p.images.isNotEmpty ? p.images.first : '',
-          'productPrice': _effectivePrice,
+          'productPrice': _lineTotal,
+          'quantity': _quantity,
+          'variantId': widget.variantId,
+          'unitPrice': _effectivePrice,
           'region': region,
           'district': district,
           'ward': _selectedWard ?? '',

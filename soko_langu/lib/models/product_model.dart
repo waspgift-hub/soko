@@ -86,6 +86,9 @@ class Product {
   final String condition;
   final bool sellerKycApproved;
   final String? barcode;
+  final String unit;
+  final int minOrder;
+  final int? maxOrder;
 
   Product({
     required this.id,
@@ -121,6 +124,9 @@ class Product {
     this.condition = 'new',
     this.sellerKycApproved = false,
     this.barcode,
+    this.unit = 'piece',
+    this.minOrder = 1,
+    this.maxOrder,
   });
 
   bool get isFeaturedValid =>
@@ -198,6 +204,9 @@ class Product {
       condition: data['condition'] ?? 'new',
       sellerKycApproved: data['sellerKycApproved'] ?? false,
       barcode: data['barcode'] as String?,
+      unit: data['unit'] as String? ?? 'piece',
+      minOrder: (data['minOrder'] ?? 1) as int,
+      maxOrder: data['maxOrder'] as int?,
     );
   }
 
@@ -238,6 +247,9 @@ class Product {
     'condition': condition,
     'sellerKycApproved': sellerKycApproved,
     'barcode': barcode,
+    'unit': unit,
+    'minOrder': minOrder,
+    'maxOrder': maxOrder,
   };
 
   double getWholesalePrice(int quantity) {
