@@ -73,9 +73,15 @@ const schemas = {
 // { body, query, params } to Zod schemas for composite validation.
 function validate(schema) {
   return (req, res, next) => {
-    const targets = schema.body
-      ? { body: schema.body, query: schema.query, params: schema.params }
-      : { body: schema };
+    const isZod = (s) => s && typeof s.safeParse === 'function';
+    const targets = {};
+    if (isZod(schema)) {
+      targets.body = schema;
+    } else {
+      if (isZod(schema.body)) targets.body = schema.body;
+      if (isZod(schema.query)) targets.query = schema.query;
+      if (isZod(schema.params)) targets.params = schema.params;
+    }
 
     const errors = [];
 
