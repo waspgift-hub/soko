@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/product_service.dart';
@@ -51,6 +52,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
   List<SubCategory> _subcategories = [];
   List<XFile> _newImages = [];
   List<String> _existingImages = [];
+  List<Map<String, dynamic>> _existingMeta = [];
+  List<Map<String, dynamic>> _newMeta = [];
   bool _isWholesale = false;
   bool _saving = false;
   List<_VariantEntry> _variants = [];
@@ -104,6 +107,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
     _selectedCondition = p.condition;
     _isWholesale = p.isWholesale;
     _existingImages = List.from(p.images);
+    if (p.imageMetadata != null && p.imageMetadata!.length == _existingImages.length) {
+      _existingMeta = List.from(p.imageMetadata!);
+    }
     if (p.brand != null) _brandController.text = p.brand!;
     if (p.location.isNotEmpty) _locationController.text = p.location;
     if (p.district.isNotEmpty) _selectedDistrict = p.district;
@@ -168,17 +174,41 @@ class _AddProductScreenState extends State<AddProductScreen> {
       maxWidth: 1024,
       imageQuality: 80,
     );
-    if (images.isNotEmpty) {
-      setState(() => _newImages.addAll(images));
+    if (images.isEmpty) return;
+    final meta = await Future.wait(images.map(_decodeSize));
+    if (!mounted) return;
+    setState(() {
+      _newImages.addAll(images);
+      _newMeta.addAll(meta);
+    });
+  }
+
+  Future<Map<String, dynamic>> _decodeSize(XFile xfile) async {
+    try {
+      final bytes = await xfile.readAsBytes();
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final img = frame.image;
+      final size = <String, dynamic>{'width': img.width, 'height': img.height};
+      img.dispose();
+      return size;
+    } catch (e) {
+      return <String, dynamic>{'width': null, 'height': null};
     }
   }
 
   void _removeExistingImage(int index) {
-    setState(() => _existingImages.removeAt(index));
+    setState(() {
+      _existingImages.removeAt(index);
+      if (index < _existingMeta.length) _existingMeta.removeAt(index);
+    });
   }
 
   void _removeNewImage(int index) {
-    setState(() => _newImages.removeAt(index));
+    setState(() {
+      _newImages.removeAt(index);
+      if (index < _newMeta.length) _newMeta.removeAt(index);
+    });
   }
 
   Future<void> _scanBarcode() async {
@@ -245,6 +275,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
               : null,
           existingImages: _existingImages.isNotEmpty ? _existingImages : null,
           newImages: _newImages.isNotEmpty ? _newImages : null,
+          imageMetadata: [..._existingMeta, ..._newMeta].isEmpty
+              ? null
+              : [..._existingMeta, ..._newMeta],
         );
       } else {
         await _productService.addProduct(
@@ -256,6 +289,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
           currency: 'TZS',
           stock: parsedStock,
           imageFiles: _newImages,
+          imageMetadata: _newMeta.isEmpty ? null : _newMeta,
           location: _locationController.text.isNotEmpty
               ? _locationController.text
               : 'Tanzania',

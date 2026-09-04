@@ -127,6 +127,8 @@ service cloud.firestore {
         ]))
         // any signed-in user can bump viewCount
         || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount'])
+        // any signed-in user can like/unlike (arrayUnion/arrayRemove on likedBy)
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedBy'])
         // any signed-in user can update rating/reviewCount (after leaving a review)
         || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rating', 'reviewCount'])
         // server increments soldCount
@@ -554,8 +556,17 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
-    match /malipay_webhook_logs/{docId} {
-      allow read, write: if isAdmin();
+    // ─── CONSENT RECORDS (Tanzania PDPA 2022 evidence) ────────
+    // Doc ID equals userId; only the owner writes their own consent
+    // evidence. Users may read their own record; admins read all.
+    match /consentRecords/{userId} {
+      allow read: if isSignedIn() && (userId == request.auth.uid || isAdmin());
+      allow write: if isOwner(userId) || isAdmin();
+    }
+
+    // ─── SMOKE: deny-all fallback for any undocumented collection ──
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

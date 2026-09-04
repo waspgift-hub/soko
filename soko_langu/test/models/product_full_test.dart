@@ -10,6 +10,7 @@ void main() {
         description: 'Nice shoes',
         price: 45000,
         images: ['img1.jpg', 'img2.jpg'],
+        imageMetadata: const [],
         sellerId: 'u1',
         sellerName: 'Amina',
         category: 'Fashion',
@@ -135,6 +136,47 @@ void main() {
       expect(product.getWholesalePrice(5), 8000);
       expect(product.getWholesalePrice(20), 6000);
       expect(product.getWholesalePrice(100), 6000);
+    });
+
+    test('imageMetadata defaults to empty list', () {
+      final product = Product(
+        id: 'p8', name: 'X', description: '', price: 100,
+        images: ['a.jpg'], sellerId: 'u', sellerName: 'S', category: 'C',
+        subcategory: '', location: 'L', createdAt: DateTime.now(), stock: 1,
+      );
+      expect(product.imageMetadata, isNotNull);
+      expect(product.imageMetadata, isEmpty);
+    });
+
+    test('imageMetadata round-trips through toMap', () {
+      final product = Product(
+        id: 'p9', name: 'X', description: '', price: 100,
+        images: ['a.jpg'], sellerId: 'u', sellerName: 'S', category: 'C',
+        subcategory: '', location: 'L', createdAt: DateTime.now(), stock: 1,
+        imageMetadata: [
+          {'width': 1024, 'height': 768},
+          {'width': 800, 'height': 800},
+        ],
+      );
+      final map = product.toMap();
+      final meta = map['imageMetadata'] as List;
+      expect(meta.length, 2);
+      expect(meta[0]['width'], 1024);
+      expect(meta[0]['height'], 768);
+    });
+
+    test('maxOrder and unit fields align with quantity system', () {
+      final product = Product(
+        id: 'p10', name: 'X', description: '', price: 100,
+        images: [], sellerId: 'u', sellerName: 'S', category: 'C',
+        subcategory: '', location: 'L', createdAt: DateTime.now(), stock: 50,
+        unit: 'pcs',
+        minOrder: 2,
+        maxOrder: 20,
+      );
+      expect(product.unit, 'pcs');
+      expect(product.minOrder, 2);
+      expect(product.maxOrder, 20);
     });
   });
 

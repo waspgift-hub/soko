@@ -81,6 +81,7 @@ class ProductService {
     required String currency,
     required int stock,
     required List<XFile> imageFiles,
+    List<Map<String, dynamic>>? imageMetadata,
     String location = 'Tanzania',
     String district = '',
     bool isWholesale = false,
@@ -138,6 +139,7 @@ class ProductService {
         category, subcategory, stock, sellerName, sellerPhone,
         sellerKycApproved, isWholesale, wholesaleTiers, variants,
         attributes, brand, condition, location, district, barcode,
+        imageMetadata,
       );
     } catch (e) {
       throw NetworkError(
@@ -208,6 +210,7 @@ class ProductService {
     String location,
     String district,
     String? barcode,
+    List<Map<String, dynamic>>? imageMetadata,
   ) async {
     final duplicate = await _findDuplicateListing(name, price, imageUrls);
     if (duplicate != null) {
@@ -235,6 +238,7 @@ class ProductService {
       "price": price,
       "currency": currency,
       "images": imageUrls,
+      "imageMetadata": imageMetadata ?? [],
       "sellerId": uid,
       "sellerName": sellerName,
       "sellerPhone": sellerPhone,
@@ -616,6 +620,7 @@ class ProductService {
     String? condition,
     List<String>? existingImages,
     List<XFile>? newImages,
+    List<Map<String, dynamic>>? imageMetadata,
     String? location,
     String? district,
     String? barcode,
@@ -657,6 +662,8 @@ class ProductService {
         }
         data["images"] = allImages;
       }
+
+      if (imageMetadata != null) data["imageMetadata"] = imageMetadata;
 
       if (needsKeywordUpdate) {
         final current = await _db.collection("products").doc(productId).get();

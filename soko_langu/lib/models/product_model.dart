@@ -59,6 +59,7 @@ class Product {
   final double price;
   final String? currency;
   final List<String> images;
+  final List<Map<String, dynamic>>? imageMetadata;
   final String sellerId;
   final String sellerName;
   final String category;
@@ -86,7 +87,7 @@ class Product {
   final String condition;
   final bool sellerKycApproved;
   final String? barcode;
-  final String unit;
+final String unit;
   final int minOrder;
   final int? maxOrder;
 
@@ -97,6 +98,7 @@ class Product {
     required this.price,
     this.currency,
     required this.images,
+    this.imageMetadata = const [],
     required this.sellerId,
     required this.sellerName,
     required this.category,
@@ -169,6 +171,9 @@ class Product {
       price: (data['price'] ?? 0).toDouble(),
       currency: data['currency'] ?? 'TZS',
       images: List<String>.from(data['images'] ?? []),
+      imageMetadata: (data['imageMetadata'] as List?)
+          ?.map((e) => Map<String, dynamic>.from(e))
+          .toList(),
       sellerId: data['sellerId'] ?? '',
       sellerName: data['sellerName'] ?? '',
       category: data['category'] ?? 'General',
@@ -210,12 +215,13 @@ class Product {
     );
   }
 
-  Map<String, dynamic> toMap() => {
+Map<String, dynamic> toMap() => {
     'name': name,
     'description': description,
     'price': price,
     'currency': currency ?? 'TZS',
     'images': images,
+    'imageMetadata': imageMetadata,
     'sellerId': sellerId,
     'sellerName': sellerName,
     'category': category,

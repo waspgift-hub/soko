@@ -22,6 +22,7 @@ class FeedPostCard extends StatefulWidget {
   final String? badgeLabel;
   final double? displayPrice;
   final double? strikethroughPrice;
+  final List<Map<String, dynamic>>? imageMetadata;
   final VoidCallback? onTap;
   final VoidCallback? onChat;
   final VoidCallback? onBuy;
@@ -45,6 +46,7 @@ class FeedPostCard extends StatefulWidget {
     this.badgeLabel,
     this.displayPrice,
     this.strikethroughPrice,
+    this.imageMetadata,
     this.onTap,
     this.onChat,
     this.onBuy,
@@ -123,7 +125,7 @@ class _FeedPostCardState extends State<FeedPostCard> {
         children: [
           _header(context, cs),
           const SizedBox(height: AppSpacing.s2),
-          _media(context, cs, images),
+          _media(context, cs, images, widget.imageMetadata),
           const SizedBox(height: AppSpacing.s2),
           Padding(
             padding: const EdgeInsets.symmetric(
@@ -230,8 +232,9 @@ class _FeedPostCardState extends State<FeedPostCard> {
     );
   }
 
-  Widget _media(
-      BuildContext context, ColorScheme cs, List<String> images) {
+Widget _media(
+      BuildContext context, ColorScheme cs, List<String> images,
+      [List<Map<String, dynamic>>? imageMetadata]) {
     return GestureDetector(
       onTap: widget.onTap,
       onDoubleTap: () async {
@@ -242,30 +245,13 @@ class _FeedPostCardState extends State<FeedPostCard> {
       child: Stack(
         children: [
           AspectRatio(
-            aspectRatio: 4 / 3,
+            aspectRatio: _getAspectRatio(images, imageMetadata, _page),
             child: PageView.builder(
               controller: _pageCtrl,
               itemCount: images.length,
               onPageChanged: (i) =>
                   setState(() => _page = i),
-              itemBuilder: (_, i) => images[i].isEmpty
-                  ? Container(
-                      color: cs.surfaceContainerHighest,
-                      child: Icon(Icons.image,
-                          size: 64,
-                          color: cs.onSurfaceVariant),
-                    )
-                  : Image.network(
-                      images[i],
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      errorBuilder: (ctx, err, stack) => Container(
-                        color: cs.surfaceContainerHighest,
-                        child: Icon(Icons.broken_image,
-                            size: 64,
-                            color: cs.onSurfaceVariant),
-                      ),
-                    ),
+              itemBuilder: (_, i) => _buildMediaItem(images[i], imageMetadata, i, cs),
             ),
           ),
           if (widget.badgeLabel != null)
@@ -380,6 +366,37 @@ class _FeedPostCardState extends State<FeedPostCard> {
           ),
         ),
       ],
+    );
+  }
+
+  double _getAspectRatio(
+      List<String> images, List<Map<String, dynamic>>? metadata, int index) {
+    if (metadata != null && index < metadata.length) {
+      final meta = metadata[index];
+      final width = meta['width'] as int?;
+      final height = meta['height'] as int?;
+      if (width != null && height != null && width > 0 && height > 0) {
+        return width / height;
+      }
+    }
+    return 4 / 3;
+  }
+
+  Widget _buildMediaItem(
+      String imageUrl,
+      List<Map<String, dynamic>>? metadata,
+      int index,
+      ColorScheme cs) {
+    return Image.network(
+      imageUrl,
+      fit: BoxFit.cover,
+      width: double.infinity,
+      errorBuilder: (ctx, err, stack) => Container(
+        color: cs.surfaceContainerHighest,
+        child: Icon(Icons.broken_image,
+            size: 64,
+            color: cs.onSurfaceVariant),
+      ),
     );
   }
 }

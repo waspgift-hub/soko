@@ -232,6 +232,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
                         displayPrice: flash?.salePrice,
                         strikethroughPrice:
                             flash?.originalPrice,
+                        imageMetadata: product.imageMetadata,
                         onTap: () => _openProduct(product),
                         onBuy: () => _openProduct(product),
                         onChat: () =>
