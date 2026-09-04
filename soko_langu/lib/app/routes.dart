@@ -55,8 +55,6 @@ class AppRoutes {
   static const String orderFlow = '/order-flow';
   static const String sellerOrders = '/seller-orders';
   static const String adminUserDetail = '/admin/user';
-  static const String sellerStatement = '/seller-statement';
-  static const String buyerStatement = '/buyer-statement';
   static const String boostReceipt = '/boost-receipt';
   static const String buyerRequests = '/buyer-requests';
   static const String postBuyerRequest = '/post-buyer-request';

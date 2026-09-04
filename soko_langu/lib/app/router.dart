@@ -61,8 +61,6 @@ import '../screens/requests/post_buyer_request_screen.dart';
 import '../screens/report/admin_reports_screen.dart';
 import '../screens/ai/ai_assistant_screen.dart';
 import '../screens/seller/seller_analytics_screen.dart';
-import '../screens/seller/seller_statement_screen.dart';
-import '../screens/buyer/buyer_statement_screen.dart';
 
 import '../screens/legal/privacy_policy_screen.dart';
 import '../screens/legal/terms_of_service_screen.dart';
@@ -440,20 +438,6 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.sellerOrders,
         pageBuilder: (context, state) => _premiumPage(const SellerOrdersScreen()),
-      ),
-      GoRoute(
-        path: AppRoutes.sellerStatement,
-        pageBuilder: (context, state) {
-          final sellerId = state.extra as String? ?? FirebaseAuth.instance.currentUser?.uid ?? '';
-          return _premiumPage(SellerStatementScreen(sellerId: sellerId));
-        },
-      ),
-      GoRoute(
-        path: AppRoutes.buyerStatement,
-        pageBuilder: (context, state) {
-          final buyerId = state.extra as String? ?? FirebaseAuth.instance.currentUser?.uid ?? '';
-          return _premiumPage(BuyerStatementScreen(buyerId: buyerId));
-        },
       ),
       GoRoute(
         path: AppRoutes.kyc,
