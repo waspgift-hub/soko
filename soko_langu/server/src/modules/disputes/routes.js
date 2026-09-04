@@ -1,9 +1,10 @@
 const { Router } = require('express');
-const { authenticate, requireActive } = require('../../middleware/auth');
+const { authenticate, requireActive, verifyAdmin } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validation');
 const { z } = require('zod');
 const disputeService = require('./dispute-service');
 const evidenceService = require('./evidence-service');
+const { writeAudit, auditFromReq } = require('../../services/audit');
 
 const router = Router();
 
@@ -64,11 +65,11 @@ router.get('/:disputeId/evidence', authenticate, requireActive, async (req, res)
   res.json({ success: true, data: evidence });
 });
 
-// Resolve a dispute (admin)
+// Resolve a dispute (admin only)
 router.put(
   '/:disputeId/resolve',
   authenticate,
-  requireActive,
+  verifyAdmin,
   validate({
     body: z.object({
       resolution: z.enum(['FULL_TO_SELLER', 'FULL_REFUND', 'PARTIAL']),
@@ -77,8 +78,15 @@ router.put(
   async (req, res) => {
     const dispute = await disputeService.resolveDispute({
       disputeId: req.params.disputeId,
-      resolvedBy: req.user.uid,
+      resolvedBy: req.user.id,
       resolution: req.body.resolution,
+    });
+    await writeAudit({
+      ...auditFromReq(req),
+      action: 'dispute.resolve',
+      entityType: 'dispute',
+      entityId: req.params.disputeId,
+      newState: { resolution: req.body.resolution },
     });
     res.json({ success: true, data: dispute });
   }

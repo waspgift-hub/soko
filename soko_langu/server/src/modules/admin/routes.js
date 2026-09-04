@@ -4,6 +4,7 @@ const { validate } = require('../../middleware/validation');
 const { z } = require('zod');
 const adminService = require('./admin-service');
 const { getPrisma } = require('../../config/database');
+const { writeAudit, auditFromReq } = require('../../services/audit');
 
 const router = Router();
 
@@ -46,10 +47,22 @@ router.put(
   }),
   async (req, res) => {
     const prisma = getPrisma();
+    const before = await prisma.user.findUnique({
+      where: { id: req.params.userId },
+      select: { accountStatus: true },
+    });
     const user = await prisma.user.update({
       where: { id: req.params.userId },
       data: { accountStatus: req.body.accountStatus },
       select: { id: true, accountStatus: true, email: true },
+    });
+    await writeAudit({
+      ...auditFromReq(req),
+      action: 'user.status.change',
+      entityType: 'user',
+      entityId: req.params.userId,
+      oldState: { accountStatus: before?.accountStatus || null },
+      newState: { accountStatus: user.accountStatus, reason: req.body.reason || null },
     });
     res.json({ success: true, data: user });
   }
@@ -98,6 +111,30 @@ router.get(
       success: true,
       data: { orders, pagination: { page: Number(req.query.page), limit: Number(req.query.limit), total } },
     });
+  }
+);
+
+// Platform metrics for dashboards (GMV, orders, payments, risk queues)
+router.get('/metrics', async (req, res) => {
+  const data = await adminService.getMetrics();
+  res.json({ success: true, data });
+});
+
+// Audit log search (append-only; no update/delete endpoints exist)
+router.get(
+  '/audit-logs',
+  validate({
+    query: z.object({
+      action: z.string().optional(),
+      entityType: z.string().optional(),
+      actorId: z.string().uuid().optional(),
+      page: z.coerce.number().int().min(1).default(1),
+      limit: z.coerce.number().int().min(1).max(100).default(50),
+    }),
+  }),
+  async (req, res) => {
+    const data = await adminService.listAuditLogs(req.query);
+    res.json({ success: true, data });
   }
 );
 
@@ -159,6 +196,13 @@ router.post('/withdrawals/:id/process', async (req, res) => {
       withdrawalId: req.params.id,
       executedBy: req.user?.id || 'admin',
     });
+    await writeAudit({
+      ...auditFromReq(req),
+      action: 'withdrawal.process',
+      entityType: 'withdrawal',
+      entityId: req.params.id,
+      newState: { status: result.status, providerPayoutId: result.providerPayoutId || null },
+    });
     res.json({ success: true, data: result });
   } catch (e) {
     withdrawalError(res, e);
@@ -182,6 +226,13 @@ router.post('/withdrawals/:id/retry', async (req, res) => {
       withdrawalId: req.params.id,
       executedBy: req.user?.id || 'admin',
     });
+    await writeAudit({
+      ...auditFromReq(req),
+      action: 'withdrawal.retry',
+      entityType: 'withdrawal',
+      entityId: req.params.id,
+      newState: { status: result.status },
+    });
     res.json({ success: true, data: result });
   } catch (e) {
     withdrawalError(res, e);
@@ -197,6 +248,13 @@ router.post(
       const result = await walletService.confirmPayout({
         withdrawalId: req.params.id,
         providerPayoutId: req.body?.providerPayoutId,
+      });
+      await writeAudit({
+        ...auditFromReq(req),
+        action: 'withdrawal.confirm',
+        entityType: 'withdrawal',
+        entityId: req.params.id,
+        newState: { providerPayoutId: req.body?.providerPayoutId || null },
       });
       res.json({ success: true, data: result });
     } catch (e) {
