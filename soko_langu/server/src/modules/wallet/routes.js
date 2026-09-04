@@ -2,13 +2,31 @@ const { Router } = require('express');
 const { authenticate, requireActive } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validation');
 const { z } = require('zod');
+const { getPrisma } = require('../../config/database');
 const walletService = require('./wallet-service');
 
 const router = Router();
 
+// Resolve the caller's SellerProfile (wallet owner). Wallets belong to
+// SellerProfile rows, not directly to users.
+async function requireSellerProfile(userId) {
+  const prisma = getPrisma();
+  const profile = await prisma.sellerProfile.findUnique({
+    where: { userId },
+    select: { id: true },
+  });
+  if (!profile) {
+    const err = new Error('SELLER_PROFILE_NOT_FOUND');
+    err.status = 404;
+    throw err;
+  }
+  return profile;
+}
+
 // Get seller wallet + ledger (requires seller role)
 router.get('/', authenticate, requireActive, async (req, res) => {
-  const detail = await walletService.getWalletDetail(req.user.uid, {
+  const profile = await requireSellerProfile(req.user.id);
+  const detail = await walletService.getWalletDetail(profile.id, {
     page: req.query.page,
     limit: req.query.limit,
   });
@@ -27,8 +45,9 @@ router.post(
     }),
   }),
   async (req, res) => {
+    const profile = await requireSellerProfile(req.user.id);
     const result = await walletService.requestWithdrawal({
-      sellerId: req.user.uid,
+      sellerId: profile.id,
       amount: req.body.amount,
       phoneNumber: req.body.phoneNumber,
     });
@@ -38,9 +57,10 @@ router.post(
 
 // List withdrawal history
 router.get('/withdrawals', authenticate, requireActive, async (req, res) => {
-  const prisma = require('../../config/database').getPrisma();
+  const prisma = getPrisma();
+  const profile = await requireSellerProfile(req.user.id);
   const withdrawals = await prisma.withdrawal.findMany({
-    where: { sellerId: req.user.uid },
+    where: { sellerId: profile.id },
     orderBy: { createdAt: 'desc' },
   });
   res.json({ success: true, data: withdrawals });

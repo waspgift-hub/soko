@@ -101,4 +101,108 @@ router.get(
   }
 );
 
+// ---- Withdrawals (admin operates real-money payouts) ----
+const walletService = require('../wallet/wallet-service');
+
+function withdrawalError(res, e) {
+  return res.status(e.status || 500).json({ error: e.message || 'Withdrawal operation failed' });
+}
+
+// List withdrawals (default pending first)
+router.get(
+  '/withdrawals',
+  validate({
+    query: z.object({
+      status: z.string().optional(),
+      page: z.coerce.number().int().min(1).default(1),
+      limit: z.coerce.number().int().min(1).max(100).default(20),
+    }),
+  }),
+  async (req, res) => {
+    const prisma = getPrisma();
+    const where = req.query.status ? { status: req.query.status } : {};
+    const [withdrawals, total] = await Promise.all([
+      prisma.withdrawal.findMany({
+        where,
+        include: {
+          seller: { select: { id: true, storeName: true, userId: true } },
+          payouts: { orderBy: { createdAt: 'desc' }, take: 5 },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: Number(req.query.limit),
+        skip: (Number(req.query.page) - 1) * Number(req.query.limit),
+      }),
+      prisma.withdrawal.count({ where }),
+    ]);
+    res.json({
+      success: true,
+      data: { withdrawals, pagination: { page: Number(req.query.page), limit: Number(req.query.limit), total } },
+    });
+  }
+);
+
+// Withdrawal status + payout attempts
+router.get('/withdrawals/:id/status', async (req, res) => {
+  const prisma = getPrisma();
+  const withdrawal = await prisma.withdrawal.findUnique({
+    where: { id: req.params.id },
+    include: { payouts: { orderBy: { createdAt: 'desc' } } },
+  });
+  if (!withdrawal) return res.status(404).json({ error: 'WITHDRAWAL_NOT_FOUND' });
+  res.json({ success: true, data: withdrawal });
+});
+
+// Process a pending withdrawal: sends the ClickPesa mobile-money payout.
+router.post('/withdrawals/:id/process', async (req, res) => {
+  try {
+    const result = await walletService.processWithdrawal({
+      withdrawalId: req.params.id,
+      executedBy: req.user?.id || 'admin',
+    });
+    res.json({ success: true, data: result });
+  } catch (e) {
+    withdrawalError(res, e);
+  }
+});
+
+// Retry a failed withdrawal: resets to pending, then processes again.
+router.post('/withdrawals/:id/retry', async (req, res) => {
+  try {
+    const prisma = getPrisma();
+    const current = await prisma.withdrawal.findUnique({ where: { id: req.params.id } });
+    if (!current) return res.status(404).json({ error: 'WITHDRAWAL_NOT_FOUND' });
+    if (current.status === 'completed') return res.status(409).json({ error: 'WITHDRAWAL_ALREADY_COMPLETED' });
+    if (current.status === 'failed') {
+      await prisma.withdrawal.update({
+        where: { id: req.params.id },
+        data: { status: 'pending', providerPayoutId: null },
+      });
+    }
+    const result = await walletService.processWithdrawal({
+      withdrawalId: req.params.id,
+      executedBy: req.user?.id || 'admin',
+    });
+    res.json({ success: true, data: result });
+  } catch (e) {
+    withdrawalError(res, e);
+  }
+});
+
+// Confirm a payout completed (provider callback or manual confirmation).
+router.post(
+  '/withdrawals/:id/confirm',
+  validate({ body: z.object({ providerPayoutId: z.string().optional() }) }),
+  async (req, res) => {
+    try {
+      const result = await walletService.confirmPayout({
+        withdrawalId: req.params.id,
+        providerPayoutId: req.body?.providerPayoutId,
+      });
+      res.json({ success: true, data: result });
+    } catch (e) {
+      withdrawalError(res, e);
+    }
+  }
+);
+
 module.exports = router;

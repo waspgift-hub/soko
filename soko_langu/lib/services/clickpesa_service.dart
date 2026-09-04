@@ -72,15 +72,15 @@ class ClickPesaService {
   }) async {
     final token = await FirebaseAuth.instance.currentUser?.getIdToken();
     final resp = await http.post(
-      Uri.parse('${ApiConfig.baseUrl}/api/seller/withdraw'),
+      Uri.parse(ApiConfig.v1('/wallet/withdrawals')),
       headers: {
         'Content-Type': 'application/json',
         if (token != null) 'Authorization': 'Bearer $token',
       },
-      body: jsonEncode({'userId': userId, 'amount': amount, 'phone': phone}),
+      body: jsonEncode({'amount': amount, 'phoneNumber': phone}),
     );
     final body = jsonDecode(resp.body) as Map<String, dynamic>;
-    if (resp.statusCode != 200) {
+    if (resp.statusCode != 200 && resp.statusCode != 201) {
       throw Exception(body['error'] ?? 'Withdrawal failed');
     }
     return body;
