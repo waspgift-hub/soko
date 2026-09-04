@@ -6,6 +6,8 @@ import '../../services/user_service.dart';
 import '../../services/product_service.dart';
 import '../../services/rating_service.dart';
 import '../../models/product_model.dart';
+import '../../widgets/ds/ds_follow_button.dart';
+import '../../services/follow_service.dart';
 import '../../widgets/verified_badge.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/glass_container.dart'; // ignore: unused_import
@@ -280,6 +282,8 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                   textAlign: TextAlign.center,
                 ),
               ],
+              const SizedBox(height: 12),
+              _buildFollowRow(context),
               if (profile?.location.isNotEmpty == true) ...[
                 const SizedBox(height: 4),
                 Row(
@@ -344,6 +348,76 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
             ],
           ),
       );
+  }
+
+  Widget _buildFollowRow(BuildContext context) {
+    final follow = FollowService();
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _followCount(
+              context,
+              stream: follow.followersCount(widget.userId),
+              label: context.tr('followers', 'Followers'),
+              onTap: () => context.push(
+                '${AppRoutes.followList}/${widget.userId}?tab=0',
+              ),
+            ),
+            Container(
+              width: 1,
+              height: 28,
+              margin: const EdgeInsets.symmetric(horizontal: 20),
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurfaceVariant
+                  .withValues(alpha: 0.3),
+            ),
+            _followCount(
+              context,
+              stream: follow.followingCount(widget.userId),
+              label: context.tr('following', 'Following'),
+              onTap: () => context.push(
+                '${AppRoutes.followList}/${widget.userId}?tab=1',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        DsFollowButton(userId: widget.userId),
+      ],
+    );
+  }
+
+  Widget _followCount(
+    BuildContext context, {
+    required Stream<int> stream,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          StreamBuilder<int>(
+            stream: stream,
+            builder: (context, snap) => Text(
+              '${snap.data ?? 0}',
+              style: const TextStyle(
+                  fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildStats(BuildContext context, UserProfile? profile) {
