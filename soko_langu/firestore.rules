@@ -63,6 +63,23 @@ service cloud.firestore {
         && incoming.get('isSuspended', false) != true;
     }
 
+    // Social counters (followers/following) may move by exactly +-1 per
+    // write by any signed-in, non-suspended user. Follow/unfollow batches
+    // touch the OTHER party's counters, so owner-only writes would break
+    // follows entirely. Values can never jump or go negative; every other
+    // field stays owner-only.
+    function socialCounterDeltaOnly() {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      let oldFollowers = resource.data.get('followersCount', 0);
+      let newFollowers = request.resource.data.get('followersCount', oldFollowers);
+      let oldFollowing = resource.data.get('followingCount', 0);
+      let newFollowing = request.resource.data.get('followingCount', oldFollowing);
+      return changed.hasOnly(['followersCount', 'followingCount'])
+        && (newFollowers == oldFollowers + 1 || newFollowers == oldFollowers - 1 || newFollowers == oldFollowers)
+        && (newFollowing == oldFollowing + 1 || newFollowing == oldFollowing - 1 || newFollowing == oldFollowing)
+        && newFollowers >= 0 && newFollowing >= 0;
+    }
+
     // ─── USERS ──────────────────────────────────────────────
     match /users/{userId} {
       allow read: if isSignedIn();
@@ -71,15 +88,23 @@ service cloud.firestore {
       allow create: if isOwner(userId) && noSensitiveCreateFields();
       // Clients may update their own profile BUT NOT financial, trust,
       // or boost fields. Only the admin SDK (server webhook) may touch those.
-      allow update: if (isOwner(userId) && noSensitiveFieldChanges()) || isAdmin();
+      // Exception: social counter +-1 moves (follow/unfollow across users).
+      allow update: if (isOwner(userId) && noSensitiveFieldChanges()) || isAdmin() || (isSignedIn() && notSuspended() && socialCounterDeltaOnly());
       allow delete: if isOwner(userId) || isAdmin();
 
       match /following/{followingId} {
-        allow read, write: if isOwner(userId);
+        allow read: if isOwner(userId);
+        // Owner manages own following list only (create/delete, no edits).
+        allow create, delete: if isOwner(userId) && notSuspended();
+        allow update: if false;
       }
 
       match /followers/{followerId} {
-        allow read, write: if isOwner(userId);
+        allow read: if isOwner(userId);
+        // Any signed-in user may add/remove ONLY their own follower entry
+        // (this is how A follows B). Nobody may edit entries or forge others.
+        allow create, delete: if isSignedIn() && notSuspended() && followerId == request.auth.uid;
+        allow update: if false;
       }
 
       match /admin_withdrawals/{wdId} {

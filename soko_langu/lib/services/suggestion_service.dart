@@ -21,11 +21,13 @@ class SuggestionService {
       final followed = await _follow.getFollowing(me).first;
       final followedIds =
           followed.map((e) => (e['id'] ?? e['userId']).toString()).toSet();
+      final blocked = await _blockedIds(me);
       final seen = <String>{};
       final out = <Map<String, dynamic>>[];
       for (final Product p in products) {
         if (p.sellerId.isEmpty || p.sellerId == me) continue;
         if (followedIds.contains(p.sellerId)) continue;
+        if (blocked.contains(p.sellerId)) continue;
         if (!seen.add(p.sellerId)) continue;
         out.add({
           'sellerId': p.sellerId,
@@ -40,6 +42,18 @@ class SuggestionService {
     } catch (_) {
       return [];
     }
+  }
+
+  Future<Set<String>> _blockedIds(String me) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(me)
+          .get();
+      final list = doc.data()?['blockedUsers'];
+      if (list is List) return list.map((e) => e.toString()).toSet();
+    } catch (_) {}
+    return {};
   }
 
   Future<Map<String, String>> sellerNames(Set<String> sellerIds) async {

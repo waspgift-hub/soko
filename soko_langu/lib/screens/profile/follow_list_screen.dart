@@ -1,11 +1,14 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import '../../app/routes.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/follow_service.dart';
 import '../../services/suggestion_service.dart';
 import '../../services/user_service.dart';
 import '../../widgets/ds/ds.dart';
 import '../../widgets/ds/ds_follow_button.dart';
+import '../chat/chat_navigation.dart';
 
 /// Followers / Following lists with search, relationship states and a
 /// suggestions section. All data comes from FollowService streams.
@@ -34,14 +37,19 @@ class _FollowListScreenState extends State<FollowListScreen>
   final Map<String, String> _photos = {};
   List<Map<String, dynamic>>? _suggestions;
   bool _suggestionsLoading = false;
+  List<Map<String, dynamic>>? _friendsCache;
 
   @override
   void initState() {
     super.initState();
     _tabs = TabController(
-        length: 2,
+        length: 3,
         vsync: this,
-        initialIndex: widget.initialTab == 1 ? 1 : 0);
+        initialIndex: widget.initialTab >= 2
+            ? 2
+            : widget.initialTab == 1
+                ? 1
+                : 0);
     _tabs.addListener(() {
       if (_tabs.index == 1) _loadSuggestions();
     });
@@ -97,6 +105,7 @@ class _FollowListScreenState extends State<FollowListScreen>
           tabs: [
             Tab(text: context.tr('followers', 'Followers')),
             Tab(text: context.tr('following', 'Following')),
+            Tab(text: context.tr('friends', 'Friends')),
           ],
         ),
       ),
@@ -127,6 +136,7 @@ class _FollowListScreenState extends State<FollowListScreen>
               children: [
                 _listTab(isFollowers: true),
                 _listTab(isFollowers: false),
+                _friendsTab(),
               ],
             ),
           ),
@@ -200,8 +210,94 @@ class _FollowListScreenState extends State<FollowListScreen>
     );
   }
 
-  Widget _suggestionsSection() {
-    if (_suggestions == null) {
+  /// Mutual connections only: following ∩ followers. Derived live from
+  /// the two real lists — never a separate stored record that could drift.
+  Widget _friendsTab() {
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: _follow.getFollowing(widget.userId),
+      builder: (context, followingSnap) {
+        return StreamBuilder<List<Map<String, dynamic>>>(
+          stream: _follow.getFollowers(widget.userId),
+          builder: (context, followersSnap) {
+            if (followingSnap.connectionState ==
+                    ConnectionState.waiting ||
+                followersSnap.connectionState ==
+                    ConnectionState.waiting) {
+              return const Center(
+                  child: CircularProgressIndicator());
+            }
+            final followingIds = (followingSnap.data ?? [])
+                .map((e) => (e['id'] ?? e['userId']).toString())
+                .toSet();
+            var mutuals = (followersSnap.data ?? [])
+                .where((e) => followingIds
+                    .contains((e['id'] ?? e['userId']).toString()))
+                .toList();
+            if (_query.isNotEmpty) {
+              mutuals = mutuals.where((e) {
+                final name =
+                    (_names[(e['id'] ?? e['userId']).toString()] ?? '')
+                        .toLowerCase();
+                return name.contains(_query);
+              }).toList();
+            }
+            if (mutuals.isEmpty) {
+              return DsEmptyState(
+                icon: Icons.group_outlined,
+                title: context.tr(
+                    'no_friends_yet', 'No friends yet.'),
+              );
+            }
+            _fillNames(mutuals);
+            return ListView.builder(
+              itemCount: mutuals.length,
+              itemBuilder: (context, i) {
+                final id = (mutuals[i]['id'] ??
+                        mutuals[i]['userId'])
+                    .toString();
+                if (id.isEmpty) {
+                  return const SizedBox.shrink();
+                }
+                final name = _names[id] ?? 'Member';
+                final photo = _photos[id] ?? '';
+                return ListTile(
+                  leading: DsAvatar(
+                    imageUrl:
+                        photo.isEmpty ? null : photo,
+                    initials: name.isNotEmpty
+                        ? name.characters.first.toUpperCase()
+                        : '?',
+                  ),
+                  title: Text(name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.chat_outlined),
+                        onPressed: () =>
+                            ChatNavigation.openSellerChat(
+                                context, id, name),
+                      ),
+                      DsFollowButton(
+                          userId: id, compact: true),
+                    ],
+                  ),
+                  onTap: () => context.push(
+                    '${AppRoutes.publicProfile}/$id',
+                    extra: name,
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _suggestionsSection() {    if (_suggestions == null) {
       return const Padding(
         padding: EdgeInsets.all(16),
         child: Center(child: CircularProgressIndicator()),
