@@ -22,6 +22,7 @@ const trustRouter = require('./modules/trust/routes');
 const adminRouter = require('./modules/admin/routes');
 const productRouter = require('./modules/products/routes');
 const referralRouter = require('./modules/referrals/routes');
+const moderationRouter = require('./modules/moderation/routes');
 
 const app = express();
 
@@ -87,6 +88,7 @@ app.use('/api/v1/trust', trustRouter);
 app.use('/api/v1/admin', adminRouter);
 app.use('/api/v1/products', productRouter);
 app.use('/api/v1/referrals', referralRouter);
+app.use('/api/v1/moderation', moderationRouter);
 
 // Legacy-compat: proven old routers under original /api paths (payouts,
 // delivery OTP, search, notifications). Firestore is the same project, so
@@ -101,6 +103,7 @@ try {
   app.use('/api/notification', generalLimiter, compat.notificationRouter);
   app.use('/api/escrow', generalLimiter, compat.escrowRouter);
   app.use('/api', generalLimiter, compat.ordersCompatRouter);
+  app.use('/api', generalLimiter, compat.moderationCompatRouter);
   console.log('[COMPAT] legacy routers mounted');
 } catch (e) {
   console.error('[COMPAT] mount failed, v1 continues:', e.message);

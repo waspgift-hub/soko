@@ -12,7 +12,7 @@ class ReportService {
   Future<void> submitReport(Report report) async {
     final token = await _auth.currentUser?.getIdToken();
     final resp = await http.post(
-      Uri.parse('${ApiConfig.baseUrl}/api/reports'),
+      Uri.parse(ApiConfig.v1('/moderation/')),
       headers: {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
