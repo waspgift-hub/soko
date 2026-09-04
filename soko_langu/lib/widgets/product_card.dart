@@ -6,7 +6,6 @@ import '../../services/product_service.dart';
 import '../../services/soko_cache_manager.dart';
 import '../extensions/context_tr.dart';
 import '../theme/app_colors.dart';
-import '../theme/app_typography.dart';
 import 'soko_vibe_watermark.dart';
 import 'ds/ds.dart';
 
@@ -122,17 +121,20 @@ class ProductCard extends StatelessWidget {
                       ],
                     ),
                     SizedBox(height: 4 * scale),
-                    if (flashSale != null) ...[
-                      Text(context.formatPrice(flashSale!.salePrice),
-                        style: AppTypography.amount(cs.error).copyWith(fontSize: priceSize, fontWeight: FontWeight.w700),
-                      ),
-                      SizedBox(height: 2 * scale),
-                      Text(context.formatPrice(flashSale!.originalPrice),
-                        style: TextStyle(decoration: TextDecoration.lineThrough, color: cs.onSurface.withValues(alpha: 0.5), fontSize: smallSize),
-                      ),
-                    ] else
-                      Text(context.formatPrice(product.price),
-                        style: AppTypography.amount(cs.primary).copyWith(fontSize: priceSize, fontWeight: FontWeight.w700),
+                    if (flashSale != null)
+                      DsPrice(
+                        price: flashSale!.salePrice,
+                        oldPrice: flashSale!.originalPrice,
+                        color: cs.error,
+                        size: priceSize,
+                        weight: FontWeight.w700,
+                      )
+                    else
+                      DsPrice(
+                        price: product.price,
+                        color: cs.primary,
+                        size: priceSize,
+                        weight: FontWeight.w700,
                       ),
                     SizedBox(height: 4 * scale),
                     Row(

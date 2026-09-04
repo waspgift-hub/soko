@@ -9,6 +9,9 @@ class DsPrice extends StatelessWidget {
   final num? oldPrice;
   final String? currencyOverride;
   final bool large;
+  final Color? color;
+  final double? size;
+  final FontWeight? weight;
 
   const DsPrice({
     super.key,
@@ -16,6 +19,9 @@ class DsPrice extends StatelessWidget {
     this.oldPrice,
     this.currencyOverride,
     this.large = false,
+    this.color,
+    this.size,
+    this.weight,
   });
 
   @override
@@ -26,6 +32,8 @@ class DsPrice extends StatelessWidget {
     final pct = hasDiscount
         ? ((1 - price / oldPrice!) * 100).round()
         : 0;
+    final priceStyle =
+        AppTypography.amount(color ?? (large ? cs.primary : cs.onSurface));
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.center,
       spacing: 6,
@@ -33,9 +41,9 @@ class DsPrice extends StatelessWidget {
         Text(
           context.formatPrice(price.toDouble(),
               currencyOverride: currencyOverride),
-          style: large
-              ? AppTypography.amount(cs.primary)
-              : AppTypography.amount(cs.onSurface),
+          style: size != null || weight != null
+              ? priceStyle.copyWith(fontSize: size, fontWeight: weight)
+              : priceStyle,
         ),
         if (hasDiscount) ...[
           Text(
