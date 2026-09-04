@@ -43,6 +43,15 @@ async function checkHealth() {
     heapTotal: `${Math.round(memUsage.heapTotal / 1024 / 1024)}MB`,
   };
 
+  // Worker queue (set by worker process via app.locals)
+  try {
+    const app = require('../../app');
+    if (app.app && app.app.locals.mediaQueueMetrics) {
+      const counts = await app.app.locals.mediaQueueMetrics();
+      health.checks.workerQueue = { status: 'ok', counts };
+    }
+  } catch (_) {}
+
   return health;
 }
 
