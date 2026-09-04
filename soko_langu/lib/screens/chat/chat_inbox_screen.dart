@@ -201,7 +201,22 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
               ],
             )
           : AppBar(
-              title: Text(context.tr('chats', 'Chats')),
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Messages'),
+                  Text(
+                    'Stay connected with buyers and sellers',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.normal,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
               backgroundColor: Colors.transparent,
               elevation: 0,
             ),
@@ -227,13 +242,19 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
               ),
             ),
           if (!_selectMode)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               child: Row(
                 children: [
                   _buildTabChip(context, context.tr('all', 'All'), 0),
                   const SizedBox(width: 6),
                   _buildTabChip(context, context.tr('unread', 'Unread'), 1),
+                  const SizedBox(width: 6),
+                  _buildTabChip(context, 'Buying', 4),
+                  const SizedBox(width: 6),
+                  _buildTabChip(context, 'Selling', 5),
                   const SizedBox(width: 6),
                   _buildTabChip(context, context.tr('favourited', 'Favourite'), 2),
                   const SizedBox(width: 6),
@@ -265,6 +286,16 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                       return r.isFavourited(myUid) && !r.archivedBy.contains(myUid);
                     case 3:
                       return r.archivedBy.contains(myUid);
+                    case 4:
+                      return !r.archivedBy.contains(myUid) &&
+                          (r.buyerId == null ||
+                              r.buyerId!.isEmpty ||
+                              r.buyerId == myUid);
+                    case 5:
+                      return !r.archivedBy.contains(myUid) &&
+                          r.sellerId != null &&
+                          r.sellerId!.isNotEmpty &&
+                          r.sellerId == myUid;
                     default:
                       return !r.archivedBy.contains(myUid);
                   }
@@ -322,20 +353,23 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                     final name = _userNames[otherId] ?? context.tr('member', 'Member');
                     final photo = _userPhotos[otherId] ?? '';
                     final unreadCount = room.unreadCountFor(myUid);
-
-                    return _ChatListTile(
+                    final pinned = room.isPinned(myUid);
+                    final prevPinned = i > 0 &&
+                        rooms[i - 1].isPinned(myUid);
+                    final tile = _ChatListTile(
                       name: name,
                       photo: photo,
                       kycApproved: _userKyc[otherId] ?? false,
                       lastMessage: room.lastMessage,
                       lastTimestamp: room.lastTimestamp,
                       unreadCount: unreadCount,
-                      isPinned: room.isPinned(myUid),
+                      isPinned: pinned,
                       isMuted: room.isMuted(myUid),
                       isFavourited: room.isFavourited(myUid),
                       isArchived: room.isArchived(myUid),
                       isSelected: _selectedIds.contains(room.id),
                       selectMode: _selectMode,
+                      productTitle: room.productTitle,
                       onTap: () {
                         if (_selectMode) {
                           _toggleSelect(room.id);
@@ -352,6 +386,66 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                       onMenuAction: (action) => _handleMenuAction(action, room, otherId, name),
                       cs: cs,
                     );
+                    final wrapped = _selectMode
+                        ? tile
+                        : Dismissible(
+                            key: ValueKey(room.id),
+                            direction: DismissDirection.horizontal,
+                            background: Container(
+                              alignment: Alignment.centerLeft,
+                              padding: const EdgeInsets.only(left: 20),
+                              color: cs.primary.withValues(alpha: 0.12),
+                              child: Icon(
+                                  room.isArchived(myUid)
+                                      ? Icons.unarchive
+                                      : Icons.archive,
+                                  color: cs.primary),
+                            ),
+                            secondaryBackground: Container(
+                              alignment: Alignment.centerRight,
+                              padding:
+                                  const EdgeInsets.only(right: 20),
+                              color: cs.primary.withValues(alpha: 0.12),
+                              child: Icon(
+                                  room.isMuted(myUid)
+                                      ? Icons.volume_up
+                                      : Icons.volume_off,
+                                  color: cs.primary),
+                            ),
+                            confirmDismiss: (dir) async {
+                              if (dir ==
+                                  DismissDirection.startToEnd) {
+                                await _chatService
+                                    .toggleArchive(room.id);
+                              } else {
+                                await _chatService
+                                    .toggleMute(room.id);
+                              }
+                              return false;
+                            },
+                            child: tile,
+                          );
+                    if (pinned && !prevPinned) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                                12, 8, 12, 2),
+                            child: Text(
+                              'Pinned',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                          wrapped,
+                        ],
+                      );
+                    }
+                    return wrapped;
                   },
                 );
               },
@@ -376,6 +470,16 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
             return r.isFavourited(uid) && !r.archivedBy.contains(uid);
           case 3:
             return r.archivedBy.contains(uid);
+          case 4:
+            return !r.archivedBy.contains(uid) &&
+                (r.buyerId == null ||
+                    r.buyerId!.isEmpty ||
+                    r.buyerId == uid);
+          case 5:
+            return !r.archivedBy.contains(uid) &&
+                r.sellerId != null &&
+                r.sellerId!.isNotEmpty &&
+                r.sellerId == uid;
           default:
             return !r.archivedBy.contains(uid);
         }
@@ -564,6 +668,7 @@ class _ChatListTile extends StatelessWidget {
   final bool isArchived;
   final bool isSelected;
   final bool selectMode;
+  final String? productTitle;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   final Function(String) onMenuAction;
@@ -582,6 +687,7 @@ class _ChatListTile extends StatelessWidget {
     this.isArchived = false,
     this.isSelected = false,
     this.selectMode = false,
+    this.productTitle,
     required this.onTap,
     required this.onLongPress,
     required this.onMenuAction,
@@ -652,7 +758,7 @@ class _ChatListTile extends StatelessWidget {
                                     padding: const EdgeInsets.only(right: 4),
                                     child: Icon(Icons.favorite, size: 14, color: cs.error),
                                   ),
-                                Flexible(child: Text(name, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: cs.onSurface))),
+                                Flexible(child: Text(name, style: TextStyle(fontWeight: unreadCount > 0 ? FontWeight.w700 : FontWeight.w600, fontSize: 16, color: cs.onSurface))),
                                 if (kycApproved) VerifiedBadge(size: 14),
                               ],
                             ),
@@ -675,6 +781,24 @@ class _ChatListTile extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 4),
+                      if (productTitle != null && productTitle!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 2),
+                          child: Row(
+                            children: [
+                              Icon(Icons.shopping_bag_outlined, size: 13, color: cs.primary),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  productTitle!,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontSize: 12, color: cs.primary, fontWeight: FontWeight.w500),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       Row(
                         children: [
                           Expanded(
@@ -689,7 +813,7 @@ class _ChatListTile extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                               decoration: BoxDecoration(
-                                color: Colors.green,
+                                color: cs.primary,
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text('$unreadCount', style: TextStyle(fontSize: 11, color: cs.surface, fontWeight: FontWeight.w600)),
