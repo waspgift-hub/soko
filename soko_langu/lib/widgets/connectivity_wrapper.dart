@@ -55,10 +55,12 @@ class _ConnectivityWrapperState extends State<ConnectivityWrapper> {
 
   Future<bool> _isServerReachable() async {
     try {
+      // Any HTTP response (even 503) proves network + server reachability.
+      // /health is the canonical endpoint (there is no /ping route).
       final resp = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/ping'),
+        Uri.parse('${ApiConfig.baseUrl}/health'),
       ).timeout(const Duration(seconds: 5));
-      return resp.statusCode == 200;
+      return resp.statusCode < 600;
     } catch (_) {
       return false;
     }

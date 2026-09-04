@@ -13,7 +13,6 @@ import '../../services/wishlist_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../services/permission_service.dart';
 import '../../services/ai/ai_service.dart';
-import '../../services/account_tier_service.dart';
 import '../../widgets/account_switcher_sheet.dart';
 import '../../widgets/ad_banner.dart';
 import '../../widgets/verified_badge.dart';
@@ -40,8 +39,6 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
   double _avgRating = 0;
   bool _isLoading = true;
   StreamSubscription<User?>? _authSub;
-  StreamSubscription<String>? _tierSub;
-  String _accountTier = 'both';
 
   @override
   void initState() {
@@ -50,7 +47,6 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       _loadProfile();
-      _loadTier();
     }
     // Reactive auth: covers the cold-start race where currentUser is still
     // null in initState, and handles sign-in/sign-out without one-shot
@@ -60,7 +56,6 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
       if (u != null) {
         if (!_isLoading && _profile == null) {
           _loadProfile();
-          _loadTier();
         }
       } else {
         setState(() {
@@ -72,105 +67,12 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
         });
       }
     });
-    _tierSub = AccountTierService().onTierChanged.listen((tier) {
-      if (mounted) setState(() => _accountTier = tier);
-    });
-  }
-
-  Future<void> _loadTier() async {
-    final tier = await AccountTierService().getTier();
-    if (mounted) setState(() => _accountTier = tier);
-  }
-
-  void _showTierSwitcher() {
-    final cs = Theme.of(context).colorScheme;
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: cs.onSurfaceVariant.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  context.tr('choose_account_type'),
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: cs.onSurface,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32),
-                  child: Text(
-                    context.tr('help_account_types'),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: cs.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _TierOption(
-                  icon: Icons.shopping_bag_outlined,
-                  titleKey: 'account_buyer',
-                  descKey: 'account_buyer_desc',
-                  selected: _accountTier == 'buyer',
-                  onTap: () async {
-                    await AccountTierService().setTier('buyer');
-                    if (ctx.mounted) Navigator.of(ctx).pop();
-                  },
-                ),
-                const SizedBox(height: 8),
-                _TierOption(
-                  icon: Icons.store_outlined,
-                  titleKey: 'account_seller',
-                  descKey: 'account_seller_desc',
-                  selected: _accountTier == 'seller',
-                  onTap: () async {
-                    await AccountTierService().setTier('seller');
-                    if (ctx.mounted) Navigator.of(ctx).pop();
-                  },
-                ),
-                const SizedBox(height: 8),
-                _TierOption(
-                  icon: Icons.swap_horiz_rounded,
-                  titleKey: 'account_both',
-                  descKey: 'account_both_desc',
-                  selected: _accountTier == 'both',
-                  onTap: () async {
-                    await AccountTierService().setTier('both');
-                    if (ctx.mounted) Navigator.of(ctx).pop();
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _authSub?.cancel();
-    _tierSub?.cancel();
     super.dispose();
   }
 
@@ -509,27 +411,20 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
     final isAdmin = _profile?.email == 'admin@soko-langu.com' ||
         user?.email?.toLowerCase() == 'admin@soko-langu.com';
     final actions = [
-      _ActionItem(Icons.swap_horiz_rounded, context.tr('choose_account_type'), _showTierSwitcher),
       _ActionItem(Icons.switch_account_rounded, context.tr('accounts'), () => AccountSwitcherSheet.show(context)),
       _ActionItem(Icons.edit_rounded, context.tr('edit_profile'), () async { await context.push(AppRoutes.editProfile); _refreshProfile(); }),
       _ActionItem(Icons.favorite_rounded, context.tr('wishlist'), () => context.push(AppRoutes.wishlist)),
-      if (_accountTier != 'buyer')
-        _ActionItem(Icons.shopping_bag_rounded, context.tr('my_ads'), () => context.push(AppRoutes.myAds)),
-      if (_accountTier != 'buyer')
-        _ActionItem(Icons.store_rounded, context.tr('customize_shop'), () => context.push(AppRoutes.shopCustomization)),
-      if (_accountTier != 'buyer')
-        _ActionItem(Icons.dashboard_rounded, context.tr('dashboard'), () => context.push(AppRoutes.sellerDashboard)),
-      if (_accountTier != 'buyer')
-        _ActionItem(Icons.analytics_rounded, context.tr('analytics'), () {
-          final uid = FirebaseAuth.instance.currentUser?.uid;
-          if (uid != null) context.push(AppRoutes.sellerAnalytics, extra: uid);
-        }),
+      _ActionItem(Icons.shopping_bag_rounded, context.tr('my_ads'), () => context.push(AppRoutes.myAds)),
+      _ActionItem(Icons.store_rounded, context.tr('customize_shop'), () => context.push(AppRoutes.shopCustomization)),
+      _ActionItem(Icons.dashboard_rounded, context.tr('dashboard'), () => context.push(AppRoutes.sellerDashboard)),
+      _ActionItem(Icons.analytics_rounded, context.tr('analytics'), () {
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        if (uid != null) context.push(AppRoutes.sellerAnalytics, extra: uid);
+      }),
       _ActionItem(Icons.auto_awesome_rounded, context.tr('ai_assistant'), () => context.push(AppRoutes.aiAssistant)),
       _ActionItem(Icons.explore_rounded, context.tr('discovery'), () => context.push(AppRoutes.discovery)),
-      if (_accountTier != 'seller')
-        _ActionItem(Icons.receipt_long_rounded, context.tr('my_purchases'), () => context.push(AppRoutes.myPurchases)),
-      if (_accountTier != 'seller')
-        _ActionItem(Icons.account_balance_wallet_rounded, context.tr('buyer_statement'), () => context.push(AppRoutes.buyerStatement)),
+      _ActionItem(Icons.receipt_long_rounded, context.tr('my_purchases'), () => context.push(AppRoutes.myPurchases)),
+      _ActionItem(Icons.account_balance_wallet_rounded, context.tr('buyer_statement'), () => context.push(AppRoutes.buyerStatement)),
       _ActionItem(Icons.verified_rounded, context.tr('kyc'), () => context.push(AppRoutes.kyc)),
     ];
     if (isAdmin) {
@@ -836,101 +731,6 @@ class _AiChatBoxState extends State<_AiChatBox> with TickerProviderStateMixin {
   }
 }
 
-class _TierOption extends StatelessWidget {
-  final IconData icon;
-  final String titleKey;
-  final String descKey;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _TierOption({
-    required this.icon,
-    required this.titleKey,
-    required this.descKey,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Material(
-        color: selected
-            ? cs.primary.withValues(alpha: 0.1)
-            : cs.surfaceContainerHighest.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: selected
-                    ? cs.primary
-                    : cs.onSurfaceVariant.withValues(alpha: 0.12),
-                width: selected ? 1.5 : 1,
-              ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: (selected ? cs.primary : cs.onSurfaceVariant)
-                        .withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    icon,
-                    color: selected ? cs.primary : cs.onSurfaceVariant,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        context.tr(titleKey),
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: cs.onSurface,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        context.tr(descKey),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: cs.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (selected)
-                  Icon(Icons.check_circle_rounded, color: cs.primary, size: 22)
-                else
-                  Icon(
-                    Icons.radio_button_unchecked,
-                    color: cs.onSurfaceVariant.withValues(alpha: 0.4),
-                    size: 22,
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _ProfileSkeleton extends StatefulWidget {
   const _ProfileSkeleton();

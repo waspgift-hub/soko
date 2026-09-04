@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 
@@ -8,8 +7,8 @@ class AccountSelectionScreen extends StatelessWidget {
   const AccountSelectionScreen({super.key});
 
   Future<void> _select(String tier, BuildContext context) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('account_tier', tier);
+    // Account tiers removed: everyone can buy and sell. The choice is
+    // informational only; continue straight to registration.
     if (context.mounted) {
       context.replace(AppRoutes.register);
     }

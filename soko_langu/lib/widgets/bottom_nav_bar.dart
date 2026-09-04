@@ -8,7 +8,6 @@ import '../screens/home/discovery_screen.dart';
 import '../screens/chat/chat_inbox_screen.dart';
 import '../screens/home/add_product_screen.dart';
 import '../services/user_service.dart';
-import '../services/account_tier_service.dart';
 import '../app/app_transitions.dart';
 import '../extensions/context_tr.dart';
 import '../main.dart';
@@ -27,7 +26,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   Timer? _adTimer;
   final UserService _userService = UserService();
   String? _profilePhotoUrl;
-  String _accountTier = 'both';
 
   // Tabs are built lazily on first visit (IndexedStack keeps them alive
   // afterwards). Building all of them at app start means offstage subtrees
@@ -67,12 +65,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       interstitialAdService.tryShow();
     });
     _loadProfilePhoto();
-    _loadTier();
-  }
-
-  Future<void> _loadTier() async {
-    final tier = await AccountTierService().getTier();
-    if (mounted) setState(() => _accountTier = tier);
   }
 
   Future<void> _loadProfilePhoto() async {
@@ -172,10 +164,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                   context.tr('discovery'),
                   cs,
                 ),
-                if (_accountTier != 'buyer')
-                  _buildSellTab(cs)
-                else
-                  const Spacer(),
+                _buildSellTab(cs),
                 _buildTab(
                   3,
                   Icons.chat_outlined,
@@ -505,8 +494,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 }),
                 const Divider(height: 16),
                 // Sell button in sidebar
-                if (_accountTier != 'buyer')
-                  Container(
+                Container(
                     margin: const EdgeInsets.only(bottom: 2),
                     child: Material(
                       color: Colors.transparent,
