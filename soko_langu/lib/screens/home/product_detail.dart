@@ -21,6 +21,7 @@ import '../../services/product_service.dart';
 import '../../services/user_service.dart';
 import '../../services/analytics_service.dart';
 import '../../services/flash_sale_service.dart';
+import '../../services/cart_service.dart';
 import '../../services/recently_viewed_service.dart';
 import '../../models/flash_sale_model.dart';
 import '../../theme/app_colors.dart';
@@ -728,11 +729,56 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
-                  icon: Icon(Icons.chat, size: 18),
-                  onPressed: _chatWithSeller,
+                  icon: const Icon(Icons.shopping_bag_outlined, size: 18),
+                  onPressed: () async {
+                    final product = widget.product;
+                    if (currentUser == null) {
+                      context.push(AppRoutes.login);
+                      return;
+                    }
+                    await CartService().add(
+                      product: product,
+                      quantity: _quantity,
+                      variantId: _selectedVariantId,
+                      unitPrice: _unitPrice,
+                    );
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                            content:
+                                Text(context.tr('added_to_cart', 'Added to cart'))),
+                      );
+                    }
+                  },
                   label: Text(
-                    context.tr('chat'),
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                    context.tr('add_to_cart', 'Add to Cart'),
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Container(
+                height: 52,
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: cs.primary.withValues(alpha: 0.12)),
+                ),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: _chatWithSeller,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.chat, size: 18, color: cs.primary),
+                      const SizedBox(width: 6),
+                      Text(
+                        context.tr('chat'),
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cs.primary),
+                      ),
+                    ],
                   ),
                 ),
               ),

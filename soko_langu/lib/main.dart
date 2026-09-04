@@ -27,6 +27,7 @@ import 'notifiers/auth_notifier.dart';
 import 'providers/product_feed_provider.dart';
 import 'repositories/auth_repository.dart';
 import 'services/ai/ai_service.dart';
+import 'services/cart_service.dart';
 import 'services/app_lock_service.dart';
 import 'services/auth_service.dart';
 import 'services/exchange_rate_service.dart';
@@ -97,6 +98,7 @@ void main() async {
   if (!kIsWeb) {
     try {
       await LocalCacheService.init();
+      await CartService.init();
     } catch (e) {
       debugPrint('LocalCacheService: init failed — $e');
     }
