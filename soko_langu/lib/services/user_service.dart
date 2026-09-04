@@ -145,13 +145,13 @@ class UserService {
       final user = FirebaseAuth.instance.currentUser;
       final token = await user?.getIdToken();
       if (token == null) return;
-      await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/user/language'),
+      await http.put(
+        Uri.parse(ApiConfig.v1('/users/settings/language_region')),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-        body: jsonEncode({'langCode': langCode}),
+        body: jsonEncode({'preferredLanguage': langCode}),
       );
     } catch (_) {
       // Firestore write above is the source of truth; the server cache expires
@@ -172,8 +172,8 @@ class UserService {
       final user = FirebaseAuth.instance.currentUser;
       final token = await user?.getIdToken();
       if (token == null) return;
-      await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/user/sms-language'),
+      await http.put(
+        Uri.parse(ApiConfig.v1('/users/settings/language_region')),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',

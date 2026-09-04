@@ -267,6 +267,7 @@ async function phoneLogin(req, res) {
           email,
           displayName: `User ${clean.slice(-4)}`,
           phoneVerified: true,
+          accountStatus: 'active',
           lastLoginAt: new Date(),
         },
       });
@@ -274,7 +275,7 @@ async function phoneLogin(req, res) {
       uid = user.firebaseUid;
       await prisma.user.update({
         where: { id: user.id },
-        data: { lastLoginAt: new Date(), phoneVerified: true },
+        data: { lastLoginAt: new Date(), phoneVerified: true, accountStatus: 'active' },
       }).catch(() => {});
     }
 

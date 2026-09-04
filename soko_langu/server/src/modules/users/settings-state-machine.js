@@ -40,7 +40,7 @@ const DOMAIN_VALIDATORS = {
   shopping: ['defaultAddressId', 'preferredShipping', 'savedCards'],
   selling: ['storeName', 'storeDescription', 'returnsPolicy'],
   payments: ['defaultPayoutMethod', 'currencyPreference'],
-  language_region: ['preferredLanguage', 'preferredCurrency', 'timezone'],
+  language_region: ['preferredLanguage', 'preferredCurrency', 'timezone', 'smsLangCode'],
   accessibility: ['fontScale', 'highContrast', 'reduceMotion'],
   data_deletion: ['deletionRequested', 'dataExportRequested'],
 };
