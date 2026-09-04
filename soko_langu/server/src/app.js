@@ -96,6 +96,7 @@ try {
   app.use('/api/search', searchLimiter, compat.searchRouter);
   app.use('/api/notification', generalLimiter, compat.notificationRouter);
   app.use('/api/escrow', generalLimiter, compat.escrowRouter);
+  app.use('/api', generalLimiter, compat.ordersCompatRouter);
   console.log('[COMPAT] legacy routers mounted');
 } catch (e) {
   console.error('[COMPAT] mount failed, v1 continues:', e.message);

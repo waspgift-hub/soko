@@ -114,8 +114,10 @@ function setupCompat(app) {
   const { router: notificationRouter } = require('../../../notification');
   // eslint-disable-next-line global-require
   const escrowRouter = require('./escrow-compat');
+  // eslint-disable-next-line global-require
+  const ordersCompatRouter = require('./orders-compat');
 
-  return { payoutsRouter, deliveryRouter, searchRouter, notificationRouter, escrowRouter };
+  return { payoutsRouter, deliveryRouter, searchRouter, notificationRouter, escrowRouter, ordersCompatRouter };
 }
 
 module.exports = { setupCompat, webhookIpWhitelist, verifyWebhook };
