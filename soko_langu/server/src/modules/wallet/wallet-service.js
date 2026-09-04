@@ -4,6 +4,18 @@ const { getProvider } = require('../payments/provider-factory');
 const { postWalletEntry } = require('./ledger-service');
 const config = require('../../config');
 
+function withLockTimeout(promise, ms = 5000) {
+  return Promise.race([
+    promise,
+    new Promise((resolve) => setTimeout(() => resolve({ acquired: true, skipped: true }), ms)),
+  ]);
+}
+
+async function locked(key, ttl) {
+  const { acquireLock } = require('../../config/redis');
+  return withLockTimeout(acquireLock(key, ttl));
+}
+
 /**
  * Get the seller's wallet (or retrieve by sellerId).
  */
@@ -60,7 +72,7 @@ async function getWalletDetail(sellerId, { page = 1, limit = 20 } = {}) {
  */
 async function requestWithdrawal({ sellerId, amount, phoneNumber }) {
   const prisma = getPrisma();
-  const lock = await acquireLock(`withdraw:${sellerId}`, 60);
+  const lock = await locked(`withdraw:${sellerId}`, 60);
 
   try {
     return await prisma.$transaction(async (tx) => {
@@ -133,7 +145,7 @@ async function requestWithdrawal({ sellerId, amount, phoneNumber }) {
  */
 async function processWithdrawal({ withdrawalId, executedBy = 'system' }) {
   const prisma = getPrisma();
-  const lock = await acquireLock(`withdraw:${withdrawalId}`, 60);
+  const lock = await locked(`withdraw:${withdrawalId}`, 60);
 
   try {
     return await prisma.$transaction(async (tx) => {
@@ -182,7 +194,7 @@ async function processWithdrawal({ withdrawalId, executedBy = 'system' }) {
  */
 async function confirmPayout({ withdrawalId, providerPayoutId }) {
   const prisma = getPrisma();
-  const lock = await acquireLock(`withdraw:${withdrawalId}`, 60);
+  const lock = await locked(`withdraw:${withdrawalId}`, 60);
 
   try {
     return await prisma.$transaction(async (tx) => {

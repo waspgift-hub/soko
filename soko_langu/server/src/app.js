@@ -84,6 +84,22 @@ app.use('/api/v1/share', sharingRouter);
 app.use('/api/v1/trust', trustRouter);
 app.use('/api/v1/admin', adminRouter);
 
+// Legacy-compat: proven old routers under original /api paths (payouts,
+// delivery OTP, search, notifications). Firestore is the same project, so
+// existing app versions keep working with zero client changes.
+try {
+  const { setupCompat } = require('./modules/legacy-compat/compat');
+  const { generalLimiter, searchLimiter } = require('./middleware/rateLimiter');
+  const compat = setupCompat(app);
+  app.use('/api', generalLimiter, compat.payoutsRouter);
+  app.use('/api/orders', generalLimiter, compat.deliveryRouter);
+  app.use('/api/search', searchLimiter, compat.searchRouter);
+  app.use('/api/notification', generalLimiter, compat.notificationRouter);
+  console.log('[COMPAT] legacy routers mounted');
+} catch (e) {
+  console.error('[COMPAT] mount failed, v1 continues:', e.message);
+}
+
 // Error handler
 app.use((err, req, res, next) => {
   console.error('[ERROR]', err.message);

@@ -4,6 +4,11 @@ const config = require('./config');
 
 const PORT = config.port;
 
+// Warm up shared connections (DB + Redis) without blocking boot.
+// Health and first requests work regardless; failures only log.
+const { initialize } = require('./app');
+initialize().catch((e) => console.error('[INIT]', e.message));
+
 const server = app.listen(PORT, () => {
   console.log(`[API] Soko Vibe API running on port ${PORT}`);
   console.log(`[API] Environment: ${config.nodeEnv}`);
