@@ -21,6 +21,7 @@ const sharingRouter = require('./modules/sharing/routes');
 const trustRouter = require('./modules/trust/routes');
 const adminRouter = require('./modules/admin/routes');
 const productRouter = require('./modules/products/routes');
+const referralRouter = require('./modules/referrals/routes');
 
 const app = express();
 
@@ -85,6 +86,7 @@ app.use('/api/v1/share', sharingRouter);
 app.use('/api/v1/trust', trustRouter);
 app.use('/api/v1/admin', adminRouter);
 app.use('/api/v1/products', productRouter);
+app.use('/api/v1/referrals', referralRouter);
 
 // Legacy-compat: proven old routers under original /api paths (payouts,
 // delivery OTP, search, notifications). Firestore is the same project, so
