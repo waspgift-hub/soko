@@ -38,7 +38,7 @@ class AuthRepository {
       final normalized = PhoneUtils.toE164(phone);
 
       final res = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/phone-login'),
+        Uri.parse(ApiConfig.v1('/auth/phone-login')),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'phone': normalized, 'otp': otp}),
       );

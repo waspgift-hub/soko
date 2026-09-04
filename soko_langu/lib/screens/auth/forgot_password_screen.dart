@@ -152,7 +152,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     try {
       final normalized = _normalizePhone(_phoneController.text.trim());
       final resp = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/auth/reset-password-by-phone'),
+        Uri.parse(ApiConfig.v1('/auth/reset-password-by-phone')),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'phone': normalized,
