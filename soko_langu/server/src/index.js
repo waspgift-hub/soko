@@ -9,6 +9,14 @@ const PORT = config.port;
 const { initialize } = require('./app');
 initialize().catch((e) => console.error('[INIT]', e.message));
 
+// Follow/friend notifications (Firestore watcher, best-effort).
+try {
+  const { startFollowWatcher } = require('./services/follow-watcher');
+  startFollowWatcher();
+} catch (e) {
+  console.error('[FOLLOW-WATCH] disabled:', e.message);
+}
+
 const server = app.listen(PORT, () => {
   console.log(`[API] Soko Vibe API running on port ${PORT}`);
   console.log(`[API] Environment: ${config.nodeEnv}`);
