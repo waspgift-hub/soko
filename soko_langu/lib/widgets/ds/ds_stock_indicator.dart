@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../extensions/context_tr.dart';
 
 /// Stock availability line: green when plentiful, amber when low.
 /// Shows "Only X left" at or below [lowThreshold] to create urgency
@@ -23,7 +24,7 @@ class DsStockIndicator extends StatelessWidget {
           Icon(Icons.remove_shopping_cart_outlined,
               size: 14, color: cs.error),
           const SizedBox(width: 4),
-          Text('Out of stock',
+          Text(context.tr('out_of_stock', 'Out of stock'),
               style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
@@ -44,7 +45,13 @@ class DsStockIndicator extends StatelessWidget {
         ),
         const SizedBox(width: 4),
         Text(
-          low ? 'Only $stock left' : 'In stock ($stock)',
+          low
+              ? context
+                  .tr('only_x_left', 'Only {0} left')
+                  .replaceAll('{0}', '$stock')
+              : context
+                  .tr('in_stock_x', 'In stock ({0})')
+                  .replaceAll('{0}', '$stock'),
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,

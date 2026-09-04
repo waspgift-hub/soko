@@ -204,9 +204,10 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
               title: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Messages'),
+                  Text(context.tr('messages', 'Messages')),
                   Text(
-                    'Stay connected with buyers and sellers',
+                    context.tr('messages_subtitle',
+                        'Stay connected with buyers and sellers'),
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.normal,
@@ -252,9 +253,9 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                   const SizedBox(width: 6),
                   _buildTabChip(context, context.tr('unread', 'Unread'), 1),
                   const SizedBox(width: 6),
-                  _buildTabChip(context, 'Buying', 4),
+                  _buildTabChip(context, context.tr('buying', 'Buying'), 4),
                   const SizedBox(width: 6),
-                  _buildTabChip(context, 'Selling', 5),
+                  _buildTabChip(context, context.tr('selling', 'Selling'), 5),
                   const SizedBox(width: 6),
                   _buildTabChip(context, context.tr('favourited', 'Favourite'), 2),
                   const SizedBox(width: 6),
@@ -433,7 +434,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                             padding: const EdgeInsets.fromLTRB(
                                 12, 8, 12, 2),
                             child: Text(
-                              'Pinned',
+                              context.tr('pinned', 'Pinned'),
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,

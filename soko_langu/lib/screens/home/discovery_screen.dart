@@ -224,7 +224,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
                       final flash = _flashSales[product.id];
                       final trendingBadge =
                           _tab == FeedTab.trending && index <= 3
-                              ? 'TRENDING'
+                              ? context.tr('trending', 'TRENDING')
                               : null;
                       return FeedPostCard(
                         product: product,
@@ -301,8 +301,9 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
       case FeedTab.following:
         return DsEmptyState(
           icon: Icons.people_outline,
-          title: 'Follow sellers to see their latest products here.',
-          actionLabel: 'Discover Sellers',
+          title: context.tr('follow_sellers_empty',
+              'Follow sellers to see their latest products here.'),
+          actionLabel: context.tr('discover_sellers', 'Discover Sellers'),
           onAction: () =>
               setState(() => _tab = FeedTab.forYou),
         );
@@ -310,16 +311,20 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
         if (_userLocation.isEmpty) {
           return DsEmptyState(
             icon: Icons.location_off_outlined,
-            title: 'Set your location to see nearby products.',
-            actionLabel: 'Set Location',
+            title: context.tr('set_location_title',
+                'Set your location to see nearby products.'),
+            actionLabel:
+                context.tr('set_location', 'Set Location'),
             onAction: () =>
                 context.push(AppRoutes.editProfile),
           );
         }
         return DsEmptyState(
           icon: Icons.location_on_outlined,
-          title: 'No products near you yet.',
-          actionLabel: 'Explore Marketplace',
+          title: context.tr(
+              'no_nearby', 'No products near you yet.'),
+          actionLabel: context.tr(
+              'explore_marketplace', 'Explore Marketplace'),
           onAction: () =>
               setState(() => _tab = FeedTab.forYou),
         );
@@ -328,7 +333,8 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
         return DsEmptyState(
           icon: Icons.inventory_2_outlined,
           title: context.tr('no_products'),
-          actionLabel: 'Explore Marketplace',
+          actionLabel: context.tr(
+              'explore_marketplace', 'Explore Marketplace'),
           onAction: () =>
               setState(() => _tab = FeedTab.forYou),
         );

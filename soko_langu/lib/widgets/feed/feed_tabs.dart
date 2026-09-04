@@ -1,16 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../extensions/context_tr.dart';
 import '../../theme/app_dimens.dart';
 
 /// Social feed selector: For You / Following / Nearby / Trending.
 /// The selected tab is filled; others are outlined chips.
 enum FeedTab { forYou, following, nearby, trending }
-
-const feedTabLabels = {
-  FeedTab.forYou: 'For You',
-  FeedTab.following: 'Following',
-  FeedTab.nearby: 'Nearby',
-  FeedTab.trending: 'Trending',
-};
 
 class FeedTabs extends StatelessWidget {
   final FeedTab selected;
@@ -21,6 +15,19 @@ class FeedTabs extends StatelessWidget {
     required this.selected,
     required this.onSelect,
   });
+
+  String _label(BuildContext context, FeedTab t) {
+    switch (t) {
+      case FeedTab.forYou:
+        return context.tr('for_you', 'For You');
+      case FeedTab.following:
+        return context.tr('following', 'Following');
+      case FeedTab.nearby:
+        return context.tr('nearby', 'Nearby');
+      case FeedTab.trending:
+        return context.tr('trending', 'Trending');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +44,7 @@ class FeedTabs extends StatelessWidget {
           return Padding(
             padding: const EdgeInsets.only(right: AppSpacing.s2),
             child: ChoiceChip(
-              label: Text(feedTabLabels[t]!),
+              label: Text(_label(context, t)),
               selected: active,
               onSelected: (_) => onSelect(t),
               selectedColor: cs.primary,

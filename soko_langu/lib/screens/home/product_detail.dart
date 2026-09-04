@@ -831,8 +831,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   void _onQtyLimit(bool atMin) {
     final msg = atMin
-        ? 'Minimum order is $_minQty'
-        : 'Only $_maxQty available';
+        ? context
+            .tr('minimum_order_x', 'Minimum order is {0}')
+            .replaceAll('{0}', '$_minQty ${widget.product.unit}')
+        : context
+            .tr('only_x_left', 'Only {0} left')
+            .replaceAll('{0}', '$_maxQty ${widget.product.unit}');
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg)),
     );
@@ -916,7 +920,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         Row(
           children: [
             Text(
-              'Quantity${p.unit.isNotEmpty ? ' (${p.unit})' : ''}',
+              '${context.tr('quantity', 'Quantity')}${p.unit.isNotEmpty ? ' (${p.unit})' : ''}',
               style: const TextStyle(
                   fontWeight: FontWeight.w600, fontSize: 14),
             ),
@@ -951,7 +955,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   ),
                   if (saved > 0)
                     Text(
-                      'You save ${context.formatPrice(saved)}',
+                      '${context.tr('you_save', 'You save')} ${context.formatPrice(saved)}',
                       style: TextStyle(
                           fontSize: 12,
                           color: cs.tertiary,
@@ -966,7 +970,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Text(
-              'Minimum order is ${p.minOrder} ${p.unit}',
+              context
+                  .tr('minimum_order_x', 'Minimum order is {0}')
+                  .replaceAll('{0}', '${p.minOrder} ${p.unit}'),
               style: TextStyle(
                   fontSize: 12, color: cs.onSurfaceVariant),
             ),
@@ -1032,7 +1038,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     if (!mounted) return;
     if (_availableStock <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Out of stock')),
+        SnackBar(content: Text(context.tr('out_of_stock', 'Out of stock'))),
       );
       return;
     }

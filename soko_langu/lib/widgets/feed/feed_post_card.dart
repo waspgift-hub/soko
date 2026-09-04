@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../models/product_model.dart';
+import '../../extensions/context_tr.dart';
 import '../../theme/app_dimens.dart';
 import '../../theme/app_typography.dart';
 import '../ds/ds.dart';
@@ -199,7 +200,9 @@ class _FeedPostCardState extends State<FeedPostCard> {
                 setState(() => _following = !_following);
                 widget.onFollow?.call(_following);
               },
-              child: Text(_following ? 'Following' : 'Follow'),
+              child: Text(_following
+                  ? context.tr('following', 'Following')
+                  : context.tr('follow', 'Follow')),
             ),
           IconButton(
             icon: const Icon(Icons.more_vert),
@@ -328,7 +331,7 @@ class _FeedPostCardState extends State<FeedPostCard> {
       children: [
         Expanded(
           child: DsButton(
-            label: 'Chat Seller',
+            label: context.tr('chat_seller', 'Chat Seller'),
             variant: DsButtonVariant.secondary,
             onPressed: widget.onChat,
           ),
@@ -336,7 +339,7 @@ class _FeedPostCardState extends State<FeedPostCard> {
         const SizedBox(width: AppSpacing.s2),
         Expanded(
           child: DsButton(
-            label: 'Buy Now',
+            label: context.tr('buy_now', 'Buy Now'),
             variant: DsButtonVariant.primary,
             onPressed: widget.onBuy,
           ),

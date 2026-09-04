@@ -399,7 +399,7 @@ class _ChatPageState extends State<ChatPage> {
                 ? null
                 : () => context.push(
                     '${AppRoutes.productDetail}/${widget.productId}'),
-            child: const Text('View'),
+            child: Text(context.tr('view', 'View')),
           ),
         ],
       ),
@@ -419,10 +419,11 @@ class _ChatPageState extends State<ChatPage> {
         children: [
           Icon(Icons.lock_outline, size: 14, color: cs.primary),
           const SizedBox(width: 8),
-          const Expanded(
+          Expanded(
             child: Text(
-              'Keep payments inside Soko Vibe. Never share your OTP.',
-              style: TextStyle(fontSize: 11),
+              context.tr('trust_banner_msg',
+                  'Keep payments inside Soko Vibe. Never share your OTP.'),
+              style: const TextStyle(fontSize: 11),
             ),
           ),
           GestureDetector(
