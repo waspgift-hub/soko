@@ -570,6 +570,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         context.tr('wholesale'),
                         context.tr('available'),
                       ),
+                    const SizedBox(height: 16),
+                    _buildProtectionCard(context, cs),
                     if (product.variants.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       Text(
@@ -800,6 +802,59 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       (v) => v.id == _selectedVariantId,
     );
     return variants.isNotEmpty ? variants.first : null;
+  }
+
+  Widget _buildProtectionCard(BuildContext context, ColorScheme cs) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cs.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const DsEscrowShield(
+              label: 'Buyer Protection', compact: true),
+          const SizedBox(height: 10),
+          _protectionStep(
+              cs, '1', 'Pay securely through Soko Vibe'),
+          _protectionStep(
+              cs, '2', 'Money is held safely until you receive'),
+          _protectionStep(
+              cs, '3', 'Confirm delivery to release payment'),
+        ],
+      ),
+    );
+  }
+
+  Widget _protectionStep(ColorScheme cs, String n, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        children: [
+          Container(
+            width: 20,
+            height: 20,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: cs.primary,
+              shape: BoxShape.circle,
+            ),
+            child: Text(n,
+                style: const TextStyle(
+                    color: Colors.white, fontSize: 11)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(text,
+                style: TextStyle(
+                    fontSize: 13, color: cs.onSurface)),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildDetailRow(String label, String value) {
