@@ -588,10 +588,11 @@ class _GoogleRegisterButton extends StatelessWidget {
         ),
         icon: ClipRRect(
           borderRadius: BorderRadius.circular(4),
-          child: Image.asset(
-            'assets/google_logo.jpg',
-            width: 20,
-            height: 20,
+          child: Image.network(
+            // Google-hosted "G" — matches dark and light themes.
+            'https://www.gstatic.com/images/branding/product/2x/googleg_32dp.png',
+            width: 22,
+            height: 22,
             fit: BoxFit.contain,
             errorBuilder: (_, _, _) =>
                 const Icon(Icons.g_mobiledata, size: 22),

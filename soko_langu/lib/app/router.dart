@@ -134,6 +134,17 @@ GoRouter buildRouter() {
         return AppRoutes.home;
       }
 
+      // Google is the only sign-in method; legacy email/phone screens are
+      // unreachable bypasses to that rule, so deep links collapse to login.
+      final legacyAuthScreens = [
+        AppRoutes.register,
+        AppRoutes.forgotPassword,
+        AppRoutes.verifyEmail,
+      ];
+      if (legacyAuthScreens.any((r) => location == r || location.startsWith('$r/'))) {
+        return isAuth ? AppRoutes.home : AppRoutes.login;
+      }
+
       // Admin-only routes
       if (_adminOnlyRoutes.any((r) => location == r || location.startsWith('$r/'))) {
         if (!isAuth) return AppRoutes.login;

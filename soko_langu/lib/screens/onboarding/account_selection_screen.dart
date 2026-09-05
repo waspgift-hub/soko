@@ -8,9 +8,9 @@ class AccountSelectionScreen extends StatelessWidget {
 
   Future<void> _select(String tier, BuildContext context) async {
     // Account tiers removed: everyone can buy and sell. The choice is
-    // informational only; continue straight to registration.
+    // informational only; continue straight to the Google-only login.
     if (context.mounted) {
-      context.replace(AppRoutes.register);
+      context.replace(AppRoutes.login);
     }
   }
 

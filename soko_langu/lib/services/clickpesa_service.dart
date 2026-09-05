@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -7,6 +8,14 @@ import '../utils/network_error.dart';
 
 class ClickPesaService {
   // ─── Payin (Collection) ───
+
+  /// Render free tier sleeps after ~15 min idle; the first request wakes it and
+  /// can take up to ~60s, so escalation retries instead of failing the cold start.
+  static const List<Duration> _initAttemptTimeouts = [
+    Duration(seconds: 10),
+    Duration(seconds: 25),
+    Duration(seconds: 60),
+  ];
 
   static Future<Map<String, dynamic>?> initiateMarketplacePayment({
     required double productPrice,
@@ -23,44 +32,53 @@ class ClickPesaService {
     String paymentMethod = 'ussd_push',
     double shippingCost = 0,
   }) async {
-    try {
-      final url = '${ApiConfig.baseUrl}/api/create-marketplace-payment-link';
-      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-      debugPrint('ClickPesa: POST $url');
-      final resp = await http.post(
-        Uri.parse(url),
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'productPrice': productPrice,
-          'productName': productName,
-          'productId': productId,
-          'sellerId': sellerId,
-          'sellerName': sellerName,
-          'email': email,
-          'phone': phone,
-          'buyerId': buyerId ?? '',
-          'buyerName': buyerName ?? '',
-          'deliveryType': deliveryType,
-          'paymentMethod': paymentMethod,
-          'shippingCost': shippingCost,
-          if (existingTransactionId != null) 'existingTransactionId': existingTransactionId,
-        }),
-      );
+    Object? lastError;
+    for (var attempt = 0; attempt < _initAttemptTimeouts.length; attempt++) {
+      try {
+        final url = '${ApiConfig.baseUrl}/api/create-marketplace-payment-link';
+        final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+        debugPrint('ClickPesa: POST $url (attempt ${attempt + 1})');
+        final resp = await http.post(
+          Uri.parse(url),
+          headers: {
+            'Content-Type': 'application/json',
+            if (token != null) 'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            'productPrice': productPrice,
+            'productName': productName,
+            'productId': productId,
+            'sellerId': sellerId,
+            'sellerName': sellerName,
+            'email': email,
+            'phone': phone,
+            'buyerId': buyerId ?? '',
+            'buyerName': buyerName ?? '',
+            'deliveryType': deliveryType,
+            'paymentMethod': paymentMethod,
+            'shippingCost': shippingCost,
+            'existingTransactionId': ?existingTransactionId,
+          }),
+        ).timeout(_initAttemptTimeouts[attempt]);
 
-      debugPrint('ClickPesa: status ${resp.statusCode} body ${resp.body}');
-      if (resp.statusCode != 200) {
-        debugPrint('ClickPesa: non-200 response');
-        return {'error': resp.body};
+        debugPrint('ClickPesa: status ${resp.statusCode} body ${resp.body}');
+        if (resp.statusCode != 200) {
+          debugPrint('ClickPesa: non-200 response');
+          return {'error': resp.body};
+        }
+
+        return jsonDecode(resp.body) as Map<String, dynamic>;
+      } catch (e) {
+        // Network/timeout errors during a wake-up are retried; everything else
+        // (auth, bad request) should surface to the caller immediately. The
+        // caller renders the exception via context.trError(), which localizes it.
+        lastError = e;
+        final kind = classifyFirestoreError(e).kind;
+        if (kind != FirestoreErrorKind.network) rethrow;
       }
-
-      return jsonDecode(resp.body) as Map<String, dynamic>;
-    } catch (e) {
-      debugPrint('ClickPesaService initiateMarketplacePayment: $e');
-      return {'error': translateError(e)};
+      await Future<void>.delayed(const Duration(seconds: 3));
     }
+    throw lastError ?? TimeoutException('Payment init timed out');
   }
 
   // ─── Payout (Withdrawal) ───
