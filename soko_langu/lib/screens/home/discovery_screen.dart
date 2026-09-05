@@ -8,20 +8,18 @@ import '../../services/product_service.dart';
 import '../../services/localization_service.dart';
 import '../../services/flash_sale_service.dart';
 import '../../services/follow_service.dart';
-import '../../services/wishlist_service.dart';
 import '../../models/product_model.dart';
 import '../../models/flash_sale_model.dart';
-import '../../widgets/feed/feed_post_card.dart';
 import '../../widgets/feed/feed_tabs.dart';
+import '../../widgets/product_card.dart';
 import '../../widgets/ds/ds_empty_state.dart';
 import '../../widgets/dynamic_banner.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
 import '../../app/routes.dart';
-import '../../screens/chat/chat_navigation.dart';
 
-/// Social-commerce discovery feed: seller-led posts with big media,
-/// social actions and direct commerce. Tabs filter one products stream.
+/// Discovery marketplace: product cards in a 2-column grid, tabs filter the
+/// same products stream. Follow controls live on the profile of each seller.
 class DiscoveryScreen extends StatefulWidget {
   const DiscoveryScreen({super.key});
 
@@ -36,7 +34,6 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
   final ProductService _productService = ProductService();
   final FlashSaleService _flashSaleService = FlashSaleService();
   final FollowService _followService = FollowService();
-  final WishlistService _wishlistService = WishlistService();
   Map<String, FlashSale> _flashSales = {};
   StreamSubscription? _flashSub;
   FeedTab _tab = FeedTab.forYou;
@@ -158,21 +155,6 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
     );
   }
 
-  Future<void> _toggleLike(Product p, bool liked) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    try {
-      final ref = FirebaseFirestore.instance
-          .collection('products')
-          .doc(p.id);
-      await ref.update({
-        'likedBy': liked
-            ? FieldValue.arrayUnion([user.uid])
-            : FieldValue.arrayRemove([user.uid]),
-      });
-    } catch (_) {}
-  }
-
   @override
   void dispose() {
     _flashSub?.cancel();
@@ -214,51 +196,39 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
                 return RefreshIndicator(
                   onRefresh: () async =>
                       setState(() => _loadMeta()),
-                  child: ListView.builder(
-                    itemCount: items.length + 1,
-                    itemBuilder: (context, index) {
-                      if (index == 0) {
-                        return const DynamicBanner();
-                      }
-                      final product = items[index - 1];
-                      final flash = _flashSales[product.id];
-                      final trendingBadge =
-                          _tab == FeedTab.trending && index <= 3
-                              ? context.tr('trending', 'TRENDING')
-                              : null;
-                      return FeedPostCard(
-                        product: product,
-                        badgeLabel: trendingBadge,
-                        displayPrice: flash?.salePrice,
-                        strikethroughPrice:
-                            flash?.originalPrice,
-                        imageMetadata: product.imageMetadata,
-                        onTap: () => _openProduct(product),
-                        onBuy: () => _openProduct(product),
-                        onChat: () =>
-                            ChatNavigation.openSellerChat(
-                          context,
-                          product.sellerId,
-                          product.sellerName,
+                  child: CustomScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    slivers: [
+                      const SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(12, 12, 12, 4),
+                          child: DynamicBanner(),
                         ),
-                        onComment: () => _openProduct(product),
-                        onLike: (liked) =>
-                            _toggleLike(product, liked),
-                        onSave: (_) => _wishlistService
-                            .toggle(product.id),
-                        onFollow: (following) async {
-                          if (following) {
-                            await _followService
-                                .follow(product.sellerId);
-                          } else {
-                            await _followService
-                                .unfollow(product.sellerId);
-                          }
-                          _loadMeta();
-                        },
-                        onSellerTap: () => _openProduct(product),
-                      );
-                    },
+                      ),
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                        sliver: SliverGrid(
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            mainAxisSpacing: 10,
+                            crossAxisSpacing: 10,
+                            childAspectRatio: 0.62,
+                          ),
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              final product = items[index];
+                              return ProductCard(
+                                product: product,
+                                onTap: () => _openProduct(product),
+                                flashSale: _flashSales[product.id],
+                              );
+                            },
+                            childCount: items.length,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 );
               },

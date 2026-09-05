@@ -54,6 +54,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
   List<String> _existingImages = [];
   List<Map<String, dynamic>> _existingMeta = [];
   List<Map<String, dynamic>> _newMeta = [];
+  XFile? _videoFile;
+  String? _existingVideoUrl;
   bool _isWholesale = false;
   bool _saving = false;
   List<_VariantEntry> _variants = [];
@@ -107,6 +109,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     _selectedCondition = p.condition;
     _isWholesale = p.isWholesale;
     _existingImages = List.from(p.images);
+    _existingVideoUrl = p.videoUrl;
     if (p.imageMetadata != null && p.imageMetadata!.length == _existingImages.length) {
       _existingMeta = List.from(p.imageMetadata!);
     }
@@ -170,9 +173,19 @@ class _AddProductScreenState extends State<AddProductScreen> {
   }
 
   Future<void> _pickImages() async {
+    final remaining = 5 - _existingImages.length - _newImages.length;
+    if (remaining <= 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('max_5_images', 'Max 5 photos'))),
+        );
+      }
+      return;
+    }
     final List<XFile> images = await _picker.pickMultiImage(
       maxWidth: 1024,
       imageQuality: 80,
+      limit: remaining,
     );
     if (images.isEmpty) return;
     final meta = await Future.wait(images.map(_decodeSize));
@@ -195,6 +208,12 @@ class _AddProductScreenState extends State<AddProductScreen> {
     } catch (e) {
       return <String, dynamic>{'width': null, 'height': null};
     }
+  }
+
+  Future<void> _pickVideo() async {
+    final picked = await _picker.pickVideo(source: ImageSource.gallery);
+    if (picked == null) return;
+    setState(() => _videoFile = picked);
   }
 
   void _removeExistingImage(int index) {
@@ -278,6 +297,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
           imageMetadata: [..._existingMeta, ..._newMeta].isEmpty
               ? null
               : [..._existingMeta, ..._newMeta],
+          newVideoFile: _videoFile,
+          videoUrl: _videoFile == null ? _existingVideoUrl : null,
         );
       } else {
         await _productService.addProduct(
@@ -290,6 +311,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
           stock: parsedStock,
           imageFiles: _newImages,
           imageMetadata: _newMeta.isEmpty ? null : _newMeta,
+          videoFile: _videoFile,
+          videoUrl: _videoFile == null ? _existingVideoUrl : null,
           location: _locationController.text.isNotEmpty
               ? _locationController.text
               : 'Tanzania',
@@ -410,18 +433,38 @@ class _AddProductScreenState extends State<AddProductScreen> {
                       if (index == 0) {
                         return GestureDetector(
                           onTap: _pickImages,
-                          child: Container(
-                            width: 100,
-                            decoration: BoxDecoration(
-                              border: Border.all(color: Theme.of(context).colorScheme.outline),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(
-                              Icons.add_a_photo,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurface.withValues(alpha: 0.6),
-                            ),
+                          child: Stack(
+                            children: [
+                              Container(
+                                width: 100,
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Theme.of(context).colorScheme.outline),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  Icons.add_a_photo,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface.withValues(alpha: 0.6),
+                                ),
+                              ),
+                              Positioned(
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                child: Container(
+                                  margin: const EdgeInsets.all(6),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    '${_existingImages.length + _newImages.length}/5',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         );
                       }
@@ -498,6 +541,66 @@ class _AddProductScreenState extends State<AddProductScreen> {
                       );
                     },
                   ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    if (_videoFile != null || _existingVideoUrl != null)
+                      Container(
+                        width: 100,
+                        height: 100,
+                        child: Stack(
+                          children: [
+                            Container(
+                              width: 100,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                image: _videoFile != null
+                                    ? DecorationImage(
+                                        image: FileImage(File(_videoFile!.path)),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : null,
+                              ),
+                            ),
+                            Center(
+                              child: Icon(
+                                Icons.play_circle_fill,
+                                size: 36,
+                                color: Colors.white.withValues(alpha: 0.85),
+                              ),
+                            ),
+                            Positioned(
+                              top: 0,
+                              right: 0,
+                              child: GestureDetector(
+                                onTap: () => setState(() {
+                                  _videoFile = null;
+                                  _existingVideoUrl = null;
+                                }),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).colorScheme.error,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.close,
+                                    size: 18,
+                                    color: Theme.of(context).colorScheme.surface,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (_videoFile == null && _existingVideoUrl == null)
+                      OutlinedButton.icon(
+                        onPressed: _pickVideo,
+                        icon: const Icon(Icons.videocam),
+                        label: Text(context.tr('add_video', 'Add video (max 1)')),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 20),
                 TextFormField(

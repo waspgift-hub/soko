@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import '../repositories/auth_repository.dart';
 import '../services/api_config.dart';
 import '../services/meseji_service.dart';
@@ -15,7 +14,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum AuthStatus {
   loading,
-  onboarding,
   unauthenticated,
   authenticated,
 }
@@ -110,18 +108,10 @@ class AuthNotifier extends ChangeNotifier {
 
   Future<void> initialize() async {
     try {
-      final onboardingSeen = await _onboardingService.isCompleted();
       final currentUser = _authRepo.currentUser;
 
-      // User already logged in but onboarding wasn't marked — fix it
-      if (!onboardingSeen && currentUser != null) {
+      if (currentUser != null) {
         await _onboardingService.markCompleted();
-      }
-
-      if (!onboardingSeen && currentUser == null) {
-        _status = AuthStatus.onboarding;
-        notifyListeners();
-        return;
       }
 
       if (currentUser != null) {
@@ -143,11 +133,11 @@ class AuthNotifier extends ChangeNotifier {
         if (user == null && _status == AuthStatus.unauthenticated) return;
 
         _user = user;
-        if (user != null && _status != AuthStatus.onboarding) {
+        if (user != null) {
           _status = AuthStatus.authenticated;
           await _fetchAdminStatus();
           await _checkSuspended();
-        } else if (user == null && _status != AuthStatus.onboarding) {
+        } else {
           _status = AuthStatus.unauthenticated;
           _isAdmin = false;
         }
@@ -159,19 +149,6 @@ class AuthNotifier extends ChangeNotifier {
       _syncAppState();
       notifyListeners();
     }
-  }
-
-  Future<void> completeOnboarding(String? phone) async {
-    await _onboardingService.markCompleted();
-    if (phone != null && phone.isNotEmpty) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('phone_number', phone);
-    }
-
-    final currentUser = _authRepo.currentUser;
-    _status =
-        currentUser != null ? AuthStatus.authenticated : AuthStatus.unauthenticated;
-    notifyListeners();
   }
 
   void _setAuthState(User? user) {

@@ -38,7 +38,6 @@ import '../screens/profile/order_flow_screen.dart';
 import '../screens/notification/notification_screen.dart';
 import '../screens/notification/notification_preferences_screen.dart';
 import '../screens/onboarding/account_selection_screen.dart';
-import '../screens/onboarding/onboarding_screen.dart';
 import '../screens/auth/verify_email_screen.dart';
 
 import '../screens/admin/admin_dashboard_screen.dart';
@@ -343,10 +342,6 @@ GoRouter buildRouter() {
           final groupId = state.pathParameters['groupId']!;
           return _premiumPage(GroupChatScreen(groupId: groupId));
         },
-      ),
-      GoRoute(
-        path: AppRoutes.onboarding,
-        pageBuilder: (context, state) => _premiumPage(const OnboardingScreen()),
       ),
       GoRoute(
         path: AppRoutes.aiAssistant,

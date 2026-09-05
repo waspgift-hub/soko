@@ -137,22 +137,14 @@ class ProductCard extends StatelessWidget {
                         weight: FontWeight.w700,
                       ),
                     SizedBox(height: 4 * scale),
-                    Row(
-                      children: [
-                        Icon(Icons.location_on_outlined, size: 12 * scale, color: cs.onSurface.withValues(alpha: 0.45)),
-                        SizedBox(width: 2 * scale),
-                        Expanded(
-                          child: Text(product.location,
-                            style: TextStyle(fontSize: smallSize, color: cs.onSurface.withValues(alpha: 0.5)),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (product.condition == 'new')
+                    if (product.condition == 'new')
+                      Row(
+                        children: [
                           Text('  ·  ${context.tr('new')}',
                             style: TextStyle(fontSize: smallSize, color: cs.successGreen, fontWeight: FontWeight.w600),
                           ),
-                      ],
-                    ),
+                        ],
+                      ),
                     if (product.rating > 0) ...[
                       SizedBox(height: 2 * scale),
                       Row(
@@ -178,10 +170,9 @@ class ProductCard extends StatelessWidget {
         );
 
         final displayPrice = flashSale?.salePrice ?? product.price;
-        final semanticsLabel = [
+final semanticsLabel = [
           product.name,
           context.formatPrice(displayPrice),
-          if (product.location.isNotEmpty) product.location,
           if (product.rating > 0)
             '${product.rating.toStringAsFixed(1)} ${context.tr('rating')}',
         ].join(', ');

@@ -29,7 +29,6 @@ class AppRoutes {
   static const String about = '/about';
   static const String createGroup = '/create-group';
   static const String groupChat = '/group-chat';
-  static const String onboarding = '/onboarding';
 
   static const String sellerEarnings = '/seller-earnings';
   static const String checkout = '/checkout';

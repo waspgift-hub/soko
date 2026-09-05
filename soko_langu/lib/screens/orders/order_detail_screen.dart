@@ -67,6 +67,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   String? _otpError;
   int _otpAttemptsRemaining = 3;
 
+  // Seller dispatch state (escrow -> ship). Kept local so the seller can
+  // send the product straight from the order detail instead of the tab.
+  bool _sellerShipBusy = false;
+  bool _sellerDispatchBusy = false;
+  final _shipCostCtrl = TextEditingController();
+  final _courierCtrl = TextEditingController();
+  final _trackCtrl = TextEditingController();
+  final _driverCtrl = TextEditingController();
+  final _notesCtrl = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -201,6 +211,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     _otpSub?.cancel();
     _phoneController.dispose();
     _sellerOtpController.dispose();
+    _shipCostCtrl.dispose();
+    _courierCtrl.dispose();
+    _trackCtrl.dispose();
+    _driverCtrl.dispose();
+    _notesCtrl.dispose();
     super.dispose();
   }
 
@@ -210,10 +225,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   bool get _isPaidState =>
       status == 'paid_escrow_hold' ||
       status == 'escrow_hold' ||
+      status == 'paid_escrow_held' ||
       status == 'dispatched' ||
       status == 'delivered' ||
       status == 'delivery_confirmed' ||
       status == 'completed';
+
+  /// Legacy + current escrow statuses from each era of the server. All three
+  /// must be treated as "money safely held, waiting for the seller to ship".
+  bool get _isEscrowStatus =>
+      status == 'escrow_hold' ||
+      status == 'paid_escrow_hold' ||
+      status == 'paid_escrow_held';
 
   bool get _isCompletedState =>
       status == 'delivered' ||
@@ -1525,10 +1548,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     final canConfirm = status == 'delivered' || status == 'dispatched';
     final canDispute =
         status == 'paid_escrow_hold' ||
+        status == 'paid_escrow_held' ||
         status == 'escrow_hold' ||
         status == 'dispatched' ||
         status == 'delivered';
-    final canCancel = status == 'paid_escrow_hold' || status == 'escrow_hold';
+    final canCancel =
+        status == 'paid_escrow_hold' ||
+        status == 'paid_escrow_held' ||
+        status == 'escrow_hold';
 
     if ((status == 'pending' || status == 'awaiting_shipping_quote') && isBuyer) {
       return Container(
@@ -1693,6 +1720,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       );
     }
 
+    if (_isEscrowStatus && isSeller) {
+      return _buildSellerDispatchActions(cs);
+    }
+
     if (!canConfirm && !canDispute && !canCancel) return const SizedBox.shrink();
 
     return Container(
@@ -1799,6 +1830,155 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         Text(label, style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant, fontWeight: bold ? FontWeight.w600 : FontWeight.w400)),
         Text(value, style: TextStyle(fontSize: 15, fontWeight: bold ? FontWeight.w800 : FontWeight.w600, color: valueColor)),
       ],
+    );
+  }
+
+  Widget _buildSellerDispatchActions(ColorScheme cs) {
+    final shippingCost = (d['shippingCost'] as num?)?.toDouble() ?? 0;
+    final hasShipping = shippingCost > 0;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: cs.surface.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.15)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: cs.successGreen.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(Icons.lock_clock, color: cs.successGreen, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  context.tr('escrow_funds_held',
+                      'Malipo ya mnunuzi yametunzwa kwenye escrow. Tuma bidhaa ili hela itolewe kwako.'),
+                  style: TextStyle(fontSize: 13.5, color: cs.onSurfaceVariant, height: 1.35),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (!hasShipping) ...[
+            Text(
+              context.tr('enter_shipping_cost', 'Weka gharama ya usafirishaji'),
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: cs.onSurface),
+            ),
+            const SizedBox(height: 8),
+            _dispatchField(cs, _shipCostCtrl,
+                context.tr('shipping_cost', 'Gharama ya usafirishaji'), Icons.monetization_on_outlined,
+                phone: true),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: _sellerShipBusy ? null : _submitSellerShippingCost,
+                icon: _sellerShipBusy
+                    ? const GoogleLoading(size: 20, strokeWidth: 2)
+                    : const Icon(Icons.check, size: 20),
+                label: Text(_sellerShipBusy
+                    ? context.tr('processing_label')
+                    : context.tr('send_shipping_to_buyer')),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: cs.primary,
+                  foregroundColor: cs.surface,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                ),
+              ),
+            ),
+          ] else ...[
+            Row(
+              children: [
+                Icon(Icons.local_shipping_outlined, size: 18, color: cs.tertiary),
+                const SizedBox(width: 8),
+                Text(context.tr('shipping_cost'), style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
+                const Spacer(),
+                Text(context.formatPrice(shippingCost),
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: cs.primary)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Container(height: 1, color: cs.primary.withValues(alpha: 0.08)),
+            const SizedBox(height: 12),
+            Text(context.tr('dispatch_details', 'Taarifa za usafirishaji'),
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: cs.onSurface)),
+            const SizedBox(height: 10),
+            _dispatchField(cs, _courierCtrl,
+                context.tr('courier_company_name', 'Jina la kampuni ya usafirishaji'), Icons.business_outlined),
+            const SizedBox(height: 10),
+            _dispatchField(cs, _trackCtrl,
+                context.tr('tracking_number', 'Namba ya tracking'), Icons.qr_code_2),
+            const SizedBox(height: 10),
+            _dispatchField(cs, _driverCtrl,
+                context.tr('driver_phone', 'Namba ya dereva'), Icons.phone_outlined, phone: true),
+            const SizedBox(height: 10),
+            _dispatchField(cs, _notesCtrl,
+                context.tr('additional_notes', 'Maelezo ya ziada'), Icons.notes, maxLines: 2),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: _sellerDispatchBusy ? null : _submitSellerDispatch,
+                icon: _sellerDispatchBusy
+                    ? const GoogleLoading(size: 20, strokeWidth: 2)
+                    : const Icon(Icons.local_shipping_outlined, size: 20),
+                label: Text(_sellerDispatchBusy
+                    ? context.tr('dispatching', 'Inatuma...')
+                    : context.tr('confirm_dispatch', 'Tuma Bidhaa Sasa')),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: cs.primary,
+                  foregroundColor: cs.surface,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _dispatchField(ColorScheme cs, TextEditingController ctrl, String hint, IconData icon,
+      {bool phone = false, int maxLines = 1}) {
+    return TextFormField(
+      controller: ctrl,
+      maxLines: maxLines,
+      keyboardType: phone ? TextInputType.phone : TextInputType.text,
+      style: TextStyle(color: cs.onSurface),
+      decoration: InputDecoration(
+        hintText: hint,
+        prefixIcon: Icon(icon, color: cs.onSurface.withValues(alpha: 0.55)),
+        filled: true,
+        fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.2),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: cs.primary, width: 1.5),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      ),
     );
   }
 
@@ -2309,6 +2489,103 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
           ),
         );
     }
+  }
+
+  // ─── Seller dispatch helpers (escrow -> ship) ───
+
+  Future<void> _submitSellerShippingCost() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final cost = double.tryParse(_shipCostCtrl.text.trim().replaceAll(',', ''));
+    if (cost == null || cost <= 0) {
+      if (mounted) _showSellerSnack(context.tr('enter_valid_shipping_cost', 'Weka gharama halali ya usafirishaji'), isError: true);
+      return;
+    }
+    setState(() => _sellerShipBusy = true);
+    try {
+      final token = await user.getIdToken();
+      final resp = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/orders/set-shipping-cost'),
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+        body: jsonEncode({'orderId': widget.docId, 'shippingCost': cost}),
+      );
+      if (resp.statusCode == 200) {
+        _shipCostCtrl.clear();
+        if (mounted) _showSellerSnack(context.tr('shipping_cost_submitted'));
+      } else if (resp.statusCode == 404) {
+        // Fallback: direct write — rules let the seller set shippingCost.
+        final productPrice = (d['productPrice'] as num?)?.toDouble() ?? 0;
+        await FirebaseFirestore.instance
+            .collection('transactions')
+            .doc(widget.docId)
+            .update({'shippingCost': cost, 'totalAmount': productPrice + cost});
+        try {
+          await FirebaseFirestore.instance
+              .collection('orders')
+              .doc(widget.docId)
+              .update({'shippingCost': cost, 'totalAmount': productPrice + cost});
+        } catch (_) {}
+        _shipCostCtrl.clear();
+        if (mounted) _showSellerSnack(context.tr('shipping_cost_submitted'));
+      } else {
+        final body = jsonDecode(resp.body);
+        if (mounted) _showSellerSnack(body['error'] ?? context.tr('dispatch_failed', 'Imeshindikana'), isError: true);
+      }
+    } catch (e) {
+      if (mounted) _showSellerSnack(context.trError(e), isError: true);
+    }
+    if (mounted) setState(() => _sellerShipBusy = false);
+  }
+
+  Future<void> _submitSellerDispatch() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final courier = _courierCtrl.text.trim();
+    final tracking = _trackCtrl.text.trim();
+    if (courier.isEmpty || tracking.isEmpty) {
+      if (mounted) _showSellerSnack(context.tr('required'), isError: true);
+      return;
+    }
+    setState(() => _sellerDispatchBusy = true);
+    try {
+      final resp = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/escrow/dispatch'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${await user.getIdToken()}',
+        },
+        body: jsonEncode({
+          'orderId': widget.docId,
+          'userId': user.uid,
+          'courierName': courier,
+          'trackingNumber': tracking,
+          'driverPhone': _driverCtrl.text.trim(),
+          'notes': _notesCtrl.text.trim(),
+        }),
+      );
+      final result = jsonDecode(resp.body);
+      if (resp.statusCode == 200 && result['success'] == true) {
+        for (final c in [_courierCtrl, _trackCtrl, _driverCtrl, _notesCtrl]) c.clear();
+        if (mounted) _showSellerSnack(context.tr('product_dispatched_msg'));
+      } else {
+        if (mounted) _showSellerSnack(result['error'] ?? context.tr('dispatch_failed', 'Imeshindikana'), isError: true);
+      }
+    } catch (e) {
+      if (mounted) _showSellerSnack(context.trError(e), isError: true);
+    }
+    if (mounted) setState(() => _sellerDispatchBusy = false);
+  }
+
+  void _showSellerSnack(String msg, {bool isError = false}) {
+    if (!mounted) return;
+    final cs = Theme.of(context).colorScheme;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: isError ? cs.error : cs.primary,
+      ),
+    );
   }
 
   // ─── Payment helpers for quoted state ───

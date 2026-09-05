@@ -60,6 +60,7 @@ class Product {
   final String? currency;
   final List<String> images;
   final List<Map<String, dynamic>>? imageMetadata;
+  final String? videoUrl;
   final String sellerId;
   final String sellerName;
   final String category;
@@ -99,6 +100,7 @@ final String unit;
     this.currency,
     required this.images,
     this.imageMetadata = const [],
+    this.videoUrl,
     required this.sellerId,
     required this.sellerName,
     required this.category,
@@ -174,6 +176,7 @@ final String unit;
       imageMetadata: (data['imageMetadata'] as List?)
           ?.map((e) => Map<String, dynamic>.from(e))
           .toList(),
+      videoUrl: data['videoUrl'] as String?,
       sellerId: data['sellerId'] ?? '',
       sellerName: data['sellerName'] ?? '',
       category: data['category'] ?? 'General',
@@ -222,6 +225,7 @@ Map<String, dynamic> toMap() => {
     'currency': currency ?? 'TZS',
     'images': images,
     'imageMetadata': imageMetadata,
+    'videoUrl': videoUrl,
     'sellerId': sellerId,
     'sellerName': sellerName,
     'category': category,

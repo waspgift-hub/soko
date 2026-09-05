@@ -31,6 +31,7 @@ import '../chat/chat_navigation.dart';
 import '../../widgets/ds/ds.dart';
 import '../../widgets/call_seller_button.dart';
 import '../../widgets/soko_vibe_watermark.dart';
+import '../../widgets/product_video_player.dart';
 
 // ignore: unused_element
 Color? _hexToColor(String? hex) {
@@ -61,6 +62,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   String? _selectedVariantId;
   final PageController _imageController = PageController();
   int _currentImageIndex = 0;
+  DateTime? _lastCartTapAt;
 
   UserProfile? _sellerProfile;
   bool _processing = false;
@@ -408,6 +410,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     ],
                   ),
                 ),
+              if (product.videoUrl != null && product.videoUrl!.isNotEmpty)
+                ProductVideoPlayer(url: product.videoUrl!),
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -554,7 +558,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     if (product.brand != null)
                       _buildDetailRow(context.tr('brand'), product.brand!),
                     _buildDetailRow(context.tr('condition'), product.condition),
-                    _buildDetailRow(context.tr('location'), product.location),
                     _buildDetailRow(
                       context.tr('stock'),
                       "${product.stock} ${context.tr('units')}",
@@ -736,6 +739,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       context.push(AppRoutes.login);
                       return;
                     }
+                    // Swallow double-taps: each quick re-tap would stack a
+                    // quantity bump plus a snackbar while Hive is mid-write
+                    final now = DateTime.now();
+                    if (_lastCartTapAt != null &&
+                        now.difference(_lastCartTapAt!).inMilliseconds < 600) {
+                      return;
+                    }
+                    _lastCartTapAt = now;
                     await CartService().add(
                       product: product,
                       quantity: _quantity,

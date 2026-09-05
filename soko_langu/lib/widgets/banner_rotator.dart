@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/flash_sale_model.dart';
 import 'flash_sale_banner.dart';
 import 'dynamic_banner.dart';
+import 'boost_promo_banner.dart';
 
 class BannerRotator extends StatefulWidget {
   final List<FlashSale> flashSales;
@@ -69,6 +71,10 @@ class _BannerRotatorState extends State<BannerRotator> {
     final list = <Widget>[];
     if (widget.flashSales.isNotEmpty) {
       list.add(FlashSaleBanner(key: const ValueKey('flash_banner'), sales: widget.flashSales));
+    }
+    // Boost promo targets sellers; guests get the plain dynamic banner only.
+    if (FirebaseAuth.instance.currentUser != null) {
+      list.add(const BoostPromoBanner(key: ValueKey('boost_promo')));
     }
     list.add(const DynamicBanner(key: ValueKey('dynamic_banner')));
     return list;

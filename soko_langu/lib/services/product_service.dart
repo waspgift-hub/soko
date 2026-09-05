@@ -82,6 +82,8 @@ class ProductService {
     required int stock,
     required List<XFile> imageFiles,
     List<Map<String, dynamic>>? imageMetadata,
+    XFile? videoFile,
+    String? videoUrl,
     String location = 'Tanzania',
     String district = '',
     bool isWholesale = false,
@@ -125,6 +127,11 @@ class ProductService {
         imageUrls.add(url);
       }
 
+      String? resolvedVideoUrl = videoUrl;
+      if (videoFile != null) {
+        resolvedVideoUrl = await CloudinaryService.uploadVideo(videoFile);
+      }
+
       String sellerName = user.displayName ?? user.email ?? 'Anonymous';
       String sellerPhone = '';
       bool sellerKycApproved = true;
@@ -139,7 +146,7 @@ class ProductService {
         category, subcategory, stock, sellerName, sellerPhone,
         sellerKycApproved, isWholesale, wholesaleTiers, variants,
         attributes, brand, condition, location, district, barcode,
-        imageMetadata,
+        imageMetadata, resolvedVideoUrl,
       );
     } catch (e) {
       throw NetworkError(
@@ -211,6 +218,7 @@ class ProductService {
     String district,
     String? barcode,
     List<Map<String, dynamic>>? imageMetadata,
+    String? videoUrl,
   ) async {
     final duplicate = await _findDuplicateListing(name, price, imageUrls);
     if (duplicate != null) {
@@ -239,6 +247,7 @@ class ProductService {
       "currency": currency,
       "images": imageUrls,
       "imageMetadata": imageMetadata ?? [],
+      "videoUrl": videoUrl,
       "sellerId": uid,
       "sellerName": sellerName,
       "sellerPhone": sellerPhone,
@@ -621,6 +630,8 @@ class ProductService {
     List<String>? existingImages,
     List<XFile>? newImages,
     List<Map<String, dynamic>>? imageMetadata,
+    XFile? newVideoFile,
+    String? videoUrl,
     String? location,
     String? district,
     String? barcode,
@@ -664,6 +675,12 @@ class ProductService {
       }
 
       if (imageMetadata != null) data["imageMetadata"] = imageMetadata;
+
+      if (newVideoFile != null) {
+        data["videoUrl"] = await CloudinaryService.uploadVideo(newVideoFile);
+      } else if (videoUrl != null) {
+        data["videoUrl"] = videoUrl;
+      }
 
       if (needsKeywordUpdate) {
         final current = await _db.collection("products").doc(productId).get();

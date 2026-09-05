@@ -198,16 +198,6 @@ class _FeedPostCardState extends State<FeedPostCard> {
                       ],
                     ],
                   ),
-                  if (p.location.isNotEmpty)
-                    Text(
-                      p.district.isNotEmpty
-                          ? '${p.district}, ${p.location}'
-                          : p.location,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.timeIndicator(
-                          cs.onSurfaceVariant),
-                    ),
                 ],
               ),
             ),

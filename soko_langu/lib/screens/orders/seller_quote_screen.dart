@@ -103,10 +103,13 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
         centerTitle: true,
       ),
       body: StreamBuilder<QuerySnapshot>(
+        // Source of truth is the `orders` doc (same query that powers the
+        // "Orders Needing Quote" carousel). The mirror in `transactions` is
+        // written by the server inside a swallowed try/catch, so it can drift
+        // and leave this list empty — reading `orders` keeps both in sync.
         stream: FirebaseFirestore.instance
-            .collection('transactions')
+            .collection('orders')
             .where('sellerId', isEqualTo: user.uid)
-            .where('status', isEqualTo: 'awaiting_shipping_quote')
             .snapshots(),
         builder: (context, snap) {
           if (snap.hasError) {
@@ -116,9 +119,12 @@ class _SellerQuoteScreenState extends State<SellerQuoteScreen> {
             return const Center(child: GoogleLoading());
           }
 
-          final docs = snap.data!.docs
-              .where((d) => (d.data() as Map)['deletedForSeller'] != true)
-              .toList();
+          final docs = snap.data!.docs.where((d) {
+            final data = d.data() as Map;
+            final status = data['status'] as String? ?? '';
+            final shippingCost = (data['shippingCost'] as num?)?.toDouble() ?? 0;
+            return status == 'pending' && shippingCost <= 0 && data['deletedForSeller'] != true;
+          }).toList();
           docs.sort((a, b) {
             final ta = (a.data() as Map)['createdAt'];
             final tb = (b.data() as Map)['createdAt'];

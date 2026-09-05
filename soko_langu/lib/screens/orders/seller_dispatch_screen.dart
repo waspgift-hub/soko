@@ -151,7 +151,12 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
           if (snap.hasError) return Center(child: Text('${context.tr('error')}: ${snap.error}'));
           if (!snap.hasData) return const Center(child: GoogleLoading());
           final docs = snap.data!.docs
-              .where((d) => (d.data() as Map)['status'] == 'escrow_hold' || (d.data() as Map)['status'] == 'paid_escrow_held')
+              .where((d) {
+                final s = (d.data() as Map)['status'] as String? ?? '';
+                return s == 'escrow_hold' ||
+                    s == 'paid_escrow_hold' ||
+                    s == 'paid_escrow_held';
+              })
               .where((d) => (d.data() as Map)['deletedForSeller'] != true)
               .toList();
           docs.sort((a, b) {

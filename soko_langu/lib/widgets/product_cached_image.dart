@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/soko_cache_manager.dart';
+import 'ds/ds.dart';
 
 /// Standardized image widget with consistent caching, shimmer placeholder,
 /// fade-in transition, memory optimization, and error handling.
@@ -63,20 +64,18 @@ class ProductCachedImage extends StatelessWidget {
   }
 
   Widget _buildPlaceholder(ColorScheme cs) {
-    return Container(
-      width: width,
-      height: height,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment(-1.0, -0.3),
-          end: Alignment(1.0, 0.3),
-          colors: [
-            cs.surfaceContainerLow,
-            cs.surfaceContainerHigh.withValues(alpha: 0.5),
-            cs.surfaceContainerLow,
-          ],
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerLow,
+          ),
         ),
-      ),
+        Center(
+          child: DsLoadingDots(color: cs.primary),
+        ),
+      ],
     );
   }
 

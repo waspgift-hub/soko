@@ -15,6 +15,7 @@ export 'ds_divider.dart';
 export 'ds_empty_state.dart';
 export 'ds_escrow_shield.dart';
 export 'ds_like_button.dart';
+export 'ds_loading_dots.dart';
 export 'ds_microburst.dart';
 export 'ds_payment_status_timeline.dart';
 export 'ds_price.dart';

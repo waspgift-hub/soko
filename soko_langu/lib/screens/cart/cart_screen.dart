@@ -148,9 +148,32 @@ class _CartScreenState extends State<CartScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        context.tr('subtotal', 'Subtotal'),
-                        style: AppTypography.timeIndicator(cs.onSurfaceVariant),
+                      Row(
+                        children: [
+                          Text(
+                            context.tr('subtotal', 'Subtotal'),
+                            style: AppTypography.timeIndicator(cs.onSurfaceVariant),
+                          ),
+                          const SizedBox(width: AppSpacing.s2),
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: AppSpacing.s2,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: cs.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '${items.fold<int>(0, (sum, e) => sum + e.quantity)} ${context.tr('items', 'items')}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: cs.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       DsPrice(price: _cart.subtotal),
                     ],
@@ -226,6 +249,24 @@ class _SellerGroup extends StatelessWidget {
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                     color: cs.onSurface,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.s2,
+                  vertical: 2,
+                ),
+                decoration: BoxDecoration(
+                  color: cs.secondaryContainer.withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${items.length}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: cs.onSecondaryContainer,
                   ),
                 ),
               ),

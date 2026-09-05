@@ -8,6 +8,8 @@ import '../screens/home/discovery_screen.dart';
 import '../screens/chat/chat_inbox_screen.dart';
 import '../screens/home/add_product_screen.dart';
 import '../services/user_service.dart';
+import '../services/chat_service.dart';
+import '../models/chat_room.dart';
 import '../app/app_transitions.dart';
 import '../extensions/context_tr.dart';
 import '../main.dart';
@@ -27,6 +29,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   Timer? _adTimer;
   final UserService _userService = UserService();
   String? _profilePhotoUrl;
+  int _unreadTotal = 0;
+  StreamSubscription<List<ChatRoom>>? _chatSub;
 
   // Tabs are built lazily on first visit (IndexedStack keeps them alive
   // afterwards). Building all of them at app start means offstage subtrees
@@ -72,6 +76,19 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       interstitialAdService.tryShow();
     });
     _loadProfilePhoto();
+    _subscribeUnread();
+  }
+
+  void _subscribeUnread() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    _chatSub = ChatService().getRooms().listen((rooms) {
+      if (!mounted) return;
+      final total = rooms
+          .where((r) => !r.archivedBy.contains(uid))
+          .fold<int>(0, (sum, r) => sum + r.unreadCountFor(uid));
+      if (total != _unreadTotal) setState(() => _unreadTotal = total);
+    });
   }
 
   Future<void> _loadProfilePhoto() async {
@@ -87,6 +104,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _adTimer?.cancel();
+    _chatSub?.cancel();
     super.dispose();
   }
 
@@ -178,6 +196,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                   Icons.chat_rounded,
                   context.tr('chat'),
                   cs,
+                  badgeCount: _unreadTotal,
                 ),
                 _buildProfileTab(cs),
               ],
@@ -193,8 +212,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     IconData icon,
     IconData activeIcon,
     String label,
-    ColorScheme cs,
-  ) {
+    ColorScheme cs, {
+    int badgeCount = 0,
+  }) {
     final isSelected = _currentIndex == index;
     return Expanded(
       child: Semantics(
@@ -222,12 +242,47 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 AnimatedScale(
                   duration: const Duration(milliseconds: 180),
                   scale: isSelected ? 1 : 0.9,
-                  child: Icon(
-                    isSelected ? activeIcon : icon,
-                    color: isSelected
-                        ? cs.primary
-                        : cs.onSurface.withValues(alpha: 0.45),
-                    size: 24,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Icon(
+                        isSelected ? activeIcon : icon,
+                        color: isSelected
+                            ? cs.primary
+                            : cs.onSurface.withValues(alpha: 0.45),
+                        size: 24,
+                      ),
+                      if (badgeCount > 0)
+                        Positioned(
+                          top: -6,
+                          right: -10,
+                          child: Container(
+                            constraints: const BoxConstraints(
+                              minWidth: 18,
+                              minHeight: 18,
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 5),
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: cs.error,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Theme.of(context).scaffoldBackgroundColor,
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Text(
+                              badgeCount > 99 ? '99+' : '$badgeCount',
+                              style: TextStyle(
+                                color: cs.onError,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w800,
+                                height: 1.2,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -384,7 +439,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         context.tr('discovery'),
         1,
       ),
-      _NavItem(Icons.chat_outlined, Icons.chat_rounded, context.tr('chat'), 3),
+      _NavItem(Icons.chat_outlined, Icons.chat_rounded, context.tr('chat'), 3,
+        badgeCount: _unreadTotal),
       _NavItem(
         Icons.person_outline,
         Icons.person_rounded,
@@ -483,7 +539,28 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                 ),
                               ),
                               const Spacer(),
-                              if (isSelected)
+                              if (item.badgeCount > 0)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 7,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: cs.error,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    item.badgeCount > 99
+                                        ? '99+'
+                                        : '${item.badgeCount}',
+                                    style: TextStyle(
+                                      color: cs.onError,
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                              if (isSelected && item.badgeCount == 0)
                                 Container(
                                   width: 6,
                                   height: 6,
@@ -569,5 +646,12 @@ class _NavItem {
   final IconData activeIcon;
   final String label;
   final int index;
-  const _NavItem(this.icon, this.activeIcon, this.label, this.index);
+  final int badgeCount;
+  const _NavItem(
+    this.icon,
+    this.activeIcon,
+    this.label,
+    this.index, {
+    this.badgeCount = 0,
+  });
 }

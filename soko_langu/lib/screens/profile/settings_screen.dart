@@ -243,15 +243,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     "${config.currencyCode} (${LocalizationService.supportedCurrencies[config.currencyCode]?['symbol'] ?? 'TSh'})",
                 onTap: () => _showCurrencyPicker(context, config),
               ),
-              _buildTile(
-                icon: Icons.sms_outlined,
-                title: context.tr('sms_language'),
-                subtitle: LocalizationService
-                        .supportedLanguages[
-                            config.smsLangCode.isEmpty ? 'sw' : config.smsLangCode] ??
-                    context.tr('swahili'),
-                onTap: () => _showSmsLanguagePicker(context, config),
-              ),
               const Divider(),
               _buildTile(
                 icon: Icons.pin,
@@ -482,46 +473,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _showSmsLanguagePicker(BuildContext context, AppConfig config) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                context.tr('select_sms_language'),
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-            ),
-            ...LocalizationService.supportedLanguages.entries.map(
-              (e) => ListTile(
-                title: Text(e.value),
-                trailing:
-                    (config.smsLangCode.isEmpty ? 'sw' : config.smsLangCode) ==
-                            e.key
-                        ? Icon(Icons.check,
-                            color: Theme.of(context).colorScheme.primary)
-                        : null,
-                onTap: () {
-                  SharedPreferences.getInstance()
-                      .then((p) => p.setString('sms_language', e.key));
-                  config.onSetSmsLanguage(e.key);
-                  Navigator.pop(ctx);
-                },
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
-    );
-  }
 
   void _showCurrencyPicker(BuildContext context, AppConfig config) {
     showModalBottomSheet(

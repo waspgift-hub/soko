@@ -64,6 +64,12 @@ class _NotificationScreenState extends State<NotificationScreen> {
                   onPressed: () => _markAllRead(),
                   child: Text('${context.tr('mark_all_read')} ($unreadCount)'),
                 ),
+              if (docs.isNotEmpty)
+                IconButton(
+                  icon: const Icon(Icons.delete_sweep_outlined),
+                  tooltip: context.tr('clear_all'),
+                  onPressed: () => _deleteAll(docs),
+                ),
             ],
           ),
           body: Container(
@@ -98,6 +104,47 @@ class _NotificationScreenState extends State<NotificationScreen> {
         SnackBar(content: Text(context.tr('mark_all_read'))),
       );
     }
+  }
+
+  /// Batch-deletes every notification and shows how many were removed so the
+  /// user has feedback when swiping-heavy cleanup leaves the list empty.
+  Future<void> _deleteAll(List<QueryDocumentSnapshot> docs) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(ctx.tr('clear_all')),
+        content: Text(
+          '${ctx.tr('confirm_clear_notifications', 'Delete all notifications?')} '
+          '(${docs.length})',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(ctx.tr('cancel', 'Cancel')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(ctx.tr('clear_all')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    var deleted = 0;
+    for (final doc in docs) {
+      if (await _notifService.deleteNotification(doc.id)) deleted++;
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(context.tr(
+          'deleted_notifications_count',
+          '$deleted ${context.tr('notifications_deleted', 'notifications deleted')}',
+        )),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   /// Opens the destination for a tapped notification. A fast second tap on the
