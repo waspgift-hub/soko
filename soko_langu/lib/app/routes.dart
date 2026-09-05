@@ -33,6 +33,7 @@ class AppRoutes {
 
   static const String sellerEarnings = '/seller-earnings';
   static const String checkout = '/checkout';
+static const String cart = '/cart';
   static const String discovery = '/discovery';
   static const String productBoost = '/product-boost';
   static const String myPurchases = '/my-purchases';

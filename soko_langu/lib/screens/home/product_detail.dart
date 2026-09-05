@@ -745,8 +745,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                            content:
-                                Text(context.tr('added_to_cart', 'Added to cart'))),
+                          content:
+                              Text(context.tr('added_to_cart', 'Added to cart')),
+                          action: SnackBarAction(
+                            label: context.tr('view_cart', 'View Cart'),
+                            onPressed: () => context.push(AppRoutes.cart),
+                          ),
+                        ),
                       );
                     }
                   },

@@ -13,6 +13,7 @@ import '../screens/home/product_detail.dart';
 import '../screens/home/product_reviews_screen.dart';
 import '../screens/home/search_screen.dart';
 import '../screens/home/checkout_screen.dart';
+import '../screens/cart/cart_screen.dart';
 import '../screens/home/category_screen.dart';
 import '../screens/home/category_products_screen.dart';
 import '../screens/home/add_product_screen.dart';
@@ -75,6 +76,7 @@ Page<T> _premiumPage<T>(Widget child) {
 }
 
 final List<String> _authRequiredRoutes = [
+  AppRoutes.cart,
   AppRoutes.checkout,
   AppRoutes.kyc,
   AppRoutes.addProduct,
@@ -360,6 +362,11 @@ GoRouter buildRouter() {
           final sellerId = state.extra as String? ?? FirebaseAuth.instance.currentUser?.uid ?? '';
           return _premiumPage(SellerAnalyticsScreen(sellerId: sellerId));
         },
+      ),
+      GoRoute(
+        path: AppRoutes.cart,
+        pageBuilder: (context, state) =>
+            _premiumPage(const CartScreen()),
       ),
       GoRoute(
         path: AppRoutes.checkout,

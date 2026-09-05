@@ -31,6 +31,11 @@ class CartService {
     }).toList();
   }
 
+  /// Emits freshly-parsed items whenever the Hive box changes so the cart
+  /// badge and the cart screen stay live without manual refresh.
+  Stream<List<CartItem>> watch() =>
+      _getBox().watch().map((_) => items);
+
   int get count => items.length;
 
   Future<void> add({
