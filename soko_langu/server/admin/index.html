@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Soko Vibe — Super Admin</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230b0f1a'/><text x='50' y='68' font-family='Arial' font-size='55' text-anchor='middle' fill='%2322d3ee'>S</text></svg>">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0b0f1a;
+    --bg2: #0e1424;
+    --panel: #121828;
+    --panel2: #161e31;
+    --border: #1e2740;
+    --border2: #26304e;
+    --text: #e6ecff;
+    --muted: #8b97b8;
+    --accent: #22d3ee;
+    --accent2: #a78bfa;
+    --green: #22c55e;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --radius: 14px;
+    --shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: radial-gradient(1200px 600px at 80% -10%, #16203a 0%, var(--bg) 55%);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #28314e; border-radius: 8px; }
+  ::-webkit-scrollbar-thumb:hover { background: #33406a; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* ---------- Auth / splash ---------- */
+  #screen { min-height: 100vh; display: grid; place-items: center; }
+  .auth-card {
+    width: 380px; max-width: calc(100vw - 32px);
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 20px; padding: 36px 30px; box-shadow: var(--shadow);
+    text-align: center;
+  }
+  .logo-badge {
+    width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 18px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    display: grid; place-items: center; color: #06121c; font-weight: 800; font-size: 28px;
+  }
+  .auth-card h1 { font-size: 20px; margin-bottom: 4px; }
+  .auth-card p { color: var(--muted); font-size: 13px; margin-bottom: 22px; }
+  .gbtn {
+    width: 100%; padding: 12px; border: 1px solid var(--border2); border-radius: 12px;
+    background: #fff; color: #222; font-weight: 600; font-size: 15px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 10px; transition: opacity .15s;
+  }
+  .gbtn:hover { opacity: .9; }
+  .gbtn:disabled { opacity: .5; cursor: wait; }
+  .gbtn svg { width: 20px; height: 20px; flex: none; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 16px; line-height: 1.5; }
+  .err { color: var(--red); font-size: 13px; margin-top: 12px; min-height: 18px; }
+
+  .spinner {
+    width: 44px; height: 44px; margin: 0 auto 18px; border-radius: 50%;
+    border: 3px solid #223; border-top-color: var(--accent); animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- App shell ---------- */
+  #app { display: none; min-height: 100vh; }
+  #app.busy #main { opacity: .5; pointer-events: none; }
+  aside {
+    position: fixed; inset: 0 auto 0 0; width: 210px; z-index: 20;
+    background: var(--bg2); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; padding: 18px 12px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 16px; border-bottom: 1px solid var(--border); }
+  .brand .logo-badge { width: 38px; height: 38px; border-radius: 10px; font-size: 16px; margin: 0; }
+  .brand .nm { font-size: 15px; font-weight: 700; line-height: 1.1; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav { margin-top: 14px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; flex: 1; }
+  nav button {
+    border: 0; background: transparent; color: var(--muted); cursor: pointer;
+    text-align: left; padding: 10px 12px; border-radius: 10px; font-size: 13.5px;
+    font-weight: 500; display: flex; align-items: center; gap: 10px; transition: all .15s;
+    font-family: inherit;
+  }
+  nav button .dot { width: 7px; height: 7px; border-radius: 50%; background: #2a3557; flex: none; }
+  nav button:hover { background: #141b31; color: var(--text); }
+  nav button.active { background: linear-gradient(90deg, rgba(34,211,238,.14), rgba(167,139,250,.14)); color: var(--accent); }
+  nav button.active .dot { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  nav .grp { color: #4d5878; font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; padding: 14px 12px 4px; }
+  .me { border-top: 1px solid var(--border); padding: 12px 8px 0; display: flex; align-items: center; gap: 10px; }
+  .me img { width: 34px; height: 34px; border-radius: 50%; background: #223; }
+  .me .who { flex: 1; min-width: 0; }
+  .me .who b { display: block; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .me .who span { color: var(--muted); font-size: 11px; }
+  .me button {
+    background: #1a2240; color: var(--muted); border: 1px solid var(--border); border-radius: 8px;
+    cursor: pointer; padding: 6px 8px; font-size: 11px; font-family: inherit;
+  }
+  .me button:hover { color: var(--red); border-color: #3a2540; }
+
+  main { margin-left: 210px; padding: 20px 26px 60px; min-height: 100vh; }
+  .topbar { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; flex-wrap: wrap; }
+  .topbar h2 { font-size: 20px; font-weight: 700; flex: 1; }
+  .topbar .meta { color: var(--muted); font-size: 12px; }
+  .btn {
+    border: 1px solid var(--border2); background: var(--panel2); color: var(--text);
+    padding: 8px 14px; border-radius: 10px; cursor: pointer; font-size: 13px; font-family: inherit;
+    transition: all .15s;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.accent { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #07121c; border: 0; font-weight: 600; }
+  .btn.accent:hover { filter: brightness(1.1); }
+
+  .section { display: none; animation: fade .25s ease; }
+  .section.active { display: block; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
+
+  .grid { display: grid; gap: 14px; margin-bottom: 18px; }
+  .kpis { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+  .charts { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+  .two { grid-template-columns: 1fr 1fr; }
+  @media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px 18px; box-shadow: var(--shadow);
+  }
+  .kpi .lbl { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+  .kpi .val { font-size: 25px; font-weight: 700; letter-spacing: -0.02em; }
+  .kpi .sub { color: var(--muted); font-size: 12px; margin-top: 3px; }
+  .kpi .val.g { color: var(--green); } .kpi .val.a { color: var(--accent); } .kpi .val.p { color: var(--accent2); } .kpi .val.y { color: var(--amber); } .kpi .val.r { color: var(--red); }
+
+  .card h3 { font-size: 14px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .card h3 .cnt {
+    margin-left: auto; font-size: 11px; color: var(--muted); background: #1c2440;
+    padding: 2px 9px; border-radius: 99px; font-weight: 500;
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    text-align: left; color: var(--muted); font-weight: 600; font-size: 11px;
+    text-transform: uppercase; letter-spacing: .05em; padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  td { padding: 9px 10px; border-bottom: 1px solid #172033; vertical-align: middle; }
+  tbody tr:hover { background: #141b31; }
+  tr:last-child td { border-bottom: 0; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+  .dim { color: var(--muted); }
+  .wrap { max-width: 360px; }
+
+  .filter { width: 100%; max-width: 320px; background: var(--panel2); border: 1px solid var(--border); color: var(--text); border-radius: 10px; padding: 8px 12px; font-size: 13px; font-family: inherit; margin-bottom: 12px; }
+  .filter:focus { outline: none; border-color: var(--accent); }
+
+  .th-scroll { max-height: 62vh; overflow: auto; }
+  .th-scroll-lg { max-height: 72vh; overflow: auto; }
+  .right { text-align: right; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .bdg { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 11px; font-weight: 600; }
+  .bdg.ok { background: rgba(34,197,94,.14); color: var(--green); }
+  .bdg.warn { background: rgba(245,158,11,.14); color: var(--amber); }
+  .bdg.bad { background: rgba(239,68,68,.14); color: var(--red); }
+  .bdg.info { background: rgba(34,211,238,.14); color: var(--accent); }
+  .bdg.mut { background: #1c2440; color: var(--muted); }
+
+  .mini { font-size: 11px; border: 1px solid var(--border2); background: transparent; color: var(--text); border-radius: 8px; padding: 5px 8px; cursor: pointer; font-family: inherit; transition: all .15s; }
+  .mini:hover { border-color: var(--accent); color: var(--accent); }
+  .mini.danger:hover { border-color: var(--red); color: var(--red); }
+  select.mini { cursor: pointer; }
+
+  .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 50; background: #0f1626; border: 1px solid var(--border2); color: var(--text); padding: 11px 18px; border-radius: 12px; box-shadow: var(--shadow); font-size: 13px; opacity: 0; transition: opacity .25s; }
+  .toast.show { opacity: 1; }
+  .toast.ok { border-color: rgba(34,197,94,.5); }
+  .toast.bad { border-color: rgba(239,68,68,.5); }
+
+  .empty { color: var(--muted); text-align: center; padding: 26px; font-size: 13px; }
+  .chartbox { height: 260px; position: relative; }
+  .chartbox.short { height: 220px; }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; }
+  .stat-chip { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; flex: 1; min-width: 120px; }
+  .stat-chip .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+  .stat-chip .v { font-size: 18px; font-weight: 700; margin-top: 2px; }
+  .avatar { width: 30px; height: 30px; border-radius: 50%; background: #223; flex: none; }
+  .cell-user { display: flex; align-items: center; gap: 8px; }
+</style>
+</head>
+<body>
+
+<div id="screen">
+  <div class="auth-card" id="splashCard" hidden>
+    <div class="spinner"></div>
+    <p>Inaingia...</p>
+  </div>
+
+  <div class="auth-card" id="loginCard" hidden>
+    <div class="logo-badge">S</div>
+    <h1>Soko Vibe</h1>
+    <p>Super Admin Dashboard</p>
+    <button class="gbtn" id="loginBtn">
+      <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      Continue na Google
+    </button>
+    <div class="err" id="loginErr"></div>
+    <p class="hint">Akaunti lazima iwe na ruhusa ya admin. Iwapo popup imefungwa, itabadilisha kuwa redirect moja kwa moja.</p>
+  </div>
+
+  <div class="auth-card" id="deniedCard" hidden>
+    <div class="logo-badge" style="background:linear-gradient(135deg,var(--red),var(--amber));">!</div>
+    <h1>Hakuna Ruhusa</h1>
+    <p>Akaunti yako haina ruhusa ya kuipata dashboard hii.</p>
+    <button class="btn" id="deniedOut">Ondoka</button>
+  </div>
+</div>
+
+<div id="app">
+  <aside>
+    <div class="brand">
+      <div class="logo-badge">S</div>
+      <div>
+        <div class="nm">Soko Vibe</div>
+        <div class="sub">Super Admin</div>
+      </div>
+    </div>
+    <nav id="nav">
+      <button data-sec="overview" class="active"><span class="dot"></span>Overview</button>
+      <div class="grp">Biashara</div>
+      <button data-sec="finance"><span class="dot"></span>Fedha</button>
+      <button data-sec="users"><span class="dot"></span>Watumiaji</button>
+      <button data-sec="products"><span class="dot"></span>Bidhaa</button>
+      <button data-sec="orders"><span class="dot"></span>Maagizo</button>
+      <div class="grp">Angalia</div>
+      <button data-sec="transactions"><span class="dot"></span>Transactions</button>
+      <button data-sec="withdrawals"><span class="dot"></span>Withdrawals</button>
+      <button data-sec="kyc"><span class="dot"></span>KYC</button>
+      <button data-sec="reports"><span class="dot"></span>Reports</button>
+      <button data-sec="fraud"><span class="dot"></span>Fraud</button>
+      <button data-sec="audit"><span class="dot"></span>Audit Log</button>
+      <button data-sec="online"><span class="dot"></span>Online</button>
+    </nav>
+    <div class="me">
+      <img id="meImg" alt="">
+      <div class="who"><b id="meName"></b><span id="meEmail"></span></div>
+      <button id="logoutBtn" title="Logout">Ondoka</button>
+    </div>
+  </aside>
+
+  <main id="main">
+    <div class="topbar">
+      <h2 id="pageTitle">Overview</h2>
+      <span class="meta" id="lastUpd"></span>
+      <button class="btn" id="refreshBtn">Renew</button>
+    </div>
+
+    <!-- ===================== OVERVIEW ===================== -->
+    <section class="section active" data-sec="overview">
+      <div class="grid kpis" id="kpiOverview"></div>
+      <div class="grid charts">
+        <div class="card"><h3>Fedha za Kila Siku (siku 30)</h3><div class="chartbox"><canvas id="cTimeseries"></canvas></div></div>
+        <div class="card"><h3>Revenue &amp; Wapya (siku 7)</h3><div class="chartbox"><canvas id="cRev7"></canvas></div></div>
+        <div class="card"><h3>Bidhaa kwa Kategoria</h3><div class="chartbox short"><canvas id="cCats"></canvas></div></div>
+        <div class="card"><h3>Watumiaji kwa Eneo</h3><div class="chartbox short"><canvas id="cLocs"></canvas></div></div>
+      </div>
+    </section>
+
+    <!-- ===================== FINANCE ===================== -->
+    <section class="section" data-sec="finance">
+      <div class="grid kpis" id="kpiFinance"></div>
+      <div class="card" style="margin-bottom:14px">
+        <h3>Malipo ya ClickPesa <span class="cnt" id="cpCount"></span></h3>
+        <table>
+          <thead>
+            <tr><th>Reference</th><th>Channel</th><th class="right">Amount</th><th>Status</th><th>Muda</th></tr>
+          </thead>
+          <tbody id="cpRows"></tbody>
+        </table>
+      </div>
+      <div class="grid two">
+        <div class="card"><h3>Balances za ClickPesa</h3><div id="cpBalances" class="empty">Hazijapatikana...</div></div>
+        <div class="card"><h3>Summary</h3><div id="cpSummary" class="empty">Hazijapatikana...</div></div>
+      </div>
+    </section>
+
+    <!-- ===================== USERS ===================== -->
+    <section class="section" data-sec="users">
+      <div class="card">
+        <h3>Watumiaji Wote <span class="cnt" id="uCnt"></span></h3>
+        <input class="filter" id="uFilter" placeholder="Tafuta kwa jina, simu, email...">
+        <div class="th-scroll-lg">
+          <table>
+            <thead><tr><th>Mtumiaji</th><th>Simu</th><th class="right">Salio</th><th>KYC</th><th>Hali</th><th>Role</th><th>Imejiunga</th><th>Vitendo</th></tr></thead>
+            <tbody id="uRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== PRODUCTS ===================== -->
+    <section class="section" data-sec="products">
+      <div class="card">
+        <h3>Bidhaa Zote <span class="cnt" id="pCnt"></span></h3>
+        <input class="filter" id="pFilter" placeholder="Tafuta kwa jina, kategoria, muuzaji...">
+        <div class="th-scroll-lg">
+          <table>
+            <thead><tr><th>Bidhaa</th><th>Kategoria</th><th class="right">Bei</th><th>Muuzaji</th><th>Hali</th><th>Featured</th><th>Iliwekwepo</th><th>Vitendo</th></tr></thead>
+            <tbody id="pRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== ORDERS ===================== -->
+    <section class="section" data-sec="orders">
+      <div class="card">
+        <h3>Maagizo Yote <span class="cnt" id="oCnt"></span></h3>
+        <div class="th-scroll-lg">
+          <table>
+            <thead><tr><th>ID</th><th>Bidhaa</th><th>Mnunuzi</th><th>Muuzaji</th><th class="right">Kiasi</th><th>Hali</th><th>Sasa</th><th>Muda</th></tr></thead>
+            <tbody id="oRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== TRANSACTIONS ===================== -->
+    <section class="section" data-sec="transactions">
+      <div class="card">
+        <h3>Transactions <span class="cnt" id="tCnt"></span></h3>
+        <div class="th-scroll-lg">
+          <table>
+            <thead><tr><th>Bidhaa</th><th>Mnunuzi</th><th>Muuzaji</th><th class="right">Jumla</th><th class="right">Kod.</th><th>Hali</th><th>Aina</th><th>Muda</th></tr></thead>
+            <tbody id="tRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== WITHDRAWALS ===================== -->
+    <section class="section" data-sec="withdrawals">
+      <div class="card">
+        <h3>Withdrawals <span class="cnt" id="wCnt"></span></h3>
+        <div class="th-scroll-lg">
+          <table>
+            <thead><tr><th>Mtumiaji</th><th class="right">Kiasi</th><th class="right">Net</th><th>Hali</th><th>Chanzo</th><th>Muda</th></tr></thead>
+            <tbody id="wRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== KYC ===================== -->
+    <section class="section" data-sec="kyc">
+      <div class="card">
+        <h3>KYC Inasubiri <span class="cnt" id="kCnt"></span></h3>
+        <div class="th-scroll-lg">
+          <table>
+            <thead><tr><th>Mtumiaji</th><th>Simu</th><th>Email</th><th>Hati</th><th>Vitendo</th></tr></thead>
+            <tbody id="kRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== REPORTS ===================== -->
+    <section class="section" data-sec="reports">
+      <div class="card">
+        <h3>Reports <span class="cnt" id="rCnt"></span></h3>
+        <div class="th-scroll-lg">
+          <table>
+            <thead><tr><th>Mtumiaji</th><th>Aina</th><th>Sababu</th><th>Target</th><th>Hali</th><th>Muda</th><th>Vitendo</th></tr></thead>
+            <tbody id="rRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== FRAUD ===================== -->
+    <section class="section" data-sec="fraud">
+      <div class="card">
+        <h3>Fraud Alerts <span class="cnt" id="fCnt"></span></h3>
+        <div class="th-scroll-lg">
+          <table>
+            <thead><tr><th>Muuzaji</th><th>Aina</th><th>Maelezo</th><th>Hali</th><th>Muda</th><th>Vitendo</th></tr></thead>
+            <tbody id="fRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== AUDIT ===================== -->
+    <section class="section" data-sec="audit">
+      <div class="card">
+        <h3>Audit Log <span class="cnt" id="aCnt"></span></h3>
+        <div class="th-scroll-lg">
+          <table>
+            <thead><tr><th>Mtumiaji</th><th>Aina</th><th class="right">Kiasi</th><th>Sababu</th><th>Muda</th></tr></thead>
+            <tbody id="aRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== ONLINE ===================== -->
+    <section class="section" data-sec="online">
+      <div class="row" id="onChips" style="margin-bottom:14px"></div>
+      <div class="card">
+        <h3>Wanatumia Sasa (saa 10 zilizopita)</h3>
+        <div class="th-scroll">
+          <table>
+            <thead><tr><th>UID</th><th>Wakati wa Mwisho</th></tr></thead>
+            <tbody id="onRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+// ---------------------------------------------------------------------------
+// Firebase Web config (same Firebase project as the mobile app).
+// ---------------------------------------------------------------------------
+firebase.initializeApp({
+  apiKey: "AIzaSyBrh5W9VwbC3qTtSTm8LJbTQeYufRGil5s",
+  authDomain: "sokonimoko-8c171-a8d14.firebaseapp.com",
+  projectId: "sokonimoko-8c171-a8d14",
+  appId: "1:344682929526:web:5d3732578d6f012ac26e57",
+  messagingSenderId: "344682929526",
+});
+
+const auth = firebase.auth();
+const API = ""; // same origin → /api/... ; relative so hosting/env-agnostic
+
+let idToken = null;
+const $ = (id) => document.getElementById(id);
+
+// ---------- helpers ----------
+function esc(v) {
+  return String(v == null ? "" : v).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+function fmtNum(v) { return (Number(v) || 0).toLocaleString("en-US"); }
+function fmtTZS(v) { return "TSh " + Math.round(Number(v) || 0).toLocaleString("en-US"); }
+function fmtTime(v) {
+  if (!v) return "—";
+  let ms = null;
+  if (typeof v === "number") ms = v < 1e12 ? v * 1000 : v;
+  else if (typeof v === "string") { const d = new Date(v); if (!isNaN(d)) ms = d.getTime(); }
+  else if (v && (v._seconds || v.seconds)) ms = Number(v._seconds ?? v.seconds) * 1000;
+  else if (v instanceof Date) ms = v.getTime();
+  if (ms == null) return esc(String(v));
+  return new Date(ms).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+function badge(status) {
+  const s = String(status || "?").toLowerCase();
+  const map = {
+    completed: "ok", delivered: "ok", delivery_confirmed: "ok", confirmed: "ok", paid: "ok",
+    active: "ok", approved: "ok", resolved: "ok", verified: "ok", enabled: "ok",
+    escrow_hold: "warn", paid_escrow_hold: "warn", paid_escrow_held: "warn", dispatched: "info",
+    shipped: "info", processing: "info", pending: "warn", reviewing: "warn", in_review: "warn",
+    cancelled: "bad", canceled: "bad", rejected: "bad", disputed: "bad", failed: "bad",
+    suspended: "bad", dismissed: "bad", disabled: "bad", under_review: "warn", failed_retry: "bad",
+  };
+  return `<span class="bdg ${map[s] || "mut"}">${esc(status)}</span>`;
+}
+function toast(msg, ok) {
+  const el = $("toast");
+  el.textContent = msg;
+  el.className = "toast show " + (ok ? "ok" : "bad");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => (el.className = "toast"), 3200);
+}
+function money(v) { return `<span class="num">${fmtTZS(v)}</span>`; }
+function time(v) { return `<span class="dim">${fmtTime(v)}</span>`; }
+function notAdmin() {
+  $("deniedOut").onclick = () => { auth.signOut().then(() => location.reload()); };
+}
+function setBusy(b) { $("app").classList.toggle("busy", b); }
+function setUpd() { $("lastUpd").textContent = "Updated " + new Date().toLocaleTimeString(); }
+
+// ---------- API ----------
+async function api(path, opts = {}) {
+  if (!idToken) throw new Error("Not signed in");
+  const init = { ...opts, headers: { ...(opts.headers || {}), Authorization: "Bearer " + idToken } };
+  if (opts.body && typeof opts.body === "object" && !(opts.body instanceof FormData)) {
+    init.headers["Content-Type"] = "application/json";
+    init.body = JSON.stringify(opts.body);
+  }
+  const r = await fetch(API + path, init);
+  let j = null;
+  try { j = await r.json(); } catch (_) {}
+  if (r.status === 401) {
+    await auth.signOut();
+    location.reload();
+    throw new Error("Unauthorized");
+  }
+  if (!r.ok) throw new Error((j && j.error) || ("HTTP " + r.status));
+  return j;
+}
+async function getJSON(path) { return api(path); }
+async function putJSON(path, body) { return api(path, { method: "PUT", body }); }
+async function postJSON(path, body) { return api(path, { method: "POST", body }); }
+async function patchJSON(path, body) { return api(path, { method: "PATCH", body }); }
+
+// ---------- tables ----------
+function renderRows(tbody, html) {
+  tbody.innerHTML = html || `<tr><td colspan="9" class="empty">Hakuna data</td></tr>`;
+}
+function bindFilter(inputId, tbodySel) {
+  const inp = $(inputId);
+  if (!inp) return;
+  inp.addEventListener("input", () => {
+    const q = inp.value.toLowerCase();
+    document.querySelectorAll(tbodySel + " tr").forEach((tr) => {
+      tr.style.display = tr.textContent.toLowerCase().includes(q) ? "" : "none";
+    });
+  });
+}
+const inputCols = {};
+
+// ---------- navigation ----------
+const TITLES = {
+  overview: "Overview", finance: "Fedha", users: "Watumiaji", products: "Bidhaa",
+  orders: "Maagizo", transactions: "Transactions", withdrawals: "Withdrawals",
+  kyc: "KYC", reports: "Reports", fraud: "Fraud Alerts", audit: "Audit Log", online: "Online",
+};
+$("nav").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-sec]");
+  if (!btn) return;
+  document.querySelectorAll("#nav button").forEach((b) => b.classList.remove("active"));
+  document.querySelectorAll("main .section").forEach((s) => s.classList.remove("active"));
+  btn.classList.add("active");
+  const sec = btn.dataset.sec;
+  document.querySelector(`main .section[data-sec="${sec}"]`).classList.add("active");
+  $("pageTitle").textContent = TITLES[sec] || sec;
+});
+$("refreshBtn").addEventListener("click", () => {
+  const sec = document.querySelector("main .section.active").dataset.sec;
+  LOADERS[sec] && LOADERS[sec]();
+});
+
+// ---------- charts ----------
+const charts = {};
+const PAL = ["#22d3ee", "#a78bfa", "#22c55e", "#f59e0b", "#ef4444", "#60a5fa", "#f472b6", "#34d399", "#fbbf24", "#818cf8", "#2dd4bf", "#fb923c"];
+function chartCfg() {
+  return {
+    grid: { color: "#1a2340" },
+    ticks: { color: "#8b97b8", font: { size: 10 } },
+    border: { display: false },
+  };
+}
+function makeChart(id, cfg) {
+  if (charts[id]) { charts[id].destroy(); }
+  const c = new Chart($(id), { responsive: true, maintainAspectRatio: false, ...cfg });
+  charts[id] = c;
+  return c;
+}
+
+// ---------- authentication gate ----------
+function show(id) { ["splashCard", "loginCard", "deniedCard"].forEach((x) => ($(x).hidden = $(x).id !== id)); }
+
+$("loginBtn").addEventListener("click", async () => {
+  $("loginErr").textContent = "";
+  $("loginBtn").disabled = true;
+  const provider = new firebase.auth.GoogleAuthProvider();
+  try {
+    await auth.signInWithPopup(provider);
+  } catch (err) {
+    // Popup mara nyingi hukosa kwenye domains zisizounganishwa na Firebase —
+    // redirect flow imani na authDomain (ambalo limeruhusiwa).
+    if (err.code === "auth/operation-not-supported-in-this-environment" ||
+        err.code === "auth/popup-blocked" || err.code === "auth/popup-closed-by-user" ||
+        err.code === "auth/cancelled-popup-request") {
+      $("loginErr").textContent = "Redirecting...";
+      try { await auth.signInWithRedirect(provider); } catch (_) {}
+    } else if (err.code === "auth/unauthorized-domain") {
+      $("loginErr").textContent = "Domain hii haijaruhusiwa kwenye Firebase Auth. Ongeza " + location.hostname + " kwenye Authorized Domains.";
+    } else {
+      $("loginErr").textContent = err.message || "Imeshindikana.";
+    }
+  } finally {
+    $("loginBtn").disabled = false;
+  }
+});
+$("logoutBtn").addEventListener("click", () => auth.signOut().then(() => location.reload()));
+
+function setMe(u) {
+  $("meName").textContent = u.displayName || u.email || "Admin";
+  $("meEmail").textContent = u.email || u.uid;
+  $("meImg").src = u.photoURL || "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><rect width='40' height='40' fill='%23223144'/><text x='20' y='25' text-anchor='middle' fill='%238b97b8' font-size='16'>?</text></svg>";
+}
+
+async function bootAuth() {
+  auth.onAuthStateChanged(async (u) => {
+    if (u) {
+      setMe(u);
+      show("splashCard");
+      try {
+        idToken = await u.getIdToken(true);
+        // "master super admin" ya kweli — kila endpoint inathibitisha tokeni +
+        // isAdmin server-side, lakini hapa twathibitisha mapema kwa UX nzuri.
+        await getJSON("/api/admin/stats");
+        $("app").style.display = "";
+        $("screen").style.display = "none";
+        loadAllInitial();
+      } catch (e) {
+        await auth.signOut();
+        show("deniedCard");
+      }
+    } else {
+      idToken = null;
+      show("loginCard");
+    }
+  });
+  // Redirect flow inarudi hapa na matokeo.
+  try {
+    const res = await auth.getRedirectResult();
+    if (res && res.user) {
+      idToken = await res.user.getIdToken(true);
+      $("app").style.display = "";
+      $("screen").style.display = "none";
+      setMe(res.user);
+      loadAllInitial();
+    }
+  } catch (e) {
+    if (e.code === "auth/unauthorized-domain") {
+      show("loginCard");
+      $("loginErr").textContent = "Ongeza " + location.hostname + " kwenye Firebase Auth → Authorized Domains.";
+    }
+  }
+}
+
+function loadAllInitial() {
+  LOADERS.overview();
+  // Load rest kwa utulivu (kipimo kidogo sana kwenye Render free tier).
+  setTimeout(() => LOADERS.finance(), 600);
+  setTimeout(() => LOADERS.users(), 1200);
+  setTimeout(() => LOADERS.products(), 1800);
+  setTimeout(() => LOADERS.orders(), 2400);
+  setTimeout(() => LOADERS.transactions(), 3000);
+  setTimeout(() => LOADERS.withdrawals(), 3600);
+  setTimeout(() => LOADERS.kyc(), 4200);
+  setTimeout(() => LOADERS.reports(), 4800);
+  setTimeout(() => LOADERS.fraud(), 5400);
+  setTimeout(() => LOADERS.audit(), 6000);
+  setTimeout(() => LOADERS.online(), 6600);
+}
+
+// ---------- Overview ----------
+async function loadOverview() {
+  setBusy(true);
+  try {
+    const [s, an, ts, on] = await Promise.all([
+      getJSON("/api/admin/stats"),
+      getJSON("/api/admin/analytics"),
+      getJSON("/api/admin/timeseries?days=30"),
+      getJSON("/api/admin/online"),
+    ]);
+    const onl = on.online || {};
+    $("kpiOverview").innerHTML = [
+      kpi("Watumiaji", fmtNum(an.totalUsers), "a", `+${fmtNum(an.newUsersToday || 0)} leo · +${fmtNum(an.newUsersThisMonth || 0)} mwezi huu`),
+      kpi("Bidhaa", fmtNum(an.totalProducts), "p", `${fmtNum(an.activeProducts)} active · ${fmtNum(an.inactiveProducts)} inactive`),
+      kpi("Maagizo", fmtNum(s.totalOrders), "a", `${fmtNum(onl.lastHour || 0)} online (saa 1)`),
+      kpi("Revenue (mwezi)", fmtTZS(an.revenueThisMonth), "g", `Leo: ${fmtTZS(an.revenueToday)}`),
+      kpi("Kod.% (mikataba)", fmtTZS(an.totalRevenue), "y", "Jumla iliyochakatwa"),
+      kpi("Withdrawals", fmtNum(s.totalWithdrawals), "r", ""),
+      kpi("Seller salio", fmtTZS(s.totalSellerBalance), "a", ""),
+      kpi("Ad views", fmtNum(s.totalAdViews), "", ""),
+    ].join("");
+
+    const tsLabels = ts.series.map((d) => d.date.slice(5));
+    makeChart("cTimeseries", {
+      data: {
+        labels: tsLabels,
+        datasets: [
+          { type: "bar", label: "Fedha (TSh)", data: ts.series.map((d) => Math.round(d.money || 0)), backgroundColor: "rgba(34,211,238,.45)", borderColor: "#22d3ee", borderWidth: 1, order: 2 },
+          { type: "line", label: "Kod (%)", data: ts.series.map((d) => Math.round(d.commission || 0)), borderColor: "#a78bfa", backgroundColor: "transparent", tension: .25, yAxisID: "y1", order: 1 },
+          { type: "line", label: "Wapya", data: ts.series.map((d) => d.users || 0), borderColor: "#22c55e", backgroundColor: "transparent", tension: .25, yAxisID: "y2", order: 1 },
+        ],
+      },
+      options: {
+        scales: {
+          x: chartCfg(), y: { ...chartCfg(), position: "left", beginAtZero: true },
+          y1: { ...chartCfg(), position: "right", grid: { display: false }, beginAtZero: true },
+          y2: { ...chartCfg(), position: "right", grid: { display: false }, beginAtZero: true },
+        },
+      },
+    });
+
+    const rev7 = an.revenueOverTime.map((d) => { const dt = new Date(d.date); return (dt.getMonth() + 1) + "/" + dt.getDate(); });
+    makeChart("cRev7", {
+      data: {
+        labels: rev7,
+        datasets: [
+          { label: "Revenue", data: an.revenueOverTime.map((d) => d.count || 0), borderColor: "#22d3ee", backgroundColor: "rgba(34,211,238,.15)", fill: true, tension: .3 },
+          { label: "Wapya", data: an.userGrowth.map((d) => d.count || 0), borderColor: "#22c55e", backgroundColor: "rgba(34,197,94,.1)", fill: true, tension: .3, yAxisID: "y1" },
+        ],
+      },
+      options: { scales: { x: chartCfg(), y: { ...chartCfg(), beginAtZero: true }, y1: { ...chartCfg(), position: "right", grid: { display: false }, beginAtZero: true } } },
+    });
+
+    const cats = Object.entries(an.productsByCategory || {}).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    const colors = cats.map((_, i) => PAL[i % PAL.length]);
+    makeChart("cCats", {
+      type: "doughnut",
+      data: { labels: cats.map((c) => c[0]), datasets: [{ data: cats.map((c) => c[1]), backgroundColor: colors, borderColor: "#121828", borderWidth: 2 }] },
+      options: { cutout: "62%", plugins: { legend: { position: "right", labels: { color: "#8b97b8", boxWidth: 10, font: { size: 10 } } } } },
+    });
+
+    const locs = Object.entries(an.locationDistribution || {}).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    makeChart("cLocs", {
+      type: "bar",
+      data: { labels: locs.map((l) => l[0]), datasets: [{ label: "Watumiaji", data: locs.map((l) => l[1]), backgroundColor: "rgba(167,139,250,.55)", borderColor: "#a78bfa", borderWidth: 1 }] },
+      options: { indexAxis: "y", scales: { x: { ...chartCfg(), beginAtZero: true }, y: chartCfg() }, plugins: { legend: { display: false } } },
+    });
+    setUpd();
+  } catch (e) {
+    toast("Overview imeshindikana: " + e.message, false);
+  } finally {
+    setBusy(false);
+  }
+}
+function kpi(lbl, val, cls, sub) {
+  return `<div class="card kpi"><div class="lbl">${esc(lbl)}</div><div class="val ${cls}">${val}</div>${sub ? `<div class="sub">${esc(sub)}</div>` : ""}</div>`;
+}
+
+// ---------- Finance ----------
+async function loadFinance() {
+  setBusy(true);
+  try {
+    const f = await getJSON("/api/admin/finance-summary");
+    $("kpiFinance").innerHTML = [
+      kpi("Salio Lipukaji", fmtTZS(f.availableBalance), "g", "kom.+boost minus payouts"),
+      kpi("Jumla Admin", fmtTZS(f.totalAdminBalance), "a", "incl. AdMob"),
+      kpi("Imechakatwa", fmtTZS(f.totalProcessed), "y", "paid transactions"),
+      kpi("Komissions", fmtTZS(f.totalCommissions), "a", ""),
+      kpi("Boost revenue", fmtTZS(f.totalBoostRevenue), "p", ""),
+      kpi("Ad revenue (makisio)", fmtTZS(f.estimatedAdRevenue), "a", `AdMob: ${fmtTZS(f.actualAdRevenue)}`),
+      kpi("Payouts", fmtTZS(f.totalPayouts), "r", `was:${fmtTZS(f.totalUserPaidOut)}`),
+      kpi("ClickPesa kweli", fmtTZS(f.actualClickPesaBalance), "g", ""),
+    ].join("");
+
+    const cp = await getJSON("/api/admin/clickpesa/transactions?type=payments&limit=60");
+    const rows = (cp.payments && cp.payments.data) || [];
+    $("cpCount").textContent = fmtNum(cp.payments?.totalCount || rows.length) + " payments";
+    $("cpRows").innerHTML = rows.length
+      ? rows.map((p) => {
+          const user = p.user || p.payer || {};
+          return `<tr>
+            <td class="mono wrap">${esc(p.reference || p.mobilePayments || p.id || "—")}</td>
+            <td>${esc(p.channel || "—")}</td>
+            <td class="right">${fmtTZS(p.collectedAmount)}</td>
+            <td>${badge(p.status)}</td>
+            <td>${time(p.createdAt || p.paidAt || p.processTimestamp)}</td>
+          </tr>`;
+        }).join("")
+      : `<tr><td colspan="5" class="empty">Hakuna malipo kutoka ClickPesa</td></tr>`;
+
+    $("cpBalances").className = "";
+    $("cpBalances").innerHTML = (cp.balances && cp.balances.length)
+      ? cp.balances.map((b) => `<div class="row" style="margin-bottom:8px"><div class="stat-chip"><div class="k">${esc(b.account || b.currency || "Akaunti")}</div><div class="v">${fmtTZS(b.balance)}</div></div></div>`).join("")
+      : `<div class="empty">Hakuna balances</div>`;
+
+    const rowsP = (cp.payments && cp.payments.data) || [];
+    const sum = cp.payments?.summary || {};
+    const byStatus = Object.entries(sum.byStatus || {});
+    const byChannel = Object.entries(sum.byChannel || {});
+    $("cpSummary").className = "";
+    $("cpSummary").innerHTML = `
+      <div class="row">
+        <div class="stat-chip"><div class="k">Jumla payments</div><div class="v">${fmtTZS(sum.total)}</div></div>
+        <div class="stat-chip"><div class="k">Idadi</div><div class="v">${fmtNum((sum.count) || rowsP.length)}</div></div>
+      </div>
+      ${byStatus.length ? `<h4 style="margin:12px 0 6px;color:var(--muted);font-size:12px">Kwa Status</h4>` + byStatus.map(([k, v]) => `<div class="row" style="margin-bottom:6px"><div class="stat-chip"><div class="k">${esc(k)}</div><div class="v">${fmtTZS(v)}</div></div></div>`).join("") : ""}
+      ${byChannel.length ? `<h4 style="margin:12px 0 6px;color:var(--muted);font-size:12px">Kwa Channel</h4>` + byChannel.map(([k, v]) => `<div class="row" style="margin-bottom:6px"><div class="stat-chip"><div class="k">${esc(k)}</div><div class="v">${fmtTZS(v)}</div></div></div>`).join("") : ""}`;
+    setUpd();
+  } catch (e) {
+    toast("Fedha imeshindikana: " + e.message, false);
+  } finally {
+    setBusy(false);
+  }
+}
+
+// ---------- Users ----------
+async function loadUsers() {
+  setBusy(true);
+  try {
+    const { users } = await getJSON("/api/admin/users");
+    $("uCnt").textContent = fmtNum(users.length);
+    if (!inputCols.u) { bindFilter("uFilter", "#uRows"); inputCols.u = 1; }
+    renderRows($("uRows"), users.map((u) => {
+      const kyc = u.kyc || {};
+      return `<tr>
+        <td><div class="cell-user"><img class="avatar" src="${esc(u.photoURL || u.avatar || "")}" onerror="this.style.visibility='hidden'" alt=""><div><div class="wrap">${esc(u.displayName || u.fullName || u.name || u.uid)}</div><div class="dim mono">${esc(u.uid || "").slice(0, 12)}</div></div></div></td>
+        <td>${esc(u.phone || "—")}</td>
+        <td class="num">${fmtTZS(u.sellerBalance || 0)}</td>
+        <td>${kyc.approved ? badge("approved") : kyc.status === "pending" ? badge("pending") : badge("—")}</td>
+        <td>${u.isSuspended ? badge("suspended") : badge("active")}</td>
+        <td>${u.isAdmin ? badge("admin") : "<span class='dim'>user</span>"}</td>
+        <td>${time(u.createdAt)}</td>
+        <td>
+          <button class="mini act-adm" data-uid="${esc(u.uid)}" data-admin="${u.isAdmin ? 1 : 0}">${u.isAdmin ? "Remove Admin" : "Make Admin"}</button>
+          <button class="mini ${u.isSuspended ? "" : "danger"} act-sus" data-uid="${esc(u.uid)}" data-suspended="${u.isSuspended ? 1 : 0}">${u.isSuspended ? "Fungua" : "Simamisha"}</button>
+        </td>
+      </tr>`;
+    }).join(""));
+    setUpd();
+  } catch (e) {
+    toast("Watumiaji imeshindikana: " + e.message, false);
+  } finally {
+    setBusy(false);
+  }
+}
+
+// ---------- Products ----------
+async function loadProducts() {
+  setBusy(true);
+  try {
+    const { products } = await getJSON("/api/admin/products");
+    $("pCnt").textContent = fmtNum(products.length);
+    if (!inputCols.p) { bindFilter("pFilter", "#pRows"); inputCols.p = 1; }
+    renderRows($("pRows"), products.map((p) => {
+      const seller = p.sellerName || p.seller || "";
+      return `<tr>
+        <td><div class="wrap">${esc(p.name || p.title || p.id)}</div><div class="dim mono">${esc(p.id || "").slice(0, 10)}</div></td>
+        <td>${esc(p.category || "Other")}</td>
+        <td class="num">${fmtTZS(p.price)}</td>
+        <td class="wrap">${esc(typeof seller === "object" ? seller.name || seller.displayName || "—" : seller || "—")}</td>
+        <td>${p.isActive === false ? badge("disabled") : badge("active")}</td>
+        <td>${p.isFeatured ? badge("featured") : "<span class='dim'>—</span>"}</td>
+        <td>${time(p.createdAt)}</td>
+        <td>
+          <button class="mini act-act" data-id="${esc(p.id)}" data-active="${p.isActive === false ? 0 : 1}">${p.isActive === false ? "Washa" : "Zima"}</button>
+          <button class="mini act-feat" data-id="${esc(p.id)}" data-featured="${p.isFeatured ? 1 : 0}">${p.isFeatured ? "Remove Feat" : "Featured"}</button>
+        </td>
+      </tr>`;
+    }).join(""));
+    setUpd();
+  } catch (e) {
+    toast("Bidhaa imeshindikana: " + e.message, false);
+  } finally {
+    setBusy(false);
+  }
+}
+
+// ---------- Orders ----------
+async function loadOrders() {
+  setBusy(true);
+  try {
+    const { orders } = await getJSON("/api/admin/orders");
+    $("oCnt").textContent = fmtNum(orders.length);
+    const statuses = ["pending", "confirmed", "processing", "shipped", "delivered", "cancelled"];
+    renderRows($("oRows"), orders.map((o) => {
+      const buyer = o.buyerName || o.buyer || "";
+      const seller = o.sellerName || o.seller || "";
+      const pickName = (x) => (typeof x === "object" ? x.name || x.displayName || "—" : x || "—");
+      return `<tr>
+        <td class="mono">${esc(o.id || o.orderId || "").slice(0, 10)}</td>
+        <td class="wrap">${esc(o.productName || o.title || "—")}</td>
+        <td class="wrap">${esc(pickName(buyer))}</td>
+        <td class="wrap">${esc(pickName(seller))}</td>
+        <td class="num">${fmtTZS(o.amount || o.totalAmount || o.price)}</td>
+        <td>${badge(o.status || o.state)}</td>
+        <td><select class="mini order-status" data-id="${esc(o.id)}">
+          ${statuses.map((s) => `<option value="${s}" ${String(o.status || o.state) === s ? "selected" : ""}>${s}</option>`).join("")}
+        </select></td>
+        <td>${time(o.createdAt)}</td>
+      </tr>`;
+    }).join(""));
+    setUpd();
+  } catch (e) {
+    toast("Maagizo imeshindikana: " + e.message, false);
+  } finally {
+    setBusy(false);
+  }
+}
+
+// ---------- Transactions ----------
+async function loadTransactions() {
+  setBusy(true);
+  try {
+    const { transactions } = await getJSON("/api/admin/transactions");
+    $("tCnt").textContent = fmtNum(transactions.length);
+    const pickName = (x) => (typeof x === "object" ? x.name || x.displayName || x.phone || "—" : x || "—");
+    renderRows($("tRows"), transactions.map((t) => {
+      const fee = t.sokoLanguCommission || t.sokovibeCommission || t.platformFee || t.platformCommission || 0;
+      return `<tr>
+        <td class="wrap">${esc(t.productName || "—")}</td>
+        <td class="wrap">${esc(pickName(t.buyerName || t.buyer))}</td>
+        <td class="wrap">${esc(pickName(t.sellerName || t.seller))}</td>
+        <td class="num">${fmtTZS(t.totalAmount || t.amount)}</td>
+        <td class="num">${fmtTZS(fee)}</td>
+        <td>${badge(t.status)}</td>
+        <td class="wrap">${esc(t.type || "—")}</td>
+        <td>${time(t.createdAt)}</td>
+      </tr>`;
+    }).join(""));
+    setUpd();
+  } catch (e) {
+    toast("Transactions imeshindikana: " + e.message, false);
+  } finally {
+    setBusy(false);
+  }
+}
+
+// ---------- Withdrawals ----------
+async function loadWithdrawals() {
+  setBusy(true);
+  try {
+    const { withdrawals } = await getJSON("/api/admin/withdrawals");
+    $("wCnt").textContent = fmtNum(withdrawals.length);
+    const pickName = (x) => (typeof x === "object" ? x.name || x.displayName || x.phone || "—" : x || "—");
+    renderRows($("wRows"), withdrawals.map((w) => {
+      const uname = w.userName || w.name || w.user || "";
+      return `<tr>
+        <td class="wrap">${esc(pickName(uname))}</td>
+        <td class="num">${fmtTZS(w.amount)}</td>
+        <td class="num">${fmtTZS(w.netAmount ?? w.amount)}</td>
+        <td>${badge(w.status)}</td>
+        <td class="wrap">${esc(w.source || w.type || "—")}</td>
+        <td>${time(w.createdAt)}</td>
+      </tr>`;
+    }).join(""));
+    setUpd();
+  } catch (e) {
+    toast("Withdrawals imeshindikana: " + e.message, false);
+  } finally {
+    setBusy(false);
+  }
+}
+
+// ---------- KYC ----------
+async function loadKyc() {
+  setBusy(true);
+  try {
+    const { pending } = await getJSON("/api/admin/kyc/pending");
+    $("kCnt").textContent = fmtNum(pending.length);
+    renderRows($("kRows"), pending.map((u) => {
+      const k = u.kyc || {};
+      const docName = k.fullName || k.idType || "";
+      return `<tr>
+        <td>${esc(u.displayName || u.uid)}</td>
+        <td>${esc(u.phone || "—")}</td>
+        <td class="wrap">${esc(u.email || "—")}</td>
+        <td class="wrap">${esc(docName || "—")}${esc(k.idNumber ? (" · " + k.idNumber) : "")}</td>
+        <td>
+          <button class="mini act-kyc" data-uid="${esc(u.uid)}" data-approve="1">Appro</button>
+          <button class="mini danger act-kyc" data-uid="${esc(u.uid)}" data-approve="0">Kataa</button>
+        </td>
+      </tr>`;
+    }).join(""));
+    setUpd();
+  } catch (e) {
+    toast("KYC imeshindikana: " + e.message, false);
+  } finally {
+    setBusy(false);
+  }
+}
+
+// ---------- Reports ----------
+async function loadReports() {
+  setBusy(true);
+  try {
+    const { reports } = await getJSON("/api/reports");
+    $("rCnt").textContent = fmtNum(reports.length);
+    renderRows($("rRows"), reports.map((r) => {
+      const target = r.targetProduct || r.productName || r.productId || r.target || "";
+      return `<tr>
+        <td class="wrap">${esc(typeof r.userId === "object" ? r.userId.name || r.userId.displayName || "—" : r.userId || "—")}</td>
+        <td>${esc(r.type || r.category || "—")}</td>
+        <td class="wrap">${esc(r.reason || r.details || "—")}</td>
+        <td class="wrap">${esc(target)}</td>
+        <td>${badge(r.status)}</td>
+        <td>${time(r.createdAt)}</td>
+        <td>${["pending", "reviewing", "resolved", "dismissed"].map((s) =>
+          `<button class="mini act-rep" data-id="${esc(r.id)}" data-status="${s}" ${r.status === s ? "disabled" : ""}>${s}</button>`
+        ).join(" ")}</td>
+      </tr>`;
+    }).join(""));
+    setUpd();
+  } catch (e) {
+    toast("Reports imeshindikana: " + e.message, false);
+  } finally {
+    setBusy(false);
+  }
+}
+
+// ---------- Fraud ----------
+async function loadFraud() {
+  setBusy(true);
+  try {
+    const { alerts } = await getJSON("/api/fraud/alerts?resolved=false");
+    $("fCnt").textContent = fmtNum(alerts.length);
+    renderRows($("fRows"), alerts.map((a) => {
+      const seller = a.sellerName || a.sellerId || a.userId || "";
+      return `<tr>
+        <td class="wrap">${esc(typeof seller === "object" ? seller.name || seller.displayName || "—" : seller)}</td>
+        <td>${esc(a.type || a.riskLevel || "—")}</td>
+        <td class="wrap">${esc(a.details || a.reason || "—")}</td>
+        <td>${a.resolved ? badge("resolved") : badge("alert")}</td>
+        <td>${time(a.detectedAt || a.createdAt)}</td>
+        <td><button class="mini act-frd" data-id="${esc(a.id)}">Dismiss</button></td>
+      </tr>`;
+    }).join(""));
+    setUpd();
+  } catch (e) {
+    toast("Fraud imeshindikana: " + e.message, false);
+  } finally {
+    setBusy(false);
+  }
+}
+
+// ---------- Audit ----------
+async function loadAudit() {
+  setBusy(true);
+  try {
+    const { logs } = await getJSON("/api/admin/audit-log");
+    $("aCnt").textContent = fmtNum(logs.length);
+    renderRows($("aRows"), logs.map((l) => {
+      const user = l.userName || l.userId || l.uid || "";
+      const pickName = (x) => (typeof x === "object" ? x.name || x.displayName || "—" : x || "—");
+      return `<tr>
+        <td class="wrap">${esc(pickName(user))}</td>
+        <td>${esc(l.type || "—")}</td>
+        <td class="num">${fmtTZS(l.amount || 0)}</td>
+        <td class="wrap">${esc(l.reason || l.note || "—")}</td>
+        <td>${time(l.timestamp || l.createdAt)}</td>
+      </tr>`;
+    }).join(""));
+    setUpd();
+  } catch (e) {
+    toast("Audit imeshindikana: " + e.message, false);
+  } finally {
+    setBusy(false);
+  }
+}
+
+// ---------- Online ----------
+async function loadOnline() {
+  setBusy(true);
+  try {
+    const o = await getJSON("/api/admin/online");
+    const on = o.online || {};
+    const chips = [
+      ["Wanatumia Sasa (1m)", on.lastMinute || 0, "g"],
+      ["Saa 5 (5m)", on.last5Min || 0, "a"],
+      ["Saa 15 (15m)", on.last15Min || 0, "p"],
+      ["Saa 1 (1h)", on.lastHour || 0, "y"],
+      ["Siku 1 (24h)", on.lastDay || 0, "mut"],
+    ];
+    const chipColor = { g: "var(--green)", a: "var(--accent)", p: "var(--accent2)", y: "var(--amber)", mut: "var(--muted)" };
+    $("onChips").innerHTML = chips.map(([k, v, c]) =>
+      `<div class="stat-chip"><div class="k">${esc(k)}</div><div class="v" style="color:${chipColor[c] || "var(--text)"}">${fmtNum(v)}</div></div>`
+    ).join("");
+    renderRows($("onRows"), (o.recentlyActive || []).map((u) => {
+      const dt = new Date(u.lastActive).toLocaleTimeString();
+      return `<tr><td class="mono wrap">${esc(u.uid || "—")}</td><td class="dim">${esc(dt)}</td></tr>`;
+    }).join(""));
+    setUpd();
+  } catch (e) {
+    toast("Online imeshindikana: " + e.message, false);
+  } finally {
+    setBusy(false);
+  }
+}
+
+const LOADERS = {
+  overview: loadOverview, finance: loadFinance, users: loadUsers, products: loadProducts,
+  orders: loadOrders, transactions: loadTransactions, withdrawals: loadWithdrawals,
+  kyc: loadKyc, reports: loadReports, fraud: loadFraud, audit: loadAudit, online: loadOnline,
+};
+
+// ---------- global action delegation ----------
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  try {
+    if (btn.classList.contains("act-adm")) {
+      if (!confirm("Badilisha admin role?")) return;
+      await putJSON("/api/admin/users/" + encodeURIComponent(btn.dataset.uid), { isAdmin: btn.dataset.admin === "1" ? false : true });
+      toast("Imebadilishwa.", true); loadUsers();
+    } else if (btn.classList.contains("act-sus")) {
+      if (!confirm(btn.dataset.suspended === "1" ? "Fungua akaunti hii?" : "Simamisha akaunti hii?")) return;
+      await putJSON("/api/admin/users/" + encodeURIComponent(btn.dataset.uid), { isSuspended: btn.dataset.suspended === "1" ? false : true });
+      toast("Imebadilishwa.", true); loadUsers();
+    } else if (btn.classList.contains("act-act")) {
+      await putJSON("/api/admin/products/" + encodeURIComponent(btn.dataset.id), { isActive: btn.dataset.active === "1" ? false : true });
+      toast("Imebadilishwa.", true); loadProducts();
+    } else if (btn.classList.contains("act-feat")) {
+      const body = btn.dataset.featured === "1"
+        ? { isFeatured: false }
+        : { isFeatured: true, featuredUntil: new Date(Date.now() + 30 * 86400000).toISOString() };
+      await putJSON("/api/admin/products/" + encodeURIComponent(btn.dataset.id), body);
+      toast("Imebadilishwa.", true); loadProducts();
+    } else if (btn.classList.contains("act-kyc")) {
+      const approve = btn.dataset.approve === "1";
+      const notes = approve ? "" : (prompt("Sababu ya kukataa KYC (hiari):") || "");
+      await postJSON("/api/admin/kyc/review", { userId: btn.dataset.uid, approve, notes });
+      toast("KYC " + (approve ? "imekubaliwa." : "imekataliwa."), true); loadKyc();
+    } else if (btn.classList.contains("act-rep")) {
+      if (!confirm("Weka report kama " + btn.dataset.status + "?")) return;
+      await patchJSON("/api/reports/" + encodeURIComponent(btn.dataset.id), { status: btn.dataset.status });
+      toast("Imebadilishwa.", true); loadReports();
+    } else if (btn.classList.contains("act-frd")) {
+      if (!confirm("Funga fraud alert hii?")) return;
+      await patchJSON("/api/fraud/alerts/" + encodeURIComponent(btn.dataset.id) + "/dismiss", { resolved: true });
+      toast("Imefungwa.", true); loadFraud();
+    }
+  } catch (err) {
+    toast("Kitendo kimeshindikana: " + err.message, false);
+  }
+});
+
+document.addEventListener("change", async (e) => {
+  const sel = e.target.closest(".order-status");
+  if (!sel) return;
+  if (!confirm("Badilisha hali ya agizo kuwa '" + sel.value + "'?")) { loadOrders(); return; }
+  try {
+    await putJSON("/api/admin/orders/" + encodeURIComponent(sel.dataset.id), { status: sel.value });
+    toast("Agizo limebadilishwa.", true);
+  } catch (err) {
+    toast("Imeshindikana: " + err.message, false);
+  } finally {
+    loadOrders();
+  }
+});
+
+bootAuth();
+</script>
+</body>
+</html>

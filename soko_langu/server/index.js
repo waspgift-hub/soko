@@ -7,6 +7,7 @@ const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
 const axios = require('axios');
 const Redis = require('ioredis');
+const path = require('path');
 
 // Firebase init — MUST be before any module that calls admin.firestore() at require time
 let db;
@@ -97,6 +98,10 @@ app.use((req, res, next) => {
   res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   next();
 });
+
+// Browser-based super-admin dashboard (served same-origin so its /api calls
+// share the host header and CORS allow-list without extra setup).
+app.use('/admin', express.static(path.join(__dirname, 'admin'), { index: 'index.html' }));
 
 // Tight CORS — only allow the Flutter app + admin panel origins
 const ALLOWED_ORIGINS = [
@@ -1917,10 +1922,8 @@ app.post('/api/setup-admin', async (req, res) => {
 // ============================================================
 app.get('/api/admin/users', async (req, res) => {
   try {
-    const secret = req.headers['x-admin-secret'];
-    if (!verifyAdminSecret(secret)) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const snap = await db.collection('users').orderBy('createdAt', 'desc').get();
@@ -1942,10 +1945,8 @@ app.get('/api/admin/users', async (req, res) => {
 // ============================================================
 app.get('/api/admin/products', async (req, res) => {
   try {
-    const secret = req.headers['x-admin-secret'];
-    if (!verifyAdminSecret(secret)) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const snap = await db.collection('products').orderBy('createdAt', 'desc').get();
@@ -1961,10 +1962,8 @@ app.get('/api/admin/products', async (req, res) => {
 // ============================================================
 app.put('/api/admin/users/:uid', async (req, res) => {
   try {
-    const secret = req.headers['x-admin-secret'];
-    if (!verifyAdminSecret(secret)) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const { uid } = req.params;
@@ -1988,10 +1987,8 @@ app.put('/api/admin/users/:uid', async (req, res) => {
 // ============================================================
 app.put('/api/admin/products/:id', async (req, res) => {
   try {
-    const secret = req.headers['x-admin-secret'];
-    if (!verifyAdminSecret(secret)) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const { id } = req.params;
@@ -2015,10 +2012,8 @@ app.put('/api/admin/products/:id', async (req, res) => {
 // ============================================================
 app.put('/api/admin/orders/:id', async (req, res) => {
   try {
-    const secret = req.headers['x-admin-secret'];
-    if (!verifyAdminSecret(secret)) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const { id } = req.params;
@@ -2039,10 +2034,8 @@ app.put('/api/admin/orders/:id', async (req, res) => {
 // ============================================================
 app.get('/api/admin/orders', async (req, res) => {
   try {
-    const secret = req.headers['x-admin-secret'];
-    if (!verifyAdminSecret(secret)) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const snap = await db.collection('orders').orderBy('createdAt', 'desc').get();
@@ -4349,8 +4342,8 @@ app.get('/api/seller/balance', async (req, res) => {
 // ============================================================
 app.get('/api/admin/stats', async (req, res) => {
   try {
-    const secret = req.headers['x-admin-secret'];
-    if (!verifyAdminSecret(secret)) return res.status(401).json({ error: 'Unauthorized' });
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const [usersSnap, ordersSnap, withdrawalsSnap, adViewsSnap] = await Promise.all([
@@ -4390,8 +4383,8 @@ app.get('/api/admin/stats', async (req, res) => {
 // ============================================================
 app.get('/api/admin/transactions', async (req, res) => {
   try {
-    const secret = req.headers['x-admin-secret'];
-    if (!verifyAdminSecret(secret)) return res.status(401).json({ error: 'Unauthorized' });
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const limit = Math.min(parseInt(req.query.limit) || 100, 500);
@@ -4408,8 +4401,8 @@ app.get('/api/admin/transactions', async (req, res) => {
 // ============================================================
 app.get('/api/admin/withdrawals', async (req, res) => {
   try {
-    const secret = req.headers['x-admin-secret'];
-    if (!verifyAdminSecret(secret)) return res.status(401).json({ error: 'Unauthorized' });
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const limit = Math.min(parseInt(req.query.limit) || 100, 500);
@@ -4561,8 +4554,8 @@ app.get('/api/admin/analytics', async (req, res) => {
 // ============================================================
 app.get('/api/admin/timeseries', async (req, res) => {
   try {
-    const secret = req.headers['x-admin-secret'];
-    if (!verifyAdminSecret(secret)) return res.status(401).json({ error: 'Unauthorized' });
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const days = Math.min(parseInt(req.query.days) || 30, 90);
@@ -4613,8 +4606,8 @@ app.get('/api/admin/timeseries', async (req, res) => {
 // ============================================================
 app.get('/api/admin/online', async (req, res) => {
   try {
-    const secret = req.headers['x-admin-secret'];
-    if (!verifyAdminSecret(secret)) return res.status(401).json({ error: 'Unauthorized' });
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const [sessionsSnap, usersCountSnap] = await Promise.all([
@@ -5502,8 +5495,8 @@ app.get('/api/admin/revenue-transactions', async (req, res) => {
 // ============================================================
 app.get('/api/admin/audit-log', async (req, res) => {
   try {
-    const secret = req.headers['x-admin-secret'];
-    if (!verifyAdminSecret(secret)) return res.status(401).json({ error: 'Unauthorized' });
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const limit = Math.min(parseInt(req.query.limit) || 100, 500);
