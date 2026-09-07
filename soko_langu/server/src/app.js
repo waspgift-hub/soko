@@ -41,10 +41,11 @@ app.use((req, res, next) => {
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  // Sparse CSP: same-origin API stays locked down, but the admin dashboard
-  // needs the Firebase JS SDK, inline script/style slots, and the Google
-  // identity popup to actually work.
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.googleapis.com https://apis.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://accounts.google.com; font-src 'self' data:");
+  // Sparse CSP: same-origin API stays locked down, but the public marketing
+  // pages + admin dashboard pull Firebase/Google, Tailwind, chart.js, lucide,
+  // Google Fonts, and AdSense from CDNs — those hosts are allow-listed instead
+  // of falling back to unsafe-inline-everything.
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.googleapis.com https://apis.google.com https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://unpkg.com https://pagead2.googlesyndication.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://accounts.google.com https://googleads.g.doubleclick.net https://pagead2.googlesyndication.com; font-src 'self' data: https://fonts.gstatic.com");
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   next();
 });
@@ -74,15 +75,16 @@ app.use((req, res, next) => {
   next();
 });
 
-// Public assets: browser admin dashboard at /admin and the landing page at /.
-// The admin hostname is redirected to /admin so the bare domain lands on the
-// panel; every other host gets the marketing page.
-app.use('/admin', express.static(path.join(__dirname, '..', 'admin'), { index: 'index.html' }));
-app.get('/', (req, res) => {
-  const host = req.hostname || '';
-  if (host.endsWith('admin.sokovibe.co.tz')) return res.redirect(301, '/admin');
-  res.sendFile(path.join(__dirname, '..', 'landing', 'index.html'));
+// Public assets: browser admin dashboard at /admin and the marketing site at
+// / (the landing files mirror the Firebase Hosting site). The admin hostname
+// is redirected to /admin so the bare domain lands on the panel; every other
+// host gets the marketing page.
+app.get('/', (req, res, next) => {
+  if ((req.hostname || '').endsWith('admin.sokovibe.co.tz')) return res.redirect(301, '/admin');
+  next();
 });
+app.use(express.static(path.join(__dirname, '..', 'landing'), { index: 'index.html' }));
+app.use('/admin', express.static(path.join(__dirname, '..', 'admin'), { index: 'index.html' }));
 
 // Routes
 app.use('/health', healthRouter);
