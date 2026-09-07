@@ -322,6 +322,25 @@ class AuthNotifier extends ChangeNotifier {
     }
   }
 
+  Future<void> loginWithEmailOtp(String email, String otp) async {
+    _error = null;
+    notifyListeners();
+    try {
+      await _authRepo.loginWithEmailOtp(email, otp);
+      await _onboardingService.markCompleted();
+      _setAuthState(_authRepo.currentUser);
+      await _fetchAdminStatus();
+      await _checkSuspended();
+      await _checkProfileCompleteness();
+      _syncAppState();
+      notifyListeners();
+    } catch (e) {
+      _error = translateError(e);
+      notifyListeners();
+      rethrow;
+    }
+  }
+
   Future<void> registerWithPhone({
     required String phone,
     required String password,

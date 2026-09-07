@@ -70,6 +70,44 @@ class AuthRepository {
     }
   }
 
+  Future<UserCredential> loginWithEmailOtp(String email, String otp) async {
+    try {
+      final res = await http.post(
+        Uri.parse(ApiConfig.v1('/auth/email-otp-login')),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email.trim().toLowerCase(),
+          'otp': otp,
+        }),
+      );
+
+      final body = jsonDecode(res.body);
+      if (res.statusCode != 200 || body['success'] != true) {
+        throw NetworkError(
+          message: 'Email OTP login failed: ${body['error']}',
+          userMessage: body['error'] ?? 'auth_otp_invalid',
+        );
+      }
+
+      final cred = await _auth.signInWithCustomToken(body['token'] as String);
+      await _ensureProfileExists(cred.user);
+      return cred;
+    } on NetworkError {
+      rethrow;
+    } on FirebaseAuthException catch (e) {
+      throw NetworkError(
+        message: e.message ?? 'Email OTP login failed',
+        userMessage: _mapError(e.code),
+        originalError: e,
+      );
+    } catch (e) {
+      throw NetworkError(
+        message: 'Email OTP login error: $e',
+        userMessage: ErrorKeys.poorNetwork,
+      );
+    }
+  }
+
   Future<UserCredential> register({
     required String email,
     required String password,

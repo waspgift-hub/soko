@@ -103,6 +103,14 @@ app.use((req, res, next) => {
 // share the host header and CORS allow-list without extra setup).
 app.use('/admin', express.static(path.join(__dirname, 'admin'), { index: 'index.html' }));
 
+// Public landing page at the root — on the admin hostname it bounces straight
+// to the dashboard so a bare domain visit lands on the panel, not a page.
+app.get('/', (req, res) => {
+  const host = req.hostname || '';
+  if (host.endsWith('admin.sokovibe.co.tz')) return res.redirect(301, '/admin');
+  res.sendFile(path.join(__dirname, 'landing', 'index.html'));
+});
+
 // Tight CORS — only allow the Flutter app + admin panel origins
 const ALLOWED_ORIGINS = [
   'https://soko-langu-server.onrender.com',
@@ -1652,6 +1660,53 @@ app.post('/api/auth/verify-email-otp', otpVerifyRateLimit, async (req, res) => {
 });
 
 // ============================================================
+// 🔐 AUTH — Email OTP sign-in (admin web dashboard)
+// Verifies the email OTP, then returns a Firebase custom token so
+// the browser can complete sign-in via signInWithCustomToken.
+// ============================================================
+app.post('/api/auth/otp-sign-in', otpVerifyRateLimit, async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) return res.status(400).json({ error: 'Email and OTP are required' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const cleanEmail = email.trim().toLowerCase();
+    const doc = await db.collection('otp_codes').doc(cleanEmail).get();
+    if (!doc.exists) return res.status(400).json({ error: 'auth_otp_expired' });
+
+    const data = doc.data();
+    if (data.used) return res.status(400).json({ error: 'auth_otp_invalid' });
+    if (Date.now() > data.expiresAt) return res.status(400).json({ error: 'auth_otp_expired' });
+
+    const hashed = crypto.createHash('sha256').update(otp).digest('hex');
+    if (hashed !== data.otpHash) return res.status(400).json({ error: 'auth_otp_invalid' });
+
+    await doc.ref.update({ used: true });
+
+    // Look up the Firebase Auth account for this email address.
+    let uid;
+    try {
+      const userRecord = await admin.auth().getUserByEmail(cleanEmail);
+      uid = userRecord.uid;
+    } catch (_) {
+      return res.status(404).json({ error: 'auth_user_not_found' });
+    }
+
+    // Only allow admin accounts to get a sign-in token from the dashboard.
+    const userSnap = await db.collection('users').doc(uid).get();
+    if (!userSnap.exists || userSnap.data().isAdmin !== true) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const customToken = await admin.auth().createCustomToken(uid);
+    res.json({ customToken, uid });
+  } catch (e) {
+    console.error('/api/auth/otp-sign-in error:', e.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================================
 // 🔐 AUTH — Check if phone already registered
 // ============================================================
 app.post('/api/auth/check-phone', async (req, res) => {
@@ -1831,6 +1886,46 @@ app.post('/api/phone-login', otpVerifyRateLimit, async (req, res) => {
     res.json({ success: true, token });
   } catch (e) {
     console.error('/api/phone-login error:', e.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================================
+// 🔐 AUTH — Email OTP login (mobile app)
+// Verifies the email OTP and returns a Firebase custom token so
+// the client can sign in without a password (existing account only).
+// ============================================================
+app.post('/api/email-otp-login', otpVerifyRateLimit, async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) return res.status(400).json({ error: 'Email and OTP are required' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const cleanEmail = email.trim().toLowerCase();
+    const otpDoc = await db.collection('otp_codes').doc(cleanEmail).get();
+    if (!otpDoc.exists) return res.status(400).json({ error: 'auth_otp_expired' });
+
+    const otpData = otpDoc.data();
+    if (otpData.used) return res.status(400).json({ error: 'auth_otp_invalid' });
+    if (Date.now() > otpData.expiresAt) return res.status(400).json({ error: 'auth_otp_expired' });
+
+    const hashed = crypto.createHash('sha256').update(otp).digest('hex');
+    if (hashed !== otpData.otpHash) return res.status(400).json({ error: 'auth_otp_invalid' });
+
+    await otpDoc.ref.update({ used: true });
+
+    let uid;
+    try {
+      const userRecord = await admin.auth().getUserByEmail(cleanEmail);
+      uid = userRecord.uid;
+    } catch (_) {
+      return res.status(404).json({ error: 'auth_user_not_found' });
+    }
+
+    const token = await admin.auth().createCustomToken(uid);
+    res.json({ success: true, token });
+  } catch (e) {
+    console.error('/api/email-otp-login error:', e.message);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

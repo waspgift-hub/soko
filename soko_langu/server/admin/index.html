@@ -120,6 +120,18 @@
   .btn:hover { border-color: var(--accent); color: var(--accent); }
   .btn.accent { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #07121c; border: 0; font-weight: 600; }
   .btn.accent:hover { filter: brightness(1.1); }
+  .btn.full { width: 100%; margin-top: 10px; }
+
+  .tabs { display: flex; gap: 6px; background: var(--panel2); border: 1px solid var(--border); border-radius: 12px; padding: 4px; margin-bottom: 18px; }
+  .tab { flex: 1; border: 0; background: transparent; color: var(--muted); padding: 8px 0; border-radius: 9px; cursor: pointer; font-size: 13px; font-weight: 600; font-family: inherit; transition: all .15s; }
+  .tab.active { background: linear-gradient(135deg, rgba(34,211,238,.18), rgba(167,139,250,.18)); color: var(--accent); }
+  .tabpane { margin-bottom: 2px; }
+
+  .field { width: 100%; background: var(--panel2); border: 1px solid var(--border); color: var(--text); border-radius: 10px; padding: 11px 13px; font-size: 14px; font-family: inherit; margin-bottom: 10px; transition: border-color .15s; }
+  .field:focus { outline: none; border-color: var(--accent); }
+  .field::placeholder { color: #5a6584; }
+  .otp-row { display: flex; gap: 8px; }
+  .otp-row .field { flex: 1; }
 
   .section { display: none; animation: fade .25s ease; }
   .section.active { display: block; }
@@ -208,12 +220,41 @@
     <div class="logo-badge">S</div>
     <h1>Soko Vibe</h1>
     <p>Super Admin Dashboard</p>
-    <button class="gbtn" id="loginBtn">
-      <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-      Continue na Google
-    </button>
+
+    <div class="tabs" id="loginTabs">
+      <button class="tab active" data-tab="google">Google</button>
+      <button class="tab" data-tab="email">Email</button>
+      <button class="tab" data-tab="otp">OTP</button>
+    </div>
+
+    <!-- Google -->
+    <div class="tabpane" id="paneGoogle">
+      <button class="gbtn" id="loginBtn">
+        <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        Continue na Google
+      </button>
+      <p class="hint">Iwapo popup imefungwa, itabadilisha kuwa redirect moja kwa moja.</p>
+    </div>
+
+    <!-- Email + Password -->
+    <div class="tabpane" id="paneEmail" hidden>
+      <input class="field" id="epEmail" type="email" placeholder="Barua pepe" autocomplete="email" spellcheck="false">
+      <input class="field" id="epPass" type="password" placeholder="Nenosiri" autocomplete="current-password">
+      <button class="btn accent full" id="epBtn" style="margin-top:2px">Ingia</button>
+    </div>
+
+    <!-- Email + OTP -->
+    <div class="tabpane" id="paneOtp" hidden>
+      <input class="field" id="otpEmail" type="email" placeholder="Barua pepe" autocomplete="email" spellcheck="false">
+      <div class="otp-row">
+        <input class="field" id="otpCode" type="text" inputmode="numeric" maxlength="6" placeholder="Code ya sita" autocomplete="one-time-code">
+        <button class="btn" id="otpSendBtn">Tuma code</button>
+      </div>
+      <button class="btn accent full" id="otpConfirmBtn">Thibitisha</button>
+    </div>
+
     <div class="err" id="loginErr"></div>
-    <p class="hint">Akaunti lazima iwe na ruhusa ya admin. Iwapo popup imefungwa, itabadilisha kuwa redirect moja kwa moja.</p>
+    <p class="hint">Akaunti lazima iwe na ruhusa ya admin (isAdmin).</p>
   </div>
 
   <div class="auth-card" id="deniedCard" hidden>
@@ -598,6 +639,90 @@ $("loginBtn").addEventListener("click", async () => {
     $("loginBtn").disabled = false;
   }
 });
+
+// ---------- login tabs ----------
+document.querySelectorAll("#loginTabs .tab").forEach(function (t) {
+  t.addEventListener("click", function () {
+    document.querySelectorAll("#loginTabs .tab").forEach((x) => x.classList.remove("active"));
+    t.classList.add("active");
+    ["google", "email", "otp"].forEach((n) => ($("pane" + n[0].toUpperCase() + n.slice(1)).hidden = n !== t.dataset.tab));
+    $("loginErr").textContent = "";
+  });
+});
+
+// ---------- email + password sign-in ----------
+$("epBtn").addEventListener("click", async () => {
+  $("loginErr").textContent = "";
+  const email = $("epEmail").value.trim();
+  const pass = $("epPass").value;
+  if (!email || !pass) { $("loginErr").textContent = "Jaza barua pepe na nenosiri."; return; }
+  $("epBtn").disabled = true;
+  try {
+    await auth.signInWithEmailAndPassword(email, pass);
+  } catch (e) {
+    $("loginErr").textContent = e.code === "auth/user-not-found" || e.code === "auth/wrong-password" || e.code === "auth/invalid-login-credentials"
+      ? "Barua pepe au nenosiri si sahihi."
+      : (e.message || "Imeshindikana.");
+  } finally {
+    $("epBtn").disabled = false;
+  }
+});
+["epEmail", "epPass"].forEach((id) => $(id).addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("epBtn").click(); } }));
+
+// ---------- email + OTP sign-in ----------
+$("otpSendBtn").addEventListener("click", async () => {
+  $("loginErr").textContent = "";
+  const email = $("otpEmail").value.trim();
+  if (!email) { $("loginErr").textContent = "Weka barua pepe yako."; return; }
+  $("otpSendBtn").disabled = true;
+  $("otpSendBtn").textContent = "Inatuma...";
+  try {
+    const r = await fetch("/api/auth/send-email-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, langCode: "sw" }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error === "auth_otp_send_failed" ? "Kutuma code kulishindikana." : (j.error || "Imeshindikana."));
+    $("otpCode").focus();
+  } catch (e) {
+    $("loginErr").textContent = e.message;
+  } finally {
+    $("otpSendBtn").disabled = false;
+    $("otpSendBtn").textContent = "Tuma code";
+  }
+});
+
+$("otpConfirmBtn").addEventListener("click", async () => {
+  $("loginErr").textContent = "";
+  const email = $("otpEmail").value.trim();
+  const code = $("otpCode").value.trim();
+  if (!email || !code) { $("loginErr").textContent = "Weka barua pepe na code."; return; }
+  $("otpConfirmBtn").disabled = true;
+  try {
+    const r = await fetch("/api/auth/otp-sign-in", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, otp: code }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      if (j.error === "auth_user_not_found") $("loginErr").textContent = "Hakuna akaunti ya Firebase kwa barua pepe hii.";
+      else if (j.error === "Unauthorized") $("loginErr").textContent = "Akaunti hii haina ruhusa ya admin.";
+      else if (j.error === "auth_otp_invalid" || j.error === "auth_otp_expired") $("loginErr").textContent = "Code si sahihi au imeisha.";
+      else $("loginErr").textContent = j.error || "Imeshindikana.";
+      return;
+    }
+    await auth.signInWithCustomToken(j.customToken);
+  } catch (e) {
+    $("loginErr").textContent = e.message || "Imeshindikana.";
+  } finally {
+    $("otpConfirmBtn").disabled = false;
+  }
+});
+["otpEmail"].forEach((id) => $(id).addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("otpSendBtn").click(); } }));
+$("otpCode").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("otpConfirmBtn").click(); } });
+
 $("logoutBtn").addEventListener("click", () => auth.signOut().then(() => location.reload()));
 
 function setMe(u) {
