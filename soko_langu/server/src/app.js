@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const compression = require('compression');
 const cors = require('cors');
 const config = require('./config');
@@ -40,7 +41,10 @@ app.use((req, res, next) => {
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Content-Security-Policy', "default-src 'self'");
+  // Sparse CSP: same-origin API stays locked down, but the admin dashboard
+  // needs the Firebase JS SDK, inline script/style slots, and the Google
+  // identity popup to actually work.
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.googleapis.com https://apis.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://accounts.google.com; font-src 'self' data:");
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   next();
 });
@@ -68,6 +72,16 @@ app.use((req, res, next) => {
     res.status(504).json({ error: 'Request timed out' });
   });
   next();
+});
+
+// Public assets: browser admin dashboard at /admin and the landing page at /.
+// The admin hostname is redirected to /admin so the bare domain lands on the
+// panel; every other host gets the marketing page.
+app.use('/admin', express.static(path.join(__dirname, '..', 'admin'), { index: 'index.html' }));
+app.get('/', (req, res) => {
+  const host = req.hostname || '';
+  if (host.endsWith('admin.sokovibe.co.tz')) return res.redirect(301, '/admin');
+  res.sendFile(path.join(__dirname, '..', 'landing', 'index.html'));
 });
 
 // Routes

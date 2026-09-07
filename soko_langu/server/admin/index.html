@@ -677,7 +677,7 @@ $("otpSendBtn").addEventListener("click", async () => {
   $("otpSendBtn").disabled = true;
   $("otpSendBtn").textContent = "Inatuma...";
   try {
-    const r = await fetch("/api/auth/send-email-otp", {
+    const r = await fetch("/api/v1/auth/send-email-otp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, langCode: "sw" }),
@@ -700,7 +700,7 @@ $("otpConfirmBtn").addEventListener("click", async () => {
   if (!email || !code) { $("loginErr").textContent = "Weka barua pepe na code."; return; }
   $("otpConfirmBtn").disabled = true;
   try {
-    const r = await fetch("/api/auth/otp-sign-in", {
+    const r = await fetch("/api/v1/auth/otp-sign-in", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, otp: code }),

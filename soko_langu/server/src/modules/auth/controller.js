@@ -117,6 +117,27 @@ async function sendEmailOtp(req, res) {
   }
 }
 
+// Shared email-OTP check: expiry, single-use, 5 attempts, timing-safe compare.
+async function checkEmailCode(cleanEmail, otpValue) {
+  if (!otpValue) return { ok: false, error: 'auth_otp_invalid' };
+  const record = await getOtp(`email:${cleanEmail}`);
+  if (!record || record.used || Date.now() > record.expiresAt) {
+    return { ok: false, error: 'auth_otp_expired' };
+  }
+  const attempts = await bumpAttempts(`email:${cleanEmail}`);
+  if (attempts > OTP_MAX_ATTEMPTS) {
+    return { ok: false, error: 'auth_otp_invalid' };
+  }
+  const hashed = hashOtp(otpValue);
+  const a = Buffer.from(hashed);
+  const b = Buffer.from(record.otpHash);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+    return { ok: false, error: 'auth_otp_invalid' };
+  }
+  await markUsed(`email:${cleanEmail}`);
+  return { ok: true };
+}
+
 // Verify email OTP
 async function verifyEmailOtp(req, res) {
   try {
@@ -125,30 +146,85 @@ async function verifyEmailOtp(req, res) {
     if (!email || !otpValue) return res.status(400).json({ error: 'auth_otp_invalid' });
     const cleanEmail = String(email).trim().toLowerCase();
 
-    const record = await getOtp(`email:${cleanEmail}`);
-    if (!record || record.used || Date.now() > record.expiresAt) {
-      return res.status(400).json({ error: 'auth_otp_expired' });
-    }
+    const check = await checkEmailCode(cleanEmail, otpValue);
+    if (!check.ok) return res.status(400).json({ error: check.error });
 
-    const attempts = await bumpAttempts(`email:${cleanEmail}`);
-    if (attempts > OTP_MAX_ATTEMPTS) {
-      return res.status(400).json({ error: 'auth_otp_invalid' });
-    }
-
-    const hashed = hashOtp(otpValue);
-    const a = Buffer.from(hashed);
-    const b = Buffer.from(record.otpHash);
-    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
-      return res.status(400).json({ error: 'auth_otp_invalid' });
-    }
-
-    await markUsed(`email:${cleanEmail}`);
     res.json({
       success: true,
       valid: true,
     });
   } catch (error) {
     console.error('[AUTH] Verify email OTP error:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+// Email + OTP login for the app: verifies the emailed code, resolves the
+// Firebase user by email (no auto-create for email signups), returns a
+// custom token the client signs in with.
+async function emailOtpLogin(req, res) {
+  try {
+    const { email, otp, code } = req.body;
+    const otpValue = otp || code;
+    if (!email || !otpValue) return res.status(400).json({ error: 'auth_otp_invalid' });
+    const cleanEmail = String(email).trim().toLowerCase();
+    const check = await checkEmailCode(cleanEmail, otpValue);
+    if (!check.ok) return res.status(400).json({ error: check.error });
+
+    const auth = getFirebaseAuth();
+    if (!auth) return res.status(503).json({ error: 'Auth not configured' });
+
+    let uid;
+    try {
+      const record = await auth.getUserByEmail(cleanEmail);
+      uid = record.uid;
+    } catch (e) {
+      return res.status(404).json({ error: 'auth_user_not_found' });
+    }
+
+    const token = await auth.createCustomToken(uid);
+    res.json({ success: true, token });
+  } catch (error) {
+    console.error('[AUTH] Email OTP login error:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+// Admin OTP sign-in: the emailed code must verify AND the account must carry
+// an admin role — guards the dashboard against non-admin OTP signups.
+async function otpSignIn(req, res) {
+  try {
+    const { email, otp, code } = req.body;
+    const otpValue = otp || code;
+    if (!email || !otpValue) return res.status(400).json({ error: 'auth_otp_invalid' });
+    const cleanEmail = String(email).trim().toLowerCase();
+    const check = await checkEmailCode(cleanEmail, otpValue);
+    if (!check.ok) return res.status(400).json({ error: check.error });
+
+    const auth = getFirebaseAuth();
+    if (!auth) return res.status(503).json({ error: 'Auth not configured' });
+
+    let uid;
+    try {
+      const record = await auth.getUserByEmail(cleanEmail);
+      uid = record.uid;
+    } catch (e) {
+      return res.status(404).json({ error: 'auth_user_not_found' });
+    }
+
+    const prisma = getPrisma();
+    const user = await prisma.user.findFirst({
+      where: { firebaseUid: uid },
+      select: { role: true },
+    });
+    if (!user || !['admin', 'super_admin'].includes(user.role)) {
+      return res.status(403).json({ error: 'ADMIN_REQUIRED' });
+    }
+
+    const customToken = await auth.createCustomToken(uid);
+    res.json({ customToken, uid });
+  } catch (error) {
+    console.error('[AUTH] Admin OTP sign-in error:', error.message);
     res.status(500).json({ error: 'Internal server error' });
   }
 }
@@ -342,4 +418,6 @@ module.exports = {
   checkEmail,
   phoneLogin,
   resetPasswordByPhone,
+  emailOtpLogin,
+  otpSignIn,
 };
