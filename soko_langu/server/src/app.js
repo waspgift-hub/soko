@@ -54,18 +54,24 @@ app.use((req, res, next) => {
 // Canonical domain: www.sokovibe.co.tz is the official host. Render redirects
 // the apex (sokovibe.co.tz) to www at the edge before the app; if a request
 // ever reaches the app on the apex (e.g. the edge redirect is removed) we
-// still fold it onto www ourselves. Other sokovibe.co.tz subdomains are folded
-// onto www too (path + query preserved). The admin subdomain keeps its
-// root->/admin mapping. Non-Soko hosts (Render origin, health checks) are left
-// alone so the platform health checks stay 200.
+// still fold it onto www ourselves — unless SERVE_APEX=1, in which case the
+// apex serves the SAME landing site directly (canonical/og tags stay www).
+// Other sokovibe.co.tz subdomains are folded onto www too (path + query
+// preserved). The admin subdomain keeps its root->/admin mapping. Non-Soko
+// hosts (Render origin, health checks) are left alone so the platform health
+// checks stay 200.
 const CANONICAL_HOST = 'https://www.sokovibe.co.tz';
 const DOMAIN = 'sokovibe.co.tz';
 const WWW_HOST = `www.${DOMAIN}`;
+const SERVE_APEX = process.env.SERVE_APEX === '1';
 
 app.use((req, res, next) => {
   const host = (req.hostname || '').toLowerCase();
   if (!host.endsWith(DOMAIN)) return next();
-  if (host === DOMAIN) return res.redirect(301, `${CANONICAL_HOST}${req.originalUrl}`);
+  if (host === DOMAIN) {
+    if (SERVE_APEX) return next();
+    return res.redirect(301, `${CANONICAL_HOST}${req.originalUrl}`);
+  }
   if (host === `admin.${DOMAIN}` && (req.path === '/' || req.path === '')) {
     return res.redirect(301, `${CANONICAL_HOST}/admin`);
   }
