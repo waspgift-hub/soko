@@ -6,11 +6,14 @@
 
 const BASE = process.env.BASE_URL || 'https://www.sokovibe.co.tz';
 
-const PAGES = ['/', '/tanzania-marketplace', '/categories', '/about', '/about/founder'];
+const PAGES = ['/', '/tanzania-marketplace', '/categories', '/how-soko-vibe-works', '/soko-vibe-fees', '/soko-vibe-escrow', '/about', '/about/founder'];
 
 const ORG_ID = 'https://www.sokovibe.co.tz/#organization';
 const SITE_ID = 'https://www.sokovibe.co.tz/#website';
 const FOUNDER_ID = 'https://www.sokovibe.co.tz/#founder';
+// Entity description must be identical on every page (mirror of src/seo/meta.js).
+const ORG_DESCRIPTION =
+  'Soko Vibe is a Tanzania-based online marketplace connecting buyers and sellers across Tanzania.';
 
 let failures = 0;
 const fail = (m) => { failures += 1; console.log('FAIL ' + m); };
@@ -95,8 +98,34 @@ function walk(node, path, visit) {
     pass('@id graph edges correct (website→org, person→org, org→person)');
   }
 
+  const badDesc = orgs.filter((o) => o.node['description'] !== ORG_DESCRIPTION);
+  if (orgs.length === PAGES.length && badDesc.length === 0) {
+    pass(`Organization description identical on every page (${ORG_DESCRIPTION})`);
+  } else {
+    fail(`Organization description mismatch on ${badDesc.map((o) => o.page).join(', ')} or org count ${orgs.length}/${PAGES.length}`);
+  }
+
+  const breadcrumbs = [];
+  for (const p of PAGES) {
+    const res = await fetch(`${BASE}${p}`, { redirect: 'manual' });
+    const html = await res.text();
+    breadcrumbs.push({ page: p, has: html.includes('BreadcrumbList') });
+  }
+  // Root (/) has no parent page, so a BreadcrumbList there is expected to be
+  // absent; every other public page should carry one.
+  const innerPages = breadcrumbs.filter((b) => b.page !== '/');
+  const missingBc = innerPages.filter((b) => !b.has).map((b) => b.page);
+  const hasRootBc = breadcrumbs.find((b) => b.page === '/')?.has;
+  if (missingBc.length === 0 && !hasRootBc) {
+    pass(`BreadcrumbList on all inner pages (${innerPages.length}), absent on root as expected`);
+  } else {
+    fail(`BreadcrumbList issue: missing on ${missingBc.join(', ') || 'none'}; root has one=${!!hasRootBc}`);
+  }
+
   pass(faq.length === 0 || faq.length === 1 ? `FAQPage present on homepage only (${faq.length} page)` : `FAQPage on ${faq.length} pages (unexpected)`);
 
   console.log(failures === 0 ? '\nALL JSON-LD CHECKS PASSED' : `\n${failures} FAILURE(S)`);
-  process.exit(failures > 0 ? 1 : 0);
+  // Give Node a tick to close fetch handles before exiting — avoids a
+  // Windows-only libuv assertion (0xC0000409) after global fetch + exit.
+  setTimeout(() => process.exit(failures > 0 ? 1 : 0), 50);
 })();

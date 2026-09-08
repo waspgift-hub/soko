@@ -2,14 +2,22 @@
 
 const { SITE } = require('./meta');
 
-// The web app is no longer served; only the public landing pages are
-// indexed. Product pages live in the native apps only, so no /product/*
-// or per-category URLs are listed here — every path below exists and
-// returns 200.
+// Public, indexable landing pages. Every path below exists and returns 200.
+// Rules enforced here:
+//   - canonical host only (https://www.sokovibe.co.tz)
+//   - public 200 pages only: no /api, /admin, /health, login, checkout,
+//     product deep links, deleted pages or 404s
+//   - the web app is no longer served, so product/seller/listing URLs (which
+//     live in the native apps) are intentionally NOT listed here yet. When a
+//     public web catalog ships, move these pages into a sitemap index split
+//     into pages.xml / categories.xml / products.xml / sellers.xml first.
 const SITEMAP_PATHS = [
   '/',
   '/tanzania-marketplace',
   '/categories',
+  '/how-soko-vibe-works',
+  '/soko-vibe-fees',
+  '/soko-vibe-escrow',
   '/about',
   '/about/founder',
   '/privacy-policy',

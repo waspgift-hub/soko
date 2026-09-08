@@ -63,12 +63,21 @@ function count(re, text) {
   check('exactly one H1', count(/<h1[\s>]/g, t) === 1);
   check('og:title present', /<meta\s+property="og:title"/.test(t));
   check('og:image present', /<meta\s+property="og:image"/.test(t));
+  check('og:image:width present', /<meta\s+property="og:image:width"/.test(t));
   check('twitter:card present', /<meta\s+name="twitter:card"/.test(t));
   check('JSON-LD present', t.includes('application/ld+json'));
   check('WebSite schema', /"@type"\s*:\s*"WebSite"/.test(t));
   check('Organization schema', /"@type"\s*:\s*"Organization"/.test(t));
   check('Person schema (founder)', /"@type"\s*:\s*"Person"/.test(t));
   check('FAQPage schema', /"@type"\s*:\s*"FAQPage"/.test(t));
+
+  // AI / generative-search grounding: the official entity statement must be
+  // visible text (not only schema) so LLMs and crawlers resolve "Soko Vibe"
+  // consistently.
+  check(
+    'visible official entity statement (short)',
+    t.includes('Soko Vibe is a Tanzania-based online marketplace connecting buyers and sellers across Tanzania.'),
+  );
 
   check('HSTS header', (home.headers.get('strict-transport-security') || '').startsWith('max-age=31536000'));
   check('X-Content-Type-Options: nosniff', home.headers.get('x-content-type-options') === 'nosniff');
@@ -96,7 +105,23 @@ function count(re, text) {
     }
   }
 
-  const publicPages = ['/privacy-policy', '/terms-of-service', '/support', '/tanzania-marketplace', '/categories', '/about', '/about/founder'];
+  const publicPages = [
+    '/privacy-policy',
+    '/terms-of-service',
+    '/support',
+    '/tanzania-marketplace',
+    '/categories',
+    '/how-soko-vibe-works',
+    '/soko-vibe-fees',
+    '/soko-vibe-escrow',
+    '/about',
+    '/about/founder',
+  ];
+  // Entity identity used in every page's Organization JSON-LD (single source
+  // of truth — mirror of src/seo/meta.js). Kept in sync so crawlers and AI
+  // systems answer "what is Soko Vibe" identically across the site.
+  const ORG_DESCRIPTION =
+    'Soko Vibe is a Tanzania-based online marketplace connecting buyers and sellers across Tanzania.';
   for (const p of publicPages) {
     try {
       const page = await request(p);
@@ -105,10 +130,23 @@ function count(re, text) {
         check(`${p} single <title>`, count(/<title>/g, page.text) === 1);
         check(`${p} meta description`, /<meta\s+name="description"\s+content="[^"]+"/.test(page.text));
         check(`${p} canonical points at www host`, page.text.includes(`<link rel="canonical" href="https://www.sokovibe.co.tz${p}">`));
+        check(`${p} org entity description`, page.text.includes(ORG_DESCRIPTION));
+        if (p !== '/privacy-policy' && p !== '/terms-of-service' && p !== '/support') {
+          check(`${p} BreadcrumbList schema`, page.text.includes('BreadcrumbList'));
+        }
       }
     } catch (e) {
       check(`${p} 200`, false, e.message);
     }
+  }
+
+  // Canonical URL normalization: /about/ must resolve to the single canonical
+  // /about form so no URL variant duplicates content.
+  try {
+    const slash = await request('/about/');
+    check('trailing slash /about/ -> 301 /about', slash.status === 301 && (slash.headers.get('location') || '').endsWith('/about'), `${slash.status} -> ${slash.headers.get('location')}`);
+  } catch (e) {
+    check('trailing slash /about/ -> 301 /about', false, e.message);
   }
 
   const missing = await request('/this-page-does-not-exist');
@@ -138,12 +176,15 @@ function count(re, text) {
     check('robots.txt Allow /', robots.text.includes('Allow: /'));
     check('robots.txt disallows /api/', robots.text.includes('Disallow: /api/'));
     check('robots.txt disallows /admin/', robots.text.includes('Disallow: /admin/'));
+    check('robots.txt disallows /dashboard', robots.text.includes('Disallow: /dashboard'));
+    check('robots.txt disallows /account', robots.text.includes('Disallow: /account'));
+    check('robots.txt disallows /checkout', robots.text.includes('Disallow: /checkout'));
     check('robots.txt Sitemap pointer', /Sitemap:\s+https:\/\/www\.sokovibe\.co\.tz\/sitemap\.xml/.test(robots.text));
   } catch (e) {
     check('robots.txt 200', false, e.message);
   }
 
-  const sitemapPaths = ['/', '/privacy-policy', '/terms-of-service', '/support', '/tanzania-marketplace', '/categories', '/about', '/about/founder'];
+  const sitemapPaths = ['/', '/privacy-policy', '/terms-of-service', '/support', '/tanzania-marketplace', '/categories', '/how-soko-vibe-works', '/soko-vibe-fees', '/soko-vibe-escrow', '/about', '/about/founder'];
   let sitemap;
   try {
     sitemap = await request('/sitemap.xml');

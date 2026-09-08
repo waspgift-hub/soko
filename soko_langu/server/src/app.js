@@ -75,6 +75,36 @@ app.use((req, res, next) => {
   next();
 });
 
+// HTTPS-only canonicalization: if a request ever reaches the app over plain
+// HTTP on the public domain (e.g. an edge redirect is removed), fold it onto
+// HTTPS with a 301. Localhost and non-domain hosts are left untouched so local
+// dev and platform health checks keep working over HTTP.
+app.use((req, res, next) => {
+  const host = (req.hostname || '').toLowerCase();
+  if (host.endsWith(DOMAIN) && req.protocol === 'http') {
+    return res.redirect(301, `https://${req.get('host')}${req.originalUrl}`);
+  }
+  next();
+});
+
+// Canonical URL normalization: collapse trailing-slash variants of public
+// pages (e.g. /about/ -> /about) with a 301 so each page has exactly one URL.
+// API, health and .well-known paths are excluded to avoid interfering with
+// health checks, app-link validation and JSON endpoints.
+app.use((req, res, next) => {
+  const path = req.path;
+  if (
+    path.length > 1 &&
+    path.endsWith('/') &&
+    !path.startsWith('/api') &&
+    !path.startsWith('/health') &&
+    !path.startsWith('/.well-known')
+  ) {
+    return res.redirect(301, path.slice(0, -1) + req.originalUrl.slice(path.length));
+  }
+  next();
+});
+
 // CORS
 app.use(cors({
   origin: (origin, cb) => {
@@ -135,6 +165,9 @@ const PUBLIC_HTML_PAGES = [
   ['/support', 'support.html'],
   ['/tanzania-marketplace', 'tanzania-marketplace.html'],
   ['/categories', 'categories.html'],
+  ['/how-soko-vibe-works', 'how-soko-vibe-works.html'],
+  ['/soko-vibe-fees', 'soko-vibe-fees.html'],
+  ['/soko-vibe-escrow', 'soko-vibe-escrow.html'],
   ['/about', 'about.html'],
   ['/about/founder', 'about-founder.html'],
 ];
