@@ -188,11 +188,19 @@ app.use('/admin', express.static(path.join(__dirname, '..', 'admin'), { index: '
 
 // The landing page owns the root. HTML is never cached so edits go live
 // immediately; versioned assets (css/js/png/ico/json) cache hard.
+// Brand/favicon images must stay revalidatable (no-cache) so an icon swap
+// goes live without renaming files or waiting out a 1-year immutable cache.
+const landingIconNames = new Set([
+  'favicon.ico', 'favicon.png', 'favicon-16.png', 'favicon-32.png',
+  'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'logo.png',
+]);
 app.use(express.static(landingDir, {
   index: 'index.html',
   setHeaders: (res, filePath) => {
     const ext = path.extname(filePath).toLowerCase();
     if (ext === '.html' || filePath.endsWith('manifest.json')) {
+      res.setHeader('Cache-Control', 'no-cache');
+    } else if (landingIconNames.has(path.basename(filePath))) {
       res.setHeader('Cache-Control', 'no-cache');
     } else {
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');

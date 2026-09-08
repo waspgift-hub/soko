@@ -1,10 +1,10 @@
-Ôªø<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en" class="scroll-smooth">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Soko Vibe Admin ‚Äî Escrow Dashboard</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>üõ°Ô∏è</text></svg>">
+<title>Soko Vibe Admin ó Escrow Dashboard</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>???</text></svg>">
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
 tailwind.config = {
@@ -192,7 +192,7 @@ tailwind.config = {
           <div id="profileMenu" class="hidden absolute right-0 mt-2 w-56 rounded-xl bg-white dark:bg-neutral-900 shadow-xl ring-1 ring-slate-200 dark:ring-neutral-700 overflow-hidden z-40">
             <div class="px-4 py-3 border-b border-slate-100 dark:border-neutral-800">
               <p class="text-sm font-semibold text-slate-800 dark:text-neutral-100">Soko Vibe Admin</p>
-              <p class="text-xs text-slate-500 dark:text-neutral-400" id="lastSyncLabel">‚Äî</p>
+              <p class="text-xs text-slate-500 dark:text-neutral-400" id="lastSyncLabel">ó</p>
             </div>
             <a href="#" onclick="switchTab('audit'); document.getElementById('profileMenu').classList.add('hidden');" class="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-600 dark:text-neutral-300 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800"><i data-lucide="scroll-text" class="w-4 h-4"></i> Activity Log</a>
             <a href="#" onclick="logout()" class="flex items-center gap-2 px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50 border-t border-slate-100 dark:border-neutral-800"><i data-lucide="log-out" class="w-4 h-4"></i> Log Out</a>
@@ -343,7 +343,7 @@ tailwind.config = {
               <h2 class="font-bold text-slate-800 dark:text-neutral-100">Recent Escrow Orders</h2>
               <p class="text-xs text-slate-500 dark:text-neutral-400">Latest transactions across the pipeline</p>
             </div>
-            <button onclick="switchTab('orders')" class="text-sm font-medium text-green-600 hover:text-green-700">View all ‚Üí</button>
+            <button onclick="switchTab('orders')" class="text-sm font-medium text-green-600 hover:text-green-700">View all ?</button>
           </div>
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
@@ -358,7 +358,7 @@ tailwind.config = {
           <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
             <div class="flex items-center justify-between mb-3">
               <h2 class="font-bold text-slate-800 dark:text-neutral-100">Active Disputes</h2>
-              <button onclick="switchTab('disputes')" class="text-xs font-medium text-green-600">View all ‚Üí</button>
+              <button onclick="switchTab('disputes')" class="text-xs font-medium text-green-600">View all ?</button>
             </div>
             <div id="dashboardDisputes" class="space-y-3"></div>
           </div>
@@ -433,7 +433,7 @@ tailwind.config = {
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
           <h2 class="font-bold text-slate-800 dark:text-neutral-100">Dispute Center</h2>
-          <p class="text-xs text-slate-500 dark:text-neutral-400">Orders flagged by buyers ‚Äî review before releasing funds</p>
+          <p class="text-xs text-slate-500 dark:text-neutral-400">Orders flagged by buyers ó review before releasing funds</p>
         </div>
         <div class="flex flex-col sm:flex-row gap-3">
           <div class="relative">
@@ -459,7 +459,7 @@ tailwind.config = {
               <h2 class="font-bold text-slate-800 dark:text-neutral-100">Product Boosting Management</h2>
               <p class="text-xs text-slate-500 dark:text-neutral-400">Paid placements that show products first on the Flutter app</p>
             </div>
-            <button onclick="toast('Boosts are purchased by sellers in the app ‚Äî all paid placements appear here live','info')" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 text-slate-600 dark:text-neutral-300 text-sm font-medium transition">
+            <button onclick="toast('Boosts are purchased by sellers in the app ó all paid placements appear here live','info')" class="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 text-slate-600 dark:text-neutral-300 text-sm font-medium transition">
               <i data-lucide="info" class="w-4 h-4"></i> How it works
             </button>
           </div>
@@ -589,7 +589,7 @@ tailwind.config = {
             <select id="userFilter" onchange="renderUsers()" class="px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-sm text-slate-600 dark:text-neutral-300 focus:outline-none focus:ring-2 focus:ring-green-500">
               <option value="all">All</option>
               <option value="suspended">Suspended</option>
-              <option value="warned">Warned (1‚Äì2)</option>
+              <option value="warned">Warned (1ñ2)</option>
               <option value="blocked">Blocked (3)</option>
               <option value="admin">Admins</option>
               <option value="kycApproved">KYC Approved</option>
@@ -807,8 +807,8 @@ tailwind.config = {
           </div>
           <div>
             <label class="text-sm font-medium text-slate-600 dark:text-neutral-300">Platform Commission (%)</label>
-            <input id="rateInput" type="number" min="0" max="20" step="0.5" placeholder="‚Äî" class="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm">
-            <p class="text-xs text-slate-400 dark:text-neutral-500 mt-1">Read-only ‚Äî configured server-side. Updated from live data on load.</p>
+            <input id="rateInput" type="number" min="0" max="20" step="0.5" placeholder="ó" class="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm">
+            <p class="text-xs text-slate-400 dark:text-neutral-500 mt-1">Read-only ó configured server-side. Updated from live data on load.</p>
           </div>
           <div>
             <label class="text-sm font-medium text-slate-600 dark:text-neutral-300">Escrow Hold Period (days)</label>
@@ -816,7 +816,7 @@ tailwind.config = {
           </div>
           <div>
             <label class="text-sm font-medium text-slate-600 dark:text-neutral-300">ClickPesa API Secret</label>
-            <input type="password" value="‚Ä¢‚Ä¢‚Ä¢‚Ä¢‚Ä¢‚Ä¢‚Ä¢‚Ä¢‚Ä¢‚Ä¢‚Ä¢‚Ä¢‚Ä¢‚Ä¢‚Ä¢‚Ä¢" readonly class="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 focus:outline-none text-sm font-mono">
+            <input type="password" value="ïïïïïïïïïïïïïïïï" readonly class="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 focus:outline-none text-sm font-mono">
           </div>
           <button onclick="saveSettings()" class="w-full rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-2.5 transition">Save Settings</button>
         </div>
@@ -824,7 +824,7 @@ tailwind.config = {
         <div class="space-y-4">
           <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
             <h2 class="font-bold text-slate-800 dark:text-neutral-100 mb-3 flex items-center gap-2"><i data-lucide="webhook" class="w-5 h-5 text-green-600"></i> ClickPesa Webhook</h2>
-            <p class="text-xs text-slate-500 dark:text-neutral-400 mb-3">Register this URL in your ClickPesa dashboard. When a buyer pays, ClickPesa notifies your Node.js server, which transitions the order to "In Escrow Vault" automatically ‚Äî no admin action needed.</p>
+            <p class="text-xs text-slate-500 dark:text-neutral-400 mb-3">Register this URL in your ClickPesa dashboard. When a buyer pays, ClickPesa notifies your Node.js server, which transitions the order to "In Escrow Vault" automatically ó no admin action needed.</p>
             <div class="flex items-center gap-2">
               <input id="webhookUrl" readonly value="https://soko-langu-server.onrender.com/api/clickpesa/webhook" class="flex-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 text-xs font-mono text-slate-600 dark:text-neutral-300 focus:outline-none">
               <button onclick="copyWebhook()" class="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-neutral-950 hover:bg-slate-800 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-white text-xs font-semibold transition whitespace-nowrap">
@@ -832,18 +832,18 @@ tailwind.config = {
               </button>
             </div>
             <div class="mt-4 space-y-2 text-xs text-slate-500 dark:text-neutral-400">
-              <p class="flex gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500 shrink-0"></i> Payment confirmed ‚Üí order moves to "In Escrow Vault"</p>
-              <p class="flex gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500 shrink-0"></i> Buyer confirms delivery ‚Üí escrow pushes funds to seller wallet</p>
-              <p class="flex gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500 shrink-0"></i> Refund action ‚Üí ClickPesa returns funds to buyer</p>
+              <p class="flex gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500 shrink-0"></i> Payment confirmed ? order moves to "In Escrow Vault"</p>
+              <p class="flex gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500 shrink-0"></i> Buyer confirms delivery ? escrow pushes funds to seller wallet</p>
+              <p class="flex gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500 shrink-0"></i> Refund action ? ClickPesa returns funds to buyer</p>
             </div>
           </div>
           <div class="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">
             <h2 class="font-bold text-slate-800 dark:text-neutral-100 mb-3 flex items-center gap-2"><i data-lucide="lock" class="w-5 h-5 text-emerald-600"></i> Escrow Protection</h2>
             <p class="text-xs text-slate-500 dark:text-neutral-400 mb-3">Every order in this pipeline is protected end-to-end. Funds only leave the ClickPesa vault after the buyer confirms delivery, or after a dispute is resolved by an admin.</p>
             <div class="mt-4 space-y-2 text-xs text-slate-500 dark:text-neutral-400">
-              <p class="flex gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500 shrink-0"></i> Buyer pays ClickPesa ‚Üí funds locked in vault</p>
+              <p class="flex gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500 shrink-0"></i> Buyer pays ClickPesa ? funds locked in vault</p>
               <p class="flex gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500 shrink-0"></i> Seller dispatches with proof (receipt + tracking)</p>
-              <p class="flex gap-2"><i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-500 shrink-0"></i> Buyer confirms ‚Üí platform commission deducted, rest to seller wallet</p>
+              <p class="flex gap-2"><i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-500 shrink-0"></i> Buyer confirms ? platform commission deducted, rest to seller wallet</p>
             </div>
           </div>
         </div>
@@ -958,7 +958,7 @@ function ts(v) {
 
 function timeAgo(v) {
   var ms = ts(v);
-  if (ms == null) return '‚Äî';
+  if (ms == null) return 'ó';
   var s = Math.floor((Date.now() - ms) / 1000);
   if (s < 60) return 'just now';
   if (s < 3600) return Math.floor(s / 60) + 'm ago';
@@ -969,13 +969,13 @@ function timeAgo(v) {
 
 function fmtDate(v) {
   var ms = ts(v);
-  if (ms == null) return '‚Äî';
+  if (ms == null) return 'ó';
   return new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 function fmtDateTime(v) {
   var ms = ts(v);
-  if (ms == null) return '‚Äî';
+  if (ms == null) return 'ó';
   return new Date(ms).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
@@ -983,7 +983,7 @@ function fmtTZ(n) { return 'TZS ' + Math.round(Number(n) || 0).toLocaleString('e
 function num(n) { return Math.round(Number(n) || 0); }
 function orderTotal(t) { return Number(t.totalAmount) || (Number(t.productPrice || 0) + Number(t.shippingCost || 0)); }
 
-/* ---------------- STATUS MAP (real backend statuses ‚Üí admin-dashboard look) ---------------- */
+/* ---------------- STATUS MAP (real backend statuses ? admin-dashboard look) ---------------- */
 var STATUS = {
   pending:            { label:'Pending Shipping',   badge:'bg-slate-50 dark:bg-neutral-800 text-slate-700 dark:text-neutral-200 ring-1 ring-slate-200 dark:ring-neutral-700',   dot:'bg-slate-400', chart:'#94a3b8' },
   awaiting_payment:   { label:'Awaiting Payment',   badge:'bg-amber-50 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 ring-1 ring-amber-200 dark:ring-amber-800',   dot:'bg-amber-500', chart:'#f59e0b' },
@@ -1324,7 +1324,7 @@ function getBoosts() {
       var days = Number(t.boostDays) || 0;
       var started = ts(t.createdAt) || Date.now();
       var ends = days > 0 ? started + days * 86400000 : started + 7 * 86400000;
-      return { id: t.id, product: t.productName || '‚Äî', seller: t.sellerName || '‚Äî', tier: t.boostTier || 'bronze', amount: t.amount || 0, started: started, ends: ends, active: Date.now() < ends };
+      return { id: t.id, product: t.productName || 'ó', seller: t.sellerName || 'ó', tier: t.boostTier || 'bronze', amount: t.amount || 0, started: started, ends: ends, active: Date.now() < ends };
     });
 }
 
@@ -1338,7 +1338,7 @@ function refreshAll() {
   });
   Promise.all(jobs).then(function () {
     icon.classList.remove('animate-spin');
-    toast('Dashboard synced ‚Äî live data from Firestore via Node.js', 'ok');
+    toast('Dashboard synced ó live data from Firestore via Node.js', 'ok');
     refreshTotals();
     refreshBadges();
     var active = document.querySelector('.nav-item.bg-green-600');
@@ -1407,8 +1407,8 @@ function renderRecent() {
   var recent = txs.slice().sort(function (a, b) { return (ts(b.createdAt) || 0) - (ts(a.createdAt) || 0); }).slice(0, 6);
   $('recentOrders').innerHTML = recent.map(function (t) {
     return '<tr class="hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 transition">' +
-      '<td class="px-5 py-3"><p class="font-semibold text-slate-800 dark:text-neutral-100">' + esc(t.productName || '‚Äî') + '</p><p class="text-xs text-slate-500 dark:text-neutral-400">' + esc(t.id || '') + ' ¬∑ ' + timeAgo(t.createdAt) + '</p></td>' +
-      '<td class="px-5 py-3 text-slate-600 dark:text-neutral-300 whitespace-nowrap">' + esc(t.buyerName || '‚Äî') + '</td>' +
+      '<td class="px-5 py-3"><p class="font-semibold text-slate-800 dark:text-neutral-100">' + esc(t.productName || 'ó') + '</p><p class="text-xs text-slate-500 dark:text-neutral-400">' + esc(t.id || '') + ' ∑ ' + timeAgo(t.createdAt) + '</p></td>' +
+      '<td class="px-5 py-3 text-slate-600 dark:text-neutral-300 whitespace-nowrap">' + esc(t.buyerName || 'ó') + '</td>' +
       '<td class="px-5 py-3 font-semibold text-slate-800 dark:text-neutral-100 whitespace-nowrap">' + fmtTZ(orderTotal(t)) + '</td>' +
       '<td class="px-5 py-3 whitespace-nowrap">' + statusBadge(t.status) + '</td>' +
       '<td class="px-5 py-3 text-right"><button onclick="openOrderModal(\'' + esc(t.id) + '\')" class="p-2 rounded-lg hover:bg-green-50 text-slate-400 dark:text-neutral-500 hover:text-green-600 transition"><i data-lucide="eye" class="w-4 h-4"></i></button></td>' +
@@ -1428,7 +1428,7 @@ function renderDashboardExtras() {
       '<div class="min-w-0 flex-1"><p class="text-sm font-semibold text-slate-800 dark:text-neutral-100 truncate">' + esc(t.id || '') + '</p><p class="text-xs text-slate-500 dark:text-neutral-400 truncate">' + esc(t.buyerName || '') + ' vs ' + esc(t.sellerName || '') + '</p></div>' +
       '<span class="text-xs font-semibold text-rose-600 whitespace-nowrap">' + timeAgo(di.raisedAt) + '</span>' +
       '</div>';
-  }).join('') : '<p class="text-sm text-slate-400 dark:text-neutral-500 text-center py-4">All clear ‚Äî no open disputes</p>';
+  }).join('') : '<p class="text-sm text-slate-400 dark:text-neutral-500 text-center py-4">All clear ó no open disputes</p>';
 
   var an = S.analytics || {};
   var cats = an.productsByCategory || {};
@@ -1756,7 +1756,7 @@ function setOrderFilter(s) {
 
 function renderOrders() {
   if (!loaded.transactions) {
-    $('ordersBody').innerHTML = '<tr><td colspan="9" class="px-5 py-12 text-center text-slate-400 dark:text-neutral-500">' + spinner('Loading orders‚Ä¶') + '</td></tr>';
+    $('ordersBody').innerHTML = '<tr><td colspan="9" class="px-5 py-12 text-center text-slate-400 dark:text-neutral-500">' + spinner('Loading ordersÖ') + '</td></tr>';
     loadTransactions().then(function () { renderOrders(); refreshTotals(); }).catch(function (e) { $('ordersBody').innerHTML = '<tr><td colspan="9" class="px-5 py-12 text-center text-slate-400 dark:text-neutral-500">Failed to load: ' + esc(e.message) + '</td></tr>'; });
     return;
   }
@@ -1788,18 +1788,18 @@ function renderOrders() {
 
 function orderRow(t) {
   var dp = t.dispatchProof || {};
-  var courier = t.busName ? esc(t.busName) + (t.plateNumber ? ' ‚Äî ' + esc(t.plateNumber) : '') : (dp.trackingNumber ? esc(dp.trackingNumber) : '');
+  var courier = t.busName ? esc(t.busName) + (t.plateNumber ? ' ó ' + esc(t.plateNumber) : '') : (dp.trackingNumber ? esc(dp.trackingNumber) : '');
   var receipt = dp.receiptUrl || dp.photoUrl || '';
   var dispatchedAt = dp.dispatchedAt || t.dispatchedAt;
   var total = orderTotal(t);
   return '<tr class="hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 transition">' +
-    '<td class="px-5 py-3"><div class="flex items-center gap-3"><div class="w-9 h-9 rounded-lg bg-green-50 dark:bg-green-900/40 text-green-600 dark:text-green-300 flex items-center justify-center shrink-0"><i data-lucide="package" class="w-4 h-4"></i></div><div class="min-w-0"><p class="font-semibold text-slate-800 dark:text-neutral-100 truncate max-w-[200px]">' + esc(t.productName || '‚Äî') + '</p><p class="text-xs text-slate-500 dark:text-neutral-400">' + esc(t.id || '') + ' ¬∑ ' + esc(t.category || 'Sale') + '</p></div></div></td>' +
-    '<td class="px-5 py-3 text-slate-600 dark:text-neutral-300 whitespace-nowrap">' + esc(t.buyerName || '‚Äî') + '</td>' +
-    '<td class="px-5 py-3 text-slate-600 dark:text-neutral-300 whitespace-nowrap">' + esc(t.sellerName || '‚Äî') + '</td>' +
+    '<td class="px-5 py-3"><div class="flex items-center gap-3"><div class="w-9 h-9 rounded-lg bg-green-50 dark:bg-green-900/40 text-green-600 dark:text-green-300 flex items-center justify-center shrink-0"><i data-lucide="package" class="w-4 h-4"></i></div><div class="min-w-0"><p class="font-semibold text-slate-800 dark:text-neutral-100 truncate max-w-[200px]">' + esc(t.productName || 'ó') + '</p><p class="text-xs text-slate-500 dark:text-neutral-400">' + esc(t.id || '') + ' ∑ ' + esc(t.category || 'Sale') + '</p></div></div></td>' +
+    '<td class="px-5 py-3 text-slate-600 dark:text-neutral-300 whitespace-nowrap">' + esc(t.buyerName || 'ó') + '</td>' +
+    '<td class="px-5 py-3 text-slate-600 dark:text-neutral-300 whitespace-nowrap">' + esc(t.sellerName || 'ó') + '</td>' +
     '<td class="px-5 py-3 font-semibold text-slate-800 dark:text-neutral-100 whitespace-nowrap">' + fmtTZ(total) + '</td>' +
-    '<td class="px-5 py-3 text-slate-600 dark:text-neutral-300 whitespace-nowrap text-xs">' + (courier ? courier : '<span class="text-slate-300 dark:text-neutral-300">‚Äî</span>') + '</td>' +
-    '<td class="px-5 py-3">' + (receipt ? '<button onclick="toast(\'Receipt: ' + esc(receipt) + '\',\'info\')" class="inline-flex items-center gap-1 text-xs font-medium text-green-600 hover:text-green-800"><i data-lucide="paperclip" class="w-3.5 h-3.5"></i>' + esc(String(receipt).split('/').pop()) + '</button>' : '<span class="text-slate-300 dark:text-neutral-300">‚Äî</span>') + '</td>' +
-    '<td class="px-5 py-3 text-slate-600 dark:text-neutral-300 whitespace-nowrap text-xs">' + (isShipped(t.status) ? timeAgo(dispatchedAt) : '<span class="text-slate-300 dark:text-neutral-300">‚Äî</span>') + '</td>' +
+    '<td class="px-5 py-3 text-slate-600 dark:text-neutral-300 whitespace-nowrap text-xs">' + (courier ? courier : '<span class="text-slate-300 dark:text-neutral-300">ó</span>') + '</td>' +
+    '<td class="px-5 py-3">' + (receipt ? '<button onclick="toast(\'Receipt: ' + esc(receipt) + '\',\'info\')" class="inline-flex items-center gap-1 text-xs font-medium text-green-600 hover:text-green-800"><i data-lucide="paperclip" class="w-3.5 h-3.5"></i>' + esc(String(receipt).split('/').pop()) + '</button>' : '<span class="text-slate-300 dark:text-neutral-300">ó</span>') + '</td>' +
+    '<td class="px-5 py-3 text-slate-600 dark:text-neutral-300 whitespace-nowrap text-xs">' + (isShipped(t.status) ? timeAgo(dispatchedAt) : '<span class="text-slate-300 dark:text-neutral-300">ó</span>') + '</td>' +
     '<td class="px-5 py-3 whitespace-nowrap">' + statusBadge(t.status) + '</td>' +
     '<td class="px-5 py-3 text-right"><div class="flex justify-end gap-1.5">' +
     '<button onclick="openOrderModal(\'' + esc(t.id) + '\')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-neutral-700 hover:border-green-300 hover:bg-green-50 text-xs font-semibold text-slate-600 dark:text-neutral-300 hover:text-green-700 transition"><i data-lucide="eye" class="w-3.5 h-3.5"></i> Details</button>' +
@@ -1847,7 +1847,7 @@ function releaseEscrow(orderId) {
 /* ============ DISPUTES ============ */
 function renderDisputes() {
   if (!loaded.transactions) {
-    $('disputesGrid').innerHTML = '<div class="lg:col-span-2 rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-12 text-center text-slate-400 dark:text-neutral-500">' + spinner('Loading disputes‚Ä¶') + '</div>';
+    $('disputesGrid').innerHTML = '<div class="lg:col-span-2 rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 p-12 text-center text-slate-400 dark:text-neutral-500">' + spinner('Loading disputesÖ') + '</div>';
     loadTransactions().then(function () { renderDisputes(); }).catch(function () {});
     return;
   }
@@ -1875,13 +1875,13 @@ function renderDisputes() {
         '<div class="px-5 py-4 border-b border-slate-100 dark:border-neutral-800 flex items-center justify-between gap-3">' +
         '<div class="flex items-center gap-3"><div class="w-10 h-10 rounded-lg ' + (resolved ? 'bg-fuchsia-50 dark:bg-fuchsia-900/40 text-fuchsia-600 dark:text-fuchsia-300' : 'bg-rose-50 dark:bg-rose-900/40 text-rose-600 dark:text-rose-300') + ' flex items-center justify-center"><i data-lucide="scale" class="w-5 h-5"></i></div>' +
         '<div><p class="font-bold text-slate-800 dark:text-neutral-100">' + esc(t.id || '') + '</p><p class="text-xs text-slate-500 dark:text-neutral-400">' + esc(t.productName || '') + '</p></div></div>' +
-        '<span class="text-xs font-semibold px-2.5 py-1 rounded-full ' + (resolved ? 'bg-fuchsia-50 dark:bg-fuchsia-900/40 text-fuchsia-700 dark:text-fuchsia-300' : 'bg-rose-50 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300') + ' whitespace-nowrap">' + (resolved ? 'Resolved' : 'Open ¬∑ ' + timeAgo(di.raisedAt)) + '</span>' +
+        '<span class="text-xs font-semibold px-2.5 py-1 rounded-full ' + (resolved ? 'bg-fuchsia-50 dark:bg-fuchsia-900/40 text-fuchsia-700 dark:text-fuchsia-300' : 'bg-rose-50 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300') + ' whitespace-nowrap">' + (resolved ? 'Resolved' : 'Open ∑ ' + timeAgo(di.raisedAt)) + '</span>' +
         '</div>' +
         '<div class="px-5 py-4 space-y-3 text-sm">' +
-        '<div class="rounded-lg bg-rose-50 dark:bg-rose-900/40 border border-rose-100 dark:border-rose-800 px-3 py-2 text-xs text-rose-700 dark:text-rose-300 font-medium">‚ö† ' + esc(di.reason || 'Buyer flagged an issue ‚Äî package not received') + '</div>' +
+        '<div class="rounded-lg bg-rose-50 dark:bg-rose-900/40 border border-rose-100 dark:border-rose-800 px-3 py-2 text-xs text-rose-700 dark:text-rose-300 font-medium">? ' + esc(di.reason || 'Buyer flagged an issue ó package not received') + '</div>' +
         '<div class="grid grid-cols-2 gap-3">' +
-        '<div><p class="text-[11px] uppercase tracking-wide text-slate-400 dark:text-neutral-500 font-semibold">Buyer</p><p class="text-slate-700 dark:text-neutral-200 font-medium">' + esc(t.buyerName || '‚Äî') + '</p></div>' +
-        '<div><p class="text-[11px] uppercase tracking-wide text-slate-400 dark:text-neutral-500 font-semibold">Seller</p><p class="text-slate-700 dark:text-neutral-200 font-medium">' + esc(t.sellerName || '‚Äî') + '</p></div>' +
+        '<div><p class="text-[11px] uppercase tracking-wide text-slate-400 dark:text-neutral-500 font-semibold">Buyer</p><p class="text-slate-700 dark:text-neutral-200 font-medium">' + esc(t.buyerName || 'ó') + '</p></div>' +
+        '<div><p class="text-[11px] uppercase tracking-wide text-slate-400 dark:text-neutral-500 font-semibold">Seller</p><p class="text-slate-700 dark:text-neutral-200 font-medium">' + esc(t.sellerName || 'ó') + '</p></div>' +
         '<div><p class="text-[11px] uppercase tracking-wide text-slate-400 dark:text-neutral-500 font-semibold">Escrowed Amount</p><p class="text-slate-700 dark:text-neutral-200 font-semibold">' + fmtTZ(total) + '</p></div>' +
         '<div><p class="text-[11px] uppercase tracking-wide text-slate-400 dark:text-neutral-500 font-semibold">Receipt</p>' + (dp.receiptUrl ? '<button onclick="toast(\'Opening shipping receipt\',\'info\')" class="text-green-600 hover:text-green-800 font-medium text-xs flex items-center gap-1"><i data-lucide="paperclip" class="w-3 h-3"></i>' + esc(String(dp.receiptUrl).split('/').pop()) + '</button>' : '<span class="text-slate-300 dark:text-neutral-300">No receipt</span>') + '</div>' +
         '<div><p class="text-[11px] uppercase tracking-wide text-slate-400 dark:text-neutral-500 font-semibold">Dispatched</p><p class="text-slate-700 dark:text-neutral-200">' + fmtDateTime(dp.dispatchedAt || t.dispatchedAt) + '</p></div>' +
@@ -1934,7 +1934,7 @@ function resolveDispute(orderId, preset) {
 /* ============ BOOSTS ============ */
 function renderBoosts() {
   if (!loaded.transactions) {
-    $('boostsBody').innerHTML = '<tr><td colspan="7" class="px-5 py-12 text-center text-slate-400 dark:text-neutral-500">' + spinner('Loading boosts‚Ä¶') + '</td></tr>';
+    $('boostsBody').innerHTML = '<tr><td colspan="7" class="px-5 py-12 text-center text-slate-400 dark:text-neutral-500">' + spinner('Loading boostsÖ') + '</td></tr>';
     loadTransactions().then(function () { renderBoosts(); }).catch(function () {});
     return;
   }
@@ -1969,9 +1969,9 @@ function renderBoosts() {
 
 /* ============ ANALYTICS ============ */
 function renderAnalytics() {
-  $('categoryBars').innerHTML = spinner('Loading analytics‚Ä¶');
+  $('categoryBars').innerHTML = spinner('Loading analyticsÖ');
   $('locationWrap').innerHTML = '';
-  $('analyticsBody').innerHTML = '<tr><td colspan="4" class="px-5 py-12 text-center text-slate-400 dark:text-neutral-500">' + spinner('Loading‚Ä¶') + '</td></tr>';
+  $('analyticsBody').innerHTML = '<tr><td colspan="4" class="px-5 py-12 text-center text-slate-400 dark:text-neutral-500">' + spinner('LoadingÖ') + '</td></tr>';
   Promise.all([loadAnalytics(), loadTransactions()]).then(function () {
     var an = S.analytics || {};
     $('anaUsersToday').textContent = (an.newUsersToday || 0).toLocaleString('en-US');
@@ -2025,7 +2025,7 @@ function switchKycTab(v) {
 function renderKyc() {
   var wrap = $('kycWrap');
   if (!loaded.kycPending || !loaded.kycAll) {
-    wrap.innerHTML = spinner('Loading KYC‚Ä¶');
+    wrap.innerHTML = spinner('Loading KYCÖ');
     loadKyc().then(function () { renderKyc(); }).catch(function () {});
     return;
   }
@@ -2034,15 +2034,15 @@ function renderKyc() {
     if (!pending.length) { wrap.innerHTML = emptyRow('No pending KYC applications.'); return; }
     wrap.innerHTML = '<div class="grid grid-cols-1 xl:grid-cols-2 gap-4">' + pending.map(function (u) {
       var k = u.kyc || {};
-      var idNum = (k.idNumber || '').replace(/^(.{3}).*(.{3})$/, '$1‚Ä¢‚Ä¢‚Ä¢‚Ä¢‚Ä¢‚Ä¢$2');
+      var idNum = (k.idNumber || '').replace(/^(.{3}).*(.{3})$/, '$1ïïïïïï$2');
       return '<div class="bg-white dark:bg-neutral-900 rounded-2xl border border-slate-200 dark:border-neutral-700 p-5 shadow-sm">' +
         '<div class="flex items-center gap-3 mb-4">' + avatar(u.displayName, 'w-11 h-11') +
-        '<div class="min-w-0"><p class="font-bold text-slate-800 dark:text-neutral-100 truncate">' + esc(u.displayName || '‚Äî') + '</p>' +
-        '<p class="text-xs text-slate-500 dark:text-neutral-400">' + esc(u.phone || '') + ' ¬∑ ' + esc(u.email || '') + '</p></div></div>' +
+        '<div class="min-w-0"><p class="font-bold text-slate-800 dark:text-neutral-100 truncate">' + esc(u.displayName || 'ó') + '</p>' +
+        '<p class="text-xs text-slate-500 dark:text-neutral-400">' + esc(u.phone || '') + ' ∑ ' + esc(u.email || '') + '</p></div></div>' +
         '<div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm mb-4">' +
-        '<div class="text-slate-500 dark:text-neutral-400">Full name</div><div class="text-slate-800 dark:text-neutral-100 font-medium">' + esc(k.fullName || '‚Äî') + '</div>' +
-        '<div class="text-slate-500 dark:text-neutral-400">ID type</div><div class="text-slate-800 dark:text-neutral-100 font-medium">' + esc(k.idType || '‚Äî') + '</div>' +
-        '<div class="text-slate-500 dark:text-neutral-400">ID number</div><div class="text-slate-800 dark:text-neutral-100 font-medium">' + esc(idNum || '‚Äî') + '</div>' +
+        '<div class="text-slate-500 dark:text-neutral-400">Full name</div><div class="text-slate-800 dark:text-neutral-100 font-medium">' + esc(k.fullName || 'ó') + '</div>' +
+        '<div class="text-slate-500 dark:text-neutral-400">ID type</div><div class="text-slate-800 dark:text-neutral-100 font-medium">' + esc(k.idType || 'ó') + '</div>' +
+        '<div class="text-slate-500 dark:text-neutral-400">ID number</div><div class="text-slate-800 dark:text-neutral-100 font-medium">' + esc(idNum || 'ó') + '</div>' +
         '<div class="text-slate-500 dark:text-neutral-400">Submitted</div><div class="text-slate-800 dark:text-neutral-100 font-medium">' + timeAgo(k.submittedAt) + '</div></div>' +
         '<div class="flex gap-2 mb-4">' +
         (k.idImageUrl ? '<a href="' + esc(k.idImageUrl) + '" target="_blank" rel="noopener" class="flex-1 rounded-xl bg-slate-100 dark:bg-neutral-800 hover:bg-slate-200 text-center px-3 py-2 text-xs font-semibold text-slate-700 dark:text-neutral-200">View ID</a>' : '') +
@@ -2065,10 +2065,10 @@ function renderKyc() {
         : statusPill('Revoked', 'bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-300');
       return '<tr class="hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 transition">' +
         '<td class="px-4 py-3"><div class="flex items-center gap-2">' + avatar(u.displayName, 'w-7 h-7 text-xs') +
-        '<div><p class="font-medium text-slate-800 dark:text-neutral-100">' + esc(u.displayName || '‚Äî') + '</p>' +
+        '<div><p class="font-medium text-slate-800 dark:text-neutral-100">' + esc(u.displayName || 'ó') + '</p>' +
         '<p class="text-xs text-slate-400 dark:text-neutral-500">' + esc(u.phone || '') + '</p></div></div></td>' +
-        '<td class="px-4 py-3 text-slate-600 dark:text-neutral-300">' + esc(k.fullName || '‚Äî') + '</td>' +
-        '<td class="px-4 py-3 text-slate-600 dark:text-neutral-300">' + esc(k.idType || '‚Äî') + '</td>' +
+        '<td class="px-4 py-3 text-slate-600 dark:text-neutral-300">' + esc(k.fullName || 'ó') + '</td>' +
+        '<td class="px-4 py-3 text-slate-600 dark:text-neutral-300">' + esc(k.idType || 'ó') + '</td>' +
         '<td class="px-4 py-3">' + pill + '</td>' +
         '<td class="px-4 py-3">' + timeAgo(k.submittedAt) + '</td>' +
         '<td class="px-4 py-3"><div class="flex gap-1.5">' +
@@ -2132,11 +2132,11 @@ function showKyc(userId) {
   var k = u.kyc || {};
   var st = k.status || 'none';
   var body = '<div class="flex items-center gap-3 mb-5">' + avatar(u.displayName, 'w-12 h-12') +
-    '<div><p class="font-bold text-slate-800 dark:text-neutral-100 text-lg">' + esc(u.displayName || '‚Äî') + '</p>' +
-    '<p class="text-sm text-slate-500 dark:text-neutral-400">' + esc(u.phone || '') + ' ¬∑ ' + esc(u.email || '') + '</p></div></div>' +
+    '<div><p class="font-bold text-slate-800 dark:text-neutral-100 text-lg">' + esc(u.displayName || 'ó') + '</p>' +
+    '<p class="text-sm text-slate-500 dark:text-neutral-400">' + esc(u.phone || '') + ' ∑ ' + esc(u.email || '') + '</p></div></div>' +
     '<div class="rounded-xl bg-slate-50 dark:bg-neutral-800 p-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">' +
     [['KYC status', st], ['Full name', k.fullName], ['ID type', k.idType], ['ID number', k.idNumber], ['Submitted', fmtDateTime(k.submittedAt)], ['Reviewed', fmtDateTime(k.reviewedAt)], ['Review notes', k.reviewNotes]].map(function (r) {
-      return '<div class="text-slate-500 dark:text-neutral-400">' + esc(r[0]) + '</div><div class="text-slate-800 dark:text-neutral-100 font-medium">' + esc(r[1] || '‚Äî') + '</div>';
+      return '<div class="text-slate-500 dark:text-neutral-400">' + esc(r[0]) + '</div><div class="text-slate-800 dark:text-neutral-100 font-medium">' + esc(r[1] || 'ó') + '</div>';
     }).join('') + '</div>' +
     '<div class="mt-5"><p class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-neutral-400 mb-2">Documents (' + kycDocs(k).length + ')</p><div class="grid grid-cols-2 gap-3">' + kycDocs(k).map(docCard).join('') + '</div></div>';
   $('kycModalBody').innerHTML = body;
@@ -2167,15 +2167,15 @@ function kycDocs(k) {
 
 function docCard(d) {
   if (d.label === 'Selfie') {
-    return '<a href="' + esc(d.url) + '" target="_blank" rel="noopener" class="rounded-xl border border-slate-200 dark:border-neutral-700 overflow-hidden"><img src="' + esc(d.url) + '" class="w-full h-40 object-cover" onerror="this.style.display=\'none\'" onload="this.onerror=null"><span class="block px-3 py-2 text-xs font-semibold text-green-600">Selfie ‚Üó</span></a>';
+    return '<a href="' + esc(d.url) + '" target="_blank" rel="noopener" class="rounded-xl border border-slate-200 dark:border-neutral-700 overflow-hidden"><img src="' + esc(d.url) + '" class="w-full h-40 object-cover" onerror="this.style.display=\'none\'" onload="this.onerror=null"><span class="block px-3 py-2 text-xs font-semibold text-green-600">Selfie ?</span></a>';
   }
-  return '<a href="' + esc(d.url) + '" target="_blank" rel="noopener" class="rounded-xl border border-slate-200 dark:border-neutral-700 overflow-hidden"><img src="' + esc(d.url) + '" class="w-full h-40 object-cover" onerror="this.style.display=\'none\'" onload="this.onerror=null"><span class="block px-3 py-2 text-xs font-semibold text-green-600">' + esc(d.label) + ' ‚Üó</span></a>';
+  return '<a href="' + esc(d.url) + '" target="_blank" rel="noopener" class="rounded-xl border border-slate-200 dark:border-neutral-700 overflow-hidden"><img src="' + esc(d.url) + '" class="w-full h-40 object-cover" onerror="this.style.display=\'none\'" onload="this.onerror=null"><span class="block px-3 py-2 text-xs font-semibold text-green-600">' + esc(d.label) + ' ?</span></a>';
 }
 
 /* ============ USERS ============ */
 function renderUsers() {
   var wrap = $('usersWrap');
-  if (!loaded.users) { wrap.innerHTML = spinner('Loading users‚Ä¶'); loadUsers().then(function () { renderUsers(); }).catch(function () {}); return; }
+  if (!loaded.users) { wrap.innerHTML = spinner('Loading usersÖ'); loadUsers().then(function () { renderUsers(); }).catch(function () {}); return; }
   var q = ($('userSearch').value || '').toLowerCase();
   var f = $('userFilter').value;
   var list = S.users.filter(function (u) {
@@ -2206,9 +2206,9 @@ function renderUsers() {
     if (!badges.length) badges.push(statusPill('Active', 'bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-300'));
     return '<tr class="hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 transition">' +
       '<td class="px-4 py-3"><div class="flex items-center gap-3">' + avatar(u.displayName || u.name, 'w-9 h-9 text-sm') +
-      '<div><p class="font-semibold text-slate-800 dark:text-neutral-100">' + esc(u.displayName || u.name || '‚Äî') + '</p>' +
+      '<div><p class="font-semibold text-slate-800 dark:text-neutral-100">' + esc(u.displayName || u.name || 'ó') + '</p>' +
       '<p class="text-xs text-slate-400 dark:text-neutral-500">' + esc(u.email || '') + '</p></div></div></td>' +
-      '<td class="px-4 py-3 text-slate-600 dark:text-neutral-300">' + esc(u.phone || '‚Äî') + '</td>' +
+      '<td class="px-4 py-3 text-slate-600 dark:text-neutral-300">' + esc(u.phone || 'ó') + '</td>' +
       '<td class="px-4 py-3"><div class="flex flex-wrap gap-1">' + badges.join('') + '</div></td>' +
       '<td class="px-4 py-3 font-semibold text-slate-800 dark:text-neutral-100">' + fmtTZ(u.sellerBalance) + '</td>' +
       '<td class="px-4 py-3 text-slate-500 dark:text-neutral-400">' + fmtDate(u.createdAt) + '</td>' +
@@ -2246,7 +2246,7 @@ function warnUser(uid) {
   var reason = prompt('Warning reason (sent to the user):');
   if (!reason) return;
   api('/api/admin/users/' + encodeURIComponent(uid) + '/warn', { method: 'POST', body: JSON.stringify({ reason: reason }) })
-    .then(function (d) { toast(d.blocked ? '3rd warning ‚Äî account blocked' : 'Warning sent (' + d.warnings + '/3)', d.blocked ? 'err' : 'ok'); return loadUsers(true); })
+    .then(function (d) { toast(d.blocked ? '3rd warning ó account blocked' : 'Warning sent (' + d.warnings + '/3)', d.blocked ? 'err' : 'ok'); return loadUsers(true); })
     .then(function () { renderUsers(); refreshBadges(); })
     .catch(function (e) { toast(e.message, 'err'); });
 }
@@ -2272,7 +2272,7 @@ function messageUser(uid) {
 }
 function showUser(uid) {
   var body = $('userModalBody');
-  body.innerHTML = spinner('Loading user details‚Ä¶');
+  body.innerHTML = spinner('Loading user detailsÖ');
   openModal('userModal');
   loadUserDetail(uid).then(function (d) {
     var u = d.user || {};
@@ -2281,38 +2281,38 @@ function showUser(uid) {
     var balances = [['Seller balance', u.sellerBalance], ['Pending escrow', u.pendingEscrow], ['Coins', u.coins], ['Total sales', u.totalSales], ['Gross volume', u.grossSalesVolume], ['Ad views', u.totalAdViews]];
     var orderRows = (d.orders || []).slice(0, 20).map(function (o) {
       return '<tr class="border-b border-slate-100 dark:border-neutral-800"><td class="px-3 py-2 text-xs font-mono text-slate-500 dark:text-neutral-400">' + esc(o.id || '') + '</td>' +
-        '<td class="px-3 py-2 text-slate-700 dark:text-neutral-200">' + esc((o.items || []).map(function (i) { return i.name; }).join(', ') || '‚Äî') + '</td>' +
+        '<td class="px-3 py-2 text-slate-700 dark:text-neutral-200">' + esc((o.items || []).map(function (i) { return i.name; }).join(', ') || 'ó') + '</td>' +
         '<td class="px-3 py-2 font-semibold">' + fmtTZ(o.totalAmount) + '</td>' +
         '<td class="px-3 py-2">' + statusBadge(o.status) + '</td></tr>';
     }).join('');
     var wdRows = (d.withdrawals || []).slice(0, 20).map(function (wd) {
       return '<tr class="border-b border-slate-100 dark:border-neutral-800"><td class="px-3 py-2 font-semibold">' + fmtTZ(wd.amount) + '</td>' +
-        '<td class="px-3 py-2 text-slate-600 dark:text-neutral-300">' + esc(wd.phone || '‚Äî') + '</td>' +
+        '<td class="px-3 py-2 text-slate-600 dark:text-neutral-300">' + esc(wd.phone || 'ó') + '</td>' +
         '<td class="px-3 py-2">' + statusBadge(wd.status) + '</td>' +
         '<td class="px-3 py-2 text-xs text-slate-500 dark:text-neutral-400">' + timeAgo(wd.createdAt) + '</td></tr>';
     }).join('');
     var revRows = (d.revenueTransactions || []).slice(0, 20).map(function (r) {
-      return '<tr class="border-b border-slate-100 dark:border-neutral-800"><td class="px-3 py-2">' + esc(r.type || '‚Äî') + '</td>' +
+      return '<tr class="border-b border-slate-100 dark:border-neutral-800"><td class="px-3 py-2">' + esc(r.type || 'ó') + '</td>' +
         '<td class="px-3 py-2 font-semibold ' + ((Number(r.amount) || 0) < 0 ? 'text-rose-600' : 'text-emerald-600') + '">' + fmtTZ(r.amount) + '</td>' +
         '<td class="px-3 py-2 text-xs text-slate-500 dark:text-neutral-400">' + esc(r.description || '') + '</td>' +
         '<td class="px-3 py-2 text-xs text-slate-500 dark:text-neutral-400">' + timeAgo(r.timestamp) + '</td></tr>';
     }).join('');
     var boughtRows = (d.buyerOrders || []).slice(0, 20).map(function (o) {
       return '<tr class="border-b border-slate-100 dark:border-neutral-800"><td class="px-3 py-2 text-xs font-mono text-slate-500 dark:text-neutral-400">' + esc(o.id || '') + '</td>' +
-        '<td class="px-3 py-2 text-slate-700 dark:text-neutral-200">' + esc((o.items || []).map(function (i) { return i.name; }).join(', ') || '‚Äî') + '</td>' +
+        '<td class="px-3 py-2 text-slate-700 dark:text-neutral-200">' + esc((o.items || []).map(function (i) { return i.name; }).join(', ') || 'ó') + '</td>' +
         '<td class="px-3 py-2 font-semibold">' + fmtTZ(o.totalAmount) + '</td>' +
         '<td class="px-3 py-2">' + statusBadge(o.status) + '</td>' +
         '<td class="px-3 py-2 text-xs text-slate-500 dark:text-neutral-400">' + timeAgo(o.createdAt) + '</td></tr>';
     }).join('');
     var chatRows = (d.chatMessages || []).slice(0, 20).map(function (m) {
-      var dir = m.senderId === u.uid ? '‚Üí ' : '‚Üê ';
+      var dir = m.senderId === u.uid ? '? ' : '? ';
       return '<tr class="border-b border-slate-100 dark:border-neutral-800"><td class="px-3 py-2 text-xs text-slate-400 dark:text-neutral-500">' + dir + '</td>' +
         '<td class="px-3 py-2 text-slate-700 dark:text-neutral-200 max-w-[260px] truncate">' + esc(m.text || '') + '</td>' +
         '<td class="px-3 py-2 text-xs font-mono text-slate-400 dark:text-neutral-500 truncate max-w-[120px]">' + esc(m.roomId || '') + '</td>' +
         '<td class="px-3 py-2 text-xs text-slate-500 dark:text-neutral-400">' + timeAgo(m.timestamp) + '</td></tr>';
     }).join('');
     var auditRows = (d.auditLog || []).slice(0, 30).map(function (a) {
-      return '<tr class="border-b border-slate-100 dark:border-neutral-800"><td class="px-3 py-2">' + esc(a.type || '‚Äî') + '</td>' +
+      return '<tr class="border-b border-slate-100 dark:border-neutral-800"><td class="px-3 py-2">' + esc(a.type || 'ó') + '</td>' +
         '<td class="px-3 py-2 font-semibold ' + ((Number(a.amount) || 0) < 0 ? 'text-rose-600' : 'text-emerald-600') + '">' + fmtTZ(a.amount) + '</td>' +
         '<td class="px-3 py-2 text-xs text-slate-500 dark:text-neutral-400 max-w-[280px]">' + esc(a.reason || '') + '</td>' +
         '<td class="px-3 py-2 text-xs text-slate-500 dark:text-neutral-400">' + timeAgo(a.timestamp) + '</td></tr>';
@@ -2322,8 +2322,8 @@ function showUser(uid) {
     var failTx = (d.revenueTransactions || []).filter(function (r) { return /fail|cancel|refund/i.test(r.type || ''); }).length;
     body.innerHTML =
       '<div class="flex items-center gap-4 mb-5">' + avatar(u.displayName || u.name, 'w-14 h-14 text-lg') +
-      '<div><p class="text-lg font-bold text-slate-800 dark:text-neutral-100">' + esc(u.displayName || u.name || '‚Äî') + '</p>' +
-      '<p class="text-sm text-slate-500 dark:text-neutral-400">' + esc(u.email || '') + ' ¬∑ ' + esc(u.phone || '') + '</p>' +
+      '<div><p class="text-lg font-bold text-slate-800 dark:text-neutral-100">' + esc(u.displayName || u.name || 'ó') + '</p>' +
+      '<p class="text-sm text-slate-500 dark:text-neutral-400">' + esc(u.email || '') + ' ∑ ' + esc(u.phone || '') + '</p>' +
       '<p class="text-xs text-slate-400 dark:text-neutral-500">' + esc(u.uid || '') + '</p></div>' +
       '<div class="ml-auto flex gap-2">' +
       '<button onclick="toggleSuspend(\'' + esc(u.uid) + '\')" class="px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 text-xs font-semibold text-slate-600 dark:text-neutral-300 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800">' + (u.isSuspended === true ? 'Unsuspend' : 'Suspend') + '</button>' +
@@ -2331,12 +2331,12 @@ function showUser(uid) {
       '</div></div>' +
       '<div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">' + balances.map(function (b) {
         return '<div class="rounded-xl bg-slate-50 dark:bg-neutral-800 px-4 py-3"><p class="text-[11px] text-slate-400 dark:text-neutral-500 font-semibold uppercase tracking-wider">' + esc(b[0]) + '</p>' +
-          '<p class="text-lg font-extrabold text-slate-800 dark:text-neutral-100">' + (typeof b[1] === 'number' && b[0].toLowerCase().indexOf('sales') === -1 && b[0].toLowerCase().indexOf('volume') === -1 ? fmtTZ(b[1]) : (b[1] != null ? Number(b[1]).toLocaleString() : '‚Äî')) + '</p></div>';
+          '<p class="text-lg font-extrabold text-slate-800 dark:text-neutral-100">' + (typeof b[1] === 'number' && b[0].toLowerCase().indexOf('sales') === -1 && b[0].toLowerCase().indexOf('volume') === -1 ? fmtTZ(b[1]) : (b[1] != null ? Number(b[1]).toLocaleString() : 'ó')) + '</p></div>';
       }).join('') + '</div>' +
       '<div class="rounded-xl bg-slate-50 dark:bg-neutral-800 px-4 py-3 mb-5 flex flex-wrap gap-x-8 gap-y-1 text-sm">' +
       '<span class="text-slate-500 dark:text-neutral-400">Status</span><span class="text-slate-800 dark:text-neutral-100 font-semibold">' + (u.isSuspended === true ? 'Suspended' : 'Active') + '</span>' +
       '<span class="text-slate-500 dark:text-neutral-400">Presence</span><span class="font-semibold ' + (online === 'Online now' ? 'text-green-600' : 'text-slate-500') + '">' + esc(online) + '</span>' +
-      '<span class="text-slate-500 dark:text-neutral-400">Last active</span><span class="text-slate-800 dark:text-neutral-100 font-semibold">' + (d.lastActive ? timeAgo(d.lastActive) : '‚Äî') + '</span>' +
+      '<span class="text-slate-500 dark:text-neutral-400">Last active</span><span class="text-slate-800 dark:text-neutral-100 font-semibold">' + (d.lastActive ? timeAgo(d.lastActive) : 'ó') + '</span>' +
       '<span class="text-slate-500 dark:text-neutral-400">Warnings</span><span class="text-slate-800 dark:text-neutral-100 font-semibold">' + w + '/3</span>' +
       '<span class="text-slate-500 dark:text-neutral-400">Admin</span><span class="text-slate-800 dark:text-neutral-100 font-semibold">' + (u.isAdmin === true ? 'Yes' : 'No') + '</span>' +
       '<span class="text-slate-500 dark:text-neutral-400">KYC</span><span class="text-slate-800 dark:text-neutral-100 font-semibold">' + esc(kyc.status || 'none') + '</span>' +
@@ -2360,7 +2360,7 @@ function showUser(uid) {
 /* ============ PRODUCTS ============ */
 function renderProducts() {
   var wrap = $('productsWrap');
-  if (!loaded.products) { wrap.innerHTML = spinner('Loading products‚Ä¶'); loadProducts().then(function () { renderProducts(); }).catch(function () {}); return; }
+  if (!loaded.products) { wrap.innerHTML = spinner('Loading productsÖ'); loadProducts().then(function () { renderProducts(); }).catch(function () {}); return; }
   var q = ($('productSearch').value || '').toLowerCase();
   var list = S.products.filter(function (p) {
     return ((p.name || '') + ' ' + (p.sellerName || '') + ' ' + (p.category || '') + ' ' + (p.location || '')).toLowerCase().indexOf(q) !== -1;
@@ -2376,10 +2376,10 @@ function renderProducts() {
     return '<tr class="hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 transition">' +
       '<td class="px-4 py-3">' + (img ? '<img src="' + esc(img) + '" class="w-11 h-11 rounded-xl object-cover border border-slate-200 dark:border-neutral-700" onerror="this.style.display=\'none\'">' : '<div class="w-11 h-11 rounded-xl bg-slate-100 dark:bg-neutral-800"></div>') + '</td>' +
       '<td class="px-4 py-3"><p class="font-semibold text-slate-800 dark:text-neutral-100">' + esc(p.name) + '</p>' +
-      '<p class="text-xs text-slate-400 dark:text-neutral-500">' + esc(p.category || '') + (p.isActive === false ? ' ¬∑ inactive' : '') + '</p></td>' +
+      '<p class="text-xs text-slate-400 dark:text-neutral-500">' + esc(p.category || '') + (p.isActive === false ? ' ∑ inactive' : '') + '</p></td>' +
       '<td class="px-4 py-3 font-semibold text-slate-800 dark:text-neutral-100">' + fmtTZ(p.price) + '</td>' +
-      '<td class="px-4 py-3 text-slate-600 dark:text-neutral-300">' + esc(p.sellerName || '‚Äî') + '</td>' +
-      '<td class="px-4 py-3">' + (boostPill || '<span class="text-slate-400 dark:text-neutral-500 text-xs">‚Äî</span>') + '</td>' +
+      '<td class="px-4 py-3 text-slate-600 dark:text-neutral-300">' + esc(p.sellerName || 'ó') + '</td>' +
+      '<td class="px-4 py-3">' + (boostPill || '<span class="text-slate-400 dark:text-neutral-500 text-xs">ó</span>') + '</td>' +
       '<td class="px-4 py-3 text-slate-500 dark:text-neutral-400">' + timeAgo(p.createdAt) + '</td>' +
       '<td class="px-4 py-3"><div class="flex gap-1.5">' +
       '<button onclick="toggleProduct(\'' + esc(p.id) + '\')" class="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-neutral-700 text-xs font-semibold text-slate-600 dark:text-neutral-300 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800">' + (p.isActive === false ? 'Activate' : 'Hide') + '</button>' +
@@ -2438,7 +2438,7 @@ function txTypeClass(t) { var m = TX_TYPE[t.type] || (t.type ? [t.type, 'bg-slat
 
 function renderTransactions() {
   var wrap = $('transactionsWrap');
-  if (!loaded.transactions) { wrap.innerHTML = spinner('Loading transactions‚Ä¶'); loadTransactions().then(function () { renderTransactions(); }).catch(function () {}); return; }
+  if (!loaded.transactions) { wrap.innerHTML = spinner('Loading transactionsÖ'); loadTransactions().then(function () { renderTransactions(); }).catch(function () {}); return; }
   var q = ($('txSearch').value || '').toLowerCase();
   var f = $('txType').value;
   var list = S.transactions.filter(function (t) {
@@ -2456,9 +2456,9 @@ function renderTransactions() {
   });
   if (!list.length) { wrap.innerHTML = emptyRow('No transactions match.'); return; }
   var rows = list.slice(0, 300).map(function (t) {
-    var buyer = t.buyerName || t.sellerName || '‚Äî';
+    var buyer = t.buyerName || t.sellerName || 'ó';
     return '<tr class="hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 transition">' +
-      '<td class="px-4 py-3"><p class="font-semibold text-slate-800 dark:text-neutral-100">' + esc(t.productName || '‚Äî') + '</p>' +
+      '<td class="px-4 py-3"><p class="font-semibold text-slate-800 dark:text-neutral-100">' + esc(t.productName || 'ó') + '</p>' +
       '<p class="text-xs font-mono text-slate-400 dark:text-neutral-500">' + esc(t.id || '') + '</p></td>' +
       '<td class="px-4 py-3"><span class="text-[11px] font-bold px-2 py-0.5 rounded-full ' + txTypeClass(t) + '">' + esc(txTypeLabel(t)) + '</span></td>' +
       '<td class="px-4 py-3 text-slate-600 dark:text-neutral-300">' + esc(buyer) + '</td>' +
@@ -2507,7 +2507,7 @@ function showTx(id) {
   });
   if (t.disputeInfo) {
     var di = t.disputeInfo;
-    body += '<div class="text-slate-500 dark:text-neutral-400">Dispute reason</div><div class="text-slate-800 dark:text-neutral-100 font-medium">' + esc(di.reason || '‚Äî') + '</div>';
+    body += '<div class="text-slate-500 dark:text-neutral-400">Dispute reason</div><div class="text-slate-800 dark:text-neutral-100 font-medium">' + esc(di.reason || 'ó') + '</div>';
     if (di.raisedAt) body += '<div class="text-slate-500 dark:text-neutral-400">Dispute raised</div><div class="text-slate-800 dark:text-neutral-100 font-medium">' + fmtDateTime(di.raisedAt) + '</div>';
   }
   if (t.dispatchProof) {
@@ -2547,7 +2547,7 @@ function courierLabel(t) {
   var parts = [];
   if (t.busName) parts.push(t.busName + (t.plateNumber ? ' ' + t.plateNumber : ''));
   if (dp.trackingNumber) parts.push('Tracking: ' + dp.trackingNumber);
-  return parts.length ? esc(parts.join(' ¬∑ ')) : 'Waiting for seller dispatch';
+  return parts.length ? esc(parts.join(' ∑ ')) : 'Waiting for seller dispatch';
 }
 function orderTimeline(t) {
   var s = t.status;
@@ -2557,18 +2557,18 @@ function orderTimeline(t) {
   var shipped = !!dp.dispatchedAt || !!t.dispatchedAt || s === 'dispatched' || s === 'in_transit' || s === 'disputed' || isDone(s) || s === 'refunded';
   var terminal = isDone(s) || s === 'refunded' || s === 'disputed' || s === 'cancelled' || s === 'failed';
   var steps = [
-    { icon: 'shopping-bag', title: 'Order Placed', desc: (t.buyerName || 'Buyer') + ' placed order ' + (t.id || '') + ' ¬∑ ' + esc(t.productName || ''), time: t.createdAt, done: true },
+    { icon: 'shopping-bag', title: 'Order Placed', desc: (t.buyerName || 'Buyer') + ' placed order ' + (t.id || '') + ' ∑ ' + esc(t.productName || ''), time: t.createdAt, done: true },
     { icon: 'shield-check', title: 'ClickPesa Payment Secured', desc: 'Total of ' + fmtTZ(total) + ' locked safely in the escrow vault', time: paid ? t.createdAt : null, done: paid },
     { icon: 'package-check', title: 'Shipped / In Transit', desc: courierLabel(t), time: shipped ? (dp.dispatchedAt || t.dispatchedAt) : null, done: shipped }
   ];
   var lastStep;
   if (s === 'disputed') lastStep = { icon: 'scale', title: 'Dispute Raised', desc: esc(((t.disputeInfo || {}).reason) || 'Buyer reported an issue. Awaiting admin decision.'), time: (t.disputeInfo || {}).raisedAt };
   else if (s === 'refunded') lastStep = { icon: 'rotate-ccw', title: 'Refunded via ClickPesa', desc: 'Escrow amount returned to ' + (t.buyerName || 'the buyer') + ' through ClickPesa.', time: t.resolvedAt || t.updatedAt };
-  else if (isDone(s)) lastStep = { icon: 'check-check', title: 'Buyer Confirmed ‚Äî Funds Released', desc: 'Funds pushed from ClickPesa escrow to ' + (t.sellerName || 'the seller') + '\u2019s wallet.', time: t.escrowReleasedAt || t.completedAt || t.updatedAt };
+  else if (isDone(s)) lastStep = { icon: 'check-check', title: 'Buyer Confirmed ó Funds Released', desc: 'Funds pushed from ClickPesa escrow to ' + (t.sellerName || 'the seller') + '\u2019s wallet.', time: t.escrowReleasedAt || t.completedAt || t.updatedAt };
   else if (s === 'cancelled') lastStep = { icon: 'x-circle', title: 'Cancelled', desc: 'This order was cancelled before completion.', time: t.updatedAt };
   else if (s === 'failed') lastStep = { icon: 'alert-triangle', title: 'Payment Failed', desc: 'The payment attempt failed.', time: t.updatedAt };
   else if (s === 'dispatched' || s === 'in_transit') lastStep = { icon: 'hourglass', title: 'Awaiting Buyer Confirmation', desc: 'Buyer must confirm delivery before the escrow is released.', time: null };
-  else if (isEscrow(s)) lastStep = { icon: 'hourglass', title: 'Awaiting Shipment', desc: 'Funds locked in the vault ‚Äî waiting for the seller to dispatch.', time: null };
+  else if (isEscrow(s)) lastStep = { icon: 'hourglass', title: 'Awaiting Shipment', desc: 'Funds locked in the vault ó waiting for the seller to dispatch.', time: null };
   else lastStep = { icon: 'hourglass', title: 'Awaiting Payment', desc: 'Waiting for the buyer to pay the total via ClickPesa.', time: null };
   var l = Object.assign({}, lastStep); l.done = terminal;
   steps.push(l);
@@ -2581,7 +2581,7 @@ function openOrderModal(id) {
   var total = orderTotal(t);
   $('orderModalHeader').querySelector('div').innerHTML =
     '<div class="flex items-center gap-3"><div class="w-11 h-11 rounded-xl bg-green-50 dark:bg-green-900/40 text-green-600 dark:text-green-300 flex items-center justify-center"><i data-lucide="package" class="w-5 h-5"></i></div>' +
-    '<div><p class="font-bold text-slate-800 dark:text-neutral-100 text-lg leading-tight">' + esc(t.id || '') + ' ‚Äî ' + esc(t.productName || '') + '</p><p class="text-xs text-slate-500 dark:text-neutral-400">Placed ' + fmtDateTime(t.createdAt) + '</p></div></div>';
+    '<div><p class="font-bold text-slate-800 dark:text-neutral-100 text-lg leading-tight">' + esc(t.id || '') + ' ó ' + esc(t.productName || '') + '</p><p class="text-xs text-slate-500 dark:text-neutral-400">Placed ' + fmtDateTime(t.createdAt) + '</p></div></div>';
 
   var steps = orderTimeline(t).map(function (s, i, arr) {
     var last = i === arr.length - 1;
@@ -2589,7 +2589,7 @@ function openOrderModal(id) {
     return '<li class="relative pl-12">' +
       (last ? '' : '<span class="absolute left-[19px] top-10 bottom-[-16px] w-0.5 bg-slate-200 dark:bg-neutral-800"></span>') +
       '<div class="absolute left-0 top-0 w-10 h-10 rounded-full flex items-center justify-center ' + iconCls + '"><i data-lucide="' + s.icon + '" class="w-4 h-4"></i></div>' +
-      '<div class="pb-6"><div class="flex flex-wrap items-center justify-between gap-2"><p class="font-semibold text-slate-800 dark:text-neutral-100">' + s.title + '</p><span class="text-xs text-slate-400 dark:text-neutral-500 font-medium whitespace-nowrap">' + (s.time ? fmtDateTime(s.time) : '‚Äî') + '</span></div>' +
+      '<div class="pb-6"><div class="flex flex-wrap items-center justify-between gap-2"><p class="font-semibold text-slate-800 dark:text-neutral-100">' + s.title + '</p><span class="text-xs text-slate-400 dark:text-neutral-500 font-medium whitespace-nowrap">' + (s.time ? fmtDateTime(s.time) : 'ó') + '</span></div>' +
       '<p class="text-sm text-slate-500 dark:text-neutral-400 mt-0.5">' + s.desc + '</p></div></li>';
   }).join('');
 
@@ -2603,10 +2603,10 @@ function openOrderModal(id) {
     '<div class="rounded-xl bg-slate-50 dark:bg-neutral-800 border border-slate-100 dark:border-neutral-800 p-3"><p class="text-[11px] uppercase tracking-wide text-slate-400 dark:text-neutral-500 font-semibold">Status</p><p class="mt-1">' + statusBadge(t.status) + '</p></div>' +
     '</div>' +
     '<div class="grid grid-cols-2 gap-3">' +
-    '<div class="rounded-xl border border-slate-100 dark:border-neutral-800 p-3"><p class="text-[11px] uppercase tracking-wide text-slate-400 dark:text-neutral-500 font-semibold flex items-center gap-1"><i data-lucide="user" class="w-3 h-3"></i> Buyer</p><p class="font-semibold text-slate-800 dark:text-neutral-100 mt-1">' + esc(t.buyerName || '‚Äî') + '</p><p class="text-xs text-slate-400 dark:text-neutral-500">' + esc(t.buyerPhone || '') + '</p></div>' +
-    '<div class="rounded-xl border border-slate-100 dark:border-neutral-800 p-3"><p class="text-[11px] uppercase tracking-wide text-slate-400 dark:text-neutral-500 font-semibold flex items-center gap-1"><i data-lucide="store" class="w-3 h-3"></i> Seller</p><p class="font-semibold text-slate-800 dark:text-neutral-100 mt-1">' + esc(t.sellerName || '‚Äî') + '</p><p class="text-xs text-slate-400 dark:text-neutral-500">Receives ' + fmtTZ(t.sellerReceives) + '</p></div>' +
+    '<div class="rounded-xl border border-slate-100 dark:border-neutral-800 p-3"><p class="text-[11px] uppercase tracking-wide text-slate-400 dark:text-neutral-500 font-semibold flex items-center gap-1"><i data-lucide="user" class="w-3 h-3"></i> Buyer</p><p class="font-semibold text-slate-800 dark:text-neutral-100 mt-1">' + esc(t.buyerName || 'ó') + '</p><p class="text-xs text-slate-400 dark:text-neutral-500">' + esc(t.buyerPhone || '') + '</p></div>' +
+    '<div class="rounded-xl border border-slate-100 dark:border-neutral-800 p-3"><p class="text-[11px] uppercase tracking-wide text-slate-400 dark:text-neutral-500 font-semibold flex items-center gap-1"><i data-lucide="store" class="w-3 h-3"></i> Seller</p><p class="font-semibold text-slate-800 dark:text-neutral-100 mt-1">' + esc(t.sellerName || 'ó') + '</p><p class="text-xs text-slate-400 dark:text-neutral-500">Receives ' + fmtTZ(t.sellerReceives) + '</p></div>' +
     '</div>' +
-    (showShipping ? '<div class="rounded-xl border border-slate-100 dark:border-neutral-800 p-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm"><span class="text-slate-400 dark:text-neutral-500 flex items-center gap-1.5"><i data-lucide="truck" class="w-4 h-4"></i> Courier</span><span class="font-medium text-slate-700 dark:text-neutral-200">' + courierLabel(t) + '</span><span class="text-slate-300 dark:text-neutral-300">¬∑</span><span class="text-slate-400 dark:text-neutral-500 flex items-center gap-1.5"><i data-lucide="paperclip" class="w-4 h-4"></i> Receipt</span>' + (dp.receiptUrl ? '<a href="' + esc(dp.receiptUrl) + '" target="_blank" rel="noopener" class="font-medium text-green-600 hover:text-green-800">' + esc(dp.receiptUrl.split('/').pop()) + '</a>' : '<span class="text-slate-300 dark:text-neutral-300">‚Äî</span>') + '</div>' : '') +
+    (showShipping ? '<div class="rounded-xl border border-slate-100 dark:border-neutral-800 p-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm"><span class="text-slate-400 dark:text-neutral-500 flex items-center gap-1.5"><i data-lucide="truck" class="w-4 h-4"></i> Courier</span><span class="font-medium text-slate-700 dark:text-neutral-200">' + courierLabel(t) + '</span><span class="text-slate-300 dark:text-neutral-300">∑</span><span class="text-slate-400 dark:text-neutral-500 flex items-center gap-1.5"><i data-lucide="paperclip" class="w-4 h-4"></i> Receipt</span>' + (dp.receiptUrl ? '<a href="' + esc(dp.receiptUrl) + '" target="_blank" rel="noopener" class="font-medium text-green-600 hover:text-green-800">' + esc(dp.receiptUrl.split('/').pop()) + '</a>' : '<span class="text-slate-300 dark:text-neutral-300">ó</span>') + '</div>' : '') +
     '<div><p class="font-bold text-slate-800 dark:text-neutral-100 mb-3 flex items-center gap-2"><i data-lucide="history" class="w-4 h-4 text-green-600"></i> Order Timeline</p><ol>' + steps + '</ol></div>';
   refreshIcons();
   openModal('orderModal');
@@ -2627,7 +2627,7 @@ function metricCard(icon, iconCls, label, value, sub) {
 }
 function renderFinance() {
   var el = $('financeGrid');
-  el.innerHTML = spinner('Loading finance‚Ä¶');
+  el.innerHTML = spinner('Loading financeÖ');
   Promise.all([loadFinance(), loadRevenue(), loadAdViews(), loadUsers()]).then(function () {
     var f = S.finance || {};
     var pct = ((f.platformCommissionPercent || 0) * 100).toLocaleString() + '%';
@@ -2658,11 +2658,11 @@ function renderFinance() {
 }
 function renderRevenue() {
   var wrap = $('revenueWrap');
-  if (!loaded.revenue) { wrap.innerHTML = spinner('Loading revenue‚Ä¶'); loadRevenue().then(renderRevenue).catch(function () {}); return; }
+  if (!loaded.revenue) { wrap.innerHTML = spinner('Loading revenueÖ'); loadRevenue().then(renderRevenue).catch(function () {}); return; }
   if (!S.revenue.length) { wrap.innerHTML = emptyRow('No revenue transactions.'); return; }
   var rows = S.revenue.slice(0, 100).map(function (r) {
     return '<tr class="border-b border-slate-100 dark:border-neutral-800 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 transition">' +
-      '<td class="px-4 py-3"><span class="text-[11px] font-bold px-2 py-0.5 rounded-full ' + (r.type === 'boost' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300') + '">' + esc(r.type || '‚Äî') + '</span></td>' +
+      '<td class="px-4 py-3"><span class="text-[11px] font-bold px-2 py-0.5 rounded-full ' + (r.type === 'boost' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300') + '">' + esc(r.type || 'ó') + '</span></td>' +
       '<td class="px-4 py-3 font-semibold ' + ((Number(r.amount) || 0) < 0 ? 'text-rose-600' : 'text-emerald-600') + '">' + fmtTZ(r.amount) + '</td>' +
       '<td class="px-4 py-3 text-xs text-slate-500 dark:text-neutral-400 max-w-[220px] truncate">' + esc(r.description || '') + '</td>' +
       '<td class="px-4 py-3 text-xs text-slate-500 dark:text-neutral-400">' + timeAgo(r.timestamp) + '</td></tr>';
@@ -2671,12 +2671,12 @@ function renderRevenue() {
 }
 function renderAdViews() {
   var wrap = $('adViewsWrap');
-  if (!loaded.adViews) { wrap.innerHTML = spinner('Loading ad views‚Ä¶'); loadAdViews().then(renderAdViews).catch(function () {}); return; }
+  if (!loaded.adViews) { wrap.innerHTML = spinner('Loading ad viewsÖ'); loadAdViews().then(renderAdViews).catch(function () {}); return; }
   if (!S.adViews.length) { wrap.innerHTML = emptyRow('No ad views recorded.'); return; }
   var rows = S.adViews.slice(0, 100).map(function (v) {
     return '<tr class="border-b border-slate-100 dark:border-neutral-800 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 transition">' +
-      '<td class="px-4 py-3 text-slate-700 dark:text-neutral-200">' + esc(v.userId || v.uid || '‚Äî') + '</td>' +
-      '<td class="px-4 py-3 text-slate-500 dark:text-neutral-400">' + esc(v.productName || '‚Äî') + '</td>' +
+      '<td class="px-4 py-3 text-slate-700 dark:text-neutral-200">' + esc(v.userId || v.uid || 'ó') + '</td>' +
+      '<td class="px-4 py-3 text-slate-500 dark:text-neutral-400">' + esc(v.productName || 'ó') + '</td>' +
       '<td class="px-4 py-3 text-xs text-slate-500 dark:text-neutral-400">' + timeAgo(v.createdAt) + '</td></tr>';
   }).join('');
   wrap.innerHTML = tableShell(['User', 'Product', 'Viewed'], rows, '560');
@@ -2711,13 +2711,13 @@ function submitWithdraw() {
 /* ============ WITHDRAWALS ============ */
 function renderWithdrawals() {
   var wrap = $('withdrawalsWrap');
-  if (!loaded.withdrawals) { wrap.innerHTML = spinner('Loading withdrawals‚Ä¶'); loadWithdrawals().then(function () { renderWithdrawals(); }).catch(function () {}); return; }
+  if (!loaded.withdrawals) { wrap.innerHTML = spinner('Loading withdrawalsÖ'); loadWithdrawals().then(function () { renderWithdrawals(); }).catch(function () {}); return; }
   if (!S.withdrawals.length) { wrap.innerHTML = emptyRow('No withdrawals yet.'); return; }
   var rows = S.withdrawals.map(function (w) {
     return '<tr class="hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 transition">' +
       '<td class="px-4 py-3 font-semibold text-slate-800 dark:text-neutral-100">' + fmtTZ(w.amount) + '</td>' +
       '<td class="px-4 py-3 text-slate-600 dark:text-neutral-300">' + fmtTZ(w.netAmount) + ' <span class="text-xs text-slate-400 dark:text-neutral-500">(fee ' + fmtTZ(w.fee) + ')</span></td>' +
-      '<td class="px-4 py-3 text-slate-600 dark:text-neutral-300">' + esc(w.phone || '‚Äî') + '</td>' +
+      '<td class="px-4 py-3 text-slate-600 dark:text-neutral-300">' + esc(w.phone || 'ó') + '</td>' +
       '<td class="px-4 py-3">' + statusBadge(w.status) + '</td>' +
       '<td class="px-4 py-3 text-xs font-mono text-slate-500 dark:text-neutral-400">' + esc(w.payoutId || w.id || '') + '</td>' +
       '<td class="px-4 py-3 text-slate-500 dark:text-neutral-400">' + timeAgo(w.createdAt) + '</td></tr>';
@@ -2733,17 +2733,17 @@ function renderModeration() {
 }
 function renderReports() {
   var wrap = $('reportsWrap');
-  if (!loaded.reports) { wrap.innerHTML = spinner('Loading reports‚Ä¶'); loadReports().then(function () { renderReports(); }).catch(function () {}); return; }
+  if (!loaded.reports) { wrap.innerHTML = spinner('Loading reportsÖ'); loadReports().then(function () { renderReports(); }).catch(function () {}); return; }
   if (!S.reports.length) { wrap.innerHTML = emptyRow('No reports.'); return; }
   wrap.innerHTML = S.reports.map(function (r) {
     var pill = r.status === 'pending' ? statusPill('Pending', 'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300') : statusPill('Resolved', 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300');
     return '<div class="rounded-2xl border border-slate-200 dark:border-neutral-700 p-4 mb-3">' +
       '<div class="flex items-center justify-between mb-2">' +
       '<p class="font-bold text-slate-800 dark:text-neutral-100">' + esc(r.reporterName || 'Anonymous') + ' <span class="font-normal text-slate-400 dark:text-neutral-500">reported</span> ' + esc(r.reportedUserName || 'user') + '</p>' + pill + '</div>' +
-      '<p class="text-xs text-slate-500 dark:text-neutral-400 mb-2">Reason: <span class="font-semibold text-slate-600 dark:text-neutral-300">' + esc(r.reason || '‚Äî') + '</span></p>' +
+      '<p class="text-xs text-slate-500 dark:text-neutral-400 mb-2">Reason: <span class="font-semibold text-slate-600 dark:text-neutral-300">' + esc(r.reason || 'ó') + '</span></p>' +
       (r.description ? '<p class="text-sm text-slate-600 dark:text-neutral-300 mb-2">' + esc(r.description) + '</p>' : '') +
       '<div class="flex items-center gap-2 text-xs text-slate-400 dark:text-neutral-500 mb-3">' +
-      (r.productName ? '<span>Product: ' + esc(r.productName) + '</span> ¬∑ ' : '') + '<span>' + timeAgo(r.createdAt) + '</span></div>' +
+      (r.productName ? '<span>Product: ' + esc(r.productName) + '</span> ∑ ' : '') + '<span>' + timeAgo(r.createdAt) + '</span></div>' +
       (r.adminNote ? '<p class="text-xs text-slate-500 dark:text-neutral-400 mb-3">Admin note: ' + esc(r.adminNote) + '</p>' : '') +
       (r.status === 'pending' ? '<div class="flex gap-2"><button onclick="resolveReport(\'' + esc(r.id) + '\')" class="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold">Resolve</button>' +
         '<button onclick="messageUser(\'' + esc(r.reporterId) + '\')" class="px-3 py-2 rounded-lg border border-slate-200 dark:border-neutral-700 text-slate-600 dark:text-neutral-300 text-xs font-semibold hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800">Message reporter</button></div>' : '') +
@@ -2760,7 +2760,7 @@ function resolveReport(id) {
 }
 function renderFraud() {
   var wrap = $('fraudWrap');
-  if (!loaded.fraud) { wrap.innerHTML = spinner('Loading fraud alerts‚Ä¶'); loadFraud().then(function () { renderFraud(); }).catch(function () {}); return; }
+  if (!loaded.fraud) { wrap.innerHTML = spinner('Loading fraud alertsÖ'); loadFraud().then(function () { renderFraud(); }).catch(function () {}); return; }
   if (!S.fraud.length) { wrap.innerHTML = emptyRow('No fraud alerts.'); return; }
   wrap.innerHTML = S.fraud.map(function (a) {
     var sev = a.severity || 'low';
@@ -2771,7 +2771,7 @@ function renderFraud() {
     return '<div class="rounded-2xl border border-slate-200 dark:border-neutral-700 p-4 mb-3">' +
       '<div class="flex items-center justify-between mb-2"><p class="font-bold text-slate-800 dark:text-neutral-100">' + esc(a.sellerName || 'Unknown seller') + '</p>' + pill + '</div>' +
       '<p class="text-sm text-slate-600 dark:text-neutral-300 mb-1">' + esc(a.description || '') + '</p>' +
-      '<div class="flex items-center gap-2 text-xs text-slate-400 dark:text-neutral-500 mb-3"><span class="font-semibold uppercase">' + esc(a.type || '') + '</span> ¬∑ <span>' + timeAgo(a.detectedAt) + '</span></div>' +
+      '<div class="flex items-center gap-2 text-xs text-slate-400 dark:text-neutral-500 mb-3"><span class="font-semibold uppercase">' + esc(a.type || '') + '</span> ∑ <span>' + timeAgo(a.detectedAt) + '</span></div>' +
       (!a.resolved ? '<button onclick="dismissFraud(\'' + esc(a.id) + '\')" class="px-3 py-2 rounded-lg bg-slate-800 dark:bg-neutral-800 hover:bg-slate-700 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-white text-xs font-semibold">Dismiss alert</button>' : '') +
       '</div>';
   }).join('');
@@ -2794,12 +2794,12 @@ function sendBroadcast() {
   var body = $('bcBody').value.trim();
   if (!title) { toast('Title is required', 'err'); return; }
   var btn = $('bcSend');
-  btn.disabled = true; btn.textContent = 'Sending‚Ä¶';
+  btn.disabled = true; btn.textContent = 'SendingÖ';
   api('/api/admin/broadcast-notification', { method: 'POST', body: JSON.stringify({ title: title, body: body }) })
     .then(function (d) {
       toast(d.message || 'Broadcast sent', 'ok');
       $('bcTitle').value = ''; $('bcBody').value = '';
-      $('bcResult').textContent = 'Push: ' + (d.pushNotifications || 0) + ' ¬∑ In-app: ' + (d.inAppNotifications || 0) + ' ¬∑ Recipients: ' + (d.totalUsers || 0);
+      $('bcResult').textContent = 'Push: ' + (d.pushNotifications || 0) + ' ∑ In-app: ' + (d.inAppNotifications || 0) + ' ∑ Recipients: ' + (d.totalUsers || 0);
     })
     .catch(function (e) { toast(e.message, 'err'); })
     .finally(function () { btn.disabled = false; btn.textContent = 'Send to all users'; });
@@ -2809,15 +2809,15 @@ function renderBroadcast() { /* static form */ }
 /* ============ AUDIT ============ */
 function renderAudit() {
   var wrap = $('auditWrap');
-  if (!loaded.audit) { wrap.innerHTML = spinner('Loading audit log‚Ä¶'); loadAudit().then(function () { renderAudit(); }).catch(function () {}); return; }
+  if (!loaded.audit) { wrap.innerHTML = spinner('Loading audit logÖ'); loadAudit().then(function () { renderAudit(); }).catch(function () {}); return; }
   if (!S.audit.length) { wrap.innerHTML = emptyRow('No audit entries.'); return; }
   var rows = S.audit.map(function (l) {
     return '<tr class="hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 transition">' +
-      '<td class="px-4 py-3"><span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-300">' + esc(l.type || '‚Äî') + '</span></td>' +
-      '<td class="px-4 py-3 font-mono text-xs text-slate-500 dark:text-neutral-400">' + esc(l.userId || '‚Äî') + '</td>' +
-      '<td class="px-4 py-3 font-semibold ' + ((Number(l.amount) || 0) < 0 ? 'text-rose-600' : 'text-emerald-600') + '">' + (l.amount != null ? fmtTZ(l.amount) : '‚Äî') + '</td>' +
-      '<td class="px-4 py-3 text-xs text-slate-500 dark:text-neutral-400 max-w-[240px] truncate" title="' + esc(l.reason || '') + '">' + esc(l.reason || '‚Äî') + '</td>' +
-      '<td class="px-4 py-3 text-xs font-mono text-slate-400 dark:text-neutral-500">' + esc(l.relatedId || '‚Äî') + '</td>' +
+      '<td class="px-4 py-3"><span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-300">' + esc(l.type || 'ó') + '</span></td>' +
+      '<td class="px-4 py-3 font-mono text-xs text-slate-500 dark:text-neutral-400">' + esc(l.userId || 'ó') + '</td>' +
+      '<td class="px-4 py-3 font-semibold ' + ((Number(l.amount) || 0) < 0 ? 'text-rose-600' : 'text-emerald-600') + '">' + (l.amount != null ? fmtTZ(l.amount) : 'ó') + '</td>' +
+      '<td class="px-4 py-3 text-xs text-slate-500 dark:text-neutral-400 max-w-[240px] truncate" title="' + esc(l.reason || '') + '">' + esc(l.reason || 'ó') + '</td>' +
+      '<td class="px-4 py-3 text-xs font-mono text-slate-400 dark:text-neutral-500">' + esc(l.relatedId || 'ó') + '</td>' +
       '<td class="px-4 py-3 text-slate-500 dark:text-neutral-400">' + timeAgo(l.timestamp) + '</td></tr>';
   }).join('');
   wrap.innerHTML = tableShell(['Type', 'User', 'Amount', 'Reason', 'Related', 'When'], rows, '900');
@@ -2857,7 +2857,7 @@ function refreshBadges() {
   menu.innerHTML = items.length ? items.map(function (i) {
     return '<button onclick="switchTab(\'' + i.tab + '\'); document.getElementById(\'notifMenu\').classList.add(\'hidden\')" class="w-full flex items-center gap-3 px-4 py-3 border-b border-slate-100 dark:border-neutral-800 hover:bg-slate-50 dark:bg-neutral-800 dark:hover:bg-neutral-800 text-left ' + i.cls + '">' +
       '<i data-lucide="' + i.icon + '" class="w-4 h-4 shrink-0"></i><span class="text-sm font-medium">' + esc(i.text) + '</span></button>';
-  }).join('') : '<div class="px-4 py-6 text-center text-sm text-slate-400 dark:text-neutral-500">All clear ‚Äî nothing needs attention.</div>';
+  }).join('') : '<div class="px-4 py-6 text-center text-sm text-slate-400 dark:text-neutral-500">All clear ó nothing needs attention.</div>';
   refreshIcons();
 }
 
@@ -2870,8 +2870,8 @@ function copyWebhook() {
 }
 function saveSettings() {
   var rate = $('rateInput').value;
-  if (rate) toast('Commission rate is ' + rate + '% (server-side). Platform fees and rates are live ‚Äî edit PLATFORM_COMMISSION_PERCENT on the server to change.', 'ok');
-  else toast('Rates are configured server-side ‚Äî this screen is read-only.', 'ok');
+  if (rate) toast('Commission rate is ' + rate + '% (server-side). Platform fees and rates are live ó edit PLATFORM_COMMISSION_PERCENT on the server to change.', 'ok');
+  else toast('Rates are configured server-side ó this screen is read-only.', 'ok');
 }
 
 /* ============ INIT ============ */
