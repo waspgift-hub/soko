@@ -519,17 +519,77 @@ class _SearchScreenState extends State<SearchScreen>
       itemCount: results.length + 1,
       itemBuilder: (_, i) {
         if (i == 0) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8, left: 4),
-            child: Text(
-              '${resp.total} ${context.tr('results').toLowerCase()}',
-              style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
-            ),
-          );
+          return _buildResultMeta(resp, cs);
         }
         final r = results[i - 1];
         return _buildResultCard(cs, r);
       },
+    );
+  }
+
+  // Headers above results: auto-applied typo correction notice + chips for the
+  // structured filters the server pulled out of free text ("≤ 800K · DSM").
+  Widget _buildResultMeta(SearchResponse resp, ColorScheme cs) {
+    final detected = resp.detected;
+    final maxPrice = detected['maxPrice'];
+    final minPrice = detected['minPrice'];
+    final location = detected['location'];
+    final chips = <String>[
+      if (maxPrice is num) '≤ ${context.formatPrice(maxPrice.toDouble())}',
+      if (minPrice is num) '≥ ${context.formatPrice(minPrice.toDouble())}',
+      if (location is String && location.isNotEmpty) location,
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (resp.autoCorrected && resp.query.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  Icon(Icons.spellcheck_rounded, size: 16, color: cs.primary),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '${context.tr('showing_results_for')} "${resp.query}"',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cs.onSurface),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (chips.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final c in chips)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: cs.primary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
+                      ),
+                      child: Text(
+                        c,
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.primary),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          Text(
+            '${resp.total} ${context.tr('results').toLowerCase()}',
+            style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+          ),
+        ],
+      ),
     );
   }
 

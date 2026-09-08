@@ -1174,6 +1174,7 @@ const Map<String, Map<String, String>> zhTranslations = {
     'trending': '热门',
     'sellers': '卖家',
     'results': '结果',
+    'showing_results_for': '正在显示',
     'notification_preferences': '通知偏好',
     'notification_general': '一般',
     'notification_master_hint': '关闭以暂停所有通知。开启时各频道生效。',

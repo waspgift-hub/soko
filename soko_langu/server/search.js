@@ -1,6 +1,7 @@
 const express = require('express');
 const admin = require('firebase-admin');
 const cache = require('./cache');
+const { parseIntent, parseMoney, isHighConfidence } = require('./query-intent');
 
 const router = express.Router();
 const db = admin.firestore();
@@ -109,13 +110,17 @@ async function fuzzyCorrect(query) {
     }
   }
   corrections.sort((a, b) => a.distance - b.distance);
-  return corrections.length > 0 ? corrections[0].word : null;
+  if (corrections.length === 0) return null;
+  return { query: queryLower, word: corrections[0].word, distance: corrections[0].distance };
 }
 
 async function searchIndex(collection, query, options = {}) {
   const queryLower = query.toLowerCase().trim();
   const { limit = MAX_RESULTS_PER_SOURCE } = options;
-  const keywords = extractKeywords(queryLower);
+  const keywords = Array.from(new Set([
+    ...extractKeywords(queryLower),
+    ...(options.extraKeywords || []),
+  ]));
   if (queryLower.length === 0) return { results: [], total: 0 };
   const results = new Map();
   const prefixEnd = queryLower + '\uf8ff';
@@ -158,7 +163,7 @@ async function searchIndex(collection, query, options = {}) {
     }
   }
   if (results.size === 0) {
-    await fallbackSearchDirect(results, collection, queryLower, limit);
+    await fallbackSearchDirect(results, collection, queryLower, limit, options.extraKeywords || []);
   }
   const sorted = Array.from(results.values())
     .sort((a, b) => b._score - a._score)
@@ -166,7 +171,7 @@ async function searchIndex(collection, query, options = {}) {
   return { results: sorted, total: results.size };
 }
 
-async function fallbackSearchDirect(results, indexCollection, queryLower, limit) {
+async function fallbackSearchDirect(results, indexCollection, queryLower, limit, extraKeywords = []) {
   const prefixEnd = queryLower + '\uf8ff';
   const sourceMap = {
     'search_index_products': { coll: 'products', type: 'product', nameField: 'name', extraFields: ['description', 'price', 'images', 'category', 'sellerName', 'sellerId', 'stock', 'rating', 'reviewCount', 'isActive', 'condition', 'sellerKycApproved'] },
@@ -178,7 +183,10 @@ async function fallbackSearchDirect(results, indexCollection, queryLower, limit)
 
   // First try case-insensitive searchKeywords array (products only)
   if (source.type === 'product') {
-    const keywords = extractKeywords(queryLower);
+    const keywords = Array.from(new Set([
+      ...extractKeywords(queryLower),
+      ...extraKeywords,
+    ]));
     if (keywords.length > 0) {
       const keywordSnap = await db.collection(source.coll)
         .where('searchKeywords', 'array-contains-any', keywords.slice(0, 10))
@@ -246,33 +254,57 @@ router.post('/global-search', async (req, res) => {
   try {
     const decoded = await authenticate(req);
     if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
-    const { query, type = 'all', page = 0, pageSize = 20, filters = {} } = req.body;
+    const { query, type = 'all', page = 0, pageSize = 20, filters: rawFilters = {} } = req.body;
     if (!query || query.trim().length === 0) {
-      return res.json({ results: [], sources: {}, total: 0, correction: null, query: '' });
+      return res.json({
+        results: [], sources: {}, total: 0, correction: null, query: '',
+        detected: {}, autoCorrected: false,
+      });
     }
-    const queryLower = query.trim();
+
+    // Free-text → structured intent: strips "chini ya 800k dar" into search
+    // keywords + price/location filters, and expands Swahili synonyms.
+    const intent = parseIntent(query);
+    let searchQuery = intent.searchQuery;
+    const extraKeywords = intent.synonyms;
+
+    // Suggest a typo correction; auto-apply only when confidence is high.
     let correction = null;
-    if (queryLower.length >= 3) correction = await fuzzyCorrect(queryLower);
-    const sourceTypes = type === 'all' ? ['products', 'users', 'categories'] : [type];
-    const results = {};
-    let allResults = [];
-    let total = 0;
-    for (const sourceType of sourceTypes) {
-      let collection;
-      switch (sourceType) {
-        case 'products': collection = SEARCH_INDEX.products; break;
-        case 'users': collection = SEARCH_INDEX.users; break;
-        case 'categories': collection = SEARCH_INDEX.categories; break;
-        default: continue;
-      }
-      const sourceResult = await searchIndex(collection, queryLower, { limit: MAX_RESULTS_PER_SOURCE });
-      results[sourceType] = sourceResult.results;
-      allResults = [...allResults, ...sourceResult.results.map(r => ({ ...r, sourceType }))];
-      total += sourceResult.total;
+    let correctionCandidate = null;
+    if (searchQuery.length >= 3) {
+      correctionCandidate = await fuzzyCorrect(searchQuery);
+      if (correctionCandidate) correction = correctionCandidate.word;
     }
+
+    const sourceTypes = type === 'all' ? ['products', 'users', 'categories'] : [type];
+
+    const { results, allResults, total } = await runSources(
+      sourceTypes, searchQuery, extraKeywords, MAX_RESULTS_PER_SOURCE,
+    );
+
+    let autoCorrected = false;
+    let searchedQuery = searchQuery;
+
+    // §06–§07: only rewrite the query when nothing matched AND confidence is
+    // high; otherwise keep the suggestion chip for the client to offer.
+    if (total === 0 && isHighConfidence(correctionCandidate)) {
+      searchedQuery = correctionCandidate.word;
+      const corrected = await runSources(sourceTypes, searchedQuery, extraKeywords, MAX_RESULTS_PER_SOURCE);
+      if (corrected.total > 0) {
+        autoCorrected = true;
+        searchQuery = searchedQuery;
+        results = corrected.results;
+        allResults = corrected.allResults;
+        total = corrected.total;
+        correction = null;
+      }
+    }
+
+    const filters = { ...rawFilters, ...intent.filters };
     let filtered = allResults;
     if (filters.minPrice != null) filtered = filtered.filter(r => r.type === 'product' && (r.price || 0) >= filters.minPrice);
     if (filters.maxPrice != null) filtered = filtered.filter(r => r.type === 'product' && (r.price || 0) <= filters.maxPrice);
+    if (filters.location) filtered = filtered.filter(r => (r.location || '').toLowerCase().includes(filters.location.toLowerCase()));
     if (filters.category) filtered = filtered.filter(r => (r.category || '').toLowerCase() === filters.category.toLowerCase());
     if (filters.condition) filtered = filtered.filter(r => (r.condition || '').toLowerCase() === filters.condition.toLowerCase());
     if (filters.verifiedOnly) filtered = filtered.filter(r => r.kycApproved);
@@ -285,17 +317,50 @@ router.post('/global-search', async (req, res) => {
     }
     const start = page * pageSize;
     const paginated = filtered.slice(start, start + pageSize);
-    // Record analytics asynchronously
-    recordSearchQuery(decoded.uid, queryLower, total, type).catch(() => {});
+    // Expose the parsed constraints so the client can render them as chips
+    // ("≤ TSh 800,000 · Dar es Salaam") next to the results.
+    const detectedPayload = {
+      ...intent.detected,
+      maxPrice: filters.maxPrice ?? null,
+      minPrice: filters.minPrice ?? null,
+      location: filters.location ?? null,
+    };
+    // Record analytics asynchronously (corrections logged for typo analytics).
+    recordSearchQuery(decoded.uid, intent.original, total, type, {
+      correctedTo: autoCorrected ? searchQuery : correction || null,
+      autoCorrected,
+      detected: detectedPayload,
+    }).catch(() => {});
     res.json({
       results: paginated, sources: results, total, page, pageSize,
-      hasMore: start + pageSize < filtered.length, correction, query: queryLower,
+      hasMore: start + pageSize < filtered.length, correction, query: searchQuery,
+      detected: detectedPayload, autoCorrected,
     });
   } catch (e) {
     console.error('[SEARCH] global-search error:', e.message);
     res.status(400).json({ error: e.message });
   }
 });
+
+async function runSources(sourceTypes, searchQuery, extraKeywords, limit) {
+  const results = {};
+  let allResults = [];
+  let total = 0;
+  for (const sourceType of sourceTypes) {
+    let collection;
+    switch (sourceType) {
+      case 'products': collection = SEARCH_INDEX.products; break;
+      case 'users': collection = SEARCH_INDEX.users; break;
+      case 'categories': collection = SEARCH_INDEX.categories; break;
+      default: continue;
+    }
+    const sourceResult = await searchIndex(collection, searchQuery, { limit, extraKeywords });
+    results[sourceType] = sourceResult.results;
+    allResults = [...allResults, ...sourceResult.results.map(r => ({ ...r, sourceType }))];
+    total += sourceResult.total;
+  }
+  return { results, allResults, total };
+}
 
 // ════════════════════════════════════════════════════════════
 // AUTOCOMPLETE
@@ -478,10 +543,18 @@ router.post('/most-rated', async (req, res) => {
 // ════════════════════════════════════════════════════════════
 // HELPERS
 // ════════════════════════════════════════════════════════════
-async function recordSearchQuery(userId, query, resultCount, type) {
-  await db.collection(SEARCH_INDEX.analytics).add({ userId, query, resultCount, type, timestamp: FieldValue.serverTimestamp() });
+async function recordSearchQuery(userId, query, resultCount, type, extras = {}) {
+  await db.collection(SEARCH_INDEX.analytics).add({
+    userId, query, resultCount, type,
+    correctedTo: extras.correctedTo || null,
+    autoCorrected: !!extras.autoCorrected,
+    detected: extras.detected || null,
+    timestamp: FieldValue.serverTimestamp(),
+  });
+  // Count trending by the query the user actually typed, not the corrected one,
+  // so ranking reflects real language.
   const trendingRef = db.collection(SEARCH_INDEX.trending).doc(query);
   await trendingRef.set({ count: FieldValue.increment(1), lastSearched: FieldValue.serverTimestamp() }, { merge: true });
 }
 
-module.exports = { router };
+module.exports = { router, parseIntent, parseMoney, isHighConfidence };

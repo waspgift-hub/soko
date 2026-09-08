@@ -117,6 +117,14 @@ class SearchResponse {
   final String? correction;
   final String query;
 
+  /// Structured intent the server extracted from free text ("chini ya 800k dar").
+  /// Keys: location, money, maxPrice, minPrice. Empty when nothing was detected.
+  final Map<String, dynamic> detected;
+
+  /// True when the server automatically applied a high-confidence typo
+  /// correction (samsng → samsung) because nothing matched raw.
+  final bool autoCorrected;
+
   SearchResponse({
     required this.results,
     required this.sources,
@@ -125,6 +133,8 @@ class SearchResponse {
     required this.hasMore,
     this.correction,
     required this.query,
+    this.detected = const {},
+    this.autoCorrected = false,
   });  factory SearchResponse.fromMap(Map<String, dynamic> map) {
     final resultsList = (map['results'] as List<dynamic>?)
             ?.map((e) => SearchResult.fromMap(e as Map<String, dynamic>))
@@ -148,6 +158,8 @@ class SearchResponse {
       hasMore: map['hasMore'] as bool? ?? false,
       correction: map['correction'] as String?,
       query: map['query'] as String? ?? '',
+      detected: map['detected'] as Map<String, dynamic>? ?? const {},
+      autoCorrected: map['autoCorrected'] as bool? ?? false,
     );
   }
 
