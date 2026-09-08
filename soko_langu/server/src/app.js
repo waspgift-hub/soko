@@ -68,6 +68,9 @@ const SERVE_APEX = process.env.SERVE_APEX === '1';
 app.use((req, res, next) => {
   const host = (req.hostname || '').toLowerCase();
   if (!host.endsWith(DOMAIN)) return next();
+  if (host === `admin.${DOMAIN}` || host === `www.admin.${DOMAIN}`) {
+    return res.redirect(301, `${CANONICAL_HOST}/admin${req.path === '/' ? '' : req.path}`);
+  }
   if (host === DOMAIN) {
     if (SERVE_APEX) return next();
     return res.redirect(301, `${CANONICAL_HOST}${req.originalUrl}`);
@@ -104,7 +107,8 @@ app.use((req, res, next) => {
     path.endsWith('/') &&
     !path.startsWith('/api') &&
     !path.startsWith('/health') &&
-    !path.startsWith('/.well-known')
+    !path.startsWith('/.well-known') &&
+    !path.startsWith('/admin')
   ) {
     return res.redirect(301, path.slice(0, -1) + req.originalUrl.slice(path.length));
   }
