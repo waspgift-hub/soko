@@ -1,7 +1,7 @@
 {
   "name": "Soko Vibe",
   "short_name": "Soko Vibe",
-  "description": "Nunua na uze bidhaa salama Tanzania kwa malipo ya escrow.",
+  "description": "Nunua na uza bidhaa salama Tanzania kwa malipo ya escrow.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",

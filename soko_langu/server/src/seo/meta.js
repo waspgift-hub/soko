@@ -9,9 +9,9 @@ const SITE = {
   // English entity description used in structured data and GEO copy; mirrors
   // the platform: a Tanzania-based online marketplace for buyers and sellers.
   description: 'Soko Vibe is a Tanzania-based online marketplace connecting buyers and sellers.',
-  homeTitle: 'Soko Vibe | Nunua na Uze Salama Tanzania',
+  homeTitle: 'Soko Vibe | Nunua na Uza Salama Tanzania',
   homeDescription:
-    'Soko Vibe ni marketplace ya Tanzania. Nunua na uze bidhaa mpya na za mitumba kwa malipo ya escrow, chat ya wakati halisi, msaidizi wa AI, na usafirishaji nchi nzima.',
+    'Soko Vibe ni marketplace ya Tanzania. Nunua na uza bidhaa mpya na za mitumba kwa malipo ya escrow, chat ya wakati halisi, msaidizi wa AI, na usafirishaji nchi nzima.',
   logo: 'https://www.sokovibe.co.tz/assets/icon-512.png',
   email: 'support@soko-vibe.com',
   phone: '+255693273241',

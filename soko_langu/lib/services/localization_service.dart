@@ -1848,7 +1848,7 @@ class LocalizationService {
       'feature_coming_soon': 'Kipengele hiki kinakuja karibuni',
       'features': 'Vipengele',
       'features_text':
-          '✓ Soko La Mtandaoni - Nunua na uze bidhaa\n'
+          '✓ Soko La Mtandaoni - Nunua na uza bidhaa\n'
           '✓ Mazungumzo ya Moja kwa Moja - Wasiliana na wauzaji\n'
           '✓ Flash Sales - Punguzo la muda maalum\n'
           '✓ Kukuza Bidhaa - Angazia bidhaa zako\n'
