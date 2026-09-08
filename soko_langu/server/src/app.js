@@ -25,6 +25,7 @@ const productRouter = require('./modules/products/routes');
 const referralRouter = require('./modules/referrals/routes');
 const moderationRouter = require('./modules/moderation/routes');
 const reconciliationRouter = require('./modules/reconciliation/routes');
+const { seoRouter, handleSpa } = require('./seo/routes');
 
 const app = express();
 
@@ -51,6 +52,20 @@ app.use((req, res, next) => {
   // directly from the browser.
   res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://www.gstatic.com https://www.googleapis.com https://apis.google.com https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://unpkg.com https://pagead2.googlesyndication.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://accounts.google.com https://googleads.g.doubleclick.net https://pagead2.googlesyndication.com https://www.gstatic.com https://www.googleapis.com https://firestore.googleapis.com https://firebasestorage.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; media-src 'self' blob: https:; worker-src 'self' blob:");
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
+
+// Canonical domain: every sokovibe.co.tz hostname is folded onto the www host
+// (path + query preserved, one redirect hop). The admin subdomain keeps its
+// root->/admin mapping. Non-soko hosts (Render origin, health checks) are left
+// alone so the platform health checks stay 200.
+app.use((req, res, next) => {
+  const host = (req.hostname || '').toLowerCase();
+  if (host.endsWith('sokovibe.co.tz') && host !== 'www.sokovibe.co.tz') {
+    let target = req.originalUrl;
+    if (host === 'admin.sokovibe.co.tz' && (target === '/' || target === '')) target = '/admin';
+    return res.redirect(301, `https://www.sokovibe.co.tz${target}`);
+  }
   next();
 });
 
@@ -103,6 +118,9 @@ app.get('/.well-known/apple-app-site-association.json', (req, res) => {
   res.type('application/json').sendFile(path.join(wellKnownDir, 'apple-app-site-association'));
 });
 
+// SEO assets: robots.txt, sitemap.xml and the generated sitemap files.
+app.use(seoRouter);
+
 // The Flutter web app owns the root — www.sokovibe.co.tz now runs the app in
 // the browser (guest browsing first, login + buy without installing). The
 // legacy marketing landing moves under /marketing; /admin keeps its mount.
@@ -110,27 +128,25 @@ app.use('/marketing', express.static(path.join(__dirname, '..', 'landing'), { in
 app.use('/admin', express.static(path.join(__dirname, '..', 'admin'), { index: 'index.html' }));
 
 // Flutter web build (committed under build/web so Render can serve it).
-app.use(express.static(webDist, { index: 'index.html' }));
+// index.html is served through the SPA handler below, where SEO metadata is
+// injected; the rest is content-versioned by the service worker and cached hard
+// to make repeat loads fast.
+app.use(express.static(webDist, {
+  index: false,
+  setHeaders: (res, filePath) => {
+    const name = path.basename(filePath);
+    if (name === 'flutter_bootstrap.js' || name.includes('service_worker')) {
+      res.setHeader('Cache-Control', 'no-cache');
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+  },
+}));
 
-// SPA history fallback — /product/:id and the other client-side routes load
-// the app bootstrap, so web deep links open the product page directly. The
-// fallback skips everything the handlers above already own.
-app.get('*', (req, res, next) => {
-  const lastSeg = req.path.split('/').pop() || '';
-  if (req.path.startsWith('/api') ||
-      req.path.startsWith('/admin') ||
-      req.path.startsWith('/marketing') ||
-      req.path.startsWith('/.well-known') ||
-      // Asset-looking URLs (favicon.ico, /nope.txt) keep 404 instead of
-      // loading the app; client-side routes never carry an extension.
-      lastSeg.includes('.') ||
-      !req.accepts('html')) {
-    return next();
-  }
-  res.sendFile(path.join(webDist, 'index.html'), {
-    headers: { 'Cache-Control': 'no-cache' },
-  });
-});
+// SPA handler with server-side SEO: injects per-route metadata (products fetch
+// real Firestore data so title/description/OG/JSON-LD match the page), and
+// returns genuine 404s for missing products and unknown paths.
+app.get('*', handleSpa);
 
 // Routes
 app.use('/health', healthRouter);
