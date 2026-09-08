@@ -33,6 +33,17 @@ Kumbuka: chochote utakachosema kuhusu muuzaji, eneo, au bei ya nje YA APP lazima
     String locale = 'sw',
   });
 
+  /// Generates a COMPACT, DB-grounded summary of a search result set so the
+  /// search screen can show "AI found N relevant products · Best matches…"
+  /// above the results (spec §8/§9/§62). [groundedContext] is the raw catalog
+  /// data the model may use; it must never invent facts beyond it.
+  Future<String> generateSearchSummary({
+    required String query,
+    required String groundedContext,
+    required int total,
+    String locale = 'sw',
+  });
+
   Future<String> identifyImage(String base64Image);
 
   void addPreference(String product);

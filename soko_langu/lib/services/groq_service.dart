@@ -315,6 +315,97 @@ $richProductBlocks
     }
   }
 
+  String _buildSummaryPrompt({
+    required String query,
+    required String groundedContext,
+    required int total,
+    String locale = 'sw',
+  }) {
+    if (locale == 'en') {
+      return '''
+You are the "Soko Vibe AI Broker" writing a COMPACT summary of search results. Spec §62: the summary must never be longer than the result list itself.
+
+STRICT GROUNDING:
+- Use ONLY the "SEARCH RESULTS DATA" below. Never invent prices, sellers, locations, ratings, or counts.
+- The real total ("X products") must come ONLY from the total given.
+
+FORMAT (at most 2 short paragraphs, plain text, no heavy markdown):
+1) One line: how many relevant products were found for "$query", plus the price/location scope if provided.
+2) "Best matches:" with 2-3 short lines — product name — real price — real seller or location, ordered by a stated combination of price, rating, and verified seller.
+
+SEARCH RESULTS DATA:
+$groundedContext
+''';
+    }
+    return '''
+Wewe ni "Soko Vibe AI Dalali" unayeandika MUHTASARI MUFUPI wa matokeo ya utafiti. Spec §62: muhtasari usizidi matokeo kwa urefu.
+
+KANUNI KALI YA WHOLE:
+- Tumia TU "DATA YA MATOKEO" hapa chini. Usibuni bei, wauzaji, eneo, rating, wala hesabu.
+- Idadi halisi ("bidhaa X") chukua tu kutoka total iliyotolewa.
+
+MUUNDO (aya 2 fupi tu, hakuna markdown nzito):
+1) Mstari mmoja: kuna bidhaa ngapi zinazofaa kwa "$query", pamoja na eneo/bei scope ikitolewa.
+2) "Best matches:" mstari 2-3 — jina — bei halisi — muuzaji au eneo halisi, zimepangiwa kwa mchanganyiko wa bei, rating, na muuzaji aliyethibitishwa.
+
+DATA YA MATOKEO:
+$groundedContext
+''';
+  }
+
+  @override
+  Future<String> generateSearchSummary({
+    required String query,
+    required String groundedContext,
+    required int total,
+    String locale = 'sw',
+  }) async {
+    // Separate, more generous budget than chat so normal searching is not
+    // throttled by the 30/60min AI-chat limit.
+    await RateLimiter.incrementAttempt('ai_search_summary', maxAttempts: 60, window: const Duration(minutes: 60));
+    if (!await RateLimiter.isWithinLimit('ai_search_summary', maxAttempts: 60)) {
+      throw Exception('Rate limit exceeded for summary generation.');
+    }
+
+    Future<String> tryModel(String model) async {
+      return _proxyCall(
+        model: model,
+        messages: [
+          {
+            'role': 'system',
+            'content': _buildSummaryPrompt(
+              query: query,
+              groundedContext: groundedContext,
+              total: total,
+              locale: locale,
+            ),
+          },
+          {
+            'role': 'user',
+            'content':
+                'Nimepata $total matokeo kwa "$query". Andika muhtasari mfupi kulingana na DATA YA MATOKEO.',
+          },
+        ],
+        temperature: 0.3,
+        maxTokens: 200,
+      );
+    }
+
+    try {
+      String body;
+      try {
+        body = await tryModel(_textModel);
+      } catch (_) {
+        body = await tryModel(_fallbackTextModel);
+      }
+      final data = jsonDecode(body);
+      return data['choices'][0]['message']['content'].toString().trim();
+    } catch (e) {
+      if (e.toString().contains('Rate limit')) rethrow;
+      throw Exception('Summary generation failed: $e');
+    }
+  }
+
   @override
   Future<String> identifyImage(String base64Image) async {
     try {

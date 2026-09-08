@@ -50,6 +50,16 @@ lib/services/search_service.dart ──POST /api/search/*──▶ server/search
   (`≤ 800K · Dar es Salaam`) za filters zilizogunduliwa — monochrome, token-compliant.
 - Translation keys: `showing_results_for` katika EN/SW/ZH.
 
+### Tranche 2 — **G10: AI summary kwenye search UI** (`feat(ai): search summary`)
+- `AiService.generateSearchSummary(query, groundedContext, total, locale)` — abstract (+ GroqService impl).
+- **Grounding (§8/§9/§58):** context block hujengwa tu kutoka `SearchResult` halisi (jina/bei/muuzaji/eneo/
+  rating/SILA); `total` halisi; prompt inaisa "usizidi matokeo" (§62) na kutoa "Best matches" 2–3.
+- **Non-blocking (§60):** results hujitokeza mara moja; summary inafika async kwenye card. Failure au
+  empty → card inatoweka kimya; hakuna dependecy kwenye results.
+- **Rate limiting:** limiter tofauti `ai_search_summary` (60/h) — search haliwezi kuteketeza budget ya
+  AI-chat (30/h); client dedupes same-query.
+- Localization keys mpya: `ai_summarizing` (EN/SW/ZH).
+
 ## 3. Verification
 
 - **Server unit tests: `test/search-intent.test.js` — 20/20 pass** (money parsing, intent, confidence,
@@ -60,7 +70,7 @@ lib/services/search_service.dart ──POST /api/search/*──▶ server/search
 
 | # | Gap | Severity | Nini kifanyike |
 |---|---|---|---|
-| G10 | **AI answer kwenye search UI** (§8/§9/§62) — "AI SEARCH" summary above results, DB-grounded, streaming | HIGH | Reuse `AiService`+`toContextBlock`; lazy-load baada ya results; una-stream. |
+| G10 | ~~AI answer kwenye search UI~~ ✅ **Implemented** | HIGH | `AiService.generateSearchSummary` + non-blocking card; streaming + AI-reply chat juu ya summary = future. |
 | G8 | **Semantic/vector search** (§86) | HIGH | Embeddings directory + hybrid score (§87). Kifanane na catalog size. |
 | G12 | **Suggested-query chips** ("phone under 500k") | MEDIUM | Static premium examples + dynamic top-converting; keyword chips. |
 | G11 | **Sort chips** Best Match / Lowest Price / Nearest | MEDIUM | On search results; Nearest inahitaji location consent (§42). |

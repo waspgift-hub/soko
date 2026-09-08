@@ -7,10 +7,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/app_transitions.dart';
 import '../../services/search_service.dart';
+import '../../services/ai/ai_service.dart';
 import '../../services/search_history_service.dart';
 import '../../services/flash_sale_service.dart';
 import '../../models/flash_sale_model.dart';
 import '../../app/routes.dart';
+import '../../main.dart';
 import '../../models/product_model.dart';
 import '../../models/category_model.dart';
 import '../../widgets/google_loading.dart';
@@ -46,6 +48,12 @@ class _SearchScreenState extends State<SearchScreen>
   bool _hasSearched = false;
   String _selectedTab = 'all';
   Timer? _debounce;
+
+  // AI search summary (G10): DB-grounded, async, never blocks results.
+  String? _aiSummary;
+  bool _aiSummaryLoading = false;
+  bool _aiSummaryFailed = false;
+  String? _aiSummaryQuery;
 
   // Initial/discovery state (no search yet): boosted-first listing + most-rated sections.
   List<SearchResult> _discoveryProducts = [];
@@ -221,9 +229,74 @@ class _SearchScreenState extends State<SearchScreen>
           _response = resp;
           _loading = false;
         });
+        _maybeLoadAiSummary(resp);
       }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Fires a non-blocking, DB-grounded AI summary for the settled results.
+  /// Results render immediately; the summary arrives async (§60 progressive
+  /// update) and silently disappears on failure or on an empty result set.
+  Future<void> _maybeLoadAiSummary(SearchResponse resp) async {
+    final products = resp.results.where((r) => r.type == 'product').toList();
+    if (resp.total == 0 || products.isEmpty) return;
+
+    final locale = AppConfig.of(context).langCode;
+    final sameQuery = _aiSummaryQuery == resp.query.trim();
+    if (sameQuery && !_aiSummaryLoading) return; // already answered
+
+    setState(() {
+      _aiSummary = null;
+      _aiSummaryLoading = true;
+      _aiSummaryFailed = false;
+      _aiSummaryQuery = resp.query.trim();
+    });
+
+    final sym = context.currencySymbol();
+    final buffer = StringBuffer();
+    for (final r in products.take(8)) {
+      buffer.writeln(
+        '- ${r.displayName} | '
+        'bei: ${r.price != null ? '${r.price!.toStringAsFixed(0)} $sym' : 'n/a'} | '
+        'muuzaji: ${r.sellerName ?? 'n/a'} | '
+        'eneo: ${r.location ?? 'n/a'} | '
+        'rating: ${r.rating?.toStringAsFixed(1) ?? 'n/a'} (${r.reviewCount ?? 0}) | '
+        'SILA: ${r.kycApproved ? 'ndiyo' : 'hapana'}',
+      );
+    }
+    final detected = resp.detected;
+    final scope = <String>[
+      if (detected['maxPrice'] is num) 'bei<=${detected['maxPrice']}',
+      if (detected['minPrice'] is num) 'bei>=${detected['minPrice']}',
+      if (detected['location'] is String && (detected['location'] as String).isNotEmpty)
+        'eneo: ${detected['location']}',
+    ].join(', ');
+
+    final grounded = AiService.buildInAppCatalogContext(
+      scope.isNotEmpty ? 'SCOPE: $scope\n${buffer.toString()}' : buffer.toString(),
+    );
+
+    try {
+      final reply = await AiService.instance.generateSearchSummary(
+        query: resp.query,
+        groundedContext: grounded,
+        total: resp.total,
+        locale: locale,
+      );
+      if (!mounted) return;
+      setState(() {
+        _aiSummary = reply;
+        _aiSummaryLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _aiSummary = null;
+        _aiSummaryLoading = false;
+        _aiSummaryFailed = true;
+      });
     }
   }
 
@@ -514,16 +587,83 @@ class _SearchScreenState extends State<SearchScreen>
       return _buildEmptyState(cs, resp);
     }
 
+    final head = <Widget>[_buildResultMeta(resp, cs)];
+    final summary = _buildAiSummaryCard(cs, resp);
+    if (summary != null) head.add(summary);
+
     return ListView.builder(
       padding: const EdgeInsets.all(12),
-      itemCount: results.length + 1,
+      itemCount: head.length + results.length,
       itemBuilder: (_, i) {
-        if (i == 0) {
-          return _buildResultMeta(resp, cs);
+        if (i < head.length) {
+          return head[i];
         }
-        final r = results[i - 1];
+        final r = results[i - head.length];
         return _buildResultCard(cs, r);
       },
+    );
+  }
+
+  // Compact DB-grounded AI summary (§8/§9/§62). Hidden until content arrives or
+  // when generation failed — search results must never depend on it.
+  Widget? _buildAiSummaryCard(ColorScheme cs, SearchResponse resp) {
+    if (_aiSummaryFailed || _aiSummaryQuery != resp.query.trim()) return null;
+    if (!_aiSummaryLoading && _aiSummary == null) return null;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: cs.surfaceSubtle,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: cs.hairline),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.auto_awesome_rounded, size: 14, color: cs.primary),
+                const SizedBox(width: 6),
+                Text(
+                  context.tr('ai_label'),
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                    color: cs.primary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            if (_aiSummaryLoading)
+              Row(
+                children: [
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      context.tr('ai_summarizing'),
+                      style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                    ),
+                  ),
+                ],
+              )
+            else
+              Text(
+                _aiSummary!,
+                style: TextStyle(fontSize: 13, height: 1.5, color: cs.onSurface),
+              ),
+          ],
+        ),
+      ),
     );
   }
 
