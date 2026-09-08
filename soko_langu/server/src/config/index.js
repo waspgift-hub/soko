@@ -87,6 +87,15 @@ const config = {
     frontend: process.env.FRONTEND_URL || 'https://soko-vibe.co.tz',
     admin: process.env.ADMIN_URL || 'https://admin.soko-vibe.co.tz',
   },
+
+  // Deep-link store destinations. Left empty on purpose: the app is not yet
+  // listed on any store, so the fallback page must not advertise one. Once a
+  // real listing exists, set ANDROID_STORE_URL / IOS_STORE_URL in the env.
+  deepLink: {
+    androidStoreUrl: process.env.ANDROID_STORE_URL || '',
+    iosStoreUrl: process.env.IOS_STORE_URL || '',
+    webProductUrl: process.env.WEB_PRODUCT_URL || 'https://www.sokovibe.co.tz/product/',
+  },
 };
 
 module.exports = config;

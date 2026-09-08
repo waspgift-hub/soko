@@ -41,6 +41,7 @@ import 'services/local_notification_service.dart';
 import 'services/balance_privacy_service.dart';
 import 'services/interstitial_ad_service.dart';
 import 'services/analytics_service.dart';
+import 'services/deep_link_service.dart';
 import 'services/security_service.dart';
 import 'services/server_keep_alive.dart';
 import 'theme/theme_manager.dart';
@@ -96,17 +97,20 @@ void main() async {
   }
 
   // --- Local cache (Hive) — must be ready before any repository reads ---
-  if (!kIsWeb) {
-    try {
-      await LocalCacheService.init();
-      await CartService.init();
-    } catch (e) {
-      debugPrint('LocalCacheService: init failed — $e');
-    }
+  // Hive runs on web too (IndexedDB), so the cart and offline product cache
+  // keep working for browser users.
+  try {
+    await LocalCacheService.init();
+    await CartService.init();
+  } catch (e) {
+    debugPrint('LocalCacheService: init failed — $e');
   }
 
   // --- Global error handlers (must be set before runApp to catch startup crashes) ---
-  _setupGlobalErrorHandlers();
+  if (!kIsWeb) {
+    // Crashlytics has no web implementation; only wire fatal errors on native.
+    _setupGlobalErrorHandlers();
+  }
 
   // --- Google Sign-In: initialize before any sign in calls ---
   if (!kIsWeb) {
@@ -222,6 +226,7 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
     themeManager.addListener(_onThemeChange);
     _initApp();
     _setupNavigateChannel();
+    _setupDeepLinks();
   }
 
   @override
@@ -248,6 +253,24 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
     });
   }
 
+  /// Hands incoming App Links / Universal Links to the router.
+  ///
+  /// Called early so a cold-start link is captured before Firebase finishes,
+  /// while actual navigation waits for [DeepLinkService.flushPending] — the
+  /// same link therefore never races app initialization or auth restore.
+  void _setupDeepLinks() {
+    if (kIsWeb) return; // web shares are handled by the marketing site
+    DeepLinkService.instance.onLocation = _onDeepLink;
+    unawaited(DeepLinkService.instance.init());
+  }
+
+  void _onDeepLink(String location) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      appRouter.go(location);
+    });
+  }
+
   // -----------------------------------------------------------------------
   // App lifecycle observer
   // -----------------------------------------------------------------------
@@ -268,7 +291,8 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
 
   @override
   void didChangePlatformBrightness() {
-    final brightness = WidgetsBinding.instance.platformDispatcher.platformBrightness;
+    final brightness =
+        WidgetsBinding.instance.platformDispatcher.platformBrightness;
     themeManager.onSystemBrightnessChanged(brightness);
   }
 
@@ -304,21 +328,25 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
 
   /// Loads preferences and fires background services.
   Future<void> _initApp() async {
-
     try {
       final prefs = await SharedPreferences.getInstance();
 
       setState(() {
         final savedLang = prefs.getString('language_code');
-        _langCode = (savedLang != null && LocalizationService.supportedLanguages.containsKey(savedLang))
+        _langCode =
+            (savedLang != null &&
+                LocalizationService.supportedLanguages.containsKey(savedLang))
             ? savedLang
             : 'sw';
         _currencyCode = prefs.getString('currency') ?? 'TZS';
         final savedSmsLang = prefs.getString('sms_language');
         _smsLangCode =
-            (savedSmsLang != null && LocalizationService.supportedLanguages.containsKey(savedSmsLang))
-                ? savedSmsLang
-                : '';
+            (savedSmsLang != null &&
+                LocalizationService.supportedLanguages.containsKey(
+                  savedSmsLang,
+                ))
+            ? savedSmsLang
+            : '';
       });
 
       await _authNotifier.initialize();
@@ -332,11 +360,16 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
         // who never set it should keep getting SMS in their app language (the
         // server falls back to langCode when smsLangCode is unset).
         if (_smsLangCode.isNotEmpty) {
-          UserService().setSmsLanguage(user.uid, _smsLangCode).catchError((_) {});
+          UserService()
+              .setSmsLanguage(user.uid, _smsLangCode)
+              .catchError((_) {});
         }
       }
       app_state.appStateNotifier.setAppInitialized();
       _trackSession();
+      // A cold-start deep link (getInitialLink) is flushed only now that the
+      // router redirects can behave correctly.
+      DeepLinkService.instance.flushPending();
 
       // Sync phone from onboarding to Firestore if user is logged in
       final phone = prefs.getString('phone_number');
@@ -378,8 +411,12 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
         if (orderId != null) {
           _pushIfNotCurrent('/receipt/$orderId', context);
         }
-        unawaited(notificationService.markRelatedAsRead(
-            (data['type'] as String?) ?? 'payment', data));
+        unawaited(
+          notificationService.markRelatedAsRead(
+            (data['type'] as String?) ?? 'payment',
+            data,
+          ),
+        );
       });
     };
   }
@@ -402,7 +439,8 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
           // New-order requests are the only to-seller order notifications
           // that carry productId, so that discriminates them uniquely.
           final myUid = FirebaseAuth.instance.currentUser?.uid;
-          final isNewOrderForSeller = myUid != null &&
+          final isNewOrderForSeller =
+              myUid != null &&
               data?['sellerId'] == null &&
               data?['buyerId'] != null &&
               data?['productId'] != null;
@@ -422,8 +460,7 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
           _pushIfNotCurrent('/notifications', ctx);
         }
       case 'payment':
-        final orderId =
-            (data?['orderId'] ?? data?['transactionId']) as String?;
+        final orderId = (data?['orderId'] ?? data?['transactionId']) as String?;
         if (orderId != null) {
           _pushIfNotCurrent('/receipt/$orderId', ctx);
         }
@@ -448,7 +485,11 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
     unawaited(notificationService.markRelatedAsRead(type, data));
   }
 
-  void _pushIfNotCurrent(String location, [BuildContext? context, Object? extra]) {
+  void _pushIfNotCurrent(
+    String location, [
+    BuildContext? context,
+    Object? extra,
+  ]) {
     if (context != null && mounted) {
       final current = GoRouterState.of(context).matchedLocation;
       if (current == location) return;
@@ -461,21 +502,25 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
   // -----------------------------------------------------------------------
 
   Future<void> _initBackgroundServices(SharedPreferences prefs) async {
-    // Crashlytics
-    try {
-      await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);
-    } catch (e) {
-      debugPrint('Crashlytics: failed — $e');
-    }
-
-    // Performance
-    try {
-      await FirebasePerformance.instance.setPerformanceCollectionEnabled(true);
-    } catch (e) {
-      debugPrint('Performance: failed — $e');
-    }
-
     if (!kIsWeb) {
+      // Crashlytics
+      try {
+        await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(
+          true,
+        );
+      } catch (e) {
+        debugPrint('Crashlytics: failed — $e');
+      }
+
+      // Performance
+      try {
+        await FirebasePerformance.instance.setPerformanceCollectionEnabled(
+          true,
+        );
+      } catch (e) {
+        debugPrint('Performance: failed — $e');
+      }
+
       // App Check
       try {
         await FirebaseAppCheck.instance.activate(
@@ -506,7 +551,6 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
       } catch (e) {
         debugPrint('SecurityService: failed — $e');
       }
-
     }
 
     // FCM push + in-app notification service
@@ -579,11 +623,7 @@ class _SokoVibeAppState extends State<SokoVibeApp> with WidgetsBindingObserver {
         debugShowCheckedModeBanner: false,
         title: 'Soko Vibe',
         locale: Locale(_langCode),
-        supportedLocales: const [
-          Locale('en'),
-          Locale('sw'),
-          Locale('zh'),
-        ],
+        supportedLocales: const [Locale('en'), Locale('sw'), Locale('zh')],
         localizationsDelegates: const [
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,

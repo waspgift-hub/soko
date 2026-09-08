@@ -22,6 +22,7 @@ import '../../services/user_service.dart';
 import '../../services/analytics_service.dart';
 import '../../services/flash_sale_service.dart';
 import '../../services/cart_service.dart';
+import '../../services/deep_link_service.dart';
 import '../../services/recently_viewed_service.dart';
 import '../../models/flash_sale_model.dart';
 import '../../theme/app_colors.dart';
@@ -174,7 +175,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     final text =
         "${product.name}\n"
         "${context.trParams('share_price_line', {'price': price})}\n"
-        "${context.tr('check_out_on')}";
+        "${context.tr('check_out_on')} ${DeepLinkService.productShareUrl(product.id)}";
     SharePlus.instance.share(ShareParams(text: text));
   }
 

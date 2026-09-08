@@ -45,7 +45,11 @@ app.use((req, res, next) => {
   // pages + admin dashboard pull Firebase/Google, Tailwind, chart.js, lucide,
   // Google Fonts, and AdSense from CDNs — those hosts are allow-listed instead
   // of falling back to unsafe-inline-everything.
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.googleapis.com https://apis.google.com https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://unpkg.com https://pagead2.googlesyndication.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://accounts.google.com https://googleads.g.doubleclick.net https://pagead2.googlesyndication.com; font-src 'self' data: https://fonts.gstatic.com");
+  // CSP covers three consumers on one server: the API (JSON), the marketing
+  // pages, and the Flutter web app. CanvasKit needs wasm-unsafe-eval + blob
+  // workers, and the web app talks to Firestore/Storage + Firebase auth
+  // directly from the browser.
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://www.gstatic.com https://www.googleapis.com https://apis.google.com https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://unpkg.com https://pagead2.googlesyndication.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://accounts.google.com https://googleads.g.doubleclick.net https://pagead2.googlesyndication.com https://www.gstatic.com https://www.googleapis.com https://firestore.googleapis.com https://firebasestorage.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; media-src 'self' blob: https:; worker-src 'self' blob:");
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   next();
 });
@@ -83,8 +87,50 @@ app.get('/', (req, res, next) => {
   if ((req.hostname || '').endsWith('admin.sokovibe.co.tz')) return res.redirect(301, '/admin');
   next();
 });
-app.use(express.static(path.join(__dirname, '..', 'landing'), { index: 'index.html' }));
+
+// Universal/App Links verification files. Served with an explicit JSON
+// content-type because apple-app-site-association has no file extension and
+// express.static would otherwise send application/octet-stream.
+const wellKnownDir = path.join(__dirname, '..', 'landing', '.well-known');
+const webDist = path.join(__dirname, '..', '..', 'build', 'web');
+app.get('/.well-known/assetlinks.json', (req, res) => {
+  res.type('application/json').sendFile(path.join(wellKnownDir, 'assetlinks.json'));
+});
+app.get('/.well-known/apple-app-site-association', (req, res) => {
+  res.type('application/json').sendFile(path.join(wellKnownDir, 'apple-app-site-association'));
+});
+app.get('/.well-known/apple-app-site-association.json', (req, res) => {
+  res.type('application/json').sendFile(path.join(wellKnownDir, 'apple-app-site-association'));
+});
+
+// The Flutter web app owns the root — www.sokovibe.co.tz now runs the app in
+// the browser (guest browsing first, login + buy without installing). The
+// legacy marketing landing moves under /marketing; /admin keeps its mount.
+app.use('/marketing', express.static(path.join(__dirname, '..', 'landing'), { index: 'index.html' }));
 app.use('/admin', express.static(path.join(__dirname, '..', 'admin'), { index: 'index.html' }));
+
+// Flutter web build (committed under build/web so Render can serve it).
+app.use(express.static(webDist, { index: 'index.html' }));
+
+// SPA history fallback — /product/:id and the other client-side routes load
+// the app bootstrap, so web deep links open the product page directly. The
+// fallback skips everything the handlers above already own.
+app.get('*', (req, res, next) => {
+  const lastSeg = req.path.split('/').pop() || '';
+  if (req.path.startsWith('/api') ||
+      req.path.startsWith('/admin') ||
+      req.path.startsWith('/marketing') ||
+      req.path.startsWith('/.well-known') ||
+      // Asset-looking URLs (favicon.ico, /nope.txt) keep 404 instead of
+      // loading the app; client-side routes never carry an extension.
+      lastSeg.includes('.') ||
+      !req.accepts('html')) {
+    return next();
+  }
+  res.sendFile(path.join(webDist, 'index.html'), {
+    headers: { 'Cache-Control': 'no-cache' },
+  });
+});
 
 // Routes
 app.use('/health', healthRouter);

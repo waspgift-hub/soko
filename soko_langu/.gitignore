@@ -54,3 +54,7 @@ CREDENTIALS.txt
 server/last_push_id.txt
 server/server.err
 *.err
+
+# Soko Vibe legal PDFs (large, not versioned)
+/*PERSONAL_DATA_PROTECTION*.pdf
+/*THE_PERSONAL_DATA_PROTECTION*.pdf

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
@@ -23,7 +24,8 @@ class NotificationService {
   StreamSubscription<QuerySnapshot>? _fallbackSub;
   final Set<String> _seenFallbackIds = {};
 
-  final StreamController<int> _unreadController = StreamController<int>.broadcast();
+  final StreamController<int> _unreadController =
+      StreamController<int>.broadcast();
   Stream<int> get unreadCountStream => _unreadController.stream;
 
   static final GlobalKey<ScaffoldMessengerState> messengerKey =
@@ -43,6 +45,10 @@ class NotificationService {
   Future<void> setEnabled(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_key, value);
+    if (kIsWeb) {
+      // No native push exists on web; the in-app list still works via Firestore.
+      return;
+    }
     if (value) {
       _initialized = false;
       await initialize();
@@ -65,6 +71,13 @@ class NotificationService {
       }
 
       if (_initialized) return;
+
+      if (kIsWeb) {
+        // OneSignal + local notifications are native-only; skip the whole push
+        // setup on web and rely on the in-app notification list via Firestore.
+        _initialized = true;
+        return;
+      }
 
       // Initialize local notifications first for heads-up display
       await LocalNotificationService().initialize();
@@ -112,8 +125,12 @@ class NotificationService {
           final body = notif.body ?? '';
           final type = data['type'] as String? ?? 'general';
           debugPrint('[OS] foreground notification: type=$type title=$title');
-          if (type == 'chat' && activeChatRoomId != null && data['roomId'] == activeChatRoomId) {
-            debugPrint('[OS] skipping heads-up — already viewing room $activeChatRoomId');
+          if (type == 'chat' &&
+              activeChatRoomId != null &&
+              data['roomId'] == activeChatRoomId) {
+            debugPrint(
+              '[OS] skipping heads-up — already viewing room $activeChatRoomId',
+            );
             return;
           }
           _showHeadsUpNotification(title, body, type, data);
@@ -152,7 +169,12 @@ class NotificationService {
     }
   }
 
-  void _showHeadsUpNotification(String title, String body, String type, Map<String, dynamic> data) {
+  void _showHeadsUpNotification(
+    String title,
+    String body,
+    String type,
+    Map<String, dynamic> data,
+  ) {
     final String channelId;
     final String headsUpTitle;
     final List<AndroidNotificationAction> actions = [];
@@ -162,7 +184,13 @@ class NotificationService {
       case 'group_chat':
         channelId = 'chat_messages_v6';
         headsUpTitle = data['senderName'] as String? ?? title;
-        actions.add(const AndroidNotificationAction('reply', 'Jibu', showsUserInterface: true));
+        actions.add(
+          const AndroidNotificationAction(
+            'reply',
+            'Jibu',
+            showsUserInterface: true,
+          ),
+        );
         break;
       case 'payment':
       case 'payment_failed':
@@ -182,16 +210,30 @@ class NotificationService {
       case 'deposit_failed':
         channelId = 'payments_notifications_v6';
         headsUpTitle = title;
-        final hasOrder = data['orderId'] != null || data['transactionId'] != null;
+        final hasOrder =
+            data['orderId'] != null || data['transactionId'] != null;
         // sellerId marks the shipping-quote push to the buyer — pay button
-        if (type == 'payment' || (type == 'order' && data['sellerId'] != null)) {
+        if (type == 'payment' ||
+            (type == 'order' && data['sellerId'] != null)) {
           if (hasOrder) {
-            actions.add(const AndroidNotificationAction('pay', 'Lipa Sasa', showsUserInterface: true));
+            actions.add(
+              const AndroidNotificationAction(
+                'pay',
+                'Lipa Sasa',
+                showsUserInterface: true,
+              ),
+            );
           }
         }
         if (type == 'dispatched' || type == 'delivery_confirmed') {
           if (hasOrder) {
-            actions.add(const AndroidNotificationAction('confirm', 'Thibitisha Upokeaji', showsUserInterface: true));
+            actions.add(
+              const AndroidNotificationAction(
+                'confirm',
+                'Thibitisha Upokeaji',
+                showsUserInterface: true,
+              ),
+            );
           }
         }
         break;
@@ -220,7 +262,9 @@ class NotificationService {
     final payload = jsonEncode({'type': type, ...data});
 
     final id = LocalNotificationService.nextNotificationId();
-    debugPrint('[OS] local heads-up → id=$id channel=$channelId title=$headsUpTitle');
+    debugPrint(
+      '[OS] local heads-up → id=$id channel=$channelId title=$headsUpTitle',
+    );
     LocalNotificationService().showHeadsUp(
       id: id,
       title: headsUpTitle,
@@ -235,7 +279,8 @@ class NotificationService {
     final type = data['type'] as String?;
     final action = data['action'] as String?;
     debugPrint('[OS] local notification tapped: type=$type action=$action');
-    if ((type == 'payment' || action == 'pay') && onPaymentNotificationTap != null) {
+    if ((type == 'payment' || action == 'pay') &&
+        onPaymentNotificationTap != null) {
       onPaymentNotificationTap!(data);
     } else if (onNotificationTap != null) {
       onNotificationTap!(data);
@@ -304,20 +349,20 @@ class NotificationService {
         .collection('notifications')
         .where('userId', isEqualTo: user.uid)
         .snapshots()
-        .map(
-          (snap) {
-            final list = snap.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList()
-              ..sort((a, b) {
-                final ta = a['createdAt'];
-                final tb = b['createdAt'];
-                if (ta is Timestamp && tb is Timestamp) return tb.compareTo(ta);
-                return 0;
-              });
-            final unread = list.where((n) => n['isRead'] != true).length;
-            _unreadController.add(unread);
-            return list;
-          },
-        );
+        .map((snap) {
+          final list =
+              snap.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList()
+                ..sort((a, b) {
+                  final ta = a['createdAt'];
+                  final tb = b['createdAt'];
+                  if (ta is Timestamp && tb is Timestamp)
+                    return tb.compareTo(ta);
+                  return 0;
+                });
+          final unread = list.where((n) => n['isRead'] != true).length;
+          _unreadController.add(unread);
+          return list;
+        });
   }
 
   Future<void> _syncBadge() async {
@@ -339,7 +384,9 @@ class NotificationService {
 
   Future<void> markAsRead(String notifId) async {
     try {
-      await _db.collection('notifications').doc(notifId).update({'isRead': true});
+      await _db.collection('notifications').doc(notifId).update({
+        'isRead': true,
+      });
     } catch (e) {
       debugPrint('markAsRead: $e');
     }
@@ -375,7 +422,10 @@ class NotificationService {
 
   /// Marks unread in-app notifications matching this tap as read so the badge
   /// clears even when the user opened the app via a push instead of the list.
-  Future<void> markRelatedAsRead(String? type, Map<String, dynamic>? data) async {
+  Future<void> markRelatedAsRead(
+    String? type,
+    Map<String, dynamic>? data,
+  ) async {
     final user = _auth.currentUser;
     if (user == null || type == null || type.isEmpty) return;
     try {
@@ -390,7 +440,14 @@ class NotificationService {
       }).toList();
       if (candidates.isEmpty) return;
 
-      final idKeys = ['orderId', 'transactionId', 'productId', 'roomId', 'payoutId', 'depositRef'];
+      final idKeys = [
+        'orderId',
+        'transactionId',
+        'productId',
+        'roomId',
+        'payoutId',
+        'depositRef',
+      ];
       final expected = <String, String>{};
       for (final key in idKeys) {
         final value = data?[key];
@@ -427,46 +484,47 @@ class NotificationService {
         .where('userId', isEqualTo: user.uid)
         .snapshots()
         .listen((snap) async {
-      for (final change in snap.docChanges) {
-        if (change.type != DocumentChangeType.added) continue;
-        final doc = change.doc;
-        if (_seenFallbackIds.contains(doc.id)) continue;
-        _seenFallbackIds.add(doc.id);
-        final d = doc.data();
-        if (d == null) continue;
-        if (d['isRead'] == true) continue;
-        final createdAt = d['createdAt'];
-        if (createdAt is Timestamp &&
-            DateTime.now().difference(createdAt.toDate()).inMinutes > 2) {
-          continue;
-        }
-        final dType = d['type']?.toString() ?? 'general';
-        final dData = Map<String, dynamic>.from(d['data'] as Map? ?? const {});
-        if (dType == 'chat' && activeChatRoomId != null && dData['roomId'] == activeChatRoomId) {
-          debugPrint('[OS] fallback: skipping heads-up — already viewing room $activeChatRoomId');
-          continue;
-        }
-        // Server stores the copy in Swahili; localize to the user's in-app
-        // language before showing. Chat text is user-generated, not a template.
-        var title = d['title']?.toString() ?? '';
-        var body = d['body']?.toString() ?? '';
-        if (dType != 'chat' && dType != 'group_chat') {
-          final localized = NotificationLang.localize(
-            await LocalizationService().getLanguage(),
-            title,
-            body,
-          );
-          title = localized.title;
-          body = localized.body;
-        }
-        _showHeadsUpNotification(
-          title,
-          body,
-          dType,
-          dData,
-        );
-      }
-    });
+          for (final change in snap.docChanges) {
+            if (change.type != DocumentChangeType.added) continue;
+            final doc = change.doc;
+            if (_seenFallbackIds.contains(doc.id)) continue;
+            _seenFallbackIds.add(doc.id);
+            final d = doc.data();
+            if (d == null) continue;
+            if (d['isRead'] == true) continue;
+            final createdAt = d['createdAt'];
+            if (createdAt is Timestamp &&
+                DateTime.now().difference(createdAt.toDate()).inMinutes > 2) {
+              continue;
+            }
+            final dType = d['type']?.toString() ?? 'general';
+            final dData = Map<String, dynamic>.from(
+              d['data'] as Map? ?? const {},
+            );
+            if (dType == 'chat' &&
+                activeChatRoomId != null &&
+                dData['roomId'] == activeChatRoomId) {
+              debugPrint(
+                '[OS] fallback: skipping heads-up — already viewing room $activeChatRoomId',
+              );
+              continue;
+            }
+            // Server stores the copy in Swahili; localize to the user's in-app
+            // language before showing. Chat text is user-generated, not a template.
+            var title = d['title']?.toString() ?? '';
+            var body = d['body']?.toString() ?? '';
+            if (dType != 'chat' && dType != 'group_chat') {
+              final localized = NotificationLang.localize(
+                await LocalizationService().getLanguage(),
+                title,
+                body,
+              );
+              title = localized.title;
+              body = localized.body;
+            }
+            _showHeadsUpNotification(title, body, dType, dData);
+          }
+        });
     debugPrint('[OS] firestore fallback active (push denied)');
   }
 

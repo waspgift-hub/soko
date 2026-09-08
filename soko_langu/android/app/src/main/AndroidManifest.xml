@@ -55,6 +55,30 @@
                     android:host="sokonimoko-8c171-a8d14.web.app"
                     android:pathPrefix="/magic-link" />
             </intent-filter>
+            <!-- Android App Links: open the app for product/seller deep links.
+                 Both hosts are verified independently; the apex host verifies
+                 only once sokovibe.co.tz serves valid TLS + assetlinks.json. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="www.sokovibe.co.tz"
+                    android:pathPrefix="/product" />
+                <data
+                    android:scheme="https"
+                    android:host="www.sokovibe.co.tz"
+                    android:pathPrefix="/seller" />
+                <data
+                    android:scheme="https"
+                    android:host="sokovibe.co.tz"
+                    android:pathPrefix="/product" />
+                <data
+                    android:scheme="https"
+                    android:host="sokovibe.co.tz"
+                    android:pathPrefix="/seller" />
+            </intent-filter>
             <!-- Deep link for pinned chat shortcuts on home screen -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
