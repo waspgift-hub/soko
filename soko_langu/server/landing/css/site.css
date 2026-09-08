@@ -671,3 +671,113 @@ h1, h2, h3, h4, p { margin: 0; }
   .footer-grid { grid-template-columns: 1fr; gap: 28px; }
   .cta-band { padding: 44px 24px; }
 }
+
+/* ---------- Public pages (About / Marketplace / Founder / Categories) ---------- */
+
+.page-hero {
+  padding: 96px 0 56px;
+  text-align: center;
+}
+
+.page-hero .eyebrow { margin-bottom: 18px; }
+
+.page-hero h1 {
+  font-size: clamp(2rem, 5vw, 3rem);
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+  margin: 0 0 18px;
+}
+
+.page-hero .sub {
+  color: #9a9a9a;
+  font-size: 1.1rem;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.prose {
+  max-width: 720px;
+  margin: 0 auto;
+  font-size: 1.02rem;
+  line-height: 1.75;
+  color: #d4d4d4;
+}
+
+.prose p { margin: 0 0 20px; }
+
+.prose h2 {
+  font-size: 1.35rem;
+  letter-spacing: -0.01em;
+  margin: 44px 0 14px;
+  color: var(--white);
+}
+
+.prose h3 {
+  font-size: 1.05rem;
+  margin: 28px 0 8px;
+  color: var(--white);
+}
+
+.prose ul, .prose ol {
+  margin: 0 0 20px;
+  padding-left: 22px;
+}
+
+.prose li { margin-bottom: 8px; }
+
+.prose a {
+  color: var(--white);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.prose .en {
+  display: block;
+  margin: 26px auto 0;
+  max-width: 640px;
+  font-size: 1.02rem;
+  line-height: 1.7;
+  color: #d4d4d4;
+  border-left: 2px solid var(--white);
+  padding-left: 18px;
+}
+
+.intro-link {
+  display: inline-flex;
+  margin-top: 22px;
+  gap: 8px;
+  align-items: center;
+  color: var(--white);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.intro-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+.intro-link::after { content: "→"; }
+
+.cat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.cat-item {
+  background: #101010;
+  border: 1px solid #1f1f1f;
+  border-radius: 16px;
+  padding: 24px;
+}
+
+.cat-item h3 { margin: 0 0 6px; font-size: 1.05rem; }
+
+.cat-item p { margin: 0; color: #9a9a9a; font-size: 0.92rem; line-height: 1.6; }
+
+@media (max-width: 980px) {
+  .cat-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 680px) {
+  .page-hero { padding: 64px 0 40px; }
+  .cat-grid { grid-template-columns: 1fr; }
+}

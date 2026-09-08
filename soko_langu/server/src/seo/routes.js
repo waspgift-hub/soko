@@ -12,6 +12,7 @@ Allow: /
 Disallow: /api/
 Disallow: /admin/
 Disallow: /marketing/
+Disallow: /health
 
 Sitemap: ${SITE.canonicalHost}/sitemap.xml
 `;

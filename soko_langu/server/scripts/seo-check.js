@@ -5,13 +5,13 @@
  * Soko Vibe SEO & domain health check.
  *
  * Usage:
- *   node scripts/seo-check.js            # against https://sokovibe.co.tz
+ *   node scripts/seo-check.js            # against https://www.sokovibe.co.tz
  *   BASE_URL=http://localhost:3999 node scripts/seo-check.js
  *
  * Exits 0 when every required check passes, 1 otherwise.
  */
 
-const BASE = process.env.BASE_URL || 'https://sokovibe.co.tz';
+const BASE = process.env.BASE_URL || 'https://www.sokovibe.co.tz';
 
 const results = [];
 
@@ -52,7 +52,7 @@ function count(re, text) {
 
   const canon = t.match(/<link[^>]+rel="canonical"[^>]+?href="([^"]+)"/);
   check('exactly one canonical', count(/rel="canonical"/g, t) === 1, canon && canon[1]);
-  check('canonical = apex host /', canon && canon[1] === 'https://sokovibe.co.tz/', canon && canon[1]);
+  check('canonical = www host /', canon && canon[1] === 'https://www.sokovibe.co.tz/', canon && canon[1]);
 
   check('single meta description', count(/<meta\s+name="description"/g, t) === 1);
   check('meta description non-empty', /<meta\s+name="description"\s+content="[^"]+"/.test(t));
@@ -60,12 +60,15 @@ function count(re, text) {
   const robotsMeta = t.match(/<meta\s+name="robots"\s+content="([^"]+)"/);
   check('home robots index,follow', robotsMeta && robotsMeta[1] === 'index, follow', robotsMeta && robotsMeta[1]);
   check('lang="sw"', /<html\s+lang="sw"/.test(t));
+  check('exactly one H1', count(/<h1[\s>]/g, t) === 1);
   check('og:title present', /<meta\s+property="og:title"/.test(t));
   check('og:image present', /<meta\s+property="og:image"/.test(t));
   check('twitter:card present', /<meta\s+name="twitter:card"/.test(t));
   check('JSON-LD present', t.includes('application/ld+json'));
   check('WebSite schema', /"@type"\s*:\s*"WebSite"/.test(t));
   check('Organization schema', /"@type"\s*:\s*"Organization"/.test(t));
+  check('Person schema (founder)', /"@type"\s*:\s*"Person"/.test(t));
+  check('FAQPage schema', /"@type"\s*:\s*"FAQPage"/.test(t));
 
   check('HSTS header', (home.headers.get('strict-transport-security') || '').startsWith('max-age=31536000'));
   check('X-Content-Type-Options: nosniff', home.headers.get('x-content-type-options') === 'nosniff');
@@ -93,11 +96,16 @@ function count(re, text) {
     }
   }
 
-  const legal = ['/privacy-policy', '/terms-of-service', '/support'];
-  for (const p of legal) {
+  const publicPages = ['/privacy-policy', '/terms-of-service', '/support', '/tanzania-marketplace', '/categories', '/about', '/about/founder'];
+  for (const p of publicPages) {
     try {
       const page = await request(p);
       check(`${p} 200`, page.status === 200, `got ${page.status}`);
+      if (page.status === 200) {
+        check(`${p} single <title>`, count(/<title>/g, page.text) === 1);
+        check(`${p} meta description`, /<meta\s+name="description"\s+content="[^"]+"/.test(page.text));
+        check(`${p} canonical points at www host`, page.text.includes(`<link rel="canonical" href="https://www.sokovibe.co.tz${p}">`));
+      }
     } catch (e) {
       check(`${p} 200`, false, e.message);
     }
@@ -118,9 +126,9 @@ function count(re, text) {
 
   try {
     const mk = await request('/marketing');
-    check('/marketing redirects to apex root', mk.status === 301 && (mk.headers.get('location') || '').endsWith('/'), `got ${mk.status} -> ${mk.headers.get('location')}`);
+    check('/marketing redirects to root', mk.status === 301 && (mk.headers.get('location') || '').endsWith('/'), `got ${mk.status} -> ${mk.headers.get('location')}`);
   } catch (e) {
-    check('/marketing redirects to apex root', false, e.message);
+    check('/marketing redirects to root', false, e.message);
   }
 
   let robots;
@@ -130,18 +138,19 @@ function count(re, text) {
     check('robots.txt Allow /', robots.text.includes('Allow: /'));
     check('robots.txt disallows /api/', robots.text.includes('Disallow: /api/'));
     check('robots.txt disallows /admin/', robots.text.includes('Disallow: /admin/'));
-    check('robots.txt Sitemap pointer', /Sitemap:\s+https:\/\/sokovibe\.co\.tz\/sitemap\.xml/.test(robots.text));
+    check('robots.txt Sitemap pointer', /Sitemap:\s+https:\/\/www\.sokovibe\.co\.tz\/sitemap\.xml/.test(robots.text));
   } catch (e) {
     check('robots.txt 200', false, e.message);
   }
 
+  const sitemapPaths = ['/', '/privacy-policy', '/terms-of-service', '/support', '/tanzania-marketplace', '/categories', '/about', '/about/founder'];
   let sitemap;
   try {
     sitemap = await request('/sitemap.xml');
     check('sitemap.xml 200', sitemap.status === 200, `got ${sitemap.status}`);
     check('sitemap is urlset', sitemap.text.includes('<urlset'));
-    check('sitemap has home loc', sitemap.text.includes('<loc>https://sokovibe.co.tz/</loc>'));
-    check('sitemap has legal locs', ['/privacy-policy', '/terms-of-service', '/support'].every((p) => sitemap.text.includes(`<loc>https://sokovibe.co.tz${p}</loc>`)));
+    check('sitemap has home loc', sitemap.text.includes('<loc>https://www.sokovibe.co.tz/</loc>'));
+    check('sitemap has all public locs', sitemapPaths.every((p) => sitemap.text.includes(`<loc>https://www.sokovibe.co.tz${p}</loc>`)));
   } catch (e) {
     check('sitemap.xml 200', false, e.message);
   }

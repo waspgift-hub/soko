@@ -51,44 +51,25 @@ app.use((req, res, next) => {
   next();
 });
 
-// Canonical domain: the apex sokovibe.co.tz is the official host. Every other
-// sokovibe.co.tz hostname is folded onto the apex (path + query preserved, one
-// redirect hop). The admin subdomain keeps its root->/admin mapping. Non-soko
-// hosts (Render origin, health checks) are left alone so the platform health
-// checks stay 200.
-//
-// The apex->www->apex redirect loop guard: Render may be configured with its
-// own custom-domain redirect (sokovibe.co.tz -> www.sokovibe.co.tz) that runs
-// at the edge BEFORE the app. In that state a host-level redirect to the apex
-// would bounce www back to apex and the site would never render, so the
-// canonical redirect is enabled only while the apex actually serves 200 (the
-// probe runs at boot and refreshes periodically).
-const CANONICAL_HOST = 'https://sokovibe.co.tz';
-let canonicalReady = false;
-
-function probeCanonical() {
-  return fetch(`${CANONICAL_HOST}/`, { redirect: 'manual', cache: 'no-store' })
-    .then((r) => {
-      canonicalReady = r.status === 200;
-      console.log(`[CANON] apex probe ${r.status} - redirects ${canonicalReady ? 'enabled' : 'disabled'}`);
-    })
-    .catch((e) => {
-      canonicalReady = false;
-      console.warn('[CANON] apex probe failed:', e.message);
-    });
-}
-probeCanonical();
-setInterval(probeCanonical, 5 * 60 * 1000).unref();
+// Canonical domain: www.sokovibe.co.tz is the official host. Render redirects
+// the apex (sokovibe.co.tz) to www at the edge before the app; if a request
+// ever reaches the app on the apex (e.g. the edge redirect is removed) we
+// still fold it onto www ourselves. Other sokovibe.co.tz subdomains are folded
+// onto www too (path + query preserved). The admin subdomain keeps its
+// root->/admin mapping. Non-Soko hosts (Render origin, health checks) are left
+// alone so the platform health checks stay 200.
+const CANONICAL_HOST = 'https://www.sokovibe.co.tz';
+const DOMAIN = 'sokovibe.co.tz';
+const WWW_HOST = `www.${DOMAIN}`;
 
 app.use((req, res, next) => {
   const host = (req.hostname || '').toLowerCase();
-  if (!host.endsWith('sokovibe.co.tz') || host === 'sokovibe.co.tz') return next();
-  if (host === 'admin.sokovibe.co.tz' && (req.path === '/' || req.path === '')) {
-    if (canonicalReady) return res.redirect(301, `${CANONICAL_HOST}/admin`);
-    req.url = '/admin';
-    return next();
+  if (!host.endsWith(DOMAIN)) return next();
+  if (host === DOMAIN) return res.redirect(301, `${CANONICAL_HOST}${req.originalUrl}`);
+  if (host === `admin.${DOMAIN}` && (req.path === '/' || req.path === '')) {
+    return res.redirect(301, `${CANONICAL_HOST}/admin`);
   }
-  if (canonicalReady) {
+  if (host !== WWW_HOST) {
     return res.redirect(301, `${CANONICAL_HOST}${req.originalUrl}`);
   }
   next();
@@ -146,23 +127,24 @@ app.get('/.well-known/apple-app-site-association.json', (req, res) => {
 // SEO assets: robots.txt + sitemap.xml (static, no Firestore).
 app.use(seoRouter);
 
-// Legal pages on clean public URLs. Served from the landing dir so their
-// relative asset + translation links resolve (styles.css, i18n.js, index.html).
-app.get('/privacy-policy', (req, res) => {
-  res.setHeader('Cache-Control', 'no-cache');
-  if (!req.accepts('html')) return res.status(406).type('text/plain').send('Not acceptable');
-  res.type('html').sendFile(path.join(landingDir, 'privacy.html'));
-});
-app.get('/terms-of-service', (req, res) => {
-  res.setHeader('Cache-Control', 'no-cache');
-  if (!req.accepts('html')) return res.status(406).type('text/plain').send('Not acceptable');
-  res.type('html').sendFile(path.join(landingDir, 'terms.html'));
-});
-app.get('/support', (req, res) => {
-  res.setHeader('Cache-Control', 'no-cache');
-  if (!req.accepts('html')) return res.status(406).type('text/plain').send('Not acceptable');
-  res.type('html').sendFile(path.join(landingDir, 'support.html'));
-});
+// Public marketing/legal pages on clean URLs. Served from the landing dir so
+// their relative asset + translation links resolve (styles.css, i18n.js, index.html).
+const PUBLIC_HTML_PAGES = [
+  ['/privacy-policy', 'privacy.html'],
+  ['/terms-of-service', 'terms.html'],
+  ['/support', 'support.html'],
+  ['/tanzania-marketplace', 'tanzania-marketplace.html'],
+  ['/categories', 'categories.html'],
+  ['/about', 'about.html'],
+  ['/about/founder', 'about-founder.html'],
+];
+for (const [route, file] of PUBLIC_HTML_PAGES) {
+  app.get(route, (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    if (!req.accepts('html')) return res.status(406).type('text/plain').send('Not acceptable');
+    res.type('html').sendFile(path.join(landingDir, file));
+  });
+}
 
 // /marketing used to host the old landing; the site now owns the root.
 app.use('/marketing', (req, res) => {

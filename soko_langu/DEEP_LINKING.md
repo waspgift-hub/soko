@@ -166,10 +166,11 @@ paths, API keys or user data are ever included in a share link.
 - Web deep links (`/product/...`) now return a premium 404 — the native share
   text still emits `www.sokovibe.co.tz/product/{id}`; switch share URLs to the
   app scheme when store links are live.
-- Canonical host is the **apex** `https://sokovibe.co.tz`; the app middleware
-  301s `www.sokovibe.co.tz` → apex, enabled only while the apex returns 200
-  (the app probes the apex at boot and every 5 min; a `sokovibe.co.tz →
-  www.sokovibe.co.tz` redirect rule still set in the Render dashboard keeps
-  the redirect disabled to avoid a redirect loop).
+- Canonical host is **www.sokovibe.co.tz**; the app middleware 301s the apex
+  (`sokovibe.co.tz`) and any other soko subdomain → www (Render's edge redirect
+  of apex → www makes the apex hop redundant, but the app keeps it as belt and
+  suspenders). All canonical/OG/@id URLs use `https://www.sokovibe.co.tz`.
+- Public SEO pages served from `server/landing/`: `/tanzania-marketplace`,
+  `/categories`, `/about`, `/about/founder` in addition to the legal trio.
 - Firebase Console: add `sokovibe.co.tz` (apex) to **Authentication → Settings
   → Authorized domains** if web sign-in is ever re-enabled.

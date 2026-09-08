@@ -3,9 +3,15 @@
 const { SITE } = require('./meta');
 
 // The web app is no longer served; only the public landing pages are
-// indexed. Product pages live in the native apps only.
+// indexed. Product pages live in the native apps only, so no /product/*
+// or per-category URLs are listed here — every path below exists and
+// returns 200.
 const SITEMAP_PATHS = [
   '/',
+  '/tanzania-marketplace',
+  '/categories',
+  '/about',
+  '/about/founder',
   '/privacy-policy',
   '/terms-of-service',
   '/support',
