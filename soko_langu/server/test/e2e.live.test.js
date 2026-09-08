@@ -169,6 +169,7 @@ const PROTECTED_ENDPOINTS = [
   ['POST', '/api/admin/broadcast-notification', {}],
   ['POST', '/api/cron/release-escrows', {}],
   ['POST', '/api/escrow/release', {}],
+  ['POST', '/api/moderation/check-text', { text: 'test' }],
 ];
 
 for (const [method, path, body] of PROTECTED_ENDPOINTS) {

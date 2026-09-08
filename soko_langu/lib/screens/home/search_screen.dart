@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../widgets/product_cached_image.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../extensions/context_tr.dart';
@@ -18,6 +17,7 @@ import '../../widgets/google_loading.dart';
 import '../../widgets/soko_vibe_loading.dart';
 import '../../widgets/barcode_scanner_widget.dart';
 import '../../widgets/soko_vibe_watermark.dart';
+import '../../widgets/soko_widgets.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -394,44 +394,30 @@ class _SearchScreenState extends State<SearchScreen>
   Widget _buildSearchField(ColorScheme cs) {
     return SizedBox(
       height: 44,
-      child: TextField(
+      child: SokoSearchBar(
         controller: _searchCtrl,
         focusNode: _focusNode,
-        textInputAction: TextInputAction.search,
-        style: TextStyle(fontSize: 15, color: cs.onSurface),
-        decoration: InputDecoration(
-          hintText: context.tr('search_products_users'),
-          hintStyle: TextStyle(fontSize: 14, color: cs.onSurfaceVariant),
-          prefixIcon: Icon(Icons.search, size: 20, color: cs.onSurfaceVariant),
-          suffixIcon: _searchCtrl.text.isNotEmpty
-              ? IconButton(
-                  icon: Icon(Icons.clear, size: 18, color: cs.onSurfaceVariant),
-                  onPressed: _clearField,
-                )
-              : Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: _isListening
-                          ? Icon(Icons.mic, size: 20, color: cs.error)
-                          : Icon(Icons.mic_none, size: 20, color: cs.onSurfaceVariant),
-                      onPressed: _isListening ? _stopVoiceSearch : _startVoiceSearch,
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.qr_code_scanner, size: 20, color: cs.onSurfaceVariant),
-                      onPressed: _openBarcodeScanner,
-                    ),
-                  ],
-                ),
-          filled: true,
-          fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: cs.outline.withValues(alpha: 0.7)),
-          ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        ),
+        hint: context.tr('search_products_users'),
         onSubmitted: (q) => _performSearch(query: q),
+        onClear: _clearField,
+        trailing: [
+          IconButton(
+            icon: _isListening
+                ? Icon(Icons.mic, size: 20, color: cs.error)
+                : Icon(Icons.mic_none, size: 20, color: cs.onSurfaceVariant),
+            onPressed: _isListening ? _stopVoiceSearch : _startVoiceSearch,
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+          ),
+          IconButton(
+            icon: Icon(Icons.qr_code_scanner, size: 20, color: cs.onSurfaceVariant),
+            onPressed: _openBarcodeScanner,
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+          ),
+        ],
       ),
     );
   }
@@ -638,7 +624,7 @@ class _SearchScreenState extends State<SearchScreen>
                         if (r.kycApproved)
                           Padding(
                             padding: const EdgeInsets.only(left: 4),
-                            child: Icon(Icons.verified, size: 14, color: Colors.blue),
+                            child: Icon(Icons.verified, size: 14, color: cs.primary),
                           ),
                         if (r.isBoosted)
                           Container(
@@ -683,7 +669,7 @@ class _SearchScreenState extends State<SearchScreen>
                     if (r.rating != null && r.rating! > 0)
                       Row(
                         children: [
-                          Icon(Icons.star, size: 14, color: Colors.amber),
+                          Icon(Icons.star, size: 14, color: cs.primary),
                           const SizedBox(width: 2),
                           Text(r.rating!.toStringAsFixed(1),
                               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
@@ -983,7 +969,7 @@ class _SearchScreenState extends State<SearchScreen>
                           style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: cs.primary)),
                     Row(
                       children: [
-                        const Icon(Icons.star, size: 13, color: Colors.amber),
+Icon(Icons.star, size: 13, color: cs.primary),
                         const SizedBox(width: 2),
                         Text(r.rating?.toStringAsFixed(1) ?? '0.0',
                             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
@@ -1003,74 +989,14 @@ class _SearchScreenState extends State<SearchScreen>
   }
 
   Widget _buildMostRatedSellerCard(ColorScheme cs, SearchResult r) {
-    return SizedBox(
-      width: 120,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: () =>
-            context.push('${AppRoutes.publicProfile}/${r.id}', extra: r.displayName),
-        child: Column(
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                CircleAvatar(
-                  radius: 34,
-                  backgroundColor: cs.surfaceContainerHighest,
-                  backgroundImage: r.image != null && r.image!.isNotEmpty
-                      ? CachedNetworkImageProvider(r.image!)
-                      : null,
-                  child: (r.image == null || r.image!.isEmpty)
-                      ? Icon(Icons.storefront, size: 30, color: cs.onSurfaceVariant)
-                      : null,
-                ),
-                Positioned(
-                  right: -2,
-                  bottom: -2,
-                  child: Container(
-                    padding: const EdgeInsets.all(3),
-                    decoration: BoxDecoration(
-                      color: cs.primary,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: cs.surface, width: 2),
-                    ),
-                    child: const Icon(Icons.storefront, size: 12, color: Colors.white),
-                  ),
-                ),
-                if (r.kycApproved)
-                  Positioned(
-                    left: -2,
-                    bottom: -2,
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(color: cs.surface, shape: BoxShape.circle),
-                      child: const Icon(Icons.verified, size: 16, color: Colors.blue),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(r.displayName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 3),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.star, size: 13, color: Colors.amber),
-                const SizedBox(width: 2),
-                Text(r.rating?.toStringAsFixed(1) ?? '0.0',
-                    style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-                const SizedBox(width: 3),
-                Text('(${r.reviewCount ?? 0})',
-                    style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
-              ],
-            ),
-          ],
-        ),
-      ),
+    return SellerCard(
+      name: r.displayName,
+      imageUrl: r.image ?? '',
+      rating: r.rating ?? 0,
+      reviewCount: r.reviewCount ?? 0,
+      kycVerified: r.kycApproved,
+      onTap: () =>
+          context.push('${AppRoutes.publicProfile}/${r.id}', extra: r.displayName),
     );
   }
 }

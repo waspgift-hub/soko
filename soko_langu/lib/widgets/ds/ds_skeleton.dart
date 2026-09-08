@@ -44,8 +44,8 @@ class _DsSkeletonState extends State<DsSkeleton>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final base = isDark ? const Color(0xFF222952) : const Color(0xFFE4E7EF);
-    final shine = isDark ? const Color(0xFF121729) : const Color(0xFFF6F7FB);
+    final base = isDark ? const Color(0xFF262626) : const Color(0xFFE8E8EA);
+    final shine = isDark ? const Color(0xFF151515) : const Color(0xFFF7F7F8);
 
     return AnimatedBuilder(
       animation: _controller,

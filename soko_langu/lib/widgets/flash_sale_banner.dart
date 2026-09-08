@@ -227,7 +227,7 @@ class _FlashSaleBannerState extends State<FlashSaleBanner>
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Colors.deepOrange, Colors.orange],
+          colors: [Color(0xFF121212), Color(0xFF404040)],
         ),
       ),
       child: Column(
@@ -322,7 +322,7 @@ class _ImagePlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.orange.shade100,
+      color: const Color(0xFFE5E5E5),
       child: Center(
         child: Icon(Icons.image, color: Colors.black.withValues(alpha: 0.2), size: 36),
       ),

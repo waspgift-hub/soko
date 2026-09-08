@@ -102,9 +102,9 @@ class Ds {
     final isDark = Theme.of(ctx).brightness == Brightness.dark;
     return LinearGradient(
       colors: [
-        isDark ? const Color(0xFF222952) : const Color(0xFFE4E7EF),
-        isDark ? const Color(0xFF121729) : const Color(0xFFF6F7FB),
-        isDark ? const Color(0xFF222952) : const Color(0xFFE4E7EF),
+        isDark ? const Color(0xFF262626) : const Color(0xFFE8E8EA),
+        isDark ? const Color(0xFF151515) : const Color(0xFFF7F7F8),
+        isDark ? const Color(0xFF262626) : const Color(0xFFE8E8EA),
       ],
     );
   }

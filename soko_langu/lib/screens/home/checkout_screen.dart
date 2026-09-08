@@ -19,6 +19,7 @@ import '../../widgets/location_map_widget.dart';
 import '../../widgets/soko_vibe_loading.dart';
 import '../../utils/phone_utils.dart';
 import '../../services/user_service.dart';
+import '../../widgets/soko_widgets.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final Product product;
@@ -653,6 +654,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Widget _buildBottomBar(BuildContext context, ColorScheme cs) {
+    final originalTotal = widget.product.price * _quantity;
+    final discount = _flashSale != null && originalTotal > _lineTotal
+        ? originalTotal - _lineTotal
+        : 0.0;
     return Container(
       padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
       decoration: BoxDecoration(
@@ -661,58 +666,30 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       ),
       child: SafeArea(
         top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Text(
-                  context.tr('flow_place_order'),
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: cs.onSurface),
-                ),
-                const Spacer(),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      context.formatPrice(_lineTotal),
-                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: cs.primary),
-                    ),
-                    if (_flashSale != null)
-                      Text(
-                        context.formatPrice(widget.product.price * _quantity),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: cs.onSurfaceVariant.withValues(alpha: 0.6),
-                          decoration: TextDecoration.lineThrough,
-                        ),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton.icon(
-                onPressed: _processing ? null : _submitOrder,
-                icon: _processing
-                    ? SokoVibeThreeDotLoader(size: 20, dotSize: 5, color: cs.onPrimary)
-                    : const Icon(Icons.send_rounded, size: 20),
-                label: Text(
-                  _processing ? context.tr('sending') : context.tr('flow_place_order'),
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: cs.primary,
-                  foregroundColor: cs.onPrimary,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                ),
+        child: CheckoutSummary(
+          subtotal: _lineTotal,
+          discount: discount,
+          note: _flashSale != null ? context.tr('flash_sale_price', 'Flash sale price') : null,
+          action: SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: ElevatedButton.icon(
+              onPressed: _processing ? null : _submitOrder,
+              icon: _processing
+                  ? SokoVibeThreeDotLoader(size: 20, dotSize: 5, color: cs.onPrimary)
+                  : const Icon(Icons.send_rounded, size: 20),
+              label: Text(
+                _processing ? context.tr('sending') : context.tr('flow_place_order'),
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: cs.primary,
+                foregroundColor: cs.onPrimary,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );

@@ -114,10 +114,10 @@ class _AdminKycScreenState extends State<AdminKycScreen>
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: t == 'pending' ? Colors.orange.withValues(alpha: 0.2) : cs.primary.withValues(alpha: 0.1),
+                        color: t == 'pending' ? cs.tertiary.withValues(alpha: 0.2) : cs.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Text('$count', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: t == 'pending' ? Colors.orange : cs.primary)),
+                      child: Text('$count', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: t == 'pending' ? cs.tertiary : cs.primary)),
                     ),
                   ],
                 ],
@@ -144,7 +144,7 @@ class _AdminKycScreenState extends State<AdminKycScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.check_circle_outline, size: 64, color: Colors.green.withValues(alpha: 0.4)),
+              Icon(Icons.check_circle_outline, size: 64, color: cs.primary.withValues(alpha: 0.4)),
               const SizedBox(height: 16),
               Text(context.tr('no_pending_kyc'), style: TextStyle(color: cs.onSurfaceVariant, fontSize: 16)),
             ],
@@ -180,19 +180,19 @@ class _AdminKycScreenState extends State<AdminKycScreen>
     IconData statusIcon;
     switch (status) {
       case 'approved':
-        statusColor = Colors.green;
+        statusColor = cs.primary;
         statusIcon = Icons.check_circle;
         break;
       case 'rejected':
-        statusColor = Colors.red;
+        statusColor = cs.error;
         statusIcon = Icons.cancel;
         break;
       case 'revoked':
-        statusColor = Colors.orange;
+        statusColor = cs.tertiary;
         statusIcon = Icons.block;
         break;
       default:
-        statusColor = Colors.blue;
+        statusColor = cs.secondary;
         statusIcon = Icons.hourglass_empty;
     }
 
@@ -241,16 +241,16 @@ class _AdminKycScreenState extends State<AdminKycScreen>
             Row(
               children: [
                 if (status == 'pending') ...[
-                  _actionButton(cs, context.tr('approve_action'), Icons.check, Colors.green, () => _submitReview(uid, true, '')),
+                  _actionButton(cs, context.tr('approve_action'), Icons.check, cs.primary, () => _submitReview(uid, true, '')),
                   const SizedBox(width: 8),
-                  _actionButton(cs, context.tr('reject_action'), Icons.close, Colors.red, () => _showRejectDialog(uid)),
+                  _actionButton(cs, context.tr('reject_action'), Icons.close, cs.error, () => _showRejectDialog(uid)),
                   const SizedBox(width: 8),
                 ],
                 if (status == 'approved')
-                  _actionButton(cs, context.tr('revoke'), Icons.block, Colors.orange, () => _confirmRevoke(uid)),
-                _actionButton(cs, context.tr('view_label'), Icons.visibility, Colors.blue, () => _showKycDetail(user)),
+                  _actionButton(cs, context.tr('revoke'), Icons.block, cs.tertiary, () => _confirmRevoke(uid)),
+                _actionButton(cs, context.tr('view_label'), Icons.visibility, cs.secondary, () => _showKycDetail(user)),
                 const SizedBox(width: 8),
-                _actionButton(cs, context.tr('delete'), Icons.delete_forever, Colors.red.shade700, () => _confirmDelete(uid)),
+                _actionButton(cs, context.tr('delete'), Icons.delete_forever, cs.error, () => _confirmDelete(uid)),
               ],
             ),
           ],
@@ -312,7 +312,7 @@ class _AdminKycScreenState extends State<AdminKycScreen>
           ElevatedButton.icon(
             icon: const Icon(Icons.close, size: 16),
             label: Text(context.tr('reject')),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error, foregroundColor: Theme.of(context).colorScheme.onError,),
             onPressed: () {
               Navigator.pop(ctx);
               _submitReview(uid, false, notesCtrl.text);
@@ -366,7 +366,7 @@ class _AdminKycScreenState extends State<AdminKycScreen>
           ElevatedButton.icon(
             icon: const Icon(Icons.block, size: 16),
             label: Text(context.tr('revoke')),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.tertiary, foregroundColor: Theme.of(context).colorScheme.onTertiary,),
             onPressed: () => Navigator.pop(ctx, true),
           ),
         ],
@@ -416,7 +416,7 @@ class _AdminKycScreenState extends State<AdminKycScreen>
           ElevatedButton.icon(
             icon: const Icon(Icons.delete_forever, size: 16),
             label: Text(context.tr('delete_permanently')),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error, foregroundColor: Theme.of(context).colorScheme.onError,),
             onPressed: () => Navigator.pop(ctx, true),
           ),
         ],

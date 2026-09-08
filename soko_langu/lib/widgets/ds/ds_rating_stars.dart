@@ -18,7 +18,7 @@ class DsRatingStars extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final starColor = color ?? Colors.amber;
+    final starColor = color ?? Theme.of(context).colorScheme.primary;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: List.generate(max, (i) {

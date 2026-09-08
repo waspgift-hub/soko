@@ -7,7 +7,7 @@ class ThemeManager extends ChangeNotifier {
   static const String _darkKey = 'app_dark_mode';
   static const String _themeModeKey = 'app_theme_mode';
   static const String _seedKey = 'theme_seed_color';
-  static const int _defaultSeed = 0xFF1B5E20;
+  static const int _defaultSeed = 0xFF000000;
 
   ThemeMode _themeMode = ThemeMode.system;
   bool _isDark = false;

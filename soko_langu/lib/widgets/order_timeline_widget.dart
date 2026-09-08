@@ -37,28 +37,9 @@ class OrderTimelineWidget extends StatelessWidget {
     this.pulseValue,
   });
 
-  static const _statusColors = {
-    'pending': Color(0xFF2196F3),
-    'quoted': Color(0xFF00BCD4),
-    'paid': Color(0xFF4CAF50),
-    'escrow_hold': Color(0xFFFF9800),
-    'dispatched': Color(0xFFFF5722),
-    'confirmed': Color(0xFF9C27B0),
-    'completed': Color(0xFFE91E63),
-    'cancelled': Color(0xFFF44336),
-    'disputed': Color(0xFFFFC107),
-    'refunded': Color(0xFF9E9E9E),
-    'failed': Color(0xFFF44336),
-  };
-
-  static Color colorForStatus(String status) =>
-      _statusColors[status.toLowerCase()] ?? const Color(0xFF2196F3);
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    // ignore: unused_local_variable
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Column(
       children: List.generate(steps.length, (index) {
@@ -102,7 +83,13 @@ class OrderTimelineWidget extends StatelessWidget {
                               : null,
                         ),
                         child: isCompleted
-                            ? const Icon(Icons.check, color: Colors.white, size: 22)
+                            ? Icon(
+                                Icons.check,
+                                size: 22,
+                                color: stepColor.computeLuminance() > 0.5
+                                    ? Colors.black
+                                    : Colors.white,
+                              )
                             : Icon(step.icon,
                                 color: isCurrent ? stepColor : cs.onSurface.withValues(alpha: 0.4),
                                 size: isCurrent ? 22 : 20),

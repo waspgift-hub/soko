@@ -13,7 +13,7 @@ class VerifiedBadge extends StatelessWidget {
       child: Icon(
         Icons.verified,
         size: size,
-        color: color ?? Colors.blueAccent,
+        color: color ?? Theme.of(context).colorScheme.primary,
       ),
     );
   }

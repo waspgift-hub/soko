@@ -1,21 +1,16 @@
 import 'package:flutter/material.dart';
 
+/// Subtle monochrome accent line that breathes opacity instead of sweeping a
+/// gradient, so it reads as a quiet divider rather than a colorful streak.
 class AnimatedGradientLine extends StatefulWidget {
   final double height;
-  final List<Color> colors;
   final Duration duration;
   final double borderRadius;
 
   const AnimatedGradientLine({
     super.key,
     this.height = 3,
-    this.colors = const [
-      Color(0xFF6C63FF),
-      Color(0xFFFF6584),
-      Color(0xFFFFB84C),
-      Color(0xFF00DBA5),
-    ],
-    this.duration = const Duration(seconds: 4),
+    this.duration = const Duration(seconds: 3),
     this.borderRadius = 2,
   });
 
@@ -31,7 +26,7 @@ class _AnimatedGradientLineState extends State<AnimatedGradientLine>
   void initState() {
     super.initState();
     _controller = AnimationController(vsync: this, duration: widget.duration)
-      ..repeat();
+      ..repeat(reverse: true);
   }
 
   @override
@@ -42,24 +37,16 @@ class _AnimatedGradientLineState extends State<AnimatedGradientLine>
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {
-        final themeColors = [
-          Theme.of(context).colorScheme.primary,
-          Theme.of(context).colorScheme.secondary,
-          Theme.of(context).colorScheme.tertiary,
-          Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
-        ];
+        final t = Curves.easeInOut.transform(_controller.value);
         return Container(
           height: widget.height,
           decoration: BoxDecoration(
+            color: cs.primary.withValues(alpha: 0.35 + t * 0.35),
             borderRadius: BorderRadius.circular(widget.borderRadius),
-            gradient: LinearGradient(
-              begin: Alignment(-1 + _controller.value * 2, 0),
-              end: Alignment(1 - _controller.value * 2, 0),
-              colors: themeColors,
-            ),
           ),
         );
       },

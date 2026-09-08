@@ -337,21 +337,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   icon: Icons.gavel,
                   count: disputeCount,
                   label: context.tr('disputes'),
-                  color: Colors.orange,
+                  color: cs.tertiary,
                 ),
                 const SizedBox(width: 10),
                 _exceptionSummaryCard(
                   icon: Icons.error_outline,
                   count: failedCount,
                   label: context.tr('failed_payouts'),
-                  color: Colors.red,
+                  color: cs.error,
                 ),
                 const SizedBox(width: 10),
                 _exceptionSummaryCard(
                   icon: Icons.verified_user,
                   count: kycCount,
                   label: context.tr('pending_kyc'),
-                  color: Colors.blue,
+                  color: cs.secondary,
                 ),
               ],
             ),
@@ -477,7 +477,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           Icon(
             Icons.check_circle_outline,
             size: 48,
-            color: Colors.green.withValues(alpha: 0.5),
+            color: cs.primary.withValues(alpha: 0.5),
           ),
           const SizedBox(height: 12),
           Text(
@@ -514,7 +514,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           children: [
             Row(
               children: [
-                Icon(Icons.gavel, size: 18, color: Colors.orange),
+                Icon(Icons.gavel, size: 18, color: cs.tertiary),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
@@ -557,8 +557,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 icon: const Icon(Icons.gavel, size: 16),
                 label: Text(context.tr('resolve_dispute')),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
-                  foregroundColor: Colors.white,
+                  backgroundColor: cs.tertiary,
+                  foregroundColor: Theme.of(context).colorScheme.onTertiary,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 8,
@@ -590,7 +590,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           children: [
             Row(
               children: [
-                Icon(Icons.error_outline, size: 18, color: Colors.red),
+                Icon(Icons.error_outline, size: 18, color: cs.error),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
@@ -633,8 +633,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 icon: const Icon(Icons.refresh, size: 16),
                 label: Text(context.tr('retry_payout')),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
+                  backgroundColor: cs.error,
+                  foregroundColor: Theme.of(context).colorScheme.onError,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 8,
@@ -666,7 +666,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           children: [
             Row(
               children: [
-                Icon(Icons.verified_user, size: 18, color: Colors.blue),
+                Icon(Icons.verified_user, size: 18, color: cs.secondary),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
@@ -706,8 +706,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 icon: const Icon(Icons.rate_review, size: 16),
                 label: Text(context.tr('review_kyc')),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
+                  backgroundColor: cs.secondary,
+                  foregroundColor: Theme.of(context).colorScheme.onSecondary,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 8,
@@ -1015,8 +1015,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   ),
                   decoration: BoxDecoration(
                     color: currentlyEnabled
-                        ? Colors.red.withValues(alpha: 0.12)
-                        : Colors.green.withValues(alpha: 0.12),
+                        ? Theme.of(context).colorScheme.error.withValues(alpha: 0.12)
+                        : Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
@@ -1024,7 +1024,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
-                      color: currentlyEnabled ? Colors.red : Colors.green,
+                      color: currentlyEnabled ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.primary,
                     ),
                   ),
                 ),
@@ -1063,8 +1063,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               context.tr(currentlyEnabled ? 'disable_maintenance' : 'enable_maintenance'),
             ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: currentlyEnabled ? Colors.green : Colors.red,
-              foregroundColor: Colors.white,
+              backgroundColor: currentlyEnabled ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.error,
+              foregroundColor: currentlyEnabled ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onError,
             ),
             onPressed: () => Navigator.pop(ctx, {
               'enable': !currentlyEnabled,
@@ -1144,8 +1144,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             icon: const Icon(Icons.person, size: 16),
             label: Text(context.tr('release_to_seller')),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-              foregroundColor: Colors.white,
+              backgroundColor: Theme.of(context).colorScheme.tertiary,
+              foregroundColor: Theme.of(context).colorScheme.onTertiary,
             ),
             onPressed: () {
               Navigator.pop(ctx);
@@ -1156,8 +1156,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             icon: const Icon(Icons.replay, size: 16),
             label: Text(context.tr('refund_to_buyer')),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
             ),
             onPressed: () {
               Navigator.pop(ctx);
@@ -1237,8 +1237,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
             ),
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(context.tr('retry')),
@@ -1743,7 +1743,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                           value: 'full_delete',
                           child: Text(
                             context.tr('full_delete'),
-                            style: const TextStyle(color: Colors.red),
+                            style: TextStyle(color: Theme.of(context).colorScheme.error),
                           ),
                         ),
                       ],
@@ -1781,7 +1781,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 onPressed: () => Navigator.pop(ctx, true),
                 child: Text(
                   context.tr('delete_forever'),
-                  style: const TextStyle(color: Colors.red),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               ),
             ],
@@ -1861,14 +1861,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: _pendingKycUsers.length > 0 ? Colors.blue.withValues(alpha: 0.12) : Colors.green.withValues(alpha: 0.12),
+                  color: _pendingKycUsers.length > 0 ? cs.secondary.withValues(alpha: 0.12) : cs.primary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   '${_pendingKycUsers.length}',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: _pendingKycUsers.length > 0 ? Colors.blue : Colors.green,
+                    color: _pendingKycUsers.length > 0 ? cs.secondary : cs.primary,
                   ),
                 ),
               ),
@@ -1883,7 +1883,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 padding: const EdgeInsets.all(48),
                 child: Column(
                   children: [
-                    Icon(Icons.check_circle_outline, size: 64, color: Colors.green.withValues(alpha: 0.5)),
+                    Icon(Icons.check_circle_outline, size: 64, color: cs.primary.withValues(alpha: 0.5)),
                     const SizedBox(height: 16),
                     Text(context.tr('no_pending_kyc'), style: TextStyle(color: cs.onSurfaceVariant, fontSize: 16)),
                   ],
@@ -1917,8 +1917,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               icon: const Icon(Icons.send_rounded, size: 18),
               label: Text(context.tr('send_broadcast')),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
+                backgroundColor: cs.error,
+                foregroundColor: Theme.of(context).colorScheme.onError,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
@@ -2223,7 +2223,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               child: ExpansionTile(
                 leading: CircleAvatar(
                   backgroundColor: isAi
-                      ? Colors.teal.withValues(alpha: 0.12)
+                      ? Theme.of(context).colorScheme.tertiary.withValues(alpha: 0.12)
                       : Theme.of(context).colorScheme.primaryContainer,
                   child: Icon(isAi ? Icons.smart_toy : Icons.chat),
                 ),

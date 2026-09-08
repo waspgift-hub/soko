@@ -61,8 +61,8 @@ void main() {
         expect(Validators.password('12345'), isNotNull);
       });
 
-      test('accepts 6 chars', () {
-        expect(Validators.password('123456'), isNull);
+      test('accepts 8 chars', () {
+        expect(Validators.password('12345678'), isNull);
       });
 
       test('accepts long password', () {

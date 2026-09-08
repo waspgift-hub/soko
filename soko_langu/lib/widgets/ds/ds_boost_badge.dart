@@ -3,7 +3,8 @@ import '../../theme/app_dimens.dart';
 import '../../theme/app_typography.dart';
 import '../../extensions/context_tr.dart';
 
-/// Gold gradient pill for boosted listings only (spec §4.6).
+/// Monochrome pill for boosted listings only (spec §4.6): solid primary chip,
+/// no gold gradient.
 class DsBoostBadge extends StatelessWidget {
   final String? label;
 
@@ -11,21 +12,18 @@ class DsBoostBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.s2,
         vertical: 4,
       ),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFFFD700), Color(0xFFFFB74D)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: cs.primary,
         borderRadius: BorderRadius.circular(AppRadius.full),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFFFB74D).withValues(alpha: 0.35),
+            color: Colors.black.withValues(alpha: 0.2),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -34,11 +32,11 @@ class DsBoostBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.bolt, size: 12, color: Color(0xFF4A2C00)),
+          Icon(Icons.bolt, size: 12, color: cs.onPrimary),
           const SizedBox(width: 3),
           Text(
             label ?? context.tr('boosted', 'BOOSTED'),
-            style: AppTypography.statusChip(const Color(0xFF4A2C00)),
+            style: AppTypography.statusChip(cs.onPrimary),
           ),
         ],
       ),

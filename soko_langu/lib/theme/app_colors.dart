@@ -53,35 +53,39 @@ extension AppColorScheme on ColorScheme {
       ? const Color(0x1AFFFFFF)
       : const Color(0xCCFFFFFF);
 
-  Color get glassSurface => brightness == Brightness.dark
-      ? const Color(0x0DFFFFFF)
-      : const Color(0x08FFFFFF);
-
-  Color get glassHighlight => brightness == Brightness.dark
-      ? const Color(0x15FFFFFF)
-      : const Color(0x1A000000);
-
-  Color get glassReflection => brightness == Brightness.dark
-      ? const Color(0x08FFFFFF)
-      : const Color(0x0DFFFFFF);
-
   Color get glassBorder => brightness == Brightness.dark
       ? const Color(0x2AFFFFFF)
       : const Color(0x08000000);
 
+  // WhatsApp CTA buttons keep the official brand green so users instantly
+  // recognize the "chat on WhatsApp" affordance; everything else is grayscale.
   Color get whatsappGreen => const Color(0xFF25D366);
-  Color get trendingOrange => const Color(0xFFFF6F00);
-  Color get flashSaleDarkGreen => const Color(0xFF1B4332);
-  Color get flashSaleMidGreen => const Color(0xFF2D6A4F);
-  Color get flashSaleAccentGreen => const Color(0xFF52B788);
-  Color get flashSaleLightGreen => const Color(0xFF95D5B2);
-  Color get flashSaleBg => const Color(0xFFF0F9F1);
-  Color get successGreen => const Color(0xFF065535);
-  Color get boostBronze => const Color(0xFFCD7F32);
-  Color get boostSilver => const Color(0xFF9E9E9E);
-  Color get boostGold => const Color(0xFFFFD700);
-  Color get premiumAmber => const Color(0xFFFFB74D);
-  Color get premiumTeal => const Color(0xFF26A69A);
-  Color get premiumRose => const Color(0xFFEC407A);
-  Color get premiumIndigo => const Color(0xFF5C6BC0);
+
+  Color get trendingOrange => brightness == Brightness.dark
+      ? const Color(0xFFE4E4E7)
+      : const Color(0xFF171717);
+
+  Color get successGreen => brightness == Brightness.dark
+      ? const Color(0xFFD4D4D8)
+      : const Color(0xFF111111);
+
+  Color get boostGold => brightness == Brightness.dark
+      ? const Color(0xFFF5F5F5)
+      : const Color(0xFF0A0A0A);
+
+  Color get boostSilver => brightness == Brightness.dark
+      ? const Color(0xFFC0C0C0)
+      : const Color(0xFF7A7A7A);
+
+  Color get boostBronze => brightness == Brightness.dark
+      ? const Color(0xFF8E8E8E)
+      : const Color(0xFF9E9E9E);
+
+  Color get premiumAmber => brightness == Brightness.dark
+      ? const Color(0xFFE4E4E7)
+      : const Color(0xFF333333);
+
+  Color get premiumTeal => brightness == Brightness.dark
+      ? const Color(0xFFA1A1AA)
+      : const Color(0xFF18181B);
 }

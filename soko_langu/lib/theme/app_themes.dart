@@ -1,37 +1,84 @@
 import 'package:flutter/material.dart';
 import 'app_typography.dart';
 
+// The whole product is a strict black-and-white design language: no chromatic
+// accent is derived from the seed. `seed` is kept for API compatibility with the
+// theme-persistence layer but never influences the rendered palette.
 ThemeData buildLightTheme(Color seed) {
-  final scheme = ColorScheme.fromSeed(
-    seedColor: seed,
-    brightness: Brightness.light,
-  ).copyWith(
-    surface: const Color(0xFFFAFAFA),
-    surfaceContainerLow: const Color(0xFFF4F4F5),
-    surfaceContainer: const Color(0xFFECECEE),
-    surfaceContainerHigh: const Color(0xFFE4E4E7),
-    surfaceContainerHighest: const Color(0xFFD4D4D8),
-    onSurface: const Color(0xFF09090B),
-    onSurfaceVariant: const Color(0xFF52525B),
-    outlineVariant: const Color(0xFFE4E4E7),
+  final scheme = const ColorScheme.light(
+    primary: Color(0xFF000000),
+    onPrimary: Color(0xFFFFFFFF),
+    primaryContainer: Color(0xFFE3E3E3),
+    onPrimaryContainer: Color(0xFF1C1C1C),
+    inversePrimary: Color(0xFFB8B8B8),
+    secondary: Color(0xFF3B3B3B),
+    onSecondary: Color(0xFFFFFFFF),
+    secondaryContainer: Color(0xFFEBEBEB),
+    onSecondaryContainer: Color(0xFF1C1C1C),
+    tertiary: Color(0xFF5C5C5C),
+    onTertiary: Color(0xFFFFFFFF),
+    tertiaryContainer: Color(0xFFF0F0F0),
+    onTertiaryContainer: Color(0xFF1C1C1C),
+    error: Color(0xFFBA1A1A),
+    onError: Color(0xFFFFFFFF),
+    errorContainer: Color(0xFFFFDAD6),
+    onErrorContainer: Color(0xFF410002),
+    surface: Color(0xFFFAFAFA),
+    onSurface: Color(0xFF09090B),
+    surfaceDim: Color(0xFFD9D9D9),
+    surfaceBright: Color(0xFFFAFAFA),
+    surfaceContainerLowest: Color(0xFFFFFFFF),
+    surfaceContainerLow: Color(0xFFF4F4F5),
+    surfaceContainer: Color(0xFFECECEE),
+    surfaceContainerHigh: Color(0xFFE4E4E7),
+    surfaceContainerHighest: Color(0xFFD4D4D8),
+    onSurfaceVariant: Color(0xFF52525B),
+    outline: Color(0xFF747474),
+    outlineVariant: Color(0xFFE4E4E7),
+    shadow: Color(0xFF000000),
+    scrim: Color(0xFF000000),
+    inverseSurface: Color(0xFF121212),
+    onInverseSurface: Color(0xFFF5F5F5),
   );
 
   return _buildTheme(scheme);
 }
 
 ThemeData buildDarkTheme(Color seed) {
-  final scheme = ColorScheme.fromSeed(
-    seedColor: seed,
-    brightness: Brightness.dark,
-  ).copyWith(
-    surface: const Color(0xFF000000),
-    surfaceContainerLow: const Color(0xFF121212),
-    surfaceContainer: const Color(0xFF171717),
-    surfaceContainerHigh: const Color(0xFF1E1E1E),
-    surfaceContainerHighest: const Color(0xFF27272A),
-    onSurface: const Color(0xFFF4F4F5),
-    onSurfaceVariant: const Color(0xFFA1A1AA),
-    outlineVariant: const Color(0xFF2E2E32),
+  final scheme = const ColorScheme.dark(
+    primary: Color(0xFFFFFFFF),
+    onPrimary: Color(0xFF000000),
+    primaryContainer: Color(0xFF232323),
+    onPrimaryContainer: Color(0xFFFFFFFF),
+    inversePrimary: Color(0xFF303030),
+    secondary: Color(0xFFD6D6D6),
+    onSecondary: Color(0xFF000000),
+    secondaryContainer: Color(0xFF2A2A2A),
+    onSecondaryContainer: Color(0xFFEBEBEB),
+    tertiary: Color(0xFFBEBEBE),
+    onTertiary: Color(0xFF000000),
+    tertiaryContainer: Color(0xFF333333),
+    onTertiaryContainer: Color(0xFFF0F0F0),
+    error: Color(0xFFF2B8B5),
+    onError: Color(0xFF601410),
+    errorContainer: Color(0xFF8C1D18),
+    onErrorContainer: Color(0xFFFFDAD6),
+    surface: Color(0xFF000000),
+    onSurface: Color(0xFFF4F4F5),
+    surfaceDim: Color(0xFF0D0D0D),
+    surfaceBright: Color(0xFF1F1F1F),
+    surfaceContainerLowest: Color(0xFF0A0A0A),
+    surfaceContainerLow: Color(0xFF121212),
+    surfaceContainer: Color(0xFF171717),
+    surfaceContainerHigh: Color(0xFF1E1E1E),
+    surfaceContainerHighest: Color(0xFF27272A),
+    onSurfaceVariant: Color(0xFFA1A1AA),
+    outline: Color(0xFF8E8E93),
+    outlineVariant: Color(0xFF2E2E32),
+    shadow: Color(0xFF000000),
+    scrim: Color(0xFF000000),
+    inverseSurface: Color(0xFFF4F4F5),
+    onInverseSurface: Color(0xFF0A0A0A),
   );
 
   return _buildTheme(scheme);
@@ -151,7 +198,7 @@ ThemeData _buildTheme(ColorScheme scheme) {
         foregroundColor: scheme.onPrimary,
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
         ),
         textStyle: const TextStyle(
           fontWeight: FontWeight.w600,
@@ -169,7 +216,7 @@ ThemeData _buildTheme(ColorScheme scheme) {
         foregroundColor: scheme.onPrimary,
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
         ),
         textStyle: const TextStyle(
           fontWeight: FontWeight.w600,
@@ -184,7 +231,7 @@ ThemeData _buildTheme(ColorScheme scheme) {
         side: BorderSide(color: scheme.outlineVariant),
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
         ),
         textStyle: const TextStyle(
           fontWeight: FontWeight.w600,
@@ -297,7 +344,7 @@ ThemeData _buildTheme(ColorScheme scheme) {
       surfaceTintColor: Colors.transparent,
       shadowColor: Colors.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.35)),
       ),
       clipBehavior: Clip.antiAlias,

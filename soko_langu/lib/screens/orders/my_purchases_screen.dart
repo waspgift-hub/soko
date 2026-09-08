@@ -255,7 +255,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
                     return IconButton(
                       icon: Icon(
                         star <= rating ? Icons.star : Icons.star_border,
-                        color: Colors.amber,
+                        color: Theme.of(context).colorScheme.primary,
                         size: 36,
                       ),
                       onPressed: () =>
@@ -2087,9 +2087,9 @@ class _CompactTimeline extends StatelessWidget {
   List<_TimelineStep> _buildSteps() {
     return [
       _TimelineStep('', Icons.access_time_rounded, cs.onSurfaceVariant),
-      _TimelineStep('', Icons.local_shipping_outlined, Colors.orange),
-      _TimelineStep('', Icons.account_balance_wallet_outlined, Colors.blue),
-      _TimelineStep('', Icons.verified_user_outlined, Colors.purple),
+      _TimelineStep('', Icons.local_shipping_outlined, cs.tertiary),
+      _TimelineStep('', Icons.account_balance_wallet_outlined, cs.secondary),
+      _TimelineStep('', Icons.verified_user_outlined, cs.primary),
       _TimelineStep('', Icons.inventory_2_outlined, cs.successGreen),
       _TimelineStep('', Icons.check_circle_outline, cs.successGreen),
       _TimelineStep('', Icons.check_circle_rounded, cs.successGreen),

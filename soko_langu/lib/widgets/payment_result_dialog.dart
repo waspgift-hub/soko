@@ -128,12 +128,12 @@ class _PaymentResultDialogState extends State<_PaymentResultDialog>
               height: 72,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.green.shade50,
+                color: cs.primary.withValues(alpha: 0.08),
               ),
               child: Icon(
                 Icons.check_circle,
                 size: 48,
-                color: Colors.green.shade600,
+                color: cs.primary,
               ),
             ),
             const SizedBox(height: 16),
@@ -142,7 +142,7 @@ class _PaymentResultDialogState extends State<_PaymentResultDialog>
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Colors.green.shade700,
+                color: cs.primary,
               ),
             ),
             const SizedBox(height: 8),

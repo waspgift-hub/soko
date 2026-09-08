@@ -8,6 +8,7 @@ import '../../app/routes.dart';
 import '../../theme/app_dimens.dart';
 import '../../widgets/google_loading.dart';
 import '../../utils/responsive.dart';
+import '../../widgets/soko_widgets.dart';
 
 class CategoryScreen extends StatelessWidget {
   const CategoryScreen({super.key});
@@ -68,67 +69,14 @@ class CategoryScreen extends StatelessWidget {
               itemBuilder: (context, index) {
                 final cat = categories[index];
                 final config = AppConfig.of(context);
-                final cs = Theme.of(context).colorScheme;
-                return Semantics(
-                  button: true,
-                  label: cat.name,
+                return CategoryCard(
+                  name: config.langCode == 'en' ? cat.name : cat.nameSw,
+                  icon: categoryIconFor(cat.icon),
+                  imageUrl: cat.image,
                   onTap: () => context.push(
                     '${AppRoutes.categoryProducts}/${cat.name}',
                     extra: cat,
                   ),
-                  child: GestureDetector(
-                    excludeFromSemantics: true,
-                    onTap: () => context.push(
-                      '${AppRoutes.categoryProducts}/${cat.name}',
-                      extra: cat,
-                    ),
-                    child: Container(
-                    decoration: BoxDecoration(
-                      color: cs.surface,
-                      borderRadius: BorderRadius.circular(AppRadius.lg),
-                      border: Border.all(
-                        color: cs.outlineVariant.withValues(alpha: 0.6),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: cs.onSurface.withValues(alpha: cs.brightness == Brightness.dark ? 0.25 : 0.05),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 56,
-                          height: 56,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: cs.surfaceContainerHighest.withValues(alpha: 0.6),
-                            borderRadius: BorderRadius.circular(AppRadius.lg),
-                          ),
-                          child: Text(cat.icon, style: const TextStyle(fontSize: 28)),
-                        ),
-                        SizedBox(height: AppInsets.md),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: AppInsets.sm),
-                          child: Text(
-                            config.langCode == 'en' ? cat.name : cat.nameSw,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: AppFontSize.md,
-                              color: cs.onSurface,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
                 );
               },
             );
@@ -136,5 +84,54 @@ class CategoryScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Maps legacy emoji category glyphs to monochrome Material icons so the grid
+/// stays B&W-consistent; unmapped glyphs fall back to a generic catalog icon.
+IconData categoryIconFor(String emoji) {
+  switch (emoji) {
+    case '📦':
+      return Icons.inventory_2_outlined;
+    case '📱':
+      return Icons.smartphone;
+    case '👗':
+    case '👕':
+      return Icons.checkroom_outlined;
+    case '👟':
+      return Icons.ice_skating_outlined;
+    case '💄':
+      return Icons.face_retouching_natural;
+    case '🛋️':
+    case '🪑':
+      return Icons.chair_outlined;
+    case '⚽':
+    case '🏀':
+      return Icons.sports_soccer;
+    case '📚':
+      return Icons.menu_book_outlined;
+    case '🎁':
+      return Icons.card_giftcard_outlined;
+    case '💎':
+      return Icons.diamond_outlined;
+    case '🔧':
+      return Icons.build_outlined;
+    case '🍎':
+      return Icons.local_grocery_store_outlined;
+    case '🛒':
+      return Icons.shopping_cart_outlined;
+    case '🚗':
+      return Icons.directions_car_outlined;
+    case '🏭':
+      return Icons.factory_outlined;
+    case '🍔':
+    case '🥦':
+      return Icons.fastfood_outlined;
+    case '👶':
+      return Icons.child_care_outlined;
+    case '🏠':
+      return Icons.home_outlined;
+    default:
+      return Icons.category_outlined;
   }
 }

@@ -5,10 +5,10 @@ import '../../services/cart_service.dart';
 import '../../services/product_service.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
-import '../../widgets/product_cached_image.dart';
 import '../../widgets/ds/ds.dart';
 import '../../theme/app_dimens.dart';
 import '../../theme/app_typography.dart';
+import '../../widgets/soko_widgets.dart';
 
 /// Buyer's holding tray: items grouped by seller, quantity edits clamped to
 /// stock, live totals. Each line opens the existing single-product
@@ -53,31 +53,21 @@ class _CartScreenState extends State<CartScreen> {
 
   void _toast(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+    SokoSnackbar.info(context, msg);
   }
 
   void _confirmClear() {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(ctx.tr('clear_cart', 'Clear Cart')),
-        content: Text(ctx.tr('confirm_clear_cart', 'Remove all items from your cart?')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(ctx.tr('cancel', 'Cancel')),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              _cart.clearAll();
-            },
-            child: Text(ctx.tr('clear_cart', 'Clear')),
-          ),
-        ],
-      ),
-    );
+    SokoDialog.show(
+      context,
+      variant: SokoDialogVariant.danger,
+      icon: Icons.delete_sweep_outlined,
+      title: context.tr('clear_cart', 'Clear Cart'),
+      message: context.tr('confirm_clear_cart', 'Remove all items from your cart?'),
+      confirmLabel: context.tr('clear_cart', 'Clear'),
+      cancelLabel: context.tr('cancel', 'Cancel'),
+    ).then((confirmed) {
+      if (confirmed) _cart.clearAll();
+    });
   }
 
   @override
@@ -128,6 +118,7 @@ class _CartScreenState extends State<CartScreen> {
         builder: (context, snap) {
           final items = snap.data ?? _cart.items;
           if (items.isEmpty) return const SizedBox.shrink();
+          final count = items.fold<int>(0, (sum, e) => sum + e.quantity);
           return Container(
             padding: EdgeInsets.fromLTRB(
               AppSpacing.s3,
@@ -141,45 +132,9 @@ class _CartScreenState extends State<CartScreen> {
                 top: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.4)),
               ),
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            context.tr('subtotal', 'Subtotal'),
-                            style: AppTypography.timeIndicator(cs.onSurfaceVariant),
-                          ),
-                          const SizedBox(width: AppSpacing.s2),
-                          Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: AppSpacing.s2,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: cs.primary.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              '${items.fold<int>(0, (sum, e) => sum + e.quantity)} ${context.tr('items', 'items')}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: cs.primary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      DsPrice(price: _cart.subtotal),
-                    ],
-                  ),
-                ),
-              ],
+            child: CartSummary(
+              subtotal: _cart.subtotal,
+              note: '$count ${context.tr('items', 'items')}',
             ),
           );
         },
@@ -319,68 +274,23 @@ class _CartLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final maxQty = item.stock > 0 ? item.stock : 999999;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          child: SizedBox(
-            width: 64,
-            height: 64,
-            child: item.productImage.isEmpty
-                ? Container(
-                    color: cs.surfaceContainerHighest,
-                    child: Icon(Icons.image_outlined,
-                        color: cs.onSurfaceVariant, size: 28),
-                  )
-                : ProductCachedImage(url: item.productImage, fit: BoxFit.cover),
-          ),
+        CartItemTile(
+          item: item,
+          onQuantityChanged: (qty) => onQtyChanged(qty),
+          onDelete: onRemove,
         ),
-        const SizedBox(width: AppSpacing.s2),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                item.productName,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: cs.onSurface,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.s1),
-              DsPrice(price: item.unitPrice * item.quantity),
-              const SizedBox(height: AppSpacing.s1),
-              Row(
-                children: [
-                  DsQuantitySelector(
-                    value: item.quantity,
-                    min: 1,
-                    max: maxQty,
-                    onChanged: onQtyChanged,
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: Icon(Icons.close, size: 18, color: cs.onSurfaceVariant),
-                    onPressed: onRemove,
-                  ),
-                ],
-              ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: DsButton(
-                  label: context.tr('order_now', 'Order Now'),
-                  variant: DsButtonVariant.secondary,
-                  height: 34,
-                  onPressed: onOrder,
-                ),
-              ),
-            ],
+        const SizedBox(height: AppSpacing.s2),
+        Align(
+          alignment: Alignment.centerRight,
+          child: DsButton(
+            label: context.tr('order_now', 'Order Now'),
+            variant: DsButtonVariant.secondary,
+            height: 34,
+            fullWidth: false,
+            onPressed: onOrder,
           ),
         ),
       ],

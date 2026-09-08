@@ -359,7 +359,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
                         final filled = i < rating.averageRating.round();
                         return Icon(
                           filled ? Icons.star : Icons.star_border,
-                          color: Colors.amber,
+                          color: cs.primary,
                           size: 16,
                         );
                       }),
@@ -409,7 +409,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
                 value: pct,
                 minHeight: 4,
                 backgroundColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
-                color: Colors.amber,
+                color: cs.primary,
               ),
             ),
           ),

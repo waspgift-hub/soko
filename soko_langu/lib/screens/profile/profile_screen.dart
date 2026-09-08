@@ -14,6 +14,7 @@ import '../../widgets/account_switcher_sheet.dart';
 import '../../widgets/ad_banner.dart';
 import '../../widgets/verified_badge.dart';
 import '../../widgets/premium_widgets.dart';
+import '../../widgets/soko_widgets.dart';
 import '../../app/routes.dart';
 import '../../utils/phone_utils.dart';
 
@@ -290,17 +291,16 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                       // Stats
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: AppInsets.xl),
-                        child: Container(
-                          padding: const EdgeInsets.all(2),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(child: _statCard(Icons.favorite_rounded, context.tr('wishlist'), '$_wishlistCount', cs)),
-                            ],
-                          ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: ProfileStat(
+                                count: _wishlistCount,
+                                label: context.tr('wishlist'),
+                                onTap: () => context.push(AppRoutes.wishlist),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -316,20 +316,11 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                 // Settings
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
-                  child: GlassCard(
+                  child: ProfileMenuTile(
+                    icon: Icons.settings_rounded,
+                    label: context.tr('settings'),
                     onTap: () => context.push(AppRoutes.settings),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(color: cs.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
-                          child: Icon(Icons.settings_rounded, color: cs.primary, size: 22),
-                        ),
-                        const SizedBox(width: AppInsets.md),
-                        Expanded(child: Text(context.tr('settings'), style: TextStyle(fontSize: AppFontSize.lg, fontWeight: FontWeight.w600, color: cs.onSurface))),
-                        Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
-                      ],
-                    ),
+                    iconColor: cs.primary,
                   ),
                 ),
                 const SizedBox(height: AppInsets.lg),
@@ -363,25 +354,6 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
           ),
         ),
       ),
-      ),
-    );
-  }
-
-  Widget _statCard(IconData icon, String label, String value, ColorScheme cs) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        border: Border.all(color: cs.primary.withValues(alpha: 0.3), width: 1.2),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      margin: const EdgeInsets.all(2),
-      child: Column(
-        children: [
-          Icon(icon, color: cs.primary, size: 22),
-          const SizedBox(height: 4),
-          Text(value, style: TextStyle(fontWeight: FontWeight.w700, fontSize: AppFontSize.lg, color: cs.onSurface)),
-          Text(label, style: TextStyle(fontSize: AppFontSize.xs, color: cs.onSurfaceVariant)),
-        ],
       ),
     );
   }

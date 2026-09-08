@@ -4,22 +4,22 @@ const express = require('express');
 const admin = require('firebase-admin');
 const { getFirebaseFirestore } = require('../../config/firebase');
 const { containsProfanity } = require('../../services/profanity');
+const { requireUser } = require('./auth-helpers');
 
 const router = express.Router();
 
+// Requires a valid Firebase token. Without auth the endpoint is unreachable —
+// prevents unauthenticated callers from probing profanity filters and eliminates
+// the stolen-token escalation vector (3 calls = ban + balance seizure).
 router.post('/moderation/check-text', async (req, res) => {
   try {
+    const auth = await requireUser(req, res);
+    if (!auth.ok) return;
     const { text } = req.body;
     if (!text) return res.json({ clean: true });
     const clean = !containsProfanity(text);
     if (!clean) {
-      const authHeader = req.headers['authorization'];
-      let uid = null;
-      if (authHeader && authHeader.startsWith('Bearer ')) {
-        try {
-          uid = (await admin.auth().verifyIdToken(authHeader.slice(7))).uid;
-        } catch {}
-      }
+      const uid = auth.uid;
       const db = getFirebaseFirestore();
       if (uid && db) {
         const userRef = db.collection('users').doc(uid);

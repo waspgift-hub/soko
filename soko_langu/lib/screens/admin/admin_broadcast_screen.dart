@@ -32,7 +32,7 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
 
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('title_is_required')), backgroundColor: Colors.red),
+        SnackBar(content: Text(context.tr('title_is_required')), backgroundColor: Theme.of(context).colorScheme.error),
       );
       return;
     }
@@ -47,7 +47,7 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
           ElevatedButton.icon(
             icon: const Icon(Icons.send_rounded, size: 18),
             label: Text(context.tr('send_to_all')),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error, foregroundColor: Theme.of(context).colorScheme.onError,),
             onPressed: () => Navigator.pop(ctx, true),
           ),
         ],
@@ -77,7 +77,7 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(data['message'] ?? context.tr('broadcast_sent')), backgroundColor: Colors.green),
+            SnackBar(content: Text(data['message'] ?? context.tr('broadcast_sent')), backgroundColor: Theme.of(context).colorScheme.primary),
           );
         }
         _titleCtrl.clear();
@@ -89,7 +89,7 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
       setState(() => _result = '${context.tr('error_occurred')}: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${context.tr('error_occurred')}: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('${context.tr('error_occurred')}: $e'), backgroundColor: Theme.of(context).colorScheme.error),
         );
       }
     } finally {
@@ -116,13 +116,13 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.08),
+                  color: cs.error.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+                  border: Border.all(color: cs.error.withValues(alpha: 0.2)),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
+                    Icon(Icons.warning_amber_rounded, color: cs.error, size: 28),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
@@ -184,9 +184,9 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
                       ? context.tr('sending', 'Sending...')
                       : context.tr('send_to_all', 'Send to All Users')),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.red.withValues(alpha: 0.5),
+                    backgroundColor: cs.error,
+                    foregroundColor: Theme.of(context).colorScheme.onError,
+                    disabledBackgroundColor: cs.error.withValues(alpha: 0.5),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
@@ -199,12 +199,12 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: _result!.startsWith('Error') ? Colors.red.withValues(alpha: 0.08) : Colors.green.withValues(alpha: 0.08),
+                    color: _result!.startsWith('Error') ? cs.error.withValues(alpha: 0.08) : cs.primary.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(_result!,
                     style: TextStyle(
-                      color: _result!.startsWith('Error') ? Colors.red : Colors.green.shade700,
+                      color: _result!.startsWith('Error') ? cs.error : cs.primary,
                       fontWeight: FontWeight.w500,
                     ),
                   ),

@@ -1185,7 +1185,11 @@ class _StatusIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (isRead) {
-      return Icon(Icons.done_all, size: 14, color: Colors.lightBlue.shade300);
+      return Icon(
+        Icons.done_all,
+        size: 14,
+        color: Theme.of(context).colorScheme.primary,
+      );
     }
     if (isDelivered) {
       return Icon(Icons.done_all, size: 14, color: color);

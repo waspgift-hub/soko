@@ -525,7 +525,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                         final filled = i < rating.averageRating.round();
                         return Icon(
                           filled ? Icons.star : Icons.star_border,
-                          color: Colors.amber,
+                          color: cs.primary,
                           size: 16,
                         );
                       }),
@@ -575,7 +575,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                 value: pct,
                 minHeight: 4,
                 backgroundColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
-                color: Colors.amber,
+                color: cs.primary,
               ),
             ),
           ),
@@ -706,18 +706,24 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 ElevatedButton.icon(
-                  icon: const Icon(Icons.thumb_down_alt, color: Colors.white),
+                  icon: Icon(Icons.thumb_down_alt, color: Theme.of(ctx).colorScheme.onError),
                   label: Text(context.tr('not_trustworthy')),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(ctx).colorScheme.error,
+                    foregroundColor: Theme.of(ctx).colorScheme.onError,
+                  ),
                   onPressed: () {
                     Navigator.pop(ctx);
                     _submitSellerRating(user.uid, 1);
                   },
                 ),
                 ElevatedButton.icon(
-                  icon: const Icon(Icons.thumb_up_alt, color: Colors.white),
+                  icon: Icon(Icons.thumb_up_alt, color: Theme.of(ctx).colorScheme.onPrimary),
                   label: Text(context.tr('trustworthy')),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(ctx).colorScheme.primary,
+                    foregroundColor: Theme.of(ctx).colorScheme.onPrimary,
+                  ),
                   onPressed: () {
                     Navigator.pop(ctx);
                     _submitSellerRating(user.uid, 5);
@@ -763,13 +769,13 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     Color trustColor;
     IconData trustIcon;
     if (trustPct >= 80) {
-      trustColor = Colors.green;
+      trustColor = cs.primary;
       trustIcon = Icons.verified;
     } else if (trustPct >= 50) {
-      trustColor = Colors.orange;
+      trustColor = cs.tertiary;
       trustIcon = Icons.hourglass_empty;
     } else if (trustPct > 0) {
-      trustColor = Colors.red;
+      trustColor = cs.error;
       trustIcon = Icons.warning_amber;
     } else {
       trustColor = cs.onSurfaceVariant.withValues(alpha: 0.5);

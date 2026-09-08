@@ -35,11 +35,11 @@ class _DsLikeButtonState extends State<DsLikeButton>
   static final Random _random = Random();
 
   static const _palette = [
-    Color(0xFFEF5350),
-    Color(0xFFEC407A),
-    Color(0xFFD32F2F),
-    Color(0xFFFF8A80),
-    Color(0xFFFFD700),
+    Color(0xFF111111),
+    Color(0xFF3B3B3B),
+    Color(0xFF616161),
+    Color(0xFF9E9E9E),
+    Color(0xFFD6D6D6),
   ];
 
   @override
@@ -89,7 +89,7 @@ class _DsLikeButtonState extends State<DsLikeButton>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final activeColor = widget.activeColor ?? cs.error;
+    final activeColor = widget.activeColor ?? cs.primary;
     final idleColor = widget.idleColor ?? cs.onSurfaceVariant;
     final reduced = MediaQuery.disableAnimationsOf(context);
 

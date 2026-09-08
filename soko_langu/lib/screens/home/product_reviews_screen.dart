@@ -215,7 +215,7 @@ class _ProductReviewsScreenState extends State<ProductReviewsScreen> {
                                 ),
                               ),
                             ),
-                            const Icon(Icons.star, size: 14, color: Colors.amber),
+                            Icon(Icons.star, size: 14, color: cs.primary),
                             const SizedBox(width: 8),
                             Expanded(
                               child: ClipRRect(
@@ -351,6 +351,7 @@ class _StarRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final starColor = Theme.of(context).colorScheme.primary;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: List.generate(5, (i) {
@@ -358,7 +359,7 @@ class _StarRow extends StatelessWidget {
         return Icon(
           filled ? Icons.star : Icons.star_border,
           size: size,
-          color: Colors.amber,
+          color: starColor,
         );
       }),
     );
@@ -416,10 +417,10 @@ class _ReviewTile extends StatelessWidget {
                       const SizedBox(height: 2),
                       Row(
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.verified,
                             size: 13,
-                            color: Colors.blue,
+                            color: cs.primary,
                           ),
                           const SizedBox(width: 3),
                           Text(

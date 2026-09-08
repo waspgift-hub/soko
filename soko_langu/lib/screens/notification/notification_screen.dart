@@ -4,12 +4,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/notification_service.dart';
 import '../../services/notification_lang.dart';
+import '../../models/notification_item.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../main.dart' show AppConfig;
 import '../../widgets/ds/ds.dart';
 import '../../widgets/ad_banner.dart';
 import '../../widgets/soko_vibe_states.dart';
+import '../../widgets/soko_widgets.dart';
 
 class NotificationScreen extends StatefulWidget {
   const NotificationScreen({super.key});
@@ -100,34 +102,23 @@ class _NotificationScreenState extends State<NotificationScreen> {
   Future<void> _markAllRead() async {
     await _notifService.markAllAsRead();
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('mark_all_read'))),
-      );
+      SokoSnackbar.info(context, context.tr('mark_all_read'));
     }
   }
 
   /// Batch-deletes every notification and shows how many were removed so the
   /// user has feedback when swiping-heavy cleanup leaves the list empty.
   Future<void> _deleteAll(List<QueryDocumentSnapshot> docs) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(ctx.tr('clear_all')),
-        content: Text(
-          '${ctx.tr('confirm_clear_notifications', 'Delete all notifications?')} '
+    final confirmed = await SokoDialog.show(
+      context,
+      variant: SokoDialogVariant.danger,
+      icon: Icons.delete_outline_rounded,
+      title: context.tr('clear_all'),
+      message:
+          '${context.tr('confirm_clear_notifications', 'Delete all notifications?')} '
           '(${docs.length})',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(ctx.tr('cancel', 'Cancel')),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(ctx.tr('clear_all')),
-          ),
-        ],
-      ),
+      confirmLabel: context.tr('clear_all'),
+      cancelLabel: context.tr('cancel', 'Cancel'),
     );
     if (confirmed != true || !mounted) return;
 
@@ -136,14 +127,13 @@ class _NotificationScreenState extends State<NotificationScreen> {
       if (await _notifService.deleteNotification(doc.id)) deleted++;
     }
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(context.tr(
-          'deleted_notifications_count',
-          '$deleted ${context.tr('notifications_deleted', 'notifications deleted')}',
-        )),
-        duration: const Duration(seconds: 2),
+    SokoSnackbar.show(
+      context,
+      message: context.tr(
+        'deleted_notifications_count',
+        '$deleted ${context.tr('notifications_deleted', 'notifications deleted')}',
       ),
+      duration: const Duration(seconds: 2),
     );
   }
 
@@ -257,11 +247,12 @@ class _NotificationScreenState extends State<NotificationScreen> {
           confirmDismiss: (_) async {
             final deleted = await _notifService.deleteNotification(doc.id);
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(deleted ? context.tr('notification_deleted') : context.tr('something_wrong')),
-                  duration: const Duration(seconds: 2),
-                ),
+              SokoSnackbar.show(
+                context,
+                message: deleted
+                    ? context.tr('notification_deleted')
+                    : context.tr('something_wrong'),
+                type: deleted ? SokoSnackType.success : SokoSnackType.error,
               );
             }
             return deleted;
@@ -364,61 +355,29 @@ class _NotificationScreenState extends State<NotificationScreen> {
       body = localized.body;
     }
 
-    IconData icon;
-    Color color;
-    switch (type) {
-      case 'chat':
-        icon = Icons.chat; color = Colors.blue;
-      case 'group_chat':
-        icon = Icons.group; color = Colors.teal;
-      case 'order':
-        icon = Icons.shopping_bag; color = Colors.green;
-      case 'boost':
-        icon = Icons.rocket_launch; color = Colors.orange;
-      case 'comment':
-        icon = Icons.chat_bubble_outline; color = Colors.blueGrey;
-      case 'comment_reply':
-        icon = Icons.reply; color = Colors.teal;
-      case 'review':
-        icon = Icons.star; color = Colors.amber;
-      case 'profile_view':
-        icon = Icons.visibility; color = Colors.indigo;
-      case 'flash_sale':
-        icon = Icons.flash_on; color = Colors.amber;
-      case 'escrow_release':
-      case 'escrow_auto_release':
-        icon = Icons.account_balance_wallet; color = Colors.indigo;
-      case 'dispatched':
-        icon = Icons.local_shipping; color = Colors.orange;
-      case 'disputed':
-        icon = Icons.gavel; color = Colors.red;
-      case 'failed_retry':
-        icon = Icons.warning_amber; color = Colors.deepOrange;
-      case 'dispute_resolved':
-        icon = Icons.balance; color = Colors.teal;
-      case 'delivery_confirmed':
-        icon = Icons.check_circle; color = Colors.green;
-      case 'bulk':
-        icon = Icons.campaign; color = Colors.purple;
-      case 'account':
-        icon = Icons.gavel; color = Colors.red;
-      default:
-        icon = Icons.notifications; color = cs.tertiary;
-    }
+    final rawTimestamp = data['timestamp'];
+    final timestamp = switch (rawTimestamp) {
+      Timestamp t => t.toDate(),
+      DateTime dt => dt,
+      _ => DateTime.now(),
+    };
 
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: color.withValues(alpha: 0.1),
-        child: Icon(icon, color: color, size: 22),
-      ),
-      title: Text(title, style: TextStyle(fontWeight: isRead ? FontWeight.normal : FontWeight.bold)),
-      subtitle: Text(body, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
-      trailing: isRead
-          ? null
-          : Container(
-              width: 10, height: 10,
-              decoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle),
-            ),
+    final item = NotificationItem(
+      id: docId,
+      type: type,
+      title: title,
+      body: body,
+      timestamp: timestamp,
+      otherUserId: rawData?['senderId'] as String?,
+      otherUserName: rawData?['senderName'] as String?,
+      otherUserImage: rawData?['senderAvatar'] as String?,
+      productId: rawData?['productId'] as String?,
+      productImage: (data['image'] as String?) ?? (rawData?['image'] as String?),
+      isRead: isRead,
+    );
+
+    return NotificationCard(
+      item: item,
       onTap: () {
         if (!isRead) _notifService.markAsRead(docId);
         _openFromTile(context, type, rawData);

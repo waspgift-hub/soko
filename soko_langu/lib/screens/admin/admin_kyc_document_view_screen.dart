@@ -99,13 +99,13 @@ class _AdminKycDocumentViewScreenState
   (Color, IconData) get _statusStyle {
     switch (_status) {
       case 'approved':
-        return (Colors.green, Icons.check_circle);
+        return (Theme.of(context).colorScheme.primary, Icons.check_circle);
       case 'rejected':
-        return (Colors.red, Icons.cancel);
+        return (Theme.of(context).colorScheme.error, Icons.cancel);
       case 'revoked':
-        return (Colors.orange, Icons.block);
+        return (Theme.of(context).colorScheme.tertiary, Icons.block);
       default:
-        return (Colors.blue, Icons.hourglass_empty);
+        return (Theme.of(context).colorScheme.secondary, Icons.hourglass_empty);
     }
   }
 
@@ -386,8 +386,8 @@ class _AdminKycDocumentViewScreenState
                 icon: const Icon(Icons.close, size: 18),
                 label: Text(context.tr('reject')),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.red,
-                  side: BorderSide(color: Colors.red.withValues(alpha: 0.4)),
+                  foregroundColor: cs.error,
+                  side: BorderSide(color: cs.error.withValues(alpha: 0.4)),
                   padding: const EdgeInsets.symmetric(vertical: 13),
                 ),
                 onPressed: _submitting ? null : _showRejectDialog,
@@ -399,8 +399,8 @@ class _AdminKycDocumentViewScreenState
                 icon: const Icon(Icons.check, size: 18),
                 label: Text(context.tr('approve')),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
+                  backgroundColor: cs.primary,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
                   padding: const EdgeInsets.symmetric(vertical: 13),
                 ),
                 onPressed: _submitting ? null : () => _submitReview(true, ''),
@@ -412,8 +412,8 @@ class _AdminKycDocumentViewScreenState
                 icon: const Icon(Icons.block, size: 18),
                 label: Text(context.tr('revoke')),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
-                  foregroundColor: Colors.white,
+                  backgroundColor: cs.tertiary,
+                  foregroundColor: cs.onTertiary,
                   padding: const EdgeInsets.symmetric(vertical: 13),
                 ),
                 onPressed: _submitting ? null : _confirmRevoke,
@@ -447,8 +447,8 @@ class _AdminKycDocumentViewScreenState
             icon: const Icon(Icons.close, size: 16),
             label: Text(context.tr('reject')),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
             ),
             onPressed: () {
               Navigator.pop(ctx);
@@ -518,8 +518,8 @@ class _AdminKycDocumentViewScreenState
             icon: const Icon(Icons.block, size: 16),
             label: Text(context.tr('revoke')),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-              foregroundColor: Colors.white,
+              backgroundColor: Theme.of(context).colorScheme.tertiary,
+              foregroundColor: Theme.of(context).colorScheme.onTertiary,
             ),
             onPressed: () => Navigator.pop(ctx, true),
           ),

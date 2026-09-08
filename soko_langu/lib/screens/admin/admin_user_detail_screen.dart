@@ -102,7 +102,7 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
             child: Text(context.tr('delete_forever'), style: const TextStyle(color: Colors.white)),
           ),
         ],
@@ -241,7 +241,7 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
   }
 
   Widget _buildKycSection(ColorScheme cs, Map<String, dynamic>? kyc, String status) {
-    final statusColor = status == 'approved' ? Colors.green : (status == 'rejected' ? Colors.red : Colors.orange);
+    final statusColor = status == 'approved' ? cs.primary : (status == 'rejected' ? cs.error : cs.tertiary);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -298,7 +298,7 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
                         : context.trParams('warnings_x_of_3', {'count': '$policyWarnings'}),
                     style: const TextStyle(fontSize: 11, color: Colors.white),
                   ),
-                  backgroundColor: policyWarnings >= 3 ? Colors.red : (policyWarnings > 0 ? Colors.orange : Colors.grey),
+                  backgroundColor: policyWarnings >= 3 ? cs.error : (policyWarnings > 0 ? cs.tertiary : cs.outlineVariant),
                   padding: EdgeInsets.zero,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
@@ -311,7 +311,7 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
                   child: OutlinedButton.icon(
                     icon: Icon(suspended ? Icons.lock_open : Icons.lock, size: 18),
                     label: Text(suspended ? context.tr('unsuspend') : context.tr('suspend')),
-                    style: OutlinedButton.styleFrom(foregroundColor: suspended ? Colors.green : Colors.red),
+                    style: OutlinedButton.styleFrom(foregroundColor: suspended ? cs.primary : cs.error),
                     onPressed: () => _updateUser({'isSuspended': !suspended}),
                   ),
                 ),
@@ -330,9 +330,9 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    icon: const Icon(Icons.warning_amber, size: 18, color: Colors.orange),
+                    icon: Icon(Icons.warning_amber, size: 18, color: cs.tertiary),
                     label: Text(context.tr('send_warning')),
-                    style: OutlinedButton.styleFrom(foregroundColor: Colors.orange),
+                    style: OutlinedButton.styleFrom(foregroundColor: cs.tertiary),
                     onPressed: policyWarnings >= 3 ? null : _showWarningDialog,
                   ),
                 ),
@@ -350,9 +350,9 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                icon: const Icon(Icons.delete_forever, size: 18, color: Colors.red),
-                label: Text(context.tr('full_delete'), style: const TextStyle(color: Colors.red)),
-                style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red)),
+                icon: Icon(Icons.delete_forever, size: 18, color: cs.error),
+                label: Text(context.tr('full_delete'), style: TextStyle(color: cs.error)),
+                style: OutlinedButton.styleFrom(side: BorderSide(color: cs.error)),
                 onPressed: _fullDelete,
               ),
             ),
@@ -390,7 +390,7 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
             child: Text(context.tr('cancel')),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.tertiary),
             onPressed: () => _sendWarning(ctx, reasonCtrl.text),
             child: Text(context.tr('send_warning'), style: const TextStyle(color: Colors.white)),
           ),
@@ -532,9 +532,9 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
               children: [
                 Expanded(child: _statTile(cs, context.tr('seller_balance'), 'TZS ${balance.toStringAsFixed(0)}', Icons.account_balance_wallet, cs.primary)),
                 const SizedBox(width: 8),
-                Expanded(child: _statTile(cs, context.tr('pending_escrow'), 'TZS ${escrow.toStringAsFixed(0)}', Icons.lock, Colors.orange)),
+                Expanded(child: _statTile(cs, context.tr('pending_escrow'), 'TZS ${escrow.toStringAsFixed(0)}', Icons.lock, cs.tertiary)),
                 const SizedBox(width: 8),
-                Expanded(child: _statTile(cs, context.tr('total_sales'), '$sales', Icons.shopping_bag, Colors.green)),
+                Expanded(child: _statTile(cs, context.tr('total_sales'), '$sales', Icons.shopping_bag, cs.primary)),
               ],
             ),
           ],

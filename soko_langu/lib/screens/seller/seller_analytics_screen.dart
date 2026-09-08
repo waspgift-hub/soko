@@ -369,7 +369,7 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionHeader(cs, Icons.star_rounded, context.tr('rating'), Colors.amber),
+          _buildSectionHeader(cs, Icons.star_rounded, context.tr('rating'), cs.primary),
           const SizedBox(height: 16),
           Row(
             children: [
@@ -393,7 +393,7 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
                   Row(
                     children: List.generate(5, (i) {
                       final filled = i < _data!.averageRating.round();
-                      return Icon(filled ? Icons.star : Icons.star_border, color: Colors.amber, size: 18);
+                      return Icon(filled ? Icons.star : Icons.star_border, color: cs.primary, size: 18);
                     }),
                   ),
                 ],
@@ -511,7 +511,7 @@ class _SellerAnalyticsScreenState extends State<SellerAnalyticsScreen> {
           const SizedBox(height: 16),
           _demographicBar(cs, context.tr('male'), _data!.genderBreakdown['male'] ?? 0, cs.primary),
           const SizedBox(height: 8),
-          _demographicBar(cs, context.tr('female'), _data!.genderBreakdown['female'] ?? 0, Colors.pink),
+          _demographicBar(cs, context.tr('female'), _data!.genderBreakdown['female'] ?? 0, cs.tertiary),
           const SizedBox(height: 12),
           if (_data!.locationBreakdown.isNotEmpty) ...[
             Text(

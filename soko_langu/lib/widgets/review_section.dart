@@ -181,6 +181,7 @@ class _Stars extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final starColor = Theme.of(context).colorScheme.primary;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: List.generate(5, (i) {
@@ -188,7 +189,7 @@ class _Stars extends StatelessWidget {
         return Icon(
           filled ? Icons.star : Icons.star_border,
           size: size,
-          color: Colors.amber,
+          color: starColor,
         );
       }),
     );

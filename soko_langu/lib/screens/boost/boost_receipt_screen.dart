@@ -3,7 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../extensions/context_tr.dart';
-import '../../theme/app_colors.dart'; // ignore: unused_import
+import '../../theme/app_colors.dart';
 
 class BoostReceiptScreen extends StatelessWidget {
   final Map<String, dynamic> data;
@@ -28,9 +28,9 @@ class BoostReceiptScreen extends StatelessWidget {
             .format(createdAt.toDate().add(Duration(days: durationDays)))
         : '';
     final tierColors = <String, Color>{
-      'bronze': Color(0xFFCD7F32),
-      'silver': Color(0xFFC0C0C0),
-      'gold': Color(0xFFFFD700),
+      'bronze': cs.boostBronze,
+      'silver': cs.boostSilver,
+      'gold': cs.boostGold,
     };
     final tierColor = tierColors[tier.toLowerCase()] ?? cs.primary;
 

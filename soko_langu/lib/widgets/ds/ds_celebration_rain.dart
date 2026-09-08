@@ -23,13 +23,13 @@ class _DsCelebrationRainState extends State<DsCelebrationRain>
   static final Random _random = Random();
 
   static const _palette = [
-    Color(0xFFFFD700),
-    Color(0xFFFF6F00),
-    Color(0xFF2D6A4F),
-    Color(0xFFEC407A),
-    Color(0xFF3D5AFE),
-    Color(0xFF52B788),
-    Color(0xFFFFB74D),
+    Color(0xFF111111),
+    Color(0xFF3B3B3B),
+    Color(0xFF616161),
+    Color(0xFF9E9E9E),
+    Color(0xFFD6D6D6),
+    Color(0xFFECECEC),
+    Color(0xFFFFFFFF),
   ];
 
   @override

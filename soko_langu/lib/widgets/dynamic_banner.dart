@@ -6,7 +6,6 @@ import '../services/product_service.dart';
 import '../models/product_model.dart';
 import '../extensions/context_tr.dart';
 import '../app/routes.dart';
-import '../theme/app_colors.dart';
 
 class DynamicBanner extends StatelessWidget {
   const DynamicBanner({super.key});
@@ -107,7 +106,7 @@ class _BoostedCarouselState extends State<_BoostedCarousel> {
         child: Row(
           children: [
             Expanded(flex: 3, child: _buildImagePanel(cs)),
-            Expanded(flex: 1, child: _buildInfoPanel(cs)),
+            Expanded(flex: 1, child: _buildInfoPanel()),
           ],
         ),
       ),
@@ -165,18 +164,15 @@ class _BoostedCarouselState extends State<_BoostedCarousel> {
     );
   }
 
-  Widget _buildInfoPanel(ColorScheme cs) {
+  Widget _buildInfoPanel() {
     final p = widget.products[_currentPage.clamp(0, widget.products.length - 1)];
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
+        gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            cs.boostGold.withValues(alpha: 0.95),
-            cs.boostBronze.withValues(alpha: 0.9),
-          ],
+          colors: [Color(0xFF121212), Color(0xFF3D3D3D)],
         ),
       ),
       child: Column(

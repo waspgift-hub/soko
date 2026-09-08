@@ -19,40 +19,40 @@ class OrderStatusInfo {
 OrderStatusInfo orderStatusInfo(String status, ColorScheme cs) {
   switch (status) {
     case 'awaiting_shipping_quote':
-      return const OrderStatusInfo(
-        color: Color(0xFFF59E0B),
+      return OrderStatusInfo(
+        color: cs.onSurfaceVariant,
         icon: Icons.rate_review_outlined,
         labelKey: 'awaiting_shipping_quote_label',
       );
     case 'awaiting_payment':
-      return const OrderStatusInfo(
-        color: Color(0xFF3B82F6),
+      return OrderStatusInfo(
+        color: cs.onSurfaceVariant,
         icon: Icons.account_balance_wallet_outlined,
         labelKey: 'awaiting_payment',
       );
     case 'quoted':
-      return const OrderStatusInfo(
-        color: Color(0xFF14B8A6),
+      return OrderStatusInfo(
+        color: cs.tertiary,
         icon: Icons.description_outlined,
         labelKey: 'quoted',
       );
     case 'paid':
-      return const OrderStatusInfo(
-        color: Color(0xFF4F46E5),
+      return OrderStatusInfo(
+        color: cs.primary,
         icon: Icons.payments_outlined,
         labelKey: 'paid',
       );
     case 'escrow_hold':
     case 'paid_escrow_hold':
     case 'paid_escrow_held':
-      return const OrderStatusInfo(
-        color: Color(0xFF9333EA),
+      return OrderStatusInfo(
+        color: cs.secondary,
         icon: Icons.verified_user_outlined,
         labelKey: 'secured_in_escrow',
       );
     case 'dispatched':
-      return const OrderStatusInfo(
-        color: Color(0xFFF97316),
+      return OrderStatusInfo(
+        color: cs.tertiary,
         icon: Icons.local_shipping_outlined,
         labelKey: 'dispatched_label',
       );

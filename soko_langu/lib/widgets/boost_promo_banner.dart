@@ -4,7 +4,6 @@ import 'product_cached_image.dart';
 import '../services/product_service.dart';
 import '../extensions/context_tr.dart';
 import '../app/routes.dart';
-import '../theme/app_colors.dart';
 
 /// Home banner promoting the paid product-boost feature to sellers.
 class BoostPromoBanner extends StatelessWidget {
@@ -92,7 +91,6 @@ class BoostPromoBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: () => _startBoost(context),
       child: Container(
@@ -102,15 +100,15 @@ class BoostPromoBanner extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           gradient: LinearGradient(
             colors: [
-              cs.boostGold.withValues(alpha: 0.9),
-              cs.trendingOrange.withValues(alpha: 0.85),
+              const Color(0xFF121212),
+              const Color(0xFF2E2E32),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           boxShadow: [
             BoxShadow(
-              color: cs.boostGold.withValues(alpha: 0.25),
+              color: Colors.black.withValues(alpha: 0.25),
               blurRadius: 16,
               offset: const Offset(0, 6),
             ),
@@ -129,13 +127,13 @@ class BoostPromoBanner extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: cs.surface.withValues(alpha: 0.25),
+                        color: Colors.white.withValues(alpha: 0.18),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         context.tr('boost_promo_title'),
-                        style: TextStyle(
-                          color: cs.surface,
+                        style: const TextStyle(
+                          color: Colors.white,
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
                           letterSpacing: 1.2,
@@ -145,10 +143,10 @@ class BoostPromoBanner extends StatelessWidget {
                     const SizedBox(height: 10),
                     Text(
                       context.tr('boost_promo_subtitle'),
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 19,
                         fontWeight: FontWeight.w900,
-                        color: cs.surface,
+                        color: Colors.white,
                         height: 1.15,
                       ),
                     ),
@@ -156,7 +154,7 @@ class BoostPromoBanner extends StatelessWidget {
                     Text(
                       context.tr('boost_promo_desc'),
                       style: TextStyle(
-                        color: cs.surface.withValues(alpha: 0.85),
+                        color: Colors.white.withValues(alpha: 0.85),
                         fontSize: 11,
                         height: 1.4,
                       ),
@@ -172,18 +170,18 @@ class BoostPromoBanner extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.rocket_launch_rounded, size: 44, color: cs.surface),
+                    Icon(Icons.rocket_launch_rounded, size: 44, color: Colors.white),
                     const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                       decoration: BoxDecoration(
-                        color: cs.surface,
+                        color: Colors.white,
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
                         context.tr('boost_promo_cta'),
-                        style: TextStyle(
-                          color: cs.boostGold,
+                        style: const TextStyle(
+                          color: Colors.black,
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                         ),

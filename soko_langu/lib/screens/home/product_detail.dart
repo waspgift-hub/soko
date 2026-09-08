@@ -12,11 +12,11 @@ import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../widgets/product_cached_image.dart';
 import '../../widgets/ad_banner.dart';
-import '../../widgets/google_loading.dart';
 import '../../widgets/review_section.dart';
 import '../../widgets/comment_section.dart';
 import '../../widgets/verified_badge.dart';
 import '../../widgets/premium_widgets.dart';
+import '../../widgets/soko_widgets.dart';
 import '../../services/product_service.dart';
 import '../../services/user_service.dart';
 import '../../services/analytics_service.dart';
@@ -723,55 +723,40 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         child: Row(
           children: [
             Expanded(
-              child: SizedBox(
-                height: 52,
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: cs.whatsappGreen,
-                    side: BorderSide(color: cs.whatsappGreen.withValues(alpha: 0.4), width: 1.5),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  icon: const Icon(Icons.shopping_bag_outlined, size: 18),
-                  onPressed: () async {
-                    final product = widget.product;
-                    if (currentUser == null) {
-                      context.push(AppRoutes.login);
-                      return;
-                    }
-                    // Swallow double-taps: each quick re-tap would stack a
-                    // quantity bump plus a snackbar while Hive is mid-write
-                    final now = DateTime.now();
-                    if (_lastCartTapAt != null &&
-                        now.difference(_lastCartTapAt!).inMilliseconds < 600) {
-                      return;
-                    }
-                    _lastCartTapAt = now;
-                    await CartService().add(
-                      product: product,
-                      quantity: _quantity,
-                      variantId: _selectedVariantId,
-                      unitPrice: _unitPrice,
-                    );
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content:
-                              Text(context.tr('added_to_cart', 'Added to cart')),
-                          action: SnackBarAction(
-                            label: context.tr('view_cart', 'View Cart'),
-                            onPressed: () => context.push(AppRoutes.cart),
-                          ),
+              child: AddToCartButton(
+                onPressed: () async {
+                  final product = widget.product;
+                  if (currentUser == null) {
+                    context.push(AppRoutes.login);
+                    return;
+                  }
+                  // Swallow double-taps: each quick re-tap would stack a
+                  // quantity bump plus a snackbar while Hive is mid-write
+                  final now = DateTime.now();
+                  if (_lastCartTapAt != null &&
+                      now.difference(_lastCartTapAt!).inMilliseconds < 600) {
+                    return;
+                  }
+                  _lastCartTapAt = now;
+                  await CartService().add(
+                    product: product,
+                    quantity: _quantity,
+                    variantId: _selectedVariantId,
+                    unitPrice: _unitPrice,
+                  );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content:
+                            Text(context.tr('added_to_cart', 'Added to cart')),
+                        action: SnackBarAction(
+                          label: context.tr('view_cart', 'View Cart'),
+                          onPressed: () => context.push(AppRoutes.cart),
                         ),
-                      );
-                    }
-                  },
-                  label: Text(
-                    context.tr('add_to_cart', 'Add to Cart'),
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                ),
+                      ),
+                    );
+                  }
+                },
               ),
             ),
             const SizedBox(width: 10),

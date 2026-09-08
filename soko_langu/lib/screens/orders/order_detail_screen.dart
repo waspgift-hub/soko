@@ -559,7 +559,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w900,
-                        color: Colors.greenAccent,
+                        color: Colors.white,
                       ),
                     ),
                     const Spacer(),
@@ -648,20 +648,20 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.1),
+                color: cs.tertiary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.timer_outlined, size: 12, color: Colors.orange),
+                  Icon(Icons.timer_outlined, size: 12, color: cs.tertiary),
                   const SizedBox(width: 4),
                   Text(
                     _formatCountdown(_remaining!),
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
-                      color: Colors.orange,
+                      color: cs.tertiary,
                     ),
                   ),
                 ],
@@ -695,17 +695,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       _StepData(
         context.tr('step_shipping_quote'),
         Icons.local_shipping_outlined,
-        Colors.orange,
+        cs.onSurfaceVariant,
       ),
       _StepData(
         context.tr('waiting_payment'),
         Icons.account_balance_wallet_outlined,
-        Colors.blue,
+        cs.tertiary,
       ),
       _StepData(
         context.tr('step_in_escrow'),
         Icons.verified_user_outlined,
-        Colors.purple,
+        cs.secondary,
       ),
       _StepData(
         context.tr('shipped'),
@@ -720,7 +720,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       _StepData(
         context.tr('completed'),
         Icons.check_circle_rounded,
-        cs.successGreen,
+        cs.primary,
       ),
     ];
     final current = _currentStep();
@@ -771,7 +771,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                     vertical: 3,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.orange.withValues(alpha: 0.1),
+                    color: cs.tertiary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
@@ -780,7 +780,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                       Icon(
                         Icons.timer_outlined,
                         size: 12,
-                        color: Colors.orange,
+                        color: cs.tertiary,
                       ),
                       const SizedBox(width: 4),
                       Text(
@@ -788,7 +788,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
-                          color: Colors.orange,
+                          color: cs.tertiary,
                         ),
                       ),
                     ],

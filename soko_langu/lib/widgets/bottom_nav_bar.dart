@@ -145,8 +145,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   Widget _buildGlassNavBar(ColorScheme cs) {
     final isDark = cs.brightness == Brightness.dark;
     final navBg = isDark
-        ? const Color(0xFF0D1A18).withValues(alpha: 0.82)
-        : const Color(0xFFFFFFFF).withValues(alpha: 0.82);
+        ? const Color(0xFF121212).withValues(alpha: 0.85)
+        : const Color(0xFFFFFFFF).withValues(alpha: 0.88);
     final navBorder = isDark
         ? const Color(0x2AFFFFFF)
         : const Color(0x08000000);
@@ -386,16 +386,12 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 width: 46,
                 height: 46,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [cs.primary, cs.primary.withValues(alpha: 0.72)],
-                  ),
+                  color: cs.primary,
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: cs.primary.withValues(alpha: 0.32),
-                      blurRadius: 16,
+                      color: Colors.black.withValues(alpha: 0.25),
+                      blurRadius: 14,
                       offset: const Offset(0, 6),
                     ),
                   ],
@@ -467,9 +463,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [cs.primary, cs.primary.withValues(alpha: 0.7)],
-                    ),
+                    color: cs.primary,
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
@@ -602,12 +596,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                 width: 36,
                                 height: 36,
                                 decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      cs.primary,
-                                      cs.primary.withValues(alpha: 0.7),
-                                    ],
-                                  ),
+                                  color: cs.primary,
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
