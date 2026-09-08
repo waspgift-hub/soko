@@ -124,7 +124,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                         _buildEarningsCard(),
                         const SizedBox(height: 20),
                         _buildQuickActions(cs, isDark, productSnap.data ?? []),
-                        if (user?.email == 'admin@soko-langu.com' || _isAdmin) ...[
+                        if (user?.email == 'admin@sokovibe.co.tz' || _isAdmin) ...[
                           const SizedBox(height: 20),
                           _buildAdminSection(),
                         ],

@@ -360,8 +360,8 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
 
   Widget _buildActionGrid(ColorScheme cs) {
     final user = FirebaseAuth.instance.currentUser;
-    final isAdmin = _profile?.email == 'admin@soko-langu.com' ||
-        user?.email?.toLowerCase() == 'admin@soko-langu.com';
+    final isAdmin = _profile?.email == 'admin@sokovibe.co.tz' ||
+        user?.email?.toLowerCase() == 'admin@sokovibe.co.tz';
     final actions = [
       _ActionItem(Icons.switch_account_rounded, context.tr('accounts'), () => AccountSwitcherSheet.show(context)),
       _ActionItem(Icons.edit_rounded, context.tr('edit_profile'), () async { await context.push(AppRoutes.editProfile); _refreshProfile(); }),

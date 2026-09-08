@@ -1980,7 +1980,7 @@ app.post('/api/setup-admin', async (req, res) => {
     }
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-    const email = 'admin@soko-langu.com';
+    const email = 'admin@sokovibe.co.tz';
 
     // Create Firebase Auth user
     let userRecord;

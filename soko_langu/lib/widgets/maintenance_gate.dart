@@ -36,7 +36,7 @@ class _MaintenanceGateState extends State<MaintenanceGate> {
 
       final user = FirebaseAuth.instance.currentUser;
       final email = user?.email?.toLowerCase() ?? '';
-      if (email == 'admin@soko-langu.com' || email == 'admin@soko-vibe.com') {
+      if (email == 'admin@sokovibe.co.tz' || email == 'admin@soko-langu.com' || email == 'admin@soko-vibe.com') {
         return;
       }
 
