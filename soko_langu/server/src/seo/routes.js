@@ -129,6 +129,7 @@ async function handleSpa(req, res, next) {
   const lastSeg = req.path.split('/').pop() || '';
   if (
     req.path.startsWith('/api') ||
+    req.path.startsWith('/health') ||
     req.path.startsWith('/admin') ||
     req.path.startsWith('/marketing') ||
     req.path.startsWith('/.well-known') ||

@@ -143,11 +143,6 @@ app.use(express.static(webDist, {
   },
 }));
 
-// SPA handler with server-side SEO: injects per-route metadata (products fetch
-// real Firestore data so title/description/OG/JSON-LD match the page), and
-// returns genuine 404s for missing products and unknown paths.
-app.get('*', handleSpa);
-
 // Routes
 app.use('/health', healthRouter);
 app.use('/api/v1/auth', authRouter);
@@ -188,6 +183,12 @@ try {
 } catch (e) {
   console.error('[COMPAT] mount failed, v1 continues:', e.message);
 }
+
+// SPA handler with server-side SEO: injected per-route metadata (products fetch
+// real Firestore data so title/description/OG/JSON-LD match the page), genuine
+// 404s for missing products and unknown paths. Mounted LAST so real routes
+// (/health, /api/*, ...) always win over the SPA catch-all.
+app.get('*', handleSpa);
 
 // Error handler
 app.use((err, req, res, next) => {
