@@ -208,6 +208,10 @@ app.use(express.static(landingDir, {
   },
 }));
 
+// Browsers/bots often request /favicon.ico directly regardless of the <link>
+// tags — map the root one to the brand favicon instead of serving a 404.
+app.get('/favicon.ico', (req, res) => res.redirect('/assets/favicon.ico'));
+
 // Routes
 app.use('/health', healthRouter);
 app.use('/api/v1/auth', authRouter);
