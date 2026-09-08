@@ -25,7 +25,7 @@ const productRouter = require('./modules/products/routes');
 const referralRouter = require('./modules/referrals/routes');
 const moderationRouter = require('./modules/moderation/routes');
 const reconciliationRouter = require('./modules/reconciliation/routes');
-const { seoRouter, handleSpa } = require('./seo/routes');
+const { seoRouter, NOT_FOUND_HTML } = require('./seo/routes');
 
 const app = express();
 
@@ -42,29 +42,26 @@ app.use((req, res, next) => {
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  // Sparse CSP: same-origin API stays locked down, but the public marketing
-  // pages + admin dashboard pull Firebase/Google, Tailwind, chart.js, lucide,
-  // Google Fonts, and AdSense from CDNs — those hosts are allow-listed instead
-  // of falling back to unsafe-inline-everything.
-  // CSP covers three consumers on one server: the API (JSON), the marketing
-  // pages, and the Flutter web app. CanvasKit needs wasm-unsafe-eval + blob
-  // workers, and the web app talks to Firestore/Storage + Firebase auth
-  // directly from the browser.
+  // Sparse CSP: the API (JSON) is locked down, but the marketing pages, legal
+  // pages and the browser admin dashboard pull Firebase/Google, Tailwind,
+  // chart.js, lucide, and Google Fonts from CDNs — those hosts are
+  // allow-listed instead of falling back to unsafe-inline-everything.
   res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://www.gstatic.com https://www.googleapis.com https://apis.google.com https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://unpkg.com https://pagead2.googlesyndication.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://accounts.google.com https://googleads.g.doubleclick.net https://pagead2.googlesyndication.com https://www.gstatic.com https://www.googleapis.com https://firestore.googleapis.com https://firebasestorage.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; media-src 'self' blob: https:; worker-src 'self' blob:");
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   next();
 });
 
-// Canonical domain: every sokovibe.co.tz hostname is folded onto the www host
-// (path + query preserved, one redirect hop). The admin subdomain keeps its
-// root->/admin mapping. Non-soko hosts (Render origin, health checks) are left
-// alone so the platform health checks stay 200.
+// Canonical domain: the apex sokovibe.co.tz is the official host. Every other
+// sokovibe.co.tz hostname is folded onto the apex (path + query preserved, one
+// redirect hop). The admin subdomain keeps its root->/admin mapping. Non-soko
+// hosts (Render origin, health checks) are left alone so the platform health
+// checks stay 200.
 app.use((req, res, next) => {
   const host = (req.hostname || '').toLowerCase();
-  if (host.endsWith('sokovibe.co.tz') && host !== 'www.sokovibe.co.tz') {
+  if (host.endsWith('sokovibe.co.tz') && host !== 'sokovibe.co.tz') {
     let target = req.originalUrl;
     if (host === 'admin.sokovibe.co.tz' && (target === '/' || target === '')) target = '/admin';
-    return res.redirect(301, `https://www.sokovibe.co.tz${target}`);
+    return res.redirect(301, `https://sokovibe.co.tz${target}`);
   }
   next();
 });
@@ -94,20 +91,20 @@ app.use((req, res, next) => {
   next();
 });
 
-// Public assets: browser admin dashboard at /admin and the marketing site at
-// / (the landing files mirror the Firebase Hosting site). The admin hostname
-// is redirected to /admin so the bare domain lands on the panel; every other
-// host gets the marketing page.
+// Public assets: browser admin dashboard at /admin and the landing site at /
+// (the landing files mirror the Firebase Hosting site). The admin hostname is
+// redirected to /admin so the bare domain lands on the panel; every other host
+// gets the landing page.
 app.get('/', (req, res, next) => {
   if ((req.hostname || '').endsWith('admin.sokovibe.co.tz')) return res.redirect(301, '/admin');
   next();
 });
 
-// Universal/App Links verification files. Served with an explicit JSON
-// content-type because apple-app-site-association has no file extension and
-// express.static would otherwise send application/octet-stream.
-const wellKnownDir = path.join(__dirname, '..', 'landing', '.well-known');
-const webDist = path.join(__dirname, '..', '..', 'build', 'web');
+// Universal/App Links verification files for the native apps. Served with an
+// explicit JSON content-type because apple-app-site-association has no file
+// extension and express.static would otherwise send application/octet-stream.
+const landingDir = path.join(__dirname, '..', 'landing');
+const wellKnownDir = path.join(landingDir, '.well-known');
 app.get('/.well-known/assetlinks.json', (req, res) => {
   res.type('application/json').sendFile(path.join(wellKnownDir, 'assetlinks.json'));
 });
@@ -118,24 +115,41 @@ app.get('/.well-known/apple-app-site-association.json', (req, res) => {
   res.type('application/json').sendFile(path.join(wellKnownDir, 'apple-app-site-association'));
 });
 
-// SEO assets: robots.txt, sitemap.xml and the generated sitemap files.
+// SEO assets: robots.txt + sitemap.xml (static, no Firestore).
 app.use(seoRouter);
 
-// The Flutter web app owns the root — www.sokovibe.co.tz now runs the app in
-// the browser (guest browsing first, login + buy without installing). The
-// legacy marketing landing moves under /marketing; /admin keeps its mount.
-app.use('/marketing', express.static(path.join(__dirname, '..', 'landing'), { index: 'index.html' }));
+// Legal pages on clean public URLs. Served from the landing dir so their
+// relative asset + translation links resolve (styles.css, i18n.js, index.html).
+app.get('/privacy-policy', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  if (!req.accepts('html')) return res.status(406).type('text/plain').send('Not acceptable');
+  res.type('html').sendFile(path.join(landingDir, 'privacy.html'));
+});
+app.get('/terms-of-service', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  if (!req.accepts('html')) return res.status(406).type('text/plain').send('Not acceptable');
+  res.type('html').sendFile(path.join(landingDir, 'terms.html'));
+});
+app.get('/support', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  if (!req.accepts('html')) return res.status(406).type('text/plain').send('Not acceptable');
+  res.type('html').sendFile(path.join(landingDir, 'support.html'));
+});
+
+// /marketing used to host the old landing; the site now owns the root.
+app.use('/marketing', (req, res) => {
+  res.redirect(301, '/');
+});
+
 app.use('/admin', express.static(path.join(__dirname, '..', 'admin'), { index: 'index.html' }));
 
-// Flutter web build (committed under build/web so Render can serve it).
-// index.html is served through the SPA handler below, where SEO metadata is
-// injected; the rest is content-versioned by the service worker and cached hard
-// to make repeat loads fast.
-app.use(express.static(webDist, {
-  index: false,
+// The landing page owns the root. HTML is never cached so edits go live
+// immediately; versioned assets (css/js/png/ico/json) cache hard.
+app.use(express.static(landingDir, {
+  index: 'index.html',
   setHeaders: (res, filePath) => {
-    const name = path.basename(filePath);
-    if (name === 'flutter_bootstrap.js' || name.includes('service_worker')) {
+    const ext = path.extname(filePath).toLowerCase();
+    if (ext === '.html' || filePath.endsWith('manifest.json')) {
       res.setHeader('Cache-Control', 'no-cache');
     } else {
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
@@ -184,11 +198,19 @@ try {
   console.error('[COMPAT] mount failed, v1 continues:', e.message);
 }
 
-// SPA handler with server-side SEO: injected per-route metadata (products fetch
-// real Firestore data so title/description/OG/JSON-LD match the page), genuine
-// 404s for missing products and unknown paths. Mounted LAST so real routes
-// (/health, /api/*, ...) always win over the SPA catch-all.
-app.get('*', handleSpa);
+// Final 404: JSON for API routes, premium HTML page for everything else.
+app.use((req, res) => {
+  if (req.path.startsWith('/api') || req.path.startsWith('/health')) {
+    if (!req.accepts('json') && req.accepts('html')) {
+      return res.status(404).setHeader('Cache-Control', 'no-cache').type('html').send(NOT_FOUND_HTML);
+    }
+    return res.status(404).json({ error: 'Not found' });
+  }
+  if (!req.accepts('html')) {
+    return res.status(404).type('text/plain').send('Not found');
+  }
+  res.status(404).setHeader('Cache-Control', 'no-cache').type('html').send(NOT_FOUND_HTML);
+});
 
 // Error handler
 app.use((err, req, res, next) => {

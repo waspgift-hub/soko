@@ -151,21 +151,22 @@ paths, API keys or user data are ever included in a share link.
 | `ios/Runner/Runner.entitlements` | Associated Domains |
 | `server/landing/.well-known/assetlinks.json` | Android verification file |
 | `server/landing/.well-known/apple-app-site-association` | iOS verification file |
-| `server/src/app.js` | Serves `.well-known/`, the Flutter web app at the root, SPA fallback, `/marketing`, `/admin` |
+| `server/src/app.js` | Serves `.well-known/`, the landing page at the root, `/marketing` (301), `/admin` |
 | `server/src/config/index.js` | `deepLink` env config (store URLs) |
 
-## 10. Serving the web app
+## 10. Serving the web site
 
-- The Flutter web build lives at `soko_langu/build/web` and is **force-added to
-  git** (`build/` is gitignored) so Render can serve it — there is no Flutter
-  SDK on the Render box. Rebuild before each web deploy:
-  `flutter build web --release`, then `git add -f soko_langu/build/web`.
-- `server/src/app.js` serves `build/web` at `/` with `express.static`, then a
-  catch-all GET handler returns `index.html` for any extension-less,
-  non-`/api`/`/admin`/`/marketing`/`.well-known` path (SPA history fallback).
-- The CSP is shared between the API, marketing pages and the app: CanvasKit
-  needs `'wasm-unsafe-eval'` + `worker-src 'self' blob:`, and the app connects
-  to `firestore.googleapis.com` / `firebasestorage.googleapis.com` directly
-  from the browser.
-- Firebase Console: add `www.sokovibe.co.tz` to **Authentication → Settings →
-  Authorized domains** so Google + email-OTP sign-in popups work on web.
+- **The Flutter web app is no longer served** (`soko_langu/build/web` was
+  removed from git). The marketplace lives on the native Android/iOS apps.
+- `server/src/app.js` serves the marketing landing site from
+  `server/landing/` at the root: `index.html` + `css/site.css` +
+  `js/site.js` + `assets/` + `manifest.json`. Legal pages are served on clean
+  URLs (`/privacy-policy`, `/terms-of-service`, `/support`). `/marketing`
+  301-redirects to `/`. `/admin` keeps its static mount.
+- Web deep links (`/product/...`) now return a premium 404 — the native share
+  text still emits `www.sokovibe.co.tz/product/{id}`; switch share URLs to the
+  app scheme when store links are live.
+- Canonical host is the **apex** `https://sokovibe.co.tz`; the app middleware
+  301s `www.sokovibe.co.tz` → apex.
+- Firebase Console: add `sokovibe.co.tz` (apex) to **Authentication → Settings
+  → Authorized domains** if web sign-in is ever re-enabled.
