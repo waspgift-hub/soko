@@ -1,286 +1,314 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Soko Vibe — Tanzania's Trusted Online Marketplace</title>
-  <meta name="description" content="Soko Vibe is Tanzania's modern online marketplace. Buy and sell new & second-hand products with secure ClickPesa payments, escrow protection, and nationwide delivery.">
-  <meta name="theme-color" content="#000000">
-  <meta property="og:title" content="Soko Vibe">
-  <meta property="og:description" content="Buy and sell anything in Tanzania. Secure payments, escrow protection, nationwide delivery.">
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="https://www.sokovibe.co.tz/">
-  <!-- Google AdSense site verification -->
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3796499857968162" crossorigin="anonymous"></script>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%23000000'/%3E%3Ctext x='256' y='320' font-family='Arial,sans-serif' font-size='220' font-weight='bold' fill='%23ffffff' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="styles.css">
-  <script src="i18n.js"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Soko Vibe — Tanzania's Trusted Online Marketplace</title>
+<meta name="description" content="Buy and sell new &amp; second-hand products in Tanzania with escrow-protected payments, real-time chat, voice search and nationwide delivery.">
+<meta name="theme-color" content="#ffffff">
+<link rel="canonical" href="https://www.sokovibe.co.tz/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://www.sokovibe.co.tz/">
+<meta property="og:title" content="Soko Vibe — Tanzania's Trusted Online Marketplace">
+<meta property="og:description" content="Buy and sell new &amp; second-hand products in Tanzania with escrow-protected payments, real-time chat, voice search and nationwide delivery.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="premium.css">
 </head>
 <body>
 
-  <!-- NAV -->
-  <header class="site">
-    <div class="nav-inner">
-      <a class="brand" href="#">
-        <svg viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="512" height="512" rx="112" fill="#000000"/><path d="M256 96l128 96v224H128V192z" fill="#ffffff" transform="scale(0.9) translate(28,28)"/></svg>
-        Soko Vibe
-      </a>
-      <nav class="nav-links">
-        <a href="#features" data-i18n="nav_features">Features</a>
-        <a href="#how" data-i18n="nav_how">How it works</a>
-        <a href="#app" data-i18n="nav_app">The App</a>
-        <a href="#pricing" data-i18n="nav_pricing">Pricing</a>
-        <a href="#faq" data-i18n="nav_faq">FAQ</a>
-      </nav>
-      <div style="display:flex;align-items:center;gap:12px;">
-        <select class="lang-select" aria-label="Language">
-          <option value="sw">Kiswahili</option>
-          <option value="en">English</option>
-          <option value="fr">Français</option>
-          <option value="zh">中文</option>
-          <option value="de">Deutsch</option>
-        </select>
-        <a class="nav-cta" href="#app" data-i18n="nav_get_app">Get the App</a>
-      </div>
-    </div>
-  </header>
+<header class="site-header">
+  <div class="container nav-bar" id="nav-bar">
+    <a class="brand" href="#" aria-label="Soko Vibe — home">
+      <svg viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#000000"/><path d="M256 96l128 96v224H128V192z" fill="#ffffff" transform="scale(0.9) translate(28,28)"/></svg>
+      <span class="name">Soko Vibe</span>
+    </a>
+    <nav class="nav-links" id="site-nav" aria-label="Primary">
+      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <a class="nav-cta" href="https://wa.me/255693273241?text=Hi%2C%20I%27d%20like%20to%20get%20the%20Soko%20Vibe%20app.">Get the app</a>
+    <button class="menu-btn" aria-label="Toggle menu" aria-expanded="false" aria-controls="site-nav">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
+    </button>
+  </div>
+</header>
 
-  <!-- HERO -->
+<main>
+
   <section class="hero">
-    <div class="hero-badge"><span class="dot"></span> <span data-i18n="hero_badge">Now live across Tanzania</span></div>
-    <h1><span data-i18n="hero_h1_1">The marketplace that</span> <span class="outline" data-i18n="hero_h1_2">feels like home.</span></h1>
-    <p class="sub" data-i18n="hero_sub">Buy and sell new &amp; second-hand products with escrow-protected payments, real-time chat, and nationwide delivery.</p>
-    <div class="hero-actions">
-      <a class="btn btn-dark" href="#app">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 1L11 12L3 23L4 14L4 10L3 1Z"/><path d="M18 12L5 14L15 21L18 12Z"/><path d="M18 12L5 10L15 3L18 12Z"/></svg>
-        <span data-i18n="hero_download">Download App</span>
-      </a>
-      <a class="btn btn-light" href="#how" data-i18n="hero_how">How it works</a>
-    </div>
-    <div class="hero-stats">
-      <div class="stat"><div class="num">1000+</div><div class="lbl" data-i18n="stat_products">Products listed</div></div>
-      <div class="stat"><div class="num">26</div><div class="lbl" data-i18n="stat_regions">Regions covered</div></div>
-      <div class="stat"><div class="num">99.9%</div><div class="lbl" data-i18n="stat_escrow">Escrow-protected</div></div>
-    </div>
-  </section>
+    <div class="container">
+      <p class="eyebrow" data-reveal><span class="dot" aria-hidden="true"></span> Now live across Tanzania</p>
+      <h1 data-reveal>The marketplace that <span class="muted">feels like home.</span></h1>
+      <p class="sub" data-reveal>Buy and sell new &amp; second-hand products with escrow-protected payments, real-time chat, and nationwide delivery.</p>
+      <div class="actions" data-reveal>
+        <a class="btn btn-dark" href="https://wa.me/255693273241?text=Hi%2C%20I%27d%20like%20to%20get%20the%20Soko%20Vibe%20app.">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>
+          Get the app
+        </a>
+        <a class="btn btn-light" href="#how">How it works</a>
+      </div>
+      <p class="note" data-reveal>The Android app is available now. Message us on WhatsApp to get it.</p>
 
-  <!-- TICKER -->
-  <div class="ticker"><div class="ticker-inner">M-Pesa &nbsp;•&nbsp; Tigo Pesa &nbsp;•&nbsp; Airtel Money &nbsp;•&nbsp; HaloPesa &nbsp;•&nbsp; Bank Transfer &nbsp;•&nbsp; Nationwide Delivery</div></div>
-
-  <!-- FEATURES -->
-  <section id="features">
-    <div class="section-head">
-      <div class="eyebrow" data-i18n="feat_eyebrow">Why Soko Vibe</div>
-      <h2 data-i18n="feat_h2">Built for trust, designed for speed.</h2>
-      <p class="lead" data-i18n="feat_lead">Every purchase is protected from listing to doorstep — so buyers buy with confidence and sellers sell with peace of mind.</p>
-    </div>
-    <div class="features-grid">
-      <div class="feature reveal">
-        <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
-        <h3 data-i18n="f1_t">Escrow Payments</h3>
-        <p data-i18n="f1_b">Money is held safely until you confirm your order. No more paying and praying.</p>
-      </div>
-      <div class="feature reveal">
-        <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></div>
-        <h3 data-i18n="f2_t">Real-time Chat</h3>
-        <p data-i18n="f2_b">Negotiate and ask questions instantly with sellers before you commit.</p>
-      </div>
-      <div class="feature reveal">
-        <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2v3"/><path d="M9 8l-4 8h2l2-3h8"/><circle cx="17" cy="15" r="5"/><path d="M20 15h-3v3"/></svg></div>
-        <h3 data-i18n="f3_t">Verified Sellers</h3>
-        <p data-i18n="f3_b">Identity-verified sellers and a rating system you can actually rely on.</p>
-      </div>
-      <div class="feature reveal">
-        <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M4 10h16"/><path d="M10 4v16"/></svg></div>
-        <h3 data-i18n="f4_t">Smart Categories</h3>
-        <p data-i18n="f4_b">Electronics, fashion, vehicles, home &amp; more — everything organized for you.</p>
-      </div>
-      <div class="feature reveal">
-        <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
-        <h3 data-i18n="f5_t">Instant Boost</h3>
-        <p data-i18n="f5_b">Promote your listings to the top and sell faster with one tap.</p>
-      </div>
-      <div class="feature reveal">
-        <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
-        <h3 data-i18n="f6_t">24/7 Support</h3>
-        <p data-i18n="f6_b">Real humans behind real issues. Support that actually responds.</p>
+      <div class="pay-strip" data-reveal>
+        <span>M-Pesa</span>
+        <span>Tigo Pesa</span>
+        <span>Airtel Money</span>
+        <span>HaloPesa</span>
+        <span>Bank transfer</span>
       </div>
     </div>
   </section>
 
-  <!-- HOW IT WORKS -->
-  <section id="how" style="border-top:1px solid var(--gray-100); background: var(--gray-50);">
-    <div class="section-head">
-      <div class="eyebrow" data-i18n="how_eyebrow">How it works</div>
-      <h2 data-i18n="how_h2">From browse to doorstep in 4 steps.</h2>
-    </div>
-    <div class="steps">
-      <div class="step reveal"><div class="n">1</div><h3 data-i18n="s1_t">Browse &amp; Discover</h3><p data-i18n="s1_b">Explore products across Tanzania or search for exactly what you need.</p></div>
-      <div class="step reveal"><div class="n">2</div><h3 data-i18n="s2_t">Chat &amp; Negotiate</h3><p data-i18n="s2_b">Message the seller, agree on price, and arrange delivery.</p></div>
-      <div class="step reveal"><div class="n">3</div><h3 data-i18n="s3_t">Pay Securely</h3><p data-i18n="s3_b">Pay via M-Pesa, Tigo Pesa or Airtel Money — funds held in escrow.</p></div>
-      <div class="step reveal"><div class="n">4</div><h3 data-i18n="s4_t">Confirm &amp; Rate</h3><p data-i18n="s4_b">Receive your order, confirm it, and rate your experience.</p></div>
-    </div>
-  </section>
-
-  <!-- APP PREVIEW -->
-  <section id="app" class="app-section">
-    <div class="app-side">
-      <div class="eyebrow" data-i18n="app_eyebrow">The App</div>
-      <h2 data-i18n="app_h2">Your whole marketplace, in your pocket.</h2>
-      <p class="lead" data-i18n="app_lead">A modern, fast, and beautiful app — with dark mode, animations, and a rating system that feels right at home.</p>
-      <ul class="checklist">
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span data-i18n="check1">Escrow-protected payments via ClickPesa</span></li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span data-i18n="check2">Voice search &amp; AI product assistant</span></li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span data-i18n="check3">Real-time order tracking &amp; notifications</span></li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span data-i18n="check4">Wallet, boosts &amp; seller analytics</span></li>
-      </ul>
-      <div class="app-badges">
-        <div class="store-badge">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>
-          <span><span data-i18n="android_lbl">Android</span><small data-i18n="google_play">Google Play</small></span>
+  <section class="section alternate" id="how">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <p class="section-eyebrow">How it works</p>
+        <h2>From browse to handover, in four steps</h2>
+        <p>Every order on Soko Vibe follows the same clear path — so both sides stay protected.</p>
+      </div>
+      <div class="steps">
+        <div class="step" data-reveal>
+          <p class="n">01</p>
+          <h3>Browse &amp; discover</h3>
+          <p>Explore categories across Tanzania — electronics, fashion, vehicles, home — or search by voice.</p>
         </div>
-        <div class="store-badge">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
-          <span><span data-i18n="ios_lbl">iOS</span><small data-i18n="app_store">App Store</small></span>
+        <div class="step" data-reveal>
+          <p class="n">02</p>
+          <h3>Chat &amp; agree</h3>
+          <p>Message the seller in real time, ask questions, and agree on price and delivery.</p>
+        </div>
+        <div class="step" data-reveal>
+          <p class="n">03</p>
+          <h3>Pay securely</h3>
+          <p>Funds are held in escrow and released only after you confirm your order.</p>
+        </div>
+        <div class="step" data-reveal>
+          <p class="n">04</p>
+          <h3>Confirm &amp; rate</h3>
+          <p>Receive your order, confirm it, and rate the seller — or open a dispute.</p>
         </div>
       </div>
     </div>
-    <div class="phone reveal">
-      <div class="phone-screen">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <div style="width:30px;height:30px;border-radius:8px;background:#000;"></div>
-          <div><div style="height:10px;width:90px;border-radius:5px;background:#000;font-size:0;">&nbsp;</div><div style="height:8px;width:120px;border-radius:4px;background:var(--gray-200);margin-top:5px;"></div></div>
+  </section>
+
+  <section class="section" id="features">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <p class="section-eyebrow">Features</p>
+        <h2>Built for trust, built for Tanzania</h2>
+        <p>The entire marketplace — payments, chat, delivery and tools for sellers — lives in one Android app.</p>
+      </div>
+      <div class="features">
+        <div class="feature" data-reveal>
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 3.5V11c0 5-3.4 8.8-8 11-4.6-2.2-8-6-8-11V5.5z"/><path d="M9 12l2 2 4-4"/></svg></div>
+          <h3>Escrow-protected payments</h3>
+          <p>Money is held by a payment processor and released only when you confirm the order — powered by ClickPesa.</p>
         </div>
-        <div style="height:34px;border:1.5px solid var(--gray-200);border-radius:999px;margin-top:14px;display:flex;align-items:center;padding:0 12px;color:var(--gray-400);font-size:12px;">Search products, people, categories…</div>
-        <div class="phone-card"><div class="phone-img"></div><div class="phone-line"></div><div class="phone-line short"></div></div>
-        <div class="phone-card"><div class="phone-img" style="background:linear-gradient(135deg, var(--gray-300), var(--gray-500));"></div><div class="phone-line"></div><div class="phone-line short"></div></div>
-        <div class="phone-card"><div class="phone-img" style="background:linear-gradient(135deg, var(--gray-100), var(--gray-300));"></div><div class="phone-line"></div><div class="phone-line short"></div></div>
+        <div class="feature" data-reveal>
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></div>
+          <h3>Real-time chat</h3>
+          <p>Talk to buyers and sellers inside the app before committing — photos, questions and price offers included.</p>
+        </div>
+        <div class="feature" data-reveal>
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><path d="M12 18v4"/></svg></div>
+          <h3>Voice search &amp; assistant</h3>
+          <p>Search by speaking, or ask the in-app assistant to help you find what you need.</p>
+        </div>
+        <div class="feature" data-reveal>
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/></svg></div>
+          <h3>Verified sellers</h3>
+          <p>Identity-verified sellers with ratings you can check — and mediation when a dispute arises.</p>
+        </div>
+        <div class="feature" data-reveal>
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg></div>
+          <h3>Wallet &amp; seller tools</h3>
+          <p>A wallet, listing boosts, flash sales and real-time analytics for sellers — all from one dashboard.</p>
+        </div>
+        <div class="feature" data-reveal>
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 8h-6a3 3 0 0 0 0 6h3a3 3 0 1 1 0 6h-7"/><path d="M17 8V6a3 3 0 0 0-3-3h-3"/><circle cx="19" cy="19" r="4"/><path d="M19 16.5V18l1.5 1.2"/></svg></div>
+          <h3>Flash sales &amp; delivery</h3>
+          <p>Time-limited discounts that surface on the feed, and handover tracking through to confirmation.</p>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- PRICING -->
-  <section id="pricing">
-    <div class="section-head">
-      <div class="eyebrow" data-i18n="price_eyebrow">Pricing</div>
-      <h2 data-i18n="price_h2">Give your listing a boost, affordably.</h2>
-      <p class="lead" data-i18n="price_lead">Listing is free. Boosts put your product at the top for a small fee.</p>
-    </div>
-    <div class="pricing-grid">
-      <div class="price-card reveal">
-        <h3 data-i18n="p_bronze_t">Bronze</h3>
-        <div class="price-amount" data-i18n="p_bronze_price">TSh 1,500</div>
-        <div class="price-duration" data-i18n="p_bronze_d">3 days</div>
-        <p class="price-feature" data-i18n="p_bronze_f">Quick exposure</p>
-        <a class="btn btn-light price-cta" href="#app" data-i18n="price_cta">Choose a plan</a>
+  <section class="section alternate">
+    <div class="container seller">
+      <div data-reveal>
+        <h2>Made for sellers who want to be seen</h2>
+        <p>Listing costs nothing. When you want more reach, give one listing a boost.</p>
+        <ul class="list">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg><span>Free listings — pay only when you boost</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg><span>Real-time analytics on views and leads</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg><span>Wallet with withdrawals straight to your money</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg><span>Verified seller badge after identity check</span></li>
+        </ul>
       </div>
-      <div class="price-card popular reveal">
-        <div class="price-popular" data-i18n="popular">Most popular</div>
-        <h3 data-i18n="p_silver_t">Silver</h3>
-        <div class="price-amount" data-i18n="p_silver_price">TSh 3,000</div>
-        <div class="price-duration" data-i18n="p_silver_d">7 days</div>
-        <p class="price-feature" data-i18n="p_silver_f">Best value</p>
-        <a class="btn btn-dark price-cta" href="#app" data-i18n="price_cta">Choose a plan</a>
+      <div class="seller-card" data-reveal>
+        <p class="k">Boost pricing</p>
+        <div class="rows">
+          <div class="r"><span>Bronze · 3 days</span><b>TSh 1,500</b></div>
+          <div class="r"><span>Silver · 7 days</span><b>TSh 3,000</b></div>
+          <div class="r"><span>Gold · 30 days</span><b>TSh 10,000</b></div>
+        </div>
       </div>
-      <div class="price-card reveal">
-        <h3 data-i18n="p_gold_t">Gold</h3>
-        <div class="price-amount" data-i18n="p_gold_price">TSh 10,000</div>
-        <div class="price-duration" data-i18n="p_gold_d">30 days</div>
-        <p class="price-feature" data-i18n="p_gold_f">Maximum reach</p>
-        <a class="btn btn-light price-cta" href="#app" data-i18n="price_cta">Choose a plan</a>
-      </div>
-    </div>
-    <p class="price-note" data-i18n="p_free">Listing is always free — you only pay to boost.</p>
-  </section>
-
-  <!-- FAQ -->
-  <section id="faq" style="border-top:1px solid var(--gray-100); background: var(--gray-50);">
-    <div class="section-head">
-      <div class="eyebrow" data-i18n="faq_eyebrow">FAQ</div>
-      <h2 data-i18n="faq_h2">Frequently asked questions</h2>
-    </div>
-    <div class="faq-list">
-      <details class="faq-item reveal" open>
-        <summary data-i18n="faq1_q">Is listing free?</summary>
-        <p data-i18n="faq1_a">Yes — listing products is completely free. You only pay when you choose to boost a listing.</p>
-      </details>
-      <details class="faq-item reveal">
-        <summary data-i18n="faq2_q">How are payments protected?</summary>
-        <p data-i18n="faq2_a">Every payment is held safely in escrow until you confirm you have received your product. Then funds are released to the seller.</p>
-      </details>
-      <details class="faq-item reveal">
-        <summary data-i18n="faq3_q">Can I talk to sellers?</summary>
-        <p data-i18n="faq3_a">Yes — real-time chat is available in the app before any purchase.</p>
-      </details>
-      <details class="faq-item reveal">
-        <summary data-i18n="faq4_q">How does delivery work?</summary>
-        <p data-i18n="faq4_a">Nationwide delivery via bus and courier services. You will see the cost before you pay.</p>
-      </details>
     </div>
   </section>
 
-  <!-- CTA -->
-  <section>
-    <div class="cta-band reveal">
-      <div class="eyebrow" style="color:rgba(255,255,255,.5);" data-i18n="cta_eyebrow">Get started</div>
-      <h2 data-i18n="cta_h2">Ready to buy &amp; sell the Soko Vibe way?</h2>
-      <p data-i18n="cta_p">Join thousands of Tanzanians buying and selling safely, every single day.</p>
-      <a class="btn" href="#app" data-i18n="cta_download">Download the App</a>
+  <section class="section" id="pricing">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <p class="section-eyebrow">Pricing</p>
+        <h2>Listing is free. Boosts from TSh 1,500.</h2>
+        <p>You only ever pay to give a listing more visibility. Boost from inside the app.</p>
+      </div>
+      <div class="pricing">
+        <article class="price-card" data-reveal>
+          <h3>Bronze</h3>
+          <p class="price-amount">TSh 1,500</p>
+          <p class="price-duration">per listing · 3 days</p>
+          <p class="price-feature">Quick exposure for a new or expiring listing.</p>
+          <a class="btn btn-light" href="https://wa.me/255693273241?text=Hi%2C%20I%27d%20like%20the%20Soko%20Vibe%20app.">Boost a listing</a>
+        </article>
+        <article class="price-card popular" data-reveal>
+          <span class="price-popular">Most popular</span>
+          <h3>Silver</h3>
+          <p class="price-amount">TSh 3,000</p>
+          <p class="price-duration">per listing · 7 days</p>
+          <p class="price-feature">A full week of extra visibility inside the app.</p>
+          <a class="btn btn-dark" href="https://wa.me/255693273241?text=Hi%2C%20I%27d%20like%20the%20Soko%20Vibe%20app.">Boost a listing</a>
+        </article>
+        <article class="price-card" data-reveal>
+          <h3>Gold</h3>
+          <p class="price-amount">TSh 10,000</p>
+          <p class="price-duration">per listing · 30 days</p>
+          <p class="price-feature">Maximum reach for your best items, all month.</p>
+          <a class="btn btn-light" href="https://wa.me/255693273241?text=Hi%2C%20I%27d%20like%20the%20Soko%20Vibe%20app.">Boost a listing</a>
+        </article>
+      </div>
+      <p class="price-note" data-reveal>All prices in Tanzanian Shillings. You boost from the app — no prepayment, no subscription.</p>
     </div>
   </section>
 
-  <!-- FOOTER -->
-  <footer class="site">
-    <div class="footer-inner">
+  <section class="section alternate" id="faq">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <p class="section-eyebrow">FAQ</p>
+        <h2>Questions, answered plainly</h2>
+      </div>
+      <div class="faq-list">
+        <details class="faq-item" data-reveal>
+          <summary>Is listing a product really free?</summary>
+          <p>Yes. Creating a listing costs nothing. You only pay when you choose to boost it for visibility.</p>
+        </details>
+        <details class="faq-item" data-reveal>
+          <summary>How are my payments protected?</summary>
+          <p>Payments go through a payment processor and sit in escrow until you confirm you received your order. If something goes wrong, you open a dispute and the team mediates.</p>
+        </details>
+        <details class="faq-item" data-reveal>
+          <summary>Can I talk to a seller before buying?</summary>
+          <p>Yes — every listing has an in-app chat. Ask questions, share photos and agree on price or delivery before you commit.</p>
+        </details>
+        <details class="faq-item" data-reveal>
+          <summary>How does delivery work?</summary>
+          <p>Sellers arrange nationwide delivery, and you track the handover in the app. You confirm the order after receiving it — that's when funds are released.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <div class="cta-band" data-reveal>
+        <h2>Buy and sell the Soko Vibe way.</h2>
+        <p>The Android app is available now. Get it from our team on WhatsApp, and we'll help you get started.</p>
+        <div class="actions">
+          <a class="btn btn-dark" href="https://wa.me/255693273241?text=Hi%2C%20I%27d%20like%20to%20get%20the%20Soko%20Vibe%20app.">Get the app</a>
+          <a class="btn btn-light" href="mailto:support@soko-vibe.com">Email support</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
       <div class="footer-brand">
-        <a class="brand" href="#"><svg viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="512" height="512" rx="112" fill="#000000"/><path d="M256 96l128 96v224H128V192z" fill="#ffffff" transform="scale(0.9) translate(28,28)"/></svg> Soko Vibe</a>
-        <p data-i18n="f_tagline">Tanzania's trusted marketplace for buying and selling — securely and effortlessly.</p>
+        <a class="brand" href="#" aria-label="Soko Vibe — home">
+          <svg viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#000000"/><path d="M256 96l128 96v224H128V192z" fill="#ffffff" transform="scale(0.9) translate(28,28)"/></svg>
+          <span class="name">Soko Vibe</span>
+        </a>
+        <p>Tanzania's trusted marketplace for buying and selling — made with care in Tanzania.</p>
       </div>
-      <div>
-        <h4 data-i18n="f_product">Product</h4>
-        <a href="#features" data-i18n="f_features">Features</a>
-        <a href="#how" data-i18n="f_how">How it works</a>
-        <a href="#app" data-i18n="f_app">The App</a>
-        <a href="#pricing" data-i18n="f_pricing">Pricing</a>
+      <div class="col">
+        <h4>Product</h4>
+        <a href="#how">How it works</a>
+        <a href="#features">Features</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#faq">FAQ</a>
       </div>
-      <div>
-        <h4 data-i18n="f_company">Company</h4>
-        <a href="privacy.html" data-i18n="f_privacy">Privacy Policy</a>
-        <a href="terms.html" data-i18n="f_terms">Terms of Service</a>
+      <div class="col">
+        <h4>Company</h4>
+        <a href="privacy.html">Privacy policy</a>
+        <a href="terms.html">Terms of service</a>
+        <a href="support.html">Support</a>
+        <a href="https://www.admin.sokovibe.co.tz">Admin</a>
       </div>
-      <div>
-        <h4 data-i18n="f_support">Support</h4>
-        <a href="mailto:support@soko-vibe.com" data-i18n="f_email">support@soko-vibe.com</a>
-        <a href="support.html" data-i18n="f_help">Help Center</a>
-        <a href="admin.html" data-i18n="f_admin">Admin</a>
+      <div class="col">
+        <h4>Contact</h4>
+        <a href="mailto:support@soko-vibe.com">support@soko-vibe.com</a>
+        <a href="https://wa.me/255693273241">WhatsApp +255 693 273 241</a>
       </div>
     </div>
     <div class="footer-bottom">
-      <span>© <span class="year">2026</span> <span data-i18n="f_rights">Soko Vibe Limited. All rights reserved.</span></span>
-      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-        <select class="lang-select" aria-label="Language">
-          <option value="sw">Kiswahili</option>
-          <option value="en">English</option>
-          <option value="fr">Français</option>
-          <option value="zh">中文</option>
-          <option value="de">Deutsch</option>
-        </select>
-        <span data-i18n="f_made">Made with care in Tanzania 🇹🇿</span>
-      </div>
+      <span>&copy; <span id="year">2026</span> Soko Vibe Limited. All rights reserved.</span>
     </div>
-  </footer>
+  </div>
+</footer>
 
-  <script>
-    // Intersection observer for reveal animations
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
-    }, { threshold: 0.12 });
-    document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+<script>
+(function () {
+  var year = document.getElementById('year');
+  if (year) year.textContent = new Date().getFullYear();
 
-    // Add year to footer
-    document.querySelectorAll('.footer-bottom .year').forEach(el => {
-      el.textContent = String(new Date().getFullYear());
+  var bar = document.getElementById('nav-bar');
+  var btn = document.querySelector('.menu-btn');
+  if (btn && bar) {
+    btn.addEventListener('click', function () {
+      var open = bar.classList.toggle('open');
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
     });
-  </script>
+    bar.querySelectorAll('a').forEach(function (link) {
+      link.addEventListener('click', function () {
+        bar.classList.remove('open');
+        btn.setAttribute('aria-expanded', 'false');
+      });
+    });
+  }
+
+  if ('IntersectionObserver' in window && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    var items = document.querySelectorAll('[data-reveal]');
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('in');
+          io.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.12 });
+    items.forEach(function (el) { io.observe(el); });
+  } else {
+    document.querySelectorAll('[data-reveal]').forEach(function (el) { el.classList.add('in'); });
+  }
+})();
+</script>
+
 </body>
 </html>
