@@ -13,6 +13,7 @@ import '../../services/flash_sale_service.dart';
 import '../../models/flash_sale_model.dart';
 import '../../app/routes.dart';
 import '../../main.dart';
+import '../../theme/app_colors.dart';
 import '../../models/product_model.dart';
 import '../../models/category_model.dart';
 import '../../widgets/google_loading.dart';
@@ -54,6 +55,9 @@ class _SearchScreenState extends State<SearchScreen>
   bool _aiSummaryLoading = false;
   bool _aiSummaryFailed = false;
   String? _aiSummaryQuery;
+
+  // Sort (G11): 'best' (server ranking) | 'price_asc' | 'price_desc'.
+  String _sortKey = 'best';
 
   // Initial/discovery state (no search yet): boosted-first listing + most-rated sections.
   List<SearchResult> _discoveryProducts = [];
@@ -213,6 +217,7 @@ class _SearchScreenState extends State<SearchScreen>
       _loading = true;
       _hasSearched = true;
       _suggestions = [];
+      _sortKey = 'best'; // new query → fresh server ranking
     });
 
     _historyService.addQuery(q);
@@ -581,7 +586,7 @@ class _SearchScreenState extends State<SearchScreen>
 
   Widget _buildResults(ColorScheme cs) {
     final resp = _response!;
-    final results = resp.results;
+    final results = _sortedResults(resp);
 
     if (results.isEmpty) {
       return _buildEmptyState(cs, resp);
@@ -667,6 +672,23 @@ class _SearchScreenState extends State<SearchScreen>
     );
   }
 
+  // G11 local client-side sort of the server ranking. 'best' keeps the
+  // (relevance-ranked) server order; price sorts put items with no price last.
+  List<SearchResult> _sortedResults(SearchResponse resp) {
+    if (_sortKey == 'best') return resp.results;
+    final copy = [...resp.results];
+    copy.sort((a, b) {
+      final pa = a.price;
+      final pb = b.price;
+      if (pa == null && pb == null) return 0;
+      if (pa == null) return 1;
+      if (pb == null) return -1;
+      final cmp = pa.compareTo(pb);
+      return _sortKey == 'price_desc' ? -cmp : cmp;
+    });
+    return copy;
+  }
+
   // Headers above results: auto-applied typo correction notice + chips for the
   // structured filters the server pulled out of free text ("≤ 800K · DSM").
   Widget _buildResultMeta(SearchResponse resp, ColorScheme cs) {
@@ -724,10 +746,68 @@ class _SearchScreenState extends State<SearchScreen>
                 ],
               ),
             ),
+          _buildSortRow(cs),
           Text(
             '${resp.total} ${context.tr('results').toLowerCase()}',
             style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
           ),
+        ],
+      ),
+    );
+  }
+
+  // G11 sort switcher (Best Match / Lowest / Highest). Nearest (§42) is
+  // deferred until location consent exists — excluded from the chip set.
+  Widget _buildSortRow(ColorScheme cs) {
+    final sorts = <(String, String, IconData)>[
+      ('best', context.tr('sort_best_match'), Icons.recommend_rounded),
+      ('price_asc', context.tr('sort_price_low'), Icons.arrow_upward_rounded),
+      ('price_desc', context.tr('sort_price_high'), Icons.arrow_downward_rounded),
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: [
+          for (final s in sorts)
+            InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () {
+                if (_sortKey == s.$1) return;
+                setState(() => _sortKey = s.$1);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: _sortKey == s.$1 ? cs.primary : cs.surfaceRaised,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: _sortKey == s.$1 ? cs.primary : cs.hairline,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      s.$3,
+                      size: 14,
+                      color: _sortKey == s.$1 ? cs.onPrimary : cs.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      s.$2,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: _sortKey == s.$1 ? cs.onPrimary : cs.onSurface,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -932,10 +1012,54 @@ class _SearchScreenState extends State<SearchScreen>
     );
   }
 
+  // G12 quick-start queries: localized premium examples + real trending terms
+  // (deduped) so a first-time user can search without typing (spec §56-style
+  // "phone under 500k" phrasing). Tapping performs the search immediately.
+  List<String> _suggestedQueries() {
+    final statics = [
+      context.tr('suggested_q1'),
+      context.tr('suggested_q2'),
+      context.tr('suggested_q3'),
+    ];
+    final dynamicQueries = _trending
+        .map((t) => t['text'] as String? ?? '')
+        .where((s) => s.isNotEmpty && !statics.contains(s))
+        .take(3)
+        .toList();
+    return [...statics, ...dynamicQueries];
+  }
+
   Widget _buildHistoryPanel(ColorScheme cs) {
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
+        if (_suggestedQueries().isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Icon(Icons.auto_awesome_rounded, size: 18, color: cs.primary),
+                const SizedBox(width: 6),
+                Text(context.tr('suggested_for_you'),
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: cs.onSurface)),
+              ],
+            ),
+          ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: _suggestedQueries().map((q) {
+              return ActionChip(
+                label: Text(q, style: const TextStyle(fontSize: 13)),
+                onPressed: () {
+                  _searchCtrl.text = q;
+                  _performSearch();
+                },
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 16),
+        ],
         if (_trending.isNotEmpty) ...[
           Padding(
             padding: const EdgeInsets.only(bottom: 8),

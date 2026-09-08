@@ -60,6 +60,15 @@ lib/services/search_service.dart ──POST /api/search/*──▶ server/search
   AI-chat (30/h); client dedupes same-query.
 - Localization keys mpya: `ai_summarizing` (EN/SW/ZH).
 
+### Tranche 3 — **G11 sort chips + G12 suggested-query chips**
+- **G11:** sort switcher juu ya results — **Best Match** (server ranking imebaki), **Price Low**,
+  **Price High** (client-side sort, `null` prices huenda mwisho). Nearest (§42) imedefer — inahitaji
+  location consent. Monochrome tokens (`cs.primary` active / `surfaceRaised` inactive).
+- **G12:** quick-start chips kwenye initial state — 3 localized intent-examples
+  ("simu chini ya 800k", "kompyuta ndogo", "gari") + top-3 trending (deduped). Tap → search mara disc.
+- Keys mpya x4 x3 lugha: `sort_best_match`, `sort_price_low`, `sort_price_high`,
+  `suggested_for_you`, `suggested_q1..q3`.
+
 ## 3. Verification
 
 - **Server unit tests: `test/search-intent.test.js` — 20/20 pass** (money parsing, intent, confidence,
@@ -72,8 +81,8 @@ lib/services/search_service.dart ──POST /api/search/*──▶ server/search
 |---|---|---|---|
 | G10 | ~~AI answer kwenye search UI~~ ✅ **Implemented** | HIGH | `AiService.generateSearchSummary` + non-blocking card; streaming + AI-reply chat juu ya summary = future. |
 | G8 | **Semantic/vector search** (§86) | HIGH | Embeddings directory + hybrid score (§87). Kifanane na catalog size. |
-| G12 | **Suggested-query chips** ("phone under 500k") | MEDIUM | Static premium examples + dynamic top-converting; keyword chips. |
-| G11 | **Sort chips** Best Match / Lowest Price / Nearest | MEDIUM | On search results; Nearest inahitaji location consent (§42). |
+| G12 | ~~Suggested-query chips~~ ✅ **Implemented** | MEDIUM | Static premium examples + dynamic (trending dedup) kwenye initial state. |
+| G11 | ~~Sort chips~~ ✅ **Implemented** (Best/Low/High) | MEDIUM | Nearest (§42) imedefer — inahitaji location consent. |
 | G3 | **Analytics dashboard** (top searches, zero-result, typo) | MEDIUM | Raw logs zipo (`search_analytics`) — aggregate + UI ya admin. |
 | G5 | **Compare products** (§18) | MEDIUM | CompareScreen tokei picha za select. |
 | G6 | **Price-drop trigger from intent** | MEDIUM | Wire `PriceDropService` kwenye detected maxPrice. |
