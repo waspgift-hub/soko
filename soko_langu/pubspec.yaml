@@ -110,9 +110,8 @@ flutter_launcher_icons:
   android: true
   ios: true
   image_path: "assets/icons/app_icon_full.png"
-  adaptive_icon_background: "#000000"
-  adaptive_icon_foreground: "assets/icons/ic_foreground.png"
-  adaptive_icon_monochrome: "assets/icons/ic_monochrome.png"
+  # No adaptive_icon_background: the brand icon is full-bleed — adding a color
+  # background layer + 16% inset shows a black ring and shrinks the artwork.
   remove_alpha_ios: true
 
 # For information on the generic Dart part of this file, see the
