@@ -1,6 +1,38 @@
 import 'package:flutter/material.dart';
 
+// Semantic monochrome ramp. These tokens give screens a single vocabulary for
+// "background vs surface vs emphasis" in both themes. Values follow the brand
+// rule: near-black (not pure #000) for emphasis on light, near-white for
+// emphasis on dark, and gray mid-tones purely for informational hierarchy.
 extension AppColorScheme on ColorScheme {
+  /// Canvas behind everything (scaffold).
+  Color get bgCanvas =>
+      brightness == Brightness.dark ? const Color(0xFF0A0A0A) : const Color(0xFFFFFFFF);
+
+  /// Subtle tonal surface (grouped cards, sheet headers, section fills).
+  Color get surfaceSubtle =>
+      brightness == Brightness.dark ? const Color(0xFF111111) : const Color(0xFFFAFAFA);
+
+  /// Raised surface (cards, dialogs).
+  Color get surfaceRaised =>
+      brightness == Brightness.dark ? const Color(0xFF171717) : const Color(0xFFFFFFFF);
+
+  /// Primary content color (headings, emphasized labels).
+  Color get contentPrimary =>
+      brightness == Brightness.dark ? const Color(0xFFFAFAFA) : const Color(0xFF0A0A0A);
+
+  /// Secondary content color (body copy below headings).
+  Color get contentSecondary =>
+      brightness == Brightness.dark ? const Color(0xFFA3A3A3) : const Color(0xFF525252);
+
+  /// Muted content (metadata, placeholders, captions).
+  Color get contentMuted =>
+      brightness == Brightness.dark ? const Color(0xFF8E8E93) : const Color(0xFF737373);
+
+  /// Hairline divider/border color.
+  Color get hairline =>
+      brightness == Brightness.dark ? const Color(0xFF262626) : const Color(0xFFE5E5E5);
+
   Color get brandPrimary => brightness == Brightness.dark
       ? const Color(0xFFFFFFFF)
       : const Color(0xFF000000);

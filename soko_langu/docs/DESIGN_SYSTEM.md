@@ -1,12 +1,36 @@
 # Soko Vibe — Product Design System & UI/UX Spec
 
-**Version 1.0** — Production-ready design language for a billion-dollar marketplace experience.
+**Version 2.0 — Black & White Premium Identity** (mobileni/desktop, Flutter `soko_vibe` app).
 
-> **Design manifesto:** Soko Vibe is the marketplace that feels alive. Emerald for growth and trust,
-> amber for energy, midnight for depth, glass for delight. Every pixel earns its place; every
-> interaction gives feedback in under 200ms. We design for thumbs, not mice; for one hand, one
-> glance, one tap. "Soko" is Swahili for market — the design makes the user feel like they walked
-> into the world's most beautiful market.
+> **v2 manifesto:** Soko Vibe ni marketplace ya ngazi ya kimataifa yenye identity ya **black & white**.
+> Black = action/emphasis. White = space/content. Gray = hierarchy. Images = marketplace energy.
+> Typography = premium. Motion = modern. **Hakuna random colors** — semantic colors pekee
+> (success/warning/error/info), na exception pekee: `whatsappGreen` (#25D366) kwa CTA ya WhatsApp.
+
+### v2 Semantic monochrome ramp (`lib/theme/app_colors.dart`)
+
+| Token | Light | Dark | Matumizi |
+|---|---|---|---|
+| `bgCanvas` | `#FFFFFF` | `#0A0A0A` | Scaffold background |
+| `surfaceSubtle` | `#FAFAFA` | `#111111` | Grouped cards, sheet headers, section fills |
+| `surfaceRaised` | `#FFFFFF` | `#171717` | Cards, dialogs |
+| `contentPrimary` | `#0A0A0A` | `#FAFAFA` | Headings, emphasized labels |
+| `contentSecondary` | `#525252` | `#A3A3A3` | Body copy |
+| `contentMuted` | `#737373` | `#8E8E93` | Metadata, placeholders |
+| `hairline` | `#E5E5E5` | `#262626` | Borders/dividers |
+
+### v2 Rules zilizokuweka code (tranche 1)
+
+- **Chat:** bubbles `cs.primary` (sent) / `cs.surfaceContainerHigh` (received), ticks na states za
+  semantic. **Exception:** WhatsApp CTA icon hue #25D366 pekee.
+- **Order flow:** step nodes zote `cs.primary` — muondoe rainbow.
+- **Radius language:** `AppRadius.sm=8 / md=12 / lg=16 / xl=24 / full` kwenye cards; `AppRadius2` xl/xxl
+  kwa sheets. Drag-handle radius 2 ni sahihi (4px bar).
+- **Anti-patterns zilizowekwa marufuku:** `Color(0x...)` hard-coded kwenye screens (labda internal
+  palette `app_colors.dart` pekee), gradients/glass/neumorphism excessive, emoji kama icons.
+
+> V1 (emerald/amber/glass) imebaki kwenye sehemu zilizopo hapa chini kama history ya design.
+> Code ya current inafuata v2.
 
 ---
 

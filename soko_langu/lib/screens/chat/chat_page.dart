@@ -13,6 +13,7 @@ import '../../models/message_model.dart';
 import '../../extensions/context_tr.dart';
 
 import '../../app/routes.dart';
+import '../../theme/app_colors.dart';
 import '../../widgets/call_seller_button.dart';
 
 class ChatPage extends StatefulWidget {
@@ -345,7 +346,7 @@ class _ChatPageState extends State<ChatPage> {
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1F2C33) : Colors.white,
+        color: isDark ? cs.surfaceContainer : cs.surface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
       ),
@@ -442,14 +443,14 @@ class _ChatPageState extends State<ChatPage> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0B141A) : const Color(0xFFE5DDD5),
+      backgroundColor: cs.surface,
       appBar: AppBar(
-        backgroundColor: isDark ? const Color(0xFF1F2C33) : Colors.white,
+        backgroundColor: cs.surface,
         surfaceTintColor: Colors.transparent,
-        shadowColor: Colors.black12,
-        elevation: 0.5,
+        shadowColor: Colors.transparent,
+        elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: isDark ? Colors.white : const Color(0xFF3B4A54)),
+          icon: Icon(Icons.arrow_back, color: cs.onSurface),
           onPressed: () => context.pop(),
         ),
         titleSpacing: 0,
@@ -480,7 +481,7 @@ class _ChatPageState extends State<ChatPage> {
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
-                                color: isDark ? Colors.white : const Color(0xFF111B21),
+                                color: cs.onSurface,
                               ),
                               overflow: TextOverflow.ellipsis),
                         ),
@@ -502,13 +503,13 @@ class _ChatPageState extends State<ChatPage> {
                               Container(
                                 width: 8, height: 8,
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF25D366),
+                                  color: cs.brandSuccess,
                                   shape: BoxShape.circle,
                                 ),
                               ),
                               const SizedBox(width: 4),
                               Text(context.tr('online', 'Online'),
-                                  style: TextStyle(fontSize: 12, color: const Color(0xFF25D366))),
+                                  style: TextStyle(fontSize: 12, color: cs.brandSuccess)),
                             ],
                           )
                         else if (_otherLastActive != null)
@@ -518,13 +519,13 @@ class _ChatPageState extends State<ChatPage> {
                               Container(
                                 width: 8, height: 8,
                                 decoration: BoxDecoration(
-                                  color: isDark ? Colors.white38 : const Color(0xFFB0BEC5),
+                                  color: cs.onSurfaceVariant.withValues(alpha: 0.6),
                                   shape: BoxShape.circle,
                                 ),
                               ),
                               const SizedBox(width: 4),
                               Text(context.tr('offline', 'Offline'),
-                                  style: TextStyle(fontSize: 12, color: isDark ? Colors.white38 : const Color(0xFF78909C))),
+                                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
                             ],
                           ),
                       ],
@@ -537,13 +538,15 @@ class _ChatPageState extends State<ChatPage> {
         ),
         actions: [
           CallSellerButton(phone: _receiverPhone ?? '', iconOnly: true),
+          // The WhatsApp affordance keeps the official brand color; it is the
+          // single sanctioned chromatic exception (see app_colors.whatsappGreen).
           IconButton(
             icon: const Icon(Icons.chat, color: Color(0xFF25D366)),
             tooltip: context.tr('whatsapp', 'WhatsApp'),
             onPressed: _openWhatsApp,
           ),
           IconButton(
-            icon: Icon(Icons.more_vert, color: isDark ? Colors.white : const Color(0xFF3B4A54)),
+            icon: Icon(Icons.more_vert, color: cs.onSurface),
             onPressed: () => _showOptions(cs),
           ),
         ],
@@ -681,7 +684,7 @@ class _ChatPageState extends State<ChatPage> {
           // Reply preview
           if (_replyTo != null)
             Container(
-              color: isDark ? const Color(0xFF1F2C33) : Colors.white,
+              color: cs.surface,
               padding: const EdgeInsets.fromLTRB(0, 0, 8, 0),
               child: Row(
                 children: [
@@ -945,12 +948,8 @@ class _MessageBubble extends StatelessWidget {
                 color: isDeleted
                     ? cs.surfaceContainerHighest
                     : isMe
-                        ? (Theme.of(context).brightness == Brightness.dark
-                            ? const Color(0xFF005C4B)
-                            : const Color(0xFFDCF8C6))
-                        : (Theme.of(context).brightness == Brightness.dark
-                            ? const Color(0xFF202C33)
-                            : Colors.white),
+                        ? cs.primary
+                        : cs.surfaceContainerHigh,
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(8),
                   topRight: const Radius.circular(8),
@@ -968,10 +967,8 @@ class _MessageBubble extends StatelessWidget {
                     padding: const EdgeInsets.fromLTRB(0, 4, 0, 4),
                     decoration: BoxDecoration(
                       color: isMe
-                          ? const Color(0xFFB1D9A8)
-                          : (Theme.of(context).brightness == Brightness.dark
-                              ? const Color(0xFF2A3942)
-                              : const Color(0xFFF5F6F8)),
+                          ? cs.onPrimary.withValues(alpha: 0.12)
+                          : cs.surface,
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Row(
@@ -980,7 +977,7 @@ class _MessageBubble extends StatelessWidget {
                           width: 3,
                           decoration: BoxDecoration(
                             color: isMe
-                                ? const Color(0xFF075E54)
+                                ? cs.onPrimary.withValues(alpha: 0.7)
                                 : cs.primary,
                             borderRadius: const BorderRadius.only(
                               topLeft: Radius.circular(2),
@@ -997,7 +994,7 @@ class _MessageBubble extends StatelessWidget {
                                   style: TextStyle(
                                       fontSize: 11,
                                       color: isMe
-                                          ? const Color(0xFF075E54)
+                                          ? cs.onPrimary
                                           : cs.primary,
                                       fontWeight: FontWeight.w600)),
                               Text(message.replyToContent ?? '',
@@ -1006,7 +1003,7 @@ class _MessageBubble extends StatelessWidget {
                                   style: TextStyle(
                                       fontSize: 12,
                                       color: isMe
-                                          ? const Color(0xFF1B3A2C)
+                                          ? cs.onPrimary.withValues(alpha: 0.85)
                                           : cs.onSurfaceVariant)),
                             ],
                           ),
@@ -1047,9 +1044,7 @@ class _MessageBubble extends StatelessWidget {
                   Text(message.content,
                       style: TextStyle(
                         fontSize: 15,
-                        color: isMe
-                            ? (Theme.of(context).brightness == Brightness.dark ? Colors.white : const Color(0xFF111B21))
-                            : cs.onSurface,
+                        color: isMe ? cs.onPrimary : cs.onSurface,
                       )),
                 const SizedBox(height: 4),
                 Row(
@@ -1079,7 +1074,7 @@ class _MessageBubble extends StatelessWidget {
                             ? GestureDetector(
                                 onTap: onRetry,
                                 child: Icon(Icons.error_outline,
-                                    size: 16, color: Colors.red.shade400),
+                                    size: 16, color: cs.error),
                               )
                             : _StatusIcon(
                                 isRead: message.isRead,
@@ -1101,13 +1096,20 @@ class _MessageBubble extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: cs.surface,
+                            color: isMe
+                                ? cs.onPrimary.withValues(alpha: 0.12)
+                                : cs.surface,
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: cs.outlineVariant),
+                            border: Border.all(
+                                color: isMe
+                                    ? cs.onPrimary.withValues(alpha: 0.25)
+                                    : cs.outlineVariant),
                           ),
                           child: Text(
                             '${e.key} ${e.value.length}',
-                            style: const TextStyle(fontSize: 12),
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: isMe ? cs.onPrimary : cs.onSurface),
                           ),
                         );
                       }).toList(),

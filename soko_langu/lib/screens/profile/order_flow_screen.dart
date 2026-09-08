@@ -463,18 +463,20 @@ class _FeeTiersTable extends StatelessWidget {
 class _FlowNode {
   final IconData icon;
   final String titleKey;
-  final Color color;
-  const _FlowNode({required this.icon, required this.titleKey, required this.color});
+  // Kept for the icon only: the *color* is derived from the theme
+  // (`cs.primary`) at build time so the timeline stays monochrome in both
+  // light and dark mode instead of carrying a seven-color rainbow.
+  const _FlowNode({required this.icon, required this.titleKey});
 }
 
 final flowNodes = [
-  _FlowNode(icon: Icons.shopping_cart_outlined, titleKey: 'flow_place_order', color: const Color(0xFF4A90D9)),
-  _FlowNode(icon: Icons.receipt_long_outlined, titleKey: 'flow_shipping_quote', color: const Color(0xFF14B8A6)),
-  _FlowNode(icon: Icons.phone_android_outlined, titleKey: 'flow_payment', color: const Color(0xFF059669)),
-  _FlowNode(icon: Icons.verified_user_outlined, titleKey: 'flow_escrow', color: const Color(0xFFD97706)),
-  _FlowNode(icon: Icons.inventory_2_outlined, titleKey: 'flow_dispatch', color: const Color(0xFFEA580C)),
-  _FlowNode(icon: Icons.check_circle_outlined, titleKey: 'flow_confirm', color: const Color(0xFF7C3AED)),
-  _FlowNode(icon: Icons.emoji_events_outlined, titleKey: 'flow_complete', color: const Color(0xFFEC4899)),
+  _FlowNode(icon: Icons.shopping_cart_outlined, titleKey: 'flow_place_order'),
+  _FlowNode(icon: Icons.receipt_long_outlined, titleKey: 'flow_shipping_quote'),
+  _FlowNode(icon: Icons.phone_android_outlined, titleKey: 'flow_payment'),
+  _FlowNode(icon: Icons.verified_user_outlined, titleKey: 'flow_escrow'),
+  _FlowNode(icon: Icons.inventory_2_outlined, titleKey: 'flow_dispatch'),
+  _FlowNode(icon: Icons.check_circle_outlined, titleKey: 'flow_confirm'),
+  _FlowNode(icon: Icons.emoji_events_outlined, titleKey: 'flow_complete'),
 ];
 
 final flowDescKeys = ['order_placed', 'seller_sets_shipping', 'buyer_pays_ussd', 'funds_held_escrow', 'seller_dispatches', 'buyer_confirms_receipt', 'seller_payout'];
@@ -527,6 +529,10 @@ class _FlowNodeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final stepNum = index + 1;
+    // Monochrome step identity: every node renders in the theme's primary so
+    // the timeline honors the black & white brand; the step number carries
+    // the progression cue instead of a per-step rainbow color.
+    final color = cs.primary;
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -541,10 +547,10 @@ class _FlowNodeCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: LinearGradient(
-                      colors: [node.color.withValues(alpha: 0.85), node.color],
+                      colors: [color.withValues(alpha: 0.85), color],
                       begin: Alignment.topLeft, end: Alignment.bottomRight,
                     ),
-                    boxShadow: [BoxShadow(color: node.color.withValues(alpha: 0.35), blurRadius: 14, offset: const Offset(0, 4))],
+                    boxShadow: [BoxShadow(color: color.withValues(alpha: 0.35), blurRadius: 14, offset: const Offset(0, 4))],
                   ),
                   child: Stack(
                     alignment: Alignment.center,
@@ -554,8 +560,8 @@ class _FlowNodeCard extends StatelessWidget {
                         right: 2, bottom: 2,
                         child: Container(
                           width: 18, height: 18,
-                          decoration: BoxDecoration(shape: BoxShape.circle, color: cs.surface, border: Border.all(color: node.color, width: 2)),
-                          child: Center(child: Text('$stepNum', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: node.color))),
+                          decoration: BoxDecoration(shape: BoxShape.circle, color: cs.surface, border: Border.all(color: color, width: 2)),
+                          child: Center(child: Text('$stepNum', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: color))),
                         ),
                       ),
                     ],
@@ -568,7 +574,7 @@ class _FlowNodeCard extends StatelessWidget {
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.topCenter, end: Alignment.bottomCenter,
-                          colors: [node.color.withValues(alpha: 0.7), flowNodes[index + 1].color.withValues(alpha: 0.25)],
+                          colors: [color.withValues(alpha: 0.7), color.withValues(alpha: 0.25)],
                         ),
                       ),
                     ),
@@ -584,7 +590,7 @@ class _FlowNodeCard extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(22),
                 color: cs.surfaceContainerHighest.withValues(alpha: 0.4),
-                border: Border.all(color: node.color.withValues(alpha: 0.15), width: 0.5),
+                border: Border.all(color: color.withValues(alpha: 0.15), width: 0.5),
               ),
               child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -596,14 +602,14 @@ class _FlowNodeCard extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(20),
-                              color: node.color.withValues(alpha: 0.15),
+                              color: color.withValues(alpha: 0.15),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(node.icon, size: 12, color: node.color),
+                                Icon(node.icon, size: 12, color: color),
                                 const SizedBox(width: 5),
-                                Text(context.tr(flowLabelKeys[index], flowLabels[index]), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: node.color, letterSpacing: 0.6)),
+                                Text(context.tr(flowLabelKeys[index], flowLabels[index]), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color, letterSpacing: 0.6)),
                               ],
                             ),
                           ),
@@ -612,10 +618,10 @@ class _FlowNodeCard extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(12),
-                              color: node.color.withValues(alpha: 0.1),
-                              border: Border.all(color: node.color.withValues(alpha: 0.25), width: 0.5),
+                              color: color.withValues(alpha: 0.1),
+                              border: Border.all(color: color.withValues(alpha: 0.25), width: 0.5),
                             ),
-                            child: Text(context.tr(phaseLabelKeys[index], phaseLabels[index]), style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: node.color, letterSpacing: 0.8)),
+                            child: Text(context.tr(phaseLabelKeys[index], phaseLabels[index]), style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: color, letterSpacing: 0.8)),
                           ),
                         ],
                       ),
@@ -625,7 +631,7 @@ class _FlowNodeCard extends StatelessWidget {
                             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: cs.onSurface, height: 1.2),
                           ),
                           const SizedBox(height: 10),
-                          _buildDataRow(context, index, node.color, cs),
+                          _buildDataRow(context, index, color, cs),
                     ],
                   ),
               ),
