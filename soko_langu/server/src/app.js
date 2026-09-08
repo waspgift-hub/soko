@@ -56,12 +56,40 @@ app.use((req, res, next) => {
 // redirect hop). The admin subdomain keeps its root->/admin mapping. Non-soko
 // hosts (Render origin, health checks) are left alone so the platform health
 // checks stay 200.
+//
+// The apex->www->apex redirect loop guard: Render may be configured with its
+// own custom-domain redirect (sokovibe.co.tz -> www.sokovibe.co.tz) that runs
+// at the edge BEFORE the app. In that state a host-level redirect to the apex
+// would bounce www back to apex and the site would never render, so the
+// canonical redirect is enabled only while the apex actually serves 200 (the
+// probe runs at boot and refreshes periodically).
+const CANONICAL_HOST = 'https://sokovibe.co.tz';
+let canonicalReady = false;
+
+function probeCanonical() {
+  return fetch(`${CANONICAL_HOST}/`, { redirect: 'manual', cache: 'no-store' })
+    .then((r) => {
+      canonicalReady = r.status === 200;
+      console.log(`[CANON] apex probe ${r.status} - redirects ${canonicalReady ? 'enabled' : 'disabled'}`);
+    })
+    .catch((e) => {
+      canonicalReady = false;
+      console.warn('[CANON] apex probe failed:', e.message);
+    });
+}
+probeCanonical();
+setInterval(probeCanonical, 5 * 60 * 1000).unref();
+
 app.use((req, res, next) => {
   const host = (req.hostname || '').toLowerCase();
-  if (host.endsWith('sokovibe.co.tz') && host !== 'sokovibe.co.tz') {
-    let target = req.originalUrl;
-    if (host === 'admin.sokovibe.co.tz' && (target === '/' || target === '')) target = '/admin';
-    return res.redirect(301, `https://sokovibe.co.tz${target}`);
+  if (!host.endsWith('sokovibe.co.tz') || host === 'sokovibe.co.tz') return next();
+  if (host === 'admin.sokovibe.co.tz' && (req.path === '/' || req.path === '')) {
+    if (canonicalReady) return res.redirect(301, `${CANONICAL_HOST}/admin`);
+    req.url = '/admin';
+    return next();
+  }
+  if (canonicalReady) {
+    return res.redirect(301, `${CANONICAL_HOST}${req.originalUrl}`);
   }
   next();
 });

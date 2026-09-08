@@ -167,6 +167,9 @@ paths, API keys or user data are ever included in a share link.
   text still emits `www.sokovibe.co.tz/product/{id}`; switch share URLs to the
   app scheme when store links are live.
 - Canonical host is the **apex** `https://sokovibe.co.tz`; the app middleware
-  301s `www.sokovibe.co.tz` → apex.
+  301s `www.sokovibe.co.tz` → apex, enabled only while the apex returns 200
+  (the app probes the apex at boot and every 5 min; a `sokovibe.co.tz →
+  www.sokovibe.co.tz` redirect rule still set in the Render dashboard keeps
+  the redirect disabled to avoid a redirect loop).
 - Firebase Console: add `sokovibe.co.tz` (apex) to **Authentication → Settings
   → Authorized domains** if web sign-in is ever re-enabled.
