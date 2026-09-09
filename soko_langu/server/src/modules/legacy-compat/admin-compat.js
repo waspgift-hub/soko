@@ -697,10 +697,10 @@ publicRouter.get('/fraud/alerts', async (req, res) => {
     if (!(await adminGate(req, res))) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
     const limit = Math.min(parseInt(req.query.limit) || 200, 500);
-    let query = db.collection('fraud_alerts').orderBy('createdAt', 'desc').limit(limit);
-    if (req.query.resolved === 'false') query = db.collection('fraud_alerts').where('resolved', '==', false).orderBy('createdAt', 'desc').limit(limit);
-    const snap = await query.get();
-    const alerts = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const snap = await db.collection('fraud_alerts').orderBy('createdAt', 'desc').limit(1000).get();
+    let alerts = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    if (req.query.resolved === 'false') alerts = alerts.filter((a) => a.resolved === false);
+    alerts = alerts.slice(0, limit);
     res.json({ alerts });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
