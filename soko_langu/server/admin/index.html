@@ -473,6 +473,38 @@
 <script>
 "use strict";
 
+// Inline diagnostic ribbon: shows exactly which API call succeeded/failed so a
+// blank dashboard is never a mystery (esp. on flaky mobile networks).
+function bootErr(msg) {
+  var el = document.getElementById("bootErr");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "bootErr";
+    el.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:99;background:#7f1d1d;color:#fff;padding:10px 16px;font:13px system-ui;text-align:center";
+    document.body.appendChild(el);
+  }
+  el.style.display = "block";
+  el.textContent = "BOOT ERROR: " + msg;
+}
+if (typeof firebase === "undefined") {
+  bootErr("Firebase CDN haijapakia (gstatic blocked/slow). Rejesha page au angalia internet — na ufunge DevTools->Console unaone errors.");
+  throw new Error("firebase missing");
+}
+
+var _diag = [];
+function diagBar() {
+  var el = document.getElementById("statusStrip");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "statusStrip";
+    el.style.cssText = "position:fixed;left:12px;bottom:12px;z-index:98;max-width:440px;background:rgba(11,15,26,.94);border:1px solid #26304e;border-radius:10px;padding:8px 12px;font:11px/1.5 monospace;color:#8b97b8;white-space:pre-wrap;cursor:pointer";
+    el.title = "Hali ya API (bofya kuficha)";
+    el.onclick = function () { el.hidden = !el.hidden; };
+    document.body.appendChild(el);
+  }
+  el.textContent = _diag.slice(-14).map(function (d) { return (d.ok ? "OK  " : "ERR ") + d.path + "  " + d.note; }).join("\n");
+}
+
 // ---------------------------------------------------------------------------
 // Firebase Web config (same Firebase project as the mobile app).
 // ---------------------------------------------------------------------------
@@ -543,16 +575,29 @@ async function api(path, opts = {}) {
     init.headers["Content-Type"] = "application/json";
     init.body = JSON.stringify(opts.body);
   }
-  const r = await fetch(API + path, init);
-  let j = null;
-  try { j = await r.json(); } catch (_) {}
-  if (r.status === 401) {
-    await auth.signOut();
-    location.reload();
-    throw new Error("Unauthorized");
+  const okPath = String(path).split("?")[0];
+  const t0 = performance.now();
+  try {
+    const r = await fetch(API + path, init);
+    let j = null;
+    try { j = await r.json(); } catch (_) {}
+    if (r.status === 401) {
+      await auth.signOut();
+      location.reload();
+      throw new Error("Unauthorized");
+    }
+    if (!r.ok) {
+      diag({ path: okPath, ok: false, note: "HTTP " + r.status + " " + ((j && j.error) || "") });
+      throw new Error((j && j.error) || ("HTTP " + r.status));
+    }
+    diag({ path: okPath, ok: true, note: "HTTP " + r.status + " " + Math.round(performance.now() - t0) + "ms" });
+    return j;
+  } catch (e) {
+    if (!/Unauthorized/.test(e.message)) {
+      diag({ path: okPath, ok: false, note: (e.message || "fail") + " " + Math.round(performance.now() - t0) + "ms" });
+    }
+    throw e;
   }
-  if (!r.ok) throw new Error((j && j.error) || ("HTTP " + r.status));
-  return j;
 }
 async function getJSON(path) { return api(path); }
 async function putJSON(path, body) { return api(path, { method: "PUT", body }); }
@@ -745,6 +790,7 @@ async function bootAuth() {
         $("screen").style.display = "none";
         loadAllInitial();
       } catch (e) {
+        bootErr("Gate imeshindikana: " + e.message);
         await auth.signOut();
         show("deniedCard");
       }
