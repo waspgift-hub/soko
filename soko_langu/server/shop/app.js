@@ -585,32 +585,19 @@ async function renderSearch(q, cat) {
   if (!host) return;
   const sel = document.getElementById('catSelect');
   if (sel) sel.value = cat || '';
-  const inMem = Feed.list.filter((p) => {
-    const hit = !q || (p.name || '').toLowerCase().indexOf(q.toLowerCase()) >= 0 || (p.brand || '').toLowerCase().indexOf(q.toLowerCase()) >= 0;
+  if (!Feed.list.length) await loadPageInto();
+  const ql = String(q || '').toLowerCase();
+  const hits = Feed.list.filter((p) => {
+    const hit = !ql || (p.name || '').toLowerCase().indexOf(ql) >= 0 || (p.brand || '').toLowerCase().indexOf(ql) >= 0;
     if (!hit) return false;
-    if (cat) return p.category === cat || (p.subcategory || '').toLowerCase() === cat.toLowerCase();
+    if (cat) return catMatch(p, cat);
     return true;
   });
-  if (inMem.length) { renderFeed(); return; }
-  try {
-    const ql = q.toLowerCase();
-    const snap = q
-      ? await DB.collection('products').where('searchName', '>=', ql).where('searchName', '<=', ql + '\uf8ff').limit(PAGE * 2).get()
-      : await DB.collection('products').orderBy('createdAt', 'desc').limit(PAGE * 2).get();
-    const hits = snap.docs.map(norm).filter((p) => {
-      if (!p.isActive) return false;
-      if (q && (p.name || '').toLowerCase().indexOf(ql) < 0 && (p.brand || '').toLowerCase().indexOf(ql) < 0) return false;
-      if (cat) return catMatch(p, cat);
-      return true;
-    });
-    host.innerHTML = hits.length ? hits.map(cardHtml).join('') : emptyHtml(t('empty_filter'), q || cat, t('home_browse'));
-    const sent = document.getElementById('sentinel');
-    if (sent) sent.style.display = 'none';
-    const moreBtn = document.getElementById('moreBtn');
-    if (moreBtn) moreBtn.style.display = 'none';
-  } catch (e) {
-    host.innerHTML = emptyHtml(t('err_generic'), '', t('home_browse'));
-  }
+  host.innerHTML = hits.length ? hits.map(cardHtml).join('') : emptyHtml(t('empty_filter'), q || cat, t('home_browse'));
+  const sent = document.getElementById('sentinel');
+  if (sent) sent.style.display = 'none';
+  const moreBtn = document.getElementById('moreBtn');
+  if (moreBtn) moreBtn.style.display = 'none';
 }
 
 /* ---------- Product detail ---------- */
