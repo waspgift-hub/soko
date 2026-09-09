@@ -226,7 +226,7 @@
     <p>Inaingia...</p>
   </div>
 
-  <div class="auth-card" id="loginCard" hidden>
+  <div class="auth-card" id="loginCard">
     <div class="logo-badge">S</div>
     <h1>Soko Vibe</h1>
     <p>Super Admin Dashboard</p>
@@ -518,6 +518,21 @@ const S = {}; // tiny client cache (reused across loaders to avoid redundant fet
 
 let idToken = null;
 const $ = (id) => document.getElementById(id);
+// Wiring with tolerance: a single missing element must never blank the whole
+// page (a blank/white screen right after login is the classic symptom).
+function on(id, ev, fn) {
+  const el = $(id);
+  if (el) el.addEventListener(ev, fn);
+  return el;
+}
+// Global safety net: whatever breaks, always surface SOMETHING visible with the
+// error text instead of an empty white screen (hard to debug on mobile).
+window.addEventListener("error", (ev) => {
+  const app = $("app");
+  if (app && app.style.display !== "none") return;
+  try { show("loginCard"); } catch (_) {}
+  bootErr("Runtime: " + ((ev && ev.message) || "unknown error"));
+});
 
 // ---------- helpers ----------
 function esc(v) {
@@ -631,7 +646,7 @@ function lazyLoad(sec) {
   LOADERS[sec] && LOADERS[sec]();
 }
 
-$("nav").addEventListener("click", (e) => {
+on("nav", "click", (e) => {
   const btn = e.target.closest("button[data-sec]");
   if (!btn) return;
   document.querySelectorAll("#nav button").forEach((b) => b.classList.remove("active"));
@@ -642,7 +657,7 @@ $("nav").addEventListener("click", (e) => {
   $("pageTitle").textContent = TITLES[sec] || sec;
   lazyLoad(sec);
 });
-$("refreshBtn").addEventListener("click", () => {
+on("refreshBtn", "click", () => {
   const sec = document.querySelector("main .section.active").dataset.sec;
   $("lastUpd").textContent = "Inapakia " + sec + "...";
   LOADERS[sec] && LOADERS[sec]();
@@ -668,7 +683,7 @@ function makeChart(id, cfg) {
 // ---------- authentication gate ----------
 function show(id) { ["splashCard", "loginCard", "deniedCard"].forEach((x) => ($(x).hidden = $(x).id !== id)); }
 
-$("loginBtn").addEventListener("click", async () => {
+on("loginBtn", "click", async () => {
   $("loginErr").textContent = "";
   $("loginBtn").disabled = true;
   const provider = new firebase.auth.GoogleAuthProvider();
@@ -703,7 +718,7 @@ document.querySelectorAll("#loginTabs .tab").forEach(function (t) {
 });
 
 // ---------- email + password sign-in ----------
-$("epBtn").addEventListener("click", async () => {
+on("epBtn", "click", async () => {
   $("loginErr").textContent = "";
   const email = $("epEmail").value.trim();
   const pass = $("epPass").value;
@@ -719,10 +734,10 @@ $("epBtn").addEventListener("click", async () => {
     $("epBtn").disabled = false;
   }
 });
-["epEmail", "epPass"].forEach((id) => $(id).addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("epBtn").click(); } }));
+["epEmail", "epPass"].forEach((id) => on(id, "keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); on("epBtn").click(); } }));
 
 // ---------- email + OTP sign-in ----------
-$("otpSendBtn").addEventListener("click", async () => {
+on("otpSendBtn", "click", async () => {
   $("loginErr").textContent = "";
   const email = $("otpEmail").value.trim();
   if (!email) { $("loginErr").textContent = "Weka barua pepe yako."; return; }
@@ -745,7 +760,7 @@ $("otpSendBtn").addEventListener("click", async () => {
   }
 });
 
-$("otpConfirmBtn").addEventListener("click", async () => {
+on("otpConfirmBtn", "click", async () => {
   $("loginErr").textContent = "";
   const email = $("otpEmail").value.trim();
   const code = $("otpCode").value.trim();
@@ -772,10 +787,10 @@ $("otpConfirmBtn").addEventListener("click", async () => {
     $("otpConfirmBtn").disabled = false;
   }
 });
-["otpEmail"].forEach((id) => $(id).addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("otpSendBtn").click(); } }));
-$("otpCode").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("otpConfirmBtn").click(); } });
+["otpEmail"].forEach((id) => on(id, "keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); on("otpSendBtn").click(); } }));
+on("otpCode", "keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); on("otpConfirmBtn").click(); } });
 
-$("logoutBtn").addEventListener("click", () => auth.signOut().then(() => location.reload()));
+on("logoutBtn", "click", () => auth.signOut().then(() => location.reload()));
 
 function setMe(u) {
   $("meName").textContent = u.displayName || u.email || "Admin";
