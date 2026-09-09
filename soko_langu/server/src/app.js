@@ -27,6 +27,7 @@ const referralRouter = require('./modules/referrals/routes');
 const moderationRouter = require('./modules/moderation/routes');
 const reconciliationRouter = require('./modules/reconciliation/routes');
 const { seoRouter, NOT_FOUND_HTML } = require('./seo/routes');
+const legacyShopRouter = require('./modules/legacy-shop/routes');
 
 const app = express();
 
@@ -252,12 +253,18 @@ app.use('/api/v1/referrals', referralRouter);
 app.use('/api/v1/moderation', moderationRouter);
 app.use('/api/v1/reconciliation', reconciliationRouter);
 
+// Legacy web-shop: v2-backed checkout/status under the ORIGINAL /api paths so
+// the shop SPA needs no client change. Mounted before legacy-compat so these
+// execute against Postgres, not Firestore.
+const { generalLimiter } = require('./middleware/rateLimiter');
+app.use('/api', generalLimiter, legacyShopRouter);
+
 // Legacy-compat: proven old routers under original /api paths (payouts,
 // delivery OTP, search, notifications). Firestore is the same project, so
 // existing app versions keep working with zero client changes.
 try {
   const { setupCompat } = require('./modules/legacy-compat/compat');
-  const { generalLimiter, searchLimiter, adminLimiter } = require('./middleware/rateLimiter');
+  const { searchLimiter, adminLimiter } = require('./middleware/rateLimiter');
   const compat = setupCompat(app);
   app.use('/api', generalLimiter, compat.payoutsRouter);
   app.use('/api/orders', generalLimiter, compat.deliveryRouter);
