@@ -80,6 +80,21 @@ const config = {
     escrowAutoReleaseDays: parseInt(process.env.ESCROW_AUTO_RELEASE_DAYS) || 14,
     maxDailySaleAmount: parseInt(process.env.MAX_DAILY_SALE_AMOUNT) || 5000000,
   },
+
+  // Finance safety-net scheduler. All jobs are idempotent (state-machine
+  // guards + unique keys), so overlapping instances are safe.
+  finance: {
+    // Run the finance BullMQ worker inside the API process (current single
+    // instance). Set FINANCE_WORKER_IN_PROCESS=false when a dedicated worker
+    // process is deployed so both never double-process (BullMQ also guards).
+    workerInProcess: process.env.FINANCE_WORKER_IN_PROCESS !== 'false',
+    paymentExpireMs: (parseInt(process.env.FINANCE_PAYMENT_EXPIRE_MS) || 24 * 3600) * 1000,
+    autoReleaseDays: parseInt(process.env.ESCROW_AUTO_RELEASE_DAYS) || 14,
+    withdrawalAutoProcessMs: (parseInt(process.env.FINANCE_WITHDRAWAL_AUTO_PROCESS_MIN) || 15) * 60 * 1000,
+    withdrawalStuckMs: (parseInt(process.env.FINANCE_WITHDRAWAL_STUCK_HOURS) || 48) * 3600 * 1000,
+    reconciliationWindowMs: (parseInt(process.env.FINANCE_RECONCILIATION_WINDOW_HOURS) || 24) * 3600 * 1000,
+    disputeSlaMs: (parseInt(process.env.FINANCE_DISPUTE_SLA_HOURS) || 72) * 3600 * 1000,
+  },
   
   // URLs
   urls: {

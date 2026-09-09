@@ -3,6 +3,8 @@ const { acquireLock, releaseLock } = require('../../config/redis');
 const { getProvider } = require('./provider-factory');
 const config = require('../../config');
 const { OrderStateMachine, ORDER_STATES } = require('../orders/order-state-machine');
+const { sameAmount } = require('../../utils/money');
+const outbox = require('./webhook-outbox');
 
 /**
  * Payment service.
@@ -33,7 +35,7 @@ async function initiatePayment({
       if (order.status !== ORDER_STATES.AWAITING_ESCROW_PAYMENT) {
         throw httpError(409, `INVALID_ORDER_STATE:${order.status}`);
       }
-      if (order.totalAmount !== amount) throw httpError(400, 'AMOUNT_MISMATCH');
+      if (!sameAmount(order.totalAmount, amount)) throw httpError(400, 'AMOUNT_MISMATCH');
 
       // Any prior pending/initiated payment for this order is voided out.
       await tx.payment.updateMany({
@@ -175,6 +177,9 @@ async function confirmCollection({
 }
 
 // Handle an incoming provider webhook.
+// Layer 2 (WebhookEvent outbox): a unique dedup key makes re-deliveries and
+// multi-instance concurrency at-most-once. Status-priority checks remain the
+// financial source of truth even if two distinct events race on one order.
 async function handleWebhook({ providerName, payload, signature, headers }) {
   const provider = getProvider(providerName);
   if (!provider.verifyWebhook(payload, signature)) {
@@ -183,24 +188,52 @@ async function handleWebhook({ providerName, payload, signature, headers }) {
 
   const normalized = provider.normalizeWebhook(payload);
   const webhookId = headers['x-webhook-id'] || payload.webhookId || payload.id;
+  const dedupKey = outbox.buildDedupKey(providerName, webhookId, payload);
 
-  // Layer 3: DB idempotency via processed webhook tracking is replaced by
-  // status-priority checks; but guard with an explicit de-dupe key.
   if (!normalized.orderReference) {
     throw httpError(400, 'MISSING_ORDER_REFERENCE');
   }
 
-  if (normalized.status === 'completed') {
-    await confirmCollection({
+  const lock = await acquireLock(`webhook:${dedupKey}`, 60);
+  try {
+    const event = await outbox.recordWebhookEvent({
+      provider: providerName,
+      dedupKey,
+      type: normalized.status || 'unknown',
+      rawPayload: payload,
+      signature: signature || null,
       orderReference: normalized.orderReference,
-      providerPaymentId: normalized.providerPaymentId,
-      amount: normalized.amount,
     });
-  } else if (normalized.status === 'failed') {
-    await markPaymentFailed(normalized.orderReference);
-  }
 
-  return { received: true, webhookId };
+    // Already handled by a previous delivery — ack without side effects.
+    if (event && event.status === outbox.WEBHOOK_STATUS_PROCESSED) {
+      return { received: true, webhookId, duplicate: true };
+    }
+
+    await outbox.markWebhookProcessing(event);
+
+    try {
+      if (normalized.status === 'completed') {
+        await confirmCollection({
+          orderReference: normalized.orderReference,
+          providerPaymentId: normalized.providerPaymentId,
+          amount: normalized.amount,
+        });
+      } else if (normalized.status === 'failed') {
+        await markPaymentFailed(normalized.orderReference);
+      }
+      await outbox.markWebhookProcessed(event);
+    } catch (err) {
+      // Remember partial processing so the retry re-runs the safe path;
+      // confirmCollection is idempotent (status-priority + unique hold).
+      await outbox.markWebhookFailed(event, err);
+      throw err;
+    }
+
+    return { received: true, webhookId };
+  } finally {
+    if (!lock.skipped) await releaseLock(`webhook:${dedupKey}`);
+  }
 }
 
 async function markPaymentFailed(orderReference) {

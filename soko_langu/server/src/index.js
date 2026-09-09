@@ -9,6 +9,15 @@ const PORT = config.port;
 const { initialize } = require('./app');
 initialize().catch((e) => console.error('[INIT]', e.message));
 
+// Finance safety-net scheduler. Registers the repeating jobs and, in the
+// default single-instance deployment, runs the finance worker in-process.
+// Set FINANCE_WORKER_IN_PROCESS=false when a dedicated worker is deployed.
+const { scheduleFinanceJobs, startFinanceWorker } = require('./services/finance-runner');
+scheduleFinanceJobs().catch((e) => console.error('[FINANCE] schedule:', e.message));
+if (config.finance.workerInProcess) {
+  startFinanceWorker().catch((e) => console.error('[FINANCE] in-process worker:', e.message));
+}
+
 // Follow/friend notifications (Firestore watcher, best-effort).
 try {
   const { startFollowWatcher } = require('./services/follow-watcher');

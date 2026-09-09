@@ -2,6 +2,7 @@ require('dotenv').config();
 const { connectDatabase } = require('../config/database');
 const { connectRedis, getRedis } = require('../config/redis');
 const { getMediaQueue, closeMediaQueue } = require('../services/queue');
+const { scheduleFinanceJobs, startFinanceWorker, closeFinanceWorker } = require('../services/finance-runner');
 
 async function startWorker() {
   console.log('[WORKER] Starting background worker...');
@@ -16,7 +17,7 @@ async function startWorker() {
   // Health metrics (readable via /health): queued + active.
   const metrics = () => mediaQueue.getJobCounts().catch(() => ({}));
 
-  const worker = new Worker(
+  const mediaWorker = new Worker(
     'media',
     async (job) => {
       // Sharp/FFmpeg are optional at runtime — the worker keeps running
@@ -56,15 +57,22 @@ async function startWorker() {
     { connection, concurrency: 1 }
   );
 
-  worker.on('completed', (job) => console.log(`[WORKER] job ${job.id} completed`));
-  worker.on('failed', (job, err) => console.error(`[WORKER] job ${job?.id} failed:`, err.message));
-  worker.on('error', (err) => console.error('[WORKER] error:', err.message));
+  mediaWorker.on('completed', (job) => console.log(`[WORKER] media job ${job.id} completed`));
+  mediaWorker.on('failed', (job, err) => console.error(`[WORKER] media job ${job?.id} failed:`, err.message));
+  mediaWorker.on('error', (err) => console.error('[WORKER] media error:', err.message));
 
   console.log('[WORKER] Worker initialized (queue: media)');
 
+  // Finance safety-net jobs (escrow auto-release, expiry, withdrawals,
+  // reconciliation, dispute SLA). Idempotent, so both this worker and an
+  // in-process API worker can co-exist safely.
+  await scheduleFinanceJobs();
+  await startFinanceWorker();
+
   const shutdown = async (signal) => {
     console.log(`[WORKER] ${signal}, shutting down...`);
-    await worker.close().catch(() => {});
+    await mediaWorker.close().catch(() => {});
+    await closeFinanceWorker().catch(() => {});
     await closeMediaQueue();
     try {
       const { disconnectDatabase } = require('../config/database');

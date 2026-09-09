@@ -725,3 +725,30 @@ model Reconciliation {
 
   @@map("reconciliation")
 }
+
+// ============================================================
+// WEBHOOK OUTBOX (Layer-2 idempotency)
+// Append-only receipt of provider webhooks. The unique dedup_key
+// guarantees a webhook event is processed at most once even when
+// the gateway re-delivers or two instances receive it concurrently.
+// ============================================================
+
+model WebhookEvent {
+  id             String    @id @default(uuid()) @db.Uuid
+  provider       String    @db.VarChar(50)
+  dedupKey       String    @unique @map("dedup_key") @db.VarChar(300)
+  type           String    @db.VarChar(30)
+  status         String    @default("received") @db.VarChar(20)
+  rawPayload     Json?     @map("raw_payload")
+  signature      String?   @db.Text
+  orderReference String?   @map("order_reference") @db.VarChar(50)
+  attempts       Int       @default(0)
+  lastError      String?   @map("last_error") @db.Text
+  processedAt    DateTime? @map("processed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@index([provider, status])
+  @@index([orderReference])
+  @@map("webhook_events")
+}

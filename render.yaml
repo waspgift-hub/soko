@@ -5,7 +5,7 @@ services:
     region: frankfurt
     plan: free
     buildCommand: cd soko_langu/server && npm ci --omit=dev
-    startCommand: cd soko_langu/server && node index.js
+    startCommand: cd soko_langu/server && node src/index.js
     healthCheckPath: /health
     envVars:
       - key: NODE_VERSION
