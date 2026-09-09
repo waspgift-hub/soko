@@ -5,207 +5,217 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
 <title>Soko Vibe — Super Admin</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230b0f1a'/><text x='50' y='68' font-family='Arial' font-size='55' text-anchor='middle' fill='%2322d3ee'>S</text></svg>">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%230f172a'/><text x='50' y='68' font-family='Arial' font-size='55' text-anchor='middle' fill='%23fff'>S</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400..700;1,400..600&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <style>
   :root {
-    --bg: #0b0f1a;
-    --bg2: #0e1424;
-    --panel: #121828;
-    --panel2: #161e31;
-    --border: #1e2740;
-    --border2: #26304e;
-    --text: #e6ecff;
-    --muted: #8b97b8;
-    --accent: #22d3ee;
-    --accent2: #a78bfa;
-    --green: #22c55e;
-    --amber: #f59e0b;
-    --red: #ef4444;
+    --bg: #f8fafc;
+    --surface: #ffffff;
+    --fg: #0f172a;
+    --muted: #64748b;
+    --border: #e2e8f0;
+    --accent: #f1f5f9;
+    --primary: #0f172a;
     --radius: 14px;
-    --shadow: 0 10px 30px rgba(0,0,0,.35);
+    --shadow: 0 1px 2px rgba(15, 23, 42, .05), 0 1px 3px rgba(15, 23, 42, .04);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
   body {
-    background: radial-gradient(1200px 600px at 80% -10%, #16203a 0%, var(--bg) 55%);
-    color: var(--text);
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    font-size: 14px;
-    -webkit-font-smoothing: antialiased;
+    background: var(--bg); color: var(--fg);
+    font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px; -webkit-font-smoothing: antialiased;
   }
-  ::-webkit-scrollbar { width: 10px; height: 10px; }
-  ::-webkit-scrollbar-thumb { background: #28314e; border-radius: 8px; }
-  ::-webkit-scrollbar-thumb:hover { background: #33406a; }
-  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; border: 2px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background: #94a3b8; background-clip: padding-box; }
 
   /* ---------- Auth / splash ---------- */
-  #screen { min-height: 100vh; display: grid; place-items: center; }
+  #screen { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
   .auth-card {
-    width: 380px; max-width: calc(100vw - 32px);
-    background: var(--panel); border: 1px solid var(--border);
-    border-radius: 20px; padding: 36px 30px; box-shadow: var(--shadow);
-    text-align: center;
+    width: 400px; max-width: calc(100vw - 32px);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
+    padding: 38px 32px; box-shadow: 0 12px 40px rgba(15, 23, 42, .08); text-align: center;
   }
   .logo-badge {
-    width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 18px;
-    background: linear-gradient(135deg, var(--accent), var(--accent2));
-    display: grid; place-items: center; color: #06121c; font-weight: 800; font-size: 28px;
+    width: 46px; height: 46px; margin: 0 auto 14px; border-radius: 12px;
+    background: var(--primary); display: grid; place-items: center;
+    color: #fff; font-weight: 800; font-size: 22px; font-family: Manrope, sans-serif;
   }
-  .auth-card h1 { font-size: 20px; margin-bottom: 4px; }
+  .auth-card h1 { font-size: 21px; font-family: Manrope, sans-serif; font-weight: 800; margin-bottom: 4px; letter-spacing: -0.02em; }
   .auth-card p { color: var(--muted); font-size: 13px; margin-bottom: 22px; }
-  .gbtn {
-    width: 100%; padding: 12px; border: 1px solid var(--border2); border-radius: 12px;
-    background: #fff; color: #222; font-weight: 600; font-size: 15px; cursor: pointer;
-    display: flex; align-items: center; justify-content: center; gap: 10px; transition: opacity .15s;
+  .tabs { display: flex; background: var(--accent); border-radius: 11px; padding: 4px; gap: 4px; margin-bottom: 18px; }
+  .tab { flex: 1; border: 0; background: transparent; color: var(--muted); font: 600 12.5px Inter, sans-serif; padding: 8px; border-radius: 8px; cursor: pointer; transition: all .15s; }
+  .tab.active { background: #fff; color: var(--fg); box-shadow: var(--shadow); }
+  .field {
+    width: 100%; background: #fff; border: 1px solid var(--border); color: var(--fg);
+    border-radius: 10px; padding: 11px 13px; font-size: 14px; font-family: inherit; margin-bottom: 11px;
   }
-  .gbtn:hover { opacity: .9; }
-  .gbtn:disabled { opacity: .5; cursor: wait; }
+  .field:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(15, 23, 42, .1); }
+  .btn {
+    border: 1px solid var(--border); background: #fff; color: var(--fg);
+    padding: 9px 15px; border-radius: 9px; cursor: pointer; font: 600 13px Inter, sans-serif;
+    transition: all .15s; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .btn:hover { border-color: var(--fg); background: var(--accent); }
+  .btn.full { width: 100%; }
+  .btn.accent { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .btn.accent:hover { opacity: .9; background: var(--primary); }
+  .btn:disabled { opacity: .5; cursor: wait; }
+  .otp-row { display: flex; gap: 10px; }
+  .otp-row .field { flex: 1; }
+  .gbtn {
+    width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: #fff;
+    color: var(--fg); font: 600 14px Inter, sans-serif; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 10px; transition: all .15s;
+  }
+  .gbtn:hover { border-color: var(--fg); }
   .gbtn svg { width: 20px; height: 20px; flex: none; }
-  .hint { color: var(--muted); font-size: 12px; margin-top: 16px; line-height: 1.5; }
-  .err { color: var(--red); font-size: 13px; margin-top: 12px; min-height: 18px; }
-
+  .hint { color: var(--muted); font-size: 12px; margin-top: 14px; line-height: 1.5; }
+  .err { color: #dc2626; font-size: 13px; margin-top: 12px; min-height: 18px; }
   .spinner {
-    width: 44px; height: 44px; margin: 0 auto 18px; border-radius: 50%;
-    border: 3px solid #223; border-top-color: var(--accent); animation: spin 0.9s linear infinite;
+    width: 40px; height: 40px; margin: 0 auto 16px; border-radius: 50%;
+    border: 3px solid var(--accent); border-top-color: var(--primary); animation: spin .9s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
   /* ---------- App shell ---------- */
   #app { display: none; min-height: 100vh; }
-  #app.busy #main { opacity: .5; pointer-events: none; }
+  #app.busy #main { opacity: .45; pointer-events: none; }
   aside {
-    position: fixed; inset: 0 auto 0 0; width: 210px; z-index: 20;
-    background: var(--bg2); border-right: 1px solid var(--border);
-    display: flex; flex-direction: column; padding: 18px 12px;
+    position: fixed; inset: 0 auto 0 0; width: 260px; z-index: 30;
+    background: var(--surface); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; padding: 18px 14px;
   }
-  .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 16px; border-bottom: 1px solid var(--border); }
-  .brand .logo-badge { width: 38px; height: 38px; border-radius: 10px; font-size: 16px; margin: 0; }
-  .brand .nm { font-size: 15px; font-weight: 700; line-height: 1.1; }
+  .brand { display: flex; align-items: center; gap: 11px; padding: 0 8px 18px; border-bottom: 1px solid var(--border); }
+  .brand .logo-badge { width: 34px; height: 34px; border-radius: 10px; font-size: 18px; margin: 0; }
+  .brand .nm { font-size: 15px; font-family: Manrope, sans-serif; font-weight: 800; line-height: 1.1; letter-spacing: -0.01em; }
   .brand .sub { color: var(--muted); font-size: 11px; }
-  nav { margin-top: 14px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; flex: 1; }
+  nav { margin-top: 12px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; flex: 1; }
+  nav .grp { color: #94a3b8; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; padding: 14px 12px 6px; }
   nav button {
     border: 0; background: transparent; color: var(--muted); cursor: pointer;
-    text-align: left; padding: 10px 12px; border-radius: 10px; font-size: 13.5px;
-    font-weight: 500; display: flex; align-items: center; gap: 10px; transition: all .15s;
-    font-family: inherit;
+    text-align: left; padding: 9px 12px; border-radius: 9px; font: 600 13.5px Inter, sans-serif;
+    display: flex; align-items: center; gap: 11px; transition: all .12s; width: 100%;
   }
-  nav button .dot { width: 7px; height: 7px; border-radius: 50%; background: #2a3557; flex: none; }
-  nav button:hover { background: #141b31; color: var(--text); }
-  nav button.active { background: linear-gradient(90deg, rgba(34,211,238,.14), rgba(167,139,250,.14)); color: var(--accent); }
-  nav button.active .dot { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
-  nav .grp { color: #4d5878; font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; padding: 14px 12px 4px; }
-  .me { border-top: 1px solid var(--border); padding: 12px 8px 0; display: flex; align-items: center; gap: 10px; }
-  .me img { width: 34px; height: 34px; border-radius: 50%; background: #223; }
+  nav button:hover { background: var(--accent); color: var(--fg); }
+  nav button.active { background: var(--primary); color: #fff; }
+  nav button .ic { width: 17px; height: 17px; flex: none; }
+  nav button .ic svg { width: 100%; height: 100%; stroke: currentColor; }
+  .me { border-top: 1px solid var(--border); padding: 12px 6px 0; display: flex; align-items: center; gap: 10px; }
+  .me img { width: 34px; height: 34px; border-radius: 50%; background: var(--accent); object-fit: cover; }
   .me .who { flex: 1; min-width: 0; }
-  .me .who b { display: block; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .me .who span { color: var(--muted); font-size: 11px; }
+  .me .who b { display: block; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .me .who span { color: var(--muted); font-size: 11.5px; }
   .me button {
-    background: #1a2240; color: var(--muted); border: 1px solid var(--border); border-radius: 8px;
-    cursor: pointer; padding: 6px 8px; font-size: 11px; font-family: inherit;
+    background: #fff; color: var(--muted); border: 1px solid var(--border); border-radius: 8px;
+    cursor: pointer; padding: 7px; display: grid; place-items: center; transition: all .15s;
   }
-  .me button:hover { color: var(--red); border-color: #3a2540; }
+  .me button svg { width: 16px; height: 16px; stroke: currentColor; }
+  .me button:hover { color: #dc2626; border-color: #fecaca; background: #fef2f2; }
 
-  main { margin-left: 210px; padding: 20px 26px 60px; min-height: 100vh; }
-  .topbar { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; flex-wrap: wrap; }
-  .topbar h2 { font-size: 20px; font-weight: 700; flex: 1; }
-  .topbar .meta { color: var(--muted); font-size: 12px; }
-  .btn {
-    border: 1px solid var(--border2); background: var(--panel2); color: var(--text);
-    padding: 8px 14px; border-radius: 10px; cursor: pointer; font-size: 13px; font-family: inherit;
-    transition: all .15s;
-  }
-  .btn:hover { border-color: var(--accent); color: var(--accent); }
-  .btn.accent { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #07121c; border: 0; font-weight: 600; }
-  .btn.accent:hover { filter: brightness(1.1); }
-  .btn.full { width: 100%; margin-top: 10px; }
+  main { margin-left: 260px; padding: 26px 30px 70px; min-height: 100vh; }
+  .topbar { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; flex-wrap: wrap; }
+  .topbar h2 { font-size: 22px; font-family: Manrope, sans-serif; font-weight: 800; letter-spacing: -0.02em; flex: 1; }
+  .topbar .meta { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 
-  .tabs { display: flex; gap: 6px; background: var(--panel2); border: 1px solid var(--border); border-radius: 12px; padding: 4px; margin-bottom: 18px; }
-  .tab { flex: 1; border: 0; background: transparent; color: var(--muted); padding: 8px 0; border-radius: 9px; cursor: pointer; font-size: 13px; font-weight: 600; font-family: inherit; transition: all .15s; }
-  .tab.active { background: linear-gradient(135deg, rgba(34,211,238,.18), rgba(167,139,250,.18)); color: var(--accent); }
-  .tabpane { margin-bottom: 2px; }
+  /* ---------- Sections ---------- */
+  main .section { display: none; }
+  main .section.active { display: block; animation: fade .18s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
 
-  .field { width: 100%; background: var(--panel2); border: 1px solid var(--border); color: var(--text); border-radius: 10px; padding: 11px 13px; font-size: 14px; font-family: inherit; margin-bottom: 10px; transition: border-color .15s; }
-  .field:focus { outline: none; border-color: var(--accent); }
-  .field::placeholder { color: #5a6584; }
-  .otp-row { display: flex; gap: 8px; }
-  .otp-row .field { flex: 1; }
-
-  .section { display: none; animation: fade .25s ease; }
-  .section.active { display: block; }
-  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
-
-  .grid { display: grid; gap: 14px; margin-bottom: 18px; }
-  .kpis { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
-  .charts { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+  .grid { display: grid; gap: 16px; margin-bottom: 18px; }
+  .kpis { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+  .charts { grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
   .two { grid-template-columns: 1fr 1fr; }
-  @media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
+  @media (max-width: 960px) { .two { grid-template-columns: 1fr; } }
 
   .card {
-    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 16px 18px; box-shadow: var(--shadow);
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 18px 20px; box-shadow: var(--shadow);
   }
-  .kpi .lbl { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
-  .kpi .val { font-size: 25px; font-weight: 700; letter-spacing: -0.02em; }
-  .kpi .sub { color: var(--muted); font-size: 12px; margin-top: 3px; }
-  .kpi .val.g { color: var(--green); } .kpi .val.a { color: var(--accent); } .kpi .val.p { color: var(--accent2); } .kpi .val.y { color: var(--amber); } .kpi .val.r { color: var(--red); }
+  .kpi .lbl { color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 7px; }
+  .kpi .val { font-size: 25px; font-weight: 700; letter-spacing: -0.02em; font-family: Manrope, sans-serif; }
+  .kpi .sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .kpi .val.g { color: #059669; } .kpi .val.a { color: #0f172a; } .kpi .val.p { color: #6d28d9; } .kpi .val.y { color: #d97706; } .kpi .val.r { color: #dc2626; }
 
-  .card h3 { font-size: 14px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .card h3 { font-size: 14.5px; font-weight: 700; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; font-family: Manrope, sans-serif; }
   .card h3 .cnt {
-    margin-left: auto; font-size: 11px; color: var(--muted); background: #1c2440;
-    padding: 2px 9px; border-radius: 99px; font-weight: 500;
+    margin-left: auto; font-size: 11px; color: var(--muted); background: var(--accent);
+    padding: 3px 10px; border-radius: 99px; font-weight: 600; font-family: Inter, sans-serif;
   }
 
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th {
-    text-align: left; color: var(--muted); font-weight: 600; font-size: 11px;
-    text-transform: uppercase; letter-spacing: .05em; padding: 8px 10px;
-    border-bottom: 1px solid var(--border);
-    white-space: nowrap;
+  thead th {
+    text-align: left; color: var(--muted); font-weight: 700; font-size: 10.5px;
+    text-transform: uppercase; letter-spacing: .06em; padding: 10px 12px;
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+    background: #fff; position: sticky; top: 0; z-index: 1;
   }
-  td { padding: 9px 10px; border-bottom: 1px solid #172033; vertical-align: middle; }
-  tbody tr:hover { background: #141b31; }
+  td { padding: 11px 12px; border-bottom: 1px solid var(--accent); vertical-align: middle; }
+  tbody tr:hover { background: #f8fafc; }
   tr:last-child td { border-bottom: 0; }
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
   .dim { color: var(--muted); }
   .wrap { max-width: 360px; }
 
-  .filter { width: 100%; max-width: 320px; background: var(--panel2); border: 1px solid var(--border); color: var(--text); border-radius: 10px; padding: 8px 12px; font-size: 13px; font-family: inherit; margin-bottom: 12px; }
-  .filter:focus { outline: none; border-color: var(--accent); }
+  .filter {
+    width: 100%; max-width: 320px; background: #fff; border: 1px solid var(--border); color: var(--fg);
+    border-radius: 9px; padding: 9px 12px; font-size: 13px; font-family: inherit; margin-bottom: 12px;
+  }
+  .filter:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(15, 23, 42, .1); }
 
-  .th-scroll { max-height: 62vh; overflow: auto; }
+  .th-scroll { max-height: 60vh; overflow: auto; }
   .th-scroll-lg { max-height: 72vh; overflow: auto; }
   .right { text-align: right; }
   .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-  .bdg { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 11px; font-weight: 600; }
-  .bdg.ok { background: rgba(34,197,94,.14); color: var(--green); }
-  .bdg.warn { background: rgba(245,158,11,.14); color: var(--amber); }
-  .bdg.bad { background: rgba(239,68,68,.14); color: var(--red); }
-  .bdg.info { background: rgba(34,211,238,.14); color: var(--accent); }
-  .bdg.mut { background: #1c2440; color: var(--muted); }
+  .bdg { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: 600; border: 1px solid transparent; }
+  .bdg.ok { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+  .bdg.warn { background: #fffbeb; color: #b45309; border-color: #fde68a; }
+  .bdg.bad { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+  .bdg.info { background: #ecfeff; color: #0e7490; border-color: #a5f3fc; }
+  .bdg.mut { background: var(--accent); color: var(--muted); border-color: var(--border); }
 
-  .mini { font-size: 11px; border: 1px solid var(--border2); background: transparent; color: var(--text); border-radius: 8px; padding: 5px 8px; cursor: pointer; font-family: inherit; transition: all .15s; }
-  .mini:hover { border-color: var(--accent); color: var(--accent); }
-  .mini.danger:hover { border-color: var(--red); color: var(--red); }
+  .mini {
+    font-size: 11.5px; border: 1px solid var(--border); background: #fff; color: var(--fg);
+    border-radius: 7px; padding: 5px 9px; cursor: pointer; font-family: inherit; transition: all .15s;
+  }
+  .mini:hover { border-color: var(--fg); }
+  .mini.danger:hover { border-color: #dc2626; color: #dc2626; }
   select.mini { cursor: pointer; }
 
-  .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 50; background: #0f1626; border: 1px solid var(--border2); color: var(--text); padding: 11px 18px; border-radius: 12px; box-shadow: var(--shadow); font-size: 13px; opacity: 0; transition: opacity .25s; }
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 60;
+    background: var(--primary); border: 1px solid #334155; color: #fff;
+    padding: 11px 18px; border-radius: 11px; box-shadow: 0 10px 30px rgba(15, 23, 42, .3);
+    font-size: 13px; opacity: 0; transition: opacity .25s;
+  }
   .toast.show { opacity: 1; }
-  .toast.ok { border-color: rgba(34,197,94,.5); }
-  .toast.bad { border-color: rgba(239,68,68,.5); }
+  .toast.ok { background: #047857; }
+  .toast.bad { background: #b91c1c; }
 
   .empty { color: var(--muted); text-align: center; padding: 26px; font-size: 13px; }
   .chartbox { height: 260px; position: relative; }
   .chartbox.short { height: 220px; }
   .row { display: flex; gap: 14px; flex-wrap: wrap; }
-  .stat-chip { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; flex: 1; min-width: 120px; }
-  .stat-chip .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
-  .stat-chip .v { font-size: 18px; font-weight: 700; margin-top: 2px; }
-  .avatar { width: 30px; height: 30px; border-radius: 50%; background: #223; flex: none; }
-  .cell-user { display: flex; align-items: center; gap: 8px; }
+  .stat-chip { background: var(--surface); border: 1px solid var(--border); border-radius: 11px; padding: 11px 15px; flex: 1; min-width: 130px; }
+  .stat-chip .k { color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+  .stat-chip .v { font-size: 18px; font-weight: 700; margin-top: 3px; font-family: Manrope, sans-serif; }
+  .avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); flex: none; object-fit: cover; }
+  .cell-user { display: flex; align-items: center; gap: 9px; }
+
+  @media (max-width: 1000px) {
+    aside { width: 64px; padding: 18px 10px; }
+    aside .txt, aside .grp, aside .brand .nm, aside .brand .sub { display: none; }
+    aside nav button { justify-content: center; padding: 10px; }
+    main { margin-left: 64px; padding: 20px 16px 60px; }
+  }
 </style>
 </head>
 <body>
@@ -227,7 +237,6 @@
       <button class="tab" data-tab="otp">OTP</button>
     </div>
 
-    <!-- Google -->
     <div class="tabpane" id="paneGoogle">
       <button class="gbtn" id="loginBtn">
         <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
@@ -236,14 +245,12 @@
       <p class="hint">Iwapo popup imefungwa, itabadilisha kuwa redirect moja kwa moja.</p>
     </div>
 
-    <!-- Email + Password -->
     <div class="tabpane" id="paneEmail" hidden>
       <input class="field" id="epEmail" type="email" placeholder="Barua pepe" autocomplete="email" spellcheck="false">
       <input class="field" id="epPass" type="password" placeholder="Nenosiri" autocomplete="current-password">
       <button class="btn accent full" id="epBtn" style="margin-top:2px">Ingia</button>
     </div>
 
-    <!-- Email + OTP -->
     <div class="tabpane" id="paneOtp" hidden>
       <input class="field" id="otpEmail" type="email" placeholder="Barua pepe" autocomplete="email" spellcheck="false">
       <div class="otp-row">
@@ -258,10 +265,10 @@
   </div>
 
   <div class="auth-card" id="deniedCard" hidden>
-    <div class="logo-badge" style="background:linear-gradient(135deg,var(--red),var(--amber));">!</div>
+    <div class="logo-badge" style="background:linear-gradient(135deg,#dc2626,#f59e0b);">!</div>
     <h1>Hakuna Ruhusa</h1>
     <p>Akaunti yako haina ruhusa ya kuipata dashboard hii.</p>
-    <button class="btn" id="deniedOut">Ondoka</button>
+    <button class="btn accent" id="deniedOut">Ondoka</button>
   </div>
 </div>
 
@@ -270,30 +277,30 @@
     <div class="brand">
       <div class="logo-badge">S</div>
       <div>
-        <div class="nm">Soko Vibe</div>
-        <div class="sub">Super Admin</div>
+        <div class="nm txt">Soko Vibe</div>
+        <div class="sub txt">Super Admin</div>
       </div>
     </div>
     <nav id="nav">
-      <button data-sec="overview" class="active"><span class="dot"></span>Overview</button>
-      <div class="grp">Biashara</div>
-      <button data-sec="finance"><span class="dot"></span>Fedha</button>
-      <button data-sec="users"><span class="dot"></span>Watumiaji</button>
-      <button data-sec="products"><span class="dot"></span>Bidhaa</button>
-      <button data-sec="orders"><span class="dot"></span>Maagizo</button>
-      <div class="grp">Angalia</div>
-      <button data-sec="transactions"><span class="dot"></span>Transactions</button>
-      <button data-sec="withdrawals"><span class="dot"></span>Withdrawals</button>
-      <button data-sec="kyc"><span class="dot"></span>KYC</button>
-      <button data-sec="reports"><span class="dot"></span>Reports</button>
-      <button data-sec="fraud"><span class="dot"></span>Fraud</button>
-      <button data-sec="audit"><span class="dot"></span>Audit Log</button>
-      <button data-sec="online"><span class="dot"></span>Online</button>
+      <button data-sec="overview" class="active"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg></span><span class="txt">Overview</span></button>
+      <div class="grp txt">Biashara</div>
+      <button data-sec="finance"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg></span><span class="txt">Fedha</span></button>
+      <button data-sec="users"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><span class="txt">Watumiaji</span></button>
+      <button data-sec="products"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></span><span class="txt">Bidhaa</span></button>
+      <button data-sec="orders"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg></span><span class="txt">Maagizo</span></button>
+      <div class="grp txt">Angalia</div>
+      <button data-sec="transactions"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/></svg></span><span class="txt">Transactions</span></button>
+      <button data-sec="withdrawals"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg></span><span class="txt">Withdrawals</span></button>
+      <button data-sec="kyc"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg></span><span class="txt">KYC</span></button>
+      <button data-sec="reports"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/></svg></span><span class="txt">Reports</span></button>
+      <button data-sec="fraud"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg></span><span class="txt">Fraud</span></button>
+      <button data-sec="audit"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 12h-5"/><path d="M15 8h-5"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/><path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 0 1-2 2"/><path d="M2 5v14a2 2 0 0 0 2 2"/></svg></span><span class="txt">Audit Log</span></button>
+      <button data-sec="online"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"/><path d="M4.93 19.07a10 10 0 0 1 0-14.14"/><path d="M7.76 16.24a6 6 0 0 1 0-8.49"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></span><span class="txt">Online</span></button>
     </nav>
     <div class="me">
       <img id="meImg" alt="">
-      <div class="who"><b id="meName"></b><span id="meEmail"></span></div>
-      <button id="logoutBtn" title="Logout">Ondoka</button>
+      <div class="who txt"><b id="meName"></b><span id="meEmail"></span></div>
+      <button id="logoutBtn" title="Ondoka"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg></button>
     </div>
   </aside>
 
@@ -301,10 +308,9 @@
     <div class="topbar">
       <h2 id="pageTitle">Overview</h2>
       <span class="meta" id="lastUpd"></span>
-      <button class="btn" id="refreshBtn">Renew</button>
+      <button class="btn" id="refreshBtn"><svg style="width:15px;height:15px;stroke:currentColor" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>Renew</button>
     </div>
 
-    <!-- ===================== OVERVIEW ===================== -->
     <section class="section active" data-sec="overview">
       <div class="grid kpis" id="kpiOverview"></div>
       <div class="grid charts">
@@ -315,7 +321,6 @@
       </div>
     </section>
 
-    <!-- ===================== FINANCE ===================== -->
     <section class="section" data-sec="finance">
       <div class="grid kpis" id="kpiFinance"></div>
       <div class="card" style="margin-bottom:14px">
@@ -333,7 +338,6 @@
       </div>
     </section>
 
-    <!-- ===================== USERS ===================== -->
     <section class="section" data-sec="users">
       <div class="card">
         <h3>Watumiaji Wote <span class="cnt" id="uCnt"></span></h3>
@@ -347,7 +351,6 @@
       </div>
     </section>
 
-    <!-- ===================== PRODUCTS ===================== -->
     <section class="section" data-sec="products">
       <div class="card">
         <h3>Bidhaa Zote <span class="cnt" id="pCnt"></span></h3>
@@ -361,7 +364,6 @@
       </div>
     </section>
 
-    <!-- ===================== ORDERS ===================== -->
     <section class="section" data-sec="orders">
       <div class="card">
         <h3>Maagizo Yote <span class="cnt" id="oCnt"></span></h3>
@@ -374,7 +376,6 @@
       </div>
     </section>
 
-    <!-- ===================== TRANSACTIONS ===================== -->
     <section class="section" data-sec="transactions">
       <div class="card">
         <h3>Transactions <span class="cnt" id="tCnt"></span></h3>
@@ -387,7 +388,6 @@
       </div>
     </section>
 
-    <!-- ===================== WITHDRAWALS ===================== -->
     <section class="section" data-sec="withdrawals">
       <div class="card">
         <h3>Withdrawals <span class="cnt" id="wCnt"></span></h3>
@@ -400,7 +400,6 @@
       </div>
     </section>
 
-    <!-- ===================== KYC ===================== -->
     <section class="section" data-sec="kyc">
       <div class="card">
         <h3>KYC Inasubiri <span class="cnt" id="kCnt"></span></h3>
@@ -413,7 +412,6 @@
       </div>
     </section>
 
-    <!-- ===================== REPORTS ===================== -->
     <section class="section" data-sec="reports">
       <div class="card">
         <h3>Reports <span class="cnt" id="rCnt"></span></h3>
@@ -426,7 +424,6 @@
       </div>
     </section>
 
-    <!-- ===================== FRAUD ===================== -->
     <section class="section" data-sec="fraud">
       <div class="card">
         <h3>Fraud Alerts <span class="cnt" id="fCnt"></span></h3>
@@ -439,7 +436,6 @@
       </div>
     </section>
 
-    <!-- ===================== AUDIT ===================== -->
     <section class="section" data-sec="audit">
       <div class="card">
         <h3>Audit Log <span class="cnt" id="aCnt"></span></h3>
@@ -452,7 +448,6 @@
       </div>
     </section>
 
-    <!-- ===================== ONLINE ===================== -->
     <section class="section" data-sec="online">
       <div class="row" id="onChips" style="margin-bottom:14px"></div>
       <div class="card">
@@ -469,7 +464,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-
 <script>
 "use strict";
 
@@ -656,11 +650,11 @@ $("refreshBtn").addEventListener("click", () => {
 
 // ---------- charts ----------
 const charts = {};
-const PAL = ["#22d3ee", "#a78bfa", "#22c55e", "#f59e0b", "#ef4444", "#60a5fa", "#f472b6", "#34d399", "#fbbf24", "#818cf8", "#2dd4bf", "#fb923c"];
+const PAL = ["#2563eb", "#7c3aed", "#059669", "#d97706", "#dc2626", "#0ea5e9", "#db2777", "#14b8a6", "#f59e0b", "#6366f1", "#0891b2", "#f97316"];
 function chartCfg() {
   return {
-    grid: { color: "#1a2340" },
-    ticks: { color: "#8b97b8", font: { size: 10 } },
+    grid: { color: "#eef1f6" },
+    ticks: { color: "#64748b", font: { size: 11 } },
     border: { display: false },
   };
 }
