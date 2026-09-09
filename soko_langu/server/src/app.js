@@ -251,7 +251,7 @@ app.use('/api/v1/reconciliation', reconciliationRouter);
 // existing app versions keep working with zero client changes.
 try {
   const { setupCompat } = require('./modules/legacy-compat/compat');
-  const { generalLimiter, searchLimiter } = require('./middleware/rateLimiter');
+  const { generalLimiter, searchLimiter, adminLimiter } = require('./middleware/rateLimiter');
   const compat = setupCompat(app);
   app.use('/api', generalLimiter, compat.payoutsRouter);
   app.use('/api/orders', generalLimiter, compat.deliveryRouter);
@@ -260,8 +260,8 @@ try {
   app.use('/api/escrow', generalLimiter, compat.escrowRouter);
   app.use('/api', generalLimiter, compat.ordersCompatRouter);
   app.use('/api', generalLimiter, compat.moderationCompatRouter);
-  app.use('/api/admin', generalLimiter, compat.adminCompatRouter);
-  app.use('/api', generalLimiter, compat.adminCompatPublic);
+  app.use('/api/admin', adminLimiter, compat.adminCompatRouter);
+  app.use('/api', adminLimiter, compat.adminCompatPublic);
   console.log('[COMPAT] legacy routers mounted');
 } catch (e) {
   console.error('[COMPAT] mount failed, v1 continues:', e.message);

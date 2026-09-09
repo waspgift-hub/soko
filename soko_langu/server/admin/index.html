@@ -520,6 +520,7 @@ firebase.initializeApp({
 
 const auth = firebase.auth();
 const API = ""; // same origin → /api/... ; relative so hosting/env-agnostic
+const S = {}; // tiny client cache (reused across loaders to avoid redundant fetches)
 
 let idToken = null;
 const $ = (id) => document.getElementById(id);
@@ -628,6 +629,14 @@ const TITLES = {
   orders: "Maagizo", transactions: "Transactions", withdrawals: "Withdrawals",
   kyc: "KYC", reports: "Reports", fraud: "Fraud Alerts", audit: "Audit Log", online: "Online",
 };
+const loadedSec = {};
+function lazyLoad(sec) {
+  if (loadedSec[sec]) return;
+  loadedSec[sec] = true;
+  $("lastUpd").textContent = "Inapakia " + (TITLES[sec] || sec) + "...";
+  LOADERS[sec] && LOADERS[sec]();
+}
+
 $("nav").addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-sec]");
   if (!btn) return;
@@ -637,9 +646,11 @@ $("nav").addEventListener("click", (e) => {
   const sec = btn.dataset.sec;
   document.querySelector(`main .section[data-sec="${sec}"]`).classList.add("active");
   $("pageTitle").textContent = TITLES[sec] || sec;
+  lazyLoad(sec);
 });
 $("refreshBtn").addEventListener("click", () => {
   const sec = document.querySelector("main .section.active").dataset.sec;
+  $("lastUpd").textContent = "Inapakia " + sec + "...";
   LOADERS[sec] && LOADERS[sec]();
 });
 
@@ -787,7 +798,7 @@ async function bootAuth() {
         idToken = await u.getIdToken(true);
         // "master super admin" ya kweli — kila endpoint inathibitisha tokeni +
         // isAdmin server-side, lakini hapa twathibitisha mapema kwa UX nzuri.
-        await getJSON("/api/admin/stats");
+        S.stats = await getJSON("/api/admin/stats");
         $("app").style.display = "";
         $("screen").style.display = "none";
         loadAllInitial();
@@ -820,19 +831,13 @@ async function bootAuth() {
 }
 
 function loadAllInitial() {
+  // Lazy loading: tu Overview + Fedha + Watumiaji hupakiwa mara moja (baadhi
+  // ya namba muhimu zionekane papo hapo); sehemu zingine hupakiwa ukibonyeza
+  // kwenye nav. Vinginevyo mashine ~14 requests mara moja zinakutana na
+  // rate-limit (429 "too many requests").
   LOADERS.overview();
-  // Load rest kwa utulivu (kipimo kidogo sana kwenye Render free tier).
-  setTimeout(() => LOADERS.finance(), 600);
-  setTimeout(() => LOADERS.users(), 1200);
-  setTimeout(() => LOADERS.products(), 1800);
-  setTimeout(() => LOADERS.orders(), 2400);
-  setTimeout(() => LOADERS.transactions(), 3000);
-  setTimeout(() => LOADERS.withdrawals(), 3600);
-  setTimeout(() => LOADERS.kyc(), 4200);
-  setTimeout(() => LOADERS.reports(), 4800);
-  setTimeout(() => LOADERS.fraud(), 5400);
-  setTimeout(() => LOADERS.audit(), 6000);
-  setTimeout(() => LOADERS.online(), 6600);
+  setTimeout(() => LOADERS.finance(), 900);
+  setTimeout(() => LOADERS.users(), 1500);
 }
 
 // ---------- Overview ----------
@@ -840,7 +845,7 @@ async function loadOverview() {
   setBusy(true);
   try {
     const [s, an, ts, on] = await Promise.all([
-      getJSON("/api/admin/stats"),
+      ((S.stats && Promise.resolve(S.stats)) || getJSON("/api/admin/stats")),
       getJSON("/api/admin/analytics"),
       getJSON("/api/admin/timeseries?days=30"),
       getJSON("/api/admin/online"),

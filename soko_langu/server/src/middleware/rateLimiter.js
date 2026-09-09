@@ -92,6 +92,10 @@ function rateLimit(options = {}) {
 
 // Pre-configured rate limiters
 const generalLimiter = rateLimit({ max: 100, windowMs: 60000 });
+// Admin dashboard calls several endpoints (stats/analytics/timeseries/online/
+// finance) on first paint plus per-section lazy loads — allow a wider burst so
+// a legitimate admin session is never mistaken for a crawler.
+const adminLimiter = rateLimit({ max: 300, windowMs: 60000 });
 const authLimiter = rateLimit({ max: 10, windowMs: 900000 });
 const paymentLimiter = rateLimit({ max: 5, windowMs: 60000 });
 const searchLimiter = rateLimit({ max: 30, windowMs: 60000 });
@@ -108,6 +112,7 @@ const messageLimiter = rateLimit({ max: 30, windowMs: 60000 });          // 30/m
 module.exports = {
   rateLimit,
   generalLimiter,
+  adminLimiter,
   authLimiter,
   paymentLimiter,
   searchLimiter,
