@@ -258,6 +258,7 @@ try {
   app.use('/api/escrow', generalLimiter, compat.escrowRouter);
   app.use('/api', generalLimiter, compat.ordersCompatRouter);
   app.use('/api', generalLimiter, compat.moderationCompatRouter);
+  app.use('/api/admin', generalLimiter, compat.adminCompatRouter);
   console.log('[COMPAT] legacy routers mounted');
 } catch (e) {
   console.error('[COMPAT] mount failed, v1 continues:', e.message);
