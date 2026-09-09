@@ -497,6 +497,13 @@ function renderFeed(errFlag) {
     return;
   }
   const list = applySort(filterForMode());
+  if (!list.length && !Feed.loading) {
+    host.innerHTML = emptyHtml(t('empty_filter'), Feed.mode.kind === 'category' ? Feed.mode.cat : (Feed.mode.q || ''), t('home_browse'));
+    if (sent) sent.style.display = 'none';
+    const moreBtn = document.getElementById('moreBtn');
+    if (moreBtn) moreBtn.style.display = 'none';
+    return;
+  }
   host.innerHTML = list.map(cardHtml).join('') + (Feed.loading && list.length === 0 ? skelGrid(8) : '');
   if (sent) sent.style.display = Feed.done ? 'none' : 'block';
   const moreBtn = document.getElementById('moreBtn');
