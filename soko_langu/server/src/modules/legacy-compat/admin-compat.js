@@ -31,6 +31,22 @@ const PAYED_STATUSES = new Set([
 
 const db = getFirebaseFirestore();
 
+// In-memory TTL cache for the heavy aggregation endpoints. These aggregate
+// full Firestore collections (users, transactions, revenue_transactions) on
+// every request, which made the panel idle 3–7s on a blank page. 30–60s
+// staleness is fine for a super-admin overview; every admin write clears it.
+const mem = { cache: {} };
+async function memGet(key, ttlMs, loader) {
+  const hit = mem.cache[key];
+  if (hit && Date.now() - hit.at < ttlMs) return hit.value;
+  const value = await loader();
+  mem.cache[key] = { at: Date.now(), value };
+  return value;
+}
+function clearAdminCache() {
+  mem.cache = {};
+}
+
 async function updateSellerKycOnProducts(sellerId, kycApproved) {
   if (!db || !sellerId) return;
   try {
@@ -70,27 +86,31 @@ router.get('/stats', async (req, res) => {
     if (!(await adminGate(req, res))) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-    const [usersSnap, ordersSnap, withdrawalsSnap, adViewsSnap] = await Promise.all([
-      db.collection('users').count().get(),
-      db.collection('orders').count().get(),
-      db.collection('withdrawals').count().get(),
-      db.collection('ad_views').count().get(),
-    ]);
+    const result = await memGet('admin.stats', 30_000, async () => {
+      const [usersSnap, ordersSnap, withdrawalsSnap, adViewsSnap] = await Promise.all([
+        db.collection('users').count().get(),
+        db.collection('orders').count().get(),
+        db.collection('withdrawals').count().get(),
+        db.collection('ad_views').count().get(),
+      ]);
 
-    const balanceSnap = await db.collection('users').get();
-    let totalSellerBalance = 0;
-    balanceSnap.docs.forEach((doc) => {
-      const d = doc.data();
-      totalSellerBalance += d.sellerBalance || 0;
+      const balanceSnap = await db.collection('users').get();
+      let totalSellerBalance = 0;
+      balanceSnap.docs.forEach((doc) => {
+        const d = doc.data();
+        totalSellerBalance += d.sellerBalance || 0;
+      });
+
+      return {
+        totalUsers: usersSnap.data().count,
+        totalOrders: ordersSnap.data().count,
+        totalWithdrawals: withdrawalsSnap.data().count,
+        totalAdViews: adViewsSnap.data().count,
+        totalSellerBalance,
+      };
     });
 
-    res.json({
-      totalUsers: usersSnap.data().count,
-      totalOrders: ordersSnap.data().count,
-      totalWithdrawals: withdrawalsSnap.data().count,
-      totalAdViews: adViewsSnap.data().count,
-      totalSellerBalance,
-    });
+    res.json(result);
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -132,110 +152,118 @@ router.get('/analytics', async (req, res) => {
     if (!(await adminGate(req, res))) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const result = await memGet('admin.analytics', 45_000, async () => {
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const usersSnap = await db.collection('users').get();
-    let totalUsers = 0, newUsersToday = 0, newUsersThisMonth = 0;
-    const locationDistribution = {};
-    const ageDistribution = {};
-    for (const doc of usersSnap.docs) {
-      totalUsers++;
-      const d = doc.data();
-      const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
-      if (createdAt) {
-        if (createdAt >= todayStart) newUsersToday++;
-        if (createdAt >= monthStart) newUsersThisMonth++;
-      }
-      const loc = d.location;
-      if (loc) locationDistribution[loc] = (locationDistribution[loc] || 0) + 1;
-      const dob = d.dateOfBirth;
-      if (dob) {
-        try {
-          const birth = new Date(dob);
-          const age = now.getFullYear() - birth.getFullYear();
-          const group = age < 18 ? 'Under 18' : age < 25 ? '18-24' : age < 35 ? '25-34' : age < 50 ? '35-49' : '50+';
-          ageDistribution[group] = (ageDistribution[group] || 0) + 1;
-        } catch (_) {}
-      }
-    }
+      const [usersSnap, productsSnap, txSnap, sessionsSnap] = await Promise.all([
+        db.collection('users').get(),
+        db.collection('products').get(),
+        db.collection('transactions').get(),
+        db.collection('user_sessions').get(),
+      ]);
 
-    const productsSnap = await db.collection('products').get();
-    let totalProducts = 0, activeProducts = 0, inactiveProducts = 0;
-    const productsByCategory = {};
-    for (const doc of productsSnap.docs) {
-      totalProducts++;
-      const d = doc.data();
-      if (d.isActive !== false) activeProducts++; else inactiveProducts++;
-      const cat = d.category || 'Other';
-      productsByCategory[cat] = (productsByCategory[cat] || 0) + 1;
-    }
-
-    const txSnap = await db.collection('transactions').get();
-    let totalRevenue = 0, revenueToday = 0, revenueThisMonth = 0;
-    for (const doc of txSnap.docs) {
-      const d = doc.data();
-      const status = d.status || '';
-      const amount = d.totalAmount || 0;
-      const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
-      if (PAYED_STATUSES.has(status)) {
-        totalRevenue += amount;
+      let totalUsers = 0, newUsersToday = 0, newUsersThisMonth = 0;
+      const locationDistribution = {};
+      const ageDistribution = {};
+      for (const doc of usersSnap.docs) {
+        totalUsers++;
+        const d = doc.data();
+        const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
         if (createdAt) {
-          if (createdAt >= todayStart) revenueToday += amount;
-          if (createdAt >= monthStart) revenueThisMonth += amount;
+          if (createdAt >= todayStart) newUsersToday++;
+          if (createdAt >= monthStart) newUsersThisMonth++;
+        }
+        const loc = d.location;
+        if (loc) locationDistribution[loc] = (locationDistribution[loc] || 0) + 1;
+        const dob = d.dateOfBirth;
+        if (dob) {
+          try {
+            const birth = new Date(dob);
+            const age = now.getFullYear() - birth.getFullYear();
+            const group = age < 18 ? 'Under 18' : age < 25 ? '18-24' : age < 35 ? '25-34' : age < 50 ? '35-49' : '50+';
+            ageDistribution[group] = (ageDistribution[group] || 0) + 1;
+          } catch (_) {}
         }
       }
-    }
 
-    const revenueOverTime = [];
-    const userGrowth = [];
-    for (let i = 6; i >= 0; i--) {
-      const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
-      const nextDay = new Date(day.getTime() + 86400000);
-      let dayRev = 0, dayUsers = 0;
+      let totalProducts = 0, activeProducts = 0, inactiveProducts = 0;
+      const productsByCategory = {};
+      for (const doc of productsSnap.docs) {
+        totalProducts++;
+        const d = doc.data();
+        if (d.isActive !== false) activeProducts++; else inactiveProducts++;
+        const cat = d.category || 'Other';
+        productsByCategory[cat] = (productsByCategory[cat] || 0) + 1;
+      }
+
+      // revenue aggregations
+      let totalRevenue = 0, revenueToday = 0, revenueThisMonth = 0;
+      const day0 = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+      const revByDay = new Array(7).fill(0);
+      const grwByDay = new Array(7).fill(0);
+      const bucketFor = (t) => {
+        const c = new Date(t.getFullYear(), t.getMonth(), t.getDate());
+        return Math.round((c - day0) / 86400000);
+      };
       for (const doc of txSnap.docs) {
         const d = doc.data();
         const status = d.status || '';
         const amount = d.totalAmount || 0;
         const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
-        if (createdAt && createdAt >= day && createdAt < nextDay && PAYED_STATUSES.has(status)) dayRev += amount;
+        if (!PAYED_STATUSES.has(status)) continue;
+        totalRevenue += amount;
+        if (createdAt) {
+          if (createdAt >= todayStart) revenueToday += amount;
+          if (createdAt >= monthStart) revenueThisMonth += amount;
+          const b = bucketFor(createdAt);
+          if (b >= 0 && b < 7) revByDay[b] += amount;
+        }
       }
-      revenueOverTime.push({ date: day.toISOString(), count: Math.round(dayRev) });
       for (const doc of usersSnap.docs) {
         const d = doc.data();
         const createdAt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
-        if (createdAt && createdAt >= day && createdAt < nextDay) dayUsers++;
+        if (!createdAt) continue;
+        const b = bucketFor(createdAt);
+        if (b >= 0 && b < 7) grwByDay[b]++;
       }
-      userGrowth.push({ date: day.toISOString(), count: dayUsers });
-    }
 
-    const sessionsSnap = await db.collection('user_sessions').get();
-    let perSecond = 0, perMinute = 0, perHour = 0, perDay = 0, perMonth = 0, perYear = 0;
-    const allTime = sessionsSnap.docs.length;
-    for (const doc of sessionsSnap.docs) {
-      const ts = doc.data().lastActive;
-      const lastActive = ts ? (ts.toDate ? ts.toDate() : new Date(ts)) : null;
-      if (!lastActive) continue;
-      const diffMs = now - lastActive;
-      if (diffMs <= 1000) perSecond++;
-      if (diffMs <= 60000) perMinute++;
-      if (diffMs <= 3600000) perHour++;
-      if (diffMs <= 86400000) perDay++;
-      if (diffMs <= 2592000000) perMonth++;
-      if (diffMs <= 31536000000) perYear++;
-    }
+      const revenueOverTime = [];
+      const userGrowth = [];
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(day0.getTime() + i * 86400000).toISOString();
+        revenueOverTime.push({ date, count: Math.round(revByDay[i]) });
+        userGrowth.push({ date, count: grwByDay[i] });
+      }
 
-    res.json({
-      success: true,
-      totalUsers, newUsersToday, newUsersThisMonth,
-      totalProducts, activeProducts, inactiveProducts,
-      productsByCategory,
-      totalRevenue, revenueToday, revenueThisMonth,
-      revenueOverTime, userGrowth,
-      locationDistribution, ageDistribution,
-      activeUserCounts: { perSecond, perMinute, perHour, perDay, perMonth, perYear, allTime },
+      let perSecond = 0, perMinute = 0, perHour = 0, perDay = 0, perMonth = 0, perYear = 0;
+      for (const doc of sessionsSnap.docs) {
+        const ts = doc.data().lastActive;
+        const lastActive = ts ? (ts.toDate ? ts.toDate() : new Date(ts)) : null;
+        if (!lastActive) continue;
+        const diffMs = now - lastActive;
+        if (diffMs <= 1000) perSecond++;
+        if (diffMs <= 60000) perMinute++;
+        if (diffMs <= 3600000) perHour++;
+        if (diffMs <= 86400000) perDay++;
+        if (diffMs <= 2592000000) perMonth++;
+        if (diffMs <= 31536000000) perYear++;
+      }
+
+      return {
+        success: true,
+        totalUsers, newUsersToday, newUsersThisMonth,
+        totalProducts, activeProducts, inactiveProducts,
+        productsByCategory,
+        totalRevenue, revenueToday, revenueThisMonth,
+        revenueOverTime, userGrowth,
+        locationDistribution, ageDistribution,
+        activeUserCounts: { perSecond, perMinute, perHour, perDay, perMonth, perYear, allTime: sessionsSnap.docs.length },
+      };
     });
+
+    res.json(result);
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -248,42 +276,46 @@ router.get('/timeseries', async (req, res) => {
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
     const days = Math.min(parseInt(req.query.days) || 30, 90);
-    const now = new Date();
+    const result = await memGet('admin.ts.' + days, 45_000, async () => {
+      const now = new Date();
 
-    const series = [];
-    for (let i = days - 1; i >= 0; i--) {
-      const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
-      series.push({ date: day.toISOString().slice(0, 10), money: 0, commission: 0, users: 0 });
-    }
-    const index = new Map(series.map((s, i) => [s.date, i]));
-    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1));
+      const series = [];
+      for (let i = days - 1; i >= 0; i--) {
+        const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+        series.push({ date: day.toISOString().slice(0, 10), money: 0, commission: 0, users: 0 });
+      }
+      const index = new Map(series.map((s, i) => [s.date, i]));
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1));
 
-    const [txSnap, usersSnap] = await Promise.all([
-      db.collection('transactions').get(),
-      db.collection('users').get(),
-    ]);
+      const [txSnap, usersSnap] = await Promise.all([
+        db.collection('transactions').get(),
+        db.collection('users').get(),
+      ]);
 
-    for (const doc of txSnap.docs) {
-      const d = doc.data();
-      if (!PAYED_STATUSES.has(d.status || '')) continue;
-      const created = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
-      if (!created || created < start) continue;
-      const i = index.get(created.toISOString().slice(0, 10));
-      if (i === undefined) continue;
-      series[i].money += (d.totalAmount || 0);
-      series[i].commission += (d.sokoLanguCommission || d.sokovibeCommission || d.platformFee || d.platformCommission || 0);
-    }
+      for (const doc of txSnap.docs) {
+        const d = doc.data();
+        if (!PAYED_STATUSES.has(d.status || '')) continue;
+        const created = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
+        if (!created || created < start) continue;
+        const i = index.get(created.toISOString().slice(0, 10));
+        if (i === undefined) continue;
+        series[i].money += (d.totalAmount || 0);
+        series[i].commission += (d.sokoLanguCommission || d.sokovibeCommission || d.platformFee || d.platformCommission || 0);
+      }
 
-    for (const doc of usersSnap.docs) {
-      const d = doc.data();
-      const created = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
-      if (!created || created < start) continue;
-      const i = index.get(created.toISOString().slice(0, 10));
-      if (i === undefined) continue;
-      series[i].users++;
-    }
+      for (const doc of usersSnap.docs) {
+        const d = doc.data();
+        const created = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
+        if (!created || created < start) continue;
+        const i = index.get(created.toISOString().slice(0, 10));
+        if (i === undefined) continue;
+        series[i].users++;
+      }
 
-    res.json({ success: true, series });
+      return { success: true, series };
+    });
+
+    res.json(result);
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -295,35 +327,39 @@ router.get('/online', async (req, res) => {
     if (!(await adminGate(req, res))) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-    const [sessionsSnap, usersCountSnap] = await Promise.all([
-      db.collection('user_sessions').get(),
-      db.collection('users').count().get(),
-    ]);
+    const result = await memGet('admin.online', 15_000, async () => {
+      const [sessionsSnap, usersCountSnap] = await Promise.all([
+        db.collection('user_sessions').get(),
+        db.collection('users').count().get(),
+      ]);
 
-    const now = Date.now();
-    let lastMinute = 0, last5Min = 0, last15Min = 0, lastHour = 0, lastDay = 0;
-    const recent = [];
-    for (const doc of sessionsSnap.docs) {
-      const ts = doc.data().lastActive;
-      const lastActive = ts ? (ts.toDate ? ts.toDate().getTime() : new Date(ts).getTime()) : 0;
-      if (!lastActive) continue;
-      const diff = now - lastActive;
-      if (diff <= 60000) lastMinute++;
-      if (diff <= 300000) last5Min++;
-      if (diff <= 900000) last15Min++;
-      if (diff <= 3600000) lastHour++;
-      if (diff <= 86400000) lastDay++;
-      if (diff <= 600000) recent.push({ uid: doc.id, lastActive });
-    }
-    recent.sort((a, b) => b.lastActive - a.lastActive);
+      const now = Date.now();
+      let lastMinute = 0, last5Min = 0, last15Min = 0, lastHour = 0, lastDay = 0;
+      const recent = [];
+      for (const doc of sessionsSnap.docs) {
+        const ts = doc.data().lastActive;
+        const lastActive = ts ? (ts.toDate ? ts.toDate().getTime() : new Date(ts).getTime()) : 0;
+        if (!lastActive) continue;
+        const diff = now - lastActive;
+        if (diff <= 60000) lastMinute++;
+        if (diff <= 300000) last5Min++;
+        if (diff <= 900000) last15Min++;
+        if (diff <= 3600000) lastHour++;
+        if (diff <= 86400000) lastDay++;
+        if (diff <= 600000) recent.push({ uid: doc.id, lastActive });
+      }
+      recent.sort((a, b) => b.lastActive - a.lastActive);
 
-    res.json({
-      success: true,
-      totalUsers: (usersCountSnap.data() || {}).count || 0,
-      online: { lastMinute, last5Min, last15Min, lastHour, lastDay },
-      recentlyActive: recent.slice(0, 30),
-      asOf: now,
+      return {
+        success: true,
+        totalUsers: (usersCountSnap.data() || {}).count || 0,
+        online: { lastMinute, last5Min, last15Min, lastHour, lastDay },
+        recentlyActive: recent.slice(0, 30),
+        asOf: now,
+      };
     });
+
+    res.json(result);
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -335,76 +371,89 @@ router.get('/finance-summary', async (req, res) => {
     if (!(await adminGate(req, res))) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-    const adSnap = await db.collection('ad_views').count().get();
-    const estimatedAdRevenue = (adSnap.data().count || 0) * AD_REVENUE_PER_VIEW;
+    const result = await memGet('admin.finance', 30_000, async () => {
+      // All Firestore reads run in parallel — previously serialized (6 waits)
+      // — so one cold compute ≈ max(read), not the sum.
+      const [adSnap, admobSnap, revSnap, txSnap, withdrawSnap, adminWithdrawSnap, clickRes] = await Promise.allSettled([
+        db.collection('ad_views').count().get(),
+        db.collection('admob_earnings').orderBy('month', 'desc').limit(1).get(),
+        db.collection('revenue_transactions').get(),
+        db.collection('transactions').get(),
+        db.collection('withdrawals').get(),
+        db.collection('admin_withdrawals').get(),
+        memGet('clickpesa.balance', 120_000, () => clickpesaBalance()),
+      ]);
 
-    const admobSnap = await db.collection('admob_earnings').orderBy('month', 'desc').limit(1).get();
-    let actualAdRevenue = 0;
-    if (!admobSnap.empty) actualAdRevenue = admobSnap.docs[0].data().amount || 0;
+      const estimatedAdRevenue = (adSnap.status === 'fulfilled' ? adSnap.value.data().count : 0) * AD_REVENUE_PER_VIEW;
 
-    const revSnap = await db.collection('revenue_transactions').get();
-    let totalCommissions = 0, totalBoostRevenue = 0;
-    revSnap.docs.forEach((doc) => {
-      const d = doc.data();
-      if (d.type === 'boost') totalBoostRevenue += (d.sokoLanguCommission || 0);
-      else totalCommissions += (d.sokoLanguCommission || 0);
-    });
+      let actualAdRevenue = 0;
+      const admob = admobSnap.status === 'fulfilled' ? admobSnap.value : null;
+      if (admob && !admob.empty) actualAdRevenue = admob.docs[0].data().amount || 0;
 
-    const totalAdminBalance = actualAdRevenue + totalCommissions + totalBoostRevenue;
-
-    const txSnap = await db.collection('transactions').get();
-    let totalProcessed = 0;
-    txSnap.docs.forEach((doc) => {
-      const d = doc.data();
-      if (PAYED_STATUSES.has(d.status)) totalProcessed += (d.totalAmount || 0);
-    });
-
-    const withdrawSnap = await db.collection('withdrawals').get();
-    let totalPaidOut = 0;
-    withdrawSnap.docs.forEach((doc) => {
-      const d = doc.data();
-      if (d.status === 'completed') totalPaidOut += (d.netAmount || d.amount || 0);
-    });
-
-    const adminWithdrawSnap = await db.collection('admin_withdrawals').get();
-    let totalAdminPaidOut = 0, totalAdminWithdrawn = 0;
-    adminWithdrawSnap.docs.forEach((doc) => {
-      const d = doc.data();
-      if (d.status === 'completed') {
-        totalAdminPaidOut += (d.netAmount || d.amount || 0);
-        totalAdminWithdrawn += (d.amount || 0);
+      let totalCommissions = 0, totalBoostRevenue = 0;
+      if (revSnap.status === 'fulfilled') {
+        revSnap.value.docs.forEach((doc) => {
+          const d = doc.data();
+          if (d.type === 'boost') totalBoostRevenue += (d.sokoLanguCommission || 0);
+          else totalCommissions += (d.sokoLanguCommission || 0);
+        });
       }
+
+      const totalAdminBalance = actualAdRevenue + totalCommissions + totalBoostRevenue;
+
+      let totalProcessed = 0;
+      if (txSnap.status === 'fulfilled') {
+        txSnap.value.docs.forEach((doc) => {
+          const d = doc.data();
+          if (PAYED_STATUSES.has(d.status)) totalProcessed += (d.totalAmount || 0);
+        });
+      }
+
+      let totalPaidOut = 0;
+      if (withdrawSnap.status === 'fulfilled') {
+        withdrawSnap.value.docs.forEach((doc) => {
+          const d = doc.data();
+          if (d.status === 'completed') totalPaidOut += (d.netAmount || d.amount || 0);
+        });
+      }
+
+      let totalAdminPaidOut = 0, totalAdminWithdrawn = 0;
+      if (adminWithdrawSnap.status === 'fulfilled') {
+        adminWithdrawSnap.value.docs.forEach((doc) => {
+          const d = doc.data();
+          if (d.status === 'completed') {
+            totalAdminPaidOut += (d.netAmount || d.amount || 0);
+            totalAdminWithdrawn += (d.amount || 0);
+          }
+        });
+      }
+
+      const totalPayouts = totalPaidOut + totalAdminPaidOut;
+      const availableBalance = totalCommissions + totalBoostRevenue - totalAdminPaidOut;
+      const actualClickPesaBalance = clickRes.status === 'fulfilled' ? (clickRes.value || 0) : 0;
+
+      return {
+        success: true,
+        estimatedAdRevenue,
+        actualAdRevenue,
+        totalCommissions,
+        totalBoostRevenue,
+        totalAdminBalance,
+        totalProcessed,
+        totalUserPaidOut: totalPaidOut,
+        totalAdminPaidOut,
+        totalPayouts,
+        totalPaidOut: totalPayouts,
+        availableBalance,
+        totalAdminWithdrawn,
+        actualClickPesaBalance,
+        paymentProcessor: 'ClickPesa',
+        platformCommissionPercent: PLATFORM_COMMISSION_PERCENT,
+        adRevenuePerView: AD_REVENUE_PER_VIEW,
+      };
     });
 
-    const totalPayouts = totalPaidOut + totalAdminPaidOut;
-    const availableBalance = totalCommissions + totalBoostRevenue - totalAdminPaidOut;
-
-    let actualClickPesaBalance = 0;
-    try {
-      actualClickPesaBalance = await clickpesaBalance();
-    } catch (_) {
-      actualClickPesaBalance = 0;
-    }
-
-    res.json({
-      success: true,
-      estimatedAdRevenue,
-      actualAdRevenue,
-      totalCommissions,
-      totalBoostRevenue,
-      totalAdminBalance,
-      totalProcessed,
-      totalUserPaidOut: totalPaidOut,
-      totalAdminPaidOut,
-      totalPayouts,
-      totalPaidOut: totalPayouts,
-      availableBalance,
-      totalAdminWithdrawn,
-      actualClickPesaBalance,
-      paymentProcessor: 'ClickPesa',
-      platformCommissionPercent: PLATFORM_COMMISSION_PERCENT,
-      adRevenuePerView: AD_REVENUE_PER_VIEW,
-    });
+    res.json(result);
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -480,15 +529,19 @@ router.get('/users', async (req, res) => {
     if (!(await adminGate(req, res))) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-    const snap = await db.collection('users').orderBy('createdAt', 'desc').get();
-    const users = snap.docs.map((doc) => {
-      const u = { uid: doc.id, ...doc.data() };
-      if (typeof u.sellerBalance !== 'undefined') u.sellerBalance = Math.max(0, u.sellerBalance || 0);
-      if (typeof u.pendingEscrow !== 'undefined') u.pendingEscrow = Math.max(0, u.pendingEscrow || 0);
-      if (typeof u.coins !== 'undefined') u.coins = Math.max(0, u.coins || 0);
-      return u;
+    const result = await memGet('admin.users', 60_000, async () => {
+      const snap = await db.collection('users').orderBy('createdAt', 'desc').get();
+      const users = snap.docs.map((doc) => {
+        const u = { uid: doc.id, ...doc.data() };
+        if (typeof u.sellerBalance !== 'undefined') u.sellerBalance = Math.max(0, u.sellerBalance || 0);
+        if (typeof u.pendingEscrow !== 'undefined') u.pendingEscrow = Math.max(0, u.pendingEscrow || 0);
+        if (typeof u.coins !== 'undefined') u.coins = Math.max(0, u.coins || 0);
+        return u;
+      });
+      return { users };
     });
-    res.json({ users });
+
+    res.json(result);
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -510,6 +563,7 @@ router.put('/users/:uid', async (req, res) => {
       return res.status(400).json({ error: 'No valid fields to update' });
     }
     await db.collection('users').doc(uid).update(updates);
+    clearAdminCache();
     res.json({ updated: true, uid, updates });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
@@ -522,9 +576,13 @@ router.get('/products', async (req, res) => {
     if (!(await adminGate(req, res))) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-    const snap = await db.collection('products').orderBy('createdAt', 'desc').get();
-    const products = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    res.json({ products });
+    const result = await memGet('admin.products', 60_000, async () => {
+      const snap = await db.collection('products').orderBy('createdAt', 'desc').get();
+      const products = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      return { products };
+    });
+
+    res.json(result);
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -546,6 +604,7 @@ router.put('/products/:id', async (req, res) => {
       return res.status(400).json({ error: 'No valid fields to update' });
     }
     await db.collection('products').doc(id).update(updates);
+    clearAdminCache();
     res.json({ updated: true, id, updates });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
@@ -558,9 +617,13 @@ router.get('/orders', async (req, res) => {
     if (!(await adminGate(req, res))) return;
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-    const snap = await db.collection('orders').orderBy('createdAt', 'desc').get();
-    const orders = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    res.json({ orders });
+    const result = await memGet('admin.orders', 60_000, async () => {
+      const snap = await db.collection('orders').orderBy('createdAt', 'desc').get();
+      const orders = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      return { orders };
+    });
+
+    res.json(result);
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -580,6 +643,7 @@ router.put('/orders/:id', async (req, res) => {
     }
     await db.collection('orders').doc(id).update({ status });
     await auditLog({ type: 'order_status_change', reason: `Order ${id} status → ${status}` });
+    clearAdminCache();
     res.json({ updated: true, id, status });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
@@ -654,6 +718,8 @@ router.post('/kyc/review', async (req, res) => {
       amount: 0,
       reason: `KYC ${status} by admin. Notes: ${notes || ''}`,
     });
+
+    clearAdminCache();
 
     res.json({ success: true, message: `KYC ${status}` });
   } catch (e) {

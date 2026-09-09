@@ -310,6 +310,17 @@
   [data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: #475569; }
   [data-theme="dark"] nav .grp { color: #64748b; }
   [data-theme="dark"] .toast { border-color: #334155; }
+
+  /* ---------- Skeleton loading (never stare at a blank page) ---------- */
+  .skel {
+    background: linear-gradient(90deg, var(--accent) 25%, rgba(148, 163, 184, .28) 50%, var(--accent) 75%);
+    background-size: 200% 100%; animation: skel 1.3s ease infinite; border-radius: 10px;
+  }
+  [data-theme="dark"] .skel {
+    background: linear-gradient(90deg, #1c2840 25%, #24344f 50%, #1c2840 75%);
+    background-size: 200% 100%;
+  }
+  @keyframes skel { to { background-position: -200% 0; } }
 </style>
 </head>
 <body>
@@ -410,7 +421,7 @@
     </div>
 
     <section class="section active" data-sec="overview">
-      <div class="grid kpis" id="kpiOverview"></div>
+      <div class="grid kpis" id="kpiOverview"><div class="card skel" style="height:98px"></div><div class="card skel" style="height:98px"></div><div class="card skel" style="height:98px"></div><div class="card skel" style="height:98px"></div></div>
       <div class="grid charts">
         <div class="card"><h3>Fedha za Kila Siku (siku 30)</h3><div class="chartbox"><canvas id="cTimeseries"></canvas></div></div>
         <div class="card"><h3>Revenue &amp; Wapya (siku 7)</h3><div class="chartbox"><canvas id="cRev7"></canvas></div></div>
@@ -420,14 +431,14 @@
     </section>
 
     <section class="section" data-sec="finance">
-      <div class="grid kpis" id="kpiFinance"></div>
+      <div class="grid kpis" id="kpiFinance"><div class="card skel" style="height:98px"></div><div class="card skel" style="height:98px"></div><div class="card skel" style="height:98px"></div><div class="card skel" style="height:98px"></div></div>
       <div class="card" style="margin-bottom:14px">
         <h3>Malipo ya ClickPesa <span class="cnt" id="cpCount"></span></h3>
         <table>
           <thead>
             <tr><th>Reference</th><th>Channel</th><th class="right">Amount</th><th>Status</th><th>Muda</th></tr>
           </thead>
-          <tbody id="cpRows"></tbody>
+          <tbody id="cpRows"><tr><td colspan="5" class="skel" style="height:132px;border:0"></td></tr></tbody>
         </table>
       </div>
       <div class="grid two">
@@ -443,7 +454,7 @@
         <div class="th-scroll-lg">
           <table>
             <thead><tr><th>Mtumiaji</th><th>Simu</th><th class="right">Salio</th><th>KYC</th><th>Hali</th><th>Role</th><th>Imejiunga</th><th>Vitendo</th></tr></thead>
-            <tbody id="uRows"></tbody>
+            <tbody id="uRows"><tr><td colspan="8" class="skel" style="height:132px;border:0"></td></tr></tbody>
           </table>
         </div>
       </div>
@@ -468,7 +479,7 @@
         <div class="th-scroll-lg">
           <table>
             <thead><tr><th>ID</th><th>Bidhaa</th><th>Mnunuzi</th><th>Muuzaji</th><th class="right">Kiasi</th><th>Hali</th><th>Sasa</th><th>Muda</th></tr></thead>
-            <tbody id="oRows"></tbody>
+            <tbody id="oRows"><tr><td colspan="8" class="skel" style="height:132px;border:0"></td></tr></tbody>
           </table>
         </div>
       </div>
