@@ -676,4 +676,36 @@ router.get('/audit-log', async (req, res) => {
   }
 });
 
+// ---- Reports & fraud alerts (panel sections that live outside /api/admin) ----
+const publicRouter = express.Router();
+
+publicRouter.get('/reports', async (req, res) => {
+  try {
+    if (!(await adminGate(req, res))) return;
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const limit = Math.min(parseInt(req.query.limit) || 200, 500);
+    const snap = await db.collection('reports').orderBy('createdAt', 'desc').limit(limit).get();
+    const reports = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    res.json({ reports });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+publicRouter.get('/fraud/alerts', async (req, res) => {
+  try {
+    if (!(await adminGate(req, res))) return;
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const limit = Math.min(parseInt(req.query.limit) || 200, 500);
+    let query = db.collection('fraud_alerts').orderBy('createdAt', 'desc').limit(limit);
+    if (req.query.resolved === 'false') query = db.collection('fraud_alerts').where('resolved', '==', false).orderBy('createdAt', 'desc').limit(limit);
+    const snap = await query.get();
+    const alerts = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    res.json({ alerts });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 module.exports = router;
+module.exports.publicRouter = publicRouter;

@@ -195,6 +195,8 @@ app.use('/marketing', (req, res) => {
 });
 
 app.use('/admin', express.static(path.join(__dirname, '..', 'admin'), { index: 'index.html' }));
+  // Old panel URLs redirect to the real panel so nobody lands on a stale page.
+  app.get(['/admin.html', '/dashboard', '/admin/index.html'], (req, res) => res.redirect(301, '/admin/'));
 
 // The landing page owns the root. HTML is never cached so edits go live
 // immediately; versioned assets (css/js/png/ico/json) cache hard.
@@ -259,6 +261,7 @@ try {
   app.use('/api', generalLimiter, compat.ordersCompatRouter);
   app.use('/api', generalLimiter, compat.moderationCompatRouter);
   app.use('/api/admin', generalLimiter, compat.adminCompatRouter);
+  app.use('/api', generalLimiter, compat.adminCompatPublic);
   console.log('[COMPAT] legacy routers mounted');
 } catch (e) {
   console.error('[COMPAT] mount failed, v1 continues:', e.message);

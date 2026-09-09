@@ -809,7 +809,10 @@ async function loadOverview() {
       kpi("Ad views", fmtNum(s.totalAdViews), "", ""),
     ].join("");
 
-    const tsLabels = ts.series.map((d) => d.date.slice(5));
+    // Charts come from CDNs that may be blocked or slow; a chart failure must
+    // never blank the whole overview (KPIs above already rendered).
+    try {
+      const tsLabels = ts.series.map((d) => d.date.slice(5));
     makeChart("cTimeseries", {
       data: {
         labels: tsLabels,
@@ -854,6 +857,9 @@ async function loadOverview() {
       data: { labels: locs.map((l) => l[0]), datasets: [{ label: "Watumiaji", data: locs.map((l) => l[1]), backgroundColor: "rgba(167,139,250,.55)", borderColor: "#a78bfa", borderWidth: 1 }] },
       options: { indexAxis: "y", scales: { x: { ...chartCfg(), beginAtZero: true }, y: chartCfg() }, plugins: { legend: { display: false } } },
     });
+    } catch (chartErr) {
+      console.warn("charts skipped:", chartErr && chartErr.message);
+    }
     setUpd();
   } catch (e) {
     toast("Overview imeshindikana: " + e.message, false);
