@@ -302,19 +302,43 @@ const emptyHtml = (msg, sub, cta) => '<div class="empty-state"><div class="big">
 
 function activeCat() { return (Feed.mode && Feed.mode.cat) || ''; }
 
+function browseCats() {
+  const extra = [];
+  for (const p of Feed.list) {
+    const c = p.category;
+    if (c && SV_CATEGORIES.indexOf(c) < 0 && extra.indexOf(c) < 0) extra.push(c);
+  }
+  return SV_CATEGORIES.concat(extra);
+}
+
+function catTokens(s) {
+  return String(s || '').toLowerCase().replace(/&/g, ' ').split(/[^a-z0-9à-ž]+/).filter((w) => w.length >= 4);
+}
+
+function catMatch(p, cat) {
+  if (!cat) return true;
+  const pc = (p.category || '').trim();
+  if (pc === cat) return true;
+  if ((p.subcategory || '').toLowerCase() === cat.toLowerCase()) return true;
+  const have = new Set(catTokens(pc));
+  return catTokens(cat).some((w) => have.has(w));
+}
+
 function buildCats() {
   const side = document.getElementById('sideCatList');
   const drawer = document.getElementById('catList');
   const sel = document.getElementById('catSelect');
   if (side) {
-    side.innerHTML = '<div class="side-list">' + SV_CATEGORIES.map((c) => catSideItem(c)).join('') + '</div>';
+    side.innerHTML = '<div class="side-list">' + browseCats().map((c) => catSideItem(c)).join('') + '</div>';
   }
   if (drawer) {
-    drawer.innerHTML = '<div class="side-list">' + SV_CATEGORIES.map((c) => catSideItem(c, true)).join('') + '</div>';
+    drawer.innerHTML = '<div class="side-list">' + browseCats().map((c) => catSideItem(c, true)).join('') + '</div>';
   }
   if (sel) {
+    const keep = sel.value;
     sel.innerHTML = '<option value="">Kategoria zote</option>'
-      + SV_CATEGORIES.map((c) => '<option value="' + esc(c) + '">' + esc(c) + '</option>').join('');
+      + browseCats().map((c) => '<option value="' + esc(c) + '">' + esc(c) + '</option>').join('');
+    sel.value = keep;
   }
   paintActiveCat();
 }
@@ -436,7 +460,7 @@ function feedRegion(title, sub, chipsHtml, extraHtml) {
 
 function chipsFor(active) {
   return '<div class="chips"><a class="chip' + (!active ? ' active' : '') + '" href="#/">' + t('all') + '</a>'
-    + SV_CATEGORIES.map((c) => '<a class="chip' + (c === active ? ' active' : '') + '" href="#/c/' + encodeURIComponent(c) + '">' + esc(c) + '</a>').join('')
+    + browseCats().map((c) => '<a class="chip' + (c === active ? ' active' : '') + '" href="#/c/' + encodeURIComponent(c) + '">' + esc(c) + '</a>').join('')
     + '</div>';
 }
 
@@ -464,16 +488,14 @@ async function loadPageInto() {
 function filterForMode() {
   const list = Feed.list;
   if (Feed.mode.kind === 'category') {
-    return catSort(list.filter((p) => p.category === Feed.mode.cat || (p.subcategory || '').toLowerCase() === String(Feed.mode.cat).toLowerCase()));
+    return catSort(list.filter((p) => catMatch(p, Feed.mode.cat)));
   }
   if (Feed.mode.kind === 'query') {
     const q = String(Feed.mode.q || '').toLowerCase();
     return catSort(list.filter((p) => {
       const hit = !q || (p.name || '').toLowerCase().indexOf(q) >= 0 || (p.brand || '').toLowerCase().indexOf(q) >= 0;
       if (!hit) return false;
-      if (Feed.mode.c) {
-        return p.category === Feed.mode.c || (p.subcategory || '').toLowerCase() === String(Feed.mode.c).toLowerCase();
-      }
+      if (Feed.mode.c) return catMatch(p, Feed.mode.c);
       return true;
     }));
   }
@@ -510,6 +532,7 @@ function renderFeed(errFlag) {
   if (moreBtn) moreBtn.style.display = Feed.done || errFlag ? 'none' : 'inline-flex';
   const sel = document.getElementById('sortSel');
   if (sel) sel.value = Feed.sort;
+  buildCats();
 }
 
 function sortFeedView(v) {
@@ -572,7 +595,7 @@ async function renderSearch(q, cat) {
     const hits = snap.docs.map(norm).filter((p) => {
       if (!p.isActive) return false;
       if (q && (p.name || '').toLowerCase().indexOf(ql) < 0 && (p.brand || '').toLowerCase().indexOf(ql) < 0) return false;
-      if (cat) return p.category === cat || (p.subcategory || '').toLowerCase() === cat.toLowerCase();
+      if (cat) return catMatch(p, cat);
       return true;
     });
     host.innerHTML = hits.length ? hits.map(cardHtml).join('') : emptyHtml(t('empty_filter'), q || cat, t('home_browse'));
