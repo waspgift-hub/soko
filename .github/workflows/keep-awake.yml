@@ -1,0 +1,15 @@
+name: keep-awake
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health
+        run: curl -sS -m 30 -o /dev/null https://www.sokovibe.co.tz/health || true
+      - name: Ping landing
+        run: curl -sS -m 30 -o /dev/null https://www.sokovibe.co.tz/ || true
