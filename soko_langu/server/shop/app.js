@@ -533,6 +533,11 @@ function renderFeed(errFlag) {
   const sel = document.getElementById('sortSel');
   if (sel) sel.value = Feed.sort;
   buildCats();
+  const chipsHost = document.querySelector('.chips');
+  if (chipsHost) {
+    const activeChip = Feed.mode.kind === 'category' ? Feed.mode.cat : (Feed.mode.kind === 'query' ? (Feed.mode.c || '') : '');
+    chipsHost.innerHTML = chipsFor(activeChip);
+  }
 }
 
 function sortFeedView(v) {
