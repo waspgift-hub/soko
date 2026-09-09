@@ -1,6 +1,7 @@
 const { getPrisma } = require('../../config/database');
 const { acquireLock, releaseLock } = require('../../config/redis');
 const { OrderStateMachine, ORDER_STATES } = require('./order-state-machine');
+const { computeSellerParity } = require('../../utils/commission-parity');
 
 // Default timers (configurable)
 const DEFAULT_TIMERS = {
@@ -210,9 +211,9 @@ async function approveShippingQuote({ orderId, approvedBy, actorType = 'admin' }
     const shippingFee = order.shippingFee;
     const productPrice = order.productPrice;
     
-    // Platform commission (3.5% of product price)
-    const commission = (productPrice * 35n) / 1000n;
-    const totalAmount = productPrice + shippingFee;
+    // Commission parity with legacy: buyer pays fee ON TOP (3.5% + USSD
+    // pass-through); seller nets product price + shipping in full.
+    const { commission, totalAmount } = computeSellerParity(order.productPrice, shippingFee);
 
     const machine = new OrderStateMachine(order.status);
     machine.transition(ORDER_STATES.AWAITING_ESCROW_PAYMENT, {

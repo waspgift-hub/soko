@@ -173,6 +173,10 @@ async function runAutoReleaseSweep({ now = new Date() } = {}) {
   const due = new Date(now.getTime() - config.finance.autoReleaseDays * 24 * 3600 * 1000);
   const orders = await prisma.order.findMany({
     where: {
+      // Legacy-migrated orders are still fulfilled + released by the legacy
+      // app until the Phase-6 cutover; a v2 auto-release here would double
+      // pay the seller for the same escrow.
+      legacyFirestoreId: null,
       status: { in: [ORDER_STATES.INSPECTION_PERIOD, ORDER_STATES.DELIVERED] },
       deliveredAt: { lte: due },
     },

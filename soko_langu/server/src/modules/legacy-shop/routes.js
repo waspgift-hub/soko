@@ -10,6 +10,7 @@ const { optionalAuth } = require('../../middleware/auth');
 const { paymentService } = require('../payments/payment-service');
 const { generateOrderNumber } = require('../orders/order-service');
 const { ORDER_STATES } = require('../orders/order-state-machine');
+const { computeSellerParity } = require('../../utils/commission-parity');
 
 function httpError(status, message) {
   const err = new Error(message);
@@ -120,6 +121,8 @@ router.post('/orders/create', optionalAuth, requireSyncedBuyer, async (req, res)
   const sellerId = await ensureSellerProfile(body.sellerId, body.sellerName);
   if (!sellerId) throw httpError(404, 'SELLER_NOT_FOUND');
 
+  const { commission, totalAmount } = computeSellerParity(BigInt(productPrice), 0n);
+
   const order = await prisma.order.create({
     data: {
       orderNumber: generateOrderNumber(),
@@ -146,8 +149,8 @@ router.post('/orders/create', optionalAuth, requireSyncedBuyer, async (req, res)
       shippingQuoteSnapshot: { amount: 0, source: 'shop_legacy_compat' },
       productPrice: BigInt(productPrice),
       shippingFee: 0n,
-      platformCommission: 0n,
-      totalAmount: BigInt(productPrice),
+      platformCommission: commission,
+      totalAmount,
       currency: 'TZS',
       shippingMethod: body.deliveryType || 'local',
       placedAt: new Date(),
