@@ -338,13 +338,14 @@ model PaymentAttempt {
 }
 
 model EscrowHold {
-  id         String    @id @default(uuid()) @db.Uuid
-  orderId    String    @unique @map("order_id") @db.Uuid
-  paymentId  String    @unique @map("payment_id") @db.Uuid
-  amount     BigInt    @db.BigInt
-  status     String    @default("holding") @db.VarChar(20)
-  releasedAt DateTime? @map("released_at")
-  createdAt  DateTime  @default(now()) @map("created_at")
+  id            String    @id @default(uuid()) @db.Uuid
+  orderId       String    @unique @map("order_id") @db.Uuid
+  paymentId     String    @unique @map("payment_id") @db.Uuid
+  amount        BigInt    @db.BigInt
+  releasedToBuyer BigInt  @default(0) @map("released_to_buyer") @db.BigInt
+  status        String    @default("holding") @db.VarChar(20)
+  releasedAt    DateTime? @map("released_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
 
   order        Order              @relation(fields: [orderId], references: [id])
   payment      Payment            @relation(fields: [paymentId], references: [id])
@@ -381,17 +382,24 @@ model CommissionTransaction {
 }
 
 model Refund {
-  id          String    @id @default(uuid()) @db.Uuid
-  orderId     String    @map("order_id") @db.Uuid
-  paymentId   String    @map("payment_id") @db.Uuid
-  amount      BigInt    @db.BigInt
-  reason      String?   @db.Text
-  status      String    @default("pending") @db.VarChar(20)
-  processedAt DateTime? @map("processed_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
+  id            String    @id @default(uuid()) @db.Uuid
+  orderId       String    @map("order_id") @db.Uuid
+  paymentId     String    @map("payment_id") @db.Uuid
+  amount        BigInt    @db.BigInt
+  mode          String    @default("full") @db.VarChar(10)
+  reason        String?   @db.Text
+  status        String    @default("pending") @db.VarChar(20)
+  correlationId String    @unique @map("correlation_id") @db.VarChar(80)
+  requestedBy   String?   @map("requested_by") @db.Uuid
+  resolvedBy    String?   @map("resolved_by") @db.Uuid
+  lastError     String?   @map("last_error") @db.VarChar(500)
+  errorAt       DateTime? @map("error_at")
+  processedAt   DateTime? @map("processed_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
 
-  order   Order   @relation(fields: [orderId], references: [id])
-  payment Payment @relation(fields: [paymentId], references: [id])
+  order             Order               @relation(fields: [orderId], references: [id])
+  payment           Payment             @relation(fields: [paymentId], references: [id])
+  payoutTransactions PayoutTransaction[]
 
   @@map("refunds")
 }
@@ -458,13 +466,15 @@ model Withdrawal {
 
 model PayoutTransaction {
   id               String   @id @default(uuid()) @db.Uuid
-  withdrawalId     String   @map("withdrawal_id") @db.Uuid
+  withdrawalId     String?  @map("withdrawal_id") @db.Uuid
+  refundId         String?  @unique @map("refund_id") @db.Uuid
   amount           BigInt   @db.BigInt
   providerResponse Json?    @map("provider_response")
   status           String   @db.VarChar(20)
   createdAt        DateTime @default(now()) @map("created_at")
 
-  withdrawal Withdrawal @relation(fields: [withdrawalId], references: [id])
+  withdrawal Withdrawal? @relation(fields: [withdrawalId], references: [id])
+  refund     Refund?     @relation(fields: [refundId], references: [id])
 
   @@map("payout_transactions")
 }

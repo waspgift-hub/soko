@@ -134,6 +134,37 @@ async function resolveDispute({ disputeId, resolvedBy, resolution, note }) {
         });
       }
 
+      // FULL_REFUND also opens a refund record so processRefund can later
+      // execute the money movement (escrow -> buyer + provider payout).
+      if (resolution === 'FULL_REFUND') {
+        const openRefund = await tx.refund.findFirst({
+          where: {
+            orderId: dispute.orderId,
+            status: { in: ['pending', 'processing'] },
+          },
+        });
+        if (!openRefund) {
+          const payment = await tx.payment.findFirst({
+            where: { orderId: dispute.orderId, status: { in: ['completed', 'initiated', 'pending'] } },
+            orderBy: { createdAt: 'desc' },
+          });
+          if (payment) {
+            await tx.refund.create({
+              data: {
+                orderId: dispute.orderId,
+                paymentId: payment.id,
+                amount: dispute.order.totalAmount,
+                mode: 'full',
+                reason: `Dispute resolved: FULL_REFUND`,
+                status: 'pending',
+                correlationId: `refund_${dispute.order.orderNumber}_${Date.now().toString(36)}`,
+                requestedBy: dispute.filedBy || resolvedBy,
+              },
+            });
+          }
+        }
+      }
+
       return updated;
     });
   } finally {

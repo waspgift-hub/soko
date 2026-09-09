@@ -304,6 +304,41 @@ async function escalateDisputes({ now = new Date() } = {}) {
 }
 
 /* ------------------------------------------------------------------ */
+/* 6. refundUnstuck — flag stranded refunds                              */
+/* ------------------------------------------------------------------ */
+
+async function refundUnstuck({ now = new Date() } = {}) {
+  const prisma = getPrisma();
+  const processingCutoff = new Date(now.getTime() - 2 * 3600 * 1000);
+  const failedCutoff = new Date(now.getTime() - 24 * 3600 * 1000);
+  const summary = { stuck: 0 };
+
+  const stuck = await prisma.refund.findMany({
+    where: {
+      OR: [
+        { status: 'processing', createdAt: { lte: processingCutoff } },
+        { status: 'failed', createdAt: { lte: failedCutoff } },
+      ],
+    },
+    take: 20,
+    orderBy: { createdAt: 'asc' },
+    include: { order: { select: { orderNumber: true } } },
+  });
+
+  for (const r of stuck) {
+    summary.stuck += 1;
+    await throttledNotify(`refund:${r.id}`, 24 * 3600, () =>
+      notifyAdmins(
+        'Refund imekwama',
+        `Refund ya TZS ${Number(r.amount).toLocaleString()} (${r.status}, oda ${r.order ? r.order.orderNumber : '?'}) inahitaji uangalizi.`,
+        { type: 'refund_stuck', refundId: r.id, status: r.status, amount: r.amount.toString() }
+      )
+    );
+  }
+  return summary;
+}
+
+/* ------------------------------------------------------------------ */
 /* Dispatch                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -313,6 +348,7 @@ const JOB_HANDLERS = {
   'finance.withdrawalProcess': processPendingWithdrawals,
   'finance.reconciliationRun': runReconciliationSweep,
   'finance.disputeEscalate': escalateDisputes,
+  'finance.refundUnstuck': refundUnstuck,
 };
 
 async function runFinanceJob(name, data = {}) {
@@ -327,5 +363,6 @@ module.exports = {
   processPendingWithdrawals,
   runReconciliationSweep,
   escalateDisputes,
+  refundUnstuck,
   runFinanceJob,
 };

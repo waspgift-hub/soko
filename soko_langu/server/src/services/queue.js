@@ -31,6 +31,7 @@ const FINANCE_SCHEDULE = [
   { name: 'finance.withdrawalProcess', every: 30 * 60 * 1000, jobId: 'recur:withdrawalProcess' },
   { name: 'finance.reconciliationRun', every: 60 * 60 * 1000, jobId: 'recur:reconciliationRun' },
   { name: 'finance.disputeEscalate', every: 30 * 60 * 1000, jobId: 'recur:disputeEscalate' },
+  { name: 'finance.refundUnstuck', every: 30 * 60 * 1000, jobId: 'recur:refundUnstuck' },
 ];
 
 async function ensureFinanceSchedule() {
