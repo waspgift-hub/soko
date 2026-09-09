@@ -198,6 +198,9 @@ app.use('/admin', express.static(path.join(__dirname, '..', 'admin'), { index: '
   // Old panel URLs redirect to the real panel so nobody lands on a stale page.
   app.get(['/admin.html', '/dashboard', '/admin/index.html'], (req, res) => res.redirect(301, '/admin/'));
 
+// The buyer web shop (marketplace) — monochrome design mirroring the Flutter app.
+app.use('/shop', express.static(path.join(__dirname, '..', 'shop'), { index: 'index.html' }));
+
 // The landing page owns the root. HTML is never cached so edits go live
 // immediately; versioned assets (css/js/png/ico/json) cache hard.
 // Brand/favicon images must stay revalidatable (no-cache) so an icon swap
