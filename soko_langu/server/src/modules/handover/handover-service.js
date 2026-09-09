@@ -158,7 +158,7 @@ async function verifyOtpAndComplete({ orderId, submittedOtp, verifiedBy }) {
 // Release escrow and credit seller wallet; guarded so it runs at most once.
 async function releaseEscrowAndSettle(tx, order) {
   const escrowHold = await tx.escrowHold.findFirst({
-    where: { orderId: order.id, status: 'holding' },
+    where: { orderId: order.id, status: { in: ['holding', 'disputed'] } },
   });
   if (!escrowHold) return;
 

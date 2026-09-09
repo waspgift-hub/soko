@@ -86,7 +86,7 @@ router.post(
   orderController.markDelivered
 );
 
-// Buyer confirms OTP (handover completes order)
+// Buyer confirms OTP (handover completes order — release is OTP-gated)
 router.post(
   '/:orderId/complete',
   authenticate,
@@ -94,7 +94,6 @@ router.post(
   validate({
     body: z.object({
       otp: z.string().length(6),
-      method: z.enum(['otp', 'auto']).default('otp'),
     }),
   }),
   orderController.completeOrder

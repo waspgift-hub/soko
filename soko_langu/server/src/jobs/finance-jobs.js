@@ -287,7 +287,7 @@ async function escalateDisputes({ now = new Date() } = {}) {
     where: { status: 'open', createdAt: { lte: cutoff } },
     take: 20,
     orderBy: { createdAt: 'asc' },
-    include: { order: { select: { orderNumber: true } } },
+    include: { order: { select: { orderNumber: true, buyerId: true, sellerId: true } } },
   });
   const summary = { escalated: 0 };
   for (const d of open) {
@@ -299,6 +299,27 @@ async function escalateDisputes({ now = new Date() } = {}) {
         { type: 'order_disputed', disputeId: d.id, sla: true }
       )
     );
+
+    if (!d.order) continue;
+    const sellerProfile = await prisma.sellerProfile.findUnique({
+      where: { id: d.order.sellerId },
+      select: { userId: true },
+    });
+    const partyIds = [d.order.buyerId, sellerProfile ? sellerProfile.userId : null].filter(Boolean);
+    const parties = await prisma.user.findMany({
+      where: { id: { in: partyIds } },
+      select: { id: true, firebaseUid: true },
+    });
+    for (const party of parties) {
+      await throttledNotify(`dispute:${d.id}:party:${party.id}`, 24 * 3600, () =>
+        sendOneSignalNotification(
+          party.firebaseUid,
+          'Mgogoro umechelewa kutatuliwa',
+          `Mtafaruku wa oda ${d.order.orderNumber} bado unaendelea. Mtaalam atawasiliana nawe hivi karibuni.`,
+          { type: 'dispute_sla', disputeId: d.id, sla: true }
+        )
+      );
+    }
   }
   return summary;
 }

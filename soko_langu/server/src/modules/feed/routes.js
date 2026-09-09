@@ -7,7 +7,7 @@ const router = Router();
 // Public feed, cursor paginated
 router.get('/', optionalAuth, async (req, res) => {
   const result = await feedService.getFeed({
-    requesterId: req.user ? req.user.uid : null,
+    requesterId: req.user ? req.user.id : null,
     cursor: req.query.cursor,
     limit: req.query.limit || 15,
   });

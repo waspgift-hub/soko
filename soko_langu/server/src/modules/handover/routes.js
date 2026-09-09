@@ -14,7 +14,7 @@ router.post(
   async (req, res) => {
     const result = await handoverService.issueOtp({
       orderId: req.params.orderId,
-      issuedBy: req.user.uid,
+      issuedBy: req.user.id,
     });
     res.status(201).json({ success: true, data: result });
   }
@@ -32,7 +32,7 @@ router.post(
     const result = await handoverService.verifyOtpAndComplete({
       orderId: req.params.orderId,
       submittedOtp: req.body.otp,
-      verifiedBy: req.user.uid,
+      verifiedBy: req.user.id,
     });
     res.json({ success: true, data: result });
   }

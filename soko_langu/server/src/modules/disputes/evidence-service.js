@@ -24,9 +24,23 @@ async function addEvidence({ disputeId, submittedBy, type, r2Key, description })
 
   try {
     return await prisma.$transaction(async (tx) => {
-      const dispute = await tx.dispute.findUnique({ where: { id: disputeId } });
+      const dispute = await tx.dispute.findUnique({
+        where: { id: disputeId },
+        include: { order: { select: { buyerId: true, sellerId: true } } },
+      });
       if (!dispute) throw httpError(404, 'DISPUTE_NOT_FOUND');
       if (dispute.status !== 'open') throw httpError(409, 'DISPUTE_NOT_OPEN');
+
+      const requester = await tx.user.findUnique({
+        where: { id: submittedBy },
+        select: { role: true, sellerProfile: { select: { id: true } } },
+      });
+      const isParty =
+        dispute.order.buyerId === submittedBy ||
+        dispute.order.sellerId === (requester && requester.sellerProfile ? requester.sellerProfile.id : null) ||
+        dispute.filedBy === submittedBy;
+      const isAdmin = requester && ['super_admin', 'admin'].includes(requester.role);
+      if (!isParty && !isAdmin) throw httpError(403, 'FORBIDDEN');
 
       if (!EVIDENCE_TYPES.includes(type)) throw httpError(400, 'INVALID_EVIDENCE_TYPE');
 

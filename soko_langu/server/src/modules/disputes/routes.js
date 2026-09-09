@@ -23,7 +23,7 @@ router.post(
   async (req, res) => {
     const dispute = await disputeService.fileDispute({
       orderId: req.body.orderId,
-      filedBy: req.user.uid,
+      filedBy: req.user.id,
       reason: req.body.reason,
       description: req.body.description,
       role: req.body.role,
@@ -47,7 +47,7 @@ router.post(
   async (req, res) => {
     const evidence = await evidenceService.addEvidence({
       disputeId: req.params.disputeId,
-      submittedBy: req.user.uid,
+      submittedBy: req.user.id,
       type: req.body.type,
       r2Key: req.body.r2Key,
       description: req.body.description,
@@ -60,12 +60,13 @@ router.post(
 router.get('/:disputeId/evidence', authenticate, requireActive, async (req, res) => {
   const evidence = await evidenceService.listEvidence({
     disputeId: req.params.disputeId,
-    requesterId: req.user.uid,
+    requesterId: req.user.id,
   });
   res.json({ success: true, data: evidence });
 });
 
-// Resolve a dispute (admin only)
+// Resolve a dispute (admin only). PARTIAL requires the split amounts that
+// together cover the escrow exactly (buyerAmount + sellerAmount).
 router.put(
   '/:disputeId/resolve',
   authenticate,
@@ -73,6 +74,8 @@ router.put(
   validate({
     body: z.object({
       resolution: z.enum(['FULL_TO_SELLER', 'FULL_REFUND', 'PARTIAL']),
+      buyerAmount: z.number().int().positive().optional(),
+      sellerAmount: z.number().int().positive().optional(),
     }),
   }),
   async (req, res) => {
@@ -80,13 +83,15 @@ router.put(
       disputeId: req.params.disputeId,
       resolvedBy: req.user.id,
       resolution: req.body.resolution,
+      buyerAmount: req.body.buyerAmount,
+      sellerAmount: req.body.sellerAmount,
     });
     await writeAudit({
       ...auditFromReq(req),
       action: 'dispute.resolve',
       entityType: 'dispute',
       entityId: req.params.disputeId,
-      newState: { resolution: req.body.resolution },
+      newState: { resolution: req.body.resolution, buyerAmount: req.body.buyerAmount, sellerAmount: req.body.sellerAmount },
     });
     res.json({ success: true, data: dispute });
   }

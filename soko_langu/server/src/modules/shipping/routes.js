@@ -3,8 +3,20 @@ const { authenticate, requireActive } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validation');
 const { z } = require('zod');
 const shippingService = require('./shipping-quote-service');
+const { getPrisma } = require('../../config/database');
 
 const router = Router();
+
+async function requireSellerProfile(req) {
+  const prisma = getPrisma();
+  const profile = await prisma.sellerProfile.findUnique({ where: { userId: req.user.id } });
+  if (!profile) {
+    const err = new Error('SELLER_PROFILE_NOT_FOUND');
+    err.status = 403;
+    throw err;
+  }
+  return profile;
+}
 
 // Seller submits a shipping quote for an order
 router.post(
@@ -19,9 +31,10 @@ router.post(
     }),
   }),
   async (req, res) => {
+    const profile = await requireSellerProfile(req);
     const result = await shippingService.submitQuote({
       orderId: req.params.orderId,
-      sellerId: req.user.uid,
+      sellerId: profile.id,
       amount: req.body.amount,
       estimatedDays: req.body.estimatedDays,
       notes: req.body.notes,
@@ -40,7 +53,7 @@ router.post(
   async (req, res) => {
     const order = await shippingService.approveQuote({
       orderId: req.params.orderId,
-      approvedBy: req.user.uid,
+      approvedBy: req.user.id,
     });
     res.json({ success: true, data: order });
   }
@@ -57,7 +70,7 @@ router.post(
   async (req, res) => {
     const order = await shippingService.blockQuote({
       orderId: req.params.orderId,
-      blockedBy: req.user.uid,
+      blockedBy: req.user.id,
       reason: req.body.reason,
     });
     res.json({ success: true, data: order });
