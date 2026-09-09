@@ -36,67 +36,135 @@
 <body>
 
 <header class="site-header" id="siteHeader">
-  <div class="container nav-bar">
+  <div class="h-top container-wide">
+
     <a class="brand" href="#/" aria-label="Soko Vibe nyumbani">
       <img class="brand-mark" src="/assets/icon-192.png?v=2" alt="Soko Vibe">
       <span class="brand-name">Soko Vibe</span>
       <span class="brand-badge">DUKA</span>
     </a>
-    <form class="search" id="searchForm" role="search">
-      <span class="sico" aria-hidden="true">
+
+    <form class="search" id="searchForm" role="search" autocomplete="off">
+      <span class="sico glass-ico" aria-hidden="true">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       </span>
-      <input id="searchInput" type="search" autocomplete="off" aria-label="Tafuta bidhaa" placeholder="Tafuta bidhaa...">
-    </form>
-    <nav class="nav-links">
-      <button class="icon-btn" id="themeBtn" type="button" title="Mchana/Usiku">
-        <span id="themeIco" aria-hidden="true">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
-        </span>
+      <select id="catSelect" class="cat-sel" aria-label="Kategoria">
+        <option value="">Kategoria zote</option>
+      </select>
+      <div class="search-divider" aria-hidden="true"></div>
+      <div class="search-box">
+        <input id="searchInput" type="search" autocomplete="off" aria-label="Tafuta bidhaa" placeholder="Tafuta bidhaa...">
+        <div class="suggest" id="suggestBox" role="listbox" hidden></div>
+      </div>
+      <button class="search-btn" type="submit">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <span>Tafuta</span>
       </button>
-      <a class="icon-btn cart-btn" href="#/cart" aria-label="Kikapu">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>
+    </form>
+
+    <nav class="h-actions" aria-label="Kichwa">
+      <button class="icon-btn" id="themeBtn" type="button" title="Mchana/Usiku" aria-label="Mchana/Usiku">
+        <svg id="themeIco" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+      </button>
+      <a class="icon-link" href="#/orders" title="Agizo Zangu" aria-label="Agizo Zangu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3H8a3 3 0 0 0-3 3v15l7-4 7 4V6a3 3 0 0 0-3-3Z"/></svg>
+      </a>
+      <a class="icon-link" id="navAccount" href="#/account" title="Akaunti" aria-label="Akaunti">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg>
+        <span class="acct-label" id="navAcctTxt">Ingia</span>
+      </a>
+      <a class="icon-link cart-link" href="#/cart" aria-label="Kikapu">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>
         <span class="cart-badge" id="cartBadge">0</span>
       </a>
-      <a class="btn-dark" id="navAccount" href="#/account">Ingia</a>
     </nav>
-    <button class="menu-btn" id="menuBtn" type="button" aria-label="Menyu"><span></span><span></span><span></span></button>
+
   </div>
-  <div class="mobile-menu" id="mobileMenu">
-    <a href="#/cart">Kikapu</a>
-    <a href="#/orders">Agizo Zangu</a>
-    <a href="#/account" id="mobAccount">Akaunti</a>
-    <a href="/">Soko Vibe — Nyumbani</a>
+
+  <div class="h-nav container-wide">
+    <button class="cat-toggle" id="catToggle" type="button" data-act="opencats" aria-expanded="false" aria-controls="catDrawer">
+      <span class="burger" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span>Kategoria Zote</span>
+      <svg class="cat-caret" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <nav class="top-links" aria-label="Viungo">
+      <a href="#/" data-nav>Nyumbani</a>
+      <a href="#/c/Electronics" data-nav>Electronics</a>
+      <a href="#/c/Fashion%20%26%20Clothing" data-nav>Fashion</a>
+      <a href="#/c/Phones%20%26%20Tablets" data-nav>Phones</a>
+      <a href="#/c/Home%20%26%20Garden" data-nav>Home</a>
+      <a href="#/c/Services" data-nav>Services</a>
+    </nav>
+    <span class="h-seal hidden-sm">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 3.5V11c0 5-3.4 8.8-8 11-4.6-2.2-8-6-8-11V5.5z"/><path d="M9 12l2 2 4-4"/></svg>
+      Escrow
+    </span>
   </div>
 </header>
 
-<main id="view">
-  <div class="container">
-    <div class="hero">
-      <div class="kicker skel" style="width:180px;height:12px"></div>
-      <div class="skel" style="height:36px;width:70%;margin-top:14px"></div>
-      <div class="skel" style="height:36px;width:50%;margin-top:10px"></div>
-      <div class="skel" style="height:14px;width:85%;margin-top:18px"></div>
-      <div class="skel" style="height:14px;width:60%;margin-top:8px"></div>
-    </div>
-    <div class="chips">
-      <div class="skel" style="width:72px;height:34px;border-radius:999px"></div>
-      <div class="skel" style="width:110px;height:34px;border-radius:999px"></div>
-      <div class="skel" style="width:96px;height:34px;border-radius:999px"></div>
-      <div class="skel" style="width:130px;height:34px;border-radius:999px"></div>
-      <div class="skel" style="width:88px;height:34px;border-radius:999px"></div>
-    </div>
-    <div class="grid">
-      <div class="card"><div class="skel" style="height:0;padding-top:100%"></div><div class="skel" style="height:12px;width:60%;margin:10px 14px 0"></div><div class="skel" style="height:16px;width:40%;margin:10px 14px 14px"></div></div>
-      <div class="card"><div class="skel" style="height:0;padding-top:100%"></div><div class="skel" style="height:12px;width:60%;margin:10px 14px 0"></div><div class="skel" style="height:16px;width:40%;margin:10px 14px 14px"></div></div>
-      <div class="card"><div class="skel" style="height:0;padding-top:100%"></div><div class="skel" style="height:12px;width:60%;margin:10px 14px 0"></div><div class="skel" style="height:16px;width:40%;margin:10px 14px 14px"></div></div>
-      <div class="card"><div class="skel" style="height:0;padding-top:100%"></div><div class="skel" style="height:12px;width:60%;margin:10px 14px 0"></div><div class="skel" style="height:16px;width:40%;margin:10px 14px 14px"></div></div>
-    </div>
+<div class="trust-strip container-wide" aria-label="Uaminifu">
+  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 3.5V11c0 5-3.4 8.8-8 11-4.6-2.2-8-6-8-11V5.5z"/><path d="M9 12l2 2 4-4"/></svg>Escrow Protected</span>
+  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>Verified Sellers</span>
+  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>ClickPesa Secured</span>
+  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 17H3V7h13v10h-1"/><path d="M5 17a3 3 0 1 0 6 0 3 3 0 0 0-6 0Z"/><path d="M13 13h5l3 4v4h-3"/><path d="M13 16a3 3 0 1 0 6 0 3 3 0 0 0-6 0Z"/></svg>Nationwide Delivery</span>
+</div>
+
+<div class="scrim" id="scrim" data-act="closecats" hidden></div>
+<aside class="cat-drawer" id="catDrawer" aria-label="Kategoria" hidden>
+  <div class="drawer-head">
+    <span>Kategoria</span>
+    <button class="icon-btn" type="button" data-act="closecats" aria-label="Funga">×</button>
+  </div>
+  <div class="drawer-body" id="catList"></div>
+  <div class="drawer-sub" id="catSub"></div>
+</aside>
+
+<main class="site-main container-wide">
+
+  <aside class="sidebar" aria-label="Kategoria" id="sidebar">
+    <div class="side-title">Kategoria</div>
+    <div id="sideCatList"></div>
+  </aside>
+
+  <div class="content">
+
+    <section class="hero-slider" id="heroSlider" aria-label="Taarifa kuu">
+      <div class="slides" id="heroSlides"></div>
+      <button class="sl-arrow prev" id="slPrev" type="button" aria-label="Zote zilizopita">‹</button>
+      <button class="sl-arrow next" id="slNext" type="button" aria-label="Inayofuata">›</button>
+      <div class="sl-dots" id="slDots"></div>
+    </section>
+
+    <div id="view" aria-live="polite"></div>
+
   </div>
 </main>
 
+<nav class="bottom-nav" id="bottomNav" aria-label="Peleka">
+  <a class="bn-btn" href="#/" data-bn>
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V21a1 1 0 0 1-1 1h-6v-7h-4v7H4a1 1 0 0 1-1-1Z"/></svg>
+    <span>Nyumbani</span>
+  </a>
+  <button class="bn-btn" type="button" data-act="opencats" data-bn>
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    <span>Kategoria</span>
+  </button>
+  <a class="bn-btn" href="#/cart" data-bn>
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>
+    <span>Kikapu <b class="bn-dot" id="bnBadge" hidden></b></span>
+  </a>
+  <a class="bn-btn" href="#/orders" data-bn>
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3H8a3 3 0 0 0-3 3v15l7-4 7 4V6a3 3 0 0 0-3-3Z"/></svg>
+    <span>Oda</span>
+  </a>
+  <a class="bn-btn" href="#/account" id="bnAccount" data-bn>
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg>
+    <span id="bnAcctTxt">Akaunti</span>
+  </a>
+</nav>
+
 <footer class="site-footer">
-  <div class="container">
+  <div class="container-wide">
     <div class="footer-grid">
       <div>
         <div class="brand">
@@ -127,8 +195,8 @@
       </div>
     </div>
     <div class="footer-bottom">
-      <span>© 2026 Soko Vibe. Malipo ya TZS.</span>
-      <span>jengwa kwa escrow — soko usiwawe madhara</span>
+      <span>&copy; 2026 Soko Vibe. Malipo ya TZS.</span>
+      <span>jengwa kwa escrow — soko salama</span>
     </div>
   </div>
 </footer>

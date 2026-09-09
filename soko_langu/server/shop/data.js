@@ -8,6 +8,23 @@ const SV_CATEGORIES = [
   'Toys & Games', 'Books & Stationery', 'Supermarket', 'Agriculture', 'Services',
 ];
 
+// Sub-category menus for the left mega nav, mirroring how the app groups
+// products by category + subcategory fields.
+const SV_SUBCATS = {
+  'Phones & Tablets': ['Smartphones', 'Feature Phones', 'Tablets', 'Phone Accessories', 'Phone Cases'],
+  'Electronics': ['TVs & Audio', 'Computers & Laptops', 'Cameras', 'Gaming', 'Home Appliances'],
+  'Fashion & Clothing': ["Men's Fashion", "Women's Fashion", "Kids Fashion", 'Shoes', 'Bags & Accessories'],
+  'Home & Garden': ['Furniture', 'Kitchen', 'Decor', 'Garden & Outdoor'],
+  'Vehicles & Spare Parts': ['Cars', 'Motorbikes', 'Bicycles', 'Spare Parts'],
+  'Health & Beauty': ['Cosmetics', 'Personal Care', 'Fragrances', 'Supplements'],
+  'Sports & Outdoors': ['Fitness', 'Sportswear', 'Camping', 'Fishing'],
+  'Toys & Games': ['Kids Toys', 'Remote Control', 'Board Games'],
+  'Books & Stationery': ['Books', 'Stationery', 'Office Supplies'],
+  'Supermarket': ['Food & Beverages', 'Household', 'Personal Care', 'Fresh'],
+  'Agriculture': ['Farm Produce', 'Livestock', 'Machinery', 'Seeds & Fertilizer'],
+  'Services': ['Delivery & Transport', 'Repairs', 'Rental', 'Professional'],
+};
+
 const SV_REGIONS = ["Arusha","Dar es Salaam","Dodoma","Geita","Iringa","Kagera","Katavi","Kigoma","Kilimanjaro","Lindi","Manyara","Mara","Mbeya","Mjini Magharibi","Morogoro","Mtwara","Mwanza","Njombe","Pwani","Rukwa","Ruvuma","Shinyanga","Simiyu","Singida","Songwe","Tabora","Tanga","Kaskazini Pemba","Kusini Pemba","Kaskazini Unguja","Kusini Unguja"];
 
 const SV_DISTRICTS = {"Rukwa":["Kalambo","Nkasi","Sumbawanga City","Sumbawanga"],"Songwe":["Ileje","Mbozi","Momba","Songwe","Tunduma"],"Kilimanjaro":["Hai","Moshi City","Moshi","Mwanga","Rombo","Same","Siha"],"Mtwara":["Masasi City","Masasi","Mtwara City","Mtwara","Nanyumbu","Newala City","Newala","Tandahimba"],"Kaskazini Unguja":["Kaskazini A","Kaskazini B"],"Kagera":["Biharamulo","Bukoba City","Bukoba","Karagwe","Kyerwa","Missenyi","Muleba","Ngara"],"Mjini Magharibi":["Magharibi","Mjini"],"Kaskazini Pemba":["Wete","Micheweni"],"Pwani":["Bagamoyo","Chalinze","Kibaha City","Kibaha","Kisarawe","Mafia","Mkuranga","Rufiji"],"Simiyu":["Bariadi","Busega","Itilima","Maswa","Meatu"],"Dar es Salaam":["Ilala","Kigamboni","Kinondoni","Temeke","Ubungo"],"Shinyanga":["Kahama City","Kahama","Kishapu","Msalala","Shinyanga City","Shinyanga","Ushetu"],"Manyara":["Babati City","Babati","Hanang","Kiteto","Mbulu","Simanjiro"],"Mara":["Bunda","Butiama","Musoma City","Musoma","Rorya","Serengeti","Tarime"],"Tanga":["Bumbuli","Handeni City","Handeni","Kilindi","Korogwe City","Korogwe","Lushoto","Mkinga","Muheza","Pangani","Tanga City"],"Morogoro":["Gairo","Ifakara","Kilombero","Kilosa","Malinyi","Morogoro City","Morogoro","Mvomero","Ulanga"],"Kusini Pemba":["Chake Chake","Mkoani"],"Dodoma":["Bahi","Chamwino","Chemba","Dodoma City","Kongwa","Kondoa","Mpwapwa"],"Singida":["Ikungi","Iramba","Itigi","Manyoni","Mkalama","Singida City","Singida"],"Ruvuma":["Mbinga","Namtumbo","Nyasa","Songea City","Songea","Tunduru"],"Kusini Unguja":["Kati","Kusini"],"Katavi":["Mlele","Mpanda","Mpimbwe","Tanganyika"],"Lindi":["Kilwa","Lindi City","Lindi","Liwale","Nachingwea","Ruangwa"],"Geita":["Bukombe","Chato","Geita","Mbogwe","Nyang'hwale"],"Tabora":["Igunga","Kaliua","Nzega","Sikonge","Tabora City","Urambo","Uyui"],"Arusha":["Arusha City","Arusha","Karatu","Longido","Meru","Monduli","Ngorongoro"],"Iringa":["Iringa City","Iringa","Kilolo","Mufindi"],"Kigoma":["Buhigwe","Kakonko","Kasulu City","Kasulu","Kibondo","Kigoma City","Kigoma","Uvinza"],"Mbeya":["Busokelo","Chunya","Kyela","Mbarali","Mbeya City","Mbeya","Rungwe"],"Mwanza":["Bukoba City","Buchosa","Kwimba","Magu","Misungwi","Nyamagana","Sengerema","Ukerewe"]};
@@ -20,6 +37,14 @@ const SV_T = {
     home_hero_kicker: 'Soko la Tanzania', home_hero_title: 'Nunua na kuuza popote Tanzania.',
     home_hero_sub: 'Malipo salama kupitia ClickPesa na escrow — bidhaa unayoipata ndiyo unayolipia.',
     home_new: 'Bidhaa mpya', home_browse: 'Vinjari', featured: 'Zinazoangaziwa',
+    feed_all: 'Bidhaa Zote', feed_new: 'Bidhaa Mpya', trust_escrow: 'Escrow Protected',
+    trust_verified: 'Verified Sellers', trust_clickpesa: 'ClickPesa Secured', trust_delivery: 'Nationwide Delivery',
+    checkout_step_addr: 'Anwani', checkout_step_pay: 'Malipo', checkout_step_done: 'Uthibitisho',
+    addr_heading: 'Anwani ya Ununuzi', summary_heading: 'Muhtasari wa Agizo',
+    escrow_note: 'Malipo yanashikiliwa kwa escrow kupitia ClickPesa hadi uthibitishe kupokea.',
+    step_back: 'Rudi nyuma', step_next: 'Endelea', confirm_title: 'Agizo Limepokelewa',
+    confirm_sub: 'Malipo yameingia escrow. Muuzaji ataanza kukusanyia bidhaa yako.',
+    view_orders: 'Angalia Agizo Zangu', back_home: 'Endelea Kununua',
     categories: 'Kategoria', all: 'Zote', load_more: 'Pakia zaidi',
     empty: 'Hakuna bidhaa', empty_filter: 'Hakuna bidhaa zinazolingana',
     view_detail: 'Angalia', add_cart: 'Ongeza kwenye kikapu', buy_now: 'Nunua Sasa',
@@ -55,6 +80,14 @@ const SV_T = {
     home_hero_kicker: 'Tanzania\'s marketplace', home_hero_title: 'Buy and sell anywhere in Tanzania.',
     home_hero_sub: 'Secure ClickPesa payments and escrow — pay only for what you receive.',
     home_new: 'New arrivals', home_browse: 'Browse', featured: 'Featured',
+    feed_all: 'All Products', feed_new: 'New Arrivals', trust_escrow: 'Escrow Protected',
+    trust_verified: 'Verified Sellers', trust_clickpesa: 'ClickPesa Secured', trust_delivery: 'Nationwide Delivery',
+    checkout_step_addr: 'Address', checkout_step_pay: 'Payment', checkout_step_done: 'Confirmation',
+    addr_heading: 'Delivery address', summary_heading: 'Order summary',
+    escrow_note: 'Payment is held in escrow by ClickPesa until you confirm receipt.',
+    step_back: 'Go back', step_next: 'Continue', confirm_title: 'Order Received',
+    confirm_sub: 'Payment reached escrow. The seller will start preparing your order.',
+    view_orders: 'View my orders', back_home: 'Keep shopping',
     categories: 'Categories', all: 'All', load_more: 'Load more',
     empty: 'No products', empty_filter: 'No matching products',
     view_detail: 'View', add_cart: 'Add to cart', buy_now: 'Buy now',
