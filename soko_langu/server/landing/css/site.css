@@ -513,6 +513,31 @@ h1, h2, h3, h4, p { margin: 0; }
   font-size: 1.05rem;
 }
 
+/* ---------- Shop direction banner ---------- */
+
+.shop-banner { border-bottom: 1px solid #1a1a1a; }
+
+.shop-banner .cta-band {
+  background: linear-gradient(180deg, #141414, var(--black));
+  position: relative;
+}
+
+.shop-banner .cta-band::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 72px;
+  height: 4px;
+  background: #25d366;
+  border-radius: 0 0 4px 4px;
+}
+
+.shop-banner .section-eyebrow { color: #a6a6a6; }
+
+.shop-note { color: #a6a6a6 !important; }
+
 .store-links {
   display: flex;
   flex-wrap: wrap;

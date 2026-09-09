@@ -7,12 +7,12 @@ const { SITE } = require('./meta');
 //   - canonical host only (https://www.sokovibe.co.tz)
 //   - public 200 pages only: no /api, /admin, /health, login, checkout,
 //     product deep links, deleted pages or 404s
-//   - the web app is no longer served, so product/seller/listing URLs (which
-//     live in the native apps) are intentionally NOT listed here yet. When a
-//     public web catalog ships, move these pages into a sitemap index split
-//     into pages.xml / categories.xml / products.xml / sellers.xml first.
+//   - the /shop catalog is client-rendered (Firestore on load), so product
+//     deep links are indexed by rendering engines but not listed here; the
+//     sitemap carries the shop entry page only
 const SITEMAP_PATHS = [
   '/',
+  '/shop/',
   '/tanzania-marketplace',
   '/categories',
   '/how-soko-vibe-works',

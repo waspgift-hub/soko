@@ -26,7 +26,6 @@ class LocalizationService {
 
   static final Map<String, Map<String, String>> translations = {
     'sw': {
-
       'app_name': 'Soko Vibe',
       'main_market': 'Soko Kuu',
       'login': 'Ingia',
@@ -50,7 +49,8 @@ class LocalizationService {
       'chat_seller': 'Ongea na Muuzaji',
       'messages': 'Ujumbe',
       'messages_subtitle': 'Wasiliana na wanunuzi na wauzaji',
-      'trust_banner_msg': 'Weka malipo ndani ya Soko Vibe. Usimpe mtu yeyote OTP yako.',
+      'trust_banner_msg':
+          'Weka malipo ndani ya Soko Vibe. Usimpe mtu yeyote OTP yako.',
       'for_you': 'Kwa Ajili Yako',
       'nearby': 'Karibu Nawe',
       'follow_sellers_empty': 'Fuata wauzaji ili kuona bidhaa zao hapa.',
@@ -64,7 +64,8 @@ class LocalizationService {
       'your_connections': 'Miunganisho yako',
       'connections': 'Miunganisho',
       'login_required_title': 'Ingia kuendelea',
-      'login_required_body': 'Unahitaji akaunti kufanya hivi. Kutazama ni bure.',
+      'login_required_body':
+          'Unahitaji akaunti kufanya hivi. Kutazama ni bure.',
       'maybe_later': 'Baadaye',
       'no_followers_yet': 'Hakuna wanaokufuata bado.',
       'not_following_anyone': 'Hufuatilii mtu yeyote bado.',
@@ -142,7 +143,8 @@ class LocalizationService {
       'chat_with_seller': 'Zungumza na Muuzaji',
       'send': 'Tuma',
       'message_sent': 'Ujumbe umetumwa',
-      'duplicate_listing': 'Bidhaa hii tayari ipo kwenye soko (inafanana na tangazo lililopo). Huwezi kuchapisha tangazo dufu.',
+      'duplicate_listing':
+          'Bidhaa hii tayari ipo kwenye soko (inafanana na tangazo lililopo). Huwezi kuchapisha tangazo dufu.',
       'type_message': 'Andika ujumbe...',
       'no_conversations': 'Hakuna mazungumzo bado',
       'no_notifications': 'Hakuna arifa bado',
@@ -319,12 +321,15 @@ class LocalizationService {
       'get_location': 'Pata mahali nilipo',
       'location_disabled': 'Huduma za mahali zimezimwa',
       'location_denied': 'Ruhusa ya mahali imekataliwa kabisa',
-      'location_permission_denied': 'Ruhusa ya mahali imekataliwa. Jaribu tena.',
+      'location_permission_denied':
+          'Ruhusa ya mahali imekataliwa. Jaribu tena.',
       'location_title': 'Ruhusu eneo lako',
-      'location_disclosure': 'Soko Vibe inatumia eneo lako kuonyesha bidhaa zilizo karibu nawe na kuwasaidia wauzaji kupata wanunuzi katika eneo lako. Eneo lako halionyeshwi hadharani.',
+      'location_disclosure':
+          'Soko Vibe inatumia eneo lako kuonyesha bidhaa zilizo karibu nawe na kuwasaidia wauzaji kupata wanunuzi katika eneo lako. Eneo lako halionyeshwi hadharani.',
       'allow_location': 'Ruhusu eneo',
       'age_verification': 'Uthibitishaji wa Umri',
-      'age_gate_message': 'Ili kutumia Soko Vibe, lazima uwe na umri wa miaka 18 au zaidi. Tafadhali thibitisha umri wako.',
+      'age_gate_message':
+          'Ili kutumia Soko Vibe, lazima uwe na umri wa miaka 18 au zaidi. Tafadhali thibitisha umri wako.',
       'i_am_over_18': 'Nina miaka 18 au zaidi',
       'i_am_under_18': 'Nina chini ya miaka 18',
       'not_now': 'Sio sasa',
@@ -393,8 +398,7 @@ class LocalizationService {
       'direct_transfer': 'Uhamisho wa Moja kwa Moja',
       'send_to_seller_directly': 'Tuma kwa muuzaji moja kwa moja',
       'no_commission': 'Hakuna ada',
-'mongike': 'ClickPesa',
-
+      'mongike': 'ClickPesa',
 
       'you_save': 'Unaokoa',
       'ai_greeting':
@@ -472,7 +476,8 @@ class LocalizationService {
       'requests_empty_hint': 'Weka ombi lako na uwaache wauzaji wakutafutie',
       'requests_error': 'Hitilafu kupakia maombi. Angalia muunganisho wako.',
       'unlock_contact': 'Fungua Anwani ya Mwasiliani',
-      'unlock_contact_ad_msg': 'Tazama tangazo moja la video kufungua mawasiliano ya mnunuzi',
+      'unlock_contact_ad_msg':
+          'Tazama tangazo moja la video kufungua mawasiliano ya mnunuzi',
       'contact_unlocked': 'Mawasiliano yamefunguliwa!',
       'locked_contact_hint': 'Mawasiliano yamefichwa',
       'invalid_whatsapp': 'Weka namba sahihi ya WhatsApp',
@@ -500,7 +505,8 @@ class LocalizationService {
           'Samahani mkuu, siwezi kusikia vizuri. Tafadhali jaribu tena au andika jina la bidhaa.',
       'ai_generic_error': 'Samahani mkuu, kuna tatizo. Tafadhali jaribu tena.',
       'ai_insights': 'Ushauri wa AI wa kukuza biashara',
-      'ai_insights_empty': 'Tafuta maoni ya AI kwa kubofya ikoni ya kuonyesha upya hapo juu.',
+      'ai_insights_empty':
+          'Tafuta maoni ya AI kwa kubofya ikoni ya kuonyesha upya hapo juu.',
       'regenerate': 'Onyesha upya',
       'ai_chat_hint': 'Andika chochote... tafuta, ongea, omba ushauri',
       'ai_tip_title': 'Mkuu! Dalali ana ushauri',
@@ -677,7 +683,8 @@ class LocalizationService {
       'warning_sent': 'Onyo limetumwa',
       'warning_sent_blocked': 'Onyo la 3 limetumwa — akaunti imefungwa',
       'warning_reason': 'Sababu ya Onyo',
-      'warning_will_block_after_3': 'Baada ya maonyo 3 akaunti itafungwa (kusimamishwa).',
+      'warning_will_block_after_3':
+          'Baada ya maonyo 3 akaunti itafungwa (kusimamishwa).',
       'warning_reason_required': 'Tafadhali andika sababu ya onyo',
       'hidden': ' [IMEFICHWA]',
       'no_active_fraud_alerts': 'Hakuna tahadhari za ulaghai',
@@ -713,7 +720,8 @@ class LocalizationService {
           'Malipo yamepokelewa. Uangaziaji utakamilika hivi punde.',
       'product_now_boosted': 'Bidhaa yako sasa imeangaziwa.',
       'payment_failed_try_again': 'Malipo yameshindwa. Jaribu tena.',
-      'payment_timeout': 'Muda umeisha — malipo hayajathibitishwa. Tafadhali jaribu tena.',
+      'payment_timeout':
+          'Muda umeisha — malipo hayajathibitishwa. Tafadhali jaribu tena.',
       'check_phone_complete_payment':
           'Angalia simu yako na kamilisha malipo kwenye M-Pesa',
       'complete_payment_on_phone': 'Kamilisha malipo kwenye simu yako.',
@@ -846,7 +854,8 @@ class LocalizationService {
       'unarchived': 'Imetolewa kwenye hifadhi',
       'shortcut_added': 'Njia ya haraka imeongezwa',
       'add_shortcut': 'Ongeza Njia ya Haraka',
-      'shortcut_not_supported': 'Njia ya haraka haijaungana kwenye skrini ya nyumbani',
+      'shortcut_not_supported':
+          'Njia ya haraka haijaungana kwenye skrini ya nyumbani',
       'view_profile': 'Angalia Wasifu',
       'mark_as_read': 'Weka Kama Imesomwa',
       'mark_all_read': 'Weka Zote Kama Zimesomwa',
@@ -918,7 +927,8 @@ class LocalizationService {
       'get_started': 'Anza',
       'done': 'Imekamilika',
       'onboarding_title1': 'Karibu Soko Vibe',
-      'onboarding_desc1': 'Nunua na uza bidhaa Tanzania nzima kwa urahisi na usalama.',
+      'onboarding_desc1':
+          'Nunua na uza bidhaa Tanzania nzima kwa urahisi na usalama.',
       'onboarding_title2': 'Malipo Salama',
       'onboarding_desc2': 'Escrow inalinda malipo yako mpaka bidhaa ifike.',
       'onboarding_title3': 'Anza Kuuza',
@@ -965,7 +975,8 @@ class LocalizationService {
       'product_management': 'Usimamizi wa Bidhaa',
       'order_management': 'Usimamizi wa Oda',
       'view_all': 'Tazama Zote',
-      'maintenance_message': 'Soko Vibe kwa sasa iko kwenye matengenezo. Tafadhali jaribu tena baadaye.',
+      'maintenance_message':
+          'Soko Vibe kwa sasa iko kwenye matengenezo. Tafadhali jaribu tena baadaye.',
       'system_health': 'Hali ya Mfumo',
       'last_checked': 'Iliangaliwa Mwisho',
       'server_status': 'Hali ya Seva',
@@ -987,20 +998,26 @@ class LocalizationService {
       'enter_your_phone': 'Weka namba yako ya simu',
       'phone_used_for_txns': 'Itatumika kwa miamala na arifa',
       'phone_format_hint': '255xxxxxxxxx',
-      'onboarding_phone_footer_hint': 'Bonyeza "Endelea" kuendelea au "Ruka" kuruka hatua hii',
+      'onboarding_phone_footer_hint':
+          'Bonyeza "Endelea" kuendelea au "Ruka" kuruka hatua hii',
       'skip': 'Ruka',
       'next': 'Endelea',
       'onboarding_start': 'Anza',
       'onboarding_welcome_title': 'Karibu Soko Vibe!',
-      'onboarding_welcome_desc': 'Tunafurahi kukukaribisha kwa moyo mkunjufu! Nunua na uza bidhaa kwa urahisi na usalama — soko moja kwa Tanzania nzima.',
+      'onboarding_welcome_desc':
+          'Tunafurahi kukukaribisha kwa moyo mkunjufu! Nunua na uza bidhaa kwa urahisi na usalama — soko moja kwa Tanzania nzima.',
       'onboarding_ai_title': 'Msaidizi wa AI',
-      'onboarding_ai_desc': 'Muulize AI yetu lolote — mapendekezo ya bidhaa, ushauri wa kuuza, na zaidi, 24/7.',
+      'onboarding_ai_desc':
+          'Muulize AI yetu lolote — mapendekezo ya bidhaa, ushauri wa kuuza, na zaidi, 24/7.',
       'onboarding_chat_title': 'Zungumza na Wauzaji',
-      'onboarding_chat_desc': 'Wasiliana moja kwa moja na wauzaji, uliza maswali, na kamilisha biashara kwa urahisi.',
+      'onboarding_chat_desc':
+          'Wasiliana moja kwa moja na wauzaji, uliza maswali, na kamilisha biashara kwa urahisi.',
       'onboarding_language_title': 'Chagua Lugha',
-      'onboarding_language_desc': 'Tumia Soko Vibe kwa lugha unayopenda — Kiswahili au English.',
+      'onboarding_language_desc':
+          'Tumia Soko Vibe kwa lugha unayopenda — Kiswahili au English.',
       'onboarding_phone_title': 'Namba ya Simu',
-      'onboarding_phone_desc': 'Weka namba yako ya simu kwa miamala salama na arifa za maagizo yako.',
+      'onboarding_phone_desc':
+          'Weka namba yako ya simu kwa miamala salama na arifa za maagizo yako.',
       'powered_by_ai': 'Inaendeshwa na AI',
       'chat_with_ai_help': 'Zungumza na AI yetu kwa usaidizi wa haraka',
       'no_flash_sales': 'Hakuna Flash Sale kwa sasa',
@@ -1012,13 +1029,16 @@ class LocalizationService {
       'view': 'Angalia',
       'order_already_paid': 'Oda hii tayari imelipwa.',
       'preparing_payment_wait': 'Inaandaa malipo... Tafadhali subiri.',
-      'check_phone_enter_pin': 'Angalia simu yako — weka PIN kukamilisha malipo.',
+      'check_phone_enter_pin':
+          'Angalia simu yako — weka PIN kukamilisha malipo.',
       'dispute_notify_admin': 'Hii itaarifu admin kukagua muamala huu.',
       'dispute_opened_msg': 'Mgogoro umefunguliwa. Admin atakagua.',
       'dispute_failed': 'Imeshindwa kufungua mgogoro',
-      'cancel_order_refund_message': 'Hii itarudisha hela yako kupitia Mongike ukikatwa TZS 2,000 kwa gharama za payout. Hakikisha hujapokea mzigo.',
+      'cancel_order_refund_message':
+          'Hii itarudisha hela yako kupitia Mongike ukikatwa TZS 2,000 kwa gharama za payout. Hakikisha hujapokea mzigo.',
       'yes_cancel': 'Ndiyo, Ghairi',
-      'order_cancelled_refunded': 'Oda imeghairiwa. Hela yako imerudishwa (TZS 2,000 imekatwa kwa ada).',
+      'order_cancelled_refunded':
+          'Oda imeghairiwa. Hela yako imerudishwa (TZS 2,000 imekatwa kwa ada).',
       'cancel_order_failed': 'Imeshindwa kughairi oda',
       'payment_error': 'Hitilafu ya malipo',
       'secured_in_escrow': 'Imehifadhiwa kwenye Escrow',
@@ -1064,8 +1084,10 @@ class LocalizationService {
       'transport_note': 'Maelezo Mafupi',
       'transport_submit': 'Hifadhi Taarifa za Usafirishaji',
       'transport_saved': 'Taarifa za usafirishaji zimehifadhiwa',
-      'transport_fill': 'Jaza taarifa za usafirishaji ulizochagua (basi, bodaboda au pikipiki)',
-      'buyer_transport_done': 'Umehifadhi taarifa za usafirishaji. Muuzaji atatumia hizo taarifa kutuma bidhaa.',
+      'transport_fill':
+          'Jaza taarifa za usafirishaji ulizochagua (basi, bodaboda au pikipiki)',
+      'buyer_transport_done':
+          'Umehifadhi taarifa za usafirishaji. Muuzaji atatumia hizo taarifa kutuma bidhaa.',
       'buyer_transport_label': 'Taarifa za Usafirishaji za Mnunuzi',
       'mongike_fee_label': 'Ada ya Kuchakata',
       'fee_per_transaction': 'Ada ya kuchakata kwa kila ununuzi',
@@ -1078,18 +1100,22 @@ class LocalizationService {
       'disputed_label': 'Mgogoro',
       'quoted_label': 'Nukuu Imepeanwa',
       'cancelled_label': 'Imeghairiwa',
-      'enter_valid_shipping_cost': 'Tafadhali ingiza gharama sahihi ya usafirishaji',
+      'enter_valid_shipping_cost':
+          'Tafadhali ingiza gharama sahihi ya usafirishaji',
       'shipping_cost_set': 'Gharama ya Usafirishaji Imewekwa!',
-      'shipping_cost_set_body': 'Muuzaji ameweka gharama ya usafirishaji TZS {0}. Lipa sasa.',
+      'shipping_cost_set_body':
+          'Muuzaji ameweka gharama ya usafirishaji TZS {0}. Lipa sasa.',
       'shipping_cost_submitted': 'Gharama ya usafirishaji imetumwa kwa mnunuzi',
-      'quote_sync_warning': 'Taarifa ya quote haikufika kwa mnunuzi. Angalia muunganisho na ujaribu tena.',
+      'quote_sync_warning':
+          'Taarifa ya quote haikufika kwa mnunuzi. Angalia muunganisho na ujaribu tena.',
       'shipping_quote': 'Gharama ya Usafirishaji',
       'no_shipping_requests': 'Hakuna ombi la gharama ya usafirishaji',
       'mark_shipped': 'Safirisha Bidhaa',
       'bus_name': 'Jina la Basi',
       'plate_number': 'Namba ya Gari',
       'order_shipped_success': 'Bidhaa Imesafirishwa! Mnunuzi ataarifiwa.',
-      'dispatch_required_fields': 'Tafadhali jaza jina la basi na namba ya gari',
+      'dispatch_required_fields':
+          'Tafadhali jaza jina la basi na namba ya gari',
       'new_request': 'Ombi Mpya',
       'enter_shipping_cost': 'Weka Gharama ya Usafirishaji',
       'sending_label': 'Inatuma...',
@@ -1110,33 +1136,41 @@ class LocalizationService {
       'total_payment': 'Jumla ya Malipo',
       'seller_receives_percent': 'Muuzaji anapokea ({0}% toka kwake)',
       'soko_commission_percent': 'Commission ya Soko Vibe ({0}%)',
-      'mongike_fee_info': 'ClickPesa huchargia TZS {0} kwa kila malipo ya mobile money',
-      'shipping_quote_info': 'Gharama ya usafirishaji itaongezwa baada ya muuzaji kutoa quote',
+      'mongike_fee_info':
+          'ClickPesa huchargia TZS {0} kwa kila malipo ya mobile money',
+      'shipping_quote_info':
+          'Gharama ya usafirishaji itaongezwa baada ya muuzaji kutoa quote',
       'region_hint': 'Mkoa / Region',
       'district_hint': 'Wilaya / District',
       'ward_hint': 'Kata / Ward',
       'street_hint': 'Mtaa / Street',
       'landmarks_hint': 'Alama za Jirani / Landmarks',
-      'shipping_info_message': 'Muuzaji atatoa gharama ya usafirishaji. Utalipa jumla ya bidhaa + usafirishaji baada ya kukubaliana.',
+      'shipping_info_message':
+          'Muuzaji atatoa gharama ya usafirishaji. Utalipa jumla ya bidhaa + usafirishaji baada ya kukubaliana.',
       'sending': 'Inatuma...',
       'submit_shipping_request': 'Tuma Ombi la Usafirishaji',
       'enter_phone_error': 'Tafadhali ingiza namba ya simu',
-      'fill_full_address_error': 'Tafadhali jaza anwani kamili (Mkoa, Wilaya, Mtaa)',
+      'fill_full_address_error':
+          'Tafadhali jaza anwani kamili (Mkoa, Wilaya, Mtaa)',
       'delivery_type': 'Aina ya Usafirishaji',
       'delivery_within_region': 'Ndani ya Mkoa',
       'delivery_outside_region': 'Nje ya Mkoa',
       'select_region': 'Chagua Mkoa',
-      'address_filled_confirm': 'Anwani imejazwa kiotomatiki. Thibitisha kisha tuma agizo.',
+      'address_filled_confirm':
+          'Anwani imejazwa kiotomatiki. Thibitisha kisha tuma agizo.',
       'new_order_title': 'Order Mpya Imewasilishwa!',
-      'new_order_body': '{0} anataka kununua {1}. Ingiza gharama ya usafirishaji.',
+      'new_order_body':
+          '{0} anataka kununua {1}. Ingiza gharama ya usafirishaji.',
       'customer': 'Mnunuzi',
-      'order_submitted_success': 'Ombi lako limetumwa. Muuzaji atakupa gharama ya usafirishaji.',
+      'order_submitted_success':
+          'Ombi lako limetumwa. Muuzaji atakupa gharama ya usafirishaji.',
       'error_format': 'Hitilafu: {0}',
       'app_analytics': 'Analytics za App',
       'current_status': 'Hali ya sasa: ',
       'maintenance_message_label': 'Ujumbe kwa watumiaji',
       'maintenance_message_hint': 'App iko kwenye matengenezo...',
-      'maintenance_warning': 'Hutaweza kufikia app wakati maintenance ikiwa washwa. Watumiaji wote (isipokuwa admin) watazuiwa.',
+      'maintenance_warning':
+          'Hutaweza kufikia app wakati maintenance ikiwa washwa. Watumiaji wote (isipokuwa admin) watazuiwa.',
       'maintenance_enabled': 'Maintenance imewashwa',
       'maintenance_disabled': 'Maintenance imezimwa',
       'selfie_label': 'Selfie:',
@@ -1172,16 +1206,20 @@ class LocalizationService {
       'bank_name_label': 'Jina la Benki',
       'quantity_prefix': 'x{0} ',
       'mongike_processing_fee': 'Ada ya Kuchakata ya ClickPesa',
-      'shipping_cost_note': 'Gharama ya usafirishaji itaongezwa baada ya muuzaji kutoa quote.',
+      'shipping_cost_note':
+          'Gharama ya usafirishaji itaongezwa baada ya muuzaji kutoa quote.',
       'shipping_address_title': 'Anwani ya Usafirishaji',
       'phone_label_title': 'Namba ya Simu',
       'send_shipping_request': 'Tuma Ombi la Usafirishaji',
-      'shipping_info': 'Muuzaji atatoa gharama ya usafirishaji. Utalipa jumla ya bidhaa + usafirishaji baada ya kukubaliana.',
+      'shipping_info':
+          'Muuzaji atatoa gharama ya usafirishaji. Utalipa jumla ya bidhaa + usafirishaji baada ya kukubaliana.',
       'enter_full_address': 'Tafadhali jaza anwani kamili (Mkoa, Wilaya, Mtaa)',
-      'order_submitted': 'Ombi lako limetumwa. Muuzaji atakupa gharama ya usafirishaji.',
+      'order_submitted':
+          'Ombi lako limetumwa. Muuzaji atakupa gharama ya usafirishaji.',
       'error_prefix': 'Hitilafu: ',
       'new_order_notification': 'Order Mpya Imewasilishwa!',
-      'buyer_wants_to_buy': '{buyer} anataka kununua {product}. Ingiza gharama ya usafirishaji.',
+      'buyer_wants_to_buy':
+          '{buyer} anataka kununua {product}. Ingiza gharama ya usafirishaji.',
       'min_price_hint': 'Kuanzia',
       'max_price_hint': 'Hadi',
       'location_hint': 'Mf. Dar es Salaam, Arusha...',
@@ -1209,7 +1247,8 @@ class LocalizationService {
       'send_first_message': 'Tuma ujumbe wa kwanza!',
       'otp_will_be_sent_to_email': 'OTP itatumwa kwenye barua pepe yako',
       'enter_otp_email_sent': 'Ingiza OTP uliopokea kwenye barua pepe yako',
-      'seller_quote_subtitle': 'Weka gharama ya usafirishaji kwa ombi la mnunuzi',
+      'seller_quote_subtitle':
+          'Weka gharama ya usafirishaji kwa ombi la mnunuzi',
       'dispatch_subtitle': 'Weka proof of delivery na tracking number',
       'payout_subtitle': 'Tuma pesa kwa mobile money yako',
       'processing_label': 'Inachakata...',
@@ -1267,33 +1306,35 @@ class LocalizationService {
       'product_featured_for_days': 'Bidhaa imeangaziwa kwa siku {days}',
       'admin': 'Msimamizi',
       'pending_escrow': 'Escrow Inasubiri',
-      'escrow_awaiting_confirmation': 'Escrow: TZS {0} (inasubiri uthibitisho wa mteja)',
+      'escrow_awaiting_confirmation':
+          'Escrow: TZS {0} (inasubiri uthibitisho wa mteja)',
 
       'otp_code_hint': 'Ingiza Msimbo wa OTP',
-    'verify_your_number': 'Thibitisha Namba Yako',
-    'enter_code_sent': 'Weka msimbo wa uthibitisho uliotumwa kwa {0}',
-    'change_phone': 'Badilisha namba ya simu',
-    'resend_code': 'Tuma Msimbo Tena',
-    'invalid_otp': 'OTP si sahihi. Tafadhali jaribu tena.',
-    'otp_expired_again': 'OTP imeisha muda wake. Tuma nyingine.',
-    'paste_otp': 'Tumia msimbo kutoka clipboard',
-    'country_search_hint': 'Tafuta nchi',
-    'login_subtitle': 'Ingia uendelee kwenye Soko Vibe',
-    'login_with_email': 'Ingia kwa barua pepe na nenosiri',
-    'login_with_phone': 'Ingia kwa namba ya simu',
-    'no_account_yet': 'Bado huna akaunti? Unda Akaunti',
-    'create_your_account': 'Unda Akaunti Yako',
-    'signup_subtitle': 'Jiunge na Soko Vibe na uanze kununua, kuuza na kuungana na jamii.',
-    'email_optional': 'Barua pepe (hiari)',
-    'already_have_account': 'Tayari una akaunti? Ingia',
-    'password_strength': 'Nguvu ya Nenosiri',
-    'password_min_hint': 'Angalau herufi 8',
-    'strength_weak': 'Dhaifu',
-    'strength_fair': 'Wastani',
-    'strength_good': 'Nzuri',
-    'strength_strong': 'Imara',
-    'verified': 'Umethibitishwa',
-    'otp_arrives_via_sms': 'Utapokea msimbo wa uthibitisho kwa SMS',
+      'verify_your_number': 'Thibitisha Namba Yako',
+      'enter_code_sent': 'Weka msimbo wa uthibitisho uliotumwa kwa {0}',
+      'change_phone': 'Badilisha namba ya simu',
+      'resend_code': 'Tuma Msimbo Tena',
+      'invalid_otp': 'OTP si sahihi. Tafadhali jaribu tena.',
+      'otp_expired_again': 'OTP imeisha muda wake. Tuma nyingine.',
+      'paste_otp': 'Tumia msimbo kutoka clipboard',
+      'country_search_hint': 'Tafuta nchi',
+      'login_subtitle': 'Ingia uendelee kwenye Soko Vibe',
+      'login_with_email': 'Ingia kwa barua pepe na nenosiri',
+      'login_with_phone': 'Ingia kwa namba ya simu',
+      'no_account_yet': 'Bado huna akaunti? Unda Akaunti',
+      'create_your_account': 'Unda Akaunti Yako',
+      'signup_subtitle':
+          'Jiunge na Soko Vibe na uanze kununua, kuuza na kuungana na jamii.',
+      'email_optional': 'Barua pepe (hiari)',
+      'already_have_account': 'Tayari una akaunti? Ingia',
+      'password_strength': 'Nguvu ya Nenosiri',
+      'password_min_hint': 'Angalau herufi 8',
+      'strength_weak': 'Dhaifu',
+      'strength_fair': 'Wastani',
+      'strength_good': 'Nzuri',
+      'strength_strong': 'Imara',
+      'verified': 'Umethibitishwa',
+      'otp_arrives_via_sms': 'Utapokea msimbo wa uthibitisho kwa SMS',
       'verify': 'Thibitisha',
       'resend_wait': 'Subiri sekunde {0} ...',
       'otp_expires_in': 'OTP inaisha kwa {0}',
@@ -1317,7 +1358,8 @@ class LocalizationService {
       'showing_results_for': 'Matokeo ya',
       'notification_preferences': 'Mapendeleo ya Arifa',
       'notification_general': 'Maelezo ya Jumla',
-      'notification_master_hint': 'Zima ili kusitisha arifa zote. Vituo mahususi vinatumika wakati umeanzishwa.',
+      'notification_master_hint':
+          'Zima ili kusitisha arifa zote. Vituo mahususi vinatumika wakati umeanzishwa.',
       'notification_payments': 'Malipo',
       'notification_chat': 'Ujumbe',
       'notification_orders': 'Agizo',
@@ -1327,7 +1369,8 @@ class LocalizationService {
       'sms_for_payments': 'SMS kwa malipo',
       'no_notification_prefs': 'Hakuna mapendeleo ya arifa',
       'district_notifications': 'Bidhaa Mpya katika Eneo Lako',
-      'district_notifications_hint': 'Pokea arifa kuhusu bidhaa mpya zinazowekwa katika wilaya ulizochagua.',
+      'district_notifications_hint':
+          'Pokea arifa kuhusu bidhaa mpya zinazowekwa katika wilaya ulizochagua.',
       'select_districts': 'Chagua wilaya',
       'no_districts_selected': 'Hakuna wilaya zilizochaguliwa bado',
 
@@ -1341,15 +1384,18 @@ class LocalizationService {
       'share_receipt': 'Shiriki Risiti',
       'receipt_saved': 'Risiti imehifadhiwa',
       'seller_statement': 'Taarifa za Kifedha',
-      'seller_statement_footer': 'Soko Vibe © {year} — Hati hii ni taarifa rasmi ya kifedha',
+      'seller_statement_footer':
+          'Soko Vibe © {year} — Hati hii ni taarifa rasmi ya kifedha',
       'seller_statement_subtitle': 'SELLER STATEMENT',
       'buyer_statement': 'Taarifa za Malipo',
-      'buyer_statement_footer': 'Soko Vibe © {year} — Hati hii ni taarifa rasmi ya malipo',
+      'buyer_statement_footer':
+          'Soko Vibe © {year} — Hati hii ni taarifa rasmi ya malipo',
       'buyer_statement_subtitle': 'BUYER STATEMENT',
       'total_refunds': 'Jumla ya Marejesho',
       'total_credits': 'Jumla ya Mapato',
       'net_spend': 'MATUMIZI YA JUMLA',
-      'buyer_no_payments_subtitle': 'Taarifa zako za malipo zitaonekana hapa utakapobuy bidhaa',
+      'buyer_no_payments_subtitle':
+          'Taarifa zako za malipo zitaonekana hapa utakapobuy bidhaa',
       'info_name': 'JINA',
       'info_phone': 'SIMU',
       'info_email': 'BARUA PEPE',
@@ -1365,11 +1411,13 @@ class LocalizationService {
       'expenses_column': 'Matumizi',
       'balance_column': 'Salio',
       'no_payments_yet': 'Hakuna malipo bado',
-      'no_payments_subtitle': 'Taarifa za kifedha zitaonekana hapo ukianza kuuza',
+      'no_payments_subtitle':
+          'Taarifa za kifedha zitaonekana hapo ukianza kuuza',
       'scan_qr_full_info': 'SCAN QR CODE KWA TAARIFA KAMILI',
       'scan_qr_hint': 'Scan hii QR code kupata taarifa zote za statement',
       'your_statement': 'Statement Yako',
-      'statement_ready_body': 'Statement yako ya kifedha iko tayari. Angalia app.',
+      'statement_ready_body':
+          'Statement yako ya kifedha iko tayari. Angalia app.',
       'statement_sent_notification': 'Statement imetumwa kwa notification',
       'statement_saved': 'Statement imehifadhiwa',
       'error_label': 'Hitilafu',
@@ -1414,11 +1462,14 @@ class LocalizationService {
       'withdraw': 'Toa',
       'deposit': 'Weka',
       'error_occurred': 'Hitilafu imetokea',
-      'error_poor_network': 'Mtandao dhaifu. Tafadhali angalia muunganisho wako.',
-      'error_no_permission': 'Huna ruhusa ya kufanya kitendo hiki. Tafadhali jitoke na uingie tena.',
+      'error_poor_network':
+          'Mtandao dhaifu. Tafadhali angalia muunganisho wako.',
+      'error_no_permission':
+          'Huna ruhusa ya kufanya kitendo hiki. Tafadhali jitoke na uingie tena.',
       'error_not_found': 'Taarifa uliyoiomba haikupatikana.',
       'error_already_exists': 'Kitu hiki tayari kipo.',
-      'error_index_building': 'Hifadhidata inajengwa. Tafadhali jaribu tena baada ya muda.',
+      'error_index_building':
+          'Hifadhidata inajengwa. Tafadhali jaribu tena baada ya muda.',
       'error_session_expired': 'Kipindi chako kimeisha. Tafadhali ingia tena.',
       'error_generic': 'Kuna tatizo limetokea. Tafadhali jaribu tena.',
       'error_no_account': 'Hakuna akaunti iliyopatikana kwa barua pepe hii.',
@@ -1428,20 +1479,29 @@ class LocalizationService {
       'error_email_in_use': 'Akaunti yenye barua pepe hii tayari ipo.',
       'error_operation_not_allowed': 'Njia hii ya kuingia haijawashwa.',
       'error_weak_password': 'Nenosiri ni fupi sana. Tumia angalau herufi 6.',
-      'error_too_many_attempts': 'Umejaribu mara nyingi sana. Tafadhali jaribu baadaye.',
-      'error_invalid_credentials': 'Barua pepe au nenosiri si sahihi. Tafadhali jaribu tena.',
+      'error_too_many_attempts':
+          'Umejaribu mara nyingi sana. Tafadhali jaribu baadaye.',
+      'error_invalid_credentials':
+          'Barua pepe au nenosiri si sahihi. Tafadhali jaribu tena.',
       'error_timeout': 'Muda umeisha. Mtandao dhaifu.',
-      'auth_google_failed': 'Kuingia kwa Google kumeshindwa. Tafadhali jaribu tena.',
-      'auth_google_cancelled': 'Umesitisha kuingia kwa Google. Tafadhali chagua akaunti na jaribu tena.',
-      'auth_no_account': 'Hakuna akaunti kwa namba hii. Tafadhali sajili kwanza.',
-      'auth_wrong_phone': 'Namba ya simu si sahihi. Weka namba sahihi ya Tanzania (mfano 0712345678).',
+      'auth_google_failed':
+          'Kuingia kwa Google kumeshindwa. Tafadhali jaribu tena.',
+      'auth_google_cancelled':
+          'Umesitisha kuingia kwa Google. Tafadhali chagua akaunti na jaribu tena.',
+      'auth_no_account':
+          'Hakuna akaunti kwa namba hii. Tafadhali sajili kwanza.',
+      'auth_wrong_phone':
+          'Namba ya simu si sahihi. Weka namba sahihi ya Tanzania (mfano 0712345678).',
       'auth_otp_invalid': 'OTP si sahihi. Angalia SMS na jaribu tena.',
       'auth_otp_expired': 'OTP imeisha muda. Tuma OTP mpya.',
-      'auth_otp_rate_limited': 'Umejaribu mara nyingi sana. Subiri kidogo kisha jaribu tena.',
+      'auth_otp_rate_limited':
+          'Umejaribu mara nyingi sana. Subiri kidogo kisha jaribu tena.',
       'auth_otp_send_failed': 'Imeshindwa kutuma OTP. Jaribu tena.',
       'auth_login_required': 'Tafadhali ingia kwanza kuendelea.',
-      'product_limit_kyc_needed': 'Umefikia kikomo cha bidhaa 5 bila KYC. Tafadhali kamilisha uthibitisho wa KYC kuweza kuongeza bidhaa zaidi.',
-      'comment_edit_own_only': 'Unaweza kufuta maoni na majibu yako mwenyewe pekee.',
+      'product_limit_kyc_needed':
+          'Umefikia kikomo cha bidhaa 5 bila KYC. Tafadhali kamilisha uthibitisho wa KYC kuweza kuongeza bidhaa zaidi.',
+      'comment_edit_own_only':
+          'Unaweza kufuta maoni na majibu yako mwenyewe pekee.',
       'kyc_id_national': 'Kitambulisho cha Taifa',
       'kyc_id_passport': 'Pasipoti',
       'kyc_id_drivers': 'Leseni ya Udereva',
@@ -1462,8 +1522,10 @@ class LocalizationService {
       'delete_account': 'Futa Akaunti',
       'terms_of_service': 'Sheria na Masharti',
       'privacy_policy': 'Sera ya Faragha',
-      'tos_founder_summary': 'BARUA RASMI YA MAKUBALIANO\n\nMakubaliano haya yanaanzishwa kati yako ("Mtumiaji") na Gift Henry Wapalila ("Mwanzilishi"), mmiliki na msimamizi wa Soko Vibe. Kwa kuunda akaunti, kusajiliwa, au kutumia Soko Vibe kwa namna yoyote, unakubali kwa hiari yako kuwa umesoma, umeelewa, na umekubali kufungwa kisheria na Sheria na Masharti haya kwa ukamilifu.\n\nMUHTASARI WA MAKUBALIANO:\n• Unatumia Soko Vibe kuweka, kununua, na kuuza bidhaa Tanzania kwa kufuata sheria za Tanzania.\n• Lazima uwe na umri wa miaka 18+ na uwezo kamili wa kisheria wa kuingia mkataba huu.\n• Soko Vibe hutoa miamala salama ya escrow — fedha hazitolewi kwa muuzaji hadi mnunuzi athibitishe kupokea bidhaa.\n• Ada za usindikaji na tume za jukwaa hulipwa na mnunuzi; muuzaji hupokea kiasi kamili cha bei ya bidhaa.\n• Ukiuki sheria au masharti haya, akaunti yako inaweza kusitishwa mara moja bila taarifa.\n• Migogoro itatatuliwa kupitia mfumo wa Soko Vibe, kisha kwa usuluhishi au usitishaji katika Dar es Salaam, Tanzania, kwa mujibu wa sheria za Tanzania.\n• Kwa kukubali makubaliano haya, unakubali kufungwa kisheria na Mwanzilishi Gift Henry Wapalila na Soko Vibe.',
-      'pp_founder_summary': 'BARUA RASMI YA SERA YA FARAGHA\n\nSera hii ni mkataba kati yako ("Mtumiaji") na Gift Henry Wapalila ("Mwanzilishi"), mmiliki na msimamizi wa Soko Vibe. Tunakusanya data yako ya kibinafsi ili kuendesha jukwaa kwa usalama: usajili, miamala, escrow, usafirishaji, mawasiliano, na utoaji wa pesa.\n\nMUHTASARI:\n• Hatutauzi data yako kwa mtu yeyote, wala kukodisha, wala kuipangisha.\n• Tunashiriki data tu na watoa huduma wanaohitajika (malipo, usafirishaji, ramani, push) na mamlaka pale inapotakiwa na sheria.\n• Unaweza kuomba nakala ya data yako au kufutwa kwake wakati wowote.\n• Data huhifadhiwa kwa muda unaotakiwa na sheria (rekodi za miamala kwa zaidi ya miaka 7 kwa mujibu wa TRA).\n• Kwa kutumia Soko Vibe, unakubali Sera hii ya Faragha kwa ukamilifu.',
+      'tos_founder_summary':
+          'BARUA RASMI YA MAKUBALIANO\n\nMakubaliano haya yanaanzishwa kati yako ("Mtumiaji") na Gift Henry Wapalila ("Mwanzilishi"), mmiliki na msimamizi wa Soko Vibe. Kwa kuunda akaunti, kusajiliwa, au kutumia Soko Vibe kwa namna yoyote, unakubali kwa hiari yako kuwa umesoma, umeelewa, na umekubali kufungwa kisheria na Sheria na Masharti haya kwa ukamilifu.\n\nMUHTASARI WA MAKUBALIANO:\n• Unatumia Soko Vibe kuweka, kununua, na kuuza bidhaa Tanzania kwa kufuata sheria za Tanzania.\n• Lazima uwe na umri wa miaka 18+ na uwezo kamili wa kisheria wa kuingia mkataba huu.\n• Soko Vibe hutoa miamala salama ya escrow — fedha hazitolewi kwa muuzaji hadi mnunuzi athibitishe kupokea bidhaa.\n• Ada za usindikaji na tume za jukwaa hulipwa na mnunuzi; muuzaji hupokea kiasi kamili cha bei ya bidhaa.\n• Ukiuki sheria au masharti haya, akaunti yako inaweza kusitishwa mara moja bila taarifa.\n• Migogoro itatatuliwa kupitia mfumo wa Soko Vibe, kisha kwa usuluhishi au usitishaji katika Dar es Salaam, Tanzania, kwa mujibu wa sheria za Tanzania.\n• Kwa kukubali makubaliano haya, unakubali kufungwa kisheria na Mwanzilishi Gift Henry Wapalila na Soko Vibe.',
+      'pp_founder_summary':
+          'BARUA RASMI YA SERA YA FARAGHA\n\nSera hii ni mkataba kati yako ("Mtumiaji") na Gift Henry Wapalila ("Mwanzilishi"), mmiliki na msimamizi wa Soko Vibe. Tunakusanya data yako ya kibinafsi ili kuendesha jukwaa kwa usalama: usajili, miamala, escrow, usafirishaji, mawasiliano, na utoaji wa pesa.\n\nMUHTASARI:\n• Hatutauzi data yako kwa mtu yeyote, wala kukodisha, wala kuipangisha.\n• Tunashiriki data tu na watoa huduma wanaohitajika (malipo, usafirishaji, ramani, push) na mamlaka pale inapotakiwa na sheria.\n• Unaweza kuomba nakala ya data yako au kufutwa kwake wakati wowote.\n• Data huhifadhiwa kwa muda unaotakiwa na sheria (rekodi za miamala kwa zaidi ya miaka 7 kwa mujibu wa TRA).\n• Kwa kutumia Soko Vibe, unakubali Sera hii ya Faragha kwa ukamilifu.',
       'about_app': 'Kuhusu Programu',
       'report_problem': 'Ripoti Tatizo',
       'help_center': 'Kituo cha Msaada',
@@ -1479,7 +1541,8 @@ class LocalizationService {
       'pickup_label': 'Mahali pa Kuokota',
       'dropoff_label': 'Mahali pa Kushusha',
       'sos_emergency': 'Dharura ya SOS',
-      'sos_alert_message': 'Tuma tahadhari ya dharura kwa wasiliani wako na ushiriki eneo lako moja kwa moja?',
+      'sos_alert_message':
+          'Tuma tahadhari ya dharura kwa wasiliani wako na ushiriki eneo lako moja kwa moja?',
       'send_sos': 'Tuma SOS',
       'sos_alert_sent': 'Tahadhari ya SOS imetumwa kwa wasiliani wako',
       'sos_button': 'SOS',
@@ -1534,88 +1597,131 @@ class LocalizationService {
       'unknown_user_display': 'Haijulikani',
 
       'tos_title': 'SHERIA NA MASHARTI YA SOKO VIBE',
-      'tos_last_updated': 'Ilisasishwa Mwisho: 16 Agosti 2026 | Tarehe ya Kuanza: 16 Agosti 2026',
-      'tos_section_1_title': '1. KUKUBALI MASHARTI — MAKUBALIANO YANAYOFUNGA KISHERIA',
-      'tos_section_1_body': '1.1 Kwa kupakua, kusakinisha, kufikia, kuvinjari, kujiandikisha, au kutumia Soko Vibe ("Jukwaa") kwa njia yoyote, unakiri, unawakilisha, unathibitisha, na unakubali kuwa umesoma, umeelewa, na unakubali KUFUNGWA KISHERIA na Sheria na Masharti haya ("Masharti", "Makubaliano"), iwapo wewe ni mtumiaji aliyesajiliwa au la.\n\n1.2 Masharti haya yanaunda MAKUBALIANO YA KISHERIA HALALI, YANAYOFUNGA, NA YANAYOTEKELEZEKA kati yako ("Mtumiaji", "wewe", "yako") na Soko Vibe ("sisi", "yetu", "Kampuni", "Jukwaa").\n\n1.3 Kama hukubaliani na Masharti haya kwa UKAMILIFU, LAZIMA USIFIKIE au kutumia Jukwaa kwa njia yoyote, na lazima ufute mara moja programu na nyenzo zote zinazohusiana.\n\n1.4 Tunahifadhi haki KAMILI NA YA KUPANDE MOJA kurekebisha, kuongeza, kusasisha, kuongezea, kusimamisha, au kukomesha Masharti haya wakati wowote, kwa sababu yoyote, bila taarifa. Mabadiliko yanaanza KUTUMIKA MARA MOJA baada ya kuchapishwa kwenye Jukwaa.\n\n1.5 Kuendelea kwako kutumia Jukwaa baada ya mabadiliko yoyote kunajumuisha KUKUBALI KWAKO BILA SHAARTI Masharti yaliyorekebishwa. Kama hukubaliani na mabadiliko yoyote, SULUHISHO LAKO PEKEE NA LA KIPEKE ni kuacha mara moja kutumia Jukwaa na kufuta akaunti yako.\n\n1.6 NI WAJIBU WAKO PEKEE kukagua Masharti haya mara kwa mara. Tunapendekeza uangalie ukurasa huu angalau mara moja kwa mwezi. Tunaweza kuwataarifu watumiaji waliosajiliwa kuhusu mabadiliko makubwa kupitia barua pepe au arifa ndani ya programu, lakini kutopokea taarifa hiyo hakutabatilisha mabadiliko au kukubali kwako.\n\n1.7 Masharti haya yanaweza kuchapishwa kwa lugha mbalimbali kwa urahisi. Iwapo kutakuwa na mgogoro au kutofautiana katiya matoleo ya lugha mbalimbali, toleo la lugha ya Kiswahili litashinda na kuwa la kisheria.',
+      'tos_last_updated':
+          'Ilisasishwa Mwisho: 16 Agosti 2026 | Tarehe ya Kuanza: 16 Agosti 2026',
+      'tos_section_1_title':
+          '1. KUKUBALI MASHARTI — MAKUBALIANO YANAYOFUNGA KISHERIA',
+      'tos_section_1_body':
+          '1.1 Kwa kupakua, kusakinisha, kufikia, kuvinjari, kujiandikisha, au kutumia Soko Vibe ("Jukwaa") kwa njia yoyote, unakiri, unawakilisha, unathibitisha, na unakubali kuwa umesoma, umeelewa, na unakubali KUFUNGWA KISHERIA na Sheria na Masharti haya ("Masharti", "Makubaliano"), iwapo wewe ni mtumiaji aliyesajiliwa au la.\n\n1.2 Masharti haya yanaunda MAKUBALIANO YA KISHERIA HALALI, YANAYOFUNGA, NA YANAYOTEKELEZEKA kati yako ("Mtumiaji", "wewe", "yako") na Soko Vibe ("sisi", "yetu", "Kampuni", "Jukwaa").\n\n1.3 Kama hukubaliani na Masharti haya kwa UKAMILIFU, LAZIMA USIFIKIE au kutumia Jukwaa kwa njia yoyote, na lazima ufute mara moja programu na nyenzo zote zinazohusiana.\n\n1.4 Tunahifadhi haki KAMILI NA YA KUPANDE MOJA kurekebisha, kuongeza, kusasisha, kuongezea, kusimamisha, au kukomesha Masharti haya wakati wowote, kwa sababu yoyote, bila taarifa. Mabadiliko yanaanza KUTUMIKA MARA MOJA baada ya kuchapishwa kwenye Jukwaa.\n\n1.5 Kuendelea kwako kutumia Jukwaa baada ya mabadiliko yoyote kunajumuisha KUKUBALI KWAKO BILA SHAARTI Masharti yaliyorekebishwa. Kama hukubaliani na mabadiliko yoyote, SULUHISHO LAKO PEKEE NA LA KIPEKE ni kuacha mara moja kutumia Jukwaa na kufuta akaunti yako.\n\n1.6 NI WAJIBU WAKO PEKEE kukagua Masharti haya mara kwa mara. Tunapendekeza uangalie ukurasa huu angalau mara moja kwa mwezi. Tunaweza kuwataarifu watumiaji waliosajiliwa kuhusu mabadiliko makubwa kupitia barua pepe au arifa ndani ya programu, lakini kutopokea taarifa hiyo hakutabatilisha mabadiliko au kukubali kwako.\n\n1.7 Masharti haya yanaweza kuchapishwa kwa lugha mbalimbali kwa urahisi. Iwapo kutakuwa na mgogoro au kutofautiana katiya matoleo ya lugha mbalimbali, toleo la lugha ya Kiswahili litashinda na kuwa la kisheria.',
       'tos_section_2_title': '2. USTAHIKI, USAJILI, NA MAHITAJI YA AKAUNTI',
-      'tos_section_2_body': '2.1 MAHITAJI YA UMRI: LAZIMA uwe na umri wa angalau miaka 18 (kumi na nane) ili kutumia Jukwaa. Kwa kutumia Jukwaa, unawakilisha na kuthibitisha chini ya adhabu ya kusema uwongo kuwa una miaka 18 au zaidi.\n\n2.2 UWEZO WA KISHERIA: Lazima uwe na uwezo kamili wa kisheria wa kuingia mikataba inayofunga. Kama unatumia Jukwaa kwa niaba ya biashara au shirika, unawakilisha na kuthibitisha kuwa una mamlaka ya kuufunga shirika hilo kwa Masharti haya.\n\n2.3 TAARIFA SAHIHI: Lazima utoe taarifa sahihi, za sasa, na kamili za usajili. Unakubali kusasisha taarifa zako mara moja ikibadilika. Kutoa taarifa za uwongo au za kupotosha ni ukiukwaji wa kimaudhui wa Masharti haya.\n\n2.4 AKAUNTI MOJA TU: Kila mtu au chombo cha kisheria kinaweza kudumisha AKAUNTI MOJA (1) tu kwenye Jukwaa. Kuunda, kujaribu kuunda, au kudumisha akaunti nyingi ni MARUFUKU KABISA na kutasababisha kusimamishwa mara moja na kwa kudumu kwa akaunti zote zinazohusika na kupoteza salio au manufaa yoyote.\n\n2.5 USALAMA WA AKAUNTI: WEWE KWA PEKEE NA KWA UKAMILIFU UNAWAJIBIKA KWA:\n  a) Kudumisha usiri wa nenosiri lako, vitambulisho vya kuingia, na vitufe vya uthibitishaji.\n  b) Shughuli zote zinazotokea chini ya akaunti yako, iwe umeidhinisha au la.\n  c) Kutuarifu mara moja kuhusu matumizi yoyote yasiyoidhinishwa ya akaunti yako au uvunjaji wa usalama.\n  d) Kuhakikisha kuwa unatoka kwenye akaunti yako mwishoni mwa kila kikao, hasa kwenye vifaa vinavyoshirikiwa.\n\n2.6 KUSIMAMISHA NA KUKOMESHA AKAUNTI: Tunahifadhi HAKI KAMILI kukataa usajili, kusimamisha, kukomesha, au kuweka vikwazo kwenye akaunti yako kwa HIARI YETU PEKEE, bila taarifa ya awali, dhima, au wajibu wa kutoa sababu. Sababu za kusimamisha au kukomesha ni pamoja na lakini sio tu:\n  a) Ukiukwaji wa kifungu chochote cha Masharti haya.\n  b) Tuhuma za shughuli za ulaghai, dhuluma, au haramu.\n  c) Kutoa taarifa za uwongo, za kupotosha, au zisizokamilika.\n  d) Kuunda akaunti nyingi.\n  e) Kujihusisha na shughuli zilizopigwa marufuku kama ilivyofafanuliwa katika Sehemu ya 4.\n  f) Kupokea malalamiko mengi au ukadiriaji mbaya.\n  g) Kushindwa kukamilisha uthibitishaji wa KYC inapohitajika.\n  h) Shughuli yoyote ambayo, kwa uamuzi wetu pekee, inaleta hatari kwa Jukwaa, watumiaji wake, au sifa yetu.\n\n2.7 KUFUTA AKAUNTI: Unaweza kufuta akaunti yako wakati wowote kupitia menyu ya Mipangilio. Baada ya kufuta, akaunti yako itazimwa mara moja na kufutwa kabisa baada ya kipindi cha siku 90, kwa kuzingatia mahitaji ya kisheria ya uhifadhi wa data.\n\n2.8 UTHIBITISHO WA KYC: Watumiaji wanaotaka kuuza bidhaa kwenye Jukwaa lazima wawasilishe uthibitisho wa KYC (Know Your Customer). Kukubaliwa kwa KYC ni kwa HIARI ya msimamizi wa Jukwaa pekee. Bila kibali cha KYC, wauzaji wanaweza kuorodhesha kiwango cha juu cha BIDHAA TANO (5). Wauzaji wanaweza kuhitajika kufanya uthibitishaji upya mara kwa mara.',
+      'tos_section_2_body':
+          '2.1 MAHITAJI YA UMRI: LAZIMA uwe na umri wa angalau miaka 18 (kumi na nane) ili kutumia Jukwaa. Kwa kutumia Jukwaa, unawakilisha na kuthibitisha chini ya adhabu ya kusema uwongo kuwa una miaka 18 au zaidi.\n\n2.2 UWEZO WA KISHERIA: Lazima uwe na uwezo kamili wa kisheria wa kuingia mikataba inayofunga. Kama unatumia Jukwaa kwa niaba ya biashara au shirika, unawakilisha na kuthibitisha kuwa una mamlaka ya kuufunga shirika hilo kwa Masharti haya.\n\n2.3 TAARIFA SAHIHI: Lazima utoe taarifa sahihi, za sasa, na kamili za usajili. Unakubali kusasisha taarifa zako mara moja ikibadilika. Kutoa taarifa za uwongo au za kupotosha ni ukiukwaji wa kimaudhui wa Masharti haya.\n\n2.4 AKAUNTI MOJA TU: Kila mtu au chombo cha kisheria kinaweza kudumisha AKAUNTI MOJA (1) tu kwenye Jukwaa. Kuunda, kujaribu kuunda, au kudumisha akaunti nyingi ni MARUFUKU KABISA na kutasababisha kusimamishwa mara moja na kwa kudumu kwa akaunti zote zinazohusika na kupoteza salio au manufaa yoyote.\n\n2.5 USALAMA WA AKAUNTI: WEWE KWA PEKEE NA KWA UKAMILIFU UNAWAJIBIKA KWA:\n  a) Kudumisha usiri wa nenosiri lako, vitambulisho vya kuingia, na vitufe vya uthibitishaji.\n  b) Shughuli zote zinazotokea chini ya akaunti yako, iwe umeidhinisha au la.\n  c) Kutuarifu mara moja kuhusu matumizi yoyote yasiyoidhinishwa ya akaunti yako au uvunjaji wa usalama.\n  d) Kuhakikisha kuwa unatoka kwenye akaunti yako mwishoni mwa kila kikao, hasa kwenye vifaa vinavyoshirikiwa.\n\n2.6 KUSIMAMISHA NA KUKOMESHA AKAUNTI: Tunahifadhi HAKI KAMILI kukataa usajili, kusimamisha, kukomesha, au kuweka vikwazo kwenye akaunti yako kwa HIARI YETU PEKEE, bila taarifa ya awali, dhima, au wajibu wa kutoa sababu. Sababu za kusimamisha au kukomesha ni pamoja na lakini sio tu:\n  a) Ukiukwaji wa kifungu chochote cha Masharti haya.\n  b) Tuhuma za shughuli za ulaghai, dhuluma, au haramu.\n  c) Kutoa taarifa za uwongo, za kupotosha, au zisizokamilika.\n  d) Kuunda akaunti nyingi.\n  e) Kujihusisha na shughuli zilizopigwa marufuku kama ilivyofafanuliwa katika Sehemu ya 4.\n  f) Kupokea malalamiko mengi au ukadiriaji mbaya.\n  g) Kushindwa kukamilisha uthibitishaji wa KYC inapohitajika.\n  h) Shughuli yoyote ambayo, kwa uamuzi wetu pekee, inaleta hatari kwa Jukwaa, watumiaji wake, au sifa yetu.\n\n2.7 KUFUTA AKAUNTI: Unaweza kufuta akaunti yako wakati wowote kupitia menyu ya Mipangilio. Baada ya kufuta, akaunti yako itazimwa mara moja na kufutwa kabisa baada ya kipindi cha siku 90, kwa kuzingatia mahitaji ya kisheria ya uhifadhi wa data.\n\n2.8 UTHIBITISHO WA KYC: Watumiaji wanaotaka kuuza bidhaa kwenye Jukwaa lazima wawasilishe uthibitisho wa KYC (Know Your Customer). Kukubaliwa kwa KYC ni kwa HIARI ya msimamizi wa Jukwaa pekee. Bila kibali cha KYC, wauzaji wanaweza kuorodhesha kiwango cha juu cha BIDHAA TANO (5). Wauzaji wanaweza kuhitajika kufanya uthibitishaji upya mara kwa mara.',
       'tos_section_3_title': '3. HUDUMA ZA JUKWAA — JUKUMU NA VIKWAZO',
-      'tos_section_3_body': '3.1 Soko Vibe hutoa jukwaa la teknolojia linalounganisha:\n  a) Wanunuzi na wauzaji wa bidhaa na huduma (Huduma za Soko).\n  b) Watumiaji na vipengele vya msaidizi vya AI.\n  c) Watumiaji na vifaa vya mawasiliano, malipo, na usafirishaji.\n\n3.2 JUKUMU KAMA MDHIBITI: Tunachukua nafasi YA MDHIBITI/mtoa jukwaa tu. SISI SI:\n  a) Mhusika katika muamala wowote kati ya wanunuzi na wauzaji.\n  b) Mwajiri, mkuu, au mshirika wa ubia wa muuzaji au mtoa huduma yeyote.\n  c) Mtoa huduma za usafirishaji au vifaa.\n  d) Taasisi ya fedha, benki, au mtoa huduma za malipo (isipokuwa kama wakala wa kuchakata malipo).\n\n3.3 HAKUNA DHAMANA YA MIAMALA: HATUTOI UWAKILISHJI AU DHAMANA YOYOTE kuhusu ubora, usalama, uhalali, au kufaa kwa bidhaa, huduma, au miamala yoyote inayowezeshwa kupitia Jukwaa. Miamala yote ni KWA HATARI YAKO MWENYEWE.\n\n3.4 HUDUMA ZA ESCROW: Tunawezesha malipo kupitia wasindikaji wa malipo wengine. Kwa kukamilisha ununuzi, malipo hushikiliwa kwenye escrow kama mwamuzi huru (neutral third party) hadi mnunuzi athibitishe kupokea mzigo ukiwa salama, kwa mujibu wa Sehemu ya 6.3. Sisi si benki na hatushikili amana au kutoa huduma za kifedha.\n\n3.5 MAREKEBISHO YA HUDUMA: Tunahifadhi HAKI KAMILI kurekebisha, kusimamisha, kuweka vikwazo, au kukomesha kipengele chochote cha Huduma wakati wowote, kwa taarifa au bila taarifa, na bila dhima kwako au kwa mtu mwingine yeyote.\n\n3.6 UPATIKANAJI WA HUDUMA: Hatuhakikishii kuwa Jukwaa litapatikana wakati wote, lisiloingiliwa, lisilo na makosa, au lisilo na virusi au vipengele vingine hatari. Tunaweza kufanya matengenezo, sasisho, au maboresho wakati wowote bila taarifa.\n\n3.7 HUDUMA ZA GUMZO (CHAT): Jukwaa linatoa mfumo wa ujumbe wa ndani kwa ajili ya mawasiliano kati ya wanunuzi na wauzaji. Kwa kutumia huduma ya gumzo, unakubali:\n  a) Mawasiliano yote ndani ya Jukwaa ni ya KIBINAFSI na ni SIRI kati yako na mhusika wa mawasiliano. Soko Vibe haisomi, kuchunguza, au kufichua mawasiliano hayo isipokuwa:\n     i) Inapohitajika na sheria, amri ya mahakama, au utafiti wa kisheria.\n     ii) Tunapoamini kwa nia njema kwamba mawasiliano yanajumuisha ulaghai, vitisho, matusi, au shughuli haramu.\n     iii) Inapohitajika kusuluhisha mgogoro kati ya watumiaji.\n  b) LAZIMA utumie lugha nzuri na kuheshimu watumiaji wengine kwenye gumzo.\n  c) NI MARUFUKU kutuma:\n     i) Ujumbe wa matusi, vitisho, unyanyasaji, au ubaguzi.\n     ii) Picha, video, au maudhui ya ngono, chafu, au ya kushangaza.\n     iii) Viungo vya ulaghai, matangazo ya uwongo, au maudhui yenye madhara.\n     iv) Taarifa za kibinafsi za watumiaji wengine bila ruhusa yao.\n     v) Maudhui yanayokiuka haki za miliki za watu wengine.\n  d) Ujumbe wote wa gumzo huhifadhiwa kwa muda wa akaunti yako pamoja na siku 90 baada ya kufuta akaunti.\n  e) Soko Vibe hana dhima kwa ukweli wa taarifa zinazotumwa kati ya watumiaji kupitia gumzo.\n  f) Unabeba dhima kamilia ya maneno na matendo yako ndani ya mfumo wa gumzo.\n\n3.8 UTHIBITISHO WA WATUMIAJI: Jukwaa linaweza kuomba uthibitisho wa utambulisho (KYC) kabla ya kukuza kiwango cha juu cha matumizi. Uthibitisho huu unashughulikiwa kwa mujibu wa Sera yetu ya Faragha na sheria za Ulinzi wa Taarifa Binafsi za Tanzania (PDPA 2022).\n\n3.9 MALIPO KUPITIA MFUMO MBALIMBALI: Tunawezesha malipo kupitia mfumo mbalimbali ikiwemo fedha za mkononi (M-Pesa, Tigo Pesa, Airtel Money, Halopesa, EzyPesa), benki, na huduma nyingine za malipo. Kila mfumo wa malipo una masharti yake ya ziada ambayo unaweza kukubaliwa kuukubali kabla ya kufanya malipo.\n\n3.10 KUPIGA BIDHAA (BOOST): Wauzaji wanaweza kulipa ada ya ziada ili kupiga bidhaa zao na kuzionyesha kwa umakini zaidi. Ada za kupiga bidhaa ni za HIARI, hazirejeshwi, na zinadhibitiwa na Soko Vibe pekee. Kupiga bidhaa hakikihakikishii mauzo.',
-      'tos_section_4_title': '4. SHUGHULI ZILIZOPIGWA MARUFUKU — SERA KALI YA KUTOVUMILIA',
-      'tos_section_4_body': '4.1 Shughuli zifuatazo zimepigwa MARUFUKU KABISA kwenye Jukwaa. Ukiukwaji wa kifungu chochote kati ya hizi unajumuisha UKIUKWAJI WA KIMAUDHUI wa Masharti haya na kutasababisha KUSIMAMISHWA KWA AKAUNTI MARA MOJA NA KWA KUDUMU, kupoteza salio lolote, na uwezekano wa kurejeshwa kwa mamlaka za ulinzi:\n\n4.2 SHUGHULI HARAMU:\n  a) Kutumia Jukwaa kwa kusudi lolote haramu au kwa kukiuka sheria yoyote ya mitaa, kitaifa, au kimataifa.\n  b) Kujihusisha na utakatishaji fedha, ufadhili wa kigaidi, au uhalifu wowote wa kifedha.\n  c) Kuorodhesha, kuuza, au kuwezesha uuzaji wa vitu haramu ikiwemo lakini sio tu:\n     i) Dawa za kulevya haramu, madawa ya kulevya, na vitu vinavyodhibitiwa.\n     ii) Silaha, bunduki, risasi, vilipuzi, na vifaa vya silaha.\n     iii) Bidhaa ghushi, bandia, au zilizokiwa hakimiliki.\n     iv) Mali iliyoibwa au vitu vilivyopatikana kwa njia haramu.\n     v) Nyenzo hatari, sumu, au vitu vya hatari.\n     vi) Mabaki ya binadamu, sehemu za mwili, au maji ya mwili.\n     vii) Spishi zilizo hatarini kutoweka au bidhaa zilizotengenezwa kutoka kwa spishi zilizo hatarini.\n     viii) Nyenzo za ponografia, chafu, au ngono waziwazi.\n     ix) Vitu vinavyokiuka haki za miliki.\n     x) Vitu vyovyote ambavyo uuzaji wake umepigwa marufuku na sheria ya Tanzania.\n\n4.3 SHUGHULI ZA ULAGHAI NA UDANGANYIFU:\n  a) Kuchapisha matangazo ya uwongo, ya kupotosha, ya udanganyifu, au ya ulaghai.\n  b) Kupotosha hali, ukweli, asili, au vipimo vya bidhaa.\n  c) Kujihusisha na ghiliba ya bei, zabuni bandia, au miamala feki.\n  d) Kuunda akaunti feki, maoni feki, au kuongeza ukadiriaji bandia.\n  e) Kujifanya mtu au shirika lingine, au kudai uhusiano kwa uwongo.\n  f) Kutumia njia za malipo zilizoibwa au za ulaghai.\n  g) Ulaghai wa kurejeshewa fedha au kupinga miamala halali bila sababu halali.\n\n4.4 TABIA ZA KUKERA NA KUDHURU:\n  a) Kuwasumbua, kutukana, kutishia, kufuatilia, kutisha, au kumnyanyasa mtumiaji mwingine.\n  b) Kuchapisha matamshi ya chuki, maudhui ya ubaguzi, au maudhui yanayochochea vurugu.\n  c) Kushiriki taarifa za kibinafsi za wengine bila kibali chao cha wazi (doxxing).\n  d) Kutoa tuhuma za uwongo, taarifa za kukashifu, au ripoti za uovu.\n  e) Kujihusisha na aina yoyote ya ubaguzi kulingana na rangi, kabila, jinsia, dini, umri, ulemavu, au mwelekeo wa kijinsia.\n\n4.5 UKIUKWAJI WA KITAALAM:\n  a) Kupakia misimbo hatari, virusi, wadudu, farasi wa Trojan, au programu yoyote hatari.\n  b) Kujaribu kudukia, kuvunja, kukwepa, au kuzima hatua zozote za usalama, usimbaji fiche, au udhibiti wa ufikiaji.\n  c) Kugeuza uhandisi, kukusanya, kutenganisha, au kujaribu kupata msimbo wa chanzo.\n  d) Kutumia boti za kiotomatiki, vikwarua, vitambaa, buibui, au hati kufikia Jukwaa bila idhini yetu ya maandishi.\n  e) Kuingilia au kuvuruga seva, mitandao, au shughuli za Jukwaa.\n  f) Kufanya upimaji wa kupenya au uchunguzi wa udhaifu bila idhini ya maandishi ya awali.\n  g) Kujaribu kuzidisha sana Jukwaa kwa mashambulizi ya kukatalia huduma (DOS) au kukatalia huduma kusambazwa (DDOS).\n\n4.6 UKIUKWAJI WA SOKO:\n  a) Kukamilisha miamala nje ya Jukwaa ili kukwepa ada (ikiwemo kubadilishana maelezo ya mawasiliano kwa madhumuni hayo).\n  b) Kuendesha matokeo ya utafutaji, kategoria, au lebo.\n  c) Kuorodhesha bidhaa kwenye kategoria zisizo sahihi.\n  d) Kuunda orodha rudufu za bidhaa sawa.\n  e) Kuorodhesha huduma bila leseni zinazofaa au sifa inapohitajika.\n  f) Kushindwa kutimiza maagizo baada ya kupokea malipo.\n  g) Kukataa kuwasilisha bidhaa baada ya kupokea malipo.\n  h) Kudai malipo ya ziada nje ya mfumo wa malipo wa Jukwaa.\n\n4.7 ADHABU ZA UKIUKWAJI:\n  a) KUSIMAMISHWA KWA AKAUNTI MARA MOJA NA KWA KUDUMU.\n  b) KUPOTEZA malipo yoyote yanayosubiri, salio la pochi, au manufaa.\n  c) KUREJESHWA kwa mamlaka za ulinzi kwa mashitaka ya jinai.\n  d) DHIMA YA KIRAIA kwa uharibifu wote, gharama, na matumizi yanayotokezwa na sisi au wahusika walioathiriwa.\n  e) MARUFUKU DAIMA kutoka kutumia Jukwaa au huduma zozote zinazohusiana.\n  f) KUCHAPISHWA kwa ukiukwaji (bila data za kibinafsi) kama onyo kwa wengine.\n\n4.8 HAKUNA MFUMO WA ONYO kwa shughuli zilizopigwa marufuku. Ukiukwaji husababisha hatua mara moja bila taarifa ya awali.',
+      'tos_section_3_body':
+          '3.1 Soko Vibe hutoa jukwaa la teknolojia linalounganisha:\n  a) Wanunuzi na wauzaji wa bidhaa na huduma (Huduma za Soko).\n  b) Watumiaji na vipengele vya msaidizi vya AI.\n  c) Watumiaji na vifaa vya mawasiliano, malipo, na usafirishaji.\n\n3.2 JUKUMU KAMA MDHIBITI: Tunachukua nafasi YA MDHIBITI/mtoa jukwaa tu. SISI SI:\n  a) Mhusika katika muamala wowote kati ya wanunuzi na wauzaji.\n  b) Mwajiri, mkuu, au mshirika wa ubia wa muuzaji au mtoa huduma yeyote.\n  c) Mtoa huduma za usafirishaji au vifaa.\n  d) Taasisi ya fedha, benki, au mtoa huduma za malipo (isipokuwa kama wakala wa kuchakata malipo).\n\n3.3 HAKUNA DHAMANA YA MIAMALA: HATUTOI UWAKILISHJI AU DHAMANA YOYOTE kuhusu ubora, usalama, uhalali, au kufaa kwa bidhaa, huduma, au miamala yoyote inayowezeshwa kupitia Jukwaa. Miamala yote ni KWA HATARI YAKO MWENYEWE.\n\n3.4 HUDUMA ZA ESCROW: Tunawezesha malipo kupitia wasindikaji wa malipo wengine. Kwa kukamilisha ununuzi, malipo hushikiliwa kwenye escrow kama mwamuzi huru (neutral third party) hadi mnunuzi athibitishe kupokea mzigo ukiwa salama, kwa mujibu wa Sehemu ya 6.3. Sisi si benki na hatushikili amana au kutoa huduma za kifedha.\n\n3.5 MAREKEBISHO YA HUDUMA: Tunahifadhi HAKI KAMILI kurekebisha, kusimamisha, kuweka vikwazo, au kukomesha kipengele chochote cha Huduma wakati wowote, kwa taarifa au bila taarifa, na bila dhima kwako au kwa mtu mwingine yeyote.\n\n3.6 UPATIKANAJI WA HUDUMA: Hatuhakikishii kuwa Jukwaa litapatikana wakati wote, lisiloingiliwa, lisilo na makosa, au lisilo na virusi au vipengele vingine hatari. Tunaweza kufanya matengenezo, sasisho, au maboresho wakati wowote bila taarifa.\n\n3.7 HUDUMA ZA GUMZO (CHAT): Jukwaa linatoa mfumo wa ujumbe wa ndani kwa ajili ya mawasiliano kati ya wanunuzi na wauzaji. Kwa kutumia huduma ya gumzo, unakubali:\n  a) Mawasiliano yote ndani ya Jukwaa ni ya KIBINAFSI na ni SIRI kati yako na mhusika wa mawasiliano. Soko Vibe haisomi, kuchunguza, au kufichua mawasiliano hayo isipokuwa:\n     i) Inapohitajika na sheria, amri ya mahakama, au utafiti wa kisheria.\n     ii) Tunapoamini kwa nia njema kwamba mawasiliano yanajumuisha ulaghai, vitisho, matusi, au shughuli haramu.\n     iii) Inapohitajika kusuluhisha mgogoro kati ya watumiaji.\n  b) LAZIMA utumie lugha nzuri na kuheshimu watumiaji wengine kwenye gumzo.\n  c) NI MARUFUKU kutuma:\n     i) Ujumbe wa matusi, vitisho, unyanyasaji, au ubaguzi.\n     ii) Picha, video, au maudhui ya ngono, chafu, au ya kushangaza.\n     iii) Viungo vya ulaghai, matangazo ya uwongo, au maudhui yenye madhara.\n     iv) Taarifa za kibinafsi za watumiaji wengine bila ruhusa yao.\n     v) Maudhui yanayokiuka haki za miliki za watu wengine.\n  d) Ujumbe wote wa gumzo huhifadhiwa kwa muda wa akaunti yako pamoja na siku 90 baada ya kufuta akaunti.\n  e) Soko Vibe hana dhima kwa ukweli wa taarifa zinazotumwa kati ya watumiaji kupitia gumzo.\n  f) Unabeba dhima kamilia ya maneno na matendo yako ndani ya mfumo wa gumzo.\n\n3.8 UTHIBITISHO WA WATUMIAJI: Jukwaa linaweza kuomba uthibitisho wa utambulisho (KYC) kabla ya kukuza kiwango cha juu cha matumizi. Uthibitisho huu unashughulikiwa kwa mujibu wa Sera yetu ya Faragha na sheria za Ulinzi wa Taarifa Binafsi za Tanzania (PDPA 2022).\n\n3.9 MALIPO KUPITIA MFUMO MBALIMBALI: Tunawezesha malipo kupitia mfumo mbalimbali ikiwemo fedha za mkononi (M-Pesa, Tigo Pesa, Airtel Money, Halopesa, EzyPesa), benki, na huduma nyingine za malipo. Kila mfumo wa malipo una masharti yake ya ziada ambayo unaweza kukubaliwa kuukubali kabla ya kufanya malipo.\n\n3.10 KUPIGA BIDHAA (BOOST): Wauzaji wanaweza kulipa ada ya ziada ili kupiga bidhaa zao na kuzionyesha kwa umakini zaidi. Ada za kupiga bidhaa ni za HIARI, hazirejeshwi, na zinadhibitiwa na Soko Vibe pekee. Kupiga bidhaa hakikihakikishii mauzo.',
+      'tos_section_4_title':
+          '4. SHUGHULI ZILIZOPIGWA MARUFUKU — SERA KALI YA KUTOVUMILIA',
+      'tos_section_4_body':
+          '4.1 Shughuli zifuatazo zimepigwa MARUFUKU KABISA kwenye Jukwaa. Ukiukwaji wa kifungu chochote kati ya hizi unajumuisha UKIUKWAJI WA KIMAUDHUI wa Masharti haya na kutasababisha KUSIMAMISHWA KWA AKAUNTI MARA MOJA NA KWA KUDUMU, kupoteza salio lolote, na uwezekano wa kurejeshwa kwa mamlaka za ulinzi:\n\n4.2 SHUGHULI HARAMU:\n  a) Kutumia Jukwaa kwa kusudi lolote haramu au kwa kukiuka sheria yoyote ya mitaa, kitaifa, au kimataifa.\n  b) Kujihusisha na utakatishaji fedha, ufadhili wa kigaidi, au uhalifu wowote wa kifedha.\n  c) Kuorodhesha, kuuza, au kuwezesha uuzaji wa vitu haramu ikiwemo lakini sio tu:\n     i) Dawa za kulevya haramu, madawa ya kulevya, na vitu vinavyodhibitiwa.\n     ii) Silaha, bunduki, risasi, vilipuzi, na vifaa vya silaha.\n     iii) Bidhaa ghushi, bandia, au zilizokiwa hakimiliki.\n     iv) Mali iliyoibwa au vitu vilivyopatikana kwa njia haramu.\n     v) Nyenzo hatari, sumu, au vitu vya hatari.\n     vi) Mabaki ya binadamu, sehemu za mwili, au maji ya mwili.\n     vii) Spishi zilizo hatarini kutoweka au bidhaa zilizotengenezwa kutoka kwa spishi zilizo hatarini.\n     viii) Nyenzo za ponografia, chafu, au ngono waziwazi.\n     ix) Vitu vinavyokiuka haki za miliki.\n     x) Vitu vyovyote ambavyo uuzaji wake umepigwa marufuku na sheria ya Tanzania.\n\n4.3 SHUGHULI ZA ULAGHAI NA UDANGANYIFU:\n  a) Kuchapisha matangazo ya uwongo, ya kupotosha, ya udanganyifu, au ya ulaghai.\n  b) Kupotosha hali, ukweli, asili, au vipimo vya bidhaa.\n  c) Kujihusisha na ghiliba ya bei, zabuni bandia, au miamala feki.\n  d) Kuunda akaunti feki, maoni feki, au kuongeza ukadiriaji bandia.\n  e) Kujifanya mtu au shirika lingine, au kudai uhusiano kwa uwongo.\n  f) Kutumia njia za malipo zilizoibwa au za ulaghai.\n  g) Ulaghai wa kurejeshewa fedha au kupinga miamala halali bila sababu halali.\n\n4.4 TABIA ZA KUKERA NA KUDHURU:\n  a) Kuwasumbua, kutukana, kutishia, kufuatilia, kutisha, au kumnyanyasa mtumiaji mwingine.\n  b) Kuchapisha matamshi ya chuki, maudhui ya ubaguzi, au maudhui yanayochochea vurugu.\n  c) Kushiriki taarifa za kibinafsi za wengine bila kibali chao cha wazi (doxxing).\n  d) Kutoa tuhuma za uwongo, taarifa za kukashifu, au ripoti za uovu.\n  e) Kujihusisha na aina yoyote ya ubaguzi kulingana na rangi, kabila, jinsia, dini, umri, ulemavu, au mwelekeo wa kijinsia.\n\n4.5 UKIUKWAJI WA KITAALAM:\n  a) Kupakia misimbo hatari, virusi, wadudu, farasi wa Trojan, au programu yoyote hatari.\n  b) Kujaribu kudukia, kuvunja, kukwepa, au kuzima hatua zozote za usalama, usimbaji fiche, au udhibiti wa ufikiaji.\n  c) Kugeuza uhandisi, kukusanya, kutenganisha, au kujaribu kupata msimbo wa chanzo.\n  d) Kutumia boti za kiotomatiki, vikwarua, vitambaa, buibui, au hati kufikia Jukwaa bila idhini yetu ya maandishi.\n  e) Kuingilia au kuvuruga seva, mitandao, au shughuli za Jukwaa.\n  f) Kufanya upimaji wa kupenya au uchunguzi wa udhaifu bila idhini ya maandishi ya awali.\n  g) Kujaribu kuzidisha sana Jukwaa kwa mashambulizi ya kukatalia huduma (DOS) au kukatalia huduma kusambazwa (DDOS).\n\n4.6 UKIUKWAJI WA SOKO:\n  a) Kukamilisha miamala nje ya Jukwaa ili kukwepa ada (ikiwemo kubadilishana maelezo ya mawasiliano kwa madhumuni hayo).\n  b) Kuendesha matokeo ya utafutaji, kategoria, au lebo.\n  c) Kuorodhesha bidhaa kwenye kategoria zisizo sahihi.\n  d) Kuunda orodha rudufu za bidhaa sawa.\n  e) Kuorodhesha huduma bila leseni zinazofaa au sifa inapohitajika.\n  f) Kushindwa kutimiza maagizo baada ya kupokea malipo.\n  g) Kukataa kuwasilisha bidhaa baada ya kupokea malipo.\n  h) Kudai malipo ya ziada nje ya mfumo wa malipo wa Jukwaa.\n\n4.7 ADHABU ZA UKIUKWAJI:\n  a) KUSIMAMISHWA KWA AKAUNTI MARA MOJA NA KWA KUDUMU.\n  b) KUPOTEZA malipo yoyote yanayosubiri, salio la pochi, au manufaa.\n  c) KUREJESHWA kwa mamlaka za ulinzi kwa mashitaka ya jinai.\n  d) DHIMA YA KIRAIA kwa uharibifu wote, gharama, na matumizi yanayotokezwa na sisi au wahusika walioathiriwa.\n  e) MARUFUKU DAIMA kutoka kutumia Jukwaa au huduma zozote zinazohusiana.\n  f) KUCHAPISHWA kwa ukiukwaji (bila data za kibinafsi) kama onyo kwa wengine.\n\n4.8 HAKUNA MFUMO WA ONYO kwa shughuli zilizopigwa marufuku. Ukiukwaji husababisha hatua mara moja bila taarifa ya awali.',
       'tos_section_5_title': '5. KUORODHESHA NA KUUZA — MAHITAJI MADHUBUTI',
-      'tos_section_5_body': '5.1 USAHIHI WA BIDHAA: Wauzaji lazima watoe maelezo SAHIHI, YA KWELI, na KAMILI ya bidhaa, ikiwemo:\n  a) Hali sahihi (mpya, iliyotumika, iliyorekebishwa, n.k.) na kasoro zote kufahamishwa.\n  b) Bei sahihi kwa Shilingi za Tanzania (TZS) ikijumuisha ushuru wote unaotumika.\n  c) Picha halisi, wazi, na zisizopotosha zinazowakilisha kwa usahihi kitu halisi.\n  d) Vipimo sahihi, ukubwa, rangi, nyenzo, na sifa.\n  e) Kategoria na ndogo kategoria sahihi.\n  f) Viwango sahihi vya hisa na upatikanaji.\n\n5.2 UTIMIZAJI WA MAAGIZO:\n  a) Wauzaji LAZIMA watimize maagizo yaliyothibitishwa ndani ya muda ulioelezwa wa kuchakata.\n  b) Kama hawawezi kutimiza, muuzaji LAZIMA amtaarifu mnunuzi mara moja na aanzishe kurejeshewa fedha kamili.\n  c) Kushindwa kutimiza maagizo kunaweza kusababisha adhabu za akaunti, kusimamishwa, au kukomeshwa.\n  d) Wauzaji wanawajibika kuhakikisha bidhaa zinafikia wanunuzi katika hali iliyoelezwa.\n\n5.3 KYC NA VIKOMO VYA BIDHAA:\n  a) Wauzaji wasio na kibali cha KYC wanaweza kuorodhesha kiwango cha JUU cha BIDHAA TANO (5).\n  b) Kuorodhesha zaidi ya bidhaa 5, wauzaji LAZIMA wakamilishe uthibitisho wa KYC NA kupata kibali cha msimamizi.\n  c) Kibali cha KYC ni kwa HIARI ya wasimamizi wa Jukwaa pekee.\n  d) Wauzaji waliokubaliwa KYC wanazo zaidi ya uthibitishaji upya mara kwa mara.\n  e) Hali ya KYC inaweza KUTENGULIWA na msimamizi wakati wowote kwa ukiukwaji wa Masharti haya.\n  f) Kutenguliwa kwa KYC kunasababisha kupunguzwa mara moja kwa kikomo cha kuorodhesha bidhaa hadi 5.\n\n5.4 MAORODHESHO YALIYOPIGWA MARUFUKU (kwa kuongezea Sehemu ya 4.2):\n  a) Bidhaa za kidijitali zinazokiuka haki za miliki.\n  b) Huduma zinazohitaji leseni za kitaalamu, bila uthibitisho wa leseni halali.\n  c) Kadi za zawadi, vocha, au vitu vya thamani vilivyohifadhiwa vinavyokabiliwa na hatari ya ulaghai.\n  d) Maorodhesho yanayoelekeza wanunuzi kwenye tovuti au majukwaa ya nje.\n  e) Maagizo ya kabla au maagizo ya nyuma bila kufahamisha wazi ratiba za utoaji.\n\n5.5 BEI:\n  a) Bei zote LAZIMA ziorodheshwe kwa Shilingi za Tanzania (TZS).\n  b) Bei LAZIMA zijumuishe ushuru wote unaotumika, ada, na malipo isipokuwa kama imeelezwa wazi.\n  c) Wauzaji hawawezi kutoza bei tofauti na zile zilizoorodheshwa kwenye Jukwaa.\n  d) Tunahifadhi haki ya kuondoa au kurekebisha bei zilizo na makosa dhahiri.\n\n5.6 UONDOAJI WA BIDHAA:\n  a) Tunahifadhi haki ya kuondoa orodha yoyote kwa hiari yetu pekee bila taarifa au maelezo.\n  b) Orodha zilizoondolewa hazihesabiwi kwenye kikomo cha bidhaa cha muuzaji ikiwa zimeondolewa kwa sababu ya ukiukwaji wa sera.\n  c) Wauzaji hawawezi kuorodhesha tena bidhaa zilizoondolewa bila ruhusa yetu.',
+      'tos_section_5_body':
+          '5.1 USAHIHI WA BIDHAA: Wauzaji lazima watoe maelezo SAHIHI, YA KWELI, na KAMILI ya bidhaa, ikiwemo:\n  a) Hali sahihi (mpya, iliyotumika, iliyorekebishwa, n.k.) na kasoro zote kufahamishwa.\n  b) Bei sahihi kwa Shilingi za Tanzania (TZS) ikijumuisha ushuru wote unaotumika.\n  c) Picha halisi, wazi, na zisizopotosha zinazowakilisha kwa usahihi kitu halisi.\n  d) Vipimo sahihi, ukubwa, rangi, nyenzo, na sifa.\n  e) Kategoria na ndogo kategoria sahihi.\n  f) Viwango sahihi vya hisa na upatikanaji.\n\n5.2 UTIMIZAJI WA MAAGIZO:\n  a) Wauzaji LAZIMA watimize maagizo yaliyothibitishwa ndani ya muda ulioelezwa wa kuchakata.\n  b) Kama hawawezi kutimiza, muuzaji LAZIMA amtaarifu mnunuzi mara moja na aanzishe kurejeshewa fedha kamili.\n  c) Kushindwa kutimiza maagizo kunaweza kusababisha adhabu za akaunti, kusimamishwa, au kukomeshwa.\n  d) Wauzaji wanawajibika kuhakikisha bidhaa zinafikia wanunuzi katika hali iliyoelezwa.\n\n5.3 KYC NA VIKOMO VYA BIDHAA:\n  a) Wauzaji wasio na kibali cha KYC wanaweza kuorodhesha kiwango cha JUU cha BIDHAA TANO (5).\n  b) Kuorodhesha zaidi ya bidhaa 5, wauzaji LAZIMA wakamilishe uthibitisho wa KYC NA kupata kibali cha msimamizi.\n  c) Kibali cha KYC ni kwa HIARI ya wasimamizi wa Jukwaa pekee.\n  d) Wauzaji waliokubaliwa KYC wanazo zaidi ya uthibitishaji upya mara kwa mara.\n  e) Hali ya KYC inaweza KUTENGULIWA na msimamizi wakati wowote kwa ukiukwaji wa Masharti haya.\n  f) Kutenguliwa kwa KYC kunasababisha kupunguzwa mara moja kwa kikomo cha kuorodhesha bidhaa hadi 5.\n\n5.4 MAORODHESHO YALIYOPIGWA MARUFUKU (kwa kuongezea Sehemu ya 4.2):\n  a) Bidhaa za kidijitali zinazokiuka haki za miliki.\n  b) Huduma zinazohitaji leseni za kitaalamu, bila uthibitisho wa leseni halali.\n  c) Kadi za zawadi, vocha, au vitu vya thamani vilivyohifadhiwa vinavyokabiliwa na hatari ya ulaghai.\n  d) Maorodhesho yanayoelekeza wanunuzi kwenye tovuti au majukwaa ya nje.\n  e) Maagizo ya kabla au maagizo ya nyuma bila kufahamisha wazi ratiba za utoaji.\n\n5.5 BEI:\n  a) Bei zote LAZIMA ziorodheshwe kwa Shilingi za Tanzania (TZS).\n  b) Bei LAZIMA zijumuishe ushuru wote unaotumika, ada, na malipo isipokuwa kama imeelezwa wazi.\n  c) Wauzaji hawawezi kutoza bei tofauti na zile zilizoorodheshwa kwenye Jukwaa.\n  d) Tunahifadhi haki ya kuondoa au kurekebisha bei zilizo na makosa dhahiri.\n\n5.6 UONDOAJI WA BIDHAA:\n  a) Tunahifadhi haki ya kuondoa orodha yoyote kwa hiari yetu pekee bila taarifa au maelezo.\n  b) Orodha zilizoondolewa hazihesabiwi kwenye kikomo cha bidhaa cha muuzaji ikiwa zimeondolewa kwa sababu ya ukiukwaji wa sera.\n  c) Wauzaji hawawezi kuorodhesha tena bidhaa zilizoondolewa bila ruhusa yetu.',
       'tos_section_6_title': '6. UNUNUZI NA MALIPO — MAJUKUMU YANAYOFUNGA',
-      'tos_section_6_body': '6.1 WAJIBU WA UNUNUZI: Kwa kubonyeza "Nunua" au "Thibitisha Ununuzi" au hatua yoyote sawa, unaingia MAKUBALIANO YANAYOFUNGA KISHERIA kulipa kiasi kamili kilichobainishwa, ikijumuisha bei ya bidhaa, ada za usafirishaji, na ushuru wowote unaotumika.\n\n6.2 NJIA ZA MALIPO: Tunakubali malipo kupitia fedha za mkononi (M-Pesa, Tigo Pesa, Airtel Money, Halopesa, EzyPesa), uhamisho wa benki, na njia nyingine kama zinavyopatikana. Njia zinazopatikana zinaweza kutofautiana kulingana na eneo, thamani ya muamala, na mambo mengine.\n\n6.3 MFUMO WA ESCROW:\n  a) Malipo hushikiliwa kwenye escrow na mchakataji wetu wa malipo hadi mnunuzi atakapothibitisha kupokea na kuridhika.\n  b) Kipindi cha kawaida cha escrow ni SIKU KUMI NA NNE (14) kutoka kwa uthibitisho wa uwasilishaji.\n  c) Kama mnunuzi hathibitishi kupokea au kufungua mgogoro ndani ya siku 14, fedha hutolewa moja kwa moja kwa muuzaji.\n  d) Kama mgogoro utafunguliwa, fedha hubaki kwenye escrow hadi utatuzi.\n  e) Soko Vibe ni mwamuzi huru tu (neutral third party) na haiwakilishi mnunuzi wala muuzaji katika muamala wowote.\n\n6.4 KUREJESHEWA FEDHA NA KURUDISHA:\n  a) Kurejeshewa fedha kunashughulikiwa kwa hiari ya muuzaji au kama ilivyoamuliwa na mchakato wetu wa utatuzi wa migogoro.\n  b) Kurejeshewa fedha, kukithibitishwa, kutashughulikiwa kwa njia ya malipo ya awali ndani ya siku 5-10 za kazi.\n  c) Hatuhakikishii kuwa kurejeshewa fedha kunawezekana kwa miamala yote.\n  d) Ada za usafirishaji na uchakataji zinaweza zisirejeshwe.\n\n6.5 KUGHAIRI:\n  a) Wanunuzi wanaweza kughairi agizo kabla muuzaji hajakubali na kuchakata.\n  b) Baada ya muuzaji kukubali, kughairi kunahitaji kibali cha muuzaji.\n  c) Wauzaji wanaweza kughairi maagizo ikiwa bidhaa haipatikani au ikiwa malipo ya mnunuzi yanashindwa.\n  d) Kughairi kwa ulaghai au viwango vya kughairi kupita kiasi kunaweza kusababisha hatua za akaunti.\n\n6.6 UUZAJI WOTE NI WA MWISHO ukishathibitishwa na mnunuzi, isipokuwa kama ilivyotolewa katika mchakato wetu wa utatuzi wa migogoro.',
+      'tos_section_6_body':
+          '6.1 WAJIBU WA UNUNUZI: Kwa kubonyeza "Nunua" au "Thibitisha Ununuzi" au hatua yoyote sawa, unaingia MAKUBALIANO YANAYOFUNGA KISHERIA kulipa kiasi kamili kilichobainishwa, ikijumuisha bei ya bidhaa, ada za usafirishaji, na ushuru wowote unaotumika.\n\n6.2 NJIA ZA MALIPO: Tunakubali malipo kupitia fedha za mkononi (M-Pesa, Tigo Pesa, Airtel Money, Halopesa, EzyPesa), uhamisho wa benki, na njia nyingine kama zinavyopatikana. Njia zinazopatikana zinaweza kutofautiana kulingana na eneo, thamani ya muamala, na mambo mengine.\n\n6.3 MFUMO WA ESCROW:\n  a) Malipo hushikiliwa kwenye escrow na mchakataji wetu wa malipo hadi mnunuzi atakapothibitisha kupokea na kuridhika.\n  b) Kipindi cha kawaida cha escrow ni SIKU KUMI NA NNE (14) kutoka kwa uthibitisho wa uwasilishaji.\n  c) Kama mnunuzi hathibitishi kupokea au kufungua mgogoro ndani ya siku 14, fedha hutolewa moja kwa moja kwa muuzaji.\n  d) Kama mgogoro utafunguliwa, fedha hubaki kwenye escrow hadi utatuzi.\n  e) Soko Vibe ni mwamuzi huru tu (neutral third party) na haiwakilishi mnunuzi wala muuzaji katika muamala wowote.\n\n6.4 KUREJESHEWA FEDHA NA KURUDISHA:\n  a) Kurejeshewa fedha kunashughulikiwa kwa hiari ya muuzaji au kama ilivyoamuliwa na mchakato wetu wa utatuzi wa migogoro.\n  b) Kurejeshewa fedha, kukithibitishwa, kutashughulikiwa kwa njia ya malipo ya awali ndani ya siku 5-10 za kazi.\n  c) Hatuhakikishii kuwa kurejeshewa fedha kunawezekana kwa miamala yote.\n  d) Ada za usafirishaji na uchakataji zinaweza zisirejeshwe.\n\n6.5 KUGHAIRI:\n  a) Wanunuzi wanaweza kughairi agizo kabla muuzaji hajakubali na kuchakata.\n  b) Baada ya muuzaji kukubali, kughairi kunahitaji kibali cha muuzaji.\n  c) Wauzaji wanaweza kughairi maagizo ikiwa bidhaa haipatikani au ikiwa malipo ya mnunuzi yanashindwa.\n  d) Kughairi kwa ulaghai au viwango vya kughairi kupita kiasi kunaweza kusababisha hatua za akaunti.\n\n6.6 UUZAJI WOTE NI WA MWISHO ukishathibitishwa na mnunuzi, isipokuwa kama ilivyotolewa katika mchakato wetu wa utatuzi wa migogoro.',
       'tos_section_7_title': '7. USAFIRISHAJI NA UWAZAJI WA BIDHAA',
-      'tos_section_7_body': '7.1 WAJIBU WA USAFIRISHAJI:\n\n  a) Muuzaji na mnunuzi hukubaliana juu ya njia ya usafirishaji, gharama, na muda wa uwasilishaji kabla ya malipo kuthibitishwa.\n\n  b) Muuzaji anawajibika kuhakikisha bidhaa zinawasilishwa kwa anwani iliyokubaliwa ndani ya muda ulioelezwa.\n\n  c) Mnunuzi anawajibika kutoa anwani sahihi ya uwasilishaji na kupokea mzigo.\n\n\n\n7.2 UTHIBITISHO WA UPOKEZI:\n\n  a) Fedha za escrow hutolewa kwa muuzaji MARA BAADA ya mnunuzi kuthibitisha kupokea mzigo ukiwa salama.\n\n  b) Uthibitisho wa mnunuzi ni WA MWISHO NA UNAOFUNGA isipokuwa mgogoro ukafunguliwa ndani ya kipindi cha escrow cha siku 14.\n\n  c) Uthibitisho wa upokezi hauwezi kufutwa baada ya fedha kutolewa kwa muuzaji.\n\n\n\n7.3 ASILI YA UWAZAJI:\n\n  a) Sisi SI mtoa usafirishaji, wala hatushughulikii mzigo wa kimwili.\n\n  b) Uwasilishaji unaweza kufanywa na muuzaji mwenyewe, mpeleka mzigo huru, au huduma za usafirishaji za watu wa tatu.\n\n  c) Hatuwajibiki kwa uharibifu, upotevu, au kuchelewa unaotokana na watoa usafirishaji wa tatu.\n\n\n\n7.4 GHARAMA ZA USAFIRISHAJI:\n\n  a) Gharama ya usafirishaji inaonyeshwa kwa mnunuzi kabla ya malipo.\n\n  b) Gharama hii hairejeshwi isipokuwa mgogoro utaamuliwa kwa niaba ya mnunuzi au kama inavyotakiwa na sheria.',
+      'tos_section_7_body':
+          '7.1 WAJIBU WA USAFIRISHAJI:\n\n  a) Muuzaji na mnunuzi hukubaliana juu ya njia ya usafirishaji, gharama, na muda wa uwasilishaji kabla ya malipo kuthibitishwa.\n\n  b) Muuzaji anawajibika kuhakikisha bidhaa zinawasilishwa kwa anwani iliyokubaliwa ndani ya muda ulioelezwa.\n\n  c) Mnunuzi anawajibika kutoa anwani sahihi ya uwasilishaji na kupokea mzigo.\n\n\n\n7.2 UTHIBITISHO WA UPOKEZI:\n\n  a) Fedha za escrow hutolewa kwa muuzaji MARA BAADA ya mnunuzi kuthibitisha kupokea mzigo ukiwa salama.\n\n  b) Uthibitisho wa mnunuzi ni WA MWISHO NA UNAOFUNGA isipokuwa mgogoro ukafunguliwa ndani ya kipindi cha escrow cha siku 14.\n\n  c) Uthibitisho wa upokezi hauwezi kufutwa baada ya fedha kutolewa kwa muuzaji.\n\n\n\n7.3 ASILI YA UWAZAJI:\n\n  a) Sisi SI mtoa usafirishaji, wala hatushughulikii mzigo wa kimwili.\n\n  b) Uwasilishaji unaweza kufanywa na muuzaji mwenyewe, mpeleka mzigo huru, au huduma za usafirishaji za watu wa tatu.\n\n  c) Hatuwajibiki kwa uharibifu, upotevu, au kuchelewa unaotokana na watoa usafirishaji wa tatu.\n\n\n\n7.4 GHARAMA ZA USAFIRISHAJI:\n\n  a) Gharama ya usafirishaji inaonyeshwa kwa mnunuzi kabla ya malipo.\n\n  b) Gharama hii hairejeshwi isipokuwa mgogoro utaamuliwa kwa niaba ya mnunuzi au kama inavyotakiwa na sheria.',
       'tos_section_8_title': '8. ADA, MALIPO, NA USHURU',
-      'tos_section_8_body': '8.1 KUUNDA AKAUNTI NA KUVINJARI JUKWAA NI BURE. Malipo yanatumika tu unapotumia huduma maalum.\n\n\n\n8.2 COMMISSION YA JUKWAA (3.5%):\n\n  a) Commission ya jukwaa ya 3.5% ya thamani ya bidhaa inatozwa KWA MNUNUZI wakati wa ununuzi.\n\n  b) Commission inaongezwa kwenye jumla ya kiasi cha kulipa na inaonyeshwa kwa uwazi kabla ya uthibitisho wa malipo.\n\n  c) MUUZAJI ANAPOKEA THAMANI KAMILI YA UUZAJI wa bidhaa; commission ya jukwaa HAIKATWI kwenye malipo ya muuzaji.\n\n  d) Kwa kuwa commission hulipwa na mnunuzi, si gharama kwa muuzaji na haipunguzi mapato ya muuzaji.\n\n\n\n8.3 ADA ZA MALIPO NA UTOAJI (ClickPesa/MNO):\n\n  a) Ada za ClickPesa na waendeshaji wa fedha za mkononi (MNO) zinaweza kutumika kwa malipo na utoaji wa fedha.\n\n  b) Ada za malipo hubebwa na mhusika anayefanya malipo (kawaida mnunuzi).\n\n  c) Ada za utoaji hubebwa na mhusika anayefanya utoaji (kawaida muuzaji).\n\n  d) Ada zote zinaonyeshwa kabla ya uthibitisho wa malipo au utoaji.\n\n\n\n8.4 HAKUNA KIWANGO CHA CHINI CHA UTOAJI: Hakuna kiwango cha chini cha utoaji wa fedha kutoka pochi yako; unaweza kutoa salio lolote lililopo.\n\n\n\n8.5 ADA ZA KUKUZA NA MATANGAZO: Ada za ziada zinatumika kwa kuangazia bidhaa na vipengele vya matangazo. Ada za kuangazia hazirejeshwi isipokuwa katika kesi za hitilafu za Jukwaa.\n\n\n\n8.6 USHURU:\n\n  a) Wewe ndiye unawajibika pekee kwa kuripoti na kulipa ushuru wote unaotumika kwa miamala yako.\n\n  b) Tunaweza kuhitajika kuripoti taarifa za muamala kwa Mamlaka ya Mapato Tanzania (TRA).\n\n  c) Hatuto ushauri wa ushuru. Wasiliana na mtaalamu wa ushuru kwa mwongozo.\n\n\n\n8.7 MAREKEBISHO YA ADA:\n\n  a) Tunahifadhi haki ya kubadilisha muundo wetu wa ada wakati wowote.\n\n  b) Mabadiliko yatawasilishwa angalau siku 14 kabla ya mabadiliko makubwa.\n\n  c) Kuendelea kutumia baada ya mabadiliko ya ada kunajumuisha kukubali muundo mpya wa ada.\n\n\n\n8.8 ADA ZOTE HAZIREJESHWI isipokuwa kama ilivyoelezwa wazi katika sera yetu ya kurejeshewa fedha au kama inavyotakiwa na sheria.',
+      'tos_section_8_body':
+          '8.1 KUUNDA AKAUNTI NA KUVINJARI JUKWAA NI BURE. Malipo yanatumika tu unapotumia huduma maalum.\n\n\n\n8.2 COMMISSION YA JUKWAA (3.5%):\n\n  a) Commission ya jukwaa ya 3.5% ya thamani ya bidhaa inatozwa KWA MNUNUZI wakati wa ununuzi.\n\n  b) Commission inaongezwa kwenye jumla ya kiasi cha kulipa na inaonyeshwa kwa uwazi kabla ya uthibitisho wa malipo.\n\n  c) MUUZAJI ANAPOKEA THAMANI KAMILI YA UUZAJI wa bidhaa; commission ya jukwaa HAIKATWI kwenye malipo ya muuzaji.\n\n  d) Kwa kuwa commission hulipwa na mnunuzi, si gharama kwa muuzaji na haipunguzi mapato ya muuzaji.\n\n\n\n8.3 ADA ZA MALIPO NA UTOAJI (ClickPesa/MNO):\n\n  a) Ada za ClickPesa na waendeshaji wa fedha za mkononi (MNO) zinaweza kutumika kwa malipo na utoaji wa fedha.\n\n  b) Ada za malipo hubebwa na mhusika anayefanya malipo (kawaida mnunuzi).\n\n  c) Ada za utoaji hubebwa na mhusika anayefanya utoaji (kawaida muuzaji).\n\n  d) Ada zote zinaonyeshwa kabla ya uthibitisho wa malipo au utoaji.\n\n\n\n8.4 HAKUNA KIWANGO CHA CHINI CHA UTOAJI: Hakuna kiwango cha chini cha utoaji wa fedha kutoka pochi yako; unaweza kutoa salio lolote lililopo.\n\n\n\n8.5 ADA ZA KUKUZA NA MATANGAZO: Ada za ziada zinatumika kwa kuangazia bidhaa na vipengele vya matangazo. Ada za kuangazia hazirejeshwi isipokuwa katika kesi za hitilafu za Jukwaa.\n\n\n\n8.6 USHURU:\n\n  a) Wewe ndiye unawajibika pekee kwa kuripoti na kulipa ushuru wote unaotumika kwa miamala yako.\n\n  b) Tunaweza kuhitajika kuripoti taarifa za muamala kwa Mamlaka ya Mapato Tanzania (TRA).\n\n  c) Hatuto ushauri wa ushuru. Wasiliana na mtaalamu wa ushuru kwa mwongozo.\n\n\n\n8.7 MAREKEBISHO YA ADA:\n\n  a) Tunahifadhi haki ya kubadilisha muundo wetu wa ada wakati wowote.\n\n  b) Mabadiliko yatawasilishwa angalau siku 14 kabla ya mabadiliko makubwa.\n\n  c) Kuendelea kutumia baada ya mabadiliko ya ada kunajumuisha kukubali muundo mpya wa ada.\n\n\n\n8.8 ADA ZOTE HAZIREJESHWI isipokuwa kama ilivyoelezwa wazi katika sera yetu ya kurejeshewa fedha au kama inavyotakiwa na sheria.',
       'tos_section_9_title': '9. UTATUZI WA MIGOGORO — MFUMO UNAOFUNGA',
-      'tos_section_9_body': '9.1 UTATUZI USIO RASMI: Kama mgogoro unatokea kati ya watumiaji, unakubali KWANZA kujaribu kutatua moja kwa moja na upande mwingine kupitia mfumo wa ujumbe wa Jukwaa ndani ya siku 7.\n\n9.2 MGOGORO RASMI: Kama utatuzi usio rasmi unashindwa, upande wowote unaweza kuwasilisha mgogoro rasmi kupitia mfumo wa utatuzi wa migogoro wa Jukwaa ndani ya siku 30 kutoka tarehe ya muamala.\n\n9.3 USHAHIDI: Pande zote mbili LAZIMA zitoe ushahidi wote muhimu, ikiwemo:\n  a) Kumbukumbu za gumzo na mawasiliano.\n  b) Kumbukumbu za muamala na uthibitisho wa malipo.\n  c) Picha au video za bidhaa au tatizo.\n  d) Taarifa za usafirishaji na ufuatiliaji.\n  e) Nyaraka nyingine zozote muhimu.\n\n9.4 UAMUZI WA MGOGORO:\n  a) Timu yetu ya utatuzi wa migogoro itakagua kesi kulingana na ushahidi uliotolewa na pande zote mbili.\n  b) Uamuzi wa timu yetu ya utatuzi wa migogoro ni WA MWISHO NA UNAOFUNGA kwa pande zote mbili.\n  c) Maamuzi yanafanywa ndani ya siku 14 baada ya kupokea taarifa zote muhimu.\n  d) Tunahifadhi haki ya kufanya maamuzi ya haki ambayo yanaweza yasifuate kwa ukali Masharti haya.\n\n9.5 ESCROW WAKATI WA MIGOGORO: Fedha hubaki kwenye escrow hadi mgogoro utakapotatuliwa.\n\n9.6 UPATANISHI NA USULUHISHI:\n  a) Kama mgogoro hauwezi kutatuliwa kupitia mchakato wetu wa ndani, utarejeshwa kwa upatanishi.\n  b) Kama upatanishi unashindwa, mgogoro utatatuliwa kwa usuluhishi unaofunga kwa mujibu wa sheria ya Tanzania.\n  c) Usuluhishi utafanyika Dar es Salaam, Tanzania, kwa lugha ya Kiingereza.\n  d) Kila upande utabeba gharama zake mwenyewe, isipokuwa msuluhishi ataamua vinginevyo.\n\n9.7 KANUSHO YA DAA: Unakubali kutatua migogoro nasi kwa MSINGI WA MTU BINAFSI na unakataa haki yoyote ya kushiriki katika kesi za kisheria za darasa au usuluhishi wa pamoja.\n\n9.8 SHERA YA VIKOMO: Madai yoyote au sababu ya hatua inayotokana na Masharti haya au matumizi yako ya Jukwaa lazima yawasilishwe ndani ya MWAKA (1) kutoka tukio linaloleta madai, au yatakataliwa kabisa.',
+      'tos_section_9_body':
+          '9.1 UTATUZI USIO RASMI: Kama mgogoro unatokea kati ya watumiaji, unakubali KWANZA kujaribu kutatua moja kwa moja na upande mwingine kupitia mfumo wa ujumbe wa Jukwaa ndani ya siku 7.\n\n9.2 MGOGORO RASMI: Kama utatuzi usio rasmi unashindwa, upande wowote unaweza kuwasilisha mgogoro rasmi kupitia mfumo wa utatuzi wa migogoro wa Jukwaa ndani ya siku 30 kutoka tarehe ya muamala.\n\n9.3 USHAHIDI: Pande zote mbili LAZIMA zitoe ushahidi wote muhimu, ikiwemo:\n  a) Kumbukumbu za gumzo na mawasiliano.\n  b) Kumbukumbu za muamala na uthibitisho wa malipo.\n  c) Picha au video za bidhaa au tatizo.\n  d) Taarifa za usafirishaji na ufuatiliaji.\n  e) Nyaraka nyingine zozote muhimu.\n\n9.4 UAMUZI WA MGOGORO:\n  a) Timu yetu ya utatuzi wa migogoro itakagua kesi kulingana na ushahidi uliotolewa na pande zote mbili.\n  b) Uamuzi wa timu yetu ya utatuzi wa migogoro ni WA MWISHO NA UNAOFUNGA kwa pande zote mbili.\n  c) Maamuzi yanafanywa ndani ya siku 14 baada ya kupokea taarifa zote muhimu.\n  d) Tunahifadhi haki ya kufanya maamuzi ya haki ambayo yanaweza yasifuate kwa ukali Masharti haya.\n\n9.5 ESCROW WAKATI WA MIGOGORO: Fedha hubaki kwenye escrow hadi mgogoro utakapotatuliwa.\n\n9.6 UPATANISHI NA USULUHISHI:\n  a) Kama mgogoro hauwezi kutatuliwa kupitia mchakato wetu wa ndani, utarejeshwa kwa upatanishi.\n  b) Kama upatanishi unashindwa, mgogoro utatatuliwa kwa usuluhishi unaofunga kwa mujibu wa sheria ya Tanzania.\n  c) Usuluhishi utafanyika Dar es Salaam, Tanzania, kwa lugha ya Kiingereza.\n  d) Kila upande utabeba gharama zake mwenyewe, isipokuwa msuluhishi ataamua vinginevyo.\n\n9.7 KANUSHO YA DAA: Unakubali kutatua migogoro nasi kwa MSINGI WA MTU BINAFSI na unakataa haki yoyote ya kushiriki katika kesi za kisheria za darasa au usuluhishi wa pamoja.\n\n9.8 SHERA YA VIKOMO: Madai yoyote au sababu ya hatua inayotokana na Masharti haya au matumizi yako ya Jukwaa lazima yawasilishwe ndani ya MWAKA (1) kutoka tukio linaloleta madai, au yatakataliwa kabisa.',
       'tos_section_10_title': '10. HAKI ZA MILIKI',
-      'tos_section_10_body': '10.1 UMILIKI WA JUKWAA:\n  a) Jukwaa, likiwemo muundo wake, msimbo, picha, nembo, chapa za biashara, mavazi ya biashara, kiolesura cha mtumiaji, kanuni, hifadhidata, na maudhui yote yasiyotolewa na watumiaji, ni MALI YA PEKEE NA YA KIPEKE ya Soko Vibe.\n  b) Haki zote za miliki zinalindwa na sheria za Tanzania na kimataifa za hakimiliki, chapa za biashara, hati miliki, na siri za biashara.\n  c) Hakuna leseni au haki kwa haki yoyote ya miliki inayokupatia isipokuwa kama ilivyoelezwa wazi hapa.\n\n10.2 LESENI YA MAUDHUI YA MTUMIAJI:\n  a) Unahifadhi umiliki wa maudhui unayochapisha.\n  b) Kwa kuchapisha maudhui, unampa Soko Vibe leseni ISIYO YA KIPEKE, YA DUNIA NZIMA, BILA MALIPO, YA KUDUMU, ISIYOWEZA KUTENGULIWA, INAYOWEZA KUPATIKANA KWA WAKALA NA KUWEZA KUHAMISHWA kutumia, kunakili, kurekebisha, kukubadilisha, kuchapisha, kuonyesha, kusambaza, na kuunda kazi za derivative za maudhui yako kwenye Jukwaa na kuhusiana na biashara yetu.\n  c) Leseni hii inaendelea baada ya kukomesha akaunti yako kwa madhumuni ya kudumisha uadilifu wa Jukwaa na data ya kihistoria.\n\n10.3 UWAKILISHI NA DHAMANA:\n  a) Unawakilisha na kuthibitisha kuwa unamiliki maudhui yote unayochapisha, au una haki zote muhimu, leseni, na ruhusa za kuyachapisha.\n  b) Unawakilisha na kuthibitisha kuwa maudhui yako hayakiuki haki za miliki za mtu mwingine.\n  c) Unakubali kutulipa fidia kwa madai yoyote yanayotokana na maudhui yako.\n\n10.4 UKIUKWAJI WA HAKIMILIKI:\n  a) Tunaheshimu haki za miliki na tunatarajia watumiaji kufanya vivyo hivyo.\n  b) Tutajibu arifa wazi za ukiukwaji wa hakimiliki.\n  c) Wakifanya ukiukwaji mara kwa mara wanaweza kukomeshwa akaunti.\n  d) Kuripoti ukiukwaji, wasiliana nasi kwa maelezo kamili ya maudhui yanayodaiwa kukiuka.\n\n10.5 VIKWAZO: Huwezi kunakili, kurekebisha, kusambaza, kuuza, kukodisha, kugeuza uhandisi, kukusanya, kutenganisha, au kuunda kazi derivative za sehemu yoyote ya Jukwaa bila idhini yetu ya maandishi.',
+      'tos_section_10_body':
+          '10.1 UMILIKI WA JUKWAA:\n  a) Jukwaa, likiwemo muundo wake, msimbo, picha, nembo, chapa za biashara, mavazi ya biashara, kiolesura cha mtumiaji, kanuni, hifadhidata, na maudhui yote yasiyotolewa na watumiaji, ni MALI YA PEKEE NA YA KIPEKE ya Soko Vibe.\n  b) Haki zote za miliki zinalindwa na sheria za Tanzania na kimataifa za hakimiliki, chapa za biashara, hati miliki, na siri za biashara.\n  c) Hakuna leseni au haki kwa haki yoyote ya miliki inayokupatia isipokuwa kama ilivyoelezwa wazi hapa.\n\n10.2 LESENI YA MAUDHUI YA MTUMIAJI:\n  a) Unahifadhi umiliki wa maudhui unayochapisha.\n  b) Kwa kuchapisha maudhui, unampa Soko Vibe leseni ISIYO YA KIPEKE, YA DUNIA NZIMA, BILA MALIPO, YA KUDUMU, ISIYOWEZA KUTENGULIWA, INAYOWEZA KUPATIKANA KWA WAKALA NA KUWEZA KUHAMISHWA kutumia, kunakili, kurekebisha, kukubadilisha, kuchapisha, kuonyesha, kusambaza, na kuunda kazi za derivative za maudhui yako kwenye Jukwaa na kuhusiana na biashara yetu.\n  c) Leseni hii inaendelea baada ya kukomesha akaunti yako kwa madhumuni ya kudumisha uadilifu wa Jukwaa na data ya kihistoria.\n\n10.3 UWAKILISHI NA DHAMANA:\n  a) Unawakilisha na kuthibitisha kuwa unamiliki maudhui yote unayochapisha, au una haki zote muhimu, leseni, na ruhusa za kuyachapisha.\n  b) Unawakilisha na kuthibitisha kuwa maudhui yako hayakiuki haki za miliki za mtu mwingine.\n  c) Unakubali kutulipa fidia kwa madai yoyote yanayotokana na maudhui yako.\n\n10.4 UKIUKWAJI WA HAKIMILIKI:\n  a) Tunaheshimu haki za miliki na tunatarajia watumiaji kufanya vivyo hivyo.\n  b) Tutajibu arifa wazi za ukiukwaji wa hakimiliki.\n  c) Wakifanya ukiukwaji mara kwa mara wanaweza kukomeshwa akaunti.\n  d) Kuripoti ukiukwaji, wasiliana nasi kwa maelezo kamili ya maudhui yanayodaiwa kukiuka.\n\n10.5 VIKWAZO: Huwezi kunakili, kurekebisha, kusambaza, kuuza, kukodisha, kugeuza uhandisi, kukusanya, kutenganisha, au kuunda kazi derivative za sehemu yoyote ya Jukwaa bila idhini yetu ya maandishi.',
       'tos_section_11_title': '11. VIKOMO VYA DHIMA — KANUSHO KAMILI',
-      'tos_section_11_body': '11.1 JUKWAA NA HUDUMA ZOTE ZINATOLETWA "KAMA ILIVYO" NA "KAMA INAVYOPATIKANA" BILA DHAMANA ZOZOTE, KWA UWAZI AU KWA MAADHIMISHO, IKIWEMO LAKINI SI TU DHAMANA ZA UUZAJI, KUFAA KWA MADHUMUNI MAALUM, KUTOKUKIUKA, HAKI YA UMILIKI, AU UTENDAJI.\n\n11.2 HATUTOI DHAMANA KWAMBA:\n  a) Jukwaa litatimiza mahitaji au matarajio yako.\n  b) Jukwaa litakuwa lisiloingiliwa, kwa wakati, salama, au lisilo na makosa.\n  c) Matokeo yaliyopatikana kwa kutumia Jukwaa yatakuwa sahihi au ya kuaminika.\n  d) Ubora wa bidhaa, huduma, taarifa, au nyenzo nyingine zinazonunuliwa au kupatikana kupitia Jukwaa zitakidhi matarajio yako.\n  e) Makosa yoyote kwenye Jukwaa yatasahihishwa.\n\n11.3 KWA KIWANGO CHA JUU ZAIDI KINACHORUHUSIWA NA SHERIA, SOKO VIBE, MAOFISI WAKE, WAKURUGENZI, WAFANYAKAZI, MAJUKUMU, WASHIRIKA, WARITHI, NA WAJIBU WAKE HAWATAWAJIBIKA KWA:\n  a) Uharibifu usio wa moja kwa moja, wa bahati, maalum, unaofuata, wa mfano, au wa adhabu.\n  b) Kupoteza faida, mapato, fursa za biashara, sifa nzuri, au akiba iliyotarajiwa.\n  c) Kupoteza data, maudhui, au taarifa.\n  d) Kupoteza faragha au usalama.\n  e) Majeraha ya mwili au uharibifu wa mali.\n  f) Uharibifu unaotokana na miamala kati ya watumiaji.\n  g) Uharibifu unaotokana na matendo ya Mungu, majanga ya asili, vita, ugaidi, au nguvu za ajali.\n\n11.4 DHIMA YETU YOTE YA JUMLA KUHUSIANA NAYO KWA DAI LOLOTE LINATOKANA NA MASHARTI HAYA AU MATUMIZI YAKO YA JUKWAA HAITAZIDI KIASI CHA JUMLA CHA ADA ZILIZOLIPWA NA WEWE KWETU KATIKA KIPINDI CHA MIEZI KUMI NA MBILI (12) KABLA YA DAI, AU LAKI MOJA YA SHILINGI ZA TANZANIA (TZS 100,000), KINACHO KUBWA ZAIDI KATI YA VYYO.\n\n11.5 KIKOMO HIKI CHA DHIMA KINATUMIKA IWAPO DAI LINATEGEMEA MKATABA, MAKOSA (IKIWEMO UZEMBE), DHIMA KALI, DHIMA YA BIDHAA, AU NADHARIA YOYOTE NYINGINE YA KISHERIA, NA HATA IWAPO TUMESHAURIWA KUHUSU UWEZEKANO WA DHIMA KAMILI.\n\n11.6 MAHALI FULANI HAIRUHUSU KUTENGWA KWA DHAMANA FULANI AU VIKOMO VYA DHIMA FULANI. UKIISHI KATIKA MAHALI HAFO, BAADHI YA VIKOMO HAVIWEZI KUKUHUSU KWA KIWANGO KINACHOPIGWA MARUFUKU NA SHERIA.\n\n11.7 VITENGWAZAJI NA VIKOMO KATIKA SEHEMU HII NI MASHARTI YA MSINGI YA MAKUBALIANO HAYA NA JUKWAA USINGETOLEWA BILA VITENGWAZAJI NA VIKOMO VYENYEWE.',
+      'tos_section_11_body':
+          '11.1 JUKWAA NA HUDUMA ZOTE ZINATOLETWA "KAMA ILIVYO" NA "KAMA INAVYOPATIKANA" BILA DHAMANA ZOZOTE, KWA UWAZI AU KWA MAADHIMISHO, IKIWEMO LAKINI SI TU DHAMANA ZA UUZAJI, KUFAA KWA MADHUMUNI MAALUM, KUTOKUKIUKA, HAKI YA UMILIKI, AU UTENDAJI.\n\n11.2 HATUTOI DHAMANA KWAMBA:\n  a) Jukwaa litatimiza mahitaji au matarajio yako.\n  b) Jukwaa litakuwa lisiloingiliwa, kwa wakati, salama, au lisilo na makosa.\n  c) Matokeo yaliyopatikana kwa kutumia Jukwaa yatakuwa sahihi au ya kuaminika.\n  d) Ubora wa bidhaa, huduma, taarifa, au nyenzo nyingine zinazonunuliwa au kupatikana kupitia Jukwaa zitakidhi matarajio yako.\n  e) Makosa yoyote kwenye Jukwaa yatasahihishwa.\n\n11.3 KWA KIWANGO CHA JUU ZAIDI KINACHORUHUSIWA NA SHERIA, SOKO VIBE, MAOFISI WAKE, WAKURUGENZI, WAFANYAKAZI, MAJUKUMU, WASHIRIKA, WARITHI, NA WAJIBU WAKE HAWATAWAJIBIKA KWA:\n  a) Uharibifu usio wa moja kwa moja, wa bahati, maalum, unaofuata, wa mfano, au wa adhabu.\n  b) Kupoteza faida, mapato, fursa za biashara, sifa nzuri, au akiba iliyotarajiwa.\n  c) Kupoteza data, maudhui, au taarifa.\n  d) Kupoteza faragha au usalama.\n  e) Majeraha ya mwili au uharibifu wa mali.\n  f) Uharibifu unaotokana na miamala kati ya watumiaji.\n  g) Uharibifu unaotokana na matendo ya Mungu, majanga ya asili, vita, ugaidi, au nguvu za ajali.\n\n11.4 DHIMA YETU YOTE YA JUMLA KUHUSIANA NAYO KWA DAI LOLOTE LINATOKANA NA MASHARTI HAYA AU MATUMIZI YAKO YA JUKWAA HAITAZIDI KIASI CHA JUMLA CHA ADA ZILIZOLIPWA NA WEWE KWETU KATIKA KIPINDI CHA MIEZI KUMI NA MBILI (12) KABLA YA DAI, AU LAKI MOJA YA SHILINGI ZA TANZANIA (TZS 100,000), KINACHO KUBWA ZAIDI KATI YA VYYO.\n\n11.5 KIKOMO HIKI CHA DHIMA KINATUMIKA IWAPO DAI LINATEGEMEA MKATABA, MAKOSA (IKIWEMO UZEMBE), DHIMA KALI, DHIMA YA BIDHAA, AU NADHARIA YOYOTE NYINGINE YA KISHERIA, NA HATA IWAPO TUMESHAURIWA KUHUSU UWEZEKANO WA DHIMA KAMILI.\n\n11.6 MAHALI FULANI HAIRUHUSU KUTENGWA KWA DHAMANA FULANI AU VIKOMO VYA DHIMA FULANI. UKIISHI KATIKA MAHALI HAFO, BAADHI YA VIKOMO HAVIWEZI KUKUHUSU KWA KIWANGO KINACHOPIGWA MARUFUKU NA SHERIA.\n\n11.7 VITENGWAZAJI NA VIKOMO KATIKA SEHEMU HII NI MASHARTI YA MSINGI YA MAKUBALIANO HAYA NA JUKWAA USINGETOLEWA BILA VITENGWAZAJI NA VIKOMO VYENYEWE.',
       'tos_section_12_title': '12. KULIPA FIDIA — WAJIBU WAKO WA KUTULINDA',
-      'tos_section_12_body': '12.1 Unakubali KUMLIPA FIDIA, KUMTETEA, NA KUMBUGU DHAHARA Soko Vibe, washirika wake, makampuni tanzu, kampuni mama, maofisa, wakurugenzi, wafanyakazi, majukumu, wakandarasi, watoa leseni, watoa huduma, warithi, na wakabidhi KUTOKA NA DHIDI YA madai yoyote na yote, dhima, uharibifu, hasara, gharama, matumizi, na ada (ikiwemo lakini sio tu ada za mwanasheria za kawaida, gharama za mahakama, kiasi cha makazi, na ada za mashahidi wataalamu) yanayotokana na au kuhusiana na:\n\n  a) Matumizi yako au ufikiaji wako wa Jukwaa.\n  b) Ukiukwaji wako wa kifungu chochote cha Masharti haya.\n  c) Ukiukwaji wako wa haki za mtu mwingine, ikiwemo lakini sio tu haki za miliki, haki za faragha, au haki za kimkataba.\n  d) Maudhui yako uliyochapisha, orodha, maoni, au mawasiliano.\n  e) Muamala wowote unaoingia kupitia Jukwaa.\n  f) Ukiukwaji wako wa sheria, kanuni, au amri yoyote inayotumika.\n  h) Uzembe wako, ulaghai, utovu wa nidhamu, au matendo ya makusudi.\n  i) Mgogoro wowote kati yako na mtumiaji mwingine.\n\n12.2 Tunahifadhi haki, kwa GHARAMA ZAKO, kuchukua ulinzi wa kipekee na udhibiti wa jambo lolote linalowezeshwa kwa fidia. Unakubali kushirikiana na ulinzi wetu wa madai haya.\n\n12.3 Wajibu huu wa fidia unaendelea baada ya kukomesha akaunti yako na Masharti haya.',
+      'tos_section_12_body':
+          '12.1 Unakubali KUMLIPA FIDIA, KUMTETEA, NA KUMBUGU DHAHARA Soko Vibe, washirika wake, makampuni tanzu, kampuni mama, maofisa, wakurugenzi, wafanyakazi, majukumu, wakandarasi, watoa leseni, watoa huduma, warithi, na wakabidhi KUTOKA NA DHIDI YA madai yoyote na yote, dhima, uharibifu, hasara, gharama, matumizi, na ada (ikiwemo lakini sio tu ada za mwanasheria za kawaida, gharama za mahakama, kiasi cha makazi, na ada za mashahidi wataalamu) yanayotokana na au kuhusiana na:\n\n  a) Matumizi yako au ufikiaji wako wa Jukwaa.\n  b) Ukiukwaji wako wa kifungu chochote cha Masharti haya.\n  c) Ukiukwaji wako wa haki za mtu mwingine, ikiwemo lakini sio tu haki za miliki, haki za faragha, au haki za kimkataba.\n  d) Maudhui yako uliyochapisha, orodha, maoni, au mawasiliano.\n  e) Muamala wowote unaoingia kupitia Jukwaa.\n  f) Ukiukwaji wako wa sheria, kanuni, au amri yoyote inayotumika.\n  h) Uzembe wako, ulaghai, utovu wa nidhamu, au matendo ya makusudi.\n  i) Mgogoro wowote kati yako na mtumiaji mwingine.\n\n12.2 Tunahifadhi haki, kwa GHARAMA ZAKO, kuchukua ulinzi wa kipekee na udhibiti wa jambo lolote linalowezeshwa kwa fidia. Unakubali kushirikiana na ulinzi wetu wa madai haya.\n\n12.3 Wajibu huu wa fidia unaendelea baada ya kukomesha akaunti yako na Masharti haya.',
       'tos_section_13_title': '13. KUKOMESHA NA KUSIMAMISHA',
-      'tos_section_13_body': '13.1 KUKOMESHA NA WEWE:\n  a) Unaweza kukomesha akaunti yako wakati wowote kupitia menyu ya Mipangilio au kwa kuwasiliana na usaidizi.\n  b) Kukomesha hakuondoi majukumu yako yanayotokana na miamala uliyoingia kabla ya kukomesha.\n  c) Miamala iliyo bora lazima ikamilishwe au kughairiwa ipasavyo.\n\n13.2 KUKOMESHA NA SISI:\n  a) Tunaweza kusimamisha au kukomesha akaunti yako wakati wowote, kwa sababu yoyote, kwa sababu au bila sababu, kwa taarifa au bila taarifa, kwa HIARI YETU PEKEE.\n  b) Hatupaswi kutoa sababu za kukomesha.\n  c) Hatuwajibiki kwako au kwa mtu mwingine yeyote kwa kukomesha.\n\n13.3 MADHARA YA KUKOMESHA:\n  a) Haki yako ya kufikia na kutumia Jukwaa inakoma mara moja.\n  b) Orodha zako zitazimwa na kuondolewa kwenye matokeo ya utafutaji.\n  c) Miamala yoyote inayosubiri itaghairiwa na kurejeshewa fedha wanunuzi ipasavyo.\n  d) Salio la pochi linaweza kupotea ikiwa kukomesha ni kwa sababu.\n  e) Data yako itashughulikiwa kwa mujibu wa Sera yetu ya Faragha.\n\n13.4 KUENDELEA: Vifungu vifuatavyo vinaendelea baada ya kukomesha: Sehemu ya 8 (Ada), 9 (Utatuzi wa Migogoro), 10 (Haki za Miliki), 11 (Kikomo cha Dhima), 12 (Kulipa Fidia), 14 (Sheria inayotumika), 15 (Masharti ya Jumla), na vifungu vingine vyovyote ambavyo kwa asili yake vinaendelea.',
+      'tos_section_13_body':
+          '13.1 KUKOMESHA NA WEWE:\n  a) Unaweza kukomesha akaunti yako wakati wowote kupitia menyu ya Mipangilio au kwa kuwasiliana na usaidizi.\n  b) Kukomesha hakuondoi majukumu yako yanayotokana na miamala uliyoingia kabla ya kukomesha.\n  c) Miamala iliyo bora lazima ikamilishwe au kughairiwa ipasavyo.\n\n13.2 KUKOMESHA NA SISI:\n  a) Tunaweza kusimamisha au kukomesha akaunti yako wakati wowote, kwa sababu yoyote, kwa sababu au bila sababu, kwa taarifa au bila taarifa, kwa HIARI YETU PEKEE.\n  b) Hatupaswi kutoa sababu za kukomesha.\n  c) Hatuwajibiki kwako au kwa mtu mwingine yeyote kwa kukomesha.\n\n13.3 MADHARA YA KUKOMESHA:\n  a) Haki yako ya kufikia na kutumia Jukwaa inakoma mara moja.\n  b) Orodha zako zitazimwa na kuondolewa kwenye matokeo ya utafutaji.\n  c) Miamala yoyote inayosubiri itaghairiwa na kurejeshewa fedha wanunuzi ipasavyo.\n  d) Salio la pochi linaweza kupotea ikiwa kukomesha ni kwa sababu.\n  e) Data yako itashughulikiwa kwa mujibu wa Sera yetu ya Faragha.\n\n13.4 KUENDELEA: Vifungu vifuatavyo vinaendelea baada ya kukomesha: Sehemu ya 8 (Ada), 9 (Utatuzi wa Migogoro), 10 (Haki za Miliki), 11 (Kikomo cha Dhima), 12 (Kulipa Fidia), 14 (Sheria inayotumika), 15 (Masharti ya Jumla), na vifungu vingine vyovyote ambavyo kwa asili yake vinaendelea.',
       'tos_section_14_title': '14. SHERIA INAYOTUMIKA NA MLAA WA KISHA',
-      'tos_section_14_body': '14.1 SHERIA INAYOTUMIKA: Masharti haya yataongozwa na kufasiriwa kwa mujibu wa sheria za Jamhuri ya Muungano wa Tanzania, bila kuzingatia kanuni zake za mgongano wa sheria. Sheria zinazotumika ni pamoja na lakini sio tu:\n  a) Sheria ya Mkataba wa Kisheria, Sura ya 345.\n  b) Sheria ya Miamala ya Kielektroniki, 2015.\n  c) Sheria ya Makosa ya Mtandaoni, 2015.\n  d) Sheria ya Ulinzi wa Taarifa Binafsi, 2022 (Personal Data Protection Act).\n  e) Sheria ya Kupambana na Utakatishaji Fedha, 2006.\n  f) Sheria ya Ushindani wa Haki, 2003.\n  g) Sheria ya Mamlaka ya Mapato Tanzania, Sura ya 399.\n\n14.2 MLAA WA KISHA: Hatua yoyote ya kisheria au taratibu zinazotokana na Masharti haya au matumizi ya Jukwaa zitafanywa kwa KIPEKEE katika mahakama za Dar es Salaam, Tanzania. Unajisalimisha kwa mamlaka ya kibinafsi ya mahakama hizo.\n\n14.3 WATUMIAJI WA KIMATAIFA: Ukifikia Jukwaa kutoka nje ya Tanzania, unafanya hivyo kwa hiari yako mwenyewe na unawajibika kwa utifiu wa sheria za huko. Hatutoi uwakilishaji kwamba Jukwaa linafaa au linapatikana kwa matumizi katika maeneo nje ya Tanzania.\n\n14.4 Mkataba wa Umoja wa Mataifa kuhusu Mauzo ya Kimataifa ya Bidhaa (CISG) HAUTAtumika kwa Masharti haya.',
+      'tos_section_14_body':
+          '14.1 SHERIA INAYOTUMIKA: Masharti haya yataongozwa na kufasiriwa kwa mujibu wa sheria za Jamhuri ya Muungano wa Tanzania, bila kuzingatia kanuni zake za mgongano wa sheria. Sheria zinazotumika ni pamoja na lakini sio tu:\n  a) Sheria ya Mkataba wa Kisheria, Sura ya 345.\n  b) Sheria ya Miamala ya Kielektroniki, 2015.\n  c) Sheria ya Makosa ya Mtandaoni, 2015.\n  d) Sheria ya Ulinzi wa Taarifa Binafsi, 2022 (Personal Data Protection Act).\n  e) Sheria ya Kupambana na Utakatishaji Fedha, 2006.\n  f) Sheria ya Ushindani wa Haki, 2003.\n  g) Sheria ya Mamlaka ya Mapato Tanzania, Sura ya 399.\n\n14.2 MLAA WA KISHA: Hatua yoyote ya kisheria au taratibu zinazotokana na Masharti haya au matumizi ya Jukwaa zitafanywa kwa KIPEKEE katika mahakama za Dar es Salaam, Tanzania. Unajisalimisha kwa mamlaka ya kibinafsi ya mahakama hizo.\n\n14.3 WATUMIAJI WA KIMATAIFA: Ukifikia Jukwaa kutoka nje ya Tanzania, unafanya hivyo kwa hiari yako mwenyewe na unawajibika kwa utifiu wa sheria za huko. Hatutoi uwakilishaji kwamba Jukwaa linafaa au linapatikana kwa matumizi katika maeneo nje ya Tanzania.\n\n14.4 Mkataba wa Umoja wa Mataifa kuhusu Mauzo ya Kimataifa ya Bidhaa (CISG) HAUTAtumika kwa Masharti haya.',
       'tos_section_15_title': '15. MASHARTI YA JUMLA',
-      'tos_section_15_body': '15.1 MAKUBALIANO KAMILI: Masharti haya, pamoja na Sera yetu ya Faragha na sera nyingine zozote zinazorejelewa hapa, yanaunda MAKUBALIANO KAMILI NA YA KIPEKE kati yako na Soko Vibe kuhusu matumizi yako ya Jukwaa na yanachukua nafasi ya makubaliano yote ya awali na ya sasa, maelewano, mazungumzo, na uwakilishaji, ya maandishi au ya mdomo.\n\n15.2 KUSAMEHE: Kushindwa au kuchelewa kwetu kutekeleza haki au kifungu chochote cha Masharti haya HAKUJUMUISHI kusamehe haki au kifungu hicho. Hakuna kusamehe kutakuwa na ufanisi isipokuwa kwa maandishi na kusainiwa na mwakilishi aliyeidhinishwa wa Soko Vibe.\n\n15.3 KUTENGANA: Iwapo kifungu chochote cha Masharti haya kitapatikana kuwa batili, haramu, au kisichotekelezeka na mahakama yenye mamlaka, vifungu vilivyobaki vitasalia katika NGUVU KAMILI NA UTEKELEZAJI. Kifungu batili kitarekebishwa kwa kiwango cha chini kinachohitajika kukifanya kitekekelezeka.\n\n15.4 UKABIDHIJI:\n  a) HUWEZI kukabidhi au kuhamisha Masharti haya au haki au wajibu wako wowote chini yake, iwe kwa utendaji wa sheria au vinginevyo, bila idhini yetu ya awali ya maandishi.\n  b) Ukabidhiji wowote unaojaribiwa kwa kukiuka sehemu hii ni BATILI.\n  c) Tunaweza kukabidhi Masharti haya kwa uhuru bila kizuizi.\n\n15.5 ARIFA:\n  a) Tunaweza kukupa arifa kupitia anwani yako ya barua pepe iliyosajiliwa, arifa ndani ya programu, arifa za push, SMS, au kwa kuchapisha kwa ujumla kwenye Jukwaa.\n  b) Arifa zinachukuliwa kuwa zimepokelewa masaa 24 baada ya kutuma kwa mawasiliano ya kielektroniki.\n  c) Unaweza kutupa arifa kwa support@soko-vibe.com.\n\n15.6 NGUVU ZA AJALI: Hatutawajibika kwa kushindwa au kuchelewa kwa utendaji kutokana na mazingira zaidi ya udhibiti wetu wa kawaida, ikiwemo lakini sio tu matendo ya Mungu, majanga ya asili, matetemeko ya ardhi, mafuriko, moto, magonjwa ya milipuko, janga, vita, ugaidi, ghasia, vurugu za raia, vikwazo, hatua za serikali, migomo, migogoro ya wafanyakazi, kukatika kwa umeme, kushindwa kwa mtandao, kushindwa kwa miundombinu ya mawasiliano na mtandao, na matendo au kutokuchukua hatua kwa watu wengine.\n\n15.7 UHUSIANO: Hakuna katika Masharti haya yanayounda uhusiano wowote wa wakala, ubia, ubia wa pamoja, ajira, au franchise kati yako na Soko Vibe.\n\n15.8 WANUFAAJI WA WATU WA TATU: Hakuna wanufaaji wa watu wa tatu kwa Masharti haya isipokuwa kama ilivyoelezwa wazi.\n\n15.9 LUGHA: Masharti haya yameandikwa kwa Kiswahili na Kiingereza. Matoleo yote mawili yana nguvu sawa. Iwapo kuna mgogoro au kutofautiana, toleo la Kiswahili linashinda.\n\n15.10 SAHIHI YA KIELEKTRONIKI: Kwa kutumia Jukwaa, unakubali kufanya biashara kwa njia za kielektroniki na unakiri kuwa matumizi yako ya Jukwaa hujumuisha sahihi yako ya kielektroniki na kukubali Masharti haya.',
+      'tos_section_15_body':
+          '15.1 MAKUBALIANO KAMILI: Masharti haya, pamoja na Sera yetu ya Faragha na sera nyingine zozote zinazorejelewa hapa, yanaunda MAKUBALIANO KAMILI NA YA KIPEKE kati yako na Soko Vibe kuhusu matumizi yako ya Jukwaa na yanachukua nafasi ya makubaliano yote ya awali na ya sasa, maelewano, mazungumzo, na uwakilishaji, ya maandishi au ya mdomo.\n\n15.2 KUSAMEHE: Kushindwa au kuchelewa kwetu kutekeleza haki au kifungu chochote cha Masharti haya HAKUJUMUISHI kusamehe haki au kifungu hicho. Hakuna kusamehe kutakuwa na ufanisi isipokuwa kwa maandishi na kusainiwa na mwakilishi aliyeidhinishwa wa Soko Vibe.\n\n15.3 KUTENGANA: Iwapo kifungu chochote cha Masharti haya kitapatikana kuwa batili, haramu, au kisichotekelezeka na mahakama yenye mamlaka, vifungu vilivyobaki vitasalia katika NGUVU KAMILI NA UTEKELEZAJI. Kifungu batili kitarekebishwa kwa kiwango cha chini kinachohitajika kukifanya kitekekelezeka.\n\n15.4 UKABIDHIJI:\n  a) HUWEZI kukabidhi au kuhamisha Masharti haya au haki au wajibu wako wowote chini yake, iwe kwa utendaji wa sheria au vinginevyo, bila idhini yetu ya awali ya maandishi.\n  b) Ukabidhiji wowote unaojaribiwa kwa kukiuka sehemu hii ni BATILI.\n  c) Tunaweza kukabidhi Masharti haya kwa uhuru bila kizuizi.\n\n15.5 ARIFA:\n  a) Tunaweza kukupa arifa kupitia anwani yako ya barua pepe iliyosajiliwa, arifa ndani ya programu, arifa za push, SMS, au kwa kuchapisha kwa ujumla kwenye Jukwaa.\n  b) Arifa zinachukuliwa kuwa zimepokelewa masaa 24 baada ya kutuma kwa mawasiliano ya kielektroniki.\n  c) Unaweza kutupa arifa kwa support@soko-vibe.com.\n\n15.6 NGUVU ZA AJALI: Hatutawajibika kwa kushindwa au kuchelewa kwa utendaji kutokana na mazingira zaidi ya udhibiti wetu wa kawaida, ikiwemo lakini sio tu matendo ya Mungu, majanga ya asili, matetemeko ya ardhi, mafuriko, moto, magonjwa ya milipuko, janga, vita, ugaidi, ghasia, vurugu za raia, vikwazo, hatua za serikali, migomo, migogoro ya wafanyakazi, kukatika kwa umeme, kushindwa kwa mtandao, kushindwa kwa miundombinu ya mawasiliano na mtandao, na matendo au kutokuchukua hatua kwa watu wengine.\n\n15.7 UHUSIANO: Hakuna katika Masharti haya yanayounda uhusiano wowote wa wakala, ubia, ubia wa pamoja, ajira, au franchise kati yako na Soko Vibe.\n\n15.8 WANUFAAJI WA WATU WA TATU: Hakuna wanufaaji wa watu wa tatu kwa Masharti haya isipokuwa kama ilivyoelezwa wazi.\n\n15.9 LUGHA: Masharti haya yameandikwa kwa Kiswahili na Kiingereza. Matoleo yote mawili yana nguvu sawa. Iwapo kuna mgogoro au kutofautiana, toleo la Kiswahili linashinda.\n\n15.10 SAHIHI YA KIELEKTRONIKI: Kwa kutumia Jukwaa, unakubali kufanya biashara kwa njia za kielektroniki na unakiri kuwa matumizi yako ya Jukwaa hujumuisha sahihi yako ya kielektroniki na kukubali Masharti haya.',
       'tos_section_16_title': '16. KUKIRI NA KUKUBALI',
-      'tos_section_16_body': '16.1 KWA KUUNDA AKAUNTI AU KUTUMIA JUKWAA, UNAKIRI WAZI, UNAWAKILISHA, UNATHIBITISHA, NA KUKUBALI KWAMBA:\n  a) Umesoma, umeelewa, na unakubali Masharti haya kwa ukamilifu.\n  b) Una angalau miaka 18 na una uwezo wa kisheria wa kuingia makubaliano haya.\n  c) Unakubali kufungwa kisheria na vifungu vyote vya Masharti haya.\n  d) Unakubali uwasilishaji wa kielektroniki wa makubaliano haya na mawasiliano yote yanayohusiana.\n  e) Unakiri kwamba Masharti haya yanaweza kubadilishwa wakati wowote bila taarifa ya awali.\n  f) Unakubali kukagua Masharti haya mara kwa mara.\n  g) Unakubali kwamba kuendelea kwako kutumia Jukwaa hujumuisha kukubali Masharti yoyote yaliyobadilishwa.\n\n16.2 KAMA HUKUBALIANI NA VIFUNGU VYOTE VYA MASHARTI HAYA, LAZIMA UACHE MARA MOJA KUTUMIA JUKWAA NA UFUTE AKAUNTI YAKO.\n\n16.3 MASHARTI HAYA YANA VIFUNGU VYA USULUHISHI UNAOFUNGA NA KANUSHO YA DAA VINAVYOHUSU HAKI ZAKO ZA KISHERIA. TAFA DHALI USOME KWA MAKINI.',
+      'tos_section_16_body':
+          '16.1 KWA KUUNDA AKAUNTI AU KUTUMIA JUKWAA, UNAKIRI WAZI, UNAWAKILISHA, UNATHIBITISHA, NA KUKUBALI KWAMBA:\n  a) Umesoma, umeelewa, na unakubali Masharti haya kwa ukamilifu.\n  b) Una angalau miaka 18 na una uwezo wa kisheria wa kuingia makubaliano haya.\n  c) Unakubali kufungwa kisheria na vifungu vyote vya Masharti haya.\n  d) Unakubali uwasilishaji wa kielektroniki wa makubaliano haya na mawasiliano yote yanayohusiana.\n  e) Unakiri kwamba Masharti haya yanaweza kubadilishwa wakati wowote bila taarifa ya awali.\n  f) Unakubali kukagua Masharti haya mara kwa mara.\n  g) Unakubali kwamba kuendelea kwako kutumia Jukwaa hujumuisha kukubali Masharti yoyote yaliyobadilishwa.\n\n16.2 KAMA HUKUBALIANI NA VIFUNGU VYOTE VYA MASHARTI HAYA, LAZIMA UACHE MARA MOJA KUTUMIA JUKWAA NA UFUTE AKAUNTI YAKO.\n\n16.3 MASHARTI HAYA YANA VIFUNGU VYA USULUHISHI UNAOFUNGA NA KANUSHO YA DAA VINAVYOHUSU HAKI ZAKO ZA KISHERIA. TAFA DHALI USOME KWA MAKINI.',
       'tos_footer': '© 2026 Soko Vibe Limited. Haki zote zimehifadhiwa.',
 
       'tos_section_chat_title': 'CHAT — MAWASILIANO YA NDANI',
-      'tos_section_chat_body': '3A.1 Huduma za Gumzo: Jukwaa linatoa mfumo wa ujumbe wa ndani kwa ajili ya mawasiliano kati ya wanunuzi na wauzaji. Kwa kutumia huduma ya gumzo, unakubali:\n  a) Mawasiliano yote ndani ya Jukwaa ni ya KIBINAFSI na ni SIRI kati yako na mhusika wa mawasiliano. Soko Vibe haisomi, kuchunguza, au kufichua mawasiliano hayo isipokuwa:\n     i) Inapohitajika na sheria, amri ya mahakama, au utafiti wa kisheria.\n     ii) Tunapoamini kwa nia njema kwamba mawasiliano yanajumuisha ulaghai, vitisho, matusi, au shughuli haramu.\n     iii) Inapohitajika kusuluhisha mgogoro kati ya watumiaji.\n  b) LAZIMA utumie lugha nzuri na kuheshimu watumiaji wengine kwenye gumzo.\n  c) NI MARUFUKU kutuma ujumbe wa matusi, vitisho, unyanyasaji, au ubaguzi.\n  d) NI MARUFUKU kutuma picha, video, au maudhui ya ngono, chafu, au ya kushangaza.\n  e) NI MARUFUKU kutuma viungo vya ulaghai, matangazo ya uwongo, au maudhui yenye madhara.\n  f) NI MARUFUKU kutuma taarifa za kibinafsi za watumiaji wengine bila ruhusa yao.\n  g) Ujumbe wote wa gumzo huhifadhiwa kwa muda wa akaunti yako pamoja na siku 90 baada ya kufuta akaunti.\n  h) Soko Vibe hana dhima kwa ukweli wa taarifa zinazotumwa kati ya watumiaji kupitia gumzo.\n  i) Unabeba dhima kamilia ya maneno na matendo yako ndani ya mfumo wa gumzo.',
+      'tos_section_chat_body':
+          '3A.1 Huduma za Gumzo: Jukwaa linatoa mfumo wa ujumbe wa ndani kwa ajili ya mawasiliano kati ya wanunuzi na wauzaji. Kwa kutumia huduma ya gumzo, unakubali:\n  a) Mawasiliano yote ndani ya Jukwaa ni ya KIBINAFSI na ni SIRI kati yako na mhusika wa mawasiliano. Soko Vibe haisomi, kuchunguza, au kufichua mawasiliano hayo isipokuwa:\n     i) Inapohitajika na sheria, amri ya mahakama, au utafiti wa kisheria.\n     ii) Tunapoamini kwa nia njema kwamba mawasiliano yanajumuisha ulaghai, vitisho, matusi, au shughuli haramu.\n     iii) Inapohitajika kusuluhisha mgogoro kati ya watumiaji.\n  b) LAZIMA utumie lugha nzuri na kuheshimu watumiaji wengine kwenye gumzo.\n  c) NI MARUFUKU kutuma ujumbe wa matusi, vitisho, unyanyasaji, au ubaguzi.\n  d) NI MARUFUKU kutuma picha, video, au maudhui ya ngono, chafu, au ya kushangaza.\n  e) NI MARUFUKU kutuma viungo vya ulaghai, matangazo ya uwongo, au maudhui yenye madhara.\n  f) NI MARUFUKU kutuma taarifa za kibinafsi za watumiaji wengine bila ruhusa yao.\n  g) Ujumbe wote wa gumzo huhifadhiwa kwa muda wa akaunti yako pamoja na siku 90 baada ya kufuta akaunti.\n  h) Soko Vibe hana dhima kwa ukweli wa taarifa zinazotumwa kati ya watumiaji kupitia gumzo.\n  i) Unabeba dhima kamilia ya maneno na matendo yako ndani ya mfumo wa gumzo.',
 
-      'tos_section_withhold_title': '17. HAKI YA KUZUIA, KUSHIKILIA, NA KUTAIFISHA FEDHA',
-      'tos_section_withhold_body': '17.1 HAKI YA KUZUIA FEDHA: Soko Vibe inahifadhi haki KAMILI na ya moja kwa moja ya:\n  a) Kuzaa, kushikilia, au kuzuia pesa zozote zilizopo kwenye pochi (wallet) ya mtumiaji.\n  b) Kuzuiwa kutoa pesa kutoka kwenye escrow au pochi.\n  c) Kutaifisha pesa zote zilizopo kwenye akaunti ya mtumiaji.\n  hii inatumika pale mtumiaji atakapobainika:\n  i) Kutenda udanganyifu, utapeli, au shughuli haramu kupitia Jukwaa.\n  ii) Kuuza bidhaa haramu, feki, au zilizopigwa marufuku.\n  iii) Kuhujumu mfumo, server, au miundombinu ya Jukwaa.\n  iv) Kukiuka masharti makuu ya matumizi (Terms of Service) kwa ukatili.\n  v) Kujihusisha na tabia ya matusi, unyanyasaji, au lugha chafu kwa kiwango cha 3-strike policy.\n\n17.2 HAKI YA KUTAIFISHA FEDHA ZA MATUSI: Kama ilivyoelezwa katika Sehemu ya 4.6, mtumiaji aliyefungiwa akaunti yake kwa sababu ya matusi, lugha chafu, au unyanyasaji wa mara kwa mara, pesa zake ZOTE zilizopo kwenye pochi na escrow ZITATAIFISHWA na kuwa MALI YA JUKWAA kama FAINI YA UKIUKWAJI WA MAKUBALIANO.\n\n17.3 UTATUZI: Mtumiaji ana haki ya kuwasilisha malalamiko kuhusu uamuzi wa kuzuia au kutaifisha fedha ndani ya siku 30 kutoka tarehe ya uamuzi. Malalamiko yatasikilizwa na timu yetu ya utatuzi wa migogoro ndani ya siku 14. Baada ya hapo, uamuzi ni WA MWISHO.\n\n17.4 SHERIA INAYOTUMIKA: Haki ya kuzuia na kutaifisha fedha inafanyika kwa mujibu wa sheria za Jamhuri ya Muungano wa Tanzania, ikiwemoSheria ya Mkataba wa Kisheria na sheria za ulinzi wa wateja. Uamuzi wowote wa mahakama unaothibitisha batili ya kuzuia fedha utatekelezwa mara moja.\n\n17.5 UWEKESHAJI WA DHIKI: Ukiukwaji wa kifungu hiki na mtumiaji yeyote unaweza kusababisha hatua za ziada za kisheria, ikiwemo:\n  a) Kuwasilisha madai mahakamani.\n  b) Kuripoti kwa mamlaka husika za serikali.\n  c) Kuchukua hatua zote za kisheria zinazopatikana kulinda haki za Jukwaa.',
+      'tos_section_withhold_title':
+          '17. HAKI YA KUZUIA, KUSHIKILIA, NA KUTAIFISHA FEDHA',
+      'tos_section_withhold_body':
+          '17.1 HAKI YA KUZUIA FEDHA: Soko Vibe inahifadhi haki KAMILI na ya moja kwa moja ya:\n  a) Kuzaa, kushikilia, au kuzuia pesa zozote zilizopo kwenye pochi (wallet) ya mtumiaji.\n  b) Kuzuiwa kutoa pesa kutoka kwenye escrow au pochi.\n  c) Kutaifisha pesa zote zilizopo kwenye akaunti ya mtumiaji.\n  hii inatumika pale mtumiaji atakapobainika:\n  i) Kutenda udanganyifu, utapeli, au shughuli haramu kupitia Jukwaa.\n  ii) Kuuza bidhaa haramu, feki, au zilizopigwa marufuku.\n  iii) Kuhujumu mfumo, server, au miundombinu ya Jukwaa.\n  iv) Kukiuka masharti makuu ya matumizi (Terms of Service) kwa ukatili.\n  v) Kujihusisha na tabia ya matusi, unyanyasaji, au lugha chafu kwa kiwango cha 3-strike policy.\n\n17.2 HAKI YA KUTAIFISHA FEDHA ZA MATUSI: Kama ilivyoelezwa katika Sehemu ya 4.6, mtumiaji aliyefungiwa akaunti yake kwa sababu ya matusi, lugha chafu, au unyanyasaji wa mara kwa mara, pesa zake ZOTE zilizopo kwenye pochi na escrow ZITATAIFISHWA na kuwa MALI YA JUKWAA kama FAINI YA UKIUKWAJI WA MAKUBALIANO.\n\n17.3 UTATUZI: Mtumiaji ana haki ya kuwasilisha malalamiko kuhusu uamuzi wa kuzuia au kutaifisha fedha ndani ya siku 30 kutoka tarehe ya uamuzi. Malalamiko yatasikilizwa na timu yetu ya utatuzi wa migogoro ndani ya siku 14. Baada ya hapo, uamuzi ni WA MWISHO.\n\n17.4 SHERIA INAYOTUMIKA: Haki ya kuzuia na kutaifisha fedha inafanyika kwa mujibu wa sheria za Jamhuri ya Muungano wa Tanzania, ikiwemoSheria ya Mkataba wa Kisheria na sheria za ulinzi wa wateja. Uamuzi wowote wa mahakama unaothibitisha batili ya kuzuia fedha utatekelezwa mara moja.\n\n17.5 UWEKESHAJI WA DHIKI: Ukiukwaji wa kifungu hiki na mtumiaji yeyote unaweza kusababisha hatua za ziada za kisheria, ikiwemo:\n  a) Kuwasilisha madai mahakamani.\n  b) Kuripoti kwa mamlaka husika za serikali.\n  c) Kuchukua hatua zote za kisheria zinazopatikana kulinda haki za Jukwaa.',
 
       'pp_title': 'SERA YA FARAGHI YA SOKO VIBE',
-      'pp_last_updated': 'Ilisasishwa Mwisho: 29 Julai 2026 | Tarehe ya Kuanza: 29 Julai 2026',
+      'pp_last_updated':
+          'Ilisasishwa Mwisho: 29 Julai 2026 | Tarehe ya Kuanza: 29 Julai 2026',
       'pp_section_1_title': '1. UTANGULIZI NA WIGI',
-      'pp_section_1_body': '1.1 Sera hii ya Faragha ("Sera") inaunda makubaliano ya kisheria yanayofunga kati yako ("Mtumiaji", "wewe", "yako", "Mhusika wa Data") na Soko Vibe ("sisi", "yetu", "Kampuni", "Jukwaa"), kampuni iliyosajiliwa na kufanya kazi kwa mujibu wa sheria za Jamhuri ya Muungano wa Tanzania.\n\n1.2 Sera hii inasimamia ukusanyaji, matumizi, uhifadhi, uchakataji, uhamishaji, ufichuzi, na ulinzi wa data yako ya kibinafsi unapofikia, kujiandikisha, au kutumia programu ya simu ya Soko Vibe, tovuti, au huduma zozote zinazohusiana, vipengele, maudhui, au programu (kwa pamoja "Huduma").\n\n1.3 Kwa kufikia au kutumia Huduma zetu kwa njia yoyote, unakiri wazi kuwa umesoma, umeelewa, na unakubali kwa hiari masharti yote ya Sera hii. Kama hukubaliani na kifungu chochote cha Sera hii, LAZIMA UACHE MARA MOJA kutumia Huduma zetu na ufute akaunti yako.\n\n1.4 Sera hii ni nyongeza ya na inapaswa kusomwa pamoja na Sheria na Masharti yetu. Iwapo kuna mgogoro kati ya Sera hii na Sheria na Masharti, Sheria na Masharti yatashinda isipokuwa Sera hii inatoa ulinzi zaidi kwa data yako ya kibinafsi.\n\n1.5 Tunahifadhi haki kamili ya kurekebisha, kuongezea, kusasisha, au kubadilisha Sera hii wakati wowote bila taarifa ya awali. Marekebisho yoyote yataanza KUTUMIKA MARA MOJA baada ya kuchapishwa kwenye Jukwaa. Kuendelea kwako kutumia Huduma baada ya marekebisho yoyote hujumuisha KUKUBALI KWAKO BILA SHAARTI Sera iliyorekebishwa.\n\n1.6 NI Wajibu WAKO PEKEE kukagua Sera hii mara kwa mara. Tunapendekeza sana uangalie ukurasa huu mara kwa mara kwa mabadiliko yoyote. Tutawataarifu watumiaji waliosajiliwa kuhusu mabadiliko MAKUBWA kupitia barua pepe au arifa ndani ya programu, lakini kutopokea taarifa hiyo hakutabatilisha mabadiliko.\n\n1.7 Sera hii inawatumia watumiaji wote wa Jukwaa, ikiwemo lakini sio tu wanunuzi, wauzaji, waendeshaji, madereva, na wageni wanaovinjari Jukwaa bila kujisajili.',
+      'pp_section_1_body':
+          '1.1 Sera hii ya Faragha ("Sera") inaunda makubaliano ya kisheria yanayofunga kati yako ("Mtumiaji", "wewe", "yako", "Mhusika wa Data") na Soko Vibe ("sisi", "yetu", "Kampuni", "Jukwaa"), kampuni iliyosajiliwa na kufanya kazi kwa mujibu wa sheria za Jamhuri ya Muungano wa Tanzania.\n\n1.2 Sera hii inasimamia ukusanyaji, matumizi, uhifadhi, uchakataji, uhamishaji, ufichuzi, na ulinzi wa data yako ya kibinafsi unapofikia, kujiandikisha, au kutumia programu ya simu ya Soko Vibe, tovuti, au huduma zozote zinazohusiana, vipengele, maudhui, au programu (kwa pamoja "Huduma").\n\n1.3 Kwa kufikia au kutumia Huduma zetu kwa njia yoyote, unakiri wazi kuwa umesoma, umeelewa, na unakubali kwa hiari masharti yote ya Sera hii. Kama hukubaliani na kifungu chochote cha Sera hii, LAZIMA UACHE MARA MOJA kutumia Huduma zetu na ufute akaunti yako.\n\n1.4 Sera hii ni nyongeza ya na inapaswa kusomwa pamoja na Sheria na Masharti yetu. Iwapo kuna mgogoro kati ya Sera hii na Sheria na Masharti, Sheria na Masharti yatashinda isipokuwa Sera hii inatoa ulinzi zaidi kwa data yako ya kibinafsi.\n\n1.5 Tunahifadhi haki kamili ya kurekebisha, kuongezea, kusasisha, au kubadilisha Sera hii wakati wowote bila taarifa ya awali. Marekebisho yoyote yataanza KUTUMIKA MARA MOJA baada ya kuchapishwa kwenye Jukwaa. Kuendelea kwako kutumia Huduma baada ya marekebisho yoyote hujumuisha KUKUBALI KWAKO BILA SHAARTI Sera iliyorekebishwa.\n\n1.6 NI Wajibu WAKO PEKEE kukagua Sera hii mara kwa mara. Tunapendekeza sana uangalie ukurasa huu mara kwa mara kwa mabadiliko yoyote. Tutawataarifu watumiaji waliosajiliwa kuhusu mabadiliko MAKUBWA kupitia barua pepe au arifa ndani ya programu, lakini kutopokea taarifa hiyo hakutabatilisha mabadiliko.\n\n1.7 Sera hii inawatumia watumiaji wote wa Jukwaa, ikiwemo lakini sio tu wanunuzi, wauzaji, waendeshaji, madereva, na wageni wanaovinjari Jukwaa bila kujisajili.',
       'pp_section_2_title': '2. UFAFANUZI NA TAFSIRI',
-      'pp_section_2_body': '2.1 "Data ya Kibinafsi" inamaanisha taarifa yoyote inayohusiana na mtu aliyetambuliwa au anayeweza kutambuliwa, ikiwemo lakini sio tu jina, namba ya kitambulisho, data ya eneo, kitambulisho cha mtandaoni, au sababu moja au zaidi maalum kwa utambulisho wa kimwili, kifiziolojia, kijenetiki, kiakili, kiuchumi, kitamaduni, au kijamii wa mtu huyo.\n\n2.2 "Data Nyeti ya Kibinafsi" inamaanisha data inayofichua asili ya rangi au kabila, maoni ya kisiasa, imani za kidini au kifalsafa, ushirika wa chama cha wafanyakazi, data ya kijenetiki, data ya kibaiometriki kwa utambulisho wa kipekee, data kuhusu afya, au data kuhusu maisha ya ngono au mwelekeo wa kijinsia wa mtu.\n\n2.3 "Uchakataji" inamaanisha operesheni au seti yoyote ya operesheni zinazofanywa kwa data ya kibinafsi, iwe kwa njia za kiotomatiki au la, ikijumuisha ukusanyaji, kurekodi, kupanga, kuweka muundo, kuhifadhi, kurekebisha, kurejesha, kushauriana, kutumia, kufichua, kusambaza, kufuta, au kuharibu.\n\n2.4 "Mdhibiti wa Data" inamaanisha Soko Vibe, ambayo huamua madhumuni na njia za kuchakata data yako ya kibinafsi.\n\n2.5 "Mchakataji wa Data" inamaanisha mtu yeyote wa tatu anayechakata data ya kibinafsi kwa niaba ya Soko Vibe.\n\n2.6 "Afisa Ulinzi wa Data" (DPO) inamaanisha afisa aliyeteuliwa anayewajibika kusimamia mkakati wetu wa ulinzi wa data na utii.\n\n2.7 "Mtu wa Tatu" inamaanisha mtu yeyote halisi au wa kisheria, mamlaka ya umma, wakala, au shirika lingine zaidi ya mhusika wa data, mdhibiti wa data, mchakataji wa data, na watu walioidhinishwa kuchakata data chini ya mamlaka ya moja kwa moja ya mdhibiti au mchakataji.\n\n2.8 "Idhini" inamaanisha dalili yoyote iliyotolewa kwa hiari, maalum, yenye taarifa, na isiyo na utata ya matakwa yako ambayo unaashiria kukubali kuchakatwa kwa data yako ya kibinafsi.',
+      'pp_section_2_body':
+          '2.1 "Data ya Kibinafsi" inamaanisha taarifa yoyote inayohusiana na mtu aliyetambuliwa au anayeweza kutambuliwa, ikiwemo lakini sio tu jina, namba ya kitambulisho, data ya eneo, kitambulisho cha mtandaoni, au sababu moja au zaidi maalum kwa utambulisho wa kimwili, kifiziolojia, kijenetiki, kiakili, kiuchumi, kitamaduni, au kijamii wa mtu huyo.\n\n2.2 "Data Nyeti ya Kibinafsi" inamaanisha data inayofichua asili ya rangi au kabila, maoni ya kisiasa, imani za kidini au kifalsafa, ushirika wa chama cha wafanyakazi, data ya kijenetiki, data ya kibaiometriki kwa utambulisho wa kipekee, data kuhusu afya, au data kuhusu maisha ya ngono au mwelekeo wa kijinsia wa mtu.\n\n2.3 "Uchakataji" inamaanisha operesheni au seti yoyote ya operesheni zinazofanywa kwa data ya kibinafsi, iwe kwa njia za kiotomatiki au la, ikijumuisha ukusanyaji, kurekodi, kupanga, kuweka muundo, kuhifadhi, kurekebisha, kurejesha, kushauriana, kutumia, kufichua, kusambaza, kufuta, au kuharibu.\n\n2.4 "Mdhibiti wa Data" inamaanisha Soko Vibe, ambayo huamua madhumuni na njia za kuchakata data yako ya kibinafsi.\n\n2.5 "Mchakataji wa Data" inamaanisha mtu yeyote wa tatu anayechakata data ya kibinafsi kwa niaba ya Soko Vibe.\n\n2.6 "Afisa Ulinzi wa Data" (DPO) inamaanisha afisa aliyeteuliwa anayewajibika kusimamia mkakati wetu wa ulinzi wa data na utii.\n\n2.7 "Mtu wa Tatu" inamaanisha mtu yeyote halisi au wa kisheria, mamlaka ya umma, wakala, au shirika lingine zaidi ya mhusika wa data, mdhibiti wa data, mchakataji wa data, na watu walioidhinishwa kuchakata data chini ya mamlaka ya moja kwa moja ya mdhibiti au mchakataji.\n\n2.8 "Idhini" inamaanisha dalili yoyote iliyotolewa kwa hiari, maalum, yenye taarifa, na isiyo na utata ya matakwa yako ambayo unaashiria kukubali kuchakatwa kwa data yako ya kibinafsi.',
       'pp_section_3_title': '3. TAARIFA TUNAZOKUSANYA — ORODHA KAMILI',
-      'pp_section_3_body': '3.1 TAARIFA ZA UTAAMBULISHO WA KIBINAFSI:\n  a) Jina kamili la kisheria (jina la kwanza, jina la kati, jina la mwisho) kama linavyoonekana kwenye kitambulisho chako cha serikali.\n  b) Tarehe ya kuzaliwa na uthibitisho wa umri.\n  c) Utambulisho wa jinsia.\n  d) Uraia na nchi ya makazi.\n  e) Nyaraka za utambulisho zilizotolewa na serikali, ikiwemo lakini sio tu:\n     i) Namba ya Kitambulisho cha Taifa (NIDA) na picha ya kitambulisho.\n     ii) Namba ya pasipoti, picha ya pasipoti, na nakala ya pasipoti.\n     iii) Namba ya Leseni ya Udereva, darasa, na nakala ya leseni.\n     iv) Kitambulisho cha Mpiga Kura.\n     v) Hati ya makazi au kibali cha kazi (kwa raia wa kigeni).\n  f) Data ya kibaiometriki ikijumuisha picha za utambuzi wa uso (selfie) na data ya alama za vidole inapotumika.\n  g) Sahihi (skani ya kielektroniki au wino).\n\n3.2 TAARIFA ZA MAWASILIANO:\n  a) Anwani ya barua pepe ya msingi na anwani zozote mbadala za barua pepe.\n  b) Namba za simu za mkononi ikijumuisha taarifa ya mtoa huduma wa mtandao.\n  c) Anwani ya makazi ya kudumu ikijumuisha jina la mtaa, namba ya nyumba, kata, wilaya, mkoa, na namba ya posta.\n  d) Anwani ya biashara (ikihusika).\n  e) Taarifa ya mawasiliano ya dharura ikijumuisha jina, uhusiano, namba ya simu, na barua pepe.\n\n3.3 TAARIFA ZA KIFEDHA:\n  a) Maelezo ya akaunti ya benki ikijumuisha jina la benki, tawi, namba ya akaunti, na jina la mmiliki wa akaunti.\n  b) Namba za akaunti za fedha za mkononi (M-Pesa, Tigo Pesa, Airtel Money, Halopesa, EzyPesa, n.k.).\n  c) Historia ya miamala ikijumuisha kiasi, tarehe, washirika, na kumbukumbu za muamala.\n  d) Taarifa za kadi ya malipo (zilizochakatwa kupitia wasindikaji wa tatu wanaotii PCI-DSS; HATUHIFADHI kadi kamili).\n  e) Salio la pochi na kumbukumbu za muamala ndani ya Jukwaa.\n  f) Mapendeleo ya malipo na historia ya utoaji.\n  g) Namba ya kitambulisho cha kodi (TIN) na vyeti vya usajili wa biashara (kwa akaunti za biashara).\n\n3.4 DATA YA ENEO NA MWENDO:\n  a) Data halisi ya GPS ya eneo kwa wakati halisi programu inapotumika (mbele).\n  b) Data ya eneo nyuma programu inapopunguzwa wakati wa usafiri, uwasilishaji, au vipindi vya ufuatiliaji.\n  c) Data ya kihistoria ya eneo ikijumuisha maeneo yanayotembelewa mara kwa mara, mwelekeo wa usafiri, na njia.\n  d) Maeneo yaliyowekwa alama ya kijiografia kwenye orodha za bidhaa.\n  e) Eneo la kukadiria kulingana na anwani ya IP.\n\n3.5 TAARIFA ZA KIFAA NA ZA KITAALAM:\n  a) Aina ya kifaa, mfano, mtengenezaji, na toleo la mfumo wa uendeshaji.\n  b) Vitambulisho vya kipekee vya kifaa (IMEI, IMSI, Android ID, iOS IDFA, anwani ya MAC).\n  c) Anwani ya IP (IPv4 na IPv6).\n  d) Aina ya kivinjari, toleo, na mipangilio ya lugha.\n  e) Azimio la skrini, kina cha rangi, msongamano wa saizi, na mwelekeo wa kifaa.\n  f) Mtoa huduma wa mtandao wa simu, aina ya muunganisho (WiFi, 4G, 5G, n.k.), nguvu ya ishara, na kasi ya mtandao.\n  g) Toleo la programu, namba ya ujenzi, na chaneli ya sasisho.\n  h) Orodha ya programu zilizosakinishwa na ruhusa zilizotolewa.\n  i) Kiwango cha betri, nafasi ya uhifadhi, na matumizi ya kumbukumbu.\n  j) Saa za eneo na mipangilio ya kikanda.\n\n3.6 DATA YA MATUMIZI NA TABIA:\n  a) Kurasa zilizotazamwa, muda uliotumika kwenye kila ukurasa, kina cha kusogeza, na mwelekeo wa mwingiliano.\n  b) Maswali ya utafutaji, historia ya utafutaji, na mwingiliano wa kukamilisha kiotomatiki.\n  c) Bidhaa zilizotazamwa, zilizohifadhiwa kwa orodha ya tamaa, zilizoshirikiwa, au kulinganishwa.\n  d) Historia ya ununuzi ikijumuisha vitu vilivyonunuliwa, kiasi kilicholipwa, na kurejeshewa fedha/kurudisha historia.\n  e) Historia ya uorodheshaji ikijumuisha bidhaa zilizoorodheshwa, kuhaririwa, kuangaziwa, au kuondolewa.\n  f) Ukadiriaji na maoni yaliyowasilishwa na wewe na kukuhusu.\n  g) Ujumbe wa gumzo, historia ya mawasiliano, na kumbukumbu za simu ndani ya Jukwaa.\n  h) Historia ya safari ikijumuisha maeneo ya kuokota, maeneo ya kushusha, njia zilizochukuliwa, kiasi cha nauli, na ukadiriaji wa dereva/mwendeshaji.\n  i) Mwelekeo wa matumizi ya vipengele, data ya mtiririko wa kubofya, na rekodi za kikao.\n  j) Ripoti za ajali, kumbukumbu za makosa, na vipimo vya utendaji.\n\n3.7 DATA YA MAWASILIANO:\n  a) Ujumbe wote wa gumzo uliobadilishwa kati ya watumiaji, ikiwemo maandishi, picha, ujumbe wa sauti, na faili.\n  b) Tiketi za usaidizi kwa wateja, barua pepe, na nakala za gumzo.\n  c) Mawasiliano ya utatuzi wa migogoro na ushahidi uliotolewa.\n  d) Simu zilizopigwa kupitia kipengele cha simu cha Jukwaa.\n  e) Mapendeleo ya arifa na kumbukumbu za uwasilishaji (push, SMS, barua pepe, ndani ya programu).\n\n3.8 MAUDHUI YALIYOUNDWA NA MTUMIAJI:\n  a) Orodha za bidhaa ikijumuisha picha, video, maelezo, bei, na vipimo.\n  b) Maoni, ukadiriaji, maoni, na majibu.\n  c) Picha za wasifu, wasifu, na sasisho za hali.\n  d) Viungo vya mitandao ya kijamii na maudhui yaliyoshirikiwa.',
+      'pp_section_3_body':
+          '3.1 TAARIFA ZA UTAAMBULISHO WA KIBINAFSI:\n  a) Jina kamili la kisheria (jina la kwanza, jina la kati, jina la mwisho) kama linavyoonekana kwenye kitambulisho chako cha serikali.\n  b) Tarehe ya kuzaliwa na uthibitisho wa umri.\n  c) Utambulisho wa jinsia.\n  d) Uraia na nchi ya makazi.\n  e) Nyaraka za utambulisho zilizotolewa na serikali, ikiwemo lakini sio tu:\n     i) Namba ya Kitambulisho cha Taifa (NIDA) na picha ya kitambulisho.\n     ii) Namba ya pasipoti, picha ya pasipoti, na nakala ya pasipoti.\n     iii) Namba ya Leseni ya Udereva, darasa, na nakala ya leseni.\n     iv) Kitambulisho cha Mpiga Kura.\n     v) Hati ya makazi au kibali cha kazi (kwa raia wa kigeni).\n  f) Data ya kibaiometriki ikijumuisha picha za utambuzi wa uso (selfie) na data ya alama za vidole inapotumika.\n  g) Sahihi (skani ya kielektroniki au wino).\n\n3.2 TAARIFA ZA MAWASILIANO:\n  a) Anwani ya barua pepe ya msingi na anwani zozote mbadala za barua pepe.\n  b) Namba za simu za mkononi ikijumuisha taarifa ya mtoa huduma wa mtandao.\n  c) Anwani ya makazi ya kudumu ikijumuisha jina la mtaa, namba ya nyumba, kata, wilaya, mkoa, na namba ya posta.\n  d) Anwani ya biashara (ikihusika).\n  e) Taarifa ya mawasiliano ya dharura ikijumuisha jina, uhusiano, namba ya simu, na barua pepe.\n\n3.3 TAARIFA ZA KIFEDHA:\n  a) Maelezo ya akaunti ya benki ikijumuisha jina la benki, tawi, namba ya akaunti, na jina la mmiliki wa akaunti.\n  b) Namba za akaunti za fedha za mkononi (M-Pesa, Tigo Pesa, Airtel Money, Halopesa, EzyPesa, n.k.).\n  c) Historia ya miamala ikijumuisha kiasi, tarehe, washirika, na kumbukumbu za muamala.\n  d) Taarifa za kadi ya malipo (zilizochakatwa kupitia wasindikaji wa tatu wanaotii PCI-DSS; HATUHIFADHI kadi kamili).\n  e) Salio la pochi na kumbukumbu za muamala ndani ya Jukwaa.\n  f) Mapendeleo ya malipo na historia ya utoaji.\n  g) Namba ya kitambulisho cha kodi (TIN) na vyeti vya usajili wa biashara (kwa akaunti za biashara).\n\n3.4 DATA YA ENEO NA MWENDO:\n  a) Data halisi ya GPS ya eneo kwa wakati halisi programu inapotumika (mbele).\n  b) Data ya eneo nyuma programu inapopunguzwa wakati wa usafiri, uwasilishaji, au vipindi vya ufuatiliaji.\n  c) Data ya kihistoria ya eneo ikijumuisha maeneo yanayotembelewa mara kwa mara, mwelekeo wa usafiri, na njia.\n  d) Maeneo yaliyowekwa alama ya kijiografia kwenye orodha za bidhaa.\n  e) Eneo la kukadiria kulingana na anwani ya IP.\n\n3.5 TAARIFA ZA KIFAA NA ZA KITAALAM:\n  a) Aina ya kifaa, mfano, mtengenezaji, na toleo la mfumo wa uendeshaji.\n  b) Vitambulisho vya kipekee vya kifaa (IMEI, IMSI, Android ID, iOS IDFA, anwani ya MAC).\n  c) Anwani ya IP (IPv4 na IPv6).\n  d) Aina ya kivinjari, toleo, na mipangilio ya lugha.\n  e) Azimio la skrini, kina cha rangi, msongamano wa saizi, na mwelekeo wa kifaa.\n  f) Mtoa huduma wa mtandao wa simu, aina ya muunganisho (WiFi, 4G, 5G, n.k.), nguvu ya ishara, na kasi ya mtandao.\n  g) Toleo la programu, namba ya ujenzi, na chaneli ya sasisho.\n  h) Orodha ya programu zilizosakinishwa na ruhusa zilizotolewa.\n  i) Kiwango cha betri, nafasi ya uhifadhi, na matumizi ya kumbukumbu.\n  j) Saa za eneo na mipangilio ya kikanda.\n\n3.6 DATA YA MATUMIZI NA TABIA:\n  a) Kurasa zilizotazamwa, muda uliotumika kwenye kila ukurasa, kina cha kusogeza, na mwelekeo wa mwingiliano.\n  b) Maswali ya utafutaji, historia ya utafutaji, na mwingiliano wa kukamilisha kiotomatiki.\n  c) Bidhaa zilizotazamwa, zilizohifadhiwa kwa orodha ya tamaa, zilizoshirikiwa, au kulinganishwa.\n  d) Historia ya ununuzi ikijumuisha vitu vilivyonunuliwa, kiasi kilicholipwa, na kurejeshewa fedha/kurudisha historia.\n  e) Historia ya uorodheshaji ikijumuisha bidhaa zilizoorodheshwa, kuhaririwa, kuangaziwa, au kuondolewa.\n  f) Ukadiriaji na maoni yaliyowasilishwa na wewe na kukuhusu.\n  g) Ujumbe wa gumzo, historia ya mawasiliano, na kumbukumbu za simu ndani ya Jukwaa.\n  h) Historia ya safari ikijumuisha maeneo ya kuokota, maeneo ya kushusha, njia zilizochukuliwa, kiasi cha nauli, na ukadiriaji wa dereva/mwendeshaji.\n  i) Mwelekeo wa matumizi ya vipengele, data ya mtiririko wa kubofya, na rekodi za kikao.\n  j) Ripoti za ajali, kumbukumbu za makosa, na vipimo vya utendaji.\n\n3.7 DATA YA MAWASILIANO:\n  a) Ujumbe wote wa gumzo uliobadilishwa kati ya watumiaji, ikiwemo maandishi, picha, ujumbe wa sauti, na faili.\n  b) Tiketi za usaidizi kwa wateja, barua pepe, na nakala za gumzo.\n  c) Mawasiliano ya utatuzi wa migogoro na ushahidi uliotolewa.\n  d) Simu zilizopigwa kupitia kipengele cha simu cha Jukwaa.\n  e) Mapendeleo ya arifa na kumbukumbu za uwasilishaji (push, SMS, barua pepe, ndani ya programu).\n\n3.8 MAUDHUI YALIYOUNDWA NA MTUMIAJI:\n  a) Orodha za bidhaa ikijumuisha picha, video, maelezo, bei, na vipimo.\n  b) Maoni, ukadiriaji, maoni, na majibu.\n  c) Picha za wasifu, wasifu, na sasisho za hali.\n  d) Viungo vya mitandao ya kijamii na maudhui yaliyoshirikiwa.',
       'pp_section_4_title': '4. NJIA ZA UKUSANYAJI DATA',
-      'pp_section_4_body': '4.1 TAARIFA UNAZOTOA MOJA KWA MOJA:\n  a) Fomu za usajili na kuunda akaunti.\n  b) Uwasilishaji wa uthibitisho wa KYC (picha, nyaraka, selfie).\n  c) Fomu za kuorodhesha bidhaa na michakato ya malipo.\n  d) Mawasiliano na watumiaji wengine na usaidizi kwa wateja.\n  e) Mipangilio ya wasifu na mapendeleo.\n  f) Maoni, tafiti, na ushiriki wa matangazo.\n\n4.2 TAARIFA ZINAZOKUSANYWA KIOTOMATIKI:\n  a) Kupitia vidakuzi, vibamba vya ufuatiliaji, na teknolojia zinazofanana.\n  b) Kupitia kumbukumbu za seva na zana za uchambuzi.\n  c) Kupitia uchunguzi wa alama za kifaa na uchambuzi wa tabia.\n  d) Kupitia GPS, utafutaji wa WiFi, na kuweka minara ya simu.\n  e) Kupitia kurekodi kikao na zana za ramani za joto.\n\n4.3 TAARIFA KUTOKA KWA WATU WA TATU:\n  a) Data ya Kuingia kwa Google (jina, barua pepe, picha ya wasifu).\n  b) Wasindikaji wa malipo (uthibitisho wa muamala, hali ya malipo).\n  c) Ofisi za mikopo na hifadhidata za kuzuia ulaghai.\n  d) Hifadhidata za serikali za uthibitisho wa utambulisho.\n  e) Majukwaa ya mitandao ya kijamii (ukichagua kuunganisha akaunti).\n  f) Rekodi za umma na taarifa zinazopatikana kwa umma.',
+      'pp_section_4_body':
+          '4.1 TAARIFA UNAZOTOA MOJA KWA MOJA:\n  a) Fomu za usajili na kuunda akaunti.\n  b) Uwasilishaji wa uthibitisho wa KYC (picha, nyaraka, selfie).\n  c) Fomu za kuorodhesha bidhaa na michakato ya malipo.\n  d) Mawasiliano na watumiaji wengine na usaidizi kwa wateja.\n  e) Mipangilio ya wasifu na mapendeleo.\n  f) Maoni, tafiti, na ushiriki wa matangazo.\n\n4.2 TAARIFA ZINAZOKUSANYWA KIOTOMATIKI:\n  a) Kupitia vidakuzi, vibamba vya ufuatiliaji, na teknolojia zinazofanana.\n  b) Kupitia kumbukumbu za seva na zana za uchambuzi.\n  c) Kupitia uchunguzi wa alama za kifaa na uchambuzi wa tabia.\n  d) Kupitia GPS, utafutaji wa WiFi, na kuweka minara ya simu.\n  e) Kupitia kurekodi kikao na zana za ramani za joto.\n\n4.3 TAARIFA KUTOKA KWA WATU WA TATU:\n  a) Data ya Kuingia kwa Google (jina, barua pepe, picha ya wasifu).\n  b) Wasindikaji wa malipo (uthibitisho wa muamala, hali ya malipo).\n  c) Ofisi za mikopo na hifadhidata za kuzuia ulaghai.\n  d) Hifadhidata za serikali za uthibitisho wa utambulisho.\n  e) Majukwaa ya mitandao ya kijamii (ukichagua kuunganisha akaunti).\n  f) Rekodi za umma na taarifa zinazopatikana kwa umma.',
       'pp_section_5_title': '5. MADHUMUNI NA MSINGI WA KISHERIA WA UCHAKATAJI',
-      'pp_section_5_body': '5.1 Tunachakata data yako ya kibinafsi kwa madhumuni yafuatayo, kwa kuzingatia misingi ifuatayo ya kisheria:\n\n5.2 ULAZIMA WA KIMKATABA:\n  a) Kuunda na kudumisha akaunti yako kwenye Jukwaa.\n  b) Kuwezesha miamala kati ya wanunuzi na wauzaji.\n  c) Kuunganisha waendeshaji na madereva na kuchakata huduma za usafiri.\n  d) Kuchakata malipo, huduma za escrow, na malipo.\n  e) Kutoa usaidizi kwa wateja na utatuzi wa migogoro.\n  f) Kuwasilisha bidhaa, huduma, na maudhui ya kidijitali.\n\n5.3 UTIIFU WA SHERIA:\n  a) Kutii Sheria ya Ulinzi wa Data Tanzania, 2022.\n  b) Kutii Sheria ya Kupambana na Utakatishaji Fedha Tanzania.\n  c) Kutii Sheria ya Miamala ya Kielektroniki Tanzania.\n  d) Kutii wajibu wa kuripoti kodi kwa Mamlaka ya Mapato Tanzania (TRA).\n  e) Kutii amri za mahakama, taratibu za kisheria, au maombi ya serikali.\n  f) Kutekeleza Sheria na Masharti yetu na Sera hii ya Faragha.\n  g) Kuzuia, kugundua, na kuchunguza ulaghai, utakatishaji fedha, na shughuli nyingine haramu.\n\n5.4 MAMBO HALALI:\n  a) Kuboresha, kuongeza, na kubinafsisha Jukwaa na Huduma.\n  b) Kuchambua tabia za watumiaji na mwelekeo ili kuboresha matumizi.\n  c) Kuunda vipengele vipya, bidhaa, na huduma.\n  d) Kuhakikisha usalama na uadilifu wa Jukwaa.\n  e) Kutuma ujumbe wa kiutawala, arifa za usalama, na sasisho za huduma.\n  f) Kuzalisha uchambuzi na ripoti zilizojumlishwa, bila jina.\n  g) Kufanya utafiti wa soko na mipango ya biashara.\n\n5.5 IDHINI:\n  a) Kutuma mawasiliano ya masoko na matangazo (inayoweza kutenguliwa wakati wowote).\n  b) Kukusanya data sahihi ya eneo kwa vipengele visivyo muhimu.\n  c) Kutumia data yako kwa uchunguzi wa tabia na ubinafsishaji.\n  d) Kushiriki data yako na washirika wateule wa tatu kwa madhumuni yao wenyewe.\n  e) Kuchakata data nyeti ya kibinafsi ambapo idhini ya wazi inahitajika.',
-      'pp_section_6_title': '6. KUSHIRIKI NA KUFICHUA DATA — MASHARTI MADHUBUTI',
-      'pp_section_6_body': '6.1 KANUNO YA JUMLA: HATUUZI na HATUTAUZA taarifa zako za kibinafsi kwa mtu yeyote wa tatu chini ya hali yoyote. Ukiukwaji wowote wa kanuni hii na mfanyakazi, mkandarasi, au wakala yeyote utasababisha kukomeshwa mara moja na hatua za kisheria.\n\n6.2 TUNAWEZA KUSHIRIKI TAARIFA ZAKO NA MAKUNDI YAFUATAYO YA WAPOKEAJI, KWA KUTII MAJUKUMU MADHUBUTI YA KIMKATABA:\n  a) WATUMIAJI WENGINE: Kama inavyohitajika kuwezesha miamala na mawasiliano kati ya watumiaji, ikijumuisha:\n     i) Kushiriki jina lako, picha, na ukadiriaji na washirika watarajiwa wa muamala.\n     ii) Kushiriki eneo lako la kuokota na madereva waliokabidhiwa.\n     iii) Kushiriki anwani yako ya uwasilishaji na wauzaji na washirika wa uwasilishaji.\n     iv) Kushiriki namba yako ya simu na washirika wa muamala baada ya muamala kuthibitishwa.\n\n  b) WATOZA HUDUMA NA WACHAKATAJI DATA (wote wamefungwa na Makubaliano ya Uchakataji Data):\n     i) Watoa huduma za miundombinu ya wingu (Google Cloud Platform, Firebase).\n     ii) Wasindikaji wa malipo (ClickPesa, waendeshaji fedha za mkononi, benki).\n     iii) Huduma za uthibitisho wa utambulisho.\n     iv) Huduma za arifa za push (OneSignal).\n     v) Watoa huduma za lango la SMS (Meseji, huduma za aina ya Twilio).\n     vi) Huduma za kuhifadhi picha na video (Cloudinary).\n     vii) Huduma za ramani na eneo (Google Maps).\n     viii) Huduma za uchambuzi na kuripoti ajali.\n     ix) Huduma za uwasilishaji barua pepe.\n     x) Majukwaa ya usaidizi kwa wateja.\n\n  c) MAMLAKA ZA ULINZI NA KANUNI:\n     i) Inapohitajika na sheria inayotumika, amri ya mahakama, au taratibu za kisheria.\n     ii) Tunapoamini kwa nia njema kwamba ufichuzi ni muhimu kulinda haki zetu, usalama wako, au usalama wa wengine.\n     iii) Kuchunguza, kuzuia, au kuchukua hatua kuhusu shughuli zinazoshukiwa kuwa haramu, ulaghai, au ukiukwaji wa Sheria na Masharti yetu.\n     iv) Kutii hati ya mahakama halali, wito wa mahakama, au ombi lingine linalofunga kisheria.\n\n  d) WAPOKEAJI WA BIASHARA:\n     i) Katika tukio la muungano, upatikanaji, upangaji upya, kufilisika, au uuzaji wa mali zetu zote au kiasi kikubwa cha mali zetu.\n     ii) Shirika litakalopata litafungwa na Sera hii na haliwezi kutumia data yako kwa njia tofauti kimaudhui kutoka kwa ilivyoelezwa hapa.\n     iii) Utaarifiwa kupitia barua pepe na arifa ndani ya programu kuhusu uhamisho wowote kama huo angalau siku 30 kabla.\n\n6.3 UHAMISHO WA DATA KIMATAIFA:\n  a) Data yako inaweza kuhamishwa na kuchakatwa katika nchi nje ya Tanzania ambako watoa huduma wetu wanafanya kazi.\n  b) Tunahakikisha kuwa ulinzi unaofaa umewekwa, ikijumuisha:\n     i) Vifungu vya Kawaida vya Kimkataba (SCCs) vilivyopitishwa na mamlaka husika za ulinzi wa data.\n     ii) Kanuni za Biashara Zinazofunga (BCRs) inapotumika.\n     iii) Uthibitisho kwamba nchi mpokeaji ina sheria za kutosha za ulinzi wa data.\n  c) Unakubali wazi uhamisho huo wa kimataifa kwa kutumia Huduma zetu.\n\n6.4 HATUTAWAHI:\n  a) Kuuza taarifa zako za kibinafsi kwa mtu yeyote wa tatu.\n  b) Kukodisha au kukopesha taarifa zako za kibinafsi.\n  c) Kushiriki data yako nyeti ya kibinafsi bila idhini yako ya wazi.\n  d) Kutumia data yako kwa madhumuni yasiyolingana na yale yaliyofichuliwa katika Sera hii bila kupata idhini yako.',
+      'pp_section_5_body':
+          '5.1 Tunachakata data yako ya kibinafsi kwa madhumuni yafuatayo, kwa kuzingatia misingi ifuatayo ya kisheria:\n\n5.2 ULAZIMA WA KIMKATABA:\n  a) Kuunda na kudumisha akaunti yako kwenye Jukwaa.\n  b) Kuwezesha miamala kati ya wanunuzi na wauzaji.\n  c) Kuunganisha waendeshaji na madereva na kuchakata huduma za usafiri.\n  d) Kuchakata malipo, huduma za escrow, na malipo.\n  e) Kutoa usaidizi kwa wateja na utatuzi wa migogoro.\n  f) Kuwasilisha bidhaa, huduma, na maudhui ya kidijitali.\n\n5.3 UTIIFU WA SHERIA:\n  a) Kutii Sheria ya Ulinzi wa Data Tanzania, 2022.\n  b) Kutii Sheria ya Kupambana na Utakatishaji Fedha Tanzania.\n  c) Kutii Sheria ya Miamala ya Kielektroniki Tanzania.\n  d) Kutii wajibu wa kuripoti kodi kwa Mamlaka ya Mapato Tanzania (TRA).\n  e) Kutii amri za mahakama, taratibu za kisheria, au maombi ya serikali.\n  f) Kutekeleza Sheria na Masharti yetu na Sera hii ya Faragha.\n  g) Kuzuia, kugundua, na kuchunguza ulaghai, utakatishaji fedha, na shughuli nyingine haramu.\n\n5.4 MAMBO HALALI:\n  a) Kuboresha, kuongeza, na kubinafsisha Jukwaa na Huduma.\n  b) Kuchambua tabia za watumiaji na mwelekeo ili kuboresha matumizi.\n  c) Kuunda vipengele vipya, bidhaa, na huduma.\n  d) Kuhakikisha usalama na uadilifu wa Jukwaa.\n  e) Kutuma ujumbe wa kiutawala, arifa za usalama, na sasisho za huduma.\n  f) Kuzalisha uchambuzi na ripoti zilizojumlishwa, bila jina.\n  g) Kufanya utafiti wa soko na mipango ya biashara.\n\n5.5 IDHINI:\n  a) Kutuma mawasiliano ya masoko na matangazo (inayoweza kutenguliwa wakati wowote).\n  b) Kukusanya data sahihi ya eneo kwa vipengele visivyo muhimu.\n  c) Kutumia data yako kwa uchunguzi wa tabia na ubinafsishaji.\n  d) Kushiriki data yako na washirika wateule wa tatu kwa madhumuni yao wenyewe.\n  e) Kuchakata data nyeti ya kibinafsi ambapo idhini ya wazi inahitajika.',
+      'pp_section_6_title':
+          '6. KUSHIRIKI NA KUFICHUA DATA — MASHARTI MADHUBUTI',
+      'pp_section_6_body':
+          '6.1 KANUNO YA JUMLA: HATUUZI na HATUTAUZA taarifa zako za kibinafsi kwa mtu yeyote wa tatu chini ya hali yoyote. Ukiukwaji wowote wa kanuni hii na mfanyakazi, mkandarasi, au wakala yeyote utasababisha kukomeshwa mara moja na hatua za kisheria.\n\n6.2 TUNAWEZA KUSHIRIKI TAARIFA ZAKO NA MAKUNDI YAFUATAYO YA WAPOKEAJI, KWA KUTII MAJUKUMU MADHUBUTI YA KIMKATABA:\n  a) WATUMIAJI WENGINE: Kama inavyohitajika kuwezesha miamala na mawasiliano kati ya watumiaji, ikijumuisha:\n     i) Kushiriki jina lako, picha, na ukadiriaji na washirika watarajiwa wa muamala.\n     ii) Kushiriki eneo lako la kuokota na madereva waliokabidhiwa.\n     iii) Kushiriki anwani yako ya uwasilishaji na wauzaji na washirika wa uwasilishaji.\n     iv) Kushiriki namba yako ya simu na washirika wa muamala baada ya muamala kuthibitishwa.\n\n  b) WATOZA HUDUMA NA WACHAKATAJI DATA (wote wamefungwa na Makubaliano ya Uchakataji Data):\n     i) Watoa huduma za miundombinu ya wingu (Google Cloud Platform, Firebase).\n     ii) Wasindikaji wa malipo (ClickPesa, waendeshaji fedha za mkononi, benki).\n     iii) Huduma za uthibitisho wa utambulisho.\n     iv) Huduma za arifa za push (OneSignal).\n     v) Watoa huduma za lango la SMS (Meseji, huduma za aina ya Twilio).\n     vi) Huduma za kuhifadhi picha na video (Cloudinary).\n     vii) Huduma za ramani na eneo (Google Maps).\n     viii) Huduma za uchambuzi na kuripoti ajali.\n     ix) Huduma za uwasilishaji barua pepe.\n     x) Majukwaa ya usaidizi kwa wateja.\n\n  c) MAMLAKA ZA ULINZI NA KANUNI:\n     i) Inapohitajika na sheria inayotumika, amri ya mahakama, au taratibu za kisheria.\n     ii) Tunapoamini kwa nia njema kwamba ufichuzi ni muhimu kulinda haki zetu, usalama wako, au usalama wa wengine.\n     iii) Kuchunguza, kuzuia, au kuchukua hatua kuhusu shughuli zinazoshukiwa kuwa haramu, ulaghai, au ukiukwaji wa Sheria na Masharti yetu.\n     iv) Kutii hati ya mahakama halali, wito wa mahakama, au ombi lingine linalofunga kisheria.\n\n  d) WAPOKEAJI WA BIASHARA:\n     i) Katika tukio la muungano, upatikanaji, upangaji upya, kufilisika, au uuzaji wa mali zetu zote au kiasi kikubwa cha mali zetu.\n     ii) Shirika litakalopata litafungwa na Sera hii na haliwezi kutumia data yako kwa njia tofauti kimaudhui kutoka kwa ilivyoelezwa hapa.\n     iii) Utaarifiwa kupitia barua pepe na arifa ndani ya programu kuhusu uhamisho wowote kama huo angalau siku 30 kabla.\n\n6.3 UHAMISHO WA DATA KIMATAIFA:\n  a) Data yako inaweza kuhamishwa na kuchakatwa katika nchi nje ya Tanzania ambako watoa huduma wetu wanafanya kazi.\n  b) Tunahakikisha kuwa ulinzi unaofaa umewekwa, ikijumuisha:\n     i) Vifungu vya Kawaida vya Kimkataba (SCCs) vilivyopitishwa na mamlaka husika za ulinzi wa data.\n     ii) Kanuni za Biashara Zinazofunga (BCRs) inapotumika.\n     iii) Uthibitisho kwamba nchi mpokeaji ina sheria za kutosha za ulinzi wa data.\n  c) Unakubali wazi uhamisho huo wa kimataifa kwa kutumia Huduma zetu.\n\n6.4 HATUTAWAHI:\n  a) Kuuza taarifa zako za kibinafsi kwa mtu yeyote wa tatu.\n  b) Kukodisha au kukopesha taarifa zako za kibinafsi.\n  c) Kushiriki data yako nyeti ya kibinafsi bila idhini yako ya wazi.\n  d) Kutumia data yako kwa madhumuni yasiyolingana na yale yaliyofichuliwa katika Sera hii bila kupata idhini yako.',
       'pp_section_7_title': '7. SERA YA UHIFADHI NA KUFUTA DATA',
-      'pp_section_7_body': '7.1 VIPINDI VYA UHIFADHI:\n  a) Data ya Akaunti Inayotumika: Inahifadhiwa kwa muda wa akaunti yako ikiwa hai.\n  b) Data ya Akaunti Isiyotumika: Inahifadhiwa kwa kipindi cha miezi 12 baada ya kuingia kwako kwa mwisho, baada ya hapo akaunti inaweza kuhifadhiwa kwa usanifu.\n  c) Nyaraka za KYC: Inahifadhiwa kwa kiwango cha chini cha miaka 7 kutoka tarehe ya ukusanyaji, kama inavyotakiwa na kanuni za Tanzania za kupambana na utakatishaji fedha na fedha.\n  d) Rekodi za Miamala: Inahifadhiwa kwa kiwango cha chini cha miaka 7 kutoka tarehe ya kila muamala, kama inavyotakiwa na Mamlaka ya Mapato Tanzania.\n  e) Ujumbe wa Gumzo: Inahifadhiwa kwa muda wa akaunti yako pamoja na siku 90 baada ya kufuta akaunti.\n  f) Data ya Eneo: Inahifadhiwa kwa fomu inayotambulika kwa kiwango cha juu cha siku 30, baada ya hapo inakusanywa na kutolewa jina.\n  g) Data ya Kumbukumbu na Uchambuzi: Inahifadhiwa kwa kipindi cha miezi 12.\n  h) Rekodi za Mapendeleo ya Masoko na Idhini: Inahifadhiwa kwa muda wa akaunti yako pamoja na miaka 3.\n\n7.2 KUFUTA AKAUNTI:\n  a) Unaweza kuomba kufutwa kwa akaunti yako kupitia menyu ya Mipangilio au kwa kuwasiliana na timu yetu ya usaidizi.\n  b) Baada ya kupokea ombi lako la kufuta, tut:\n     i) Kuzima akaunti yako ndani ya masaa 48.\n     ii) Kuhifadhi data yako kwa siku 90 ("Kipindi cha Kupoa") wakati ambapo unaweza kutengua kufutwa.\n     iii) Kufuta kabisa data yako ya kibinafsi baada ya Kipindi cha Kupoa, kwa kuzingatia mahitaji ya kisheria ya uhifadhi.\n  c) Data inayohitajika kwa madhumuni ya kisheria, kanuni, au ukaguzi itahifadhiwa kwa kipindi kinachotakiwa na sheria hata baada ya kufuta akaunti.\n  d) Tutakupa uthibitisho wa kufuta baada ya kukamilika.\n\n7.3 KUTOA JINA KWA DATA:\n  a) Ambapo data inahifadhiwa zaidi ya kipindi cha kufuta kwa madhumuni ya uchambuzi, itatolewa jina kiasi kwamba huwezi kutambuliwa.\n  b) Data iliyotolewa jina haichukuliwi data ya kibinafsi na inaweza kutumika kwa muda usiojulikana.\n\n7.4 UHIFADHI WA NAKALA ZA AKIBA:\n  a) Data inaweza kuendelea kwenye mifumo ya nakala za akiba kwa muda wa siku 30 baada ya kufutwa kutoka kwenye mfumo mkuu.\n  b) Nakala za akiba zinalindwa na hatua sawa za usalama kama mifumo ya uzalishaji.',
+      'pp_section_7_body':
+          '7.1 VIPINDI VYA UHIFADHI:\n  a) Data ya Akaunti Inayotumika: Inahifadhiwa kwa muda wa akaunti yako ikiwa hai.\n  b) Data ya Akaunti Isiyotumika: Inahifadhiwa kwa kipindi cha miezi 12 baada ya kuingia kwako kwa mwisho, baada ya hapo akaunti inaweza kuhifadhiwa kwa usanifu.\n  c) Nyaraka za KYC: Inahifadhiwa kwa kiwango cha chini cha miaka 7 kutoka tarehe ya ukusanyaji, kama inavyotakiwa na kanuni za Tanzania za kupambana na utakatishaji fedha na fedha.\n  d) Rekodi za Miamala: Inahifadhiwa kwa kiwango cha chini cha miaka 7 kutoka tarehe ya kila muamala, kama inavyotakiwa na Mamlaka ya Mapato Tanzania.\n  e) Ujumbe wa Gumzo: Inahifadhiwa kwa muda wa akaunti yako pamoja na siku 90 baada ya kufuta akaunti.\n  f) Data ya Eneo: Inahifadhiwa kwa fomu inayotambulika kwa kiwango cha juu cha siku 30, baada ya hapo inakusanywa na kutolewa jina.\n  g) Data ya Kumbukumbu na Uchambuzi: Inahifadhiwa kwa kipindi cha miezi 12.\n  h) Rekodi za Mapendeleo ya Masoko na Idhini: Inahifadhiwa kwa muda wa akaunti yako pamoja na miaka 3.\n\n7.2 KUFUTA AKAUNTI:\n  a) Unaweza kuomba kufutwa kwa akaunti yako kupitia menyu ya Mipangilio au kwa kuwasiliana na timu yetu ya usaidizi.\n  b) Baada ya kupokea ombi lako la kufuta, tut:\n     i) Kuzima akaunti yako ndani ya masaa 48.\n     ii) Kuhifadhi data yako kwa siku 90 ("Kipindi cha Kupoa") wakati ambapo unaweza kutengua kufutwa.\n     iii) Kufuta kabisa data yako ya kibinafsi baada ya Kipindi cha Kupoa, kwa kuzingatia mahitaji ya kisheria ya uhifadhi.\n  c) Data inayohitajika kwa madhumuni ya kisheria, kanuni, au ukaguzi itahifadhiwa kwa kipindi kinachotakiwa na sheria hata baada ya kufuta akaunti.\n  d) Tutakupa uthibitisho wa kufuta baada ya kukamilika.\n\n7.3 KUTOA JINA KWA DATA:\n  a) Ambapo data inahifadhiwa zaidi ya kipindi cha kufuta kwa madhumuni ya uchambuzi, itatolewa jina kiasi kwamba huwezi kutambuliwa.\n  b) Data iliyotolewa jina haichukuliwi data ya kibinafsi na inaweza kutumika kwa muda usiojulikana.\n\n7.4 UHIFADHI WA NAKALA ZA AKIBA:\n  a) Data inaweza kuendelea kwenye mifumo ya nakala za akiba kwa muda wa siku 30 baada ya kufutwa kutoka kwenye mfumo mkuu.\n  b) Nakala za akiba zinalindwa na hatua sawa za usalama kama mifumo ya uzalishaji.',
       'pp_section_8_title': '8. HATUA ZA USALAMA WA DATA',
-      'pp_section_8_body': '8.1 HATUA ZA AINA YA KITAALAM:\n  a) Usimbaji fiche wa mwisho hadi mwisho (E2EE) kwa ujumbe wote wa gumzo kwa kutumia itifaki za kawaida za kriptografia.\n  b) Usimbaji fiche wa TLS/SSL (kiwango cha chini TLS 1.2, kinapendelewa TLS 1.3) kwa data yote katika usafiri.\n  c) Usimbaji fiche wa AES-256 kwa data nyeti iliyopumzika.\n  d) Uthibitishaji wa mambo mengi (MFA) kwa akaunti za utawala na shughuli nyeti.\n  e) Udhibiti wa ufikiaji kulingana na jukumu (RBAC) unaozuia ufikiaji wa data kwa wafanyakazi walioidhinishwa pekee.\n  f) Ukaguzi wa usalama wa mara kwa mara, tathmini za udhaifu, na upimaji wa kupenya na watu huru wa tatu.\n  g) Mifumo ya kiotomatiki ya kugundua na kuzuia uvamizi (IDPS).\n  h) Ngome ya programu ya wavuti (WAF) kulinda dhidi ya vekta za kawaida za mashambulizi.\n  i) Viraka vya usalama vya mara kwa mara na sasisho kwa mifumo na tegemezi zote.\n  j) Udhibiti wa kasi ya API na uthibitishaji wa ombi kuzuia matumizi mabaya.\n  k) Usimbaji fiche wa hifadhidata, nakala za akiba za mara kwa mara, na taratibu za kupona kutoka kwa maafa.\n\n8.2 HATUA ZA KIMASHIRIKA:\n  a) Wafanyakazi wote, wakandarasi, na mawakala wanapata mafunzo ya lazima ya ulinzi wa data kila mwaka.\n  b) Udhibiti mkali wa ufikiaji kwa kuzingatia kanuni ya haki ndogo zaidi.\n  c) Makubaliano ya usiri yanayowafunga wafanyakazi wote wanaoshughulikia data ya kibinafsi.\n  d) Mpango wa kukabiliana na tukio na taratibu za arifa za uvunjaji wa data.\n  e) Afisa Ulinzi wa Data (DPO) aliyeteuliwa kusimamia utii.\n  f) Ukaguzi wa mara kwa mara wa ndani wa shughuli za kuchakata data.\n\n8.3 ARIFA YA UVUNJAJI WA DATA:\n  a) Katika tukio la uvunjaji wa data unaohatarisha data yako ya kibinafsi, tutakuarifu ndani ya masaa 72 baada ya kufahamu uvunjaji.\n  b) Arifa itajumuisha aina ya uvunjaji, kategoria za data zilizoathiriwa, matokeo yanayowezekana, na hatua zilizochukuliwa kushughulikia uvunjaji.\n  c) Pia tutaarifu mamlaka husika ya ulinzi wa data kama inavyotakiwa na sheria inayotumika.\n  d) Tunadumisha bima ya mtandao kufidia gharama zinazohusiana na kukabiliana na uvunjaji wa data na dhima.\n\n8.4 LICHA YA HATUA ZILIZO HAPO JUU:\n  a) Hakuna njia ya uhifadhi wa kielektroniki au usambazaji iliyo salama 100%.\n  b) Hatuwezi kuhakikisha usalama kabisa wa data yako.\n  c) Wewe unawajibika kudumisha usalama wa vitambulisho vyako vya akaunti.\n  d) Hatuwajibiki kwa ufikiaji usioidhinishwa unaotokana na uzembe wako au kushindwa kufuata mbinu bora za usalama.',
+      'pp_section_8_body':
+          '8.1 HATUA ZA AINA YA KITAALAM:\n  a) Usimbaji fiche wa mwisho hadi mwisho (E2EE) kwa ujumbe wote wa gumzo kwa kutumia itifaki za kawaida za kriptografia.\n  b) Usimbaji fiche wa TLS/SSL (kiwango cha chini TLS 1.2, kinapendelewa TLS 1.3) kwa data yote katika usafiri.\n  c) Usimbaji fiche wa AES-256 kwa data nyeti iliyopumzika.\n  d) Uthibitishaji wa mambo mengi (MFA) kwa akaunti za utawala na shughuli nyeti.\n  e) Udhibiti wa ufikiaji kulingana na jukumu (RBAC) unaozuia ufikiaji wa data kwa wafanyakazi walioidhinishwa pekee.\n  f) Ukaguzi wa usalama wa mara kwa mara, tathmini za udhaifu, na upimaji wa kupenya na watu huru wa tatu.\n  g) Mifumo ya kiotomatiki ya kugundua na kuzuia uvamizi (IDPS).\n  h) Ngome ya programu ya wavuti (WAF) kulinda dhidi ya vekta za kawaida za mashambulizi.\n  i) Viraka vya usalama vya mara kwa mara na sasisho kwa mifumo na tegemezi zote.\n  j) Udhibiti wa kasi ya API na uthibitishaji wa ombi kuzuia matumizi mabaya.\n  k) Usimbaji fiche wa hifadhidata, nakala za akiba za mara kwa mara, na taratibu za kupona kutoka kwa maafa.\n\n8.2 HATUA ZA KIMASHIRIKA:\n  a) Wafanyakazi wote, wakandarasi, na mawakala wanapata mafunzo ya lazima ya ulinzi wa data kila mwaka.\n  b) Udhibiti mkali wa ufikiaji kwa kuzingatia kanuni ya haki ndogo zaidi.\n  c) Makubaliano ya usiri yanayowafunga wafanyakazi wote wanaoshughulikia data ya kibinafsi.\n  d) Mpango wa kukabiliana na tukio na taratibu za arifa za uvunjaji wa data.\n  e) Afisa Ulinzi wa Data (DPO) aliyeteuliwa kusimamia utii.\n  f) Ukaguzi wa mara kwa mara wa ndani wa shughuli za kuchakata data.\n\n8.3 ARIFA YA UVUNJAJI WA DATA:\n  a) Katika tukio la uvunjaji wa data unaohatarisha data yako ya kibinafsi, tutakuarifu ndani ya masaa 72 baada ya kufahamu uvunjaji.\n  b) Arifa itajumuisha aina ya uvunjaji, kategoria za data zilizoathiriwa, matokeo yanayowezekana, na hatua zilizochukuliwa kushughulikia uvunjaji.\n  c) Pia tutaarifu mamlaka husika ya ulinzi wa data kama inavyotakiwa na sheria inayotumika.\n  d) Tunadumisha bima ya mtandao kufidia gharama zinazohusiana na kukabiliana na uvunjaji wa data na dhima.\n\n8.4 LICHA YA HATUA ZILIZO HAPO JUU:\n  a) Hakuna njia ya uhifadhi wa kielektroniki au usambazaji iliyo salama 100%.\n  b) Hatuwezi kuhakikisha usalama kabisa wa data yako.\n  c) Wewe unawajibika kudumisha usalama wa vitambulisho vyako vya akaunti.\n  d) Hatuwajibiki kwa ufikiaji usioidhinishwa unaotokana na uzembe wako au kushindwa kufuata mbinu bora za usalama.',
       'pp_section_9_title': '9. HAKI ZAKO NA JINSI YA KUZITUMIA',
-      'pp_section_9_body': '9.1 CHINI YA SHERIA YA ULINZI WA DATA TANZANIA, 2022, NA KANUNI ZINAZOTUMIKA, UNA HAKI ZIFUATAZO:\n\n9.2 HAKI YA KUARIFIWA:\n  a) Una haki ya kuarifiwa kuhusu ukusanyaji na matumizi ya data yako ya kibinafsi.\n  b) Sera hii ni notisi yetu ya faragha kwako.\n\n9.3 HAKI YA KUFIKIA:\n  a) Una haki ya kufikia data yako ya kibinafsi tunayoshikilia.\n  b) Unaweza kuomba nakala ya data yako katika muundo uliopangwa, unaotumika kwa kawaida, na unaosomwa na mashine.\n  c) Tutajibu maombi ya kufikia ndani ya siku 30.\n  d) Nakala ya kwanza inatolewa bure; nakala zinazofuata zinaweza kutoza ada ya kiutawala ya kawaida.\n\n9.4 HAKI YA KUREKEBISHA:\n  a) Una haki ya kuomba kurekebishwa kwa data isiyo sahihi au isiyokamilika ya kibinafsi.\n  b) Unaweza kusasisha data yako nyingi moja kwa moja kupitia mipangilio ya akaunti yako.\n  c) Tutachakata maombi ya kurekebisha ndani ya siku 15.\n\n9.5 HAKI YA KUFUTWA ("HAKI YA KUSAHALISHWA"):\n  a) Una haki ya kuomba kufutwa kwa data yako ya kibinafsi katika hali fulani.\n  b) Haki hii sio kamili na inaweza kuwekewa vikwazo na wajibu wa kisheria, miamala inayosubiri, au maslahi halali.\n  c) Tutachakata maombi ya kufuta ndani ya siku 30, kwa kuzingatia uthibitisho wa utambulisho wako.\n\n9.6 HAKI YA KUWEKEA VIKWAZO UCHAKATAJI:\n  a) Una haki ya kuomba kuwekewa vikwazo vya kuchakata data yako ya kibinafsi katika hali fulani.\n  b) Wakati uchakataji umewekewa vikwazo, tunaweza kuhifadhi data yako lakini tusiitumie.\n\n9.7 HAKI YA KUHAMISHA DATA:\n  a) Una haki ya kupokea data yako ya kibinafsi katika muundo uliopangwa, unaotumika kwa kawaida, na unaosomwa na mashine.\n  b) Una haki ya kuwasilisha data hii kwa mdhibiti mwingine bila kizuizi.\n\n9.8 HAKI YA KUPINGA:\n  a) Una haki ya kupinga uchakataji wa data yako ya kibinafsi kwa madhumuni ya uuzaji wa moja kwa moja wakati wowote.\n  b) Una haki ya kupinga uchakataji kulingana na maslahi halali.\n  c) Tutakoma uchakataji isipokuwa tutaonyesha sababu halali za kulazimisha zinazoshinda maslahi yako.\n\n9.9 HAKI KUHUSU UFANYAJI MAAMUZI KIOTOMATIKI:\n  a) Una haki ya kutokuwa chini ya maamuzi yanayotegemea uchakataji wa kiotomatiki pekee yanayotoa athari za kisheria kukuhusu.\n  b) Unaweza kuomba uingiliaji wa binadamu katika michakato ya ufanyaji maamuzi kiotomatiki.\n  c) Unaweza kupinga maamuzi yaliyofanywa kupitia uchakataji wa kiotomatiki.\n\n9.10 HAKI YA KUTENGUA IDHINI:\n  a) Ambapo uchakataji unategemea idhini yako, una haki ya kutengua idhini wakati wowote.\n  b) Kutengua hakuathiri uhalali wa uchakataji kulingana na idhini kabla ya kutengua kwake.\n\n9.11 HAKI YA KUWEKA MALALAMIKO:\n  a) Una haki ya kuweka malalamiko kwa mamlaka husika ya ulinzi wa data Tanzania.\n  b) Tunakuhimiza wasiliana nasi kwanza ili tuweze kushughulikia wasiwasi wako moja kwa moja.\n\n9.12 KUTUMIA HAKI ZOZOTE KATI YA HIZI:\n  a) Wasiliana nasi kupitia barua pepe dpo@soko-vibe.com.\n  b) Tumia kipengele cha usaidizi ndani ya programu.\n  c) Tuandikie kwa anwani yetu iliyosajiliwa.\n  d) Tunaweza kuhitaji uthibitisho wa utambulisho kabla ya kuchakata ombi lako.\n  e) Tutajibu maombi yote halali ndani ya siku 30, au ndani ya muda unaohitajika na sheria inayotumika.',
+      'pp_section_9_body':
+          '9.1 CHINI YA SHERIA YA ULINZI WA DATA TANZANIA, 2022, NA KANUNI ZINAZOTUMIKA, UNA HAKI ZIFUATAZO:\n\n9.2 HAKI YA KUARIFIWA:\n  a) Una haki ya kuarifiwa kuhusu ukusanyaji na matumizi ya data yako ya kibinafsi.\n  b) Sera hii ni notisi yetu ya faragha kwako.\n\n9.3 HAKI YA KUFIKIA:\n  a) Una haki ya kufikia data yako ya kibinafsi tunayoshikilia.\n  b) Unaweza kuomba nakala ya data yako katika muundo uliopangwa, unaotumika kwa kawaida, na unaosomwa na mashine.\n  c) Tutajibu maombi ya kufikia ndani ya siku 30.\n  d) Nakala ya kwanza inatolewa bure; nakala zinazofuata zinaweza kutoza ada ya kiutawala ya kawaida.\n\n9.4 HAKI YA KUREKEBISHA:\n  a) Una haki ya kuomba kurekebishwa kwa data isiyo sahihi au isiyokamilika ya kibinafsi.\n  b) Unaweza kusasisha data yako nyingi moja kwa moja kupitia mipangilio ya akaunti yako.\n  c) Tutachakata maombi ya kurekebisha ndani ya siku 15.\n\n9.5 HAKI YA KUFUTWA ("HAKI YA KUSAHALISHWA"):\n  a) Una haki ya kuomba kufutwa kwa data yako ya kibinafsi katika hali fulani.\n  b) Haki hii sio kamili na inaweza kuwekewa vikwazo na wajibu wa kisheria, miamala inayosubiri, au maslahi halali.\n  c) Tutachakata maombi ya kufuta ndani ya siku 30, kwa kuzingatia uthibitisho wa utambulisho wako.\n\n9.6 HAKI YA KUWEKEA VIKWAZO UCHAKATAJI:\n  a) Una haki ya kuomba kuwekewa vikwazo vya kuchakata data yako ya kibinafsi katika hali fulani.\n  b) Wakati uchakataji umewekewa vikwazo, tunaweza kuhifadhi data yako lakini tusiitumie.\n\n9.7 HAKI YA KUHAMISHA DATA:\n  a) Una haki ya kupokea data yako ya kibinafsi katika muundo uliopangwa, unaotumika kwa kawaida, na unaosomwa na mashine.\n  b) Una haki ya kuwasilisha data hii kwa mdhibiti mwingine bila kizuizi.\n\n9.8 HAKI YA KUPINGA:\n  a) Una haki ya kupinga uchakataji wa data yako ya kibinafsi kwa madhumuni ya uuzaji wa moja kwa moja wakati wowote.\n  b) Una haki ya kupinga uchakataji kulingana na maslahi halali.\n  c) Tutakoma uchakataji isipokuwa tutaonyesha sababu halali za kulazimisha zinazoshinda maslahi yako.\n\n9.9 HAKI KUHUSU UFANYAJI MAAMUZI KIOTOMATIKI:\n  a) Una haki ya kutokuwa chini ya maamuzi yanayotegemea uchakataji wa kiotomatiki pekee yanayotoa athari za kisheria kukuhusu.\n  b) Unaweza kuomba uingiliaji wa binadamu katika michakato ya ufanyaji maamuzi kiotomatiki.\n  c) Unaweza kupinga maamuzi yaliyofanywa kupitia uchakataji wa kiotomatiki.\n\n9.10 HAKI YA KUTENGUA IDHINI:\n  a) Ambapo uchakataji unategemea idhini yako, una haki ya kutengua idhini wakati wowote.\n  b) Kutengua hakuathiri uhalali wa uchakataji kulingana na idhini kabla ya kutengua kwake.\n\n9.11 HAKI YA KUWEKA MALALAMIKO:\n  a) Una haki ya kuweka malalamiko kwa mamlaka husika ya ulinzi wa data Tanzania.\n  b) Tunakuhimiza wasiliana nasi kwanza ili tuweze kushughulikia wasiwasi wako moja kwa moja.\n\n9.12 KUTUMIA HAKI ZOZOTE KATI YA HIZI:\n  a) Wasiliana nasi kupitia barua pepe dpo@soko-vibe.com.\n  b) Tumia kipengele cha usaidizi ndani ya programu.\n  c) Tuandikie kwa anwani yetu iliyosajiliwa.\n  d) Tunaweza kuhitaji uthibitisho wa utambulisho kabla ya kuchakata ombi lako.\n  e) Tutajibu maombi yote halali ndani ya siku 30, au ndani ya muda unaohitajika na sheria inayotumika.',
       'pp_section_10_title': '10. VIDAKUZI NA TEKNOLOJIA ZA UFUATILIAJI',
-      'pp_section_10_body': '10.1 Tunatumia kategoria zifuatazo za vidakuzi na teknolojia za ufuatiliaji:\n  a) Vidakuzi Muhimu: Inahitajika kwa Jukwaa kufanya kazi vizuri. Haiwezi kuzimwa.\n  b) Vidakuzi vya Utendaji: Kukusanya data isiyojulikana ya matumizi kwa uchambuzi na uboreshaji.\n  c) Vidakuzi vya Kazi: Kukumbuka mapendeleo na mipangilio yako.\n  d) Vidakuzi vya Ulenge/Matangazo: Kuwasilisha matangazo yanayofaa na kupima ufanisi wa matangazo.\n\n10.2 Ufuatiliaji wa Watu wa Tatu:\n  a) Tunatumia huduma za uchambuzi (Firebase Analytics, Google Analytics) ambazo zinaweza kuweka vidakuzi vyake.\n  b) Tunatumia mitandao ya matangazo ambayo inaweza kutumia vidakuzi kupeana matangazo yaliyolengwa.\n  c) Hatuwajibiki kwa sera za faragha za watu hao wa tatu.\n\n10.3 Chaguzi Zako:\n  a) Unaweza kudhibiti vidakuzi kupitia mipangilio ya kifaa chako na mapendeleo ya kivinjari.\n  b) Kuzima vidakuzi fulani kunaweza kuathiri utendaji wa Jukwaa.\n  c) Unaweza kukataa matangazo yaliyolengwa kupitia mipangilio ya matangazo ya kifaa chako.',
+      'pp_section_10_body':
+          '10.1 Tunatumia kategoria zifuatazo za vidakuzi na teknolojia za ufuatiliaji:\n  a) Vidakuzi Muhimu: Inahitajika kwa Jukwaa kufanya kazi vizuri. Haiwezi kuzimwa.\n  b) Vidakuzi vya Utendaji: Kukusanya data isiyojulikana ya matumizi kwa uchambuzi na uboreshaji.\n  c) Vidakuzi vya Kazi: Kukumbuka mapendeleo na mipangilio yako.\n  d) Vidakuzi vya Ulenge/Matangazo: Kuwasilisha matangazo yanayofaa na kupima ufanisi wa matangazo.\n\n10.2 Ufuatiliaji wa Watu wa Tatu:\n  a) Tunatumia huduma za uchambuzi (Firebase Analytics, Google Analytics) ambazo zinaweza kuweka vidakuzi vyake.\n  b) Tunatumia mitandao ya matangazo ambayo inaweza kutumia vidakuzi kupeana matangazo yaliyolengwa.\n  c) Hatuwajibiki kwa sera za faragha za watu hao wa tatu.\n\n10.3 Chaguzi Zako:\n  a) Unaweza kudhibiti vidakuzi kupitia mipangilio ya kifaa chako na mapendeleo ya kivinjari.\n  b) Kuzima vidakuzi fulani kunaweza kuathiri utendaji wa Jukwaa.\n  c) Unaweza kukataa matangazo yaliyolengwa kupitia mipangilio ya matangazo ya kifaa chako.',
       'pp_section_11_title': '11. FARAGHA YA WATOTO — VIKWAZO VIKALI',
-      'pp_section_11_body': '11.1 Huduma zetu zimepigwa MARUFUKU KABISA kwa watu walio chini ya umri wa miaka 18 (kumi na nane).\n\n11.2 Hatukusanyi kwa makusudi, kutumia, au kuchakata taarifa za kibinafsi kutoka kwa watu walio chini ya miaka 18.\n\n11.3 Tukifahamu kuwa mtu chini ya miaka 18 ametupa data ya kibinafsi, tut:\n  a) Kufuta mara moja data hiyo kutoka kwenye mifumo yetu.\n  b) Kusimamisha kwa kudumu akaunti inayohusika.\n  c) Kuripoti tukio kwa mamlaka husika ikihitajika na sheria.\n\n11.4 Ikiwa unaamini mtoto chini ya miaka 18 ametupa data ya kibinafsi, lazima uwasiliane nasi mara moja kwa dpo@soko-vibe.com.\n\n11.5 Tunahifadhi haki ya kuthibitisha umri wa mtumiaji yeyote kupitia uthibitisho wa hati au njia nyingine.\n\n11.6 Mtumiaji yeyote anayepatikana kuwa chini ya miaka 18 au kughushi umri wake atakomeshwa akaunti mara moja na data yote kufutwa.',
+      'pp_section_11_body':
+          '11.1 Huduma zetu zimepigwa MARUFUKU KABISA kwa watu walio chini ya umri wa miaka 18 (kumi na nane).\n\n11.2 Hatukusanyi kwa makusudi, kutumia, au kuchakata taarifa za kibinafsi kutoka kwa watu walio chini ya miaka 18.\n\n11.3 Tukifahamu kuwa mtu chini ya miaka 18 ametupa data ya kibinafsi, tut:\n  a) Kufuta mara moja data hiyo kutoka kwenye mifumo yetu.\n  b) Kusimamisha kwa kudumu akaunti inayohusika.\n  c) Kuripoti tukio kwa mamlaka husika ikihitajika na sheria.\n\n11.4 Ikiwa unaamini mtoto chini ya miaka 18 ametupa data ya kibinafsi, lazima uwasiliane nasi mara moja kwa dpo@soko-vibe.com.\n\n11.5 Tunahifadhi haki ya kuthibitisha umri wa mtumiaji yeyote kupitia uthibitisho wa hati au njia nyingine.\n\n11.6 Mtumiaji yeyote anayepatikana kuwa chini ya miaka 18 au kughushi umri wake atakomeshwa akaunti mara moja na data yote kufutwa.',
       'pp_section_12_title': '12. HUDUMA NA VIUNGO VYA WATU WA TATU',
-      'pp_section_12_body': '12.1 Jukwaa letu linaungana na kuweka viungo kwa huduma za watu wa tatu, ikiwemo lakini sio tu:\n  a) Huduma za Google (Firebase, Google Maps, Google Sign-In, Google Ads, Crashlytics, Ufuatiliaji wa Utendaji).\n  b) OneSignal (Arifa za Push).\n  c) Cloudinary (Kuhifadhi Picha na Video).\n  d) ClickPesa (Uchakataji Malipo).\n  e) Meseji (Lango la SMS).\n  f) Groq AI (Huduma za Msaidizi wa AI).\n  g) Mifumo ya mitandao ya kijamii (Facebook, Instagram, Twitter, WhatsApp).\n\n12.2 Huduma hizi za watu wa tatu zina sera zao za faragha zinazosimamia ukusanyaji, matumizi, na ufichuzi wa taarifa zako.\n\n12.3 TUNAKUHIMIZA SANA ukague sera za faragha za watu hao wa tatu kabla ya kutumia huduma zao.\n\n12.4 HATUWAJIBIKI kwa sera, utunzaji wa data, au usalama wa huduma zozote za watu wa tatu.\n\n12.5 Viungo kwa tovuti za nje au huduma vinatolewa kwa urahisi wako na havijumuishi idhini.',
+      'pp_section_12_body':
+          '12.1 Jukwaa letu linaungana na kuweka viungo kwa huduma za watu wa tatu, ikiwemo lakini sio tu:\n  a) Huduma za Google (Firebase, Google Maps, Google Sign-In, Google Ads, Crashlytics, Ufuatiliaji wa Utendaji).\n  b) OneSignal (Arifa za Push).\n  c) Cloudinary (Kuhifadhi Picha na Video).\n  d) ClickPesa (Uchakataji Malipo).\n  e) Meseji (Lango la SMS).\n  f) Groq AI (Huduma za Msaidizi wa AI).\n  g) Mifumo ya mitandao ya kijamii (Facebook, Instagram, Twitter, WhatsApp).\n\n12.2 Huduma hizi za watu wa tatu zina sera zao za faragha zinazosimamia ukusanyaji, matumizi, na ufichuzi wa taarifa zako.\n\n12.3 TUNAKUHIMIZA SANA ukague sera za faragha za watu hao wa tatu kabla ya kutumia huduma zao.\n\n12.4 HATUWAJIBIKI kwa sera, utunzaji wa data, au usalama wa huduma zozote za watu wa tatu.\n\n12.5 Viungo kwa tovuti za nje au huduma vinatolewa kwa urahisi wako na havijumuishi idhini.',
       'pp_section_13_title': '13. MASOKO NA MAWASILIANO',
-      'pp_section_13_body': '13.1 Kwa kuunda akaunti, unakubali kupokea mawasiliano yafuatayo kutoka kwetu:\n  a) Mawasiliano ya miamala (uthibitisho wa maagizo, risiti za malipo, sasisho za usafirishaji, uthibitisho wa safari) — haya ni ya lazima na hayawezi kukataliwa.\n  b) Arifa za usalama (mabadiliko ya nenosiri, arifa za kuingia, arifa za shughuli za kutiliwa shaka) — haya ni ya lazima.\n  c) Matangazo ya huduma (notisi za matengenezo, mabadiliko ya sera, sasisho za vipengele) — haya ni ya lazima.\n  d) Mawasiliano ya masoko na matangazo (ofaa maalum, punguzo, vipengele vipya, matukio) — haya ni YA HIARI.\n\n13.2 Unaweza kukataa mawasiliano ya masoko wakati wowote kwa:\n  a) Kubadilisha mapendeleo ya arifa kwenye Mipangilio.\n  b) Kubofya kiungo cha "Jiondoe" kwenye mawasiliano ya barua pepe.\n  c) Kuwasiliana na timu yetu ya usaidizi.\n\n13.3 Hata ukikataa masoko, utaendelea kupokea mawasiliano ya lazima ya miamala na usalama.\n\n13.4 Hatutumii data yako ya kibinafsi kwa madhumuni ya masoko bila idhini yako ya wazi.\n\n13.5 Hatushiriki data yako ya kibinafsi na watu wa tatu kwa madhumuni yao ya masoko bila idhini yako ya wazi.',
+      'pp_section_13_body':
+          '13.1 Kwa kuunda akaunti, unakubali kupokea mawasiliano yafuatayo kutoka kwetu:\n  a) Mawasiliano ya miamala (uthibitisho wa maagizo, risiti za malipo, sasisho za usafirishaji, uthibitisho wa safari) — haya ni ya lazima na hayawezi kukataliwa.\n  b) Arifa za usalama (mabadiliko ya nenosiri, arifa za kuingia, arifa za shughuli za kutiliwa shaka) — haya ni ya lazima.\n  c) Matangazo ya huduma (notisi za matengenezo, mabadiliko ya sera, sasisho za vipengele) — haya ni ya lazima.\n  d) Mawasiliano ya masoko na matangazo (ofaa maalum, punguzo, vipengele vipya, matukio) — haya ni YA HIARI.\n\n13.2 Unaweza kukataa mawasiliano ya masoko wakati wowote kwa:\n  a) Kubadilisha mapendeleo ya arifa kwenye Mipangilio.\n  b) Kubofya kiungo cha "Jiondoe" kwenye mawasiliano ya barua pepe.\n  c) Kuwasiliana na timu yetu ya usaidizi.\n\n13.3 Hata ukikataa masoko, utaendelea kupokea mawasiliano ya lazima ya miamala na usalama.\n\n13.4 Hatutumii data yako ya kibinafsi kwa madhumuni ya masoko bila idhini yako ya wazi.\n\n13.5 Hatushiriki data yako ya kibinafsi na watu wa tatu kwa madhumuni yao ya masoko bila idhini yako ya wazi.',
       'pp_section_14_title': '14. MALALAMIKO NA UTATUZI WA MIGOGORO',
-      'pp_section_14_body': '14.1 Ikiwa una malalamiko au wasiwasi kuhusu utunzaji wetu wa data yako ya kibinafsi, tafadhali wasiliana na Afisa wetu wa Ulinzi wa Data kwa dpo@soko-vibe.com.\n\n14.2 Tutakiri kupokea malalamiko yako ndani ya siku 5 za kazi na kutoa majibu ya kimsingi ndani ya siku 30.\n\n14.3 Ikiwa haujaridhika na jibu letu, una haki ya kuweka malalamiko kwa:\n  a) Mamlaka ya Ulinzi wa Data Tanzania (ikishaanzishwa).\n  b) Mdhibiti husika wa sekta.\n  c) Mahakama yenye mamlaka Tanzania.\n\n14.4 Migogoro yoyote ya kisheria inayotokana na Sera hii itaongozwa na sheria za Jamhuri ya Muungano wa Tanzania na kuwa chini ya mamlaka ya kipekee ya mahakama za Dar es Salaam, Tanzania.\n\n14.5 Hakuna katika Sera hii inayoweka mipaka haki zako za kisheria chini ya sheria zinazotumika za ulinzi wa data.',
+      'pp_section_14_body':
+          '14.1 Ikiwa una malalamiko au wasiwasi kuhusu utunzaji wetu wa data yako ya kibinafsi, tafadhali wasiliana na Afisa wetu wa Ulinzi wa Data kwa dpo@soko-vibe.com.\n\n14.2 Tutakiri kupokea malalamiko yako ndani ya siku 5 za kazi na kutoa majibu ya kimsingi ndani ya siku 30.\n\n14.3 Ikiwa haujaridhika na jibu letu, una haki ya kuweka malalamiko kwa:\n  a) Mamlaka ya Ulinzi wa Data Tanzania (ikishaanzishwa).\n  b) Mdhibiti husika wa sekta.\n  c) Mahakama yenye mamlaka Tanzania.\n\n14.4 Migogoro yoyote ya kisheria inayotokana na Sera hii itaongozwa na sheria za Jamhuri ya Muungano wa Tanzania na kuwa chini ya mamlaka ya kipekee ya mahakama za Dar es Salaam, Tanzania.\n\n14.5 Hakuna katika Sera hii inayoweka mipaka haki zako za kisheria chini ya sheria zinazotumika za ulinzi wa data.',
       'pp_section_15_title': '15. MAWASILIANO YA AFISA ULINZI WA DATA',
-      'pp_section_15_body': '15.1 Tumemteua Afisa Ulinzi wa Data (DPO) kusimamia utii wa Sera hii na sheria za ulinzi wa data zinazotumika.\n\n15.2 Unaweza kuwasiliana na DPO wetu kuhusu jambo lolote linalohusiana na ulinzi wa data na faragha:\n\n  Afisa Ulinzi wa Data\n  Soko Vibe Limited\n  Barua Pepe: dpo@soko-vibe.com\n  Simu: +255 7XX XXX XXX\n  Anwani: Dar es Salaam, Tanzania\n\n  Kwa maswali ya jumla: support@soko-vibe.com\n\n15.3 Tafadhali eleza wazi aina ya swali lako ili kuhakikisha utunzaji wa haraka.',
+      'pp_section_15_body':
+          '15.1 Tumemteua Afisa Ulinzi wa Data (DPO) kusimamia utii wa Sera hii na sheria za ulinzi wa data zinazotumika.\n\n15.2 Unaweza kuwasiliana na DPO wetu kuhusu jambo lolote linalohusiana na ulinzi wa data na faragha:\n\n  Afisa Ulinzi wa Data\n  Soko Vibe Limited\n  Barua Pepe: dpo@soko-vibe.com\n  Simu: +255 7XX XXX XXX\n  Anwani: Dar es Salaam, Tanzania\n\n  Kwa maswali ya jumla: support@soko-vibe.com\n\n15.3 Tafadhali eleza wazi aina ya swali lako ili kuhakikisha utunzaji wa haraka.',
       'pp_section_16_title': '16. MABADILIKO YA SERA HII YA FARAGHA',
-      'pp_section_16_body': '16.1 Tunahifadhi HAKI KAMILI ya kurekebisha, kuongezea, kusasisha, au kubadilisha Sera hii wakati wowote, kwa sababu yoyote, bila taarifa ya awali.\n\n16.2 Mabadiliko yanaanza KUTUMIKA MARA MOJA baada ya kuchapishwa kwenye Jukwaa.\n\n16.3 Kwa mabadiliko MAKUBWA, tutafanya juhudi za kawaida kukuarifu kupitia:\n  a) Barua pepe kwa anwani yako ya barua pepe iliyosajiliwa.\n  b) Arifa ndani ya programu.\n  c) Notisi maarufu kwenye Jukwaa.\n\n16.4 Kuendelea kwako kutumia Jukwaa baada ya mabadiliko yoyote hujumuisha KUKUBALI KWAKO BILA SHAARTI Sera iliyorekebishwa.\n\n16.5 Ikiwa hukubaliani na mabadiliko yoyote, SULUHISHO LAKO PEKEE ni kuacha mara moja kutumia Jukwaa na kufuta akaunti yako.\n\n16.6 NI WAJIBU WAKO kukagua Sera hii mara kwa mara. Tunapendekeza uangalie ukurasa huu angalau mara moja kwa mwezi.',
+      'pp_section_16_body':
+          '16.1 Tunahifadhi HAKI KAMILI ya kurekebisha, kuongezea, kusasisha, au kubadilisha Sera hii wakati wowote, kwa sababu yoyote, bila taarifa ya awali.\n\n16.2 Mabadiliko yanaanza KUTUMIKA MARA MOJA baada ya kuchapishwa kwenye Jukwaa.\n\n16.3 Kwa mabadiliko MAKUBWA, tutafanya juhudi za kawaida kukuarifu kupitia:\n  a) Barua pepe kwa anwani yako ya barua pepe iliyosajiliwa.\n  b) Arifa ndani ya programu.\n  c) Notisi maarufu kwenye Jukwaa.\n\n16.4 Kuendelea kwako kutumia Jukwaa baada ya mabadiliko yoyote hujumuisha KUKUBALI KWAKO BILA SHAARTI Sera iliyorekebishwa.\n\n16.5 Ikiwa hukubaliani na mabadiliko yoyote, SULUHISHO LAKO PEKEE ni kuacha mara moja kutumia Jukwaa na kufuta akaunti yako.\n\n16.6 NI WAJIBU WAKO kukagua Sera hii mara kwa mara. Tunapendekeza uangalie ukurasa huu angalau mara moja kwa mwezi.',
       'pp_section_17_title': '17. SHERIA INAYOTUMIKA NA MLAA WA KISHA',
-      'pp_section_17_body': '17.1 Sera hii ya Faragha itaongozwa na kufasiriwa kwa mujibu wa sheria za Jamhuri ya Muungano wa Tanzania, ikijumuisha lakini sio tu:\n  a) Sheria ya Ulinzi wa Data Tanzania, 2022.\n  b) Sheria ya Mawasiliano ya Kielektroniki na Posta, 2010.\n  c) Sheria ya Kupambana na Utakatishaji Fedha, 2006, kama ilivyorekebishwa.\n  d) Sheria ya Makosa ya Mtandaoni, 2015.\n  e) Sheria ya Mamlaka ya Udhibiti wa Mawasiliano Tanzania, 2003.\n\n17.2 Mgogoro wowote unaotokana na Sera hii utakuwa chini ya mamlaka ya kipekee ya mahakama za Dar es Salaam, Tanzania.\n\n17.3 Hakuna katika Sera hii kitakachoweka mipaka njia zozote za kisheria zinazopatikana kwetu chini ya sheria inayotumika.',
+      'pp_section_17_body':
+          '17.1 Sera hii ya Faragha itaongozwa na kufasiriwa kwa mujibu wa sheria za Jamhuri ya Muungano wa Tanzania, ikijumuisha lakini sio tu:\n  a) Sheria ya Ulinzi wa Data Tanzania, 2022.\n  b) Sheria ya Mawasiliano ya Kielektroniki na Posta, 2010.\n  c) Sheria ya Kupambana na Utakatishaji Fedha, 2006, kama ilivyorekebishwa.\n  d) Sheria ya Makosa ya Mtandaoni, 2015.\n  e) Sheria ya Mamlaka ya Udhibiti wa Mawasiliano Tanzania, 2003.\n\n17.2 Mgogoro wowote unaotokana na Sera hii utakuwa chini ya mamlaka ya kipekee ya mahakama za Dar es Salaam, Tanzania.\n\n17.3 Hakuna katika Sera hii kitakachoweka mipaka njia zozote za kisheria zinazopatikana kwetu chini ya sheria inayotumika.',
       'pp_section_18_title': '18. KUKIRI NA KUKUBALI',
-      'pp_section_18_body': '18.1 KWA KUTUMIA JUKWAA, UNAKIRI WAZI KWAMBA:\n  a) Umesoma na umeelewa Sera hii yote ya Faragha.\n  b) Unakubali ukusanyaji, matumizi, uchakataji, na ufichuzi wa data yako ya kibinafsi kama ilivyoelezwa hapa.\n  c) Unakubali vipindi vya uhifadhi wa data vilivyobainishwa hapa.\n  d) Unakubali uhamisho wa data kimataifa kama ilivyoelezwa hapa.\n  e) Unakiri kwamba Sera hii inaweza kubadilika bila taarifa ya awali na unakubali kufungwa na mabadiliko hayo.\n\n18.2 KAMA HUKUBALIANI NA SEHEMU YOYOTE YA SERA HII, LAZIMA UACHE MARA MOJA KUTUMIA JUKWAA NA UFUTE AKAUNTI YAKO.\n\n18.3 KUENDELEA KUTUMIA JUKWAA KWAJUMUISHA KUKUBALI KWAKO WAZI SERA HII KWA UKAMILIFU.',
+      'pp_section_18_body':
+          '18.1 KWA KUTUMIA JUKWAA, UNAKIRI WAZI KWAMBA:\n  a) Umesoma na umeelewa Sera hii yote ya Faragha.\n  b) Unakubali ukusanyaji, matumizi, uchakataji, na ufichuzi wa data yako ya kibinafsi kama ilivyoelezwa hapa.\n  c) Unakubali vipindi vya uhifadhi wa data vilivyobainishwa hapa.\n  d) Unakubali uhamisho wa data kimataifa kama ilivyoelezwa hapa.\n  e) Unakiri kwamba Sera hii inaweza kubadilika bila taarifa ya awali na unakubali kufungwa na mabadiliko hayo.\n\n18.2 KAMA HUKUBALIANI NA SEHEMU YOYOTE YA SERA HII, LAZIMA UACHE MARA MOJA KUTUMIA JUKWAA NA UFUTE AKAUNTI YAKO.\n\n18.3 KUENDELEA KUTUMIA JUKWAA KWAJUMUISHA KUKUBALI KWAKO WAZI SERA HII KWA UKAMILIFU.',
 
       'pp_section_pdpa_title': '19. UZINGATIAJI WA SHERIA YA PDPA 2022',
-      'pp_section_pdpa_body': '19.1 Usajili: Soko Vibe Limited imesajiliwa na Mamlaka ya Ulinzi wa Taarifa Binafsi Tanzania (PDPC) kama Mdhibiti wa Data kwa mujibu wa Sehemu ya 15 ya Sheria ya Ulinzi wa Taarifa Binafsi, 2022 (PDPA). Nambari ya usajili: [Nambari ya Usajili]. Usajili unapaswa kusasishwa kila miaka 5.\n\n19.2 Afisa Ulinzi wa Data: Tumemteua Afisa Ulinzi wa Data (DPO) kwa mujibu wa Sehemu ya 27(3) ya PDPA. DPO wetu anawajibika kusimamia utii wa PDPA na kanuni zake.\n\n19.3 Misingi ya Uchakataji: Uchakataji wetu wa data unategemea misingi ifuatayo ya kisheria kama ilivyowekwa katika Sehemu ya 22 ya PDPA:\n  a) Idhini ya Mhusika wa Data (Sehemu ya 23).\n  b) Uhitaji wa Kimkataba (Sehemu ya 22(2)(b)).\n  c) Utii wa Sheria (Sehemu ya 22(2)(c)).\n  d) Maslahi Halali (Sehemu ya 22(2)(f)).\n\n19.4 Haki za Mhusika wa Data: Chini ya Part VI ya PDPA, una haki zifuatazo:\n  a) Haki ya kuarifiwa (Sehemu ya 33(1)(a)).\n  b) Haki ya kufikia data yako (Sehemu ya 33(1)(b)).\n  c) Haki ya kurekebisha data isiyo sahihi (Sehemu ya 33(1)(c)).\n  d) Haki ya kufuta data ("right to be forgotten") (Sehemu ya 33(1)(d)).\n  e) Haki ya kuweka vikwazo vya uchakataji (Sehemu ya 33(1)(e)).\n  f) Haki ya kuhama data (Sehemu ya 33(1)(f)).\n  g) Haki ya kupinga uchakataji (Sehemu ya 33(1)(g)).\n  h) Haki ya kutokuwa chini ya maamuzi ya kiotomatiki pekee (Sehemu ya 33(1)(h)).\n\n19.5 Uhamisho wa Data Nje ya Tanzania: Kwa mujibu wa Part V ya PDPA (Sehemu 31-32), data yako ya kibinafsi inaweza kuhamishwa nje ya Tanzania pale inapohitajika kwa utendaji wa huduma. Tunahakikisha kuwa:\n  a) Nchi za kupokea zina ulinzi wa data unaofaa au zimesaini mikataba ya kimataifa.\n  b) Uhamisho unafanyika chini ya makubaliano ya kisheria (standard contractual clauses).\n  c) Idhini yako inapatawa kabla ya uhamisho wowote wa data nyeti.\n\n19.6 Arifa ya Uvunjaji wa Data: Katika tukio la uvunjaji wa data unaohatarisha haki zako, tunawajibika kutaaarifu PDPC na wewe kwa mujibu wa Sehemu ya 27(5) ya PDPA. Arifa itatolewa ndani ya muda unaofaa unaopendekezwa kuwa masaa 72.\n\n19.7 Faini na Adhabu: Kwa mujibu wa PDPA, ukiukwaji wa sheria unaweza kusababisha faini ya hadi TZS 5 bilioni kwa taasisi, au hadi TZS 20 milioni na/au kifungo cha hadi miaka 10 kwa watu binafsi.\n\n19.8 Malalamiko: Malalamiko yako ya data ya kibinafsi yanawezekana kwa:\n  a) Soko Vibe DPO: dpo@soko-vibe.com (ndani ya siku 30).\n  b) Mamlaka ya Ulinzi wa Data Tanzania (PDPC): helpdesk@pdpc.go.tz.',
+      'pp_section_pdpa_body':
+          '19.1 Usajili: Soko Vibe Limited imesajiliwa na Mamlaka ya Ulinzi wa Taarifa Binafsi Tanzania (PDPC) kama Mdhibiti wa Data kwa mujibu wa Sehemu ya 15 ya Sheria ya Ulinzi wa Taarifa Binafsi, 2022 (PDPA). Nambari ya usajili: [Nambari ya Usajili]. Usajili unapaswa kusasishwa kila miaka 5.\n\n19.2 Afisa Ulinzi wa Data: Tumemteua Afisa Ulinzi wa Data (DPO) kwa mujibu wa Sehemu ya 27(3) ya PDPA. DPO wetu anawajibika kusimamia utii wa PDPA na kanuni zake.\n\n19.3 Misingi ya Uchakataji: Uchakataji wetu wa data unategemea misingi ifuatayo ya kisheria kama ilivyowekwa katika Sehemu ya 22 ya PDPA:\n  a) Idhini ya Mhusika wa Data (Sehemu ya 23).\n  b) Uhitaji wa Kimkataba (Sehemu ya 22(2)(b)).\n  c) Utii wa Sheria (Sehemu ya 22(2)(c)).\n  d) Maslahi Halali (Sehemu ya 22(2)(f)).\n\n19.4 Haki za Mhusika wa Data: Chini ya Part VI ya PDPA, una haki zifuatazo:\n  a) Haki ya kuarifiwa (Sehemu ya 33(1)(a)).\n  b) Haki ya kufikia data yako (Sehemu ya 33(1)(b)).\n  c) Haki ya kurekebisha data isiyo sahihi (Sehemu ya 33(1)(c)).\n  d) Haki ya kufuta data ("right to be forgotten") (Sehemu ya 33(1)(d)).\n  e) Haki ya kuweka vikwazo vya uchakataji (Sehemu ya 33(1)(e)).\n  f) Haki ya kuhama data (Sehemu ya 33(1)(f)).\n  g) Haki ya kupinga uchakataji (Sehemu ya 33(1)(g)).\n  h) Haki ya kutokuwa chini ya maamuzi ya kiotomatiki pekee (Sehemu ya 33(1)(h)).\n\n19.5 Uhamisho wa Data Nje ya Tanzania: Kwa mujibu wa Part V ya PDPA (Sehemu 31-32), data yako ya kibinafsi inaweza kuhamishwa nje ya Tanzania pale inapohitajika kwa utendaji wa huduma. Tunahakikisha kuwa:\n  a) Nchi za kupokea zina ulinzi wa data unaofaa au zimesaini mikataba ya kimataifa.\n  b) Uhamisho unafanyika chini ya makubaliano ya kisheria (standard contractual clauses).\n  c) Idhini yako inapatawa kabla ya uhamisho wowote wa data nyeti.\n\n19.6 Arifa ya Uvunjaji wa Data: Katika tukio la uvunjaji wa data unaohatarisha haki zako, tunawajibika kutaaarifu PDPC na wewe kwa mujibu wa Sehemu ya 27(5) ya PDPA. Arifa itatolewa ndani ya muda unaofaa unaopendekezwa kuwa masaa 72.\n\n19.7 Faini na Adhabu: Kwa mujibu wa PDPA, ukiukwaji wa sheria unaweza kusababisha faini ya hadi TZS 5 bilioni kwa taasisi, au hadi TZS 20 milioni na/au kifungo cha hadi miaka 10 kwa watu binafsi.\n\n19.8 Malalamiko: Malalamiko yako ya data ya kibinafsi yanawezekana kwa:\n  a) Soko Vibe DPO: dpo@soko-vibe.com (ndani ya siku 30).\n  b) Mamlaka ya Ulinzi wa Data Tanzania (PDPC): helpdesk@pdpc.go.tz.',
       'clickpesa_overview': 'ClickPesa',
       'clickpesa_balance': 'Salio la ClickPesa',
       'clickpesa_deposits': 'Amana (Malipo)',
@@ -1647,7 +1753,8 @@ class LocalizationService {
       'all_orders': 'Oda Zote',
       'track_order': 'Fuatilia Agizo',
       'last_updated': 'Ilisasishwa',
-      'escrow_secure_note': 'Fedha zako ziko salama kwenye escrow hadi uthibitishe upokeaji',
+      'escrow_secure_note':
+          'Fedha zako ziko salama kwenye escrow hadi uthibitishe upokeaji',
       'live_updates': 'Taarifa za wakati halisi',
       'awaiting_quotes': 'Nukuu Zinazosubiri',
       'needs_action': 'Zinahitaji Hatua',
@@ -1671,11 +1778,13 @@ class LocalizationService {
       'error_loading_transactions': 'Kosa kupakia miamala',
       'no_withdrawals': 'Hakuna utoaji bado',
       'account_suspended_title': 'Akaunti Yako Imesimamishwa',
-      'account_suspended_message': 'Akaunti yako imesitishwa kwa muda. Tafadhali wasiliana na usaidizi kwa maelezo zaidi.',
+      'account_suspended_message':
+          'Akaunti yako imesitishwa kwa muda. Tafadhali wasiliana na usaidizi kwa maelezo zaidi.',
       'map_location': 'Mahali',
       'map_you': 'Wewe',
       'my_location': 'Mahali pangu',
-      'maintenance_underway': 'App iko kwenye matengenezo. Tafadhali rudi baadaye.',
+      'maintenance_underway':
+          'App iko kwenye matengenezo. Tafadhali rudi baadaye.',
       'order_bus': 'Basi',
       'order_plate': 'Namba ya gari',
       'order_tracking': 'Ufuatiliaji',
@@ -1694,15 +1803,17 @@ class LocalizationService {
       'ussd_push_charge_note': 'Inatozwa kwa mteja pamoja na ada za MNO.',
       'clickpesa_payout_fees': 'Ada za Utoaji za ClickPesa',
       'mobile_money_payouts': 'Utoaji kwa Mobile Money (M-Pesa, Airtel, Tigo)',
-      'payout_charge_note': 'Inatozwa kwa biashara. Inaweza kukabidhiwa kwa mpokeaji.',
+      'payout_charge_note':
+          'Inatozwa kwa biashara. Inaweza kukabidhiwa kwa mpokeaji.',
       'bank_eft_ach': 'Bank EFT / ACH',
       'bank_eft_ach_flat_fee': 'Ada maalum (0 – 20,000,000 TZS)',
       'bank_tiss': 'Bank TISS (TZS)',
       'bank_tiss_flat_fee': 'Ada maalum (0 – 1,000,000,000 TZS)',
       'soko_vibe_fees': 'Ada za Soko Vibe',
       'platform_commission': 'Kodi ya Mfumo',
-'charged_per_sale': 'Inatozwa kwa MNUNUZI wakati wa ununuzi',
-'commission_breakdown_note': 'Commission ya 3.5% inaongezwa kwenye jumla ya kiasi cha mnunuzi; muuzaji anapokea mapato kamili bila kukatwa chochote.',
+      'charged_per_sale': 'Inatozwa kwa MNUNUZI wakati wa ununuzi',
+      'commission_breakdown_note':
+          'Commission ya 3.5% inaongezwa kwenye jumla ya kiasi cha mnunuzi; muuzaji anapokea mapato kamili bila kukatwa chochote.',
       'account_channel_setup': 'Usanidi wa Akaunti na Njia',
       'account_creation_fee': 'Kuunda Akaunti (kikomo cha 100,000 TZS)',
       'kyc_search_fee': 'Uchunguzi wa KYC na Uandikishaji',
@@ -1714,12 +1825,14 @@ class LocalizationService {
       'seller_withdrawal_payout': 'Utoaji wa Muuzaji (payout)',
       'payout_fee_tiered': 'Ada ya utoaji (kulingana na viwango)',
       'example_ussd_push': 'Mfano: TZS 100,000 kupitia USSD Push',
-      'clickpesa_gateway_fee_tiered': 'Ada ya Lango la ClickPesa (kulingana na viwango)',
+      'clickpesa_gateway_fee_tiered':
+          'Ada ya Lango la ClickPesa (kulingana na viwango)',
       'soko_vibe_commission_calc': 'Kodi ya Soko Vibe (3.5%)',
       'total_buyer_pays': 'Jumla Atoayo Mnunuzi',
       'seller_receives_before_fee': 'Muuzaji Anapokea (kabla ya ada ya utoaji)',
       'payout_fee_estimated': 'Ada ya Utoaji (inakadiriwa)',
-      'checkout_ussd_note': 'Unapomaliza agizo, USSD Push ndiyo njia pekee ya malipo. Utapokea kiprompto cha malipo kwenye simu yako – weka PIN yako kukamilisha malipo.',
+      'checkout_ussd_note':
+          'Unapomaliza agizo, USSD Push ndiyo njia pekee ya malipo. Utapokea kiprompto cha malipo kwenye simu yako – weka PIN yako kukamilisha malipo.',
       'seller_sets_shipping': 'Muuzaji anaweka gharama ya usafirishaji',
       'buyer_pays_ussd': 'Mnunuzi analipa kupitia USSD Push',
       'funds_held_escrow': 'Pesa zinashikiliwa kwa usalama kwenye escrow',
@@ -1747,10 +1860,12 @@ class LocalizationService {
       'network_error_msg': 'Hitilafu ya mtandao',
       'coins_ads_count': 'Sarafu 15 × matangazo {count}',
       'receipt_share_text': 'Risiti ya Soko Vibe #{orderId}',
-      'order_submitted_to_seller': 'Agizo limewasilishwa kwa muuzaji. Subiri muuzaji kutoa gharama ya usafirishaji.',
+      'order_submitted_to_seller':
+          'Agizo limewasilishwa kwa muuzaji. Subiri muuzaji kutoa gharama ya usafirishaji.',
       'commission_3_5': 'Kodi (3.5%)',
       'anonymous': 'Bila jina',
-      'checkout_trust_strip': 'Unaweka agizo bila malipo. Muuzaji atakupa gharama ya usafirishaji, kisha utalipa.',
+      'checkout_trust_strip':
+          'Unaweka agizo bila malipo. Muuzaji atakupa gharama ya usafirishaji, kisha utalipa.',
       'failed_to_create_order': 'Imeshindikana kuunda agizo',
       'share_price_line': 'Bei: {price}',
       'add_status': 'Ongeza Status',
@@ -1763,19 +1878,25 @@ class LocalizationService {
       'boost_receipt_product': 'Bidhaa: {product}',
       'boost_receipt_amount': 'Kiasi: {amount}',
       'boost_receipt_type': 'Aina: {type}',
-      'phone_already_registered': 'Namba hii ya simu tayari imesajiliwa. Tumia namba nyingine au ingia kwenye akaunti yako.',
-      'email_already_registered': 'Barua pepe hii tayari imesajiliwa. Tumia barua pepe nyingine au ingia kwenye akaunti yako.',
+      'phone_already_registered':
+          'Namba hii ya simu tayari imesajiliwa. Tumia namba nyingine au ingia kwenye akaunti yako.',
+      'email_already_registered':
+          'Barua pepe hii tayari imesajiliwa. Tumia barua pepe nyingine au ingia kwenye akaunti yako.',
       'accept_terms_prefix': 'NAKUBALI ',
       'accept_terms_separator': ' NA ',
-      'kyc_id_image_upload_failed': 'Imeshindikana kupakia picha ya kitambulisho. Angalia muunganisho wako na ujaribu tena.',
-      'kyc_selfie_upload_failed': 'Imeshindikana kupakia selfie yako. Angalia muunganisho wako na ujaribu tena.',
+      'kyc_id_image_upload_failed':
+          'Imeshindikana kupakia picha ya kitambulisho. Angalia muunganisho wako na ujaribu tena.',
+      'kyc_selfie_upload_failed':
+          'Imeshindikana kupakia selfie yako. Angalia muunganisho wako na ujaribu tena.',
       'change_password': 'Badilisha Nenosiri',
       'account_selection_subtitle': 'Jionee mwenyewe/Look for yourself',
-      'transaction_fee_breakdown': 'Ada: -TZS {fee} | Soko Vibe: -TZS {commission}',
+      'transaction_fee_breakdown':
+          'Ada: -TZS {fee} | Soko Vibe: -TZS {commission}',
       'withdrawal_fee_detail': 'Ada: TZS {fee} | {date}',
       'withdrawal_failed_detail': 'Imeshindikana: {reason}',
       'admin_note_label': 'Admin: {note}',
-      'broadcast_warning': 'Notification hii itatumwa kwa watumiaji WOTE wa app. Hakikisha ujumbe ni sahihi.',
+      'broadcast_warning':
+          'Notification hii itatumwa kwa watumiaji WOTE wa app. Hakikisha ujumbe ni sahihi.',
       'offline_reconnecting': 'Hakuna mtandao — unajaribu kuunganisha',
       'escrow_safe_label': 'Fedha zako ziko salama Escrow',
       'accept_terms_required': 'Tafadhali kukubali sheria na masharti',
@@ -1787,14 +1908,17 @@ class LocalizationService {
       'activate': 'Amilisha',
       'ad': 'Tangazo',
       'ad_required': 'Tangazo linahitajika kuendelea',
-      'ai_chat_greeting': 'Habari! Mimi ni msaidizi wa Soko Vibe. Niulize jambo lolote kuhusu soko letu.',
+      'ai_chat_greeting':
+          'Habari! Mimi ni msaidizi wa Soko Vibe. Niulize jambo lolote kuhusu soko letu.',
       'already_featured': 'Tayari imeangaziwa',
       'app_lock': 'Funga App kwa PIN',
       'audio_music': 'Sauti & Muziki',
       'bidhaa_ina_flash_sale': 'Bidhaa hii tayari ina flash sale inayoendelea',
       'boosting': 'Kukuza Bidhaa',
-      'broadcast_confirm_body': 'Tuma taarifa hii kwa watumiaji WOTE wa app?\n\nKichwa: {title}\n\nUjumbe: {body}',
-      'broadcast_result': 'Imetumwa kwa watumiaji {totalUsers} ({pushNotifications} push, {inAppNotifications} ndani ya app)',
+      'broadcast_confirm_body':
+          'Tuma taarifa hii kwa watumiaji WOTE wa app?\n\nKichwa: {title}\n\nUjumbe: {body}',
+      'broadcast_result':
+          'Imetumwa kwa watumiaji {totalUsers} ({pushNotifications} push, {inAppNotifications} ndani ya app)',
       'broadcast_sent': 'Matangazo yametumwa',
       'browse_products': 'Vinjari Bidhaa',
       'browsing_products': 'Kuvinjari Bidhaa',
@@ -1805,13 +1929,15 @@ class LocalizationService {
       'choose_account_type': 'Chagua Aina ya Akaunti',
       'communication': 'Mawasiliano',
       'communication_sub': 'Wasiliana na wauzaji na wanunuzi',
-      'confirm_failed_msg': 'Imeshindwa kuthibitisha upokeaji. Tafadhali jaribu tena.',
+      'confirm_failed_msg':
+          'Imeshindwa kuthibitisha upokeaji. Tafadhali jaribu tena.',
       'confirm_logout': 'Thibitisha Kutoka',
       'confirm_password': 'Thibitisha Nenosiri',
       'contact_us': 'Wasiliana Nasi',
       'contact_us_sub': 'Piga simu au tuandie barua pepe',
       'confirm_receipt': 'Thibitisha Upokeaji',
-      'otp_security_warning': 'USIJIGAWANIE NAMBARI HII MPAKA UPOKEE NA KUKAGUA BIDHAA YAKO.',
+      'otp_security_warning':
+          'USIJIGAWANIE NAMBARI HII MPAKA UPOKEE NA KUKAGUA BIDHAA YAKO.',
       'delivery_otp_label': 'Nambari ya Uthibitisho',
       'otp_waiting': 'Subiri muuzaji atume nambari...',
       'share_otp_with_seller': 'Mpa nambari hii muuzaji ili athibitishe utoaji',
@@ -1828,8 +1954,10 @@ class LocalizationService {
       'create_account': 'Unda akaunti yako',
       'date': 'Tarehe',
       'deactivate': 'Simamisha',
-      'delete_account_confirm': 'Hii itafuta akaunti yako na data zake zote kabisa. Hatua hii haiwezi kutenduliwa.',
-      'delete_account_failed': 'Imeshindwa kufuta akaunti. Tafadhali jaribu tena.',
+      'delete_account_confirm':
+          'Hii itafuta akaunti yako na data zake zote kabisa. Hatua hii haiwezi kutenduliwa.',
+      'delete_account_failed':
+          'Imeshindwa kufuta akaunti. Tafadhali jaribu tena.',
       'delete_confirm': 'Futa bidhaa hii kabisa?',
       'delete_failed': 'Imeshindwa kufuta',
       'delete_kyc': 'Futa KYC',
@@ -1841,14 +1969,16 @@ class LocalizationService {
       'delete_product': 'Futa Bidhaa',
       'delete_selected': 'Futa Zilizochaguliwa',
       'deleting_label': 'Inafutwa...',
-      'delivery_confirmed_msg': 'Upokeaji umethibitishwa. Asante kwa kununua na Soko Vibe!',
+      'delivery_confirmed_msg':
+          'Upokeaji umethibitishwa. Asante kwa kununua na Soko Vibe!',
       'deselect_all': 'Ondoa Uchaguzi Wote',
       'developer': 'Msanidi Programu',
       'discovery': 'Ugunduzi',
       'dismiss': 'Puuza',
       'email_not_registered': 'Barua pepe hii haijasajiliwa',
       'enter_email': 'Ingiza barua pepe yako kwanza',
-      'enter_email_reset_hint': 'Ingiza barua pepe yako upokee kiungo cha kuweka upya nenosiri',
+      'enter_email_reset_hint':
+          'Ingiza barua pepe yako upokee kiungo cha kuweka upya nenosiri',
       'enter_password': 'Ingiza nenosiri',
       'enter_phone_withdraw': 'Tafadhali ingiza namba yako ya simu',
       'enter_pin': 'Ingiza PIN',
@@ -1871,8 +2001,10 @@ class LocalizationService {
           '✓ Integrasheni ya WhatsApp',
       'fill_fields': 'Jaza sehemu zote',
       'financials': 'Fedha',
-      'firestore_index_building': 'Faharasa ya database bado inajengwa. Tafadhali subiri kidogo kisha jaribu tena.',
-      'firestore_permission_hint': 'Huna ruhusa ya kuona data hii. Ikiwa umeingia, jaribu kuiboresha au ingia toka na urudi.',
+      'firestore_index_building':
+          'Faharasa ya database bado inajengwa. Tafadhali subiri kidogo kisha jaribu tena.',
+      'firestore_permission_hint':
+          'Huna ruhusa ya kuona data hii. Ikiwa umeingia, jaribu kuiboresha au ingia toka na urudi.',
       'flash_sale_ends_in': 'Flash sale inaisha baada ya {0}',
       'flash_sales': 'Flash Sales',
       'forgot_password': 'Umesahau nenosiri?',
@@ -1881,31 +2013,47 @@ class LocalizationService {
       'full_name_required': 'Ingiza jina lako kamili',
       'getting_started': 'Kuanza',
       'getting_started_sub': 'Jifunze jinsi ya kutumia Soko Vibe',
-      'help_account_types': 'Unaweza kuwa Mnunuzi (ununue bidhaa), Muuzaji (uuze bidhaa), au wote wawili. Unaweza kubadilisha wakati wowote.',
-      'help_app_lock': 'Weka PIN ya usalama ili kuzuia watu wengine kufungua app yako. PIN inahifadhiwa kwa usalama na inahitajika kila unaporudi kwenye app.',
-      'help_audio': 'Sikiliza sauti na muziki kutoka kwenye maktaba ya Soko Vibe au pakia nyimbo zako mwenyewe. Tumia foleni kucheza nyimbo kwa mpangilio.',
-      'help_boosting': 'Unaweza kulipa kukuza bidhaa yako ili iwafikie wateja zaidi. Bidhaa zilizokuzwa zinaonekana juu ya matokeo ya utafutaji.',
-      'help_browsing': 'Vinjari bidhaa kwenye ukurasa wa mwanzo, tafuta kwa jina, au chuja kwa kategoria. Unaweza pia kuchuja kwa bei, chapa, na hali ya bidhaa.',
-      'help_buying': 'Bofya bidhaa unayoipenda, kisha bofya "Nunua Sasa". Malipo yanafanywa kwa usalama kupitia Mongike. Muuzaji atawasiliana nawe kuhusu usafirishaji.',
-      'help_chat': 'Tumia mazungumzo kuwasiliana na wauzaji au wanunuzi. Unaweza kutuma ujumbe, picha, na kupanga utoaji wa bidhaa moja kwa moja.',
-      'help_flash_sales': 'Flash Sales ni ofa maalum za muda maalum. Unaweza kuunda flash sale kwa bidhaa yako ili kuvutia wateja kwa punguzo la muda.',
-      'help_kyc': 'Ili kuuza bidhaa, unahitaji kuthibitisha utambulisho wako. Nenda kwenye ukurasa wa "KYC", pakia hati yako ya utambulisho, na usubiri idhini.',
-      'help_list_product': 'Bonyeza "+" au "Tangaza Bidhaa", chagua picha za bidhaa yako, weka bei, maelezo, na kategoria. Tangazo lako litaonekana kwa wateja mara moja.',
-      'help_manage_orders': 'Tazama oda zako kwenye ukurasa wa "Oda". Unaweza kuona nani alinunua bidhaa zako na kuwasiliana nao moja kwa moja.',
-      'help_register_login': 'Fungua app na uunde akaunti kwa kutumia barua pepe, namba ya simu, au akaunti ya Google. Ukishasajiliwa, unaweza kuanza kununua na kuuza mara moja.',
-      'help_seller_dashboard': 'Dashibodi inaonyesha mauzo yako, mapato, na takwimu za bidhaa. Pata muhtasari wa biashara yako kwa mtazamo mmoja.',
-      'help_youtube': 'Tafuta na cheza muziki kutoka YouTube moja kwa moja kwenye app. Ongeza nyimbo kwenye foleni yako ya kucheza.',
+      'help_account_types':
+          'Unaweza kuwa Mnunuzi (ununue bidhaa), Muuzaji (uuze bidhaa), au wote wawili. Unaweza kubadilisha wakati wowote.',
+      'help_app_lock':
+          'Weka PIN ya usalama ili kuzuia watu wengine kufungua app yako. PIN inahifadhiwa kwa usalama na inahitajika kila unaporudi kwenye app.',
+      'help_audio':
+          'Sikiliza sauti na muziki kutoka kwenye maktaba ya Soko Vibe au pakia nyimbo zako mwenyewe. Tumia foleni kucheza nyimbo kwa mpangilio.',
+      'help_boosting':
+          'Unaweza kulipa kukuza bidhaa yako ili iwafikie wateja zaidi. Bidhaa zilizokuzwa zinaonekana juu ya matokeo ya utafutaji.',
+      'help_browsing':
+          'Vinjari bidhaa kwenye ukurasa wa mwanzo, tafuta kwa jina, au chuja kwa kategoria. Unaweza pia kuchuja kwa bei, chapa, na hali ya bidhaa.',
+      'help_buying':
+          'Bofya bidhaa unayoipenda, kisha bofya "Nunua Sasa". Malipo yanafanywa kwa usalama kupitia Mongike. Muuzaji atawasiliana nawe kuhusu usafirishaji.',
+      'help_chat':
+          'Tumia mazungumzo kuwasiliana na wauzaji au wanunuzi. Unaweza kutuma ujumbe, picha, na kupanga utoaji wa bidhaa moja kwa moja.',
+      'help_flash_sales':
+          'Flash Sales ni ofa maalum za muda maalum. Unaweza kuunda flash sale kwa bidhaa yako ili kuvutia wateja kwa punguzo la muda.',
+      'help_kyc':
+          'Ili kuuza bidhaa, unahitaji kuthibitisha utambulisho wako. Nenda kwenye ukurasa wa "KYC", pakia hati yako ya utambulisho, na usubiri idhini.',
+      'help_list_product':
+          'Bonyeza "+" au "Tangaza Bidhaa", chagua picha za bidhaa yako, weka bei, maelezo, na kategoria. Tangazo lako litaonekana kwa wateja mara moja.',
+      'help_manage_orders':
+          'Tazama oda zako kwenye ukurasa wa "Oda". Unaweza kuona nani alinunua bidhaa zako na kuwasiliana nao moja kwa moja.',
+      'help_register_login':
+          'Fungua app na uunde akaunti kwa kutumia barua pepe, namba ya simu, au akaunti ya Google. Ukishasajiliwa, unaweza kuanza kununua na kuuza mara moja.',
+      'help_seller_dashboard':
+          'Dashibodi inaonyesha mauzo yako, mapato, na takwimu za bidhaa. Pata muhtasari wa biashara yako kwa mtazamo mmoja.',
+      'help_youtube':
+          'Tafuta na cheza muziki kutoka YouTube moja kwa moja kwenye app. Ongeza nyimbo kwenye foleni yako ya kucheza.',
       'home': 'Nyumbani',
       'invalid_email': 'Barua pepe batili',
       'kyc': 'Uthibitishaji wa KYC',
       'kyc_deleted': 'KYC imefutwa',
-      'kyc_required_selling': 'Lazima ukamilishe uthibitishaji wa KYC kabla ya kuuza. Nenda Wasifu > KYC.',
+      'kyc_required_selling':
+          'Lazima ukamilishe uthibitishaji wa KYC kabla ya kuuza. Nenda Wasifu > KYC.',
       'kyc_revoked': 'KYC imebatilishwa',
       'list_product': 'Tangaza Bidhaa',
       'loading_error': 'Imeshindwa kupakia oda zako',
       'login_prompt': 'Tayari una akaunti? Ingia',
       'login_required': 'Inahitajika kuingia kwanza',
-      'logout_confirm_message': 'Una uhakika unataka kutoka kwenye akaunti yako?',
+      'logout_confirm_message':
+          'Una uhakika unataka kutoka kwenye akaunti yako?',
       'maintenance': 'Matengenezo',
       'manage_orders': 'Simamia Oda',
       'mark_featured': 'Weka kama Iliyoangaziwa',
@@ -1923,7 +2071,8 @@ class LocalizationService {
       'no_orders_this_filter': 'Hakuna oda zinazolingana na kichujio hiki',
       'no_payment_methods': 'Muuzaji hajaweka njia za malipo bado.',
       'no_phone_number_for_seller': 'Hakuna namba ya simu kwa {0} bado',
-      'no_products_matching_filters': 'Hakuna bidhaa zinazolingana na vichujio vyako',
+      'no_products_matching_filters':
+          'Hakuna bidhaa zinazolingana na vichujio vyako',
       'no_purchases_yet': 'Hujanunua chochote bado',
       'no_reports': 'Hakuna ripoti bado',
       'open': 'Fungua',
@@ -1934,10 +2083,12 @@ class LocalizationService {
       'otp_invalid': 'OTP batili',
       'password_length': 'Angalau herufi 8',
       'password_mismatch': 'Manenosiri hayalingani',
-      'password_reset_email_sent': 'Kiungo cha kuweka upya nenosiri kimetumwa kwa barua pepe yako',
+      'password_reset_email_sent':
+          'Kiungo cha kuweka upya nenosiri kimetumwa kwa barua pepe yako',
       'payout': 'Uondoaji wa Fedha',
       'permission_denied': 'Ruhusa imekataliwa',
-      'permission_permanently_denied': 'Umeikataa kabisa ruhusa hii. Tafadhali iwashe kwenye Mipangilio kuendelea.',
+      'permission_permanently_denied':
+          'Umeikataa kabisa ruhusa hii. Tafadhali iwashe kwenye Mipangilio kuendelea.',
       'permission_required': 'Ruhusa Inahitajika',
       'photo_updated': 'Picha ya wasifu imesasishwa!',
       'please_try_again': 'Tafadhali jaribu tena',
@@ -1955,7 +2106,8 @@ class LocalizationService {
       'profile_not_found': 'Wasifu haukupatikana',
       'quick_actions': 'Vitendo vya Haraka',
       'rate_seller_desc': 'Uzoefu wako na {0} ulikuwaje?',
-      'rate_seller_trust_prompt': 'Je, muuzaji huyu alitoa kama alivyoahidi? Ukadiriaji wako wa uaminifu husaidia wanunuzi wengine.',
+      'rate_seller_trust_prompt':
+          'Je, muuzaji huyu alitoa kama alivyoahidi? Ukadiriaji wako wa uaminifu husaidia wanunuzi wengine.',
       'refurbished': 'Imekarabatiwa',
       'register_login': 'Jisajili / Ingia',
       'rejection_reason': 'Sababu ya Kukataa',
@@ -1979,7 +2131,8 @@ class LocalizationService {
       'review_hint': 'Andika maoni mafupi (hiari)...',
       'reviews_count': 'maoni',
       'revoke_kyc': 'Batilisha KYC',
-      'revoke_kyc_confirm': 'Una uhakika unataka kubatilisha uthibitisho huu wa KYC?',
+      'revoke_kyc_confirm':
+          'Una uhakika unataka kubatilisha uthibitisho huu wa KYC?',
       'search_products_users_hint': 'Tafuta bidhaa au watumiaji',
       'search_users': 'Tafuta watumiaji...',
       'select': 'Chagua',
@@ -2005,7 +2158,8 @@ class LocalizationService {
       'support_hours_value': 'Jumatatu - Ijumaa, 8:00 - 18:00',
       'tagline': 'Soko Lako, Lugha Yako',
       'tap_to_boost': 'Bofya kukuza',
-      'thank_you_message': 'Asante kwa kutumia Soko Vibe. Tunatumaini unafurahia matumizi yako ya soko!',
+      'thank_you_message':
+          'Asante kwa kutumia Soko Vibe. Tunatumaini unafurahia matumizi yako ya soko!',
       'this_month': 'Mwezi Huu',
       'today': 'Leo',
       'toggle_admin': 'Badilisha Hali ya Admin',
@@ -2031,6 +2185,8 @@ class LocalizationService {
       'waiting_payment': 'Kusubiri Malipo',
       'watch_ad': 'Tazama Tangazo',
       'watch_ad_to_continue': 'Tazama tangazo kuendelea bila malipo',
+      'web_shop_subtitle': 'Nunua bidhaa moja kwa moja kwenye kivinjari',
+      'web_shop_title': 'Duka Letu',
       'welcome_back': 'Karibu tena!',
       'withdraw_min_amount': 'Kiwango cha chini cha uondoaji ni TZS 2,001',
       'withdraw_phone_hint': 'Namba ya simu ya M-Pesa',
@@ -2040,7 +2196,6 @@ class LocalizationService {
       'youtube_music': 'YouTube Music',
     },
     'en': {
-
       'you_save': 'You save',
       'app_name': 'Soko Vibe',
       'main_market': 'Main Market',
@@ -2065,10 +2220,12 @@ class LocalizationService {
       'chat_seller': 'Chat Seller',
       'messages': 'Messages',
       'messages_subtitle': 'Stay connected with buyers and sellers',
-      'trust_banner_msg': 'Keep payments inside Soko Vibe. Never share your OTP.',
+      'trust_banner_msg':
+          'Keep payments inside Soko Vibe. Never share your OTP.',
       'for_you': 'For You',
       'nearby': 'Nearby',
-      'follow_sellers_empty': 'Follow sellers to see their latest products here.',
+      'follow_sellers_empty':
+          'Follow sellers to see their latest products here.',
       'discover_sellers': 'Discover Sellers',
       'set_location_title': 'Set your location to see nearby products.',
       'set_location': 'Set Location',
@@ -2079,7 +2236,8 @@ class LocalizationService {
       'your_connections': 'Your connections',
       'connections': 'Connections',
       'login_required_title': 'Sign in to continue',
-      'login_required_body': 'You need an account to do this. Browsing is free.',
+      'login_required_body':
+          'You need an account to do this. Browsing is free.',
       'maybe_later': 'Maybe later',
       'no_followers_yet': 'No followers yet.',
       'not_following_anyone': 'Not following anyone yet.',
@@ -2157,7 +2315,8 @@ class LocalizationService {
       'chat_now': 'Chat Now',
       'send': 'Send',
       'message_sent': 'Message sent',
-      'duplicate_listing': 'This item is already on the market (it matches an existing listing). Duplicate listings are not allowed.',
+      'duplicate_listing':
+          'This item is already on the market (it matches an existing listing). Duplicate listings are not allowed.',
       'type_message': 'Type a message...',
       'no_conversations': 'No conversations yet',
       'waiting_for_user': 'Waiting for other user...',
@@ -2258,7 +2417,8 @@ class LocalizationService {
       'upload_image': 'Please add at least one image',
       'enter_valid_price': 'Please enter a valid price (numbers only)',
       'enter_valid_stock': 'Please enter a valid stock quantity',
-      'kyc_required_selling': 'You must complete KYC verification before selling. Go to Profile > KYC.',
+      'kyc_required_selling':
+          'You must complete KYC verification before selling. Go to Profile > KYC.',
       'copied': 'Copied to clipboard',
       'share': 'Share',
       'sold': 'sold',
@@ -2566,12 +2726,15 @@ class LocalizationService {
       'get_location': 'Get my location',
       'location_disabled': 'Location services are disabled',
       'location_denied': 'Location permission has been permanently denied',
-      'location_permission_denied': 'Location permission denied. Please try again.',
+      'location_permission_denied':
+          'Location permission denied. Please try again.',
       'location_title': 'Allow location access',
-      'location_disclosure': 'Soko Vibe uses your location to show products near you and help sellers find buyers in your area. Your precise location is never shared publicly.',
+      'location_disclosure':
+          'Soko Vibe uses your location to show products near you and help sellers find buyers in your area. Your precise location is never shared publicly.',
       'allow_location': 'Allow location',
       'age_verification': 'Age Verification',
-      'age_gate_message': 'To use Soko Vibe, you must be 18 years or older. Please confirm your age.',
+      'age_gate_message':
+          'To use Soko Vibe, you must be 18 years or older. Please confirm your age.',
       'i_am_over_18': 'I am 18 or older',
       'i_am_under_18': 'I am under 18',
       'not_now': 'Not now',
@@ -2639,8 +2802,7 @@ class LocalizationService {
       'direct_transfer': 'Direct Transfer',
       'send_to_seller_directly': 'Send to seller directly',
       'no_commission': 'No commission',
-'mongike': 'ClickPesa',
-
+      'mongike': 'ClickPesa',
 
       'ai_greeting':
           'Hello! Welcome to Soko Vibe. I\'m AI Dalali — your assistant for finding products, prices and sellers. I\'m here to help!\n\n• I search products directly from Soko Vibe — prices, seller, location and phone are all here.\n• If a product isn\'t in Soko Vibe, I\'ll tell you honestly and give you external market price estimates.\n• Send a product photo, I\'ll analyze it and search Soko Vibe.\n\nYou can type, speak, or send a photo — whatever works for you!',
@@ -2717,7 +2879,8 @@ class LocalizationService {
       'requests_empty_hint': 'Post your request and let sellers come to you',
       'requests_error': 'Failed to load requests. Check your connection.',
       'unlock_contact': 'Unlock Contact',
-      'unlock_contact_ad_msg': 'Watch one video ad to unlock the buyer\'s contact',
+      'unlock_contact_ad_msg':
+          'Watch one video ad to unlock the buyer\'s contact',
       'contact_unlocked': 'Contact unlocked!',
       'locked_contact_hint': 'Contact hidden',
       'invalid_whatsapp': 'Enter a valid WhatsApp number',
@@ -2897,7 +3060,8 @@ class LocalizationService {
       'warning_sent': 'Warning sent',
       'warning_sent_blocked': '3rd warning sent — account blocked',
       'warning_reason': 'Warning Reason',
-      'warning_will_block_after_3': 'After 3 warnings the account will be blocked (suspended).',
+      'warning_will_block_after_3':
+          'After 3 warnings the account will be blocked (suspended).',
       'warning_reason_required': 'Please enter a warning reason',
       'hidden': ' [HIDDEN]',
       'no_active_fraud_alerts': 'No active fraud alerts',
@@ -3053,7 +3217,8 @@ class LocalizationService {
       'delete_user': 'Delete User',
       'delete_user_confirm': 'Delete all messages and remove user %s?',
       'block_user': 'Block User',
-      'block_user_confirm': 'Block %s? You will not receive messages from them.',
+      'block_user_confirm':
+          'Block %s? You will not receive messages from them.',
       'unmute': 'Unmute',
       'unpinned': 'Unpinned',
       'pinned': 'Pinned',
@@ -3101,7 +3266,8 @@ class LocalizationService {
       'open_dispute': 'Open Dispute',
       'dispute_title': 'Open Dispute?',
       'cancel_order_title': 'Cancel Order?',
-      'dispute_description': 'Are you sure you want to open a dispute for this order?',
+      'dispute_description':
+          'Are you sure you want to open a dispute for this order?',
       'cancel_order_description': 'Are you sure you want to cancel this order?',
       'sort_by': 'Sort By',
       'area': 'Area',
@@ -3133,9 +3299,11 @@ class LocalizationService {
       'get_started': 'Get Started',
       'done': 'Done',
       'onboarding_title1': 'Welcome to Soko Vibe',
-      'onboarding_desc1': 'Buy and sell products across Tanzania easily and securely.',
+      'onboarding_desc1':
+          'Buy and sell products across Tanzania easily and securely.',
       'onboarding_title2': 'Secure Payments',
-      'onboarding_desc2': 'Escrow protects your payment until the product arrives.',
+      'onboarding_desc2':
+          'Escrow protects your payment until the product arrives.',
       'onboarding_title3': 'Start Selling',
       'onboarding_desc3': 'List your products for free and reach many buyers.',
       'ai_assistant': 'AI Assistant',
@@ -3180,7 +3348,8 @@ class LocalizationService {
       'product_management': 'Product Management',
       'order_management': 'Order Management',
       'view_all': 'View All',
-      'maintenance_message': 'Soko Vibe is currently under maintenance. Please try again later.',
+      'maintenance_message':
+          'Soko Vibe is currently under maintenance. Please try again later.',
       'system_health': 'System Health',
       'last_checked': 'Last Checked',
       'server_status': 'Server Status',
@@ -3212,7 +3381,8 @@ class LocalizationService {
       'bank_name_label': 'Bank Name',
       'quantity_prefix': 'x{0} ',
       'mongike_processing_fee': 'ClickPesa Processing Fee',
-      'shipping_cost_note': 'Shipping cost will be added after the seller provides a quote.',
+      'shipping_cost_note':
+          'Shipping cost will be added after the seller provides a quote.',
       'shipping_address_title': 'Shipping Address',
       'region_hint': 'Region',
       'district_hint': 'District',
@@ -3222,18 +3392,23 @@ class LocalizationService {
       'phone_label_title': 'Phone Number',
       'sending': 'Sending...',
       'send_shipping_request': 'Send Shipping Request',
-      'shipping_info': 'The seller will provide the shipping cost. You will pay product total + shipping after agreeing.',
+      'shipping_info':
+          'The seller will provide the shipping cost. You will pay product total + shipping after agreeing.',
       'enter_phone_error': 'Please enter phone number',
-      'enter_full_address': 'Please enter complete address (Region, District, Street)',
+      'enter_full_address':
+          'Please enter complete address (Region, District, Street)',
       'delivery_type': 'Delivery Type',
       'delivery_within_region': 'Within Region',
       'delivery_outside_region': 'Outside Region',
       'select_region': 'Select Region',
-      'address_filled_confirm': 'Address filled automatically. Review then submit your order.',
-      'order_submitted': 'Your order has been submitted. The seller will provide the shipping cost.',
+      'address_filled_confirm':
+          'Address filled automatically. Review then submit your order.',
+      'order_submitted':
+          'Your order has been submitted. The seller will provide the shipping cost.',
       'error_prefix': 'Error: ',
       'new_order_notification': 'New Order Received!',
-      'buyer_wants_to_buy': '{buyer} wants to buy {product}. Enter shipping cost.',
+      'buyer_wants_to_buy':
+          '{buyer} wants to buy {product}. Enter shipping cost.',
       'min_price_hint': 'Min',
       'max_price_hint': 'Max',
       'location_hint': 'e.g. Dar es Salaam, Arusha...',
@@ -3264,20 +3439,26 @@ class LocalizationService {
       'enter_your_phone': 'Enter your phone number',
       'phone_used_for_txns': 'Used for transactions and notifications',
       'phone_format_hint': '255xxxxxxxxx',
-      'onboarding_phone_footer_hint': 'Tap "Next" to continue or "Skip" to skip this step',
+      'onboarding_phone_footer_hint':
+          'Tap "Next" to continue or "Skip" to skip this step',
       'skip': 'Skip',
       'next': 'Next',
       'onboarding_start': 'Get Started',
       'onboarding_welcome_title': 'Welcome to Soko Vibe!',
-      'onboarding_welcome_desc': "We're delighted to have you! Buy and sell products easily and securely — one marketplace for all of Tanzania.",
+      'onboarding_welcome_desc':
+          "We're delighted to have you! Buy and sell products easily and securely — one marketplace for all of Tanzania.",
       'onboarding_ai_title': 'AI Assistant',
-      'onboarding_ai_desc': 'Ask our AI anything — product recommendations, selling tips, and more, 24/7.',
+      'onboarding_ai_desc':
+          'Ask our AI anything — product recommendations, selling tips, and more, 24/7.',
       'onboarding_chat_title': 'Chat with Sellers',
-      'onboarding_chat_desc': 'Connect directly with sellers, ask questions, and close deals with ease.',
+      'onboarding_chat_desc':
+          'Connect directly with sellers, ask questions, and close deals with ease.',
       'onboarding_language_title': 'Choose Your Language',
-      'onboarding_language_desc': 'Use Soko Vibe in the language you love — Swahili or English.',
+      'onboarding_language_desc':
+          'Use Soko Vibe in the language you love — Swahili or English.',
       'onboarding_phone_title': 'Your Phone Number',
-      'onboarding_phone_desc': 'Enter your phone number for secure transactions and order notifications.',
+      'onboarding_phone_desc':
+          'Enter your phone number for secure transactions and order notifications.',
       'powered_by_ai': 'Powered by AI',
       'chat_with_ai_help': 'Chat with our AI for quick help',
       'no_flash_sales': 'No Flash Sales right now',
@@ -3289,13 +3470,17 @@ class LocalizationService {
       'view': 'View',
       'order_already_paid': 'This order has already been paid.',
       'preparing_payment_wait': 'Preparing payment... Please wait.',
-      'check_phone_enter_pin': 'Check your phone — enter PIN to complete payment.',
-      'dispute_notify_admin': 'This will notify the admin to review this transaction.',
+      'check_phone_enter_pin':
+          'Check your phone — enter PIN to complete payment.',
+      'dispute_notify_admin':
+          'This will notify the admin to review this transaction.',
       'dispute_opened_msg': 'Dispute has been opened. Admin will review.',
       'dispute_failed': 'Failed to raise dispute',
-      'cancel_order_refund_message': 'This will refund your money via Mongike (TZS 2,000 deducted for payout fee). Make sure you have not received the item.',
+      'cancel_order_refund_message':
+          'This will refund your money via Mongike (TZS 2,000 deducted for payout fee). Make sure you have not received the item.',
       'yes_cancel': 'Yes, Cancel',
-      'order_cancelled_refunded': 'Order has been cancelled. Your money has been refunded (TZS 2,000 fee deducted).',
+      'order_cancelled_refunded':
+          'Order has been cancelled. Your money has been refunded (TZS 2,000 fee deducted).',
       'cancel_order_failed': 'Failed to cancel order',
       'payment_error': 'Payment error',
       'secured_in_escrow': 'Secured in Escrow',
@@ -3341,8 +3526,10 @@ class LocalizationService {
       'transport_note': 'Short Note',
       'transport_submit': 'Save Transport Details',
       'transport_saved': 'Transport details saved',
-      'transport_fill': 'Fill in the transport details you chose (bus, bodaboda or motorcycle)',
-      'buyer_transport_done': 'Transport details saved. The seller will use them to send your goods.',
+      'transport_fill':
+          'Fill in the transport details you chose (bus, bodaboda or motorcycle)',
+      'buyer_transport_done':
+          'Transport details saved. The seller will use them to send your goods.',
       'buyer_transport_label': 'Buyer Transport Details',
       'mongike_fee_label': 'Processing Fee',
       'fee_per_transaction': 'Processing fee per transaction',
@@ -3357,15 +3544,18 @@ class LocalizationService {
       'cancelled_label': 'Cancelled',
       'enter_valid_shipping_cost': 'Please enter a valid shipping cost',
       'shipping_cost_set': 'Shipping Cost Set!',
-      'shipping_cost_set_body': 'Seller has set shipping cost TZS {0}. Pay now.',
+      'shipping_cost_set_body':
+          'Seller has set shipping cost TZS {0}. Pay now.',
       'shipping_cost_submitted': 'Shipping cost sent to buyer',
-      'quote_sync_warning': 'Quote notification did not reach the buyer. Check your connection and try again.',
+      'quote_sync_warning':
+          'Quote notification did not reach the buyer. Check your connection and try again.',
       'shipping_quote': 'Shipping Quote',
       'no_shipping_requests': 'No shipping cost requests',
       'mark_shipped': 'Mark Shipped',
       'bus_name': 'Bus Name',
       'plate_number': 'Plate Number',
-      'order_shipped_success': 'Order marked as shipped! Buyer will be notified.',
+      'order_shipped_success':
+          'Order marked as shipped! Buyer will be notified.',
       'dispatch_required_fields': 'Please fill in bus name and plate number',
       'new_request': 'New Request',
       'enter_shipping_cost': 'Enter Shipping Cost',
@@ -3387,21 +3577,27 @@ class LocalizationService {
       'total_payment': 'Total Payment',
       'seller_receives_percent': 'Seller receives ({0}% from them)',
       'soko_commission_percent': 'Soko Vibe Commission ({0}%)',
-      'mongike_fee_info': 'ClickPesa charges TZS {0} per mobile money transaction',
-      'shipping_quote_info': 'Shipping cost will be added after the seller provides a quote',
-      'shipping_info_message': 'The seller will provide the shipping cost. You will pay the total product cost + shipping after agreeing.',
+      'mongike_fee_info':
+          'ClickPesa charges TZS {0} per mobile money transaction',
+      'shipping_quote_info':
+          'Shipping cost will be added after the seller provides a quote',
+      'shipping_info_message':
+          'The seller will provide the shipping cost. You will pay the total product cost + shipping after agreeing.',
       'submit_shipping_request': 'Submit Shipping Request',
-      'fill_full_address_error': 'Please fill in the full address (Region, District, Street)',
+      'fill_full_address_error':
+          'Please fill in the full address (Region, District, Street)',
       'new_order_title': 'New Order Received!',
       'new_order_body': '{0} wants to buy {1}. Enter the shipping cost.',
       'customer': 'Buyer',
-      'order_submitted_success': 'Your request has been sent. The seller will provide the shipping cost.',
+      'order_submitted_success':
+          'Your request has been sent. The seller will provide the shipping cost.',
       'error_format': 'Error: {0}',
       'app_analytics': 'App Analytics',
       'current_status': 'Current status: ',
       'maintenance_message_label': 'Message for users',
       'maintenance_message_hint': 'App is under maintenance...',
-      'maintenance_warning': 'You will not be able to access the app while maintenance is on. All users (except admin) will be blocked.',
+      'maintenance_warning':
+          'You will not be able to access the app while maintenance is on. All users (except admin) will be blocked.',
       'maintenance_enabled': 'Maintenance enabled',
       'maintenance_disabled': 'Maintenance disabled',
       'selfie_label': 'Selfie:',
@@ -3482,33 +3678,35 @@ class LocalizationService {
       'product_featured_for_days': 'Product featured for {days} days',
       'admin': 'Admin',
       'pending_escrow': 'Pending Escrow',
-      'escrow_awaiting_confirmation': 'Escrow: TZS {0} (awaiting buyer confirmation)',
+      'escrow_awaiting_confirmation':
+          'Escrow: TZS {0} (awaiting buyer confirmation)',
 
       'otp_code_hint': 'Enter OTP Code',
-    'verify_your_number': 'Verify Your Number',
-    'enter_code_sent': 'Enter the verification code sent to {0}',
-    'change_phone': 'Change phone number',
-    'resend_code': 'Resend Code',
-    'invalid_otp': 'Invalid OTP. Please try again.',
-    'otp_expired_again': 'OTP expired. Please request a new one.',
-    'paste_otp': 'Use code from clipboard',
-    'country_search_hint': 'Search country',
-    'login_subtitle': 'Login to continue to Soko Vibe',
-    'login_with_email': 'Login with email & password',
-    'login_with_phone': 'Login with phone number',
-    'no_account_yet': 'No account yet? Create Account',
-    'create_your_account': 'Create Your Account',
-    'signup_subtitle': 'Join Soko Vibe and start shopping, selling and connecting with the community.',
-    'email_optional': 'Email (optional)',
-    'already_have_account': 'Already have an account? Login',
-    'password_strength': 'Password Strength',
-    'password_min_hint': 'At least 8 characters',
-    'strength_weak': 'Weak',
-    'strength_fair': 'Fair',
-    'strength_good': 'Good',
-    'strength_strong': 'Strong',
-    'verified': 'Verified',
-    'otp_arrives_via_sms': "You'll receive a verification code via SMS",
+      'verify_your_number': 'Verify Your Number',
+      'enter_code_sent': 'Enter the verification code sent to {0}',
+      'change_phone': 'Change phone number',
+      'resend_code': 'Resend Code',
+      'invalid_otp': 'Invalid OTP. Please try again.',
+      'otp_expired_again': 'OTP expired. Please request a new one.',
+      'paste_otp': 'Use code from clipboard',
+      'country_search_hint': 'Search country',
+      'login_subtitle': 'Login to continue to Soko Vibe',
+      'login_with_email': 'Login with email & password',
+      'login_with_phone': 'Login with phone number',
+      'no_account_yet': 'No account yet? Create Account',
+      'create_your_account': 'Create Your Account',
+      'signup_subtitle':
+          'Join Soko Vibe and start shopping, selling and connecting with the community.',
+      'email_optional': 'Email (optional)',
+      'already_have_account': 'Already have an account? Login',
+      'password_strength': 'Password Strength',
+      'password_min_hint': 'At least 8 characters',
+      'strength_weak': 'Weak',
+      'strength_fair': 'Fair',
+      'strength_good': 'Good',
+      'strength_strong': 'Strong',
+      'verified': 'Verified',
+      'otp_arrives_via_sms': "You'll receive a verification code via SMS",
       'verify': 'Verify',
       'resend_wait': 'Wait {0} seconds ...',
       'otp_expires_in': 'OTP expires in {0}',
@@ -3532,7 +3730,8 @@ class LocalizationService {
       'showing_results_for': 'Showing results for',
       'notification_preferences': 'Notification Preferences',
       'notification_general': 'General',
-      'notification_master_hint': 'Turn off to pause all notifications. Individual channels take effect while on.',
+      'notification_master_hint':
+          'Turn off to pause all notifications. Individual channels take effect while on.',
       'notification_payments': 'Payments',
       'notification_chat': 'Chat',
       'notification_orders': 'Orders',
@@ -3542,7 +3741,8 @@ class LocalizationService {
       'sms_for_payments': 'SMS for payments',
       'no_notification_prefs': 'No notification preferences available',
       'district_notifications': 'New Products in Your Area',
-      'district_notifications_hint': 'Get notified when sellers list new products in the districts you choose.',
+      'district_notifications_hint':
+          'Get notified when sellers list new products in the districts you choose.',
       'select_districts': 'Select districts',
       'no_districts_selected': 'No districts selected yet',
 
@@ -3556,15 +3756,18 @@ class LocalizationService {
       'share_receipt': 'Share Receipt',
       'receipt_saved': 'Receipt saved',
       'seller_statement': 'Seller Statement',
-      'seller_statement_footer': 'Soko Vibe © {year} — This is an official financial statement',
+      'seller_statement_footer':
+          'Soko Vibe © {year} — This is an official financial statement',
       'seller_statement_subtitle': 'SELLER STATEMENT',
       'buyer_statement': 'Payment Statement',
-      'buyer_statement_footer': 'Soko Vibe © {year} — This is an official payment statement',
+      'buyer_statement_footer':
+          'Soko Vibe © {year} — This is an official payment statement',
       'buyer_statement_subtitle': 'BUYER STATEMENT',
       'total_refunds': 'Total Refunds',
       'total_credits': 'Total Credits',
       'net_spend': 'NET SPEND',
-      'buyer_no_payments_subtitle': 'Your payment history will appear here once you buy something',
+      'buyer_no_payments_subtitle':
+          'Your payment history will appear here once you buy something',
       'info_name': 'NAME',
       'info_phone': 'PHONE',
       'info_email': 'EMAIL',
@@ -3580,11 +3783,13 @@ class LocalizationService {
       'expenses_column': 'Expenses',
       'balance_column': 'Balance',
       'no_payments_yet': 'No payments yet',
-      'no_payments_subtitle': 'Financial details will appear once you start selling',
+      'no_payments_subtitle':
+          'Financial details will appear once you start selling',
       'scan_qr_full_info': 'SCAN QR CODE FOR FULL DETAILS',
       'scan_qr_hint': 'Scan this QR code for all statement details',
       'your_statement': 'Your Statement',
-      'statement_ready_body': 'Your financial statement is ready. Check the app.',
+      'statement_ready_body':
+          'Your financial statement is ready. Check the app.',
       'statement_sent_notification': 'Statement sent via notification',
       'statement_saved': 'Statement saved',
       'error_label': 'Error',
@@ -3629,12 +3834,16 @@ class LocalizationService {
       'withdraw': 'Withdraw',
       'deposit': 'Deposit',
       'error_occurred': 'An error occurred',
-      'error_poor_network': 'Poor internet connection. Please check your network.',
-      'error_no_permission': 'You do not have permission to perform this action. Please try logging out and back in.',
+      'error_poor_network':
+          'Poor internet connection. Please check your network.',
+      'error_no_permission':
+          'You do not have permission to perform this action. Please try logging out and back in.',
       'error_not_found': 'The requested information was not found.',
       'error_already_exists': 'This item already exists.',
-      'error_index_building': 'The database index is still building. Please try again shortly.',
-      'error_session_expired': 'Your session has expired. Please sign in again.',
+      'error_index_building':
+          'The database index is still building. Please try again shortly.',
+      'error_session_expired':
+          'Your session has expired. Please sign in again.',
       'error_generic': 'Something went wrong. Please try again.',
       'error_no_account': 'No account found with this email.',
       'error_wrong_password': 'Incorrect password. Please try again.',
@@ -3642,21 +3851,30 @@ class LocalizationService {
       'error_account_disabled': 'This account has been disabled.',
       'error_email_in_use': 'An account with this email already exists.',
       'error_operation_not_allowed': 'This sign-in method is not enabled.',
-      'error_weak_password': 'The password is too weak. Use at least 6 characters.',
+      'error_weak_password':
+          'The password is too weak. Use at least 6 characters.',
       'error_too_many_attempts': 'Too many attempts. Please try again later.',
-      'error_invalid_credentials': 'Invalid login credentials. Please try again.',
+      'error_invalid_credentials':
+          'Invalid login credentials. Please try again.',
       'error_timeout': 'Request timed out. Poor internet connection.',
       'auth_google_failed': 'Google sign-in failed. Please try again.',
-      'auth_google_cancelled': 'Google sign-in cancelled. Please choose an account and try again.',
-      'auth_no_account': 'No account found for this number. Please register first.',
-      'auth_wrong_phone': 'Incorrect phone number. Please enter a valid Tanzanian number (e.g. 0712345678).',
-      'auth_otp_invalid': 'OTP is incorrect. Please check the SMS and try again.',
+      'auth_google_cancelled':
+          'Google sign-in cancelled. Please choose an account and try again.',
+      'auth_no_account':
+          'No account found for this number. Please register first.',
+      'auth_wrong_phone':
+          'Incorrect phone number. Please enter a valid Tanzanian number (e.g. 0712345678).',
+      'auth_otp_invalid':
+          'OTP is incorrect. Please check the SMS and try again.',
       'auth_otp_expired': 'OTP has expired. Please request a new OTP.',
-      'auth_otp_rate_limited': 'Too many attempts. Please wait a moment and try again.',
+      'auth_otp_rate_limited':
+          'Too many attempts. Please wait a moment and try again.',
       'auth_otp_send_failed': 'Failed to send OTP. Please try again.',
       'auth_login_required': 'Please log in to continue.',
-      'product_limit_kyc_needed': 'You have reached the limit of 5 products without KYC. Please complete KYC verification to add more products.',
-      'comment_edit_own_only': 'You can only delete your own comments and replies.',
+      'product_limit_kyc_needed':
+          'You have reached the limit of 5 products without KYC. Please complete KYC verification to add more products.',
+      'comment_edit_own_only':
+          'You can only delete your own comments and replies.',
       'kyc_id_national': 'National ID',
       'kyc_id_passport': 'Passport',
       'kyc_id_drivers': "Driver's License",
@@ -3677,8 +3895,10 @@ class LocalizationService {
       'delete_account': 'Delete Account',
       'terms_of_service': 'Terms of Service',
       'privacy_policy': 'Privacy Policy',
-      'tos_founder_summary': 'FORMAL AGREEMENT LETTER\n\nThis agreement is entered into between you ("User") and Gift Henry Wapalila ("Founder"), the owner and operator of Soko Vibe. By creating an account, registering, or using Soko Vibe in any manner, you freely agree that you have read, understood, and agree to be legally bound by these Terms of Service in their entirety.\n\nSUMMARY OF THE AGREEMENT:\n• You use Soko Vibe to list, buy, and sell products in Tanzania in compliance with Tanzanian law.\n• You must be at least 18 years old and have full legal capacity to enter this contract.\n• Soko Vibe provides secure escrow transactions — funds are not released to the seller until the buyer confirms receipt.\n• Processing fees and platform commissions are paid by the buyer; the seller receives the full product price.\n• Violating these Terms or the law may result in immediate account termination without notice.\n• Disputes are resolved through Soko Vibe\'s process, then by mediation or arbitration in Dar es Salaam, Tanzania, under Tanzanian law.\n• By accepting this agreement you agree to be legally bound by Founder Gift Henry Wapalila and Soko Vibe.',
-      'pp_founder_summary': 'FORMAL PRIVACY POLICY LETTER\n\nThis Policy is a contract between you ("User") and Gift Henry Wapalila ("Founder"), the owner and operator of Soko Vibe. We collect your personal data solely to operate the platform safely: registration, transactions, escrow, delivery, communication, and payouts.\n\nSUMMARY:\n• We will never sell, rent, or lease your personal data to anyone.\n• We share data only with necessary service providers (payments, delivery, maps, push notifications) and authorities when legally required.\n• You may request a copy of or deletion of your data at any time.\n• Data is retained for legally required periods (transaction records for 7+ years per TRA rules).\n• By using Soko Vibe you accept this Privacy Policy in full.',
+      'tos_founder_summary':
+          'FORMAL AGREEMENT LETTER\n\nThis agreement is entered into between you ("User") and Gift Henry Wapalila ("Founder"), the owner and operator of Soko Vibe. By creating an account, registering, or using Soko Vibe in any manner, you freely agree that you have read, understood, and agree to be legally bound by these Terms of Service in their entirety.\n\nSUMMARY OF THE AGREEMENT:\n• You use Soko Vibe to list, buy, and sell products in Tanzania in compliance with Tanzanian law.\n• You must be at least 18 years old and have full legal capacity to enter this contract.\n• Soko Vibe provides secure escrow transactions — funds are not released to the seller until the buyer confirms receipt.\n• Processing fees and platform commissions are paid by the buyer; the seller receives the full product price.\n• Violating these Terms or the law may result in immediate account termination without notice.\n• Disputes are resolved through Soko Vibe\'s process, then by mediation or arbitration in Dar es Salaam, Tanzania, under Tanzanian law.\n• By accepting this agreement you agree to be legally bound by Founder Gift Henry Wapalila and Soko Vibe.',
+      'pp_founder_summary':
+          'FORMAL PRIVACY POLICY LETTER\n\nThis Policy is a contract between you ("User") and Gift Henry Wapalila ("Founder"), the owner and operator of Soko Vibe. We collect your personal data solely to operate the platform safely: registration, transactions, escrow, delivery, communication, and payouts.\n\nSUMMARY:\n• We will never sell, rent, or lease your personal data to anyone.\n• We share data only with necessary service providers (payments, delivery, maps, push notifications) and authorities when legally required.\n• You may request a copy of or deletion of your data at any time.\n• Data is retained for legally required periods (transaction records for 7+ years per TRA rules).\n• By using Soko Vibe you accept this Privacy Policy in full.',
       'about_app': 'About App',
       'report_problem': 'Report a Problem',
       'help_center': 'Help Center',
@@ -3688,7 +3908,8 @@ class LocalizationService {
       'pickup_label': 'Pickup',
       'dropoff_label': 'Dropoff',
       'sos_emergency': 'SOS Emergency',
-      'sos_alert_message': 'Send emergency alert to your emergency contacts and share your live location?',
+      'sos_alert_message':
+          'Send emergency alert to your emergency contacts and share your live location?',
       'send_sos': 'Send SOS',
       'sos_alert_sent': 'SOS alert sent to your emergency contacts',
       'sos_button': 'SOS',
@@ -3743,85 +3964,130 @@ class LocalizationService {
       'unknown_user_display': 'Unknown',
 
       'tos_title': 'SOKO VIBE TERMS OF SERVICE',
-      'tos_last_updated': 'Last Updated: 16 August 2026 | Effective Date: 16 August 2026',
-      'tos_section_1_title': '1. ACCEPTANCE OF TERMS — LEGALLY BINDING AGREEMENT',
-      'tos_section_1_body': '1.1 By downloading, installing, accessing, browsing, registering on, or using Soko Vibe ("the Platform") in any manner whatsoever, you acknowledge, represent, warrant, and agree that you have read, understood, and agree to be LEGALLY BOUND by these Terms of Service ("Terms", "Agreement"), whether or not you are a registered user.\n\n1.2 These Terms constitute a VALID, BINDING, AND ENFORCEABLE LEGAL CONTRACT between you ("User", "you", "your") and Soko Vibe ("we", "our", "us", "the Company", "the Platform").\n\n1.3 If you do not UNCONDITIONALLY agree to these Terms in their entirety, you MUST NOT access or use the Platform in any way, and you must immediately delete the application and any related materials in your possession.\n\n1.4 We reserve the ABSOLUTE AND UNILATERAL right to modify, amend, update, supplement, suspend, or terminate these Terms at any time, for any reason, with or without notice. Changes become EFFECTIVE IMMEDIATELY upon posting on the Platform.\n\n1.5 Your continued use of the Platform after any changes constitutes your UNQUALIFIED ACCEPTANCE of the modified Terms. If you do not agree with any modification, your SOLE AND EXCLUSIVE REMEDY is to immediately stop using the Platform and delete your account.\n\n1.6 It is your SOLE RESPONSIBILITY to review these Terms periodically. We recommend checking this page at least once per month. We may notify registered users of material changes via email or in-app notification, but failure to receive such notification shall not invalidate the changes or your acceptance thereof.\n\n1.7 These Terms may be published in multiple languages for convenience. In the event of any conflict or inconsistency between different language versions, the Kiswahili language version shall prevail and be binding.',
-      'tos_section_2_title': '2. ELIGIBILITY, REGISTRATION, AND ACCOUNT REQUIREMENTS',
-      'tos_section_2_body': '2.1 AGE REQUIREMENT: You MUST be at least 18 (eighteen) years of age to use the Platform. By using the Platform, you represent and warrant under penalty of perjury that you are at least 18 years old.\n\n2.2 LEGAL CAPACITY: You must have the full legal capacity to enter into binding contracts. If you are using the Platform on behalf of a business or entity, you represent and warrant that you have the authority to bind that entity to these Terms.\n\n2.3 ACCURATE INFORMATION: You must provide accurate, current, and complete registration information. You agree to update your information promptly if it changes. Providing false or misleading information is a material breach of these Terms.\n\n2.4 SINGLE ACCOUNT ONLY: Each natural person or legal entity may maintain only ONE (1) account on the Platform. Creating, attempting to create, or maintaining multiple accounts is STRICTLY PROHIBITED and will result in the immediate and permanent suspension of all associated accounts and forfeiture of any balances or benefits.\n\n2.5 ACCOUNT SECURITY: You are SOLELY AND FULLY RESPONSIBLE for:\n  a) Maintaining the confidentiality of your password, login credentials, and authentication tokens.\n  b) All activities that occur under your account, whether authorized by you or not.\n  c) Immediately notifying us of any unauthorized use of your account or security breach.\n  d) Ensuring that you log out of your account at the end of each session, especially on shared devices.\n\n2.6 ACCOUNT SUSPENSION AND TERMINATION: We reserve the ABSOLUTE RIGHT to refuse registration, suspend, terminate, or restrict your account at our SOLE DISCRETION, without prior notice, liability, or obligation to provide reasons. Grounds for suspension or termination include but are not limited to:\n  a) Violation of any provision of these Terms.\n  b) Suspicion of fraudulent, abusive, or illegal activity.\n  c) Providing false, misleading, or incomplete information.\n  d) Multiple account creation.\n  e) Engaging in prohibited activities as defined in Section 4.\n  f) Receiving an excessive number of complaints or negative ratings.\n  g) Failure to complete KYC verification when required.\n  h) Any activity that, in our sole judgment, poses a risk to the Platform, its users, or our reputation.\n\n2.7 ACCOUNT DELETION: You may delete your account at any time through the Settings menu. Upon deletion, your account will be deactivated immediately and permanently deleted after a 90-day cooling-off period, subject to legal data retention requirements.\n\n2.8 KYC VERIFICATION: Users who wish to sell products on the Platform must submit to KYC (Know Your Customer) verification. KYC approval is at the SOLE DISCRETION of the Platform administrator. Without KYC approval, sellers may list a maximum of FIVE (5) products. Sellers may be required to undergo periodic re-verification.',
+      'tos_last_updated':
+          'Last Updated: 16 August 2026 | Effective Date: 16 August 2026',
+      'tos_section_1_title':
+          '1. ACCEPTANCE OF TERMS — LEGALLY BINDING AGREEMENT',
+      'tos_section_1_body':
+          '1.1 By downloading, installing, accessing, browsing, registering on, or using Soko Vibe ("the Platform") in any manner whatsoever, you acknowledge, represent, warrant, and agree that you have read, understood, and agree to be LEGALLY BOUND by these Terms of Service ("Terms", "Agreement"), whether or not you are a registered user.\n\n1.2 These Terms constitute a VALID, BINDING, AND ENFORCEABLE LEGAL CONTRACT between you ("User", "you", "your") and Soko Vibe ("we", "our", "us", "the Company", "the Platform").\n\n1.3 If you do not UNCONDITIONALLY agree to these Terms in their entirety, you MUST NOT access or use the Platform in any way, and you must immediately delete the application and any related materials in your possession.\n\n1.4 We reserve the ABSOLUTE AND UNILATERAL right to modify, amend, update, supplement, suspend, or terminate these Terms at any time, for any reason, with or without notice. Changes become EFFECTIVE IMMEDIATELY upon posting on the Platform.\n\n1.5 Your continued use of the Platform after any changes constitutes your UNQUALIFIED ACCEPTANCE of the modified Terms. If you do not agree with any modification, your SOLE AND EXCLUSIVE REMEDY is to immediately stop using the Platform and delete your account.\n\n1.6 It is your SOLE RESPONSIBILITY to review these Terms periodically. We recommend checking this page at least once per month. We may notify registered users of material changes via email or in-app notification, but failure to receive such notification shall not invalidate the changes or your acceptance thereof.\n\n1.7 These Terms may be published in multiple languages for convenience. In the event of any conflict or inconsistency between different language versions, the Kiswahili language version shall prevail and be binding.',
+      'tos_section_2_title':
+          '2. ELIGIBILITY, REGISTRATION, AND ACCOUNT REQUIREMENTS',
+      'tos_section_2_body':
+          '2.1 AGE REQUIREMENT: You MUST be at least 18 (eighteen) years of age to use the Platform. By using the Platform, you represent and warrant under penalty of perjury that you are at least 18 years old.\n\n2.2 LEGAL CAPACITY: You must have the full legal capacity to enter into binding contracts. If you are using the Platform on behalf of a business or entity, you represent and warrant that you have the authority to bind that entity to these Terms.\n\n2.3 ACCURATE INFORMATION: You must provide accurate, current, and complete registration information. You agree to update your information promptly if it changes. Providing false or misleading information is a material breach of these Terms.\n\n2.4 SINGLE ACCOUNT ONLY: Each natural person or legal entity may maintain only ONE (1) account on the Platform. Creating, attempting to create, or maintaining multiple accounts is STRICTLY PROHIBITED and will result in the immediate and permanent suspension of all associated accounts and forfeiture of any balances or benefits.\n\n2.5 ACCOUNT SECURITY: You are SOLELY AND FULLY RESPONSIBLE for:\n  a) Maintaining the confidentiality of your password, login credentials, and authentication tokens.\n  b) All activities that occur under your account, whether authorized by you or not.\n  c) Immediately notifying us of any unauthorized use of your account or security breach.\n  d) Ensuring that you log out of your account at the end of each session, especially on shared devices.\n\n2.6 ACCOUNT SUSPENSION AND TERMINATION: We reserve the ABSOLUTE RIGHT to refuse registration, suspend, terminate, or restrict your account at our SOLE DISCRETION, without prior notice, liability, or obligation to provide reasons. Grounds for suspension or termination include but are not limited to:\n  a) Violation of any provision of these Terms.\n  b) Suspicion of fraudulent, abusive, or illegal activity.\n  c) Providing false, misleading, or incomplete information.\n  d) Multiple account creation.\n  e) Engaging in prohibited activities as defined in Section 4.\n  f) Receiving an excessive number of complaints or negative ratings.\n  g) Failure to complete KYC verification when required.\n  h) Any activity that, in our sole judgment, poses a risk to the Platform, its users, or our reputation.\n\n2.7 ACCOUNT DELETION: You may delete your account at any time through the Settings menu. Upon deletion, your account will be deactivated immediately and permanently deleted after a 90-day cooling-off period, subject to legal data retention requirements.\n\n2.8 KYC VERIFICATION: Users who wish to sell products on the Platform must submit to KYC (Know Your Customer) verification. KYC approval is at the SOLE DISCRETION of the Platform administrator. Without KYC approval, sellers may list a maximum of FIVE (5) products. Sellers may be required to undergo periodic re-verification.',
       'tos_section_3_title': '3. PLATFORM SERVICES — ROLE AND LIMITATIONS',
-      'tos_section_3_body': '3.1 Soko Vibe provides a technology platform that connects:\n  a) Buyers and sellers of goods and services (Marketplace Services).\n  b) Users with AI-powered assistant features.\n  c) Users with communication, payment, and delivery facilitation tools.\n\n3.2 ROLE AS INTERMEDIARY: We act SOLELY as an intermediary/platform provider. We are NOT:\n  a) A party to any transaction between buyers and sellers.\n  b) An employer, principal, or joint venture partner of any seller or service provider.\n  c) A provider of delivery or logistics services.\n  d) A financial institution, bank, or payment service provider (except as an agent for payment processing).\n\n3.3 NO WARRANTY OF TRANSACTIONS: We make NO REPRESENTATIONS OR WARRANTIES regarding the quality, safety, legality, or suitability of any products, services, or transactions facilitated through the Platform. All transactions are AT YOUR OWN RISK.\n\n3.4 ESCROW SERVICES: We facilitate payments through third-party payment processors. When you complete a purchase, payments are held in escrow as a neutral third party until the buyer confirms safe receipt, in accordance with Section 6.3. We are not a bank and do not hold deposits or provide financial services.\n\n3.5 SERVICE MODIFICATION: We reserve the ABSOLUTE RIGHT to modify, suspend, restrict, or discontinue any aspect of the Services at any time, with or without notice, and without liability to you or any third party.\n\n3.6 SERVICE AVAILABILITY: We do not guarantee that the Platform will be available at all times, uninterrupted, error-free, or free from viruses or other harmful components. We may perform maintenance, updates, or upgrades at any time without notice.',
-      'tos_section_4_title': '4. PROHIBITED ACTIVITIES — STRICT ZERO-TOLERANCE POLICY',
-      'tos_section_4_body': '4.1 The following activities are STRICTLY PROHIBITED on the Platform. Violation of any of these provisions constitutes a MATERIAL BREACH of these Terms and will result in IMMEDIATE AND PERMANENT ACCOUNT TERMINATION, forfeiture of any balances, and potentially referral to law enforcement authorities:\n\n4.2 ILLEGAL ACTIVITIES:\n  a) Using the Platform for any unlawful purpose or in violation of any applicable local, national, or international law.\n  b) Engaging in money laundering, terrorist financing, or any financial crime.\n  c) Listing, selling, or facilitating the sale of illegal items including but not limited to:\n     i) Illegal drugs, narcotics, and controlled substances.\n     ii) Weapons, firearms, ammunition, explosives, and weapon accessories.\n     iii) Counterfeit, replica, or pirated goods.\n     iv) Stolen property or items obtained through illegal means.\n     v) Hazardous, toxic, or dangerous materials.\n     vi) Human remains, body parts, or bodily fluids.\n     vii) Endangered species or products made from endangered species.\n     viii) Pornographic, obscene, or sexually explicit materials.\n     ix) Items that infringe intellectual property rights.\n     x) Any item whose sale is prohibited by Tanzanian law.\n\n4.3 FRAUDULENT AND DECEPTIVE ACTIVITIES:\n  a) Posting false, misleading, deceptive, or fraudulent listings, reviews, or content.\n  b) Misrepresenting the condition, authenticity, origin, or specifications of products.\n  c) Engaging in price manipulation, shill bidding, or fake transactions.\n  d) Creating fake accounts, fake reviews, or artificially inflating ratings.\n  e) Impersonating any person or entity, or falsely claiming affiliation.\n  f) Using stolen or fraudulent payment methods.\n  g) Chargeback fraud or disputing legitimate transactions without valid reason.\n\n4.4 ABUSIVE AND HARMFUL CONDUCT:\n  a) Harassing, abusing, threatening, stalking, intimidating, or bullying other users.\n  b) Posting hate speech, discriminatory content, or content that incites violence.\n  c) Sharing personal information of others without their explicit consent (doxxing).\n  d) Making false accusations, defamatory statements, or malicious reports.\n  e) Engaging in any form of discrimination based on race, ethnicity, gender, religion, age, disability, or sexual orientation.\n\n4.5 TECHNICAL VIOLATIONS:\n  a) Uploading malicious code, viruses, worms, Trojan horses, or any harmful software.\n  b) Attempting to hack, crack, bypass, or disable any security measures, encryption, or access controls.\n  c) Reverse engineering, decompiling, disassembling, or attempting to derive source code.\n  d) Using automated bots, scrapers, crawlers, spiders, or scripts to access the Platform without our express written permission.\n  e) Interfering with or disrupting the Platform\'s servers, networks, or operations.\n  f) Performing penetration testing or vulnerability scanning without prior written authorization.\n  g) Attempting to overwhelm the Platform through denial-of-service (DOS) or distributed denial-of-service (DDOS) attacks.\n\n4.6 MARKETPLACE VIOLATIONS:\n  a) Completing transactions outside the Platform to avoid fees (including exchanging contact information expressly for this purpose).\n  b) Manipulating search results, categories, or tags.\n  c) Listing products in incorrect categories.\n  d) Creating duplicate listings for the same product.\n  e) Listing services without proper licensing or qualifications where required.\n  f) Failing to fulfill orders after accepting payment.\n  g) Refusing to deliver products after receiving payment.\n  h) Demanding additional payment outside the Platform\'s payment system.\n\n4.7 PENALTIES FOR VIOLATION:\n  a) IMMEDIATE AND PERMANENT ACCOUNT SUSPENSION.\n  b) FORFEITURE of any pending payments, wallet balances, or benefits.\n  c) REFERRAL to law enforcement authorities for criminal prosecution.\n  d) CIVIL LIABILITY for all damages, costs, and expenses incurred by us or affected parties.\n  e) PERMANENT BAN from using the Platform or any associated services.\n  f) PUBLICATION of the violation (without personal data) as a deterrent to others.\n\n4.8 There is NO WARNING SYSTEM for prohibited activities. Violation results in immediate action without prior notice.',
+      'tos_section_3_body':
+          '3.1 Soko Vibe provides a technology platform that connects:\n  a) Buyers and sellers of goods and services (Marketplace Services).\n  b) Users with AI-powered assistant features.\n  c) Users with communication, payment, and delivery facilitation tools.\n\n3.2 ROLE AS INTERMEDIARY: We act SOLELY as an intermediary/platform provider. We are NOT:\n  a) A party to any transaction between buyers and sellers.\n  b) An employer, principal, or joint venture partner of any seller or service provider.\n  c) A provider of delivery or logistics services.\n  d) A financial institution, bank, or payment service provider (except as an agent for payment processing).\n\n3.3 NO WARRANTY OF TRANSACTIONS: We make NO REPRESENTATIONS OR WARRANTIES regarding the quality, safety, legality, or suitability of any products, services, or transactions facilitated through the Platform. All transactions are AT YOUR OWN RISK.\n\n3.4 ESCROW SERVICES: We facilitate payments through third-party payment processors. When you complete a purchase, payments are held in escrow as a neutral third party until the buyer confirms safe receipt, in accordance with Section 6.3. We are not a bank and do not hold deposits or provide financial services.\n\n3.5 SERVICE MODIFICATION: We reserve the ABSOLUTE RIGHT to modify, suspend, restrict, or discontinue any aspect of the Services at any time, with or without notice, and without liability to you or any third party.\n\n3.6 SERVICE AVAILABILITY: We do not guarantee that the Platform will be available at all times, uninterrupted, error-free, or free from viruses or other harmful components. We may perform maintenance, updates, or upgrades at any time without notice.',
+      'tos_section_4_title':
+          '4. PROHIBITED ACTIVITIES — STRICT ZERO-TOLERANCE POLICY',
+      'tos_section_4_body':
+          '4.1 The following activities are STRICTLY PROHIBITED on the Platform. Violation of any of these provisions constitutes a MATERIAL BREACH of these Terms and will result in IMMEDIATE AND PERMANENT ACCOUNT TERMINATION, forfeiture of any balances, and potentially referral to law enforcement authorities:\n\n4.2 ILLEGAL ACTIVITIES:\n  a) Using the Platform for any unlawful purpose or in violation of any applicable local, national, or international law.\n  b) Engaging in money laundering, terrorist financing, or any financial crime.\n  c) Listing, selling, or facilitating the sale of illegal items including but not limited to:\n     i) Illegal drugs, narcotics, and controlled substances.\n     ii) Weapons, firearms, ammunition, explosives, and weapon accessories.\n     iii) Counterfeit, replica, or pirated goods.\n     iv) Stolen property or items obtained through illegal means.\n     v) Hazardous, toxic, or dangerous materials.\n     vi) Human remains, body parts, or bodily fluids.\n     vii) Endangered species or products made from endangered species.\n     viii) Pornographic, obscene, or sexually explicit materials.\n     ix) Items that infringe intellectual property rights.\n     x) Any item whose sale is prohibited by Tanzanian law.\n\n4.3 FRAUDULENT AND DECEPTIVE ACTIVITIES:\n  a) Posting false, misleading, deceptive, or fraudulent listings, reviews, or content.\n  b) Misrepresenting the condition, authenticity, origin, or specifications of products.\n  c) Engaging in price manipulation, shill bidding, or fake transactions.\n  d) Creating fake accounts, fake reviews, or artificially inflating ratings.\n  e) Impersonating any person or entity, or falsely claiming affiliation.\n  f) Using stolen or fraudulent payment methods.\n  g) Chargeback fraud or disputing legitimate transactions without valid reason.\n\n4.4 ABUSIVE AND HARMFUL CONDUCT:\n  a) Harassing, abusing, threatening, stalking, intimidating, or bullying other users.\n  b) Posting hate speech, discriminatory content, or content that incites violence.\n  c) Sharing personal information of others without their explicit consent (doxxing).\n  d) Making false accusations, defamatory statements, or malicious reports.\n  e) Engaging in any form of discrimination based on race, ethnicity, gender, religion, age, disability, or sexual orientation.\n\n4.5 TECHNICAL VIOLATIONS:\n  a) Uploading malicious code, viruses, worms, Trojan horses, or any harmful software.\n  b) Attempting to hack, crack, bypass, or disable any security measures, encryption, or access controls.\n  c) Reverse engineering, decompiling, disassembling, or attempting to derive source code.\n  d) Using automated bots, scrapers, crawlers, spiders, or scripts to access the Platform without our express written permission.\n  e) Interfering with or disrupting the Platform\'s servers, networks, or operations.\n  f) Performing penetration testing or vulnerability scanning without prior written authorization.\n  g) Attempting to overwhelm the Platform through denial-of-service (DOS) or distributed denial-of-service (DDOS) attacks.\n\n4.6 MARKETPLACE VIOLATIONS:\n  a) Completing transactions outside the Platform to avoid fees (including exchanging contact information expressly for this purpose).\n  b) Manipulating search results, categories, or tags.\n  c) Listing products in incorrect categories.\n  d) Creating duplicate listings for the same product.\n  e) Listing services without proper licensing or qualifications where required.\n  f) Failing to fulfill orders after accepting payment.\n  g) Refusing to deliver products after receiving payment.\n  h) Demanding additional payment outside the Platform\'s payment system.\n\n4.7 PENALTIES FOR VIOLATION:\n  a) IMMEDIATE AND PERMANENT ACCOUNT SUSPENSION.\n  b) FORFEITURE of any pending payments, wallet balances, or benefits.\n  c) REFERRAL to law enforcement authorities for criminal prosecution.\n  d) CIVIL LIABILITY for all damages, costs, and expenses incurred by us or affected parties.\n  e) PERMANENT BAN from using the Platform or any associated services.\n  f) PUBLICATION of the violation (without personal data) as a deterrent to others.\n\n4.8 There is NO WARNING SYSTEM for prohibited activities. Violation results in immediate action without prior notice.',
       'tos_section_5_title': '5. LISTING AND SELLING — STRICT REQUIREMENTS',
-      'tos_section_5_body': '5.1 PRODUCT ACCURACY: Sellers must provide ACCURATE, TRUTHFUL, and COMPLETE descriptions of products, including:\n  a) Accurate condition (new, used, refurbished, etc.) with all defects disclosed.\n  b) Correct pricing in Tanzanian Shillings (TZS) inclusive of all applicable taxes.\n  c) Authentic, clear, and non-misleading images that accurately represent the actual item.\n  d) Accurate specifications, dimensions, colors, materials, and features.\n  e) Correct categorization and subcategorization.\n  f) Accurate stock levels and availability.\n\n5.2 ORDER FULFILLMENT:\n  a) Sellers MUST fulfill confirmed orders within the stated processing time.\n  b) If unable to fulfill, the seller MUST immediately notify the buyer and initiate a full refund.\n  c) Failure to fulfill orders may result in account penalties, suspension, or termination.\n  d) Sellers are responsible for ensuring products reach buyers in the condition described.\n\n5.3 KYC AND PRODUCT LIMITS:\n  a) Sellers without KYC approval may list a MAXIMUM of FIVE (5) products.\n  b) To list more than 5 products, sellers MUST complete KYC verification AND obtain admin approval.\n  c) KYC approval is at the SOLE DISCRETION of Platform administrators.\n  d) KYC-approved sellers are subject to periodic re-verification.\n  e) KYC status may be REVOKED by admin at any time for violation of these Terms.\n  f) KYC revocation results in immediate reduction of product listing limit to 5.\n\n5.4 PROHIBITED LISTINGS (in addition to Section 4.2):\n  a) Digital products that infringe intellectual property rights.\n  b) Services requiring professional licenses, without proof of valid licensing.\n  c) Gift cards, vouchers, or stored-value items subject to fraud risk.\n  d) Listings that redirect buyers to external websites or platforms.\n  e) Pre-orders or back-orders without clear disclosure of delivery timelines.\n\n5.5 PRICING:\n  a) All prices MUST be listed in Tanzanian Shillings (TZS).\n  b) Prices MUST include all applicable taxes, fees, and charges unless otherwise explicitly stated.\n  c) Sellers may not charge different prices than those listed on the Platform.\n  d) We reserve the right to remove or adjust obviously erroneous pricing.\n\n5.6 PRODUCT REMOVAL:\n  a) We reserve the right to remove any listing at our sole discretion without notice or explanation.\n  b) Removed listings do not count toward the seller\'s product limit if removed due to policy violation.\n  c) Sellers may not relist removed products without our express permission.',
+      'tos_section_5_body':
+          '5.1 PRODUCT ACCURACY: Sellers must provide ACCURATE, TRUTHFUL, and COMPLETE descriptions of products, including:\n  a) Accurate condition (new, used, refurbished, etc.) with all defects disclosed.\n  b) Correct pricing in Tanzanian Shillings (TZS) inclusive of all applicable taxes.\n  c) Authentic, clear, and non-misleading images that accurately represent the actual item.\n  d) Accurate specifications, dimensions, colors, materials, and features.\n  e) Correct categorization and subcategorization.\n  f) Accurate stock levels and availability.\n\n5.2 ORDER FULFILLMENT:\n  a) Sellers MUST fulfill confirmed orders within the stated processing time.\n  b) If unable to fulfill, the seller MUST immediately notify the buyer and initiate a full refund.\n  c) Failure to fulfill orders may result in account penalties, suspension, or termination.\n  d) Sellers are responsible for ensuring products reach buyers in the condition described.\n\n5.3 KYC AND PRODUCT LIMITS:\n  a) Sellers without KYC approval may list a MAXIMUM of FIVE (5) products.\n  b) To list more than 5 products, sellers MUST complete KYC verification AND obtain admin approval.\n  c) KYC approval is at the SOLE DISCRETION of Platform administrators.\n  d) KYC-approved sellers are subject to periodic re-verification.\n  e) KYC status may be REVOKED by admin at any time for violation of these Terms.\n  f) KYC revocation results in immediate reduction of product listing limit to 5.\n\n5.4 PROHIBITED LISTINGS (in addition to Section 4.2):\n  a) Digital products that infringe intellectual property rights.\n  b) Services requiring professional licenses, without proof of valid licensing.\n  c) Gift cards, vouchers, or stored-value items subject to fraud risk.\n  d) Listings that redirect buyers to external websites or platforms.\n  e) Pre-orders or back-orders without clear disclosure of delivery timelines.\n\n5.5 PRICING:\n  a) All prices MUST be listed in Tanzanian Shillings (TZS).\n  b) Prices MUST include all applicable taxes, fees, and charges unless otherwise explicitly stated.\n  c) Sellers may not charge different prices than those listed on the Platform.\n  d) We reserve the right to remove or adjust obviously erroneous pricing.\n\n5.6 PRODUCT REMOVAL:\n  a) We reserve the right to remove any listing at our sole discretion without notice or explanation.\n  b) Removed listings do not count toward the seller\'s product limit if removed due to policy violation.\n  c) Sellers may not relist removed products without our express permission.',
       'tos_section_6_title': '6. BUYING AND PAYMENTS — BINDING OBLIGATIONS',
-      'tos_section_6_body': '6.1 PURCHASE OBLIGATION: By clicking "Buy" or "Confirm Purchase" or any equivalent action, you enter into a LEGALLY BINDING AGREEMENT to pay the total amount specified, including product price, delivery fees, and any applicable taxes.\n\n6.2 PAYMENT METHODS: We accept payment through mobile money (M-Pesa, Tigo Pesa, Airtel Money, Halopesa, EzyPesa), bank transfers, and other methods as made available. Available methods may vary based on location, transaction value, and other factors.\n\n6.3 ESCROW SYSTEM:\n  a) Payments are held in escrow by our payment processor until the buyer confirms receipt and satisfaction.\n  b) The standard escrow period is FOURTEEN (14) DAYS from delivery confirmation.\n  c) If the buyer does not confirm receipt or raise a dispute within 14 days, funds are automatically released to the seller.\n  d) If a dispute is raised, funds remain in escrow until resolution.\n  e) Soko Vibe acts solely as a neutral third party and does not represent either the buyer or the seller in any transaction.\n\n6.4 REFUNDS AND RETURNS:\n  a) Refunds are processed at the seller\'s discretion or as determined by our dispute resolution process.\n  b) Refunds, if approved, will be processed to the original payment method within 5-10 business days.\n  c) We do not guarantee that refunds are possible for all transactions.\n  d) Shipping and processing fees may not be refundable.\n\n6.5 CANCELLATION:\n  a) Buyers may cancel an order before the seller accepts and processes it.\n  b) After the seller has accepted, cancellation requires the seller\'s consent.\n  c) Sellers may cancel orders if the product is unavailable or if the buyer\'s payment fails.\n  d) Fraudulent cancellations or excessive cancellation rates may result in account action.\n\n6.6 ALL SALES ARE FINAL once confirmed by the buyer, except as provided in our dispute resolution process.',
+      'tos_section_6_body':
+          '6.1 PURCHASE OBLIGATION: By clicking "Buy" or "Confirm Purchase" or any equivalent action, you enter into a LEGALLY BINDING AGREEMENT to pay the total amount specified, including product price, delivery fees, and any applicable taxes.\n\n6.2 PAYMENT METHODS: We accept payment through mobile money (M-Pesa, Tigo Pesa, Airtel Money, Halopesa, EzyPesa), bank transfers, and other methods as made available. Available methods may vary based on location, transaction value, and other factors.\n\n6.3 ESCROW SYSTEM:\n  a) Payments are held in escrow by our payment processor until the buyer confirms receipt and satisfaction.\n  b) The standard escrow period is FOURTEEN (14) DAYS from delivery confirmation.\n  c) If the buyer does not confirm receipt or raise a dispute within 14 days, funds are automatically released to the seller.\n  d) If a dispute is raised, funds remain in escrow until resolution.\n  e) Soko Vibe acts solely as a neutral third party and does not represent either the buyer or the seller in any transaction.\n\n6.4 REFUNDS AND RETURNS:\n  a) Refunds are processed at the seller\'s discretion or as determined by our dispute resolution process.\n  b) Refunds, if approved, will be processed to the original payment method within 5-10 business days.\n  c) We do not guarantee that refunds are possible for all transactions.\n  d) Shipping and processing fees may not be refundable.\n\n6.5 CANCELLATION:\n  a) Buyers may cancel an order before the seller accepts and processes it.\n  b) After the seller has accepted, cancellation requires the seller\'s consent.\n  c) Sellers may cancel orders if the product is unavailable or if the buyer\'s payment fails.\n  d) Fraudulent cancellations or excessive cancellation rates may result in account action.\n\n6.6 ALL SALES ARE FINAL once confirmed by the buyer, except as provided in our dispute resolution process.',
       'tos_section_7_title': '7. DELIVERY AND SHIPPING OF PRODUCTS',
-      'tos_section_7_body': '7.1 DELIVERY OBLIGATIONS:\n\n  a) The seller and the buyer must agree on the delivery method, cost, and timeframe before payment is confirmed.\n\n  b) The seller is responsible for ensuring products are delivered to the agreed address within the stated timeframe.\n\n  c) The buyer is responsible for providing an accurate delivery address and for receiving the goods.\n\n\n\n7.2 CONFIRMATION OF RECEIPT:\n\n  a) Escrow funds are released to the seller IMMEDIATELY after the buyer confirms receipt of the goods in safe condition.\n\n  b) The buyer\'s confirmation is FINAL AND BINDING unless a dispute is raised within the 14-day escrow period.\n\n  c) A confirmation of receipt cannot be withdrawn after funds have been released to the seller.\n\n\n\n7.3 NATURE OF DELIVERY:\n\n  a) We are NOT a delivery provider and we do not handle physical goods.\n\n  b) Delivery may be arranged by the seller, an independent courier, or third-party logistics services.\n\n  c) We are not liable for damage, loss, or delay caused by third-party delivery providers.\n\n\n\n7.4 DELIVERY FEES:\n\n  a) The delivery fee is shown to the buyer before payment.\n\n  b) This fee is non-refundable unless a dispute is decided in favour of the buyer or as required by law.',
+      'tos_section_7_body':
+          '7.1 DELIVERY OBLIGATIONS:\n\n  a) The seller and the buyer must agree on the delivery method, cost, and timeframe before payment is confirmed.\n\n  b) The seller is responsible for ensuring products are delivered to the agreed address within the stated timeframe.\n\n  c) The buyer is responsible for providing an accurate delivery address and for receiving the goods.\n\n\n\n7.2 CONFIRMATION OF RECEIPT:\n\n  a) Escrow funds are released to the seller IMMEDIATELY after the buyer confirms receipt of the goods in safe condition.\n\n  b) The buyer\'s confirmation is FINAL AND BINDING unless a dispute is raised within the 14-day escrow period.\n\n  c) A confirmation of receipt cannot be withdrawn after funds have been released to the seller.\n\n\n\n7.3 NATURE OF DELIVERY:\n\n  a) We are NOT a delivery provider and we do not handle physical goods.\n\n  b) Delivery may be arranged by the seller, an independent courier, or third-party logistics services.\n\n  c) We are not liable for damage, loss, or delay caused by third-party delivery providers.\n\n\n\n7.4 DELIVERY FEES:\n\n  a) The delivery fee is shown to the buyer before payment.\n\n  b) This fee is non-refundable unless a dispute is decided in favour of the buyer or as required by law.',
       'tos_section_8_title': '8. FEES, CHARGES, AND TAXES',
-      'tos_section_8_body': '8.1 CREATING AN ACCOUNT AND BROWSING THE PLATFORM IS FREE. Charges apply only when you use specific services.\n\n\n\n8.2 PLATFORM COMMISSION (3.5%):\n\n  a) A platform commission of 3.5% of the product value is charged TO THE BUYER at the time of purchase.\n\n  b) The commission is added to the total amount payable and is clearly shown before payment is confirmed.\n\n  c) THE SELLER RECEIVES THE FULL SALE PROCEEDS; the platform commission is NOT deducted from the seller payout.\n\n  d) Since the commission is paid by the buyer, it is not a cost to the seller and does not reduce the seller earnings.\n\n\n\n8.3 PAYMENT AND WITHDRAWAL FEES (ClickPesa/MNO):\n\n  a) ClickPesa and mobile money operator (MNO) fees may apply to payments and withdrawals.\n\n  b) Payment fees are borne by the party making the payment (usually the buyer).\n\n  c) Withdrawal fees are borne by the party making the withdrawal (usually the seller).\n\n  d) All fees are displayed before payment or withdrawal is confirmed.\n\n\n\n8.4 NO MINIMUM WITHDRAWAL: There is no minimum withdrawal amount; you may withdraw any available balance from your wallet.\n\n\n\n8.5 BOOST AND PROMOTIONAL FEES: Additional fees apply for product boosting and promotional features. Boost fees are non-refundable except in cases of Platform error.\n\n\n\n8.6 TAXES:\n\n  a) You are solely responsible for reporting and paying all taxes applicable to your transactions.\n\n  b) We may be required to report transaction information to the Tanzania Revenue Authority (TRA).\n\n  c) We do not provide tax advice. Consult a tax professional for guidance.\n\n\n\n8.7 FEE MODIFICATION:\n\n  a) We reserve the right to change our fee structure at any time.\n\n  b) Changes will be communicated at least 14 days in advance for material changes.\n\n  c) Continued use after fee changes constitutes acceptance of the new fee structure.\n\n\n\n8.8 ALL FEES ARE NON-REFUNDABLE except as explicitly stated in our refund policy or as required by law.',
+      'tos_section_8_body':
+          '8.1 CREATING AN ACCOUNT AND BROWSING THE PLATFORM IS FREE. Charges apply only when you use specific services.\n\n\n\n8.2 PLATFORM COMMISSION (3.5%):\n\n  a) A platform commission of 3.5% of the product value is charged TO THE BUYER at the time of purchase.\n\n  b) The commission is added to the total amount payable and is clearly shown before payment is confirmed.\n\n  c) THE SELLER RECEIVES THE FULL SALE PROCEEDS; the platform commission is NOT deducted from the seller payout.\n\n  d) Since the commission is paid by the buyer, it is not a cost to the seller and does not reduce the seller earnings.\n\n\n\n8.3 PAYMENT AND WITHDRAWAL FEES (ClickPesa/MNO):\n\n  a) ClickPesa and mobile money operator (MNO) fees may apply to payments and withdrawals.\n\n  b) Payment fees are borne by the party making the payment (usually the buyer).\n\n  c) Withdrawal fees are borne by the party making the withdrawal (usually the seller).\n\n  d) All fees are displayed before payment or withdrawal is confirmed.\n\n\n\n8.4 NO MINIMUM WITHDRAWAL: There is no minimum withdrawal amount; you may withdraw any available balance from your wallet.\n\n\n\n8.5 BOOST AND PROMOTIONAL FEES: Additional fees apply for product boosting and promotional features. Boost fees are non-refundable except in cases of Platform error.\n\n\n\n8.6 TAXES:\n\n  a) You are solely responsible for reporting and paying all taxes applicable to your transactions.\n\n  b) We may be required to report transaction information to the Tanzania Revenue Authority (TRA).\n\n  c) We do not provide tax advice. Consult a tax professional for guidance.\n\n\n\n8.7 FEE MODIFICATION:\n\n  a) We reserve the right to change our fee structure at any time.\n\n  b) Changes will be communicated at least 14 days in advance for material changes.\n\n  c) Continued use after fee changes constitutes acceptance of the new fee structure.\n\n\n\n8.8 ALL FEES ARE NON-REFUNDABLE except as explicitly stated in our refund policy or as required by law.',
       'tos_section_9_title': '9. DISPUTE RESOLUTION — BINDING PROCESS',
-      'tos_section_9_body': '9.1 INFORMAL RESOLUTION: If a dispute arises between users, you agree to FIRST attempt to resolve it directly with the other party through the Platform\'s messaging system within 7 days.\n\n9.2 FORMAL DISPUTE: If informal resolution fails, either party may submit a formal dispute through the Platform\'s dispute resolution system within 30 days of the transaction date.\n\n9.3 EVIDENCE: Both parties must provide all relevant evidence, including:\n  a) Chat logs and communication records.\n  b) Transaction records and payment confirmations.\n  c) Photographs or videos of the product or issue.\n  d) Delivery and tracking information.\n  e) Any other relevant documentation.\n\n9.4 DISPUTE DECISION:\n  a) Our dispute resolution team will review the case based on evidence provided by both parties.\n  b) The decision of our dispute resolution team is FINAL AND BINDING on both parties.\n  c) Decisions are made within 14 days of receiving all necessary information.\n  d) We reserve the right to make equitable decisions that may not strictly follow these Terms.\n\n9.5 ESCROW DURING DISPUTES: Funds remain in escrow until the dispute is resolved.\n\n9.6 MEDIATION AND ARBITRATION:\n  a) If a dispute cannot be resolved through our internal process, it shall be referred to mediation.\n  b) If mediation fails, the dispute shall be resolved through binding arbitration in accordance with Tanzanian law.\n  c) The arbitration shall be conducted in Dar es Salaam, Tanzania, in the English language.\n  d) Each party shall bear its own costs, unless the arbitrator determines otherwise.\n\n9.7 CLASS ACTION WAIVER: You agree to resolve disputes with us on an INDIVIDUAL BASIS and waive any right to participate in class action lawsuits or collective arbitration.\n\n9.8 STATUTE OF LIMITATIONS: Any claim or cause of action arising from these Terms or your use of the Platform must be filed within ONE (1) YEAR of the event giving rise to the claim, or be permanently barred.',
+      'tos_section_9_body':
+          '9.1 INFORMAL RESOLUTION: If a dispute arises between users, you agree to FIRST attempt to resolve it directly with the other party through the Platform\'s messaging system within 7 days.\n\n9.2 FORMAL DISPUTE: If informal resolution fails, either party may submit a formal dispute through the Platform\'s dispute resolution system within 30 days of the transaction date.\n\n9.3 EVIDENCE: Both parties must provide all relevant evidence, including:\n  a) Chat logs and communication records.\n  b) Transaction records and payment confirmations.\n  c) Photographs or videos of the product or issue.\n  d) Delivery and tracking information.\n  e) Any other relevant documentation.\n\n9.4 DISPUTE DECISION:\n  a) Our dispute resolution team will review the case based on evidence provided by both parties.\n  b) The decision of our dispute resolution team is FINAL AND BINDING on both parties.\n  c) Decisions are made within 14 days of receiving all necessary information.\n  d) We reserve the right to make equitable decisions that may not strictly follow these Terms.\n\n9.5 ESCROW DURING DISPUTES: Funds remain in escrow until the dispute is resolved.\n\n9.6 MEDIATION AND ARBITRATION:\n  a) If a dispute cannot be resolved through our internal process, it shall be referred to mediation.\n  b) If mediation fails, the dispute shall be resolved through binding arbitration in accordance with Tanzanian law.\n  c) The arbitration shall be conducted in Dar es Salaam, Tanzania, in the English language.\n  d) Each party shall bear its own costs, unless the arbitrator determines otherwise.\n\n9.7 CLASS ACTION WAIVER: You agree to resolve disputes with us on an INDIVIDUAL BASIS and waive any right to participate in class action lawsuits or collective arbitration.\n\n9.8 STATUTE OF LIMITATIONS: Any claim or cause of action arising from these Terms or your use of the Platform must be filed within ONE (1) YEAR of the event giving rise to the claim, or be permanently barred.',
       'tos_section_10_title': '10. INTELLECTUAL PROPERTY RIGHTS',
-      'tos_section_10_body': '10.1 PLATFORM OWNERSHIP:\n  a) The Platform, including its design, code, graphics, logos, trademarks, trade dress, user interface, algorithms, databases, and all content not provided by users, is the SOLE AND EXCLUSIVE PROPERTY of Soko Vibe.\n  b) All intellectual property rights are protected by Tanzanian and international copyright, trademark, patent, and trade secret laws.\n  c) No license or right to any intellectual property is granted to you except as expressly stated herein.\n\n10.2 USER CONTENT LICENSE:\n  a) You retain ownership of content you post.\n  b) By posting content, you grant Soko Vibe a NON-EXCLUSIVE, WORLDWIDE, ROYALTY-FREE, PERPETUAL, IRREVOCABLE, SUB-LICENSABLE, AND TRANSFERABLE license to use, reproduce, modify, adapt, publish, display, distribute, and create derivative works of your content on the Platform and in connection with our business.\n  c) This license survives termination of your account for the purpose of maintaining Platform integrity and historical data.\n\n10.3 REPRESENTATIONS AND WARRANTIES:\n  a) You represent and warrant that you own all content you post, or have all necessary rights, licenses, and permissions to post it.\n  b) You represent and warrant that your content does not infringe any third-party intellectual property rights.\n  c) You agree to indemnify us for any claims arising from your content.\n\n10.4 COPYRIGHT INFRINGEMENT:\n  a) We respect intellectual property rights and expect users to do the same.\n  b) We will respond to clear notices of alleged copyright infringement.\n  c) Repeat infringers may have their accounts terminated.\n  d) To report infringement, contact us with full details of the allegedly infringing content.\n\n10.5 RESTRICTIONS: You may not copy, modify, distribute, sell, lease, reverse engineer, decompile, disassemble, or create derivative works of any part of the Platform without our express written permission.',
-      'tos_section_11_title': '11. LIMITATION OF LIABILITY — COMPREHENSIVE DISCLAIMER',
-      'tos_section_11_body': '11.1 THE PLATFORM AND ALL SERVICES ARE PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT ANY WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT, TITLE, OR COURSE OF PERFORMANCE.\n\n11.2 WE MAKE NO WARRANTY THAT:\n  a) The Platform will meet your requirements or expectations.\n  b) The Platform will be uninterrupted, timely, secure, or error-free.\n  c) The results obtained from using the Platform will be accurate or reliable.\n  d) The quality of any products, services, information, or other material purchased or obtained through the Platform will meet your expectations.\n  e) Any errors in the Platform will be corrected.\n\n11.3 TO THE MAXIMUM EXTENT PERMITTED BY LAW, SOKO VIBE, ITS OFFICERS, DIRECTORS, EMPLOYEES, AGENTS, AFFILIATES, SUCCESSORS, AND ASSIGNS SHALL NOT BE LIABLE FOR ANY:\n  a) Indirect, incidental, special, consequential, exemplary, or punitive damages.\n  b) Loss of profits, revenue, business opportunities, goodwill, or anticipated savings.\n  c) Loss of data, content, or information.\n  d) Loss of privacy or security.\n  e) Personal injury or property damage.\n  f) Damages resulting from transactions between users.\n  g) Damages resulting from acts of God, natural disasters, war, terrorism, or force majeure events.\n\n11.4 OUR TOTAL CUMULATIVE LIABILITY TO YOU FOR ANY CLAIM ARISING FROM THESE TERMS OR YOUR USE OF THE PLATFORM SHALL NOT EXCEED THE TOTAL AMOUNT OF FEES PAID BY YOU TO US IN THE TWELVE (12) MONTHS PRECEDING THE CLAIM, OR ONE HUNDRED THOUSAND TANZANIAN SHILLINGS (TZS 100,000), WHICHEVER IS GREATER.\n\n11.5 THIS LIMITATION OF LIABILITY APPLIES WHETHER THE CLAIM IS BASED ON CONTRACT, TORT (INCLUDING NEGLIGENCE), STRICT LIABILITY, PRODUCT LIABILITY, OR ANY OTHER LEGAL THEORY, AND EVEN IF WE HAVE BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.\n\n11.6 SOME JURISDICTIONS DO NOT ALLOW THE EXCLUSION OF CERTAIN WARRANTIES OR THE LIMITATION OF CERTAIN DAMAGES. IF YOU RESIDE IN SUCH A JURISDICTION, SOME OF THESE LIMITATIONS MAY NOT APPLY TO YOU TO THE EXTENT PROHIBITED BY LAW.\n\n11.7 THE DISCLAIMERS AND LIMITATIONS IN THIS SECTION ARE FUNDAMENTAL TERMS OF THIS AGREEMENT AND THE PLATFORM WOULD NOT BE PROVIDED WITHOUT SUCH DISCLAIMERS AND LIMITATIONS.',
-      'tos_section_12_title': '12. INDEMNIFICATION — YOUR OBLIGATION TO PROTECT US',
-      'tos_section_12_body': '12.1 You agree to INDEMNIFY, DEFEND, AND HOLD HARMLESS Soko Vibe, its affiliates, subsidiaries, parents, officers, directors, employees, agents, contractors, licensors, service providers, successors, and assigns from and against ANY AND ALL claims, liabilities, damages, losses, costs, expenses, and fees (including but not limited to reasonable attorneys\' fees, court costs, settlement amounts, and expert witness fees) arising from or related to:\n\n  a) Your use of or access to the Platform.\n  b) Your violation of any provision of these Terms.\n  c) Your violation of any third-party rights, including but not limited to intellectual property rights, privacy rights, or contractual rights.\n  d) Your posted content, listings, reviews, or communications.\n  e) Any transaction you enter into through the Platform.\n  f) Your violation of any applicable law, regulation, or ordinance.\n  h) Your negligence, fraud, willful misconduct, or intentional acts.\n  i) Any dispute between you and another user.\n\n12.2 We reserve the right, at YOUR EXPENSE, to assume the exclusive defense and control of any matter subject to indemnification. You agree to cooperate with our defense of such claims.\n\n12.3 This indemnification obligation survives termination of your account and these Terms.',
+      'tos_section_10_body':
+          '10.1 PLATFORM OWNERSHIP:\n  a) The Platform, including its design, code, graphics, logos, trademarks, trade dress, user interface, algorithms, databases, and all content not provided by users, is the SOLE AND EXCLUSIVE PROPERTY of Soko Vibe.\n  b) All intellectual property rights are protected by Tanzanian and international copyright, trademark, patent, and trade secret laws.\n  c) No license or right to any intellectual property is granted to you except as expressly stated herein.\n\n10.2 USER CONTENT LICENSE:\n  a) You retain ownership of content you post.\n  b) By posting content, you grant Soko Vibe a NON-EXCLUSIVE, WORLDWIDE, ROYALTY-FREE, PERPETUAL, IRREVOCABLE, SUB-LICENSABLE, AND TRANSFERABLE license to use, reproduce, modify, adapt, publish, display, distribute, and create derivative works of your content on the Platform and in connection with our business.\n  c) This license survives termination of your account for the purpose of maintaining Platform integrity and historical data.\n\n10.3 REPRESENTATIONS AND WARRANTIES:\n  a) You represent and warrant that you own all content you post, or have all necessary rights, licenses, and permissions to post it.\n  b) You represent and warrant that your content does not infringe any third-party intellectual property rights.\n  c) You agree to indemnify us for any claims arising from your content.\n\n10.4 COPYRIGHT INFRINGEMENT:\n  a) We respect intellectual property rights and expect users to do the same.\n  b) We will respond to clear notices of alleged copyright infringement.\n  c) Repeat infringers may have their accounts terminated.\n  d) To report infringement, contact us with full details of the allegedly infringing content.\n\n10.5 RESTRICTIONS: You may not copy, modify, distribute, sell, lease, reverse engineer, decompile, disassemble, or create derivative works of any part of the Platform without our express written permission.',
+      'tos_section_11_title':
+          '11. LIMITATION OF LIABILITY — COMPREHENSIVE DISCLAIMER',
+      'tos_section_11_body':
+          '11.1 THE PLATFORM AND ALL SERVICES ARE PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT ANY WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT, TITLE, OR COURSE OF PERFORMANCE.\n\n11.2 WE MAKE NO WARRANTY THAT:\n  a) The Platform will meet your requirements or expectations.\n  b) The Platform will be uninterrupted, timely, secure, or error-free.\n  c) The results obtained from using the Platform will be accurate or reliable.\n  d) The quality of any products, services, information, or other material purchased or obtained through the Platform will meet your expectations.\n  e) Any errors in the Platform will be corrected.\n\n11.3 TO THE MAXIMUM EXTENT PERMITTED BY LAW, SOKO VIBE, ITS OFFICERS, DIRECTORS, EMPLOYEES, AGENTS, AFFILIATES, SUCCESSORS, AND ASSIGNS SHALL NOT BE LIABLE FOR ANY:\n  a) Indirect, incidental, special, consequential, exemplary, or punitive damages.\n  b) Loss of profits, revenue, business opportunities, goodwill, or anticipated savings.\n  c) Loss of data, content, or information.\n  d) Loss of privacy or security.\n  e) Personal injury or property damage.\n  f) Damages resulting from transactions between users.\n  g) Damages resulting from acts of God, natural disasters, war, terrorism, or force majeure events.\n\n11.4 OUR TOTAL CUMULATIVE LIABILITY TO YOU FOR ANY CLAIM ARISING FROM THESE TERMS OR YOUR USE OF THE PLATFORM SHALL NOT EXCEED THE TOTAL AMOUNT OF FEES PAID BY YOU TO US IN THE TWELVE (12) MONTHS PRECEDING THE CLAIM, OR ONE HUNDRED THOUSAND TANZANIAN SHILLINGS (TZS 100,000), WHICHEVER IS GREATER.\n\n11.5 THIS LIMITATION OF LIABILITY APPLIES WHETHER THE CLAIM IS BASED ON CONTRACT, TORT (INCLUDING NEGLIGENCE), STRICT LIABILITY, PRODUCT LIABILITY, OR ANY OTHER LEGAL THEORY, AND EVEN IF WE HAVE BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.\n\n11.6 SOME JURISDICTIONS DO NOT ALLOW THE EXCLUSION OF CERTAIN WARRANTIES OR THE LIMITATION OF CERTAIN DAMAGES. IF YOU RESIDE IN SUCH A JURISDICTION, SOME OF THESE LIMITATIONS MAY NOT APPLY TO YOU TO THE EXTENT PROHIBITED BY LAW.\n\n11.7 THE DISCLAIMERS AND LIMITATIONS IN THIS SECTION ARE FUNDAMENTAL TERMS OF THIS AGREEMENT AND THE PLATFORM WOULD NOT BE PROVIDED WITHOUT SUCH DISCLAIMERS AND LIMITATIONS.',
+      'tos_section_12_title':
+          '12. INDEMNIFICATION — YOUR OBLIGATION TO PROTECT US',
+      'tos_section_12_body':
+          '12.1 You agree to INDEMNIFY, DEFEND, AND HOLD HARMLESS Soko Vibe, its affiliates, subsidiaries, parents, officers, directors, employees, agents, contractors, licensors, service providers, successors, and assigns from and against ANY AND ALL claims, liabilities, damages, losses, costs, expenses, and fees (including but not limited to reasonable attorneys\' fees, court costs, settlement amounts, and expert witness fees) arising from or related to:\n\n  a) Your use of or access to the Platform.\n  b) Your violation of any provision of these Terms.\n  c) Your violation of any third-party rights, including but not limited to intellectual property rights, privacy rights, or contractual rights.\n  d) Your posted content, listings, reviews, or communications.\n  e) Any transaction you enter into through the Platform.\n  f) Your violation of any applicable law, regulation, or ordinance.\n  h) Your negligence, fraud, willful misconduct, or intentional acts.\n  i) Any dispute between you and another user.\n\n12.2 We reserve the right, at YOUR EXPENSE, to assume the exclusive defense and control of any matter subject to indemnification. You agree to cooperate with our defense of such claims.\n\n12.3 This indemnification obligation survives termination of your account and these Terms.',
       'tos_section_13_title': '13. TERMINATION AND SUSPENSION',
-      'tos_section_13_body': '13.1 TERMINATION BY YOU:\n  a) You may terminate your account at any time through the Settings menu or by contacting support.\n  b) Termination does not relieve you of obligations arising from transactions entered into before termination.\n  c) Outstanding transactions must be completed or appropriately cancelled.\n\n13.2 TERMINATION BY US:\n  a) We may suspend or terminate your account at any time, for any reason, with or without cause, with or without notice, at our SOLE DISCRETION.\n  b) We are not obligated to provide reasons for termination.\n  c) We are not liable to you or any third party for termination.\n\n13.3 EFFECTS OF TERMINATION:\n  a) Your right to access and use the Platform ceases immediately.\n  b) Your listings will be deactivated and removed from search results.\n  c) Any pending transactions will be canceled and refunded to buyers as appropriate.\n  d) Any wallet balance may be forfeited if termination is for cause.\n  e) Your data will be handled according to our Privacy Policy.\n\n13.4 SURVIVAL: The following provisions survive termination: Sections 8 (Fees), 9 (Dispute Resolution), 10 (Intellectual Property), 11 (Limitation of Liability), 12 (Indemnification), 14 (Governing Law), 15 (General Provisions), and any other provisions that by their nature should survive.',
+      'tos_section_13_body':
+          '13.1 TERMINATION BY YOU:\n  a) You may terminate your account at any time through the Settings menu or by contacting support.\n  b) Termination does not relieve you of obligations arising from transactions entered into before termination.\n  c) Outstanding transactions must be completed or appropriately cancelled.\n\n13.2 TERMINATION BY US:\n  a) We may suspend or terminate your account at any time, for any reason, with or without cause, with or without notice, at our SOLE DISCRETION.\n  b) We are not obligated to provide reasons for termination.\n  c) We are not liable to you or any third party for termination.\n\n13.3 EFFECTS OF TERMINATION:\n  a) Your right to access and use the Platform ceases immediately.\n  b) Your listings will be deactivated and removed from search results.\n  c) Any pending transactions will be canceled and refunded to buyers as appropriate.\n  d) Any wallet balance may be forfeited if termination is for cause.\n  e) Your data will be handled according to our Privacy Policy.\n\n13.4 SURVIVAL: The following provisions survive termination: Sections 8 (Fees), 9 (Dispute Resolution), 10 (Intellectual Property), 11 (Limitation of Liability), 12 (Indemnification), 14 (Governing Law), 15 (General Provisions), and any other provisions that by their nature should survive.',
       'tos_section_14_title': '14. GOVERNING LAW AND JURISDICTION',
-      'tos_section_14_body': '14.1 GOVERNING LAW: These Terms shall be governed by and construed in accordance with the laws of the United Republic of Tanzania, without regard to its conflict of law provisions. Applicable laws include but are not limited to:\n  a) The Law of Contract Act, Cap. 345.\n  b) The Electronic Transactions Act, 2015.\n  c) The Cybercrimes Act, 2015.\n  d) The Personal Data Protection Act, 2022.\n  e) The Anti-Money Laundering Act, 2006.\n  f) The Fair Competition Act, 2003.\n  g) The Tanzania Revenue Authority Act, Cap. 399.\n\n14.2 JURISDICTION: Any legal action or proceeding arising from these Terms or the use of the Platform shall be brought EXCLUSIVELY in the courts of Dar es Salaam, Tanzania. You submit to the personal jurisdiction of such courts.\n\n14.3 INTERNATIONAL USERS: If you access the Platform from outside Tanzania, you do so at your own initiative and are responsible for compliance with local laws. We make no representation that the Platform is appropriate or available for use in locations outside Tanzania.\n\n14.4 The United Nations Convention on Contracts for the International Sale of Goods (CISG) shall NOT apply to these Terms.',
+      'tos_section_14_body':
+          '14.1 GOVERNING LAW: These Terms shall be governed by and construed in accordance with the laws of the United Republic of Tanzania, without regard to its conflict of law provisions. Applicable laws include but are not limited to:\n  a) The Law of Contract Act, Cap. 345.\n  b) The Electronic Transactions Act, 2015.\n  c) The Cybercrimes Act, 2015.\n  d) The Personal Data Protection Act, 2022.\n  e) The Anti-Money Laundering Act, 2006.\n  f) The Fair Competition Act, 2003.\n  g) The Tanzania Revenue Authority Act, Cap. 399.\n\n14.2 JURISDICTION: Any legal action or proceeding arising from these Terms or the use of the Platform shall be brought EXCLUSIVELY in the courts of Dar es Salaam, Tanzania. You submit to the personal jurisdiction of such courts.\n\n14.3 INTERNATIONAL USERS: If you access the Platform from outside Tanzania, you do so at your own initiative and are responsible for compliance with local laws. We make no representation that the Platform is appropriate or available for use in locations outside Tanzania.\n\n14.4 The United Nations Convention on Contracts for the International Sale of Goods (CISG) shall NOT apply to these Terms.',
       'tos_section_15_title': '15. GENERAL PROVISIONS',
-      'tos_section_15_body': '15.1 ENTIRE AGREEMENT: These Terms, together with our Privacy Policy and any other policies referenced herein, constitute the ENTIRE AND EXCLUSIVE agreement between you and Soko Vibe regarding your use of the Platform and supersede all prior and contemporaneous agreements, understandings, negotiations, and representations, whether written or oral.\n\n15.2 WAIVER: Our failure or delay in enforcing any right or provision of these Terms shall NOT constitute a waiver of such right or provision. No waiver shall be effective unless in writing and signed by an authorized representative of Soko Vibe.\n\n15.3 SEVERABILITY: If any provision of these Terms is found to be invalid, illegal, or unenforceable by a court of competent jurisdiction, the remaining provisions shall remain in FULL FORCE AND EFFECT. The invalid provision shall be modified to the minimum extent necessary to make it enforceable.\n\n15.4 ASSIGNMENT:\n  a) You may NOT assign or transfer these Terms or any of your rights or obligations hereunder, whether by operation of law or otherwise, without our prior written consent.\n  b) Any attempted assignment in violation of this section is VOID.\n  c) We may assign these Terms freely without restriction.\n\n15.5 NOTICES:\n  a) We may provide notices to you via your registered email address, in-app notifications, push notifications, SMS, or through a general posting on the Platform.\n  b) Notices are deemed received 24 hours after sending for electronic communications.\n  c) You may provide notices to us at support@soko-vibe.com.\n\n15.6 FORCE MAJEURE: We shall not be liable for any failure or delay in performance due to circumstances beyond our reasonable control, including but not limited to acts of God, natural disasters, earthquakes, floods, fires, epidemics, pandemics, war, terrorism, riots, civil commotion, embargoes, government actions, strikes, labor disputes, power outages, network failures, failure of telecommunications or internet infrastructure, and acts or omissions of third parties.\n\n15.7 RELATIONSHIP: Nothing in these Terms creates any agency, partnership, joint venture, employment, or franchise relationship between you and Soko Vibe.\n\n15.8 THIRD-PARTY BENEFICIARIES: There are no third-party beneficiaries to these Terms except as expressly stated.\n\n15.9 LANGUAGE: These Terms are drafted in Kiswahili and English. Both versions have equal force. In case of conflict or inconsistency, the Kiswahili version prevails.\n\n15.10 ELECTRONIC SIGNATURE: By using the Platform, you consent to transact business electronically and acknowledge that your use of the Platform constitutes your electronic signature and acceptance of these Terms.',
+      'tos_section_15_body':
+          '15.1 ENTIRE AGREEMENT: These Terms, together with our Privacy Policy and any other policies referenced herein, constitute the ENTIRE AND EXCLUSIVE agreement between you and Soko Vibe regarding your use of the Platform and supersede all prior and contemporaneous agreements, understandings, negotiations, and representations, whether written or oral.\n\n15.2 WAIVER: Our failure or delay in enforcing any right or provision of these Terms shall NOT constitute a waiver of such right or provision. No waiver shall be effective unless in writing and signed by an authorized representative of Soko Vibe.\n\n15.3 SEVERABILITY: If any provision of these Terms is found to be invalid, illegal, or unenforceable by a court of competent jurisdiction, the remaining provisions shall remain in FULL FORCE AND EFFECT. The invalid provision shall be modified to the minimum extent necessary to make it enforceable.\n\n15.4 ASSIGNMENT:\n  a) You may NOT assign or transfer these Terms or any of your rights or obligations hereunder, whether by operation of law or otherwise, without our prior written consent.\n  b) Any attempted assignment in violation of this section is VOID.\n  c) We may assign these Terms freely without restriction.\n\n15.5 NOTICES:\n  a) We may provide notices to you via your registered email address, in-app notifications, push notifications, SMS, or through a general posting on the Platform.\n  b) Notices are deemed received 24 hours after sending for electronic communications.\n  c) You may provide notices to us at support@soko-vibe.com.\n\n15.6 FORCE MAJEURE: We shall not be liable for any failure or delay in performance due to circumstances beyond our reasonable control, including but not limited to acts of God, natural disasters, earthquakes, floods, fires, epidemics, pandemics, war, terrorism, riots, civil commotion, embargoes, government actions, strikes, labor disputes, power outages, network failures, failure of telecommunications or internet infrastructure, and acts or omissions of third parties.\n\n15.7 RELATIONSHIP: Nothing in these Terms creates any agency, partnership, joint venture, employment, or franchise relationship between you and Soko Vibe.\n\n15.8 THIRD-PARTY BENEFICIARIES: There are no third-party beneficiaries to these Terms except as expressly stated.\n\n15.9 LANGUAGE: These Terms are drafted in Kiswahili and English. Both versions have equal force. In case of conflict or inconsistency, the Kiswahili version prevails.\n\n15.10 ELECTRONIC SIGNATURE: By using the Platform, you consent to transact business electronically and acknowledge that your use of the Platform constitutes your electronic signature and acceptance of these Terms.',
       'tos_section_16_title': '16. ACKNOWLEDGMENT AND ACCEPTANCE',
-      'tos_section_16_body': '16.1 BY CREATING AN ACCOUNT OR USING THE PLATFORM, YOU EXPLICITLY ACKNOWLEDGE, REPRESENT, WARRANT, AND AGREE THAT:\n  a) You have read, understood, and accept these Terms in their entirety.\n  b) You are at least 18 years of age and have the legal capacity to enter into this agreement.\n  c) You agree to be legally bound by all provisions of these Terms.\n  d) You consent to the electronic delivery of this agreement and all related communications.\n  e) You acknowledge that these Terms may be modified at any time without prior notice.\n  f) You agree to review these Terms periodically.\n  g) You agree that your continued use of the Platform constitutes acceptance of any modified Terms.\n\n16.2 IF YOU DO NOT AGREE TO ALL PROVISIONS OF THESE TERMS, YOU MUST IMMEDIATELY CEASE USING THE PLATFORM AND DELETE YOUR ACCOUNT.\n\n16.3 THESE TERMS CONTAIN BINDING ARBITRATION AND CLASS ACTION WAIVER PROVISIONS THAT AFFECT YOUR LEGAL RIGHTS. PLEASE READ THEM CAREFULLY.',
+      'tos_section_16_body':
+          '16.1 BY CREATING AN ACCOUNT OR USING THE PLATFORM, YOU EXPLICITLY ACKNOWLEDGE, REPRESENT, WARRANT, AND AGREE THAT:\n  a) You have read, understood, and accept these Terms in their entirety.\n  b) You are at least 18 years of age and have the legal capacity to enter into this agreement.\n  c) You agree to be legally bound by all provisions of these Terms.\n  d) You consent to the electronic delivery of this agreement and all related communications.\n  e) You acknowledge that these Terms may be modified at any time without prior notice.\n  f) You agree to review these Terms periodically.\n  g) You agree that your continued use of the Platform constitutes acceptance of any modified Terms.\n\n16.2 IF YOU DO NOT AGREE TO ALL PROVISIONS OF THESE TERMS, YOU MUST IMMEDIATELY CEASE USING THE PLATFORM AND DELETE YOUR ACCOUNT.\n\n16.3 THESE TERMS CONTAIN BINDING ARBITRATION AND CLASS ACTION WAIVER PROVISIONS THAT AFFECT YOUR LEGAL RIGHTS. PLEASE READ THEM CAREFULLY.',
       'tos_footer': '© 2026 Soko Vibe Limited. All rights reserved.',
 
       'tos_section_chat_title': 'CHAT — INTERNAL COMMUNICATIONS',
-      'tos_section_chat_body': '3A.1 Chat Services: The Platform provides an internal messaging system for communication between buyers and sellers. By using the chat service, you agree that:\n  a) All communications within the Platform are PRIVATE and CONFIDENTIAL between you and the other party. Soko Vibe does not read, monitor, or disclose these communications except:\n     i) When required by law, court order, or legal process.\n     ii) When we reasonably believe communications involve fraud, threats, profanity, or unlawful activity.\n     iii) When necessary to resolve disputes between users.\n  b) You MUST use respectful language and treat other users with dignity.\n  c) Sending abusive messages, threats, harassment, or discriminatory content is STRICTLY PROHIBITED.\n  d) Sending sexually explicit, violent, or disturbing content is STRICTLY PROHIBITED.\n  e) Sending phishing links, false advertisements, or harmful content is STRICTLY PROHIBITED.\n  f) Sharing other users\' personal information without their consent is STRICTLY PROHIBITED.\n  g) All chat messages are retained for the duration of your account plus 90 days after account deletion.\n  h) Soko Vibe assumes no liability for the truthfulness of information exchanged between users through chat.\n  i) You bear full responsibility for your words and actions within the messaging system.',
+      'tos_section_chat_body':
+          '3A.1 Chat Services: The Platform provides an internal messaging system for communication between buyers and sellers. By using the chat service, you agree that:\n  a) All communications within the Platform are PRIVATE and CONFIDENTIAL between you and the other party. Soko Vibe does not read, monitor, or disclose these communications except:\n     i) When required by law, court order, or legal process.\n     ii) When we reasonably believe communications involve fraud, threats, profanity, or unlawful activity.\n     iii) When necessary to resolve disputes between users.\n  b) You MUST use respectful language and treat other users with dignity.\n  c) Sending abusive messages, threats, harassment, or discriminatory content is STRICTLY PROHIBITED.\n  d) Sending sexually explicit, violent, or disturbing content is STRICTLY PROHIBITED.\n  e) Sending phishing links, false advertisements, or harmful content is STRICTLY PROHIBITED.\n  f) Sharing other users\' personal information without their consent is STRICTLY PROHIBITED.\n  g) All chat messages are retained for the duration of your account plus 90 days after account deletion.\n  h) Soko Vibe assumes no liability for the truthfulness of information exchanged between users through chat.\n  i) You bear full responsibility for your words and actions within the messaging system.',
 
-      'tos_section_withhold_title': '17. RIGHT TO WITHHOLD, DETAIN, AND FORFEIT FUNDS',
-      'tos_section_withhold_body': '17.1 RIGHT TO WITHHOLD FUNDS: Soko Vibe reserves the COMPLETE and IMMEDIATE right to:\n  a) Seize, detain, or withhold any funds in a user\'s wallet.\n  b) Prevent withdrawal of funds from escrow or wallet.\n  c) Forfeit all funds in a user\'s account.\n  This applies when a user is found to have:\n  i) Committed fraud, deception, or unlawful activity through the Platform.\n  ii) Sold prohibited, counterfeit, or banned products.\n  iii) Damaged the Platform\'s systems, servers, or infrastructure.\n  iv) Grossly violated the Terms of Service.\n  v) Engaged in repeated profanity, abuse, or offensive conduct under the 3-strike policy.\n\n17.2 RIGHT TO FORFEIT PROFANITY FUNDS: As described in Section 4.6, a user whose account is terminated for profanity, offensive language, or repeated harassment will have ALL funds in their wallet and escrow FORFEITED and become PLATFORM PROPERTY as a Penalty Fee for Breach of Contract.\n\n17.3 DISPUTE PROCESS: A user has the right to submit complaints regarding fund withholding or forfeiture decisions within 30 days. Complaints will be reviewed by our dispute resolution team within 14 days. After that, the decision is FINAL.\n\n17.4 APPLICABLE LAW: The right to withhold and forfeit funds is exercised in accordance with the laws of the United Republic of Tanzania, including the Contract Law Act and consumer protection legislation. Any court ruling overturning a fund withholding decision shall be executed immediately.\n\n17.5 ENFORCEMENT: Violation of this clause by any user may result in:\n  a) Filing legal claims in court.\n  b) Reporting to relevant government authorities.\n  c) Taking all available legal action to protect Soko Vibe\'s rights.',
+      'tos_section_withhold_title':
+          '17. RIGHT TO WITHHOLD, DETAIN, AND FORFEIT FUNDS',
+      'tos_section_withhold_body':
+          '17.1 RIGHT TO WITHHOLD FUNDS: Soko Vibe reserves the COMPLETE and IMMEDIATE right to:\n  a) Seize, detain, or withhold any funds in a user\'s wallet.\n  b) Prevent withdrawal of funds from escrow or wallet.\n  c) Forfeit all funds in a user\'s account.\n  This applies when a user is found to have:\n  i) Committed fraud, deception, or unlawful activity through the Platform.\n  ii) Sold prohibited, counterfeit, or banned products.\n  iii) Damaged the Platform\'s systems, servers, or infrastructure.\n  iv) Grossly violated the Terms of Service.\n  v) Engaged in repeated profanity, abuse, or offensive conduct under the 3-strike policy.\n\n17.2 RIGHT TO FORFEIT PROFANITY FUNDS: As described in Section 4.6, a user whose account is terminated for profanity, offensive language, or repeated harassment will have ALL funds in their wallet and escrow FORFEITED and become PLATFORM PROPERTY as a Penalty Fee for Breach of Contract.\n\n17.3 DISPUTE PROCESS: A user has the right to submit complaints regarding fund withholding or forfeiture decisions within 30 days. Complaints will be reviewed by our dispute resolution team within 14 days. After that, the decision is FINAL.\n\n17.4 APPLICABLE LAW: The right to withhold and forfeit funds is exercised in accordance with the laws of the United Republic of Tanzania, including the Contract Law Act and consumer protection legislation. Any court ruling overturning a fund withholding decision shall be executed immediately.\n\n17.5 ENFORCEMENT: Violation of this clause by any user may result in:\n  a) Filing legal claims in court.\n  b) Reporting to relevant government authorities.\n  c) Taking all available legal action to protect Soko Vibe\'s rights.',
 
       'pp_title': 'SOKO VIBE PRIVACY POLICY',
-      'pp_last_updated': 'Last Updated: 29 July 2026 | Effective Date: 29 July 2026',
+      'pp_last_updated':
+          'Last Updated: 29 July 2026 | Effective Date: 29 July 2026',
       'pp_section_1_title': '1. INTRODUCTION AND SCOPE',
-      'pp_section_1_body': '1.1 This Privacy Policy ("Policy") constitutes a legally binding agreement between you ("User", "you", "your", "Data Subject") and Soko Vibe ("we", "our", "us", "the Company", "the Platform"), a company duly registered and operating under the laws of the United Republic of Tanzania.\n\n1.2 This Policy governs the collection, use, storage, processing, transfer, disclosure, and protection of your personal data when you access, register on, or use the Soko Vibe mobile application, website, or any related services, features, content, or applications (collectively, the "Services").\n\n1.3 By accessing or using our Services in any manner whatsoever, you explicitly acknowledge that you have read, understood, and freely consent to all terms of this Policy. If you do not agree with any provision of this Policy, you must IMMEDIATELY cease using our Services and delete your account.\n\n1.4 This Policy is supplementary to and should be read in conjunction with our Terms of Service. In the event of any conflict between this Policy and the Terms of Service, the Terms of Service shall prevail unless this Policy provides greater protection for your personal data.\n\n1.5 We reserve the absolute right to modify, amend, update, or replace this Policy at any time without prior notice. Any modifications shall become effective IMMEDIATELY upon posting on the Platform. Your continued use of the Services after any modification constitutes your UNCONDITIONAL acceptance of the modified Policy.\n\n1.6 It is your SOLE RESPONSIBILITY to review this Policy periodically. We strongly recommend that you check this page regularly for any changes. We will notify registered users of MATERIAL changes via email or in-app notification, but failure to receive such notification shall not invalidate the changes.\n\n1.7 This Policy applies to all users of the Platform, including but not limited to buyers, sellers, riders, drivers, and visitors who browse the Platform without registering.',
+      'pp_section_1_body':
+          '1.1 This Privacy Policy ("Policy") constitutes a legally binding agreement between you ("User", "you", "your", "Data Subject") and Soko Vibe ("we", "our", "us", "the Company", "the Platform"), a company duly registered and operating under the laws of the United Republic of Tanzania.\n\n1.2 This Policy governs the collection, use, storage, processing, transfer, disclosure, and protection of your personal data when you access, register on, or use the Soko Vibe mobile application, website, or any related services, features, content, or applications (collectively, the "Services").\n\n1.3 By accessing or using our Services in any manner whatsoever, you explicitly acknowledge that you have read, understood, and freely consent to all terms of this Policy. If you do not agree with any provision of this Policy, you must IMMEDIATELY cease using our Services and delete your account.\n\n1.4 This Policy is supplementary to and should be read in conjunction with our Terms of Service. In the event of any conflict between this Policy and the Terms of Service, the Terms of Service shall prevail unless this Policy provides greater protection for your personal data.\n\n1.5 We reserve the absolute right to modify, amend, update, or replace this Policy at any time without prior notice. Any modifications shall become effective IMMEDIATELY upon posting on the Platform. Your continued use of the Services after any modification constitutes your UNCONDITIONAL acceptance of the modified Policy.\n\n1.6 It is your SOLE RESPONSIBILITY to review this Policy periodically. We strongly recommend that you check this page regularly for any changes. We will notify registered users of MATERIAL changes via email or in-app notification, but failure to receive such notification shall not invalidate the changes.\n\n1.7 This Policy applies to all users of the Platform, including but not limited to buyers, sellers, riders, drivers, and visitors who browse the Platform without registering.',
       'pp_section_2_title': '2. DEFINITIONS AND INTERPRETATION',
-      'pp_section_2_body': '2.1 "Personal Data" means any information relating to an identified or identifiable natural person, including but not limited to name, identification number, location data, online identifier, or any one or more factors specific to the physical, physiological, genetic, mental, economic, cultural, or social identity of that person.\n\n2.2 "Sensitive Personal Data" means data revealing racial or ethnic origin, political opinions, religious or philosophical beliefs, trade union membership, genetic data, biometric data for unique identification, data concerning health, or data concerning a natural person\'s sex life or sexual orientation.\n\n2.3 "Processing" means any operation or set of operations performed on personal data, whether or not by automated means, including collection, recording, organization, structuring, storage, adaptation, retrieval, consultation, use, disclosure, dissemination, erasure, or destruction.\n\n2.4 "Data Controller" means Soko Vibe, which determines the purposes and means of processing your personal data.\n\n2.5 "Data Processor" means any third party that processes personal data on behalf of Soko Vibe.\n\n2.6 "Data Protection Officer" (DPO) means the designated officer responsible for overseeing our data protection strategy and compliance.\n\n2.7 "Third Party" means any natural or legal person, public authority, agency, or body other than the data subject, the data controller, the data processor, and persons who are authorized to process data under the direct authority of the data controller or processor.\n\n2.8 "Consent" means any freely given, specific, informed, and unambiguous indication of your wishes by which you signify agreement to the processing of your personal data.',
+      'pp_section_2_body':
+          '2.1 "Personal Data" means any information relating to an identified or identifiable natural person, including but not limited to name, identification number, location data, online identifier, or any one or more factors specific to the physical, physiological, genetic, mental, economic, cultural, or social identity of that person.\n\n2.2 "Sensitive Personal Data" means data revealing racial or ethnic origin, political opinions, religious or philosophical beliefs, trade union membership, genetic data, biometric data for unique identification, data concerning health, or data concerning a natural person\'s sex life or sexual orientation.\n\n2.3 "Processing" means any operation or set of operations performed on personal data, whether or not by automated means, including collection, recording, organization, structuring, storage, adaptation, retrieval, consultation, use, disclosure, dissemination, erasure, or destruction.\n\n2.4 "Data Controller" means Soko Vibe, which determines the purposes and means of processing your personal data.\n\n2.5 "Data Processor" means any third party that processes personal data on behalf of Soko Vibe.\n\n2.6 "Data Protection Officer" (DPO) means the designated officer responsible for overseeing our data protection strategy and compliance.\n\n2.7 "Third Party" means any natural or legal person, public authority, agency, or body other than the data subject, the data controller, the data processor, and persons who are authorized to process data under the direct authority of the data controller or processor.\n\n2.8 "Consent" means any freely given, specific, informed, and unambiguous indication of your wishes by which you signify agreement to the processing of your personal data.',
       'pp_section_3_title': '3. INFORMATION WE COLLECT — COMPREHENSIVE LIST',
-      'pp_section_3_body': '3.1 PERSONAL IDENTIFICATION INFORMATION:\n  a) Full legal name (first name, middle name, last name) as it appears on your government-issued identification.\n  b) Date of birth and age verification.\n  c) Gender identity.\n  d) Nationality and country of residence.\n  e) Government-issued identification documents, including but not limited to:\n     i) National Identification Number (NIDA) and ID card image.\n     ii) Passport number, passport photo, and passport copy.\n     iii) Driver\'s License number, class, and license copy.\n     iv) Voter\'s Identification card.\n     v) Residence permit or work permit (for foreign nationals).\n  f) Biometric data including facial recognition images (selfies) and fingerprint data where applicable.\n  g) Signature (electronic or wet-ink scan).\n\n3.2 CONTACT INFORMATION:\n  a) Primary email address and any alternative email addresses.\n  b) Mobile phone number(s) including network operator information.\n  c) Physical residential address including street name, house number, ward, district, region, and postal code.\n  d) Business address (if applicable).\n  e) Emergency contact information including name, relationship, phone number, and email.\n\n3.3 FINANCIAL INFORMATION:\n  a) Bank account details including bank name, branch, account number, and account holder name.\n  b) Mobile money account numbers (M-Pesa, Tigo Pesa, Airtel Money, Halopesa, EzyPesa, etc.).\n  c) Transaction history including amounts, dates, counterparties, and transaction references.\n  d) Payment card information (processed through PCI-DSS compliant third-party processors; we NEVER store full card numbers).\n  e) Wallet balance and transaction logs within the Platform.\n  f) Payout preferences and withdrawal history.\n  g) Tax identification number (TIN) and business registration certificates (for business accounts).\n\n3.4 LOCATION AND MOVEMENT DATA:\n  a) Real-time precise GPS location data when the app is in use (foreground).\n  b) Background location data when the app is minimized during active rides, deliveries, or tracking sessions.\n  c) Historical location data including frequently visited locations, travel patterns, and routes.\n  d) Geotagged product listing locations.\n  e) IP address-based approximate location.\n\n3.5 DEVICE AND TECHNICAL INFORMATION:\n  a) Device type, model, manufacturer, and operating system version.\n  b) Unique device identifiers (IMEI, IMSI, Android ID, iOS IDFA, MAC address).\n  c) IP address (IPv4 and IPv6).\n  d) Browser type, version, and language settings.\n  e) Screen resolution, color depth, pixel density, and device orientation.\n  f) Mobile network operator, connection type (WiFi, 4G, 5G, etc.), signal strength, and network speed.\n  g) App version, build number, and update channel.\n  h) Installed apps list and permissions granted.\n  i) Battery level, storage space, and memory usage.\n  j) Time zone and regional settings.\n\n3.6 USAGE AND BEHAVIORAL DATA:\n  a) Pages viewed, time spent on each page, scroll depth, and interaction patterns.\n  b) Search queries, search history, and autocomplete interactions.\n  c) Products viewed, saved to wishlist, shared, or compared.\n  d) Purchase history including items bought, amounts paid, and return/refund history.\n  e) Listing history including products listed, edited, boosted, or removed.\n  f) Ratings and reviews submitted by you and about you.\n  g) Chat messages, communication history, and call logs within the Platform.\n  h) Ride history including pickup locations, dropoff locations, routes taken, fare amounts, and driver/rider ratings.\n  i) Feature usage patterns, clickstream data, and session recordings.\n  j) Crash reports, error logs, and performance metrics.\n\n3.7 COMMUNICATIONS DATA:\n  a) All chat messages exchanged between users, including text, images, voice notes, and files.\n  b) Customer support tickets, emails, and chat transcripts.\n  c) Dispute resolution communications and evidence provided.\n  d) Phone calls made through the Platform\'s call feature.\n  e) Notification preferences and delivery logs (push, SMS, email, in-app).\n\n3.8 USER-GENERATED CONTENT:\n  a) Product listings including images, videos, descriptions, prices, and specifications.\n  b) Reviews, ratings, comments, and feedback.\n  c) Profile photos, bios, and status updates.\n  d) Social media links and shared content.',
+      'pp_section_3_body':
+          '3.1 PERSONAL IDENTIFICATION INFORMATION:\n  a) Full legal name (first name, middle name, last name) as it appears on your government-issued identification.\n  b) Date of birth and age verification.\n  c) Gender identity.\n  d) Nationality and country of residence.\n  e) Government-issued identification documents, including but not limited to:\n     i) National Identification Number (NIDA) and ID card image.\n     ii) Passport number, passport photo, and passport copy.\n     iii) Driver\'s License number, class, and license copy.\n     iv) Voter\'s Identification card.\n     v) Residence permit or work permit (for foreign nationals).\n  f) Biometric data including facial recognition images (selfies) and fingerprint data where applicable.\n  g) Signature (electronic or wet-ink scan).\n\n3.2 CONTACT INFORMATION:\n  a) Primary email address and any alternative email addresses.\n  b) Mobile phone number(s) including network operator information.\n  c) Physical residential address including street name, house number, ward, district, region, and postal code.\n  d) Business address (if applicable).\n  e) Emergency contact information including name, relationship, phone number, and email.\n\n3.3 FINANCIAL INFORMATION:\n  a) Bank account details including bank name, branch, account number, and account holder name.\n  b) Mobile money account numbers (M-Pesa, Tigo Pesa, Airtel Money, Halopesa, EzyPesa, etc.).\n  c) Transaction history including amounts, dates, counterparties, and transaction references.\n  d) Payment card information (processed through PCI-DSS compliant third-party processors; we NEVER store full card numbers).\n  e) Wallet balance and transaction logs within the Platform.\n  f) Payout preferences and withdrawal history.\n  g) Tax identification number (TIN) and business registration certificates (for business accounts).\n\n3.4 LOCATION AND MOVEMENT DATA:\n  a) Real-time precise GPS location data when the app is in use (foreground).\n  b) Background location data when the app is minimized during active rides, deliveries, or tracking sessions.\n  c) Historical location data including frequently visited locations, travel patterns, and routes.\n  d) Geotagged product listing locations.\n  e) IP address-based approximate location.\n\n3.5 DEVICE AND TECHNICAL INFORMATION:\n  a) Device type, model, manufacturer, and operating system version.\n  b) Unique device identifiers (IMEI, IMSI, Android ID, iOS IDFA, MAC address).\n  c) IP address (IPv4 and IPv6).\n  d) Browser type, version, and language settings.\n  e) Screen resolution, color depth, pixel density, and device orientation.\n  f) Mobile network operator, connection type (WiFi, 4G, 5G, etc.), signal strength, and network speed.\n  g) App version, build number, and update channel.\n  h) Installed apps list and permissions granted.\n  i) Battery level, storage space, and memory usage.\n  j) Time zone and regional settings.\n\n3.6 USAGE AND BEHAVIORAL DATA:\n  a) Pages viewed, time spent on each page, scroll depth, and interaction patterns.\n  b) Search queries, search history, and autocomplete interactions.\n  c) Products viewed, saved to wishlist, shared, or compared.\n  d) Purchase history including items bought, amounts paid, and return/refund history.\n  e) Listing history including products listed, edited, boosted, or removed.\n  f) Ratings and reviews submitted by you and about you.\n  g) Chat messages, communication history, and call logs within the Platform.\n  h) Ride history including pickup locations, dropoff locations, routes taken, fare amounts, and driver/rider ratings.\n  i) Feature usage patterns, clickstream data, and session recordings.\n  j) Crash reports, error logs, and performance metrics.\n\n3.7 COMMUNICATIONS DATA:\n  a) All chat messages exchanged between users, including text, images, voice notes, and files.\n  b) Customer support tickets, emails, and chat transcripts.\n  c) Dispute resolution communications and evidence provided.\n  d) Phone calls made through the Platform\'s call feature.\n  e) Notification preferences and delivery logs (push, SMS, email, in-app).\n\n3.8 USER-GENERATED CONTENT:\n  a) Product listings including images, videos, descriptions, prices, and specifications.\n  b) Reviews, ratings, comments, and feedback.\n  c) Profile photos, bios, and status updates.\n  d) Social media links and shared content.',
       'pp_section_4_title': '4. METHODS OF DATA COLLECTION',
-      'pp_section_4_body': '4.1 INFORMATION YOU PROVIDE DIRECTLY:\n  a) Registration and account creation forms.\n  b) KYC verification submissions (images, documents, selfies).\n  c) Product listing forms and checkout processes.\n  d) Communication with other users and customer support.\n  e) Profile settings and preferences.\n  f) Feedback, surveys, and promotional participation.\n\n4.2 INFORMATION COLLECTED AUTOMATICALLY:\n  a) Through cookies, tracking pixels, and similar technologies.\n  b) Through server logs and analytics tools.\n  c) Through device fingerprinting and behavioral analytics.\n  d) Through GPS, WiFi triangulation, and cell tower positioning.\n  e) Through session recording and heat mapping tools.\n\n4.3 INFORMATION FROM THIRD PARTIES:\n  a) Google Sign-In data (name, email, profile picture).\n  b) Payment processors (transaction confirmations, payment status).\n  c) Credit bureaus and fraud prevention databases.\n  d) Government databases for identity verification.\n  e) Social media platforms (if you choose to link accounts).\n  f) Public records and publicly available information.',
+      'pp_section_4_body':
+          '4.1 INFORMATION YOU PROVIDE DIRECTLY:\n  a) Registration and account creation forms.\n  b) KYC verification submissions (images, documents, selfies).\n  c) Product listing forms and checkout processes.\n  d) Communication with other users and customer support.\n  e) Profile settings and preferences.\n  f) Feedback, surveys, and promotional participation.\n\n4.2 INFORMATION COLLECTED AUTOMATICALLY:\n  a) Through cookies, tracking pixels, and similar technologies.\n  b) Through server logs and analytics tools.\n  c) Through device fingerprinting and behavioral analytics.\n  d) Through GPS, WiFi triangulation, and cell tower positioning.\n  e) Through session recording and heat mapping tools.\n\n4.3 INFORMATION FROM THIRD PARTIES:\n  a) Google Sign-In data (name, email, profile picture).\n  b) Payment processors (transaction confirmations, payment status).\n  c) Credit bureaus and fraud prevention databases.\n  d) Government databases for identity verification.\n  e) Social media platforms (if you choose to link accounts).\n  f) Public records and publicly available information.',
       'pp_section_5_title': '5. PURPOSES AND LEGAL BASIS FOR PROCESSING',
-      'pp_section_5_body': '5.1 We process your personal data for the following purposes, based on the following legal bases:\n\n5.2 CONTRACTUAL NECESSITY:\n  a) To create and maintain your account on the Platform.\n  b) To facilitate transactions between buyers and sellers.\n  c) To match riders with drivers and process ride-hailing services.\n  d) To process payments, escrow services, and payouts.\n  e) To provide customer support and dispute resolution.\n  f) To deliver products, services, and digital content.\n\n5.3 LEGAL COMPLIANCE:\n  a) To comply with the Tanzania Data Protection Act, 2022.\n  b) To comply with the Tanzania Anti-Money Laundering Act.\n  c) To comply with the Tanzania Electronic Transactions Act.\n  d) To comply with tax reporting obligations to the Tanzania Revenue Authority (TRA).\n  e) To comply with court orders, legal process, or governmental requests.\n  f) To enforce our Terms of Service and this Privacy Policy.\n  g) To prevent, detect, and investigate fraud, money laundering, and other illegal activities.\n\n5.4 LEGITIMATE INTERESTS:\n  a) To improve, optimize, and personalize the Platform and Services.\n  b) To analyze user behavior and trends to enhance user experience.\n  c) To develop new features, products, and services.\n  d) To ensure the security and integrity of the Platform.\n  e) To send administrative messages, security alerts, and service updates.\n  f) To generate aggregated, anonymized analytics and reports.\n  g) To conduct market research and business planning.\n\n5.5 CONSENT:\n  a) To send marketing and promotional communications (withdrawable at any time).\n  b) To collect precise location data for non-essential features.\n  c) To use your data for profiling and personalization.\n  d) To share your data with selected third-party partners for their own purposes.\n  e) To process sensitive personal data where explicit consent is required.',
-      'pp_section_6_title': '6. DATA SHARING AND DISCLOSURE — STRICT CONDITIONS',
-      'pp_section_6_body': '6.1 GENERAL PRINCIPLE: We DO NOT and WILL NOT sell your personal information to any third party under any circumstances. Any violation of this principle by any employee, contractor, or agent will result in immediate termination and legal action.\n\n6.2 WE MAY SHARE YOUR INFORMATION WITH THE FOLLOWING CATEGORIES OF RECIPIENTS, SUBJECT TO STRICT CONTRACTUAL OBLIGATIONS:\n  a) OTHER USERS: As necessary to facilitate transactions and communications between users, including:\n     i) Sharing your name, photo, and rating with potential transaction partners.\n     ii) Sharing your pickup location with assigned drivers.\n     iii) Sharing your delivery address with sellers and delivery partners.\n     iv) Sharing your phone number with transaction parties after a confirmed transaction.\n\n  b) SERVICE PROVIDERS AND DATA PROCESSORS (all bound by Data Processing Agreements):\n     i) Cloud infrastructure providers (Google Cloud Platform, Firebase).\n     ii) Payment processors (ClickPesa, mobile money operators, banks).\n     iii) Identity verification services.\n     iv) Push notification services (OneSignal).\n     v) SMS gateway providers (Meseji, Twilio-type services).\n     vi) Image and video hosting services (Cloudinary).\n     vii) Mapping and location services (Google Maps).\n     viii) Analytics and crash reporting services.\n     ix) Email delivery services.\n     x) Customer support platforms.\n\n  c) LAW ENFORCEMENT AND REGULATORY AUTHORITIES:\n     i) When required by applicable law, court order, or legal process.\n     ii) When we believe in good faith that disclosure is necessary to protect our rights, your safety, or the safety of others.\n     iii) To investigate, prevent, or take action regarding suspected illegal activities, fraud, or violations of our Terms.\n     iv) To comply with a valid warrant, subpoena, or other legally binding request.\n\n  d) BUSINESS TRANSFEREES:\n     i) In the event of a merger, acquisition, reorganization, bankruptcy, or sale of all or substantially all of our assets.\n     ii) The acquiring entity will be bound by this Policy and may not use your data in a manner materially different from what is described herein.\n     iii) You will be notified via email and in-app notification of any such transfer at least 30 days in advance.\n\n6.3 INTERNATIONAL DATA TRANSFERS:\n  a) Your data may be transferred to and processed in countries outside Tanzania where our service providers operate.\n  b) We ensure that appropriate safeguards are in place, including:\n     i) Standard Contractual Clauses (SCCs) adopted by relevant data protection authorities.\n     ii) Binding Corporate Rules (BCRs) where applicable.\n     iii) Verification that the recipient country has adequate data protection laws.\n  c) You explicitly consent to such international transfers by using our Services.\n\n6.4 WE WILL NEVER:\n  a) Sell your personal information to any third party.\n  b) Rent or lease your personal information.\n  c) Share your sensitive personal data without your explicit consent.\n  d) Use your data for purposes incompatible with those disclosed in this Policy without obtaining your consent.',
+      'pp_section_5_body':
+          '5.1 We process your personal data for the following purposes, based on the following legal bases:\n\n5.2 CONTRACTUAL NECESSITY:\n  a) To create and maintain your account on the Platform.\n  b) To facilitate transactions between buyers and sellers.\n  c) To match riders with drivers and process ride-hailing services.\n  d) To process payments, escrow services, and payouts.\n  e) To provide customer support and dispute resolution.\n  f) To deliver products, services, and digital content.\n\n5.3 LEGAL COMPLIANCE:\n  a) To comply with the Tanzania Data Protection Act, 2022.\n  b) To comply with the Tanzania Anti-Money Laundering Act.\n  c) To comply with the Tanzania Electronic Transactions Act.\n  d) To comply with tax reporting obligations to the Tanzania Revenue Authority (TRA).\n  e) To comply with court orders, legal process, or governmental requests.\n  f) To enforce our Terms of Service and this Privacy Policy.\n  g) To prevent, detect, and investigate fraud, money laundering, and other illegal activities.\n\n5.4 LEGITIMATE INTERESTS:\n  a) To improve, optimize, and personalize the Platform and Services.\n  b) To analyze user behavior and trends to enhance user experience.\n  c) To develop new features, products, and services.\n  d) To ensure the security and integrity of the Platform.\n  e) To send administrative messages, security alerts, and service updates.\n  f) To generate aggregated, anonymized analytics and reports.\n  g) To conduct market research and business planning.\n\n5.5 CONSENT:\n  a) To send marketing and promotional communications (withdrawable at any time).\n  b) To collect precise location data for non-essential features.\n  c) To use your data for profiling and personalization.\n  d) To share your data with selected third-party partners for their own purposes.\n  e) To process sensitive personal data where explicit consent is required.',
+      'pp_section_6_title':
+          '6. DATA SHARING AND DISCLOSURE — STRICT CONDITIONS',
+      'pp_section_6_body':
+          '6.1 GENERAL PRINCIPLE: We DO NOT and WILL NOT sell your personal information to any third party under any circumstances. Any violation of this principle by any employee, contractor, or agent will result in immediate termination and legal action.\n\n6.2 WE MAY SHARE YOUR INFORMATION WITH THE FOLLOWING CATEGORIES OF RECIPIENTS, SUBJECT TO STRICT CONTRACTUAL OBLIGATIONS:\n  a) OTHER USERS: As necessary to facilitate transactions and communications between users, including:\n     i) Sharing your name, photo, and rating with potential transaction partners.\n     ii) Sharing your pickup location with assigned drivers.\n     iii) Sharing your delivery address with sellers and delivery partners.\n     iv) Sharing your phone number with transaction parties after a confirmed transaction.\n\n  b) SERVICE PROVIDERS AND DATA PROCESSORS (all bound by Data Processing Agreements):\n     i) Cloud infrastructure providers (Google Cloud Platform, Firebase).\n     ii) Payment processors (ClickPesa, mobile money operators, banks).\n     iii) Identity verification services.\n     iv) Push notification services (OneSignal).\n     v) SMS gateway providers (Meseji, Twilio-type services).\n     vi) Image and video hosting services (Cloudinary).\n     vii) Mapping and location services (Google Maps).\n     viii) Analytics and crash reporting services.\n     ix) Email delivery services.\n     x) Customer support platforms.\n\n  c) LAW ENFORCEMENT AND REGULATORY AUTHORITIES:\n     i) When required by applicable law, court order, or legal process.\n     ii) When we believe in good faith that disclosure is necessary to protect our rights, your safety, or the safety of others.\n     iii) To investigate, prevent, or take action regarding suspected illegal activities, fraud, or violations of our Terms.\n     iv) To comply with a valid warrant, subpoena, or other legally binding request.\n\n  d) BUSINESS TRANSFEREES:\n     i) In the event of a merger, acquisition, reorganization, bankruptcy, or sale of all or substantially all of our assets.\n     ii) The acquiring entity will be bound by this Policy and may not use your data in a manner materially different from what is described herein.\n     iii) You will be notified via email and in-app notification of any such transfer at least 30 days in advance.\n\n6.3 INTERNATIONAL DATA TRANSFERS:\n  a) Your data may be transferred to and processed in countries outside Tanzania where our service providers operate.\n  b) We ensure that appropriate safeguards are in place, including:\n     i) Standard Contractual Clauses (SCCs) adopted by relevant data protection authorities.\n     ii) Binding Corporate Rules (BCRs) where applicable.\n     iii) Verification that the recipient country has adequate data protection laws.\n  c) You explicitly consent to such international transfers by using our Services.\n\n6.4 WE WILL NEVER:\n  a) Sell your personal information to any third party.\n  b) Rent or lease your personal information.\n  c) Share your sensitive personal data without your explicit consent.\n  d) Use your data for purposes incompatible with those disclosed in this Policy without obtaining your consent.',
       'pp_section_7_title': '7. DATA RETENTION AND DELETION POLICY',
-      'pp_section_7_body': '7.1 RETENTION PERIODS:\n  a) Active Account Data: Retained for the duration of your account\'s active status.\n  b) Inactive Account Data: Retained for a period of 12 months after your last login, after which the account may be archived.\n  c) KYC Documents: Retained for a minimum of 7 years from the date of collection, as required by Tanzanian anti-money laundering and financial regulations.\n  d) Transaction Records: Retained for a minimum of 7 years from the date of each transaction, as required by the Tanzania Revenue Authority.\n  e) Chat Messages: Retained for the duration of your account plus 90 days after account deletion.\n  f) Location Data: Retained in identifiable form for a maximum of 30 days, after which it is aggregated and anonymized.\n  g) Logs and Analytics Data: Retained for a period of 12 months.\n  h) Marketing Preferences and Consent Records: Retained for the duration of your account plus 3 years.\n\n7.2 ACCOUNT DELETION:\n  a) You may request deletion of your account through the Settings menu or by contacting our support team.\n  b) Upon receiving your deletion request, we will:\n     i) Deactivate your account within 48 hours.\n     ii) Retain your data for 90 days (the "Cooling-Off Period") during which you may reverse the deletion.\n     iii) Permanently delete your personal data after the Cooling-Off Period, subject to legal retention requirements.\n  c) Data required for legal, regulatory, or audit purposes will be retained for the legally mandated period even after account deletion.\n  d) We will provide you with a confirmation of deletion upon completion.\n\n7.3 DATA ANONYMIZATION:\n  a) Where data is retained beyond the deletion period for analytical purposes, it will be anonymized such that you cannot be identified.\n  b) Anonymized data is not considered personal data and may be used indefinitely.\n\n7.4 BACKUP RETENTION:\n  a) Data may persist in backup systems for up to 30 days after deletion from the primary system.\n  b) Backups are protected by the same security measures as production systems.',
+      'pp_section_7_body':
+          '7.1 RETENTION PERIODS:\n  a) Active Account Data: Retained for the duration of your account\'s active status.\n  b) Inactive Account Data: Retained for a period of 12 months after your last login, after which the account may be archived.\n  c) KYC Documents: Retained for a minimum of 7 years from the date of collection, as required by Tanzanian anti-money laundering and financial regulations.\n  d) Transaction Records: Retained for a minimum of 7 years from the date of each transaction, as required by the Tanzania Revenue Authority.\n  e) Chat Messages: Retained for the duration of your account plus 90 days after account deletion.\n  f) Location Data: Retained in identifiable form for a maximum of 30 days, after which it is aggregated and anonymized.\n  g) Logs and Analytics Data: Retained for a period of 12 months.\n  h) Marketing Preferences and Consent Records: Retained for the duration of your account plus 3 years.\n\n7.2 ACCOUNT DELETION:\n  a) You may request deletion of your account through the Settings menu or by contacting our support team.\n  b) Upon receiving your deletion request, we will:\n     i) Deactivate your account within 48 hours.\n     ii) Retain your data for 90 days (the "Cooling-Off Period") during which you may reverse the deletion.\n     iii) Permanently delete your personal data after the Cooling-Off Period, subject to legal retention requirements.\n  c) Data required for legal, regulatory, or audit purposes will be retained for the legally mandated period even after account deletion.\n  d) We will provide you with a confirmation of deletion upon completion.\n\n7.3 DATA ANONYMIZATION:\n  a) Where data is retained beyond the deletion period for analytical purposes, it will be anonymized such that you cannot be identified.\n  b) Anonymized data is not considered personal data and may be used indefinitely.\n\n7.4 BACKUP RETENTION:\n  a) Data may persist in backup systems for up to 30 days after deletion from the primary system.\n  b) Backups are protected by the same security measures as production systems.',
       'pp_section_8_title': '8. DATA SECURITY MEASURES',
-      'pp_section_8_body': '8.1 TECHNICAL MEASURES:\n  a) End-to-end encryption (E2EE) for all chat messages using industry-standard cryptographic protocols.\n  b) TLS/SSL encryption (minimum TLS 1.2, preferred TLS 1.3) for all data in transit.\n  c) AES-256 encryption for sensitive data at rest.\n  d) Multi-factor authentication (MFA) for administrative accounts and sensitive operations.\n  e) Role-based access control (RBAC) limiting data access to authorized personnel only.\n  f) Regular security audits, vulnerability assessments, and penetration testing by independent third parties.\n  g) Automated intrusion detection and prevention systems (IDPS).\n  h) Web application firewall (WAF) to protect against common attack vectors.\n  i) Regular security patches and updates to all systems and dependencies.\n  j) API rate limiting and request validation to prevent abuse.\n  k) Database encryption, regular backups, and disaster recovery procedures.\n\n8.2 ORGANIZATIONAL MEASURES:\n  a) All employees, contractors, and agents undergo mandatory data protection training on an annual basis.\n  b) Strict access controls based on the principle of least privilege.\n  c) Confidentiality agreements binding all personnel who handle personal data.\n  d) Incident response plan and data breach notification procedures.\n  e) Designated Data Protection Officer (DPO) overseeing compliance.\n  f) Regular internal audits of data processing activities.\n\n8.3 DATA BREACH NOTIFICATION:\n  a) In the event of a data breach that compromises your personal data, we will notify you within 72 hours of becoming aware of the breach.\n  b) Notification will include the nature of the breach, categories of data affected, potential consequences, and measures taken to address the breach.\n  c) We will also notify the relevant data protection authority as required by applicable law.\n  d) We maintain cyber insurance to cover costs associated with data breach response and liability.\n\n8.4 DESPITE THE ABOVE MEASURES:\n  a) No method of electronic storage or transmission is 100% secure.\n  b) We cannot guarantee absolute security of your data.\n  c) You are responsible for maintaining the security of your account credentials.\n  d) We are not liable for unauthorized access resulting from your negligence or failure to follow security best practices.',
+      'pp_section_8_body':
+          '8.1 TECHNICAL MEASURES:\n  a) End-to-end encryption (E2EE) for all chat messages using industry-standard cryptographic protocols.\n  b) TLS/SSL encryption (minimum TLS 1.2, preferred TLS 1.3) for all data in transit.\n  c) AES-256 encryption for sensitive data at rest.\n  d) Multi-factor authentication (MFA) for administrative accounts and sensitive operations.\n  e) Role-based access control (RBAC) limiting data access to authorized personnel only.\n  f) Regular security audits, vulnerability assessments, and penetration testing by independent third parties.\n  g) Automated intrusion detection and prevention systems (IDPS).\n  h) Web application firewall (WAF) to protect against common attack vectors.\n  i) Regular security patches and updates to all systems and dependencies.\n  j) API rate limiting and request validation to prevent abuse.\n  k) Database encryption, regular backups, and disaster recovery procedures.\n\n8.2 ORGANIZATIONAL MEASURES:\n  a) All employees, contractors, and agents undergo mandatory data protection training on an annual basis.\n  b) Strict access controls based on the principle of least privilege.\n  c) Confidentiality agreements binding all personnel who handle personal data.\n  d) Incident response plan and data breach notification procedures.\n  e) Designated Data Protection Officer (DPO) overseeing compliance.\n  f) Regular internal audits of data processing activities.\n\n8.3 DATA BREACH NOTIFICATION:\n  a) In the event of a data breach that compromises your personal data, we will notify you within 72 hours of becoming aware of the breach.\n  b) Notification will include the nature of the breach, categories of data affected, potential consequences, and measures taken to address the breach.\n  c) We will also notify the relevant data protection authority as required by applicable law.\n  d) We maintain cyber insurance to cover costs associated with data breach response and liability.\n\n8.4 DESPITE THE ABOVE MEASURES:\n  a) No method of electronic storage or transmission is 100% secure.\n  b) We cannot guarantee absolute security of your data.\n  c) You are responsible for maintaining the security of your account credentials.\n  d) We are not liable for unauthorized access resulting from your negligence or failure to follow security best practices.',
       'pp_section_9_title': '9. YOUR RIGHTS AND HOW TO EXERCISE THEM',
-      'pp_section_9_body': '9.1 UNDER THE TANZANIA DATA PROTECTION ACT, 2022, AND APPLICABLE REGULATIONS, YOU HAVE THE FOLLOWING RIGHTS:\n\n9.2 RIGHT TO BE INFORMED:\n  a) You have the right to be informed about the collection and use of your personal data.\n  b) This Policy serves as our privacy notice to you.\n\n9.3 RIGHT OF ACCESS:\n  a) You have the right to access your personal data held by us.\n  b) You may request a copy of your data in a structured, commonly used, and machine-readable format.\n  c) We will respond to access requests within 30 days.\n  d) The first copy is provided free of charge; subsequent copies may incur a reasonable administrative fee.\n\n9.4 RIGHT TO RECTIFICATION:\n  a) You have the right to request correction of inaccurate or incomplete personal data.\n  b) You may update most of your data directly through your account settings.\n  c) We will process correction requests within 15 days.\n\n9.5 RIGHT TO ERASURE ("RIGHT TO BE FORGOTTEN"):\n  a) You have the right to request deletion of your personal data in certain circumstances.\n  b) This right is not absolute and may be limited by legal obligations, pending transactions, or legitimate interests.\n  c) We will process deletion requests within 30 days, subject to verification of your identity.\n\n9.6 RIGHT TO RESTRICT PROCESSING:\n  a) You have the right to request restriction of processing of your personal data in certain circumstances.\n  b) While processing is restricted, we may store your data but not use it.\n\n9.7 RIGHT TO DATA PORTABILITY:\n  a) You have the right to receive your personal data in a structured, commonly used, and machine-readable format.\n  b) You have the right to transmit this data to another controller without hindrance.\n\n9.8 RIGHT TO OBJECT:\n  a) You have the right to object to processing of your personal data for direct marketing purposes at any time.\n  b) You have the right to object to processing based on legitimate interests.\n  c) We will cease processing unless we demonstrate compelling legitimate grounds overriding your interests.\n\n9.9 RIGHTS RELATED TO AUTOMATED DECISION-MAKING:\n  a) You have the right not to be subject to decisions based solely on automated processing that produce legal effects concerning you.\n  b) You may request human intervention in automated decision-making processes.\n  c) You may challenge decisions made through automated processing.\n\n9.10 RIGHT TO WITHDRAW CONSENT:\n  a) Where processing is based on your consent, you have the right to withdraw consent at any time.\n  b) Withdrawal does not affect the lawfulness of processing based on consent before its withdrawal.\n\n9.11 RIGHT TO LODGE A COMPLAINT:\n  a) You have the right to lodge a complaint with the relevant data protection authority in Tanzania.\n  b) We encourage you to contact us first so we can address your concerns directly.\n\n9.12 TO EXERCISE ANY OF THESE RIGHTS:\n  a) Contact us via email at dpo@soko-vibe.com.\n  b) Use the in-app support feature.\n  c) Write to us at our registered address.\n  d) We may require proof of identity before processing your request.\n  e) We will respond to all legitimate requests within 30 days, or within the timeframe required by applicable law.',
+      'pp_section_9_body':
+          '9.1 UNDER THE TANZANIA DATA PROTECTION ACT, 2022, AND APPLICABLE REGULATIONS, YOU HAVE THE FOLLOWING RIGHTS:\n\n9.2 RIGHT TO BE INFORMED:\n  a) You have the right to be informed about the collection and use of your personal data.\n  b) This Policy serves as our privacy notice to you.\n\n9.3 RIGHT OF ACCESS:\n  a) You have the right to access your personal data held by us.\n  b) You may request a copy of your data in a structured, commonly used, and machine-readable format.\n  c) We will respond to access requests within 30 days.\n  d) The first copy is provided free of charge; subsequent copies may incur a reasonable administrative fee.\n\n9.4 RIGHT TO RECTIFICATION:\n  a) You have the right to request correction of inaccurate or incomplete personal data.\n  b) You may update most of your data directly through your account settings.\n  c) We will process correction requests within 15 days.\n\n9.5 RIGHT TO ERASURE ("RIGHT TO BE FORGOTTEN"):\n  a) You have the right to request deletion of your personal data in certain circumstances.\n  b) This right is not absolute and may be limited by legal obligations, pending transactions, or legitimate interests.\n  c) We will process deletion requests within 30 days, subject to verification of your identity.\n\n9.6 RIGHT TO RESTRICT PROCESSING:\n  a) You have the right to request restriction of processing of your personal data in certain circumstances.\n  b) While processing is restricted, we may store your data but not use it.\n\n9.7 RIGHT TO DATA PORTABILITY:\n  a) You have the right to receive your personal data in a structured, commonly used, and machine-readable format.\n  b) You have the right to transmit this data to another controller without hindrance.\n\n9.8 RIGHT TO OBJECT:\n  a) You have the right to object to processing of your personal data for direct marketing purposes at any time.\n  b) You have the right to object to processing based on legitimate interests.\n  c) We will cease processing unless we demonstrate compelling legitimate grounds overriding your interests.\n\n9.9 RIGHTS RELATED TO AUTOMATED DECISION-MAKING:\n  a) You have the right not to be subject to decisions based solely on automated processing that produce legal effects concerning you.\n  b) You may request human intervention in automated decision-making processes.\n  c) You may challenge decisions made through automated processing.\n\n9.10 RIGHT TO WITHDRAW CONSENT:\n  a) Where processing is based on your consent, you have the right to withdraw consent at any time.\n  b) Withdrawal does not affect the lawfulness of processing based on consent before its withdrawal.\n\n9.11 RIGHT TO LODGE A COMPLAINT:\n  a) You have the right to lodge a complaint with the relevant data protection authority in Tanzania.\n  b) We encourage you to contact us first so we can address your concerns directly.\n\n9.12 TO EXERCISE ANY OF THESE RIGHTS:\n  a) Contact us via email at dpo@soko-vibe.com.\n  b) Use the in-app support feature.\n  c) Write to us at our registered address.\n  d) We may require proof of identity before processing your request.\n  e) We will respond to all legitimate requests within 30 days, or within the timeframe required by applicable law.',
       'pp_section_10_title': '10. COOKIES AND TRACKING TECHNOLOGIES',
-      'pp_section_10_body': '10.1 We use the following categories of cookies and tracking technologies:\n  a) Strictly Necessary Cookies: Required for the Platform to function properly. Cannot be disabled.\n  b) Performance Cookies: Collect anonymous usage data for analytics and optimization.\n  c) Functional Cookies: Remember your preferences and settings.\n  d) Targeting/Advertising Cookies: Deliver relevant advertisements and measure ad effectiveness.\n\n10.2 Third-Party Tracking:\n  a) We use analytics services (Firebase Analytics, Google Analytics) that may set their own cookies.\n  b) We use advertising networks that may use cookies to serve targeted ads.\n  c) We are not responsible for the privacy practices of these third parties.\n\n10.3 Your Choices:\n  a) You can control cookies through your device settings and browser preferences.\n  b) Disabling certain cookies may affect the functionality of the Platform.\n  c) You can opt out of targeted advertising through your device advertising settings.',
+      'pp_section_10_body':
+          '10.1 We use the following categories of cookies and tracking technologies:\n  a) Strictly Necessary Cookies: Required for the Platform to function properly. Cannot be disabled.\n  b) Performance Cookies: Collect anonymous usage data for analytics and optimization.\n  c) Functional Cookies: Remember your preferences and settings.\n  d) Targeting/Advertising Cookies: Deliver relevant advertisements and measure ad effectiveness.\n\n10.2 Third-Party Tracking:\n  a) We use analytics services (Firebase Analytics, Google Analytics) that may set their own cookies.\n  b) We use advertising networks that may use cookies to serve targeted ads.\n  c) We are not responsible for the privacy practices of these third parties.\n\n10.3 Your Choices:\n  a) You can control cookies through your device settings and browser preferences.\n  b) Disabling certain cookies may affect the functionality of the Platform.\n  c) You can opt out of targeted advertising through your device advertising settings.',
       'pp_section_11_title': '11. CHILDREN\'S PRIVACY — STRICT RESTRICTIONS',
-      'pp_section_11_body': '11.1 Our Services are STRICTLY PROHIBITED for individuals under the age of 18 (eighteen) years.\n\n11.2 We do not knowingly collect, use, or process personal information from individuals under 18 years of age.\n\n11.3 If we become aware that a person under 18 has provided us with personal data, we will:\n  a) Immediately delete such data from our systems.\n  b) Permanently suspend the associated account.\n  c) Report the incident to relevant authorities if required by law.\n\n11.4 If you believe a child under 18 has provided us with personal data, you must contact us immediately at dpo@soko-vibe.com.\n\n11.5 We reserve the right to verify the age of any user through document verification or other means.\n\n11.6 Any user found to be under 18 or to have falsified their age shall have their account immediately terminated and all data deleted.',
+      'pp_section_11_body':
+          '11.1 Our Services are STRICTLY PROHIBITED for individuals under the age of 18 (eighteen) years.\n\n11.2 We do not knowingly collect, use, or process personal information from individuals under 18 years of age.\n\n11.3 If we become aware that a person under 18 has provided us with personal data, we will:\n  a) Immediately delete such data from our systems.\n  b) Permanently suspend the associated account.\n  c) Report the incident to relevant authorities if required by law.\n\n11.4 If you believe a child under 18 has provided us with personal data, you must contact us immediately at dpo@soko-vibe.com.\n\n11.5 We reserve the right to verify the age of any user through document verification or other means.\n\n11.6 Any user found to be under 18 or to have falsified their age shall have their account immediately terminated and all data deleted.',
       'pp_section_12_title': '12. THIRD-PARTY SERVICES AND LINKS',
-      'pp_section_12_body': '12.1 Our Platform integrates with and links to third-party services, including but not limited to:\n  a) Google Services (Firebase, Google Maps, Google Sign-In, Google Ads, Crashlytics, Performance Monitoring).\n  b) OneSignal (Push Notifications).\n  c) Cloudinary (Image and Video Hosting).\n  d) ClickPesa (Payment Processing).\n  e) Meseji (SMS Gateway).\n  f) Groq AI (AI Assistant Services).\n  g) Social media platforms (Facebook, Instagram, Twitter, WhatsApp).\n\n12.2 These third-party services have their own privacy policies governing the collection, use, and disclosure of your information.\n\n12.3 We STRONGLY ENCOURAGE you to review the privacy policies of these third parties before using their services.\n\n12.4 We are NOT RESPONSIBLE for the privacy practices, data handling, or security of any third-party services.\n\n12.5 Links to external websites or services are provided for your convenience and do not constitute endorsement.',
+      'pp_section_12_body':
+          '12.1 Our Platform integrates with and links to third-party services, including but not limited to:\n  a) Google Services (Firebase, Google Maps, Google Sign-In, Google Ads, Crashlytics, Performance Monitoring).\n  b) OneSignal (Push Notifications).\n  c) Cloudinary (Image and Video Hosting).\n  d) ClickPesa (Payment Processing).\n  e) Meseji (SMS Gateway).\n  f) Groq AI (AI Assistant Services).\n  g) Social media platforms (Facebook, Instagram, Twitter, WhatsApp).\n\n12.2 These third-party services have their own privacy policies governing the collection, use, and disclosure of your information.\n\n12.3 We STRONGLY ENCOURAGE you to review the privacy policies of these third parties before using their services.\n\n12.4 We are NOT RESPONSIBLE for the privacy practices, data handling, or security of any third-party services.\n\n12.5 Links to external websites or services are provided for your convenience and do not constitute endorsement.',
       'pp_section_13_title': '13. MARKETING AND COMMUNICATIONS',
-      'pp_section_13_body': '13.1 By creating an account, you consent to receive the following communications from us:\n  a) Transactional communications (order confirmations, payment receipts, shipping updates, ride confirmations) — these are mandatory and cannot be opted out of.\n  b) Security alerts (password changes, login notifications, suspicious activity alerts) — these are mandatory.\n  c) Service announcements (maintenance notices, policy changes, feature updates) — these are mandatory.\n  d) Marketing and promotional communications (special offers, discounts, new features, events) — these are OPTIONAL.\n\n13.2 You may opt out of marketing communications at any time by:\n  a) Toggling notification preferences in Settings.\n  b) Clicking the "Unsubscribe" link in email communications.\n  c) Contacting our support team.\n\n13.3 Even if you opt out of marketing, you will continue to receive mandatory transactional and security communications.\n\n13.4 We do not use your personal data for marketing purposes without your explicit consent.\n\n13.5 We do not share your personal data with third parties for their own marketing purposes without your explicit consent.',
+      'pp_section_13_body':
+          '13.1 By creating an account, you consent to receive the following communications from us:\n  a) Transactional communications (order confirmations, payment receipts, shipping updates, ride confirmations) — these are mandatory and cannot be opted out of.\n  b) Security alerts (password changes, login notifications, suspicious activity alerts) — these are mandatory.\n  c) Service announcements (maintenance notices, policy changes, feature updates) — these are mandatory.\n  d) Marketing and promotional communications (special offers, discounts, new features, events) — these are OPTIONAL.\n\n13.2 You may opt out of marketing communications at any time by:\n  a) Toggling notification preferences in Settings.\n  b) Clicking the "Unsubscribe" link in email communications.\n  c) Contacting our support team.\n\n13.3 Even if you opt out of marketing, you will continue to receive mandatory transactional and security communications.\n\n13.4 We do not use your personal data for marketing purposes without your explicit consent.\n\n13.5 We do not share your personal data with third parties for their own marketing purposes without your explicit consent.',
       'pp_section_14_title': '14. COMPLAINTS AND DISPUTE RESOLUTION',
-      'pp_section_14_body': '14.1 If you have a complaint or concern about our handling of your personal data, please contact our Data Protection Officer at dpo@soko-vibe.com.\n\n14.2 We will acknowledge receipt of your complaint within 5 business days and provide a substantive response within 30 days.\n\n14.3 If you are dissatisfied with our response, you have the right to lodge a complaint with:\n  a) The Tanzania Data Protection Authority (once established).\n  b) The relevant sector regulator.\n  c) A court of competent jurisdiction in Tanzania.\n\n14.4 Any legal disputes arising from this Policy shall be governed by the laws of the United Republic of Tanzania and subject to the exclusive jurisdiction of the courts of Dar es Salaam, Tanzania.\n\n14.5 Nothing in this Policy limits your statutory rights under applicable data protection laws.',
+      'pp_section_14_body':
+          '14.1 If you have a complaint or concern about our handling of your personal data, please contact our Data Protection Officer at dpo@soko-vibe.com.\n\n14.2 We will acknowledge receipt of your complaint within 5 business days and provide a substantive response within 30 days.\n\n14.3 If you are dissatisfied with our response, you have the right to lodge a complaint with:\n  a) The Tanzania Data Protection Authority (once established).\n  b) The relevant sector regulator.\n  c) A court of competent jurisdiction in Tanzania.\n\n14.4 Any legal disputes arising from this Policy shall be governed by the laws of the United Republic of Tanzania and subject to the exclusive jurisdiction of the courts of Dar es Salaam, Tanzania.\n\n14.5 Nothing in this Policy limits your statutory rights under applicable data protection laws.',
       'pp_section_15_title': '15. DATA PROTECTION OFFICER CONTACT',
-      'pp_section_15_body': '15.1 We have appointed a Data Protection Officer (DPO) to oversee compliance with this Policy and applicable data protection laws.\n\n15.2 You may contact our DPO regarding any matter related to data protection and privacy:\n\n  Data Protection Officer\n  Soko Vibe Limited\n  Email: dpo@soko-vibe.com\n  Phone: +255 7XX XXX XXX\n  Address: Dar es Salaam, Tanzania\n\n  For general inquiries: support@soko-vibe.com\n\n15.3 Please clearly state the nature of your inquiry to ensure prompt handling.',
+      'pp_section_15_body':
+          '15.1 We have appointed a Data Protection Officer (DPO) to oversee compliance with this Policy and applicable data protection laws.\n\n15.2 You may contact our DPO regarding any matter related to data protection and privacy:\n\n  Data Protection Officer\n  Soko Vibe Limited\n  Email: dpo@soko-vibe.com\n  Phone: +255 7XX XXX XXX\n  Address: Dar es Salaam, Tanzania\n\n  For general inquiries: support@soko-vibe.com\n\n15.3 Please clearly state the nature of your inquiry to ensure prompt handling.',
       'pp_section_16_title': '16. CHANGES TO THIS PRIVACY POLICY',
-      'pp_section_16_body': '16.1 We reserve the ABSOLUTE RIGHT to modify, amend, update, or replace this Policy at any time, for any reason, without prior notice.\n\n16.2 Changes become EFFECTIVE IMMEDIATELY upon posting on the Platform.\n\n16.3 For MATERIAL changes, we will make reasonable efforts to notify you via:\n  a) Email to your registered email address.\n  b) In-app notification.\n  c) A prominent notice on the Platform.\n\n16.4 Your continued use of the Platform after any changes constitutes your UNCONDITIONAL ACCEPTANCE of the modified Policy.\n\n16.5 If you do not agree with any changes, your SOLE REMEDY is to immediately stop using the Platform and delete your account.\n\n16.6 It is your RESPONSIBILITY to review this Policy regularly. We recommend checking this page at least once per month.',
+      'pp_section_16_body':
+          '16.1 We reserve the ABSOLUTE RIGHT to modify, amend, update, or replace this Policy at any time, for any reason, without prior notice.\n\n16.2 Changes become EFFECTIVE IMMEDIATELY upon posting on the Platform.\n\n16.3 For MATERIAL changes, we will make reasonable efforts to notify you via:\n  a) Email to your registered email address.\n  b) In-app notification.\n  c) A prominent notice on the Platform.\n\n16.4 Your continued use of the Platform after any changes constitutes your UNCONDITIONAL ACCEPTANCE of the modified Policy.\n\n16.5 If you do not agree with any changes, your SOLE REMEDY is to immediately stop using the Platform and delete your account.\n\n16.6 It is your RESPONSIBILITY to review this Policy regularly. We recommend checking this page at least once per month.',
       'pp_section_17_title': '17. GOVERNING LAW AND JURISDICTION',
-      'pp_section_17_body': '17.1 This Privacy Policy shall be governed by and construed in accordance with the laws of the United Republic of Tanzania, including but not limited to:\n  a) The Tanzania Data Protection Act, 2022.\n  b) The Electronic and Postal Communications Act, 2010.\n  c) The Anti-Money Laundering Act, 2006, as amended.\n  d) The Cybercrimes Act, 2015.\n  e) The Tanzania Communications Regulatory Authority Act, 2003.\n\n17.2 Any dispute arising from this Policy shall be subject to the exclusive jurisdiction of the courts of Dar es Salaam, Tanzania.\n\n17.3 Nothing in this Policy shall limit any legal remedies available to us under applicable law.',
+      'pp_section_17_body':
+          '17.1 This Privacy Policy shall be governed by and construed in accordance with the laws of the United Republic of Tanzania, including but not limited to:\n  a) The Tanzania Data Protection Act, 2022.\n  b) The Electronic and Postal Communications Act, 2010.\n  c) The Anti-Money Laundering Act, 2006, as amended.\n  d) The Cybercrimes Act, 2015.\n  e) The Tanzania Communications Regulatory Authority Act, 2003.\n\n17.2 Any dispute arising from this Policy shall be subject to the exclusive jurisdiction of the courts of Dar es Salaam, Tanzania.\n\n17.3 Nothing in this Policy shall limit any legal remedies available to us under applicable law.',
       'pp_section_18_title': '18. ACKNOWLEDGMENT AND ACCEPTANCE',
-      'pp_section_18_body': '18.1 BY USING THE PLATFORM, YOU EXPLICITLY ACKNOWLEDGE THAT:\n  a) You have read and understood this entire Privacy Policy.\n  b) You consent to the collection, use, processing, and disclosure of your personal data as described herein.\n  c) You agree to the data retention periods specified herein.\n  d) You consent to international data transfers as described herein.\n  e) You acknowledge that this Policy may change without prior notice and you agree to be bound by such changes.\n\n18.2 IF YOU DO NOT AGREE WITH ANY PART OF THIS POLICY, YOU MUST IMMEDIATELY CEASE USING THE PLATFORM AND DELETE YOUR ACCOUNT.\n\n18.3 CONTINUED USE OF THE PLATFORM CONSTITUTES YOUR EXPLICIT ACCEPTANCE OF THIS POLICY IN ITS ENTIRETY.',
+      'pp_section_18_body':
+          '18.1 BY USING THE PLATFORM, YOU EXPLICITLY ACKNOWLEDGE THAT:\n  a) You have read and understood this entire Privacy Policy.\n  b) You consent to the collection, use, processing, and disclosure of your personal data as described herein.\n  c) You agree to the data retention periods specified herein.\n  d) You consent to international data transfers as described herein.\n  e) You acknowledge that this Policy may change without prior notice and you agree to be bound by such changes.\n\n18.2 IF YOU DO NOT AGREE WITH ANY PART OF THIS POLICY, YOU MUST IMMEDIATELY CEASE USING THE PLATFORM AND DELETE YOUR ACCOUNT.\n\n18.3 CONTINUED USE OF THE PLATFORM CONSTITUTES YOUR EXPLICIT ACCEPTANCE OF THIS POLICY IN ITS ENTIRETY.',
       'clickpesa_overview': 'ClickPesa',
       'clickpesa_balance': 'ClickPesa Balance',
       'clickpesa_deposits': 'Deposits (Payments)',
@@ -3849,13 +4115,15 @@ class LocalizationService {
       'platform_balance': 'Platform Balance',
       'pp_footer': '© 2026 Soko Vibe Limited. All rights reserved.',
       'pp_section_pdpa_title': '19. PDPA 2022 COMPLIANCE',
-      'pp_section_pdpa_body': '19.1 Registration: Soko Vibe Limited is registered with the Tanzania Personal Data Protection Commission (PDPC) as a Data Controller under Section 15 of the Personal Data Protection Act, 2022 (PDPA). Registration Number: [Registration Number]. Registration must be renewed every 5 years.\n\n19.2 Data Protection Officer: We have appointed a Data Protection Officer (DPO) under Section 27(3) of the PDPA. Our DPO is responsible for ensuring compliance with the PDPA and its regulations.\n\n19.3 Processing Bases: Our data processing relies on the following legal bases under Section 22 of the PDPA:\n  a) Data Subject Consent (Section 23).\n  b) Contractual Necessity (Section 22(2)(b)).\n  c) Legal Obligation (Section 22(2)(c)).\n  d) Legitimate Interests (Section 22(2)(f)).\n\n19.4 Data Subject Rights: Under Part VI of the PDPA, you have the following rights:\n  a) Right to be informed (Section 33(1)(a)).\n  b) Right of access (Section 33(1)(b)).\n  c) Right to rectification (Section 33(1)(c)).\n  d) Right to erasure ("right to be forgotten") (Section 33(1)(d)).\n  e) Right to restrict processing (Section 33(1)(e)).\n  f) Right to data portability (Section 33(1)(f)).\n  g) Right to object (Section 33(1)(g)).\n  h) Right not to be subject to automated decision-making (Section 33(1)(h)).\n\n19.5 Cross-Border Data Transfers: Under Part V of the PDPA (Sections 31-32), your personal data may be transferred outside Tanzania when necessary for service delivery. We ensure:\n  a) Receiving countries have adequate data protection or are signatories to international agreements.\n  b) Transfers are made under Standard Contractual Clauses.\n  c) Your consent is obtained before any transfer of sensitive data.\n\n19.6 Data Breach Notification: In the event of a data breach that threatens your rights, we are required to notify the PDPC and you under Section 27(5) of the PDPA. Notification will be made within a reasonable time, recommended to be within 72 hours.\n\n19.7 Penalties: Under the PDPA, violations may result in fines of up to TZS 5 billion for organizations, or up to TZS 20 million and/or imprisonment of up to 10 years for individuals.\n\n19.8 Complaints: Your personal data complaints can be directed to:\n  a) Soko Vibe DPO: dpo@soko-vibe.com (within 30 days).\n  b) Tanzania Personal Data Protection Commission (PDPC): helpdesk@pdpc.go.tz.',
+      'pp_section_pdpa_body':
+          '19.1 Registration: Soko Vibe Limited is registered with the Tanzania Personal Data Protection Commission (PDPC) as a Data Controller under Section 15 of the Personal Data Protection Act, 2022 (PDPA). Registration Number: [Registration Number]. Registration must be renewed every 5 years.\n\n19.2 Data Protection Officer: We have appointed a Data Protection Officer (DPO) under Section 27(3) of the PDPA. Our DPO is responsible for ensuring compliance with the PDPA and its regulations.\n\n19.3 Processing Bases: Our data processing relies on the following legal bases under Section 22 of the PDPA:\n  a) Data Subject Consent (Section 23).\n  b) Contractual Necessity (Section 22(2)(b)).\n  c) Legal Obligation (Section 22(2)(c)).\n  d) Legitimate Interests (Section 22(2)(f)).\n\n19.4 Data Subject Rights: Under Part VI of the PDPA, you have the following rights:\n  a) Right to be informed (Section 33(1)(a)).\n  b) Right of access (Section 33(1)(b)).\n  c) Right to rectification (Section 33(1)(c)).\n  d) Right to erasure ("right to be forgotten") (Section 33(1)(d)).\n  e) Right to restrict processing (Section 33(1)(e)).\n  f) Right to data portability (Section 33(1)(f)).\n  g) Right to object (Section 33(1)(g)).\n  h) Right not to be subject to automated decision-making (Section 33(1)(h)).\n\n19.5 Cross-Border Data Transfers: Under Part V of the PDPA (Sections 31-32), your personal data may be transferred outside Tanzania when necessary for service delivery. We ensure:\n  a) Receiving countries have adequate data protection or are signatories to international agreements.\n  b) Transfers are made under Standard Contractual Clauses.\n  c) Your consent is obtained before any transfer of sensitive data.\n\n19.6 Data Breach Notification: In the event of a data breach that threatens your rights, we are required to notify the PDPC and you under Section 27(5) of the PDPA. Notification will be made within a reasonable time, recommended to be within 72 hours.\n\n19.7 Penalties: Under the PDPA, violations may result in fines of up to TZS 5 billion for organizations, or up to TZS 20 million and/or imprisonment of up to 10 years for individuals.\n\n19.8 Complaints: Your personal data complaints can be directed to:\n  a) Soko Vibe DPO: dpo@soko-vibe.com (within 30 days).\n  b) Tanzania Personal Data Protection Commission (PDPC): helpdesk@pdpc.go.tz.',
       'active_orders': 'Active Orders',
       'completed_orders': 'Completed',
       'all_orders': 'All Orders',
       'track_order': 'Track Order',
       'last_updated': 'Updated',
-      'escrow_secure_note': 'Your money is safely held in escrow until you confirm receipt',
+      'escrow_secure_note':
+          'Your money is safely held in escrow until you confirm receipt',
       'live_updates': 'Live updates',
       'awaiting_quotes': 'Awaiting Quotes',
       'needs_action': 'Needs Action',
@@ -3879,11 +4147,13 @@ class LocalizationService {
       'error_loading_transactions': 'Error loading transactions',
       'no_withdrawals': 'No withdrawals yet',
       'account_suspended_title': 'Your Account Has Been Suspended',
-      'account_suspended_message': 'Your account has been suspended. Please contact support for more details.',
+      'account_suspended_message':
+          'Your account has been suspended. Please contact support for more details.',
       'map_location': 'Location',
       'map_you': 'You',
       'my_location': 'My location',
-      'maintenance_underway': 'The app is under maintenance. Please come back later.',
+      'maintenance_underway':
+          'The app is under maintenance. Please come back later.',
       'order_bus': 'Bus',
       'order_plate': 'Plate',
       'order_tracking': 'Tracking',
@@ -3902,15 +4172,17 @@ class LocalizationService {
       'ussd_push_charge_note': 'Charged to the customer on top of MNO fees.',
       'clickpesa_payout_fees': 'ClickPesa Payout Fees',
       'mobile_money_payouts': 'Mobile Money Payouts (M-Pesa, Airtel, Tigo)',
-      'payout_charge_note': 'Charged to the business. Can be passed to the recipient.',
+      'payout_charge_note':
+          'Charged to the business. Can be passed to the recipient.',
       'bank_eft_ach': 'Bank EFT / ACH',
       'bank_eft_ach_flat_fee': 'Flat fee (0 – 20,000,000 TZS)',
       'bank_tiss': 'Bank TISS (TZS)',
       'bank_tiss_flat_fee': 'Flat fee (0 – 1,000,000,000 TZS)',
       'soko_vibe_fees': 'Soko Vibe Fees',
       'platform_commission': 'Platform Commission',
-'charged_per_sale': 'Charged to the buyer at purchase',
-'commission_breakdown_note': 'The 3.5% commission is added to the buyer\'s total; the seller receives full proceeds with no deduction.',
+      'charged_per_sale': 'Charged to the buyer at purchase',
+      'commission_breakdown_note':
+          'The 3.5% commission is added to the buyer\'s total; the seller receives full proceeds with no deduction.',
       'account_channel_setup': 'Account & Channel Setup',
       'account_creation_fee': 'Account Creation (100,000 TZS limit)',
       'kyc_search_fee': 'KYC Search and Onboarding',
@@ -3927,7 +4199,8 @@ class LocalizationService {
       'total_buyer_pays': 'Total Buyer Pays',
       'seller_receives_before_fee': 'Seller Receives (before payout fee)',
       'payout_fee_estimated': 'Payout Fee (estimated)',
-      'checkout_ussd_note': 'At checkout, USSD Push is the only payment method. You will receive a payment prompt on your phone – enter your PIN to complete the payment.',
+      'checkout_ussd_note':
+          'At checkout, USSD Push is the only payment method. You will receive a payment prompt on your phone – enter your PIN to complete the payment.',
       'seller_sets_shipping': 'Seller sets shipping cost',
       'buyer_pays_ussd': 'Buyer pays via USSD Push',
       'funds_held_escrow': 'Funds held securely in escrow',
@@ -3955,10 +4228,12 @@ class LocalizationService {
       'network_error_msg': 'Network error',
       'coins_ads_count': '15 coins × {count} ads',
       'receipt_share_text': 'Soko Vibe Receipt #{orderId}',
-      'order_submitted_to_seller': 'Order submitted to seller. Wait for the seller to provide shipping cost.',
+      'order_submitted_to_seller':
+          'Order submitted to seller. Wait for the seller to provide shipping cost.',
       'commission_3_5': 'Commission (3.5%)',
       'anonymous': 'Anonymous',
-      'checkout_trust_strip': 'Place your order without payment. The seller will give you the shipping cost, then you pay.',
+      'checkout_trust_strip':
+          'Place your order without payment. The seller will give you the shipping cost, then you pay.',
       'failed_to_create_order': 'Failed to create order',
       'share_price_line': 'Price: {price}',
       'add_status': 'Add Status',
@@ -3971,19 +4246,25 @@ class LocalizationService {
       'boost_receipt_product': 'Product: {product}',
       'boost_receipt_amount': 'Amount: {amount}',
       'boost_receipt_type': 'Type: {type}',
-      'phone_already_registered': 'This phone number is already registered. Use a different number or log in to your account.',
-      'email_already_registered': 'This email is already registered. Use a different email or log in to your account.',
+      'phone_already_registered':
+          'This phone number is already registered. Use a different number or log in to your account.',
+      'email_already_registered':
+          'This email is already registered. Use a different email or log in to your account.',
       'accept_terms_prefix': 'I ACCEPT THE ',
       'accept_terms_separator': ' AND ',
-      'kyc_id_image_upload_failed': 'Failed to upload the ID image. Check your connection and try again.',
-      'kyc_selfie_upload_failed': 'Failed to upload your selfie. Check your connection and try again.',
+      'kyc_id_image_upload_failed':
+          'Failed to upload the ID image. Check your connection and try again.',
+      'kyc_selfie_upload_failed':
+          'Failed to upload your selfie. Check your connection and try again.',
       'change_password': 'Change Password',
       'account_selection_subtitle': 'Look for yourself',
-      'transaction_fee_breakdown': 'Fee: -TZS {fee} | Soko Vibe: -TZS {commission}',
+      'transaction_fee_breakdown':
+          'Fee: -TZS {fee} | Soko Vibe: -TZS {commission}',
       'withdrawal_fee_detail': 'Fee: TZS {fee} | {date}',
       'withdrawal_failed_detail': 'Failed: {reason}',
       'admin_note_label': 'Admin: {note}',
-      'broadcast_warning': 'This notification will be sent to ALL app users. Make sure the message is correct.',
+      'broadcast_warning':
+          'This notification will be sent to ALL app users. Make sure the message is correct.',
       'offline_reconnecting': 'No internet — trying to reconnect',
       'escrow_safe_label': 'Your funds are safe in Escrow',
       'access_denied': 'Access denied',
@@ -3993,10 +4274,13 @@ class LocalizationService {
       'activate': 'Activate',
       'ad': 'Ad',
       'ad_required': 'An ad is required to continue',
-      'ai_chat_greeting': "Hi! I'm the Soko Vibe assistant. Ask me anything about our marketplace.",
+      'ai_chat_greeting':
+          "Hi! I'm the Soko Vibe assistant. Ask me anything about our marketplace.",
       'bidhaa_ina_flash_sale': 'This product already has an active flash sale',
-      'broadcast_confirm_body': 'Send this notification to ALL app users?\n\nTitle: {title}\n\nMessage: {body}',
-      'broadcast_result': 'Sent to {totalUsers} users ({pushNotifications} push, {inAppNotifications} in-app)',
+      'broadcast_confirm_body':
+          'Send this notification to ALL app users?\n\nTitle: {title}\n\nMessage: {body}',
+      'broadcast_result':
+          'Sent to {totalUsers} users ({pushNotifications} push, {inAppNotifications} in-app)',
       'broadcast_sent': 'Broadcast sent',
       'browse_products': 'Browse Products',
       'buyer': 'Buyer',
@@ -4004,10 +4288,12 @@ class LocalizationService {
       'confirm_receipt': 'Confirm Receipt',
       'contact_us': 'Contact Us',
       'contact_us_sub': 'Call us or send an email',
-      'otp_security_warning': 'DO NOT SHARE THIS OTP UNTIL YOU RECEIVE & INSPECT YOUR ITEM.',
+      'otp_security_warning':
+          'DO NOT SHARE THIS OTP UNTIL YOU RECEIVE & INSPECT YOUR ITEM.',
       'delivery_otp_label': 'Delivery Verification Code',
       'otp_waiting': 'Waiting for seller to send the code...',
-      'share_otp_with_seller': 'Share this code with the seller to confirm delivery',
+      'share_otp_with_seller':
+          'Share this code with the seller to confirm delivery',
       'otp_copied': 'OTP copied',
       'enter_buyer_otp': 'Enter the verification code from the buyer',
       'otp_attempts_remaining': 'Attempts remaining: {0}',
@@ -4017,7 +4303,8 @@ class LocalizationService {
       'otp_verification_failed': 'Invalid OTP. Please try again.',
       'date': 'Date',
       'deactivate': 'Deactivate',
-      'delete_account_confirm': 'This will permanently delete your account and all its data. This cannot be undone.',
+      'delete_account_confirm':
+          'This will permanently delete your account and all its data. This cannot be undone.',
       'delete_kyc': 'Delete KYC',
       'delete_kyc_confirm': 'Delete this KYC submission permanently?',
       'delete_order_confirm': 'Are you sure you want to delete this order?',
@@ -4026,7 +4313,8 @@ class LocalizationService {
       'delete_orders_title': 'Delete Orders?',
       'delete_selected': 'Delete Selected',
       'deleting_label': 'Deleting...',
-      'delivery_confirmed_msg': 'Delivery confirmed. Thank you for shopping with Soko Vibe!',
+      'delivery_confirmed_msg':
+          'Delivery confirmed. Thank you for shopping with Soko Vibe!',
       'deselect_all': 'Deselect All',
       'discovery': 'Discovery',
       'dismiss': 'Dismiss',
@@ -4035,8 +4323,10 @@ class LocalizationService {
       'export_users': 'Export Users',
       'feature_coming_soon': 'This feature is coming soon',
       'financials': 'Financials',
-      'firestore_index_building': 'The database index is still being built. Please wait a moment and try again.',
-      'firestore_permission_hint': "You don't have permission to see this data. If you're signed in, try refreshing or sign out and back in.",
+      'firestore_index_building':
+          'The database index is still being built. Please wait a moment and try again.',
+      'firestore_permission_hint':
+          "You don't have permission to see this data. If you're signed in, try refreshing or sign out and back in.",
       'flash_sale_ends_in': 'Flash sale ends in {0}',
       'kyc_deleted': 'KYC deleted',
       'kyc_revoked': 'KYC revoked',
@@ -4059,7 +4349,8 @@ class LocalizationService {
       'order_deleted': 'Order deleted',
       'orders_deleted': 'Orders deleted',
       'permission_denied': 'Permission denied',
-      'permission_permanently_denied': "You've permanently denied this permission. Please enable it in Settings to continue.",
+      'permission_permanently_denied':
+          "You've permanently denied this permission. Please enable it in Settings to continue.",
       'please_try_again': 'Please try again',
       'popular': 'Popular',
       'price_high_to_low': 'Price: High to Low',
@@ -4067,7 +4358,8 @@ class LocalizationService {
       'profile_not_found': 'Profile not found',
       'quick_actions': 'Quick Actions',
       'rate_seller_desc': 'How was your experience with {0}?',
-      'rate_seller_trust_prompt': 'Did this seller deliver as promised? Your honest rating helps other buyers.',
+      'rate_seller_trust_prompt':
+          'Did this seller deliver as promised? Your honest rating helps other buyers.',
       'rejection_reason': 'Rejection reason',
       'remove_featured': 'Remove from Featured',
       'report_description_hint': 'Describe what happened...',
@@ -4086,7 +4378,8 @@ class LocalizationService {
       'resolved': 'Resolved',
       'review_hint': 'Write a short review (optional)...',
       'revoke_kyc': 'Revoke KYC',
-      'revoke_kyc_confirm': 'Are you sure you want to revoke this KYC approval?',
+      'revoke_kyc_confirm':
+          'Are you sure you want to revoke this KYC approval?',
       'search_products_users_hint': 'Search products or users',
       'search_users': 'Search users...',
       'select': 'Select',
@@ -4103,7 +4396,8 @@ class LocalizationService {
       'suspended': 'Suspended',
       'support_hours': 'Support Hours',
       'support_hours_value': 'Monday - Friday, 8:00 - 18:00',
-      'thank_you_message': 'Thank you for using Soko Vibe. We hope you enjoy your marketplace experience!',
+      'thank_you_message':
+          'Thank you for using Soko Vibe. We hope you enjoy your marketplace experience!',
       'this_month': 'This month',
       'toggle_admin': 'Toggle Admin',
       'total_earned_label': 'Total Earned',
@@ -4119,6 +4413,8 @@ class LocalizationService {
       'vibe': 'Vibe',
       'waiting_payment': 'Waiting for payment',
       'watch_ad_to_continue': 'Watch an ad to continue for free',
+      'web_shop_subtitle': 'Shop directly in your browser',
+      'web_shop_title': 'Our Web Shop',
       'withdraw_min_amount': 'Minimum withdrawal is TZS 2,001',
       'withdraw_phone_hint': 'M-Pesa phone number',
       'withdrawal_processing': 'Processing...',
@@ -4126,7 +4422,6 @@ class LocalizationService {
     },
     ...zhTranslations,
   };
-
 
   Future<String> getLanguage() async {
     final prefs = await SharedPreferences.getInstance();
@@ -4160,7 +4455,11 @@ class LocalizationService {
     return humanizeKey(key);
   }
 
-  static String trParams(String key, String languageCode, Map<String, String> params) {
+  static String trParams(
+    String key,
+    String languageCode,
+    Map<String, String> params,
+  ) {
     String text = translate(key, languageCode);
     for (final entry in params.entries) {
       text = text.replaceAll('{${entry.key}}', entry.value);
