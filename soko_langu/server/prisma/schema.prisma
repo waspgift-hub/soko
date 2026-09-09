@@ -222,6 +222,7 @@ model ProductMedia {
 
 model Order {
   id                     String    @id @default(uuid()) @db.Uuid
+  legacyFirestoreId      String?   @unique @map("legacy_firestore_id") @db.VarChar(40)
   orderNumber            String    @unique @map("order_number") @db.VarChar(20)
   buyerId                String    @map("buyer_id") @db.Uuid
   sellerId               String    @map("seller_id") @db.Uuid
@@ -229,6 +230,7 @@ model Order {
   productSnapshot        Json      @map("product_snapshot")
   shippingAddressSnapshot Json?   @map("shipping_address_snapshot")
   shippingQuoteSnapshot  Json?     @map("shipping_quote_snapshot")
+  legacySnapshot         Json?     @map("legacy_snapshot")
   productPrice           BigInt    @map("product_price") @db.BigInt
   shippingFee            BigInt    @default(0) @map("shipping_fee") @db.BigInt
   platformCommission     BigInt    @default(0) @map("platform_commission") @db.BigInt
