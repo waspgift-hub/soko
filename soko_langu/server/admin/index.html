@@ -506,6 +506,8 @@ function diagBar() {
 }
 
 // ---------------------------------------------------------------------------
+function diag(d) { _diag.push(d); diagBar(); }
+
 // Firebase Web config (same Firebase project as the mobile app).
 // ---------------------------------------------------------------------------
 firebase.initializeApp({
