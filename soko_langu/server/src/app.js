@@ -108,7 +108,8 @@ app.use((req, res, next) => {
     !path.startsWith('/api') &&
     !path.startsWith('/health') &&
     !path.startsWith('/.well-known') &&
-    !path.startsWith('/admin')
+    !path.startsWith('/admin') &&
+    !path.startsWith('/shop')
   ) {
     return res.redirect(301, path.slice(0, -1) + req.originalUrl.slice(path.length));
   }
