@@ -38,6 +38,7 @@ async function run() {
     const t = doc.data() || {};
     const st = t.status || 'none';
     if (t.type === 'boost') continue; // product-promotion payments, not orders
+    if (t.sourceV2 === true) continue; // mirrored new orders; their truth is Postgres
     if (!MONEY_STATUSES.has(st)) continue;
     firestoreMoneyDocs += 1;
     const legTotal = toBigInt(t.totalAmount);
@@ -69,6 +70,7 @@ async function run() {
   for (const doc of snap.docs) {
     const t = doc.data() || {};
     if (t.type === 'boost') continue;
+    if (t.sourceV2 === true) continue;
     if (!MONEY_STATUSES.has(t.status || 'none')) continue;
     if (!migratedIds.has(doc.id)) missing.push({ id: doc.id, status: t.status });
   }

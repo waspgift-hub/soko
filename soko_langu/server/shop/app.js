@@ -91,6 +91,47 @@ function refreshBadge() {
   if (dot) dot.hidden = n <= 0;
 }
 
+/* ---------- Wishlist (localStorage-backed) ---------- */
+
+let wish = readWish();
+function readWish() { try { return JSON.parse(localStorage.getItem('sv_shop_wish') || '[]'); } catch (_) { return []; } }
+function saveWish() { localStorage.setItem('sv_shop_wish', JSON.stringify(wish)); }
+function wishHas(id) { return wish.indexOf(id) >= 0; }
+function refreshWishBadge() {
+  const b = document.getElementById('wishBadge');
+  if (b) { b.textContent = String(wish.length); b.hidden = wish.length === 0; }
+}
+function toggleWish(id) {
+  const k = wish.indexOf(id);
+  const added = k < 0;
+  if (added) wish.push(id); else wish.splice(k, 1);
+  saveWish();
+  refreshWishBadge();
+  toast(added ? '✔ ' + t('wish_saved') : '✕ ' + t('wish_removed'));
+  return added;
+}
+
+function fallbackCopy(text, done) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); done(); } catch (_) {}
+  document.body.removeChild(ta);
+}
+
+/* ---------- Guest checkout context ---------- */
+
+function guestCtx() {
+  try { const g = JSON.parse(localStorage.getItem('sv_shop_guest') || 'null'); return (g && g.buyerId) ? g : null; } catch (_) { return null; }
+}
+function setGuest(g) {
+  if (g && g.buyerId) localStorage.setItem('sv_shop_guest', JSON.stringify(g));
+  else localStorage.removeItem('sv_shop_guest');
+}
+
 function toast(msg, ms) {
   toastEl.textContent = msg;
   toastEl.classList.add('show');
@@ -117,7 +158,11 @@ function apiHeaders(token) {
 async function apiGet(path) {
   const user = AUTH.currentUser;
   const token = user ? await user.getIdToken() : null;
-  const res = await fetch(path, { headers: apiHeaders(token) });
+  const g = guestCtx();
+  const qs = (!user && g)
+    ? (path.indexOf('?') >= 0 ? '&' : '?') + 'buyerId=' + encodeURIComponent(g.buyerId) + '&phone=' + encodeURIComponent(g.phone || '')
+    : '';
+  const res = await fetch(path + qs, { headers: apiHeaders(token) });
   let data = {};
   try { data = await res.json(); } catch (_) {}
   if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
@@ -189,6 +234,7 @@ function norm(doc) {
     rating: Number(d.rating) || 0,
     reviewCount: Number(d.reviewCount) || 0,
     soldCount: Number(d.soldCount) || 0,
+    sellerKycApproved: !!d.sellerKycApproved,
     createdAt: d.createdAt,
   };
 }
@@ -197,6 +243,20 @@ function boosted(p) {
   if (p.isBoosted) {
     const until = p.boostedUntil && p.boostedUntil.toDate ? p.boostedUntil.toDate() : (p.boostedUntil ? new Date(p.boostedUntil) : null);
     if (!until || until > new Date()) return p.boostTier || 'gold';
+  }
+  return null;
+}
+
+function featured(p) {
+  if (!p.isFeatured) return false;
+  const until = p.featuredUntil && p.featuredUntil.toDate ? p.featuredUntil.toDate() : (p.featuredUntil ? new Date(p.featuredUntil) : null);
+  return !until || until > new Date();
+}
+
+function discount(p) {
+  if (p.isWholesale && p.wholesaleTiers && p.wholesaleTiers.length) {
+    const tier = Number(p.wholesaleTiers[0].pricePerUnit) || 0;
+    if (tier > 0 && tier < p.price) return Math.round((1 - tier / p.price) * 100);
   }
   return null;
 }
@@ -248,35 +308,42 @@ const SELLER_SEAL = '<span class="vbadge"><svg width="9" height="9" viewBox="0 0
 function cardHtml(p) {
   const img = p.images[0];
   const bo = boosted(p);
+  const ft = featured(p);
+  const dc = discount(p);
   const soldout = p.stock <= 0;
-  const flag = soldout
-    ? '<span class="flag sold">' + esc(t('out_stock')) + '</span>'
-    : (bo ? '<span class="flag boost">' + esc(bo) + '</span>' : '');
-  const price = '<span class="pr">' + fmtTZS(p.price)
-    + (p.isWholesale && p.wholesaleTiers && p.wholesaleTiers.length ? '<span class="muted">' + fmtTZS(p.wholesaleTiers[0].pricePerUnit) + '</span>' : '')
-    + '</span>';
+  const flag = (ft ? '<span class="flag feat"><svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2l2.9 6.26L21 9.27l-4.7 4.46 1.2 6.77L12 17.4l-5.5 3.1 1.2-6.77L3 9.27l6.1-1.01z"/></svg>' + esc(t('feat_until')) + '</span>' : '')
+    + (bo ? '<span class="flag boost">' + esc(bo) + '</span>' : '');
+  const dcHtml = dc ? '<span class="disc">−' + dc + '%</span>' : '';
+  const soldov = soldout ? '<div class="sold-ov">' + esc(t('soldout_ov')) + '</div>' : '';
+  const whstruck = p.isWholesale && p.wholesaleTiers && p.wholesaleTiers.length
+    ? '<span class="muted">' + fmtTZS(p.wholesaleTiers[0].pricePerUnit) + '</span>' : '';
+  const price = '<span class="pr">' + fmtTZS(p.price) + whstruck + '</span>';
+  const verified = p.sellerKycApproved ? '<span class="verif" title="Muuzaji aliyethibitishwa (KYC)"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>' : '';
+  const gnew = (p.condition || 'new') === 'new' ? '<span class="tag-new">· ' + esc(t('cond_new')) + '</span>' : '';
+  const starsHtml = p.rating > 0
+    ? '<span class="stars" title="' + p.rating + ' / 5">★ <b>' + Number(p.rating).toFixed(1) + '</b><b class="sc">(' + (p.reviewCount || 0) + ')</b></span>'
+    : '<span class="stars mut">★</span>';
   const foot = soldout
     ? '<span class="soldnote">' + esc(t('out_stock')) + '</span>'
     : '<button class="q-btn q-add" data-act="qaddcart" data-p="' + encodeURIComponent(p.id) + '">'
       + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>'
       + esc(t('add_cart')) + '</button>'
       + '<button class="q-btn q-buy" data-act="qbuynow" data-p="' + encodeURIComponent(p.id) + '">' + esc(t('buy_now')) + '</button>';
+  const favCls = wishHas(p.id) ? ' fav onfav' : ' fav';
   return '<div class="card" data-act="openprod" data-p="' + encodeURIComponent(p.id) + '" role="link" tabindex="0" aria-label="' + esc(p.name) + '">'
-    + '<div class="thumb">' + flag
-    + '<button class="fav" data-act="fav" data-p="' + encodeURIComponent(p.id) + '" aria-label="Penda" type="button">'
+    + '<div class="thumb">' + flag + dcHtml
+    + '<button class="' + favCls + '" data-act="fav" data-p="' + encodeURIComponent(p.id) + '" aria-label="' + esc(t('nav_wish')) + '" type="button">'
     + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>'
     + (img
       ? '<img loading="lazy" src="' + esc(img) + '" alt="' + esc(p.name) + '" onerror="this.parentElement.classList.add(\'badimg\');this.remove()">'
       : '<div class="ph">SOKO</div>')
+    + soldov
     + '</div>'
     + '<div class="body">'
     + '<span class="cat">' + esc(p.category) + '</span>'
-    + '<span class="nm">' + esc(p.name) + '</span>'
+    + '<span class="nm">' + esc(p.name) + verified + gnew + '</span>'
     + price
-    + '<div class="meta">'
-    + '<span class="loc"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>' + esc(p.location || 'Tanzania') + '</span>'
-    + (p.rating > 0 ? stars(p) : '<span>—</span>')
-    + '</div>'
+    + '<div class="meta">' + starsHtml + '<span class="soldct">' + (p.soldCount || 0) + ' ' + esc(t('sold')) + '</span></div>'
     + '<div class="foot">' + foot + '</div>'
     + '</div></div>';
 }
@@ -641,6 +708,8 @@ async function renderProduct(id) {
     + '<span class="crumb">' + esc(p.category) + (p.subcategory ? ' / ' + esc(p.subcategory) : '') + '</span>'
     + '<h1>' + esc(p.name) + '</h1>'
     + '<div class="rating-line">' + (p.rating > 0 ? stars(p, '14px') : '<span>Hakuna tathmini</span>')
+    + '<span class="section-muted">' + (p.soldCount || 0) + ' ' + esc(t('sold')) + '</span>'
+    + (featured(p) ? '<span class="tag feat-tag">★ ' + esc(t('feat_until')) + '</span>' : '')
     + '<span class="loc"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>' + esc(p.location || 'Tanzania') + (p.district ? ' · ' + esc(p.district) : '') + '</span></div>'
     + '<div class="price" id="priceNow">' + fmtTZS(p.price) + '</div>'
     + '<div class="tags">' + stockTxt
@@ -653,13 +722,15 @@ async function renderProduct(id) {
     + '<div class="stepper"><button type="button" data-act="qminus" aria-label="-">−</button><span class="n" id="qtyN">1</span><button type="button" data-act="qplus" aria-label="+">+</button></div>'
     + '<span class="section-muted" id="stockNote">' + (soldout ? t('out_stock') : (p.maxOrder ? 'max ' + p.maxOrder : '')) + '</span></div>'
     + '<div class="rowbtns">'
+    + '<button class="icon-btn wish' + (wishHas(p.id) ? ' onfav' : '') + '" data-act="wish" data-p="' + encodeURIComponent(p.id) + '" title="' + esc(t('nav_wish')) + '" aria-label="' + esc(t('nav_wish')) + '">'
+    + '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>'
     + '<button class="btn-dark" data-act="buynow"' + (soldout ? ' disabled' : '') + '>' + t('buy_now') + '</button>'
     + '<button class="icon-btn" data-act="addcart" title="' + esc(t('add_cart')) + '"' + (soldout ? ' disabled' : '') + ' aria-label="' + esc(t('add_cart')) + '">'
     + '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg></button>'
     + '</div>'
     + '<div class="seller-card">'
     + '<div class="who"><div class="avatar">' + esc((p.sellerName || 'S').slice(0, 1).toUpperCase()) + '</div>'
-    + '<div style="flex:1"><div class="nm">' + esc(p.sellerName) + ' ' + SELLER_SEAL + '</div>'
+    + '<div style="flex:1"><div class="nm">' + esc(p.sellerName) + (p.sellerKycApproved ? ' ' + SELLER_SEAL : '') + '</div>'
     + '<div class="loc">' + esc(p.location || 'Tanzania') + '</div></div></div>'
     + (p.sellerPhone ? '<a class="btn-wa btn-block" href="' + waLink(p.sellerPhone, 'Habari, ninauliza kuhusu ' + p.name + '.') + '" target="_blank" rel="noopener">'
       + '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>'
@@ -668,7 +739,15 @@ async function renderProduct(id) {
     + '<div class="desc"><h3>' + t('description') + '</h3><p>' + esc(p.description) + '</p></div>'
     + tiers
     + (attrs ? '<div class="attrs mt24"><h3>' + t('attributes') + '</h3><table>' + attrs + '</table></div>' : '')
-    + '</div></div></div>';
+    + '<div class="share-row">'
+    + '<a class="btn-outline" href="' + shareWa(p) + '" target="_blank" rel="noopener">'
+    + '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>'
+    + esc(t('share')) + '</a>'
+    + '<button class="btn-outline" data-act="copylink" data-p="' + encodeURIComponent(p.id) + '" type="button">' + esc(t('copy_link')) + '</button>'
+    + '</div>'
+    + '</div></div>'
+    + '<div class="reviews" id="revHost" style="max-width:720px;margin:26px auto 0"><div class="skel" style="height:120px"></div></div>'
+    + '</div>';
 
   let sel = { qty: 1, variantId: null, adj: 0, vstock: p.stock };
   window.__pCtx = { p: p, sel: sel };
@@ -711,6 +790,72 @@ async function renderProduct(id) {
       if (m && src) m.src = src;
     }
   };
+  loadReviews(p.id, p.sellerId);
+}
+
+function shareWa(p) {
+  const text = (p.name || '') + ' — ' + fmtTZS(p.price) + ' | Soko Vibe Duka: ' + location.href.split('#')[0] + '#/p/' + encodeURIComponent(p.id);
+  return 'https://wa.me/?text=' + encodeURIComponent(text);
+}
+
+function starRow(n) {
+  let s = '';
+  for (let i = 1; i <= 5; i++) s += i <= n ? '★' : '☆';
+  return s;
+}
+
+function revHtml(r) {
+  const name = r.userName || 'Mteja';
+  return '<div class="rev">'
+    + '<div class="avatar">' + esc(String(name).slice(0, 1).toUpperCase()) + '</div>'
+    + '<div class="rbody"><div class="rtop"><b>' + esc(name) + '</b>'
+    + '<span class="stars">' + starRow(Math.round(Number(r.rating) || 0)) + '</span>'
+    + '<time>' + ts2date(r.createdAt) + '</time></div>'
+    + (r.comment ? '<p>' + esc(r.comment) + '</p>' : '')
+    + (r.sellerReply ? '<div class="reply"><b>' + esc(t('seller')) + ':</b> ' + esc(r.sellerReply) + '</div>' : '')
+    + '</div></div>';
+}
+
+function reviewFormHtml(productId, sellerId) {
+  const opts = [5, 4, 3, 2, 1].map((v) => '<button type="button" class="rv-star' + (v === 5 ? ' on' : '') + '" data-act="rvstar" data-v="' + v + '" aria-label="' + v + ' ★">★</button>').join('');
+  return '<div class="rev-form" id="revForm">'
+    + '<h4>' + t('write_review') + '</h4>'
+    + '<div class="rv-stars" id="rvStars">' + opts + '</div>'
+    + '<textarea id="revComment" rows="2" maxlength="500" placeholder="' + esc(t('your_comment')) + '"></textarea>'
+    + '<button class="btn-dark" data-act="postreview" data-p="' + encodeURIComponent(productId) + '" data-s="' + encodeURIComponent(sellerId) + '">' + t('submit_review') + '</button>'
+    + '</div>';
+}
+
+async function loadReviews(productId, sellerId) {
+  const host = document.getElementById('revHost');
+  if (!host) return;
+  let list = [];
+  try {
+    const snap = await DB.collection('reviews').where('productId', '==', productId).orderBy('createdAt', 'desc').limit(12).get();
+    list = snap.docs.map((d) => d.data());
+  } catch (_) { /* rules or transient — show empty block */ }
+  const avg = list.length ? Math.round((list.reduce((s, r) => s + (Number(r.rating) || 0), 0) / list.length) * 10) / 10 : 0;
+  const user = AUTH.currentUser;
+  const canReview = user && user.uid !== sellerId;
+  host.innerHTML = '<h3>' + t('reviews') + (list.length ? ' <small>(' + list.length + ')</small>' : '') + '</h3>'
+    + (list.length ? '<div class="rev-avg"><b>' + avg.toFixed(1) + '</b><span class="stars">' + starRow(Math.round(avg)) + '</span>'
+      + '<span class="muted">' + list.length + ' ' + esc(t('reviews')) + '</span></div>' : '')
+    + (list.length ? '<div class="rev-list">' + list.map(revHtml).join('') + '</div>' : '<p class="muted">' + esc(t('no_reviews')) + '</p>')
+    + (canReview ? reviewFormHtml(productId, sellerId) : '');
+}
+
+// Product aggregate rating is recomputed client-side after a review — the
+// Firestore rules allow any signed-in user to touch only rating/reviewCount.
+async function recomputeProductRating(productId) {
+  try {
+    const snap = await DB.collection('reviews').where('productId', '==', productId).get();
+    const rs = snap.docs.map((d) => Number(d.data().rating) || 0);
+    if (!rs.length) return;
+    const avg = Math.round((rs.reduce((a, b) => a + b, 0) / rs.length) * 10) / 10;
+    await DB.collection('products').doc(productId).update({ rating: avg, reviewCount: rs.length });
+    const pc = productCache[productId];
+    if (pc) { pc.rating = avg; pc.reviewCount = rs.length; }
+  } catch (_) { /* non-critical */ }
 }
 
 function addToCart(p, sel) {
@@ -801,28 +946,58 @@ function checkoutNextLine() {
   location.hash = '#/checkout?p=' + encodeURIComponent(first.p) + '&q=' + first.q + (first.v ? '&v=' + encodeURIComponent(first.v) : '');
 }
 
+/* ---------- Wishlist page ---------- */
+
+async function renderWishlist() {
+  setLang();
+  setHero(false);
+  view.innerHTML = '<div class="container-wide"><div class="headline-row"><a class="mini-link" href="#/">← ' + t('back') + '</a>'
+    + '<span style="font-family:var(--font-display);font-weight:700;color:var(--ink);font-size:16px">' + t('wish_title') + '</span></div>'
+    + '<p class="muted" style="margin:4px 0 16px">' + esc(t('wish_hint')) + '</p>'
+    + '<div class="grid" id="wishGrid"><div class="skel" style="height:220px"></div></div></div>';
+  const host = document.getElementById('wishGrid');
+  if (!host) return;
+  const ids = wish.slice();
+  if (!ids.length) { host.innerHTML = emptyHtml(t('wish_empty'), '', t('home_browse')); return; }
+  const prods = (await Promise.all(ids.map(getProduct))).filter(Boolean);
+  host.innerHTML = prods.length ? prods.map(cardHtml).join('') : emptyHtml(t('wish_empty'), '', t('home_browse'));
+}
+
 /* ---------- Orders ---------- */
 
 function renderOrders() {
   setLang();
   setHero(false);
   const user = AUTH.currentUser;
-  if (!user) {
+  const g = guestCtx();
+  if (!user && !g) {
     view.innerHTML = '<div class="container-wide">' + emptyHtml(t('need_auth'), '', t('nav_signin')).replace('#/', '#/account') + '</div>';
     return;
   }
   view.innerHTML = '<div class="container-wide"><div class="headline-row"><a class="mini-link" href="#/account">← ' + t('back') + '</a>'
     + '<span style="font-family:var(--font-display);font-weight:700;color:var(--ink);font-size:16px">' + t('orders_my') + '</span></div>'
+    + (g && !user ? '<div class="guest-box slim"><span>' + esc(t('guest_name')) + ': ' + esc(g.name || '') + ' · ' + esc(g.phone || '') + '</span></div>' : '')
     + '<div class="order-list"><div class="skel" style="height:74px"></div><div class="skel" style="height:74px"></div></div></div>';
   const host = $('.order-list');
-  Promise.all([
-    DB.collection('orders').where('buyerId', '==', user.uid).limit(50).get().catch(() => null),
-  ]).then(([snap]) => {
+  if (user) {
+    Promise.all([
+      DB.collection('orders').where('buyerId', '==', user.uid).limit(50).get().catch(() => null),
+    ]).then(([snap]) => {
+      if (!host) return;
+      if (!snap) { host.innerHTML = emptyHtml(t('err_generic'), '', t('home_browse')); return; }
+      const orders = snap.docs.map((d) => d.data()).sort((a, b) => tsMillis(b.createdAt) - tsMillis(a.createdAt));
+      if (!orders.length) { host.innerHTML = emptyHtml(t('my_orders_empty'), '', t('home_browse')); return; }
+      host.innerHTML = orders.map(orderHtml).join('');
+    });
+    return;
+  }
+  apiGet('/api/orders/guest/list').then((data) => {
     if (!host) return;
-    if (!snap) { host.innerHTML = emptyHtml(t('err_generic'), '', t('home_browse')); return; }
-    const orders = snap.docs.map((d) => d.data()).sort((a, b) => tsMillis(b.createdAt) - tsMillis(a.createdAt));
+    const orders = (data && data.data) || [];
     if (!orders.length) { host.innerHTML = emptyHtml(t('my_orders_empty'), '', t('home_browse')); return; }
     host.innerHTML = orders.map(orderHtml).join('');
+  }).catch(() => {
+    if (host) host.innerHTML = emptyHtml(t('err_generic'), '', t('home_browse'));
   });
 }
 
@@ -851,7 +1026,17 @@ async function renderOrderDetail(id) {
   view.innerHTML = '<div class="container-wide"><div class="headline-row"><a class="mini-link" href="#/orders">← ' + t('back') + '</a>'
     + '<span style="font-family:var(--font-display);font-weight:700;color:var(--ink);font-size:16px">Oda #' + esc(String(id).slice(0, 10)) + '</span></div>'
     + '<div class="skel" style="height:200px"></div></div>';
-  if (!user) return;
+  if (!user) {
+    if (!guestCtx()) return;
+    try {
+      const data = await apiGet('/api/orders/guest/list');
+      const list = (data && data.data) || [];
+      const found = list.find((o) => String(o.orderId) === String(id) || orderSlug(o.orderId) === orderSlug(id));
+      if (found) { view.innerHTML = guestOrderHtml(found, id); return; }
+    } catch (_) {}
+    view.innerHTML = '<div class="container-wide">' + emptyHtml(t('empty_filter'), '', t('home_browse')) + '</div>';
+    return;
+  }
   let order = null;
   try {
     const ref = DB.collection('orders').doc(id);
@@ -907,6 +1092,41 @@ async function renderOrderDetail(id) {
 
 /* ---------- Account ---------- */
 
+function guestOrderHtml(o, id) {
+  const st = o.status || 'pending';
+  const pill = PAY_STATES.has(st) ? 'done' : (BAD_STATES.has(st) ? 'bad' : 'wait');
+  const tl = SV_STATUS_ORDER.map((s, i) => {
+    const idx = SV_STATUS_ORDER.indexOf(st);
+    const done = (idx >= 0 && i < idx) || (s === st) || (PAY_STATES.has(s) && PAY_STATES.has(st));
+    return '<div class="st' + (done ? ' done' : '') + '"><span class="tick">✓</span>' + esc(SV_T[lang].order_statuses[s] || s) + '</div>';
+  }).join('');
+  const addr = [o.region, o.district, o.ward, o.street].filter(Boolean).join(', ');
+  return '<div class="container-wide"><div class="order-detail">'
+    + '<div class="od-head"><h2>' + t('orders_my') + '</h2>'
+    + '<span class="pill ' + pill + '">' + esc(SV_T[lang].order_statuses[st] || st) + '</span></div>'
+    + '<div class="card-block"><h3>' + t('cart_checkout') + '</h3>'
+    + '<div class="line-item"><div class="thumb">' + (o.productImage ? '<img src="' + esc(o.productImage) + '" alt="" onerror="this.remove()">' : '') + '</div>'
+    + '<div class="mid"><div class="nm">' + esc(o.productName || 'Agizo') + '</div>'
+    + '<div class="pr">' + fmtTZS(o.unitPrice) + ' × ' + (o.quantity || 1) + '</div></div>'
+    + '<div style="font-family:var(--font-mono);font-weight:700;color:var(--ink)">' + fmtTZS(o.totalAmount) + '</div></div>'
+    + '<div class="sum-row"><span>Namba ya oda</span><span class="order-no">' + esc(String(o.orderId || id)) + '</span></div>'
+    + '<div class="sum-row"><span>Tarehe</span><span>' + ts2date(o.createdAt) + '</span></div>'
+    + (addr ? '<div class="sum-row"><span>Anwani</span><span>' + esc(addr) + '</span></div>' : '')
+    + '<div class="sum-row"><span>Malipo</span><span style="color:var(--good)">' + t('trust_clickpesa') + ' · Escrow</span></div>'
+    + '</div>'
+    + '<div class="card-block"><h3>' + t('status_label') + '</h3><div class="status-timeline" style="max-width:none">' + tl + '</div>'
+    + '<div class="sec-note" style="max-width:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 3.5V11c0 5-3.4 8.8-8 11-4.6-2.2-8-6-8-11V5.5z"/><path d="M9 12l2 2 4-4"/></svg>'
+    + '<span>' + t('escrow_note') + '</span></div></div>'
+    + (o.sellerName ? '<div class="card-block"><h3>' + t('seller') + '</h3>'
+      + '<div class="seller-card" style="margin:0"><div class="who"><div class="avatar">' + esc((o.sellerName || 'S').slice(0, 1).toUpperCase()) + '</div>'
+      + '<div style="flex:1"><div class="nm">' + esc(o.sellerName) + '</div>'
+      + '<div class="loc">' + esc(o.region || 'Tanzania') + '</div></div></div></div></div>' : '')
+    + '<a class="mini-link" style="display:inline-block;margin-top:8px" href="#/orders">← ' + t('back') + '</a>'
+    + '</div></div></div>';
+}
+
+/* ---------- Account ---------- */
+
 function renderAccount() {
   setLang();
   setHero(false);
@@ -923,6 +1143,7 @@ function renderAccount() {
     + '<div class="nm">' + esc(user.displayName || 'Soko Vibe') + '</div>'
     + '<div class="em">' + esc(user.email || '') + '</div>'
     + '<a class="btn-wa btn-block" href="https://wa.me/255693273241?text=' + encodeURIComponent('Nahitaji msaada kwenye Soko Vibe') + '" target="_blank" rel="noopener">WhatsApp Msaada</a>'
+    + '<a class="btn-outline btn-block" href="#/seller">' + esc(t('nav_seller_page')) + '</a>'
     + '<button class="btn-outline btn-block" data-act="signout">' + t('signout') + '</button>'
     + '</div>'
     + '<div><div class="tabs">'
@@ -974,6 +1195,7 @@ function renderAuthForm(mode) {
     + (authMode === 'signup' ? '<div class="field"><label>' + t('name') + '</label><input id="aName"></div>' : '')
     + '<div class="field"><label>' + t('email') + '</label><input id="aEmail" type="email" autocomplete="email"></div>'
     + (authMode === 'signup' ? '<div class="field"><label>' + t('phone') + '</label><input id="aPhone" placeholder="+255 7xx xxx xxx"></div>' : '')
+    + (authMode === 'signup' ? '<label class="chk"><input type="checkbox" id="aIsSeller"> <span>' + esc(t('sell_signup')) + '</span></label>' : '')
     + '<div class="field"><label>' + t('password') + '</label><input id="aPass" type="password" autocomplete="current-password"></div>'
     + '<button class="btn-dark btn-block" id="authBtn">' + (authMode === 'signin' ? t('submit_signin') : t('submit_signup')) + '</button>'
     + '<div class="auth-switch">' + (authMode === 'signin'
@@ -994,15 +1216,19 @@ function renderAuthForm(mode) {
         const phone = e164(document.getElementById('aPhone').value);
         const cred = await AUTH.createUserWithEmailAndPassword(email, pass);
         if (name) await cred.user.updateProfile({ displayName: name });
-        await DB.collection('users').doc(cred.user.uid).set({
+        const isSeller = !!(document.getElementById('aIsSeller') && document.getElementById('aIsSeller').checked);
+        const uDoc = {
           name: name || email.split('@')[0],
           email: email,
           phone: phone,
           isAdmin: false,
           isSuspended: false,
+          isSeller: isSeller,
           sellerBalance: 0,
           createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        });
+        };
+        if (isSeller) uDoc.sellerName = name || email.split('@')[0];
+        await DB.collection('users').doc(cred.user.uid).set(uDoc);
       }
       toast('✔ ' + (authMode === 'signin' ? t('submit_signin') : t('submit_signup')));
       refreshChip();
@@ -1047,23 +1273,26 @@ async function renderCheckout(id, qty, variantId) {
   setLang();
   setHero(false);
   const user = AUTH.currentUser;
-  if (!user) {
-    renderAuthForm('signin');
-    toast(t('need_auth'));
-    return;
-  }
   view.innerHTML = '<div class="container-wide"><div class="skel" style="height:480px;margin-top:18px"></div></div>';
   const p = await getProduct(id);
   if (!p) { view.innerHTML = '<div class="container-wide">' + emptyHtml(t('empty_filter'), '', t('home_browse')) + '</div>'; return; }
   const { unit, lineTotal } = checkoutMeta(p, qty, variantId);
   const regions = SV_REGIONS.map((r) => '<option value="' + esc(r) + '">' + esc(r) + '</option>').join('');
+  const g = guestCtx();
+  const guestName = g ? esc(g.name || '') : '';
+  const guestHtml = !user
+    ? '<div class="guest-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'
+      + '<div><b>' + t('nav_signin') + ' au nunua bila akaunti</b><span>' + t('guest_note') + '</span></div></div>'
+      + '<div class="field"><label>' + t('guest_name') + '</label><input id="ckName" value="' + guestName + '"></div>'
+    : '';
   view.innerHTML = '<div class="container-wide" style="max-width:940px;margin:0 auto;padding-top:18px">'
     + '<div class="headline-row"><a class="mini-link" href="#/p/' + encodeURIComponent(p.id) + '">← ' + t('back') + '</a>'
     + '<span style="font-family:var(--font-display);font-weight:700;color:var(--ink);font-size:16px">' + t('checkout_title') + '</span></div>'
     + stepsBar(1)
     + '<div class="ck-grid">'
     + '<div class="form-card"><h2>' + t('addr_heading') + '</h2>'
-    + '<div class="field"><label>' + t('phone') + '</label><input id="ckPhone" value="' + esc(user.phoneNumber || '') + '" placeholder="+255 7xx xxx xxx"></div>'
+    + guestHtml
+    + '<div class="field"><label>' + t('phone') + '</label><input id="ckPhone" value="' + esc(user ? (user.phoneNumber || '') : (g ? g.phone : '')) + '" placeholder="+255 7xx xxx xxx"></div>'
     + '<div class="form-row">'
     + '<div class="field"><label>' + t('region') + '</label><select id="ckRegion"><option value="">—</option>' + regions + '</select></div>'
     + '<div class="field"><label>' + t('district') + '</label><select id="ckDistrict"><option value="">—</option></select></div>'
@@ -1099,7 +1328,6 @@ async function renderCheckout(id, qty, variantId) {
 
 async function placeOrder(p, qty, variantId, lineTotal, unit) {
   const user = AUTH.currentUser;
-  if (!user) return;
   const phone = e164(document.getElementById('ckPhone').value);
   const region = document.getElementById('ckRegion').value;
   const district = document.getElementById('ckDistrict').value;
@@ -1107,13 +1335,16 @@ async function placeOrder(p, qty, variantId, lineTotal, unit) {
   const street = document.getElementById('ckStreet').value.trim();
   const landmarks = document.getElementById('ckLandmarks').value.trim();
   const btn = document.getElementById('ckBtn');
+  const nameEl = document.getElementById('ckName');
+  const name = (nameEl ? nameEl.value.trim() : '') || (user && user.displayName) || '';
   if (!phone || !region || !district || !street) { toast('Jaza namba ya simu, mkoa, wilaya na mtaa.'); return; }
+  if (!user && !name) { toast(t('need_name_phone')); return; }
   btn.disabled = true;
   btn.textContent = t('processing');
   try {
     const created = await apiPost('/api/orders/create', {
-      buyerId: user.uid,
-      buyerName: user.displayName || '',
+      buyerId: user ? user.uid : undefined,
+      buyerName: name,
       buyerPhone: phone,
       sellerId: p.sellerId,
       sellerName: p.sellerName,
@@ -1135,6 +1366,7 @@ async function placeOrder(p, qty, variantId, lineTotal, unit) {
     });
     if (!created || !created.success || !created.order || !created.order.orderId) throw new Error('Order creation failed');
     const orderId = created.order.orderId;
+    if (!user && created.order.buyerId) setGuest({ buyerId: created.order.buyerId, phone: phone, name: name });
     localStorage.removeItem('sv_shop_cart');
     cart = readCart();
     refreshBadge();
@@ -1177,6 +1409,7 @@ async function initPay(p, qty, variantId, lineTotal, unit, orderId, phone, user)
   if (retryBtn) retryBtn.style.display = 'none';
   if (state) state.textContent = t('pay_status_pending') + '…';
   try {
+    const g = guestCtx();
     const data = await apiPost('/api/create-marketplace-payment-link', {
       productPrice: lineTotal,
       productName: p.name,
@@ -1185,8 +1418,8 @@ async function initPay(p, qty, variantId, lineTotal, unit, orderId, phone, user)
       sellerName: p.sellerName,
       email: (user && user.email) || '',
       phone: phone,
-      buyerId: user.uid,
-      buyerName: user.displayName || '',
+      buyerId: (user ? user.uid : (g && g.buyerId)) || undefined,
+      buyerName: (user ? (user.displayName || '') : (g && g.name)) || '',
       deliveryType: 'local',
       paymentMethod: 'ussd_push',
       shippingCost: 0,
@@ -1248,6 +1481,263 @@ function finishPay(st, ok) {
   }
 }
 
+/* ---------- Seller dashboard ---------- */
+
+async function renderSellerPage(tab) {
+  setLang();
+  setHero(false);
+  const user = AUTH.currentUser;
+  if (!user) { renderAuthForm('signin'); toast(t('need_auth')); return; }
+  view.innerHTML = '<div class="container-wide"><div class="skel" style="height:300px"></div></div>';
+  let u = {};
+  try {
+    const snap = await DB.collection('users').doc(user.uid).get();
+    if (snap.exists) u = snap.data();
+  } catch (_) {}
+  const isSeller = !!u.isSeller;
+  const bal = Number(u.sellerBalance) || 0;
+  const name = u.sellerName || u.name || user.displayName || 'Soko Vibe';
+  const tabs = ['overview', 'products', 'orders', 'wallet'].map((k) =>
+    '<button class="tab' + (k === tab ? ' active' : '') + '" data-act="sbtab" data-tab="' + k + '">' + esc(t('seller_' + k)) + '</button>').join('');
+  view.innerHTML = '<div class="container-wide seller-page">'
+    + '<div class="seller-head"><div class="avatar-lg">' + esc(String(name).slice(0, 1).toUpperCase()) + '</div>'
+    + '<div class="who"><div class="nm">' + esc(name) + '</div>'
+    + '<div class="loc">' + (isSeller ? t('seller_you') : t('not_seller')) + '</div></div>'
+    + (isSeller ? '<div class="head-stat"><b>' + fmtTZS(bal) + '</b><span>' + esc(t('seller_balance_lbl')) + '</span></div>' : '')
+    + '</div>'
+    + '<div class="tabs">' + tabs + '</div>'
+    + '<div id="sellerBody"></div></div>';
+  const body = document.getElementById('sellerBody');
+  if (!body) return;
+  if (!isSeller) {
+    body.innerHTML = '<div class="empty-state"><div class="big">🛍️</div>'
+      + '<p>' + esc(t('not_seller')) + '</p>'
+      + (u.kyc ? '' : '<p class="muted" style="max-width:520px">Muuzaji aliyethibitishwa (KYC) huonyeshwa vibao vya ' + esc(t('trust_verified')) + '.)</p>')
+      + '<button class="btn-accent" data-act="becomeseller">' + esc(t('seller_become')) + '</button></div>';
+    return;
+  }
+  if (tab === 'products') return sellerProductsBody(body, user, name);
+  if (tab === 'orders') return sellerOrdersBody(body, user);
+  if (tab === 'wallet') return sellerWalletBody(body, user, u, bal);
+  sellerOverviewBody(body, user, u, bal);
+}
+
+async function sellerOverviewBody(body, user, u, bal) {
+  body.innerHTML = '<div class="stat-grid">'
+    + '<div class="stat"><b id="stProducts">…</b><span>' + esc(t('stats_products')) + '</span></div>'
+    + '<div class="stat"><b id="stActive">…</b><span>' + esc(t('stats_active')) + '</span></div>'
+    + '<div class="stat"><b id="stOrderPend">…</b><span>' + esc(t('stats_pending_orders')) + '</span></div>'
+    + '<div class="stat"><b id="stOrders">…</b><span>' + esc(t('stats_orders')) + '</span></div>'
+    + '</div>'
+    + '<div class="rowbtns" style="margin-top:14px">'
+    + '<a class="btn-dark" href="#/seller?t=products">' + esc(t('new_product')) + '</a>'
+    + '<a class="btn-outline" href="#/seller?t=wallet">' + esc(t('seller_wallet')) + '</a>'
+    + '</div>';
+  try {
+    const [psnap, osnap] = await Promise.all([
+      DB.collection('products').where('sellerId', '==', user.uid).get(),
+      DB.collection('orders').where('sellerId', '==', user.uid).limit(50).get().catch(() => null),
+    ]);
+    const plist = psnap.docs.map(norm);
+    const ords = osnap ? osnap.docs.map((d) => d.data()) : [];
+    const pending = ords.filter((o) => !PAY_STATES.has(o.status || '') && !BAD_STATES.has(o.status || '')).length;
+    const st = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = String(v); };
+    st('stProducts', plist.length);
+    st('stActive', plist.filter((p) => p.isActive).length);
+    st('stOrderPend', pending);
+    st('stOrders', ords.length);
+  } catch (_) {}
+}
+
+async function sellerProductsBody(body, user, name) {
+  body.innerHTML = '<div class="sd-toolbar"><h3>' + esc(t('seller_products')) + '</h3>'
+    + '<button class="btn-accent" data-act="prodnew">+ ' + esc(t('new_product')) + '</button></div>'
+    + '<div class="prod-list" id="prodList"><div class="skel" style="height:64px"></div></div>';
+  const host = document.getElementById('prodList');
+  if (!host) return;
+  let list = [];
+  try {
+    const snap = await DB.collection('products').where('sellerId', '==', user.uid).get();
+    list = snap.docs.map(norm).sort((a, b) => tsMillis(b.createdAt) - tsMillis(a.createdAt));
+  } catch (_) {}
+  if (!list.length) {
+    host.innerHTML = emptyHtml(t('new_product'), '', t('home_browse'));
+    return;
+  }
+  host.innerHTML = list.map((p) => '<div class="prod-row' + (p.isActive ? '' : ' off') + '">'
+    + '<div class="thumb">' + (p.images[0] ? '<img src="' + esc(p.images[0]) + '" alt="" onerror="this.remove()">' : '') + '</div>'
+    + '<div class="mid"><div class="nm">' + esc(p.name) + '</div>'
+    + '<div class="pr">' + fmtTZS(p.price) + ' · ' + p.stock + ' · ' + esc(p.category) + '</div></div>'
+    + '<div class="ctrls">'
+    + '<button class="btn-sm" data-act="prodpub" data-p="' + encodeURIComponent(p.id) + '">' + esc(t(p.isActive ? 'unpublish' : 'publish')) + '</button>'
+    + '<button class="btn-sm" data-act="prodedit" data-p="' + encodeURIComponent(p.id) + '">' + esc(t('edit_product')) + '</button>'
+    + '<button class="btn-sm danger" data-act="proddel" data-p="' + encodeURIComponent(p.id) + '">' + esc(t('delete_product')) + '</button>'
+    + '</div></div>').join('');
+}
+
+async function sellerOrdersBody(body, user) {
+  body.innerHTML = '<h3>' + esc(t('seller_orders')) + '</h3>'
+    + '<div class="order-list" id="soList"><div class="skel" style="height:64px"></div></div>';
+  const host = document.getElementById('soList');
+  if (!host) return;
+  try {
+    const snap = await DB.collection('orders').where('sellerId', '==', user.uid).limit(60).get();
+    const ords = snap.docs.map((d) => d.data()).sort((a, b) => tsMillis(b.createdAt) - tsMillis(a.createdAt));
+    host.innerHTML = ords.length ? ords.map((o) => {
+      const st = o.status || 'pending';
+      const pill = PAY_STATES.has(st) ? 'done' : (BAD_STATES.has(st) ? 'bad' : 'wait');
+      return '<div class="order-item">'
+        + '<div class="thumb">' + (o.productImage ? '<img src="' + esc(o.productImage) + '" alt="" onerror="this.remove()">' : '') + '</div>'
+        + '<div class="mid"><div class="nm">' + esc(o.buyerName || ('Oda #' + String(o.orderId || o.id).slice(0, 10))) + '</div>'
+        + '<div class="meta">' + esc(o.productName || 'Agizo') + ' · ' + ts2date(o.createdAt) + '</div></div>'
+        + '<div class="rt"><span class="amt">' + fmtTZS(o.totalAmount) + '</span>'
+        + '<span class="pill ' + pill + '">' + esc(SV_T[lang].order_statuses[st] || st) + '</span>'
+        + (o.buyerPhone ? '<a class="minilink" href="' + waLink(o.buyerPhone, 'Habari, kuhusu agizo #' + String(o.orderId || o.id) + ' (' + o.productName + ').') + '" target="_blank" rel="noopener">' + esc(t('wa_cta')) + '</a>' : '')
+        + '</div></div>';
+    }).join('') : emptyHtml(t('my_orders_empty'), '', t('home_browse'));
+  } catch (_) {
+    host.innerHTML = emptyHtml(t('err_generic'), '', t('home_browse'));
+  }
+}
+
+function sellerWalletBody(body, user, u, bal) {
+  body.innerHTML = '<div class="wallet-card"><div class="bal"><span>' + esc(t('seller_balance_lbl')) + '</span>'
+    + '<b id="wdBal">' + fmtTZS(bal) + '</b></div>'
+    + '<form id="wdForm" class="wd-form"><div class="field"><label>' + esc(t('withdraw_amt')) + '</label>'
+    + '<input id="wdAmt" type="number" min="10000" step="500" inputmode="numeric"></div>'
+    + '<div class="field"><label>' + esc(t('withdraw_phone')) + '</label>'
+    + '<input id="wdPhone" value="' + esc(u.phone || '') + '" placeholder="+255 7xx xxx xxx"></div>'
+    + '<button class="btn-accent" type="submit">' + esc(t('withdraw')) + '</button>'
+    + '<p class="muted" style="font-size:12px;margin-top:10px">' + esc(t('min_withdraw')) + '</p>'
+    + '</form></div>';
+  const form = document.getElementById('wdForm');
+  if (!form) return;
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const amount = Math.round(Number(document.getElementById('wdAmt').value) || 0);
+    const phone = e164(document.getElementById('wdPhone').value);
+    if (amount < 10000) { toast(t('min_withdraw')); return; }
+    if (amount > bal) { toast('Kiasi kikubwa kuliko salio.'); return; }
+    if (!phone) { toast('Andika namba ya simu ya ClickPesa.'); return; }
+    try {
+      const data = await apiPost('/api/payouts/seller/withdraw', { userId: user.uid, amount: amount, phone: phone });
+      toast('✔ ' + t('withdraw_ok'));
+      renderSellerPage('wallet');
+    } catch (err) { toast(errMsg(err)); }
+  });
+}
+
+function productFormHtml(p) {
+  const cats = browseCats().map((c) => '<option value="' + esc(c) + '"' + (p && p.category === c ? ' selected' : '') + '>' + esc(c) + '</option>').join('');
+  const conds = ['new', 'used', 'refurbished'].map((c) => '<option value="' + c + '"' + (p && p.condition === c ? ' selected' : '') + '>' + esc(t('cond_' + c)) + '</option>').join('');
+  const ws = p && p.isWholesale && p.wholesaleTiers && p.wholesaleTiers.length ? p.wholesaleTiers : [{ minQuantity: 10, pricePerUnit: '' }];
+  const wsRows = ws.map((ti, i) => '<div class="ws-row"><input class="ws-min" data-i="' + i + '" type="number" min="2" placeholder="' + esc(t('ws_min')) + '" value="' + esc(ti.minQuantity) + '">'
+    + '<input class="ws-price" data-i="' + i + '" type="number" min="1" placeholder="' + esc(t('ws_price')) + '" value="' + esc(ti.pricePerUnit) + '"></div>').join('');
+  return '<div class="container-wide" style="max-width:760px;margin:0 auto;padding-top:14px">'
+    + '<div class="headline-row"><a class="mini-link" href="#/seller?t=products">← ' + t('back') + '</a>'
+    + '<span style="font-family:var(--font-display);font-weight:700;color:var(--ink);font-size:16px">' + (p ? t('edit_product') : t('new_product')) + '</span></div>'
+    + '<div class="form-card">'
+    + '<input type="hidden" id="pfId" value="' + esc(p ? p.id : '') + '">'
+    + '<div class="field"><label>' + t('product_name') + '</label><input id="pfName" value="' + esc(p ? p.name : '') + '"></div>'
+    + '<div class="form-row"><div class="field"><label>' + t('product_price') + '</label><input id="pfPrice" type="number" min="1" value="' + (p ? p.price : '') + '"></div>'
+    + '<div class="field"><label>' + t('product_stock') + '</label><input id="pfStock" type="number" min="0" value="' + (p ? p.stock : '') + '"></div></div>'
+    + '<div class="form-row"><div class="field"><label>' + t('product_cat') + '</label><select id="pfCat">' + cats + '</select></div>'
+    + '<div class="field"><label>' + t('product_cond') + '</label><select id="pfCond">' + conds + '</select></div></div>'
+    + '<div class="field"><label>' + t('product_subcat') + '</label><input id="pfSub" value="' + esc(p ? p.subcategory : '') + '"></div>'
+    + '<div class="field"><label>' + t('product_desc') + '</label><textarea id="pfDesc" rows="3">' + esc(p ? p.description : '') + '</textarea></div>'
+    + '<div class="field"><label>' + t('product_imgs') + '</label><input id="pfImgs" value="' + esc(p ? (p.images || []).join(', ') : '') + '" placeholder="https://…, https://…"></div>'
+    + '<div class="field"><label>' + t('product_loc') + '</label><input id="pfLoc" value="' + esc(p ? p.location : '') + '" placeholder="Mkoa, Wilaya"></div>'
+    + '<label class="chk"><input type="checkbox" id="pfWs"' + (p && p.isWholesale ? ' checked' : '') + '> <span>' + esc(t('ws_toggle')) + '</span></label>'
+    + '<div id="pfWsRows" class="ws-rows"' + (p && p.isWholesale ? '' : ' style="display:none"') + '>' + wsRows + '</div>'
+    + '<button class="btn-accent btn-block mt16" data-act="prodsave">' + esc(t('save_product')) + '</button>'
+    + '</div></div>';
+}
+
+async function sellerProdEditor(pid) {
+  let p = null;
+  if (pid) p = await getProduct(pid);
+  view.innerHTML = productFormHtml(p);
+  const wsChk = document.getElementById('pfWs');
+  if (wsChk) wsChk.addEventListener('change', () => {
+    const rows = document.getElementById('pfWsRows');
+    if (rows) rows.style.display = wsChk.checked ? '' : 'none';
+  });
+}
+
+async function saveSellerProduct() {
+  const user = AUTH.currentUser;
+  if (!user) return;
+  const id = (document.getElementById('pfId') || {}).value || '';
+  const name = (document.getElementById('pfName').value || '').trim();
+  const price = Math.round(Number(document.getElementById('pfPrice').value) || 0);
+  const stock = Math.max(0, Math.round(Number(document.getElementById('pfStock').value) || 0));
+  const category = document.getElementById('pfCat').value;
+  const condition = document.getElementById('pfCond').value;
+  const subcategory = (document.getElementById('pfSub').value || '').trim();
+  const description = (document.getElementById('pfDesc').value || '').trim();
+  const images = (document.getElementById('pfImgs').value || '').split(',').map((x) => x.trim()).filter(Boolean).slice(0, 8);
+  const locTxt = (document.getElementById('pfLoc').value || '').trim();
+  const parts = locTxt.split(/[,]/).map((x) => x.trim()).filter(Boolean);
+  const location = parts[0] || '';
+  const district = parts[1] || '';
+  const isWs = !!document.getElementById('pfWs').checked;
+  const wholesaleTiers = isWs
+    ? $all('.ws-row').map((r) => ({
+        minQuantity: Math.max(2, Math.round(Number($('.ws-min', r).value) || 0)),
+        pricePerUnit: Math.max(1, Math.round(Number($('.ws-price', r).value) || 0)),
+      })).filter((t) => t.minQuantity >= 2 && t.pricePerUnit >= 1)
+    : [];
+  if (!name || price < 1) { toast('Andika jina na bei sahihi.'); return; }
+  const keywords = (name + ' ' + (category || '') + ' ' + (subcategory || '')).toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3);
+  const base = {
+    name: name,
+    searchName: name.toLowerCase(),
+    description: description,
+    price: price,
+    currency: 'TZS',
+    images: images,
+    imageMetadata: [],
+    videoUrl: '',
+    category: category,
+    subcategory: subcategory,
+    location: location,
+    district: district,
+    stock: stock,
+    brand: '',
+    condition: condition,
+    isWholesale: isWs,
+    wholesaleTiers: wholesaleTiers,
+    variants: [],
+    attributes: {},
+    searchKeywords: keywords,
+  };
+  try {
+    if (id) {
+      await DB.collection('products').doc(id).update(base);
+    } else {
+      let seller = {};
+      try { const snap = await DB.collection('users').doc(user.uid).get(); if (snap.exists) seller = snap.data(); } catch (_) {}
+      await DB.collection('products').add({
+        ...base,
+        sellerId: user.uid,
+        sellerName: seller.sellerName || user.displayName || 'Duka',
+        sellerPhone: seller.phone || '',
+        rating: 0,
+        reviewCount: 0,
+        soldCount: 0,
+        isActive: true,
+        isFeatured: false,
+        featuredUntil: null,
+        sellerKycApproved: !!seller.kyc,
+        barcode: null,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+    toast('✔ ' + t('save_product'));
+    renderSellerPage('products');
+  } catch (e) { toast(errMsg(e)); }
+}
+
 /* ---------- Router + actions ---------- */
 
 const ACTIONS = {
@@ -1261,7 +1751,101 @@ const ACTIONS = {
     const p = decodeURIComponent(el.dataset.p || '');
     location.hash = '#/checkout?p=' + encodeURIComponent(p) + '&q=1';
   },
-  fav: (el, e) => { e.preventDefault(); e.stopPropagation(); el.classList.toggle('onfav'); el.style.color = el.classList.contains('onfav') ? '#c23434' : ''; },
+  fav: (el, e) => {
+    e.preventDefault(); e.stopPropagation();
+    const pid = decodeURIComponent(el.dataset.p || '');
+    toggleWish(pid);
+    const arr = document.querySelectorAll('.fav[data-p="' + el.dataset.p + '"]');
+    arr.forEach((o) => o.classList.toggle('onfav', wishHas(pid)));
+    if ((location.hash || '').indexOf('#/wishlist') === 0) renderWishlist();
+  },
+  wish: (el, e) => {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    const pid = decodeURIComponent(el.dataset.p || '');
+    const added = toggleWish(pid);
+    el.classList.toggle('onfav', added);
+  },
+  copylink: (el) => {
+    const pid = decodeURIComponent(el.dataset.p || '');
+    const url = location.href.split('#')[0] + '#/p/' + encodeURIComponent(pid);
+    const done = () => toast('✔ ' + t('copied'));
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(done).catch(() => fallbackCopy(url, done));
+    } else fallbackCopy(url, done);
+  },
+  rvstar: (el) => {
+    const host = el.closest('#revForm');
+    const cur = Number(el.dataset.v) || 5;
+    if (host) host._rv = cur;
+    $all('.rv-star', host).forEach((x) => x.classList.toggle('on', Number(x.dataset.v) <= cur));
+  },
+  becomeseller: async () => {
+    const user = AUTH.currentUser;
+    if (!user) return;
+    let seller = {};
+    try { const snap = await DB.collection('users').doc(user.uid).get(); if (snap.exists) seller = snap.data(); } catch (_) {}
+    try {
+      await DB.collection('users').doc(user.uid).set({
+        isSeller: true,
+        sellerName: seller.name || user.displayName || 'Duka',
+        phone: seller.phone || user.phoneNumber || '',
+      }, { merge: true });
+      toast('✔ ' + t('seller_you'));
+      renderSellerPage('overview');
+    } catch (e) { toast(errMsg(e)); }
+  },
+  sbtab: (el) => renderSellerPage(el.dataset.tab || 'overview'),
+  prodnew: () => sellerProdEditor(null),
+  prodedit: (el) => sellerProdEditor(decodeURIComponent(el.dataset.p)),
+  prodsave: () => saveSellerProduct(),
+  prodpub: async (el) => {
+    const id = decodeURIComponent(el.dataset.p || '');
+    try {
+      const soon = await DB.collection('products').doc(id).get().catch(() => null);
+      const isActive = soon ? soon.data().isActive !== false : true;
+      await DB.collection('products').doc(id).update({ isActive: !isActive });
+      toast('✔ ' + t(isActive ? 'unpublish' : 'publish'));
+      renderSellerPage('products');
+    } catch (err) { toast(errMsg(err)); }
+  },
+  proddel: async (el) => {
+    const id = decodeURIComponent(el.dataset.p || '');
+    if (!window.confirm(t('del_confirm'))) return;
+    try {
+      await DB.collection('products').doc(id).delete();
+      toast('✔ ' + t('delete_product'));
+      renderSellerPage('products');
+    } catch (err) { toast(errMsg(err)); }
+  },
+  postreview: async (el) => {
+    const pid = decodeURIComponent(el.dataset.p || '');
+    const sellerId = decodeURIComponent(el.dataset.s || '');
+    const user = AUTH.currentUser;
+    if (!user) { renderAuthForm('signin'); return; }
+    const form = el.closest('#revForm');
+    const rating = (form && form._rv) || 5;
+    const commentEl = document.getElementById('revComment');
+    const comment = commentEl ? commentEl.value.trim() : '';
+    if (!comment) { toast('Andika maoni.'); return; }
+    try {
+      await DB.collection('reviews').add({
+        productId: pid,
+        sellerId,
+        userId: user.uid,
+        userName: user.displayName || user.email || 'Mteja',
+        userImage: '',
+        rating: rating,
+        comment: comment,
+        images: [],
+        helpfulCount: 0,
+        isVerifiedPurchase: false,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      await recomputeProductRating(pid);
+      toast('✔ ' + t('review_ok'));
+      loadReviews(pid, sellerId);
+    } catch (err) { toast(errMsg(err)); }
+  },
   loadmore: () => loadPageInto(),
   sort: (el) => sortFeedView(el.value),
   img: () => {},
@@ -1329,6 +1913,8 @@ function route() {
   if (seg[0] === 'search') return renderSearch(q.q || '', q.c || '');
   if (seg[0] === 'orders') return renderOrders();
   if (seg[0] === 'o' && seg[1]) return renderOrderDetail(decodeURIComponent(seg[1]));
+  if (seg[0] === 'wishlist') return renderWishlist();
+  if (seg[0] === 'seller') return renderSellerPage(q.t || 'overview');
   if (seg[0] === 'account') { if (q.mode) renderAuthForm(q.mode === 'signup' ? 'signup' : 'signin'); else renderAccount(); return; }
   return renderHome();
 }
@@ -1345,7 +1931,7 @@ function refreshChip() {
 function highlightBottomNav() {
   const h = location.hash.replace(/^#\/?/, '');
   const seg = (h.split('?')[0]).split('/').filter(Boolean)[0] || '';
-  const map = { '': 'home', cart: 'cart', orders: 'orders', o: 'orders', account: 'account' };
+  const map = { '': 'home', cart: 'cart', orders: 'orders', o: 'orders', wishlist: 'account', seller: 'account', account: 'account' };
   const key = map[seg] || '';
   const targets = { home: 'a[href="#/"]', cart: 'a[href="#/cart"]', orders: 'a[href="#/orders"]', account: 'a[href="#/account"]' };
   const tgt = targets[key] ? document.querySelector(targets[key]) : null;
@@ -1441,6 +2027,7 @@ window.addEventListener('hashchange', () => { closeCats(); route(); highlightBot
   buildCats();
   buildHero();
   refreshBadge();
+  refreshWishBadge();
   refreshChip();
   highlightBottomNav();
   route();
