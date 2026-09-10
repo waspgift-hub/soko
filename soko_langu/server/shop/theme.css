@@ -877,6 +877,12 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .sv-main .h-actions #navAccount { display: none; }
 }
 
+/* Categories: scannable grid on desktop, preserved horizontal rail on mobile */
+@media (min-width: 768px) {
+  .sv-cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(122px, 1fr)); overflow: visible; }
+  .sv-cat-grid .sv-cat-tile { min-width: 0; max-width: none; }
+}
+
 .sv-mfilterbtn {
   align-items: center; gap: 7px;
   height: 40px; padding: 0 14px; border: 1px solid var(--sv-border); border-radius: var(--radius-sm);

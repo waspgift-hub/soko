@@ -20,7 +20,7 @@
 
   function catRailHtml() {
     const cats = browseCats();
-    const tiles = cats.slice(0, 14).map((c) => {
+    const tiles = cats.slice(0, 10).map((c) => {
       const count = Feed.list.filter((p) => catMatch(p, c)).length;
       return '<a class="sv-cat-tile" href="#/c/' + encodeURIComponent(c) + '">'
         + '<span class="sv-cat-ic">' + icon('box') + '</span>'
@@ -131,13 +131,12 @@
     if (sel) sel.value = '';
 
     view.innerHTML = promoHtml()
+      + trustHtml()
       + catRailHtml()
       + railHtml('svDealsRow', t('sv_deals'), '#/flash')
       + railHtml('svBestRow', t('sv_best'))
-      + railHtml('svNewRow', t('sv_new'))
-      + feedRegion(t('feed_new'), t('home_hero_sub'), chipsFor(''))
-      + trustHtml()
-      + sellerCtaHtml();
+      + sellerCtaHtml()
+      + feedRegion(t('feed_all'), t('home_hero_sub'), chipsFor(''));
 
     if (Feed.list.length) {
       paintDynamic();
