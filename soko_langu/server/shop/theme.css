@@ -184,15 +184,15 @@ h1, h2, h3, h4 {
 
 .search:focus-within { box-shadow: 0 0 0 3px var(--sv-accent-soft); border-color: var(--sv-accent-2); }
 
-/* Deliver-to block (Amazon-style utility, ROW 1) */
+/* Deliver-to block (Amazon-style, ROW 1) */
 .sv-d2 {
-  display: flex; align-items: center; gap: 8px;
-  padding: 4px 8px; border-radius: var(--radius-sm);
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 8px; border-radius: var(--radius-sm);
   cursor: default; border: 1px solid transparent;
 }
-.sv-d2 svg { width: 20px; height: 20px; color: var(--sv-accent); flex-shrink: 0; }
-.sv-d2 b { display: block; font-size: 13px; font-weight: 700; color: var(--sv-text); line-height: 1.15; }
-.sv-d2 span { display: block; font-size: 11.5px; color: var(--sv-muted); line-height: 1.15; }
+.sv-d2 svg { width: 16px; height: 16px; color: var(--sv-accent); flex-shrink: 0; }
+.sv-d2 b { display: block; font-size: 12px; font-weight: 700; color: var(--sv-text); line-height: 1.15; }
+.sv-d2 span { display: block; font-size: 11px; color: var(--sv-muted); line-height: 1.15; }
 
 .cat-sel {
   border: none; background: var(--sv-surface-2);
@@ -279,7 +279,9 @@ h1, h2, h3, h4 {
 .hl-act .cart-badge, .hl-act .wish-badge { position: absolute; top: 0; right: 4px; }
 .hl-act svg { width: 19px; height: 19px; }
 .hl-act .hb { display: block; font-size: 12.5px; line-height: 1.15; white-space: nowrap; }
-@media (max-width: 1180px) { .hl-act .hb { display: none; } .hl-act { min-width: 44px; } }
+.hl-act.ico-only { min-width: 40px; }
+.hl-act.ico-only .hb { display: none; }
+@media (max-width: 1180px) { .hl-act .hb { display: none; } .hl-act { min-width: 44px; } .hl-act.ico-only { min-width: 44px; } }
 @media (max-width: 900px) { .sv-d2 { display: none; } }
 
 /* Mobile search toggle (hidden on desktop) */
@@ -615,7 +617,8 @@ h1, h2, h3, h4 {
 .sv-old { font-size: 11.5px; color: var(--sv-muted); font-weight: 500; text-decoration: line-through; }
 
 .sv-meta { display: flex; align-items: center; gap: 8px; margin-top: 1px; }
-.sv-rating { font-size: 12px; font-weight: 600; color: var(--sv-star); }
+.sv-rating { font-size: 12px; font-weight: 600; color: var(--sv-star); display: inline-flex; align-items: center; gap: 4px; }
+.sv-rating svg { width: 12px; height: 12px; }
 .sv-rating i { font-style: normal; color: var(--sv-muted); font-weight: 500; font-size: 11.5px; }
 .sv-rating.mut { color: var(--sv-muted); }
 .sv-sold { font-size: 11.5px; color: var(--sv-muted); }
@@ -851,6 +854,27 @@ h1, h2, h3, h4 {
 
 @media (min-width: 768px) {
   .sv-mfilterbtn { display: none; }
+}
+
+/* --- Step 1b: app-like mobile header, overflow guards, desktop nav tidy --- */
+
+/* Horizontal scrollers must never widen the page */
+html, body { max-width: 100%; overflow-x: hidden; }
+.sv-main, .h-nav, .sv-rail-wrap, .sv-rail, .sv-cat-grid, .sv-promo,
+.sv-layout, .trust-strip, .grid, #feedGrid, .search { min-width: 0; max-width: 100%; }
+
+/* Bottom nav is app-shell chrome: larger screens use the in-top navigation */
+@media (min-width: 768px) { .bottom-nav { display: none; } }
+
+/* Mobile: two-row header (brand + actions / always-visible search), fewer actions */
+@media (max-width: 767px) {
+  .sv-main { row-gap: 6px; }
+  .sv-main .search {
+    display: flex;
+    order: 3; flex-basis: 100%; max-width: 100%; margin: 4px 0 0;
+  }
+  .sv-msearch { display: none; }
+  .sv-main .h-actions #navAccount { display: none; }
 }
 
 .sv-mfilterbtn {

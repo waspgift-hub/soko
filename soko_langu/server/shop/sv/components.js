@@ -30,11 +30,9 @@
 
   function ratingHtml(p) {
     const r = Number(p.rating) || 0;
-    if (r > 0) {
-      return '<span class="sv-rating" title="' + r + ' / 5">' + icon('star') + ' ' + r.toFixed(1)
-        + ' <i>(' + (Number(p.reviewCount) || 0) + ')</i></span>';
-    }
-    return '<span class="sv-rating mut">' + icon('star') + '</span>';
+    if (r <= 0) return '';
+    return '<span class="sv-rating" title="' + r + ' / 5">' + icon('star') + ' ' + r.toFixed(1)
+      + ' <i>(' + (Number(p.reviewCount) || 0) + ')</i></span>';
   }
 
   function verified(p) {
