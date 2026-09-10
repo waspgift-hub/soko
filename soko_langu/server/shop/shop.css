@@ -1641,3 +1641,54 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: inherit;
 .order-item { align-items: center; }
 .order-item .minilink { font-size: 11.5px; font-weight: 600; color: var(--accent); }
 .order-item .rt { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+/* --- Parity module (app-service mirror) component styles --- */
+.auth-alt { margin-top: 14px; display: grid; gap: 8px; }
+.auth-alt .btn-block { justify-content: center; }
+.auth-divider { margin: 14px 0 4px; }
+.otp-inline { display: flex; gap: 8px; margin-top: 8px; }
+.otp-inline input { flex: 1; min-width: 0; }
+.chat-card { max-width: 640px; margin: 18px auto 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--panel); }
+.chat-msgs { max-height: 46vh; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.msg { display: flex; flex-direction: column; align-items: flex-start; }
+.msg.mine { align-items: flex-end; }
+.bubble { background: var(--soft); padding: 8px 12px; border-radius: 12px; max-width: 78%; font-size: 14px; }
+.msg.mine .bubble { background: var(--accent); color: #fff; }
+.msg .meta { font-size: 11px; color: var(--fg2); margin-top: 2px; }
+.chat-send { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--line); background: var(--panel); }
+.chat-send input { flex: 1; min-width: 0; }
+.notif-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 8px; background: var(--panel); }
+.notif-item.unread { border-color: var(--accent); }
+.notif-item .mid { flex: 1; min-width: 0; }
+.chat-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 8px; background: var(--panel); text-decoration: none; color: inherit; }
+.chat-row .mid { flex: 1; min-width: 0; }
+.badge-cnt { background: var(--accent); color: #fff; border-radius: 999px; font-size: 11px; padding: 1px 7px; }
+.seller-acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-top: 6px; }
+.seller-acts .btn-sm { font-size: 12px; padding: 6px 10px; }
+.fs-card { position: relative; }
+.fs-banner { position: absolute; top: 8px; left: 8px; z-index: 2; background: var(--accent); color: #fff; font-weight: 700; font-size: 12px; padding: 2px 8px; border-radius: 999px; }
+.fs-card .thumb img { width: 100%; aspect-ratio: 1; object-fit: cover; }
+.an-bars { display: flex; align-items: flex-end; gap: 10px; height: 150px; padding-top: 8px; }
+.an-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.an-col i { display: block; width: 100%; max-width: 42px; background: var(--accent); border-radius: 4px 4px 0 0; }
+.an-col span { font-size: 11px; color: var(--fg2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.an-col b { font-size: 11px; font-family: var(--font-mono); }
+.comment-form textarea { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font: inherit; background: var(--panel); color: var(--ink); }
+.comment { display: flex; align-items: flex-start; gap: 10px; border-top: 1px solid var(--line); padding-top: 10px; margin-top: 10px; }
+.comment-replies { margin-left: 34px; }
+.replies { margin-top: 6px; display: grid; gap: 6px; }
+.reply-box { display: flex; gap: 6px; margin-top: 6px; }
+.reply-in { flex: 1; min-width: 0; }
+.rowline { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 8px; background: var(--panel); }
+.rowline .mid { flex: 1; min-width: 0; }
+.rowline .ctrls { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.mt16 { margin-top: 16px; }
+.ml16 { margin-left: 16px; }
+.muted { color: var(--fg2); font-size: 13px; }
+.order-no { font-family: var(--font-mono); font-weight: 700; }
+.sum-row { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; font-size: 14px; }
+.card-block { border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 14px; background: var(--panel); }
+.card-block h3 { margin: 0 0 8px; }
+.minilink { background: none; border: none; color: var(--accent); cursor: pointer; font-weight: 700; text-decoration: none; }
+.headline-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 18px 0 14px; }
+.who .nm { font-weight: 700; }
+.section-muted { color: var(--fg2); font-size: 13px; }

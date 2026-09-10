@@ -791,6 +791,8 @@ async function renderProduct(id) {
     }
   };
   loadReviews(p.id, p.sellerId);
+  if (typeof window.recordRecent === 'function') window.recordRecent(p.id);
+  if (typeof window.parityProductExtras === 'function') window.parityProductExtras(p);
 }
 
 function shareWa(p) {
@@ -1088,6 +1090,12 @@ async function renderOrderDetail(id) {
         + esc(t('wa_cta')) + '</a>' : '')
     + '</div></div>'
     + '</div></div>';
+  if (typeof window.parityBuyerOrderArea === 'function') {
+    try {
+      const pg = await apiGet('/api/v1/orders/' + encodeURIComponent(order.orderId || id));
+      window.parityBuyerOrderArea(order, (pg && pg.data) || pg || {});
+    } catch (_) {}
+  }
 }
 
 /* ---------- Account ---------- */
@@ -1143,6 +1151,9 @@ function renderAccount() {
     + '<div class="nm">' + esc(user.displayName || 'Soko Vibe') + '</div>'
     + '<div class="em">' + esc(user.email || '') + '</div>'
     + '<a class="btn-wa btn-block" href="https://wa.me/255693273241?text=' + encodeURIComponent('Nahitaji msaada kwenye Soko Vibe') + '" target="_blank" rel="noopener">WhatsApp Msaada</a>'
+    + '<a class="btn-outline btn-block" href="#/notifications">' + esc(t('notifications')) + '</a>'
+    + '<a class="btn-outline btn-block" href="#/chats">' + esc(t('chats')) + '</a>'
+    + '<a class="btn-outline btn-block" href="#/flash">⚡ ' + esc(t('flash_sale')) + '</a>'
     + '<a class="btn-outline btn-block" href="#/seller">' + esc(t('nav_seller_page')) + '</a>'
     + '<button class="btn-outline btn-block" data-act="signout">' + t('signout') + '</button>'
     + '</div>'
@@ -1201,6 +1212,7 @@ function renderAuthForm(mode) {
     + '<div class="auth-switch">' + (authMode === 'signin'
       ? t('no_account') + ' <a href="#/account?mode=signup">' + t('submit_signup') + '</a>'
       : t('have_account') + ' <a href="#/account?mode=signin">' + t('submit_signin') + '</a>') + '</div>'
+    + (typeof window.authAltButtons === 'function' ? window.authAltButtons() : '')
     + '</div></div></div>';
   const btn = document.getElementById('authBtn');
   btn.addEventListener('click', async () => {
@@ -1497,7 +1509,7 @@ async function renderSellerPage(tab) {
   const isSeller = !!u.isSeller;
   const bal = Number(u.sellerBalance) || 0;
   const name = u.sellerName || u.name || user.displayName || 'Soko Vibe';
-  const tabs = ['overview', 'products', 'orders', 'wallet'].map((k) =>
+  const tabs = ['overview', 'products', 'orders', 'analytics', 'flash', 'kyc', 'boost', 'wallet'].map((k) =>
     '<button class="tab' + (k === tab ? ' active' : '') + '" data-act="sbtab" data-tab="' + k + '">' + esc(t('seller_' + k)) + '</button>').join('');
   view.innerHTML = '<div class="container-wide seller-page">'
     + '<div class="seller-head"><div class="avatar-lg">' + esc(String(name).slice(0, 1).toUpperCase()) + '</div>'
@@ -1519,6 +1531,10 @@ async function renderSellerPage(tab) {
   if (tab === 'products') return sellerProductsBody(body, user, name);
   if (tab === 'orders') return sellerOrdersBody(body, user);
   if (tab === 'wallet') return sellerWalletBody(body, user, u, bal);
+  if (tab === 'analytics' && typeof window.sellerAnalyticsBody === 'function') return window.sellerAnalyticsBody(body, user);
+  if (tab === 'flash' && typeof window.sellerFlashBody === 'function') return window.sellerFlashBody(body, user);
+  if (tab === 'kyc' && typeof window.sellerKycBody === 'function') return window.sellerKycBody(body, user);
+  if (tab === 'boost' && typeof window.sellerBoostBody === 'function') return window.sellerBoostBody(body, user);
   sellerOverviewBody(body, user, u, bal);
 }
 
@@ -1582,10 +1598,26 @@ async function sellerOrdersBody(body, user) {
   if (!host) return;
   try {
     const snap = await DB.collection('orders').where('sellerId', '==', user.uid).limit(60).get();
-    const ords = snap.docs.map((d) => d.data()).sort((a, b) => tsMillis(b.createdAt) - tsMillis(a.createdAt));
-    host.innerHTML = ords.length ? ords.map((o) => {
+    let pgByOrder = {};
+    if (typeof window.sellerOrderActionsHtml === 'function') {
+      try {
+        const pg = await apiGet('/api/v1/orders?limit=200');
+        const list = (pg && pg.data && (pg.data.orders || [])) || [];
+        list.forEach((o) => {
+          pgByOrder[String(o.id || '')] = o;
+          if (o.orderNumber) pgByOrder[String(o.orderNumber)] = o;
+          if (o.legacyFirestoreId) pgByOrder[String(o.legacyFirestoreId)] = o;
+        });
+      } catch (_) {}
+    }
+    const docs = snap.docs.map((d) => ({ d, o: d.data() }))
+      .sort((a, b) => tsMillis(b.o.createdAt) - tsMillis(a.o.createdAt));
+    host.innerHTML = docs.length ? docs.map(({ d, o }) => {
       const st = o.status || 'pending';
       const pill = PAY_STATES.has(st) ? 'done' : (BAD_STATES.has(st) ? 'bad' : 'wait');
+      const pg = pgByOrder[String(o.orderId || '')] || pgByOrder[d.id] || null;
+      const acts = (typeof window.sellerOrderActionsHtml === 'function')
+        ? window.sellerOrderActionsHtml(o, user.uid, pg) : '';
       return '<div class="order-item">'
         + '<div class="thumb">' + (o.productImage ? '<img src="' + esc(o.productImage) + '" alt="" onerror="this.remove()">' : '') + '</div>'
         + '<div class="mid"><div class="nm">' + esc(o.buyerName || ('Oda #' + String(o.orderId || o.id).slice(0, 10))) + '</div>'
@@ -1593,6 +1625,7 @@ async function sellerOrdersBody(body, user) {
         + '<div class="rt"><span class="amt">' + fmtTZS(o.totalAmount) + '</span>'
         + '<span class="pill ' + pill + '">' + esc(SV_T[lang].order_statuses[st] || st) + '</span>'
         + (o.buyerPhone ? '<a class="minilink" href="' + waLink(o.buyerPhone, 'Habari, kuhusu agizo #' + String(o.orderId || o.id) + ' (' + o.productName + ').') + '" target="_blank" rel="noopener">' + esc(t('wa_cta')) + '</a>' : '')
+        + acts
         + '</div></div>';
     }).join('') : emptyHtml(t('my_orders_empty'), '', t('home_browse'));
   } catch (_) {
@@ -1880,6 +1913,11 @@ const ACTIONS = {
   },
 };
 
+Object.assign(ACTIONS, window.__PARITY_ACTIONS || {});
+document.addEventListener('DOMContentLoaded', () => {
+  Object.assign(ACTIONS, window.__PARITY_ACTIONS || {});
+});
+
 function cartBump(el, d) {
   const line = cart.find((i) => i.p === el.dataset.p && (i.v || '') === el.dataset.v);
   if (!line) return;
@@ -1913,6 +1951,14 @@ function route() {
   if (seg[0] === 'search') return renderSearch(q.q || '', q.c || '');
   if (seg[0] === 'orders') return renderOrders();
   if (seg[0] === 'o' && seg[1]) return renderOrderDetail(decodeURIComponent(seg[1]));
+  if (seg[0] === 'notifications' && typeof window.renderNotifications === 'function') return window.renderNotifications();
+  if (seg[0] === 'notifprefs' && typeof window.renderNotifPrefs === 'function') return window.renderNotifPrefs();
+  if (seg[0] === 'chats' && typeof window.renderChatInbox === 'function') return window.renderChatInbox();
+  if (seg[0] === 'chat' && seg[1] && typeof window.renderChatRoom === 'function') {
+    const prm = paramsOf();
+    return window.renderChatRoom(seg[1], prm.name ? decodeURIComponent(prm.name) : 'Muuzaji');
+  }
+  if (seg[0] === 'flash' && typeof window.renderFlashSale === 'function') return window.renderFlashSale();
   if (seg[0] === 'wishlist') return renderWishlist();
   if (seg[0] === 'seller') return renderSellerPage(q.t || 'overview');
   if (seg[0] === 'account') { if (q.mode) renderAuthForm(q.mode === 'signup' ? 'signup' : 'signin'); else renderAccount(); return; }
@@ -1950,6 +1996,7 @@ function searchSubmit(q, cat) {
 function suggest(q) {
   const box = document.getElementById('suggestBox');
   if (!box) return;
+  if (typeof window.enhanceSuggest === 'function') { window.enhanceSuggest(q); return; }
   const ql = (q || '').trim().toLowerCase();
   if (!ql || !Feed.list.length) { box.hidden = true; return; }
   const hits = Feed.list.filter((p) => (p.name || '').toLowerCase().indexOf(ql) >= 0).slice(0, 6).map((p) => p.name);
@@ -2030,5 +2077,5 @@ window.addEventListener('hashchange', () => { closeCats(); route(); highlightBot
   refreshWishBadge();
   refreshChip();
   highlightBottomNav();
-  route();
+  window.addEventListener('DOMContentLoaded', () => route());
 })();
