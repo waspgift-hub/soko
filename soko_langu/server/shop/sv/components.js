@@ -31,8 +31,11 @@
   function ratingHtml(p) {
     const r = Number(p.rating) || 0;
     if (r <= 0) return '';
-    return '<span class="sv-rating" title="' + r + ' / 5">' + icon('star') + ' ' + r.toFixed(1)
-      + ' <i>(' + (Number(p.reviewCount) || 0) + ')</i></span>';
+    const pct = Math.max(0, Math.min(100, (r / 5) * 100));
+    const row = '<span class="sv-stars" aria-hidden="true"><span class="sv-stars-bg">★★★★★</span>'
+      + '<span class="sv-stars-fill" style="width:' + pct + '%">★★★★★</span></span>';
+    return '<span class="sv-rating" title="' + r + ' / 5">' + row + '<b>' + r.toFixed(1) + '</b>'
+      + '<i>(' + (Number(p.reviewCount) || 0) + ')</i></span>';
   }
 
   function verified(p) {

@@ -566,7 +566,7 @@ h1, h2, h3, h4 {
   background: #fff;
   overflow: hidden;
 }
-.sv-thumb img { width: 100%; height: 100%; object-fit: contain; transition: transform 0.2s; }
+.sv-thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.2s; }
 .sv-card:hover .sv-thumb img { transform: scale(1.03); }
 .sv-thumb.sv-badimg { background: var(--sv-surface-2); }
 
@@ -628,9 +628,12 @@ h1, h2, h3, h4 {
 .sv-price b { font-size: 15px; font-weight: 700; color: var(--sv-text); font-family: var(--font-price); font-variant-numeric: tabular-nums; }
 .sv-old { font-size: 11.5px; color: var(--sv-muted); font-weight: 500; text-decoration: line-through; }
 
-.sv-meta { display: flex; align-items: center; gap: 8px; margin-top: 1px; }
-.sv-rating { font-size: 12px; font-weight: 600; color: var(--sv-star); display: inline-flex; align-items: center; gap: 4px; }
-.sv-rating svg { width: 12px; height: 12px; }
+.sv-meta { display: flex; align-items: center; gap: 8px; margin-top: 1px; flex-wrap: wrap; }
+.sv-rating { font-size: 12px; font-weight: 700; color: var(--sv-text); display: inline-flex; align-items: center; gap: 6px; }
+.sv-stars { position: relative; display: inline-block; font-size: 13px; line-height: 1; letter-spacing: 1.5px; color: var(--sv-border); }
+.sv-stars-fill { position: absolute; left: 0; top: 0; overflow: hidden; white-space: nowrap; letter-spacing: inherit; color: var(--sv-star); }
+.sv-stars-bg, .sv-stars-fill { display: inline-block; }
+.sv-rating b { font-weight: 700; }
 .sv-rating i { font-style: normal; color: var(--sv-muted); font-weight: 500; font-size: 11.5px; }
 .sv-rating.mut { color: var(--sv-muted); }
 .sv-sold { font-size: 11.5px; color: var(--sv-muted); }
