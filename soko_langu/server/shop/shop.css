@@ -1032,7 +1032,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: inherit;
 
 .phone-pulse svg { width: 34px; height: 34px; color: var(--good); }
 
-@keyframes pulse { 0% { box-shadow: 0 0 0 0 var(--accent-soft); } 70% { box-shadow: 0 0 0 16px rgba(37, 211, 102, 0); } 100% { box-shadow: 0 0 0 0 rgba(37, 211, 102, 0); } }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 var(--accent-soft); } 70% { box-shadow: 0 0 0 16px rgba(45, 106, 79, 0); } 100% { box-shadow: 0 0 0 0 rgba(45, 106, 79, 0); } }
 
 .status-card h2 { font-family: var(--font-display); font-weight: 700; font-size: 20px; color: var(--ink); margin-bottom: 6px; }
 
@@ -1384,7 +1384,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: inherit;
   height: 16px;
   padding: 0 4px;
   border-radius: 999px;
-  background: #c23434;
+background: var(--bad);
   color: #fff;
   font-family: var(--font-mono);
   font-size: 10px;
@@ -1396,8 +1396,8 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: inherit;
 .icon-link { position: relative; }
 
 .card .thumb .flag.feat {
-  background: linear-gradient(135deg, #ff8a3d, #ff5e3a);
-  color: #fff;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: var(--accent-ink);
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -1410,16 +1410,16 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: inherit;
   left: 10px;
   z-index: 2;
   padding: 3px 9px;
-  border-radius: 999px;
-  background: #c23434;
+border-radius: 999px;
+  background: var(--bad);
   color: #fff;
   font-family: var(--font-mono);
   font-size: 10.5px;
   font-weight: 700;
 }
 
-.card .fav.onfav { color: #c23434; }
-.card .fav.onfav svg { fill: #c23434; }
+.card .fav.onfav { color: var(--bad); }
+.card .fav.onfav svg { fill: var(--bad); }
 
 .card .thumb .sold-ov {
   position: absolute;
@@ -1442,9 +1442,9 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: inherit;
   justify-content: center;
   width: 15px;
   height: 15px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #16a34a, #0d9488);
-  color: #fff;
+border-radius: 50%;
+  background: var(--good);
+  color: var(--sv-bg);
   flex-shrink: 0;
   vertical-align: middle;
   margin-left: 4px;
