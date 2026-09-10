@@ -274,6 +274,9 @@ try {
   const { searchLimiter, adminLimiter } = require('./middleware/rateLimiter');
   const compat = setupCompat(app);
   app.use('/api', generalLimiter, compat.payoutsRouter);
+  // The shop SPA posts to /api/payouts/seller/withdraw; the legacy mount above
+  // served it as /api/seller/withdraw only. Same router, second path prefix.
+  app.use('/api/payouts', generalLimiter, compat.payoutsRouter);
   app.use('/api/orders', generalLimiter, compat.deliveryRouter);
   app.use('/api/search', searchLimiter, compat.searchRouter);
   app.use('/api/notification', generalLimiter, compat.notificationRouter);
