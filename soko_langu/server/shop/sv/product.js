@@ -24,6 +24,28 @@
       + '</div>';
   }
 
+  function stickyBar(p) {
+    const soldout = p.stock <= 0;
+    return '<div class="sv-buysticky" aria-label="Nunua">'
+      + '<div class="sv-buyp"><span class="sv-buyp-lab">' + esc(t('qty')) + '</span>'
+      + '<div class="stepper sv-stepper"><button type="button" data-act="qminus" aria-label="-">−</button>'
+      + '<span class="n" id="qtyN2">1</span><button type="button" data-act="qplus" aria-label="+">+</button></div></div>'
+      + '<button class="sv-btn sv-btn-amber" data-act="addcart"' + (soldout ? ' disabled' : '') + '>'
+      + '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>'
+      + esc(t('add_cart')) + '</button>'
+      + '<button class="sv-btn sv-btn-dark" data-act="buynow"' + (soldout ? ' disabled' : '') + '>'
+      + esc(t('buy_now')) + '</button>'
+      + '</div>';
+  }
+
+  function wireStickyQty() {
+    const qEl = document.getElementById('qtyN');
+    const q2 = document.getElementById('qtyN2');
+    if (!qEl || !q2 || !window.MutationObserver) return;
+    const sync = () => { const n = document.getElementById('qtyN2'); if (n) n.textContent = qEl.textContent; };
+    new MutationObserver(sync).observe(qEl, { childList: true, subtree: true });
+  }
+
   async function related(p, id) {
     const anchor = document.getElementById('revHost');
     if (!anchor || !p) return;
@@ -45,9 +67,14 @@
     if (ORIG) await ORIG(id);
     const p = (window.__pCtx && window.__pCtx.p) || null;
     const dinfo = document.querySelector('.detail .dinfo');
-    if (dinfo && !dinfo.querySelector('.sv-trust-mini')) {
-      dinfo.insertAdjacentHTML('beforeend', trustRow(p || {}));
-      if (p) dinfo.insertAdjacentHTML('beforeend', delRow(p));
+    if (dinfo && dinfo.querySelector('.price') && !dinfo.querySelector('.sv-trust-mini')) {
+      dinfo.querySelector('.price').insertAdjacentHTML('afterend', trustRow(p || {}) + (p ? delRow(p) : ''));
+    }
+    const detail = document.querySelector('.detail');
+    if (detail && p && !detail.querySelector('.sv-buysticky')) {
+      detail.insertAdjacentHTML('beforeend', stickyBar(p));
+      wireStickyQty();
+      document.body.classList.add('sv-has-buysticky');
     }
     await related(p, id);
   }

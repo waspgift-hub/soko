@@ -905,6 +905,28 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .sv-fclose:hover { background: var(--sv-surface-2); }
 @media (min-width: 768px) { .sv-fclose { display: none; } }
 
+/* PDP: sticky buy bar (app-like) sits above the bottom nav on mobile */
+.sv-buysticky {
+  display: none;
+  position: fixed; left: 0; right: 0;
+  bottom: calc(var(--bn-h, 60px) + env(safe-area-inset-bottom, 0px));
+  z-index: 65;
+  align-items: center; gap: 8px;
+  background: var(--sv-bg);
+  border-top: 1px solid var(--sv-border);
+  padding: 10px 12px;
+  box-shadow: 0 -8px 20px -16px rgba(0, 0, 0, 0.45);
+}
+.sv-buyp { display: flex; flex-direction: column; gap: 2px; padding-right: 4px; }
+.sv-buyp-lab { font-size: 10.5px; color: var(--sv-muted); font-weight: 600; }
+.sv-buysticky .sv-stepper { height: 42px; }
+.sv-buysticky .sv-btn { flex: 1; min-height: 42px; justify-content: center; }
+.sv-buysticky .sv-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+@media (max-width: 767px) {
+  .sv-buysticky { display: flex; }
+  body.sv-has-buysticky #view { padding-bottom: 72px; }
+}
+
 .sv-mfilterbtn {
   align-items: center; gap: 7px;
   height: 40px; padding: 0 14px; border: 1px solid var(--sv-border); border-radius: var(--radius-sm);
