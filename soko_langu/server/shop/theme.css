@@ -883,6 +883,28 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .sv-cat-grid .sv-cat-tile { min-width: 0; max-width: none; }
 }
 
+/* Listing page: breadcrumbs + subcategory refinement row (NN/g routing) */
+.sv-crumbs {
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  font-size: 12.5px; color: var(--sv-muted); margin-bottom: 2px;
+}
+.sv-crumbs a { color: var(--sv-text); text-decoration: none; }
+.sv-crumbs a:hover { color: var(--sv-accent-2); }
+.sv-crumb-cur { font-weight: 600; }
+.sv-refine-row {
+  display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 8px;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.sv-refine-row::-webkit-scrollbar { display: none; }
+.sv-refine-row .sv-chip { white-space: nowrap; flex: 0 0 auto; }
+.sv-filterpanel .sv-fhead { display: flex; align-items: center; }
+.sv-fclose {
+  margin-left: auto; width: 30px; height: 30px; border: none; background: none;
+  color: var(--sv-text); font-size: 19px; line-height: 1; border-radius: 6px;
+}
+.sv-fclose:hover { background: var(--sv-surface-2); }
+@media (min-width: 768px) { .sv-fclose { display: none; } }
+
 .sv-mfilterbtn {
   align-items: center; gap: 7px;
   height: 40px; padding: 0 14px; border: 1px solid var(--sv-border); border-radius: var(--radius-sm);

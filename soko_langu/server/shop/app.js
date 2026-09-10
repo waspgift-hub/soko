@@ -1945,7 +1945,11 @@ function route() {
   const q = paramsOf();
   if (seg.length === 0) return renderHome();
   if (seg[0] === 'p' && seg[1]) return renderProduct(seg[1]);
-  if (seg[0] === 'c' && seg[1]) return renderCategory(decodeURIComponent(seg[1]));
+  if (seg[0] === 'c' && seg[1]) {
+    const cat = decodeURIComponent(seg[1]);
+    if (window.SV && window.SV.search) return window.SV.search.render('', cat);
+    return renderCategory(cat);
+  }
   if (seg[0] === 'cart') return renderCart();
   if (seg[0] === 'checkout' && q.p) return renderCheckout(q.p, Number(q.q) || 1, q.v || null);
   if (seg[0] === 'search') return renderSearch(q.q || '', q.c || '');

@@ -79,7 +79,7 @@
 
   function goHash(p) {
     const parts = [];
-    ['q', 'c', 'verified', 'ws', 'disc', 'cond', 'brand', 'minp', 'maxp', 'star', 'sort', 'view'].forEach((k) => {
+    ['q', 'c', 'sub', 'verified', 'ws', 'disc', 'cond', 'brand', 'minp', 'maxp', 'star', 'sort', 'view'].forEach((k) => {
       if (p[k] != null && p[k] !== '') parts.push(k + '=' + encodeURIComponent(p[k]));
     });
     location.hash = '#/search' + (parts.length ? '?' + parts.join('&') : '');
@@ -87,6 +87,7 @@
 
   function matches(p, st, cat) {
     if (cat && !catMatch(p, cat)) return false;
+    if (st.sub && (p.subcategory || '').toLowerCase() !== st.sub.toLowerCase()) return false;
     if (st.verified && !p.sellerKycApproved) return false;
     if (st.ws && !p.isWholesale) return false;
     if (st.disc && !(discount(p) > 0)) return false;
@@ -131,7 +132,8 @@
     }).join('');
     const brands = uniq(list.map((p) => p.brand));
     return '<aside class="sv-filterpanel" id="svFilterPanel">'
-      + '<h3>' + esc(t('sv_filter')) + '</h3>'
+      + '<div class="sv-fhead"><h3>' + esc(t('sv_filter')) + '</h3>'
+      + '<button type="button" class="sv-fclose" data-ftoggle="1" aria-label="' + esc(t('sv_f_remove')) + '">&times;</button></div>'
       + '<div class="sv-fgroup"><div class="sv-fh">' + esc(t('sv_f_cats')) + '</div><div class="sv-fcats">' + catRows + '</div></div>'
       + (brands.length ? '<div class="sv-fgroup"><div class="sv-fh">' + esc(t('sv_f_brand')) + '</div>'
         + '<select id="svBrandSel" class="sv-sort-sel"><option value="">' + esc(t('sv_all')) + '</option>'
@@ -158,6 +160,30 @@
       + '</aside>';
   }
 
+  function crumbHtml(cat, sub, query) {
+    const H = '<span class="sv-crumb-node"><a href="#/">' + esc(t('nav_home')) + '</a></span>';
+    if (cat) {
+      const mid = sub
+        ? '<a href="#/c/' + encodeURIComponent(cat) + '">' + esc(cat) + '</a>'
+        : '<a href="#/search">' + esc(t('nav_categories')) + '</a>';
+      return H + '<span class="sv-sep">/</span><span class="sv-crumb-node">' + mid + '</span>'
+        + '<span class="sv-sep">/</span><span class="sv-crumb-node sv-crumb-cur">' + esc(sub || cat) + '</span>';
+    }
+    if (query) {
+      return H + '<span class="sv-sep">/</span><span class="sv-crumb-node"><a href="#/search">' + esc(t('sv_crumb_search')) + '</a></span>'
+        + '<span class="sv-sep">/</span><span class="sv-crumb-node sv-crumb-cur">' + esc(query) + '</span>';
+    }
+    return H + '<span class="sv-sep">/</span><span class="sv-crumb-node sv-crumb-cur">' + esc(t('sv_all_bidhaa')) + '</span>';
+  }
+
+  function refineRow(cat, sub) {
+    const subs = (typeof SV_SUBCATS !== 'undefined' && SV_SUBCATS[cat]) || [];
+    if (!subs.length) return '';
+    const row = ['<a class="sv-chip' + (!sub ? ' on' : '') + '" href="#/c/' + encodeURIComponent(cat) + '">' + esc(t('sv_all')) + '</a>']
+      .concat(subs.map((s) => '<a class="sv-chip' + (sub === s ? ' on' : '') + '" href="#/search?c=' + encodeURIComponent(cat) + '&sub=' + encodeURIComponent(s) + '">' + esc(s) + '</a>'));
+    return '<div class="sv-refine-row" role="list">' + row.join('') + '</div>';
+  }
+
   function renderShell(title, total, list, cat, st) {
     const sortSel = '<select id="svSortSel" class="sv-sort-sel" aria-label="' + esc(t('sv_sort')) + '">'
       + sortMarks().map((sk) => '<option value="' + sk + '"' + (st.sort === sk ? ' selected' : '') + '>' + esc(t('sv_sort_' + sk)) + '</option>').join('')
@@ -170,7 +196,9 @@
       + '<button type="button" class="sv-btn sv-btn-outline sv-mfilterbtn" data-ftoggle="1">' + icon('filter') + esc(t('sv_filter')) + '</button></div>';
 
     view.innerHTML = '<section class="sv-search-page">'
+      + '<nav class="sv-crumbs" aria-label="Breadcrumb">' + crumbHtml(cat, st.sub, st.bQuery) + '</nav>'
       + sectionHeadHtml(title, total)
+      + refineRow(cat, st.sub)
       + '<div class="sv-toolbar"><p class="sv-sr-count"><b>' + total + '</b> ' + esc(t('sv_items_found')) + '</p>' + tools + '</div>'
       + '<div id="svDym"></div>'
       + '<div class="sv-active-chips" id="svActiveChips"></div>'
@@ -190,6 +218,7 @@
   function chipsHtml(st, cat) {
     const chips = [];
     if (cat) chips.push({ k: 'c', v: cat, label: esc(cat) });
+    if (st.sub) chips.push({ k: 'sub', v: st.sub, label: esc(st.sub) });
     if (st.verified) chips.push({ k: 'verified', v: '1', label: t('sv_f_ver') });
     if (st.ws) chips.push({ k: 'ws', v: '1', label: t('sv_f_ws') });
     if (st.disc) chips.push({ k: 'disc', v: '1', label: t('sv_f_disc') });
@@ -240,7 +269,7 @@
     if (k === 'c') { if (p.c && p.c === v) delete p.c; else p.c = v; }
     else if (k === 'verified' || k === 'ws' || k === 'disc') { if (p[k]) delete p[k]; else p[k] = '1'; }
     else if (k === 'star') { if (num(p[k]) === num(v)) delete p[k]; else p[k] = v; }
-    else if (k === 'cond' || k === 'brand') { if (p[k] === v) delete p[k]; else p[k] = v; }
+    else if (k === 'cond' || k === 'brand' || k === 'sub') { if (p[k] === v) delete p[k]; else p[k] = v; }
     else { delete p[k]; }
     goHash(p);
   }
@@ -277,6 +306,8 @@
       disc: prm.disc === '1' || prm.disc === 'true',
       cond: prm.cond || '',
       brand: prm.brand || '',
+      sub: prm.sub || '',
+      bQuery: query,
       minp: num(prm.minp),
       maxp: num(prm.maxp),
       star: num(prm.star) || 0,
@@ -287,7 +318,7 @@
     const results = list.filter((p) => matches(p, st, cat));
     applySort(results, st.sort);
 
-    const title = query || (cat ? cat : t('sv_all_bidhaa'));
+    const title = st.sub || query || (cat ? cat : t('sv_all_bidhaa'));
     const total = results.length;
     renderShell(title, total, list, cat, st);
     document.title = (!qNorm && !cat
