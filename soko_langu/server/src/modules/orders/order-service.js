@@ -634,17 +634,48 @@ async function cancelOrder({ orderId, actorId, reason }) {
   return prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({ where: { id: orderId } });
 
-    if (!order) throw new Error('ORDER_NOT_FOUND');
+    if (!order) {
+      const err = new Error('ORDER_NOT_FOUND');
+      err.status = 404;
+      throw err;
+    }
+
+    // The state machine's CANCELLED actor set is buyer/seller/admin; the user
+    // id hitting this route only tells us who acts, so derive the actor role
+    // from the order's ownership before transitioning.
+    const actorUser = await tx.user.findUnique({ where: { id: actorId }, select: { id: true, role: true } });
+    if (!actorUser) {
+      const err = new Error('FORBIDDEN');
+      err.status = 403;
+      throw err;
+    }
+
+    let actorRole = null;
+    if (order.buyerId === actorId) {
+      actorRole = 'buyer';
+    } else if (actorUser.role === 'admin') {
+      actorRole = 'admin';
+    } else {
+      const sellerProfile = await tx.sellerProfile.findUnique({ where: { userId: actorId }, select: { id: true } });
+      if (sellerProfile && sellerProfile.id === order.sellerId) actorRole = 'seller';
+    }
+    if (!actorRole) {
+      const err = new Error('FORBIDDEN');
+      err.status = 403;
+      throw err;
+    }
 
     // Cannot cancel if funds are held and not yet refunded
     if ([ORDER_STATES.IN_ESCROW, ORDER_STATES.DISPATCHED, ORDER_STATES.IN_TRANSIT,
          ORDER_STATES.OUT_FOR_DELIVERY, ORDER_STATES.DELIVERED, ORDER_STATES.COMPLETED].includes(order.status)) {
-      throw new Error('CANNOT_CANCEL_IN_CURRENT_STATE');
+      const err = new Error('CANNOT_CANCEL_IN_CURRENT_STATE');
+      err.status = 400;
+      throw err;
     }
 
     const machine = new OrderStateMachine(order.status);
     machine.transition(ORDER_STATES.CANCELLED, {
-      actor: 'user',
+      actor: actorRole,
       actorId,
       reason,
     });
