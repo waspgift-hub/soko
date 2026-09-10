@@ -226,7 +226,7 @@
     if (st.brand) chips.push({ k: 'brand', v: st.brand, label: esc(st.brand) });
     if (st.minp != null) chips.push({ k: 'minp', v: String(st.minp), label: '&ge; ' + fmtTZS(st.minp) });
     if (st.maxp != null) chips.push({ k: 'maxp', v: String(st.maxp), label: '&le; ' + fmtTZS(st.maxp) });
-    if (st.star) chips.push({ k: 'star', v: String(st.star), label: st.star + '+ ' + '&#9733;' });
+    if (st.star) chips.push({ k: 'star', v: String(st.star), label: st.star + '+' });
     if (!chips.length) return '';
     return chips.map((ck) => '<span class="sv-active-chip"><span>' + ck.label + '</span>'
       + '<button type="button" aria-label="' + esc(t('sv_f_remove')) + '" data-fil="' + ck.k + '" data-val="' + ck.v + '">&times;</button></span>').join('');

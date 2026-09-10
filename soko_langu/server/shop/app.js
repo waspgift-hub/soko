@@ -294,11 +294,9 @@ function $all(sel, root) { return Array.prototype.slice.call((root || document).
 /* ---------- Brand / chrome builders ---------- */
 
 function stars(p, size) {
-  const n = Math.round(p.rating || 0);
-  let s = '';
-  for (let i = 1; i <= 5; i++) s += i <= n ? '★' : '☆';
-  return '<span class="stars"' + (size ? ' style="font-size:' + size + '"' : '') + '>' + s
-    + (p.reviewCount ? '<b>(' + p.reviewCount + ')</b>' : '') + '</span>';
+  const r = Number(p.rating || 0).toFixed(1);
+  return '<span class="stars"' + (size ? ' style="font-size:' + size + '"' : '') + '>★ <b>' + r + '</b>'
+    + (p.reviewCount ? '<b class="sc">(' + (p.reviewCount || 0) + ')</b>' : '') + '</span>';
 }
 
 const SELLER_SEAL = '<span class="vbadge"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Verified</span>';
@@ -311,7 +309,7 @@ function cardHtml(p) {
   const ft = featured(p);
   const dc = discount(p);
   const soldout = p.stock <= 0;
-  const flag = (ft ? '<span class="flag feat"><svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2l2.9 6.26L21 9.27l-4.7 4.46 1.2 6.77L12 17.4l-5.5 3.1 1.2-6.77L3 9.27l6.1-1.01z"/></svg>' + esc(t('feat_until')) + '</span>' : '')
+  const flag = (ft ? '<span class="flag feat">' + esc(t('feat_until')) + '</span>' : '')
     + (bo ? '<span class="flag boost">' + esc(bo) + '</span>' : '');
   const dcHtml = dc ? '<span class="disc">−' + dc + '%</span>' : '';
   const soldov = soldout ? '<div class="sold-ov">' + esc(t('soldout_ov')) + '</div>' : '';
@@ -709,13 +707,13 @@ async function renderProduct(id) {
     + '<h1>' + esc(p.name) + '</h1>'
     + '<div class="rating-line">' + (p.rating > 0 ? stars(p, '14px') : '<span>Hakuna tathmini</span>')
     + '<span class="section-muted">' + (p.soldCount || 0) + ' ' + esc(t('sold')) + '</span>'
-    + (featured(p) ? '<span class="tag feat-tag">★ ' + esc(t('feat_until')) + '</span>' : '')
+    + (featured(p) ? '<span class="tag feat-tag">' + esc(t('feat_until')) + '</span>' : '')
     + '<span class="loc"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>' + esc(p.location || 'Tanzania') + (p.district ? ' · ' + esc(p.district) : '') + '</span></div>'
     + '<div class="price" id="priceNow">' + fmtTZS(p.price) + '</div>'
     + '<div class="tags">' + stockTxt
     + '<span class="tag">' + esc(p.condition) + '</span>'
     + (p.brand ? '<span class="tag">' + esc(p.brand) + '</span>' : '')
-    + (bo ? '<span class="tag" style="border-color:var(--accent);color:var(--good)">★ ' + esc(bo) + '</span>' : '')
+    + (bo ? '<span class="tag" style="border-color:var(--accent);color:var(--good)">' + esc(bo) + '</span>' : '')
     + '</div>'
     + variants
     + '<div class="picker"><span class="section-muted">' + t('qty') + ':</span>'
