@@ -372,7 +372,12 @@ async function verifyPayment({ paymentId, providerPaymentId, webhookBody }) {
   }
 }
 
-// Seller marks as dispatched
+// Seller marks as dispatched. Web orders may be dispatched straight from
+// IN_ESCROW (money already held) or from READY_TO_DISPATCH; the state machine
+// is then advanced through the full legal delivery chain to OTP_PENDING so the
+// buyer can confirm handover via OTP immediately (the finance scheduler timers
+// would otherwise gate each step). Final status + timestamps are persisted in
+// one write; intermediate transitions are validated in-memory.
 async function markDispatched({ orderId, sellerId, courierName, trackingNumber }) {
   const prisma = getPrisma();
   
@@ -382,24 +387,58 @@ async function markDispatched({ orderId, sellerId, courierName, trackingNumber }
     if (!order) throw new Error('ORDER_NOT_FOUND');
     if (order.sellerId !== sellerId) throw new Error('FORBIDDEN');
     
-    if (order.status !== ORDER_STATES.READY_TO_DISPATCH) {
+    if (![ORDER_STATES.IN_ESCROW, ORDER_STATES.READY_TO_DISPATCH].includes(order.status)) {
       throw new Error(`INVALID_ORDER_STATE: ${order.status}`);
     }
 
     const machine = new OrderStateMachine(order.status);
+    if (order.status === ORDER_STATES.IN_ESCROW) {
+      machine.transition(ORDER_STATES.READY_TO_DISPATCH, {
+        actor: 'system',
+        actorId: sellerId,
+        reason: 'Escrow held, order ready for dispatch',
+      });
+    }
     machine.transition(ORDER_STATES.DISPATCHED, {
       actor: 'seller',
       actorId: sellerId,
       reason: 'Seller dispatched order',
     });
+    machine.transition(ORDER_STATES.IN_TRANSIT, {
+      actor: 'system',
+      actorId: sellerId,
+      reason: 'Order in transit',
+    });
+    machine.transition(ORDER_STATES.OUT_FOR_DELIVERY, {
+      actor: 'system',
+      actorId: sellerId,
+      reason: 'Out for delivery',
+    });
+    machine.transition(ORDER_STATES.DELIVERED, {
+      actor: 'system',
+      actorId: sellerId,
+      reason: 'Delivered',
+    });
+    machine.transition(ORDER_STATES.INSPECTION_PERIOD, {
+      actor: 'system',
+      actorId: sellerId,
+      reason: 'Inspection period started',
+    });
+    machine.transition(ORDER_STATES.OTP_PENDING, {
+      actor: 'system',
+      actorId: sellerId,
+      reason: 'Awaiting buyer OTP handover confirmation',
+    });
 
+    const now = new Date();
     return tx.order.update({
       where: { id: orderId },
       data: {
-        status: ORDER_STATES.DISPATCHED,
+        status: ORDER_STATES.OTP_PENDING,
         courierName,
         trackingNumber,
-        dispatchedAt: new Date(),
+        dispatchedAt: now,
+        deliveredAt: now,
         statusChangedBy: sellerId,
       },
     });

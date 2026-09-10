@@ -29,6 +29,13 @@ const reconciliationRouter = require('./modules/reconciliation/routes');
 const { seoRouter, NOT_FOUND_HTML } = require('./seo/routes');
 const legacyShopRouter = require('./modules/legacy-shop/routes');
 
+// BigInt is used for TZS money in DB rows (Prisma Decimal->string->BigInt).
+// Express res.json() cannot serialize BigInt — TZS fits a JS safe integer
+// (max ~9e15), so serialize to Number before responding.
+BigInt.prototype.toJSON = function toJSON() {
+  return Number(this);
+};
+
 const app = express();
 
 // Trust proxy for Nginx
@@ -270,12 +277,14 @@ try {
   app.use('/api/orders', generalLimiter, compat.deliveryRouter);
   app.use('/api/search', searchLimiter, compat.searchRouter);
   app.use('/api/notification', generalLimiter, compat.notificationRouter);
+  app.use('/api/notifications', generalLimiter, compat.notificationRouter);
+  app.use('/api', generalLimiter, compat.featureCompatRouter);
   app.use('/api/escrow', generalLimiter, compat.escrowRouter);
   app.use('/api', generalLimiter, compat.ordersCompatRouter);
   app.use('/api', generalLimiter, compat.moderationCompatRouter);
   app.use('/api/admin', adminLimiter, compat.adminCompatRouter);
   app.use('/api', adminLimiter, compat.adminCompatPublic);
-  console.log('[COMPAT] legacy routers mounted');
+  console.log('[COMPAT] legacy routers mounted (incl. feature-compat)');
 } catch (e) {
   console.error('[COMPAT] mount failed, v1 continues:', e.message);
 }
