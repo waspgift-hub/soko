@@ -592,15 +592,27 @@ h1, h2, h3, h4 {
 }
 
 .sv-fav {
-  position: absolute; top: 6px; right: 6px; z-index: 2;
-  width: 30px; height: 30px; border-radius: 50%;
+  position: absolute; top: 8px; right: 8px; z-index: 2;
+  width: 24px; height: 24px; border-radius: 50%;
   display: grid; place-items: center;
-  border: 1px solid var(--sv-border); background: rgba(255, 255, 255, 0.92); color: var(--sv-muted);
+  border: 1px solid var(--sv-border); background: rgba(255, 255, 255, 0.94); color: var(--sv-muted);
   transition: color 0.15s, transform 0.15s;
+  padding: 0;
 }
 .sv-fav:hover { color: var(--sv-danger); transform: scale(1.1); }
 .sv-fav.onfav { color: var(--sv-danger); border-color: var(--sv-danger); }
-.sv-fav svg { width: 14px; height: 14px; }
+.sv-fav svg { width: 13px; height: 13px; }
+
+/* Quiet category tag pinned to the image (bottom-left), per spec */
+.sv-cat-tag {
+  position: absolute; left: 8px; bottom: 8px; z-index: 2;
+  max-width: calc(100% - 16px);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--sv-text); background: var(--sv-bg);
+  border: 1px solid var(--sv-border);
+  padding: 3px 8px; border-radius: 999px;
+}
 
 .sv-body { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
 
@@ -631,19 +643,20 @@ h1, h2, h3, h4 {
 .sv-seller svg { width: 11px; height: 11px; flex-shrink: 0; }
 .sv-seller .sv-ver { color: var(--sv-success); }
 
-.sv-foot { display: flex; gap: 8px; margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--sv-border); align-items: stretch; }
+.sv-foot { display: flex; gap: 6px; margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--sv-border); align-items: stretch; }
 .sv-qadd {
-  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  min-height: 34px; border-radius: 6px; border: 1px solid var(--sv-border);
-  background: var(--sv-bg); color: var(--sv-text); font-size: 12px; font-weight: 600;
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; min-height: 36px; padding: 0;
+  border-radius: 6px; border: 1px solid var(--sv-border);
+  background: var(--sv-bg); color: var(--sv-text);
   transition: background 0.15s, color 0.15s;
 }
 .sv-qadd:hover { background: var(--sv-text); color: var(--sv-bg); }
-.sv-qadd svg { width: 13px; height: 13px; }
+.sv-qadd svg { width: 15px; height: 15px; }
 .sv-qbuy {
   flex: 1; display: inline-flex; align-items: center; justify-content: center;
-  min-height: 34px; border-radius: 6px; border: none;
-  background: var(--sv-accent); color: var(--sv-accent-ink); font-size: 12px; font-weight: 700;
+  min-height: 36px; border-radius: 6px; border: none;
+  background: var(--sv-accent); color: var(--sv-accent-ink); font-size: 12.5px; font-weight: 700;
   transition: filter 0.15s;
 }
 .sv-qbuy:hover { filter: brightness(0.93); }
@@ -947,8 +960,9 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .sv-cat-tile { min-width: 104px; padding: 10px 10px; }
   .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px 10px; }
   .sv-body { padding: 8px 8px 10px; }
-  .sv-foot { flex-direction: column; }
-  .sv-qadd, .sv-qbuy { min-height: 32px; }
+  .sv-foot { flex-direction: row; }
+  .sv-qadd { width: 36px; min-height: 34px; }
+  .sv-qbuy { min-height: 34px; }
   .trust-strip span:last-child { display: none; }
 }
 

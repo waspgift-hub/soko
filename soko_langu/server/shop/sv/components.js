@@ -56,23 +56,23 @@
     const flag = bo ? '<span class="sv-flag">' + esc(bo) + '</span>' : '';
     const disc = dc ? '<span class="sv-badge-note">−' + dc + '%</span>' : '';
     const soldov = soldout ? '<span class="sv-soldov">' + esc(t('soldout_ov')) + '</span>' : '';
+    const catTag = p.category ? '<span class="sv-cat-tag">' + esc(p.category) + '</span>' : '';
     const foot = soldout
       ? '<span class="sv-note-danger">' + esc(t('out_stock')) + '</span>'
-      : '<button class="sv-qadd" data-act="qaddcart" data-p="' + id + '" type="button">' + icon('cart') + esc(t('add_cart')) + '</button>'
-        + '<button class="sv-qbuy" data-act="qbuynow" data-p="' + id + '" type="button">' + esc(t('buy_now')) + '</button>';
+      : '<button class="sv-qadd" data-act="qaddcart" data-p="' + id + '" type="button" title="' + esc(t('add_cart')) + '" aria-label="' + esc(t('add_cart')) + '">' + icon('cart') + '</button>'
+        + '<button class="sv-qbuy" data-act="qbuynow" data-p="' + id + '" type="button">' + esc(t('sv_buy')) + '</button>';
 
     return '<div class="card sv-card" data-act="openprod" data-p="' + id + '" role="link" tabindex="0" aria-label="' + esc(p.name) + '">'
-      + '<div class="sv-thumb">' + disc + flag
+      + '<div class="sv-thumb">' + disc + flag + catTag
       + '<button class="' + favCls + '" data-act="fav" data-p="' + id + '" type="button" aria-label="' + esc(t('nav_wish')) + '">' + icon('heart') + '</button>'
       + (img
         ? '<img loading="lazy" src="' + esc(img) + '" alt="' + esc(p.name) + '" onerror="this.parentElement.classList.add(\'sv-badimg\');this.remove()">'
         : '<div class="sv-ph">SOKO</div>')
       + soldov + '</div>'
       + '<div class="sv-body">'
-      + '<span class="sv-cat">' + esc(p.category || '') + '</span>'
       + '<h3 class="sv-title">' + esc(p.name) + ' ' + verified(p) + '</h3>'
       + '<div class="sv-price"><b>' + fmtTZS(p.price) + '</b>' + old + '</div>'
-      + '<div class="sv-meta">' + ratingHtml(p) + '<span class="sv-sold">' + (Number(p.soldCount) || 0) + ' ' + esc(t('sold')) + '</span></div>'
+      + '<div class="sv-meta">' + ratingHtml(p) + (Number(p.soldCount) ? '<span class="sv-sold">' + (Number(p.soldCount) || 0) + ' ' + esc(t('sold')) + '</span>' : '') + '</div>'
       + '<div class="sv-seller">' + icon('store') + '<span>' + esc(p.sellerName || 'Muuzaji') + '</span>' + verified(p) + '</div>'
       + '<div class="sv-foot">' + foot + '</div>'
       + '</div></div>';
