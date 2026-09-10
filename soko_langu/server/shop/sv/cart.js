@@ -6,7 +6,10 @@
     setLang();
     setHero(false);
     if (!cart.length) {
-      view.innerHTML = '<div class="container-wide">' + emptyHtml(t('cart_empty'), '', t('cart_browse')) + '</div>';
+      view.innerHTML = '<div class="container-wide">' + emptyHtml(t('cart_empty'), '', t('cart_browse'))
+        + '<div class="sv-empty-cats">' + chipsFor('') + '</div>'
+        + '<div class="sv-cart-foot"><a class="sv-btn sv-btn-dark" href="#/">' + esc(t('sv_continue')) + '</a></div>'
+        + '</div>';
       refreshBadge();
       return;
     }
@@ -24,7 +27,9 @@
       + '<div class="cart-grid"><div class="cart-list">';
 
     for (const [seller, lines] of groups) {
-      html += '<div class="cart-group"><div class="ghead">' + SELLER_SEAL + '<span>' + t('cart_seller') + ': ' + esc(seller) + '</span></div>';
+      const sub = lines.reduce((s, it) => s + (Number(it.line.u) || 0) * Number(it.line.q || 0), 0);
+      html += '<div class="cart-group"><div class="ghead">' + SELLER_SEAL + '<span>' + t('cart_seller') + ': ' + esc(seller) + '</span>'
+        + '<b class="gsub">' + esc(t('sv_group_subtotal')) + ': ' + fmtTZS(sub) + '</b></div>';
       for (const it of lines) {
         const p = it.prod;
         const img = it.line.img || (p && p.images[0]) || '';
@@ -57,7 +62,9 @@
       + '<div class="sec-note">' + window.SV.components.icon('shield')
       + '<span>' + t('escrow_note') + '</span></div>'
       + '<button class="btn-accent btn-block mt16" data-act="ckcart" type="button">' + t('cart_checkout') + ' · ' + fmtTZS(tot) + '</button>'
-      + '</aside></div></div>';
+      + '</aside></div>'
+      + '<div class="sv-cart-foot"><a class="mini-link" href="#/">← ' + esc(t('sv_continue')) + '</a></div>'
+      + '</div>';
     view.innerHTML = html;
   }
 

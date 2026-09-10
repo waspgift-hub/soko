@@ -927,6 +927,14 @@ html, body { max-width: 100%; overflow-x: hidden; }
   body.sv-has-buysticky #view { padding-bottom: 72px; }
 }
 
+/* Cart polish: seller subtotal, continue-shopping foot, empty-state retry */
+.cart-group .ghead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cart-group .ghead .gsub { margin-left: auto; font-size: 12px; color: var(--sv-muted); font-weight: 700; white-space: nowrap; }
+.sv-cart-foot { margin-top: 16px; display: flex; justify-content: center; }
+.sv-empty-cats { margin: 18px 0 4px; }
+.sv-empty-cats .chips { justify-content: center; flex-wrap: wrap; }
+.sv-empty-cats .chip { flex: 0 0 auto; }
+
 .sv-mfilterbtn {
   align-items: center; gap: 7px;
   height: 40px; padding: 0 14px; border: 1px solid var(--sv-border); border-radius: var(--radius-sm);
