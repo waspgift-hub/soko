@@ -85,7 +85,8 @@ async function requestWithdrawal({ sellerId, amount, phoneNumber }) {
         throw httpError(400, 'INSUFFICIENT_BALANCE');
       }
 
-      const min = Number(process.env.WITHDRAWAL_MIN) || 1000;
+      // Product-owner rule: no withdrawal minimum (0 TZS). Overridable via env.
+      const min = Number(process.env.WITHDRAWAL_MIN) || 0;
       const max = Number(process.env.WITHDRAWAL_MAX) || 5000000;
       if (amount < min) throw httpError(400, `BELOW_MINIMUM:${min}`);
       if (amount > max) throw httpError(400, `ABOVE_MAXIMUM:${max}`);

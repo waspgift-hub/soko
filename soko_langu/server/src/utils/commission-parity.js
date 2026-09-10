@@ -1,21 +1,14 @@
-// Commission parity with the legacy economics: buyers paid the 3.5% platform
-// fee ON TOP of price + shipping, plus the ClickPesa USSD push fee as a
-// pass-through; sellers netted price + shipping in full. v2 had been
-// deducting the fee FROM the seller instead. Keeping sellerEntitlement equal
-// to (productPrice + shippingFee) is what makes v2 pay the seller the same
-// amount the legacy system would have.
-const config = require('../config');
-const { getUssdPushFee } = require('../../clickpesa');
-
+// Commission parity with the product owner's economics: Soko Vibe charges no
+// platform fee and no pass-through on orders — the buyer pays price + shipping
+// in full to the escrow and the seller nets price + shipping in full. Whatever
+// ClickPesa charges (USSD push at collection, payout fee at payout) is deducted
+// by ClickPesa itself, outside Soko Vibe's ledger, so our escrow total always
+// equals the seller entitlement exactly.
 function computeSellerParity(productPrice, shippingFee = 0n) {
   const p = BigInt(productPrice);
   const s = BigInt(shippingFee);
-  const priceNum = Number(p);
-  const percent = config.business.platformCommissionPercent || 0.035;
-  const feeTopUp = BigInt(Math.round(priceNum * percent));
-  const ussdPassThrough = BigInt(getUssdPushFee(priceNum));
-  const commission = feeTopUp + ussdPassThrough;
-  const totalAmount = p + s + commission;
+  const commission = 0n;
+  const totalAmount = p + s;
   return {
     commission,
     totalAmount,

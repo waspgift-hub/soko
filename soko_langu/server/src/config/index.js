@@ -76,7 +76,9 @@ const config = {
   
   // Business
   business: {
-    platformCommissionPercent: parseFloat(process.env.PLATFORM_COMMISSION_PERCENT) || 0.035,
+    // Product-owner rule: Soko Vibe charges NO platform fee; only ClickPesa's
+    // own charges apply (collected/deducted by ClickPesa outside our ledger).
+    platformCommissionPercent: parseFloat(process.env.PLATFORM_COMMISSION_PERCENT) || 0,
     escrowAutoReleaseDays: parseInt(process.env.ESCROW_AUTO_RELEASE_DAYS) || 14,
     maxDailySaleAmount: parseInt(process.env.MAX_DAILY_SALE_AMOUNT) || 5000000,
   },

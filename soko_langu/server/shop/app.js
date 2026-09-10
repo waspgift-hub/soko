@@ -1637,7 +1637,7 @@ function sellerWalletBody(body, user, u, bal) {
   body.innerHTML = '<div class="wallet-card"><div class="bal"><span>' + esc(t('seller_balance_lbl')) + '</span>'
     + '<b id="wdBal">' + fmtTZS(bal) + '</b></div>'
     + '<form id="wdForm" class="wd-form"><div class="field"><label>' + esc(t('withdraw_amt')) + '</label>'
-    + '<input id="wdAmt" type="number" min="10000" step="500" inputmode="numeric"></div>'
+    + '<input id="wdAmt" type="number" min="1" step="1" inputmode="numeric"></div>'
     + '<div class="field"><label>' + esc(t('withdraw_phone')) + '</label>'
     + '<input id="wdPhone" value="' + esc(u.phone || '') + '" placeholder="+255 7xx xxx xxx"></div>'
     + '<button class="btn-accent" type="submit">' + esc(t('withdraw')) + '</button>'
@@ -1649,7 +1649,7 @@ function sellerWalletBody(body, user, u, bal) {
     e.preventDefault();
     const amount = Math.round(Number(document.getElementById('wdAmt').value) || 0);
     const phone = e164(document.getElementById('wdPhone').value);
-    if (amount < 10000) { toast(t('min_withdraw')); return; }
+    if (amount < 1) { toast(t('min_withdraw')); return; }
     if (amount > bal) { toast('Kiasi kikubwa kuliko salio.'); return; }
     if (!phone) { toast('Andika namba ya simu ya ClickPesa.'); return; }
     try {

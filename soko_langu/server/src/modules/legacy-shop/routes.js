@@ -25,7 +25,6 @@ const { paymentService } = require('../payments/payment-service');
 const { generateOrderNumber } = require('../orders/order-service');
 const { ORDER_STATES } = require('../orders/order-state-machine');
 const { computeSellerParity } = require('../../utils/commission-parity');
-const { getUssdPushFee } = require('../../../clickpesa');
 
 function httpError(status, message) {
   const err = new Error(message);
@@ -67,8 +66,11 @@ const LEGACY_STATUS = {
 // `transactions` collections use these exact field names in the Flutter app.
 function buildLegacyMirror(order, body) {
   const productPrice = Number(order.productPrice);
-  const platformFee = Math.round(productPrice * 0.035);
-  const clickpesaFee = getUssdPushFee(productPrice);
+  // Soko Vibe charges no fees; ClickPesa's own charges are deducted by
+  // ClickPesa outside this ledger, so the mirror shows zero platform/ClickPesa
+  // lines and the full amount flowing to the seller.
+  const platformFee = 0;
+  const clickpesaFee = 0;
   return {
     orderId: order.id,
     status: LEGACY_STATUS[order.status] || 'pending',

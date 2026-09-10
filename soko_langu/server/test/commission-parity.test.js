@@ -8,14 +8,15 @@ test('parity keeps seller entitlement equal to price + shipping', () => {
   assert.strictEqual(totalAmount - commission, sellerEntitlement);
 });
 
-test('commission is 3.5% of price plus USSD pass-through tier', () => {
-  // 50000: 3.5% = 1750; USSD tier 50000-95999 = 2136 (ClickPesa July 2026)
-  const { commission } = computeSellerParity(50000n, 0n);
-  assert.strictEqual(commission, 3886n);
-  // 1000: 3.5% = 35; USSD tier 900-1999 = 92
-  const small = computeSellerParity(1000n, 0n);
-  assert.strictEqual(small.commission, 127n);
-  assert.strictEqual(small.sellerEntitlement, 1000n);
+test('no platform fee and no USSD pass-through on orders', () => {
+  // Business rule: Soko Vibe charges 0 fee; ClickPesa's own charges are theirs.
+  const { commission, totalAmount } = computeSellerParity(50000n, 0n);
+  assert.strictEqual(commission, 0n);
+  assert.strictEqual(totalAmount, 50000n);
+  const small = computeSellerParity(100n, 0n);
+  assert.strictEqual(small.commission, 0n);
+  assert.strictEqual(small.totalAmount, 100n);
+  assert.strictEqual(small.sellerEntitlement, 100n);
 });
 
 test('money conservation: escrow total always covers seller + commission', () => {

@@ -15,7 +15,10 @@ const {
   clickpesaQueryPayouts,
 } = require('../../../clickpesa');
 
-const PLATFORM_COMMISSION_PERCENT = 0.035; // 3.5% platform commission
+// Product-owner rule: Soko Vibe has no platform fee (ClickPesa's own charges
+// apply provider-side); kept config-driven so env can still steer it.
+const config = require('../../config');
+const PLATFORM_COMMISSION_PERCENT = config.business.platformCommissionPercent;
 const AD_REVENUE_PER_VIEW = 15;            // TZS per ad view (estimate only)
 const PAYED_STATUSES = new Set([
   'escrow_hold',

@@ -92,6 +92,7 @@ const USSD_PUSH_FEE_TIERS = [
 ];
 
 function getUssdPushFee(amount) {
+  if (amount < USSD_PUSH_FEE_TIERS[0].min) return 0; // below ClickPesa's USSD-push range -> no fee
   for (const tier of USSD_PUSH_FEE_TIERS) {
     if (amount >= tier.min && amount <= tier.max) return tier.fee;
   }
@@ -128,6 +129,7 @@ const PAYOUT_FEE_TIERS = [
 ];
 
 function getPayoutFee(amount) {
+  if (amount < PAYOUT_FEE_TIERS[0].min) return 0; // below ClickPesa's payout range -> no fee
   for (const tier of PAYOUT_FEE_TIERS) {
     if (amount >= tier.min && amount <= tier.max) return tier.fee;
   }

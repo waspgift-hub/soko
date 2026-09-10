@@ -7,7 +7,7 @@ test('buildLegacyMirror produces the legacy Flutter document shape', () => {
     id: 'or-123',
     status: 'awaiting_escrow_payment',
     productPrice: 50000n,
-    totalAmount: 53886n, // 50000 + 1750 + 2136 (3.5% + USSD tier 50000)
+    totalAmount: 50000n, // seller nets price + shipping in full; 0 platform/ClickPesa fees
     shippingFee: 0n,
   };
   const body = {
@@ -35,10 +35,10 @@ test('buildLegacyMirror produces the legacy Flutter document shape', () => {
   assert.strictEqual(m.productPrice, 50000);
   assert.strictEqual(m.quantity, 2);
   assert.strictEqual(m.shippingCost, 0);
-  // legacy split: platform fee is 3.5% of price, USSD fee is the ClickPesa tier
-  assert.strictEqual(m.platformFee, 1750);
-  assert.strictEqual(m.clickpesaFee, 2136);
-  assert.strictEqual(m.totalAmount, 53886);
+  // Soko Vibe has no fee; the mirror shows zero platform/ClickPesa lines
+  assert.strictEqual(m.platformFee, 0);
+  assert.strictEqual(m.clickpesaFee, 0);
+  assert.strictEqual(m.totalAmount, 50000);
   assert.strictEqual(m.buyerId, 'guest:255700000000');
   assert.strictEqual(m.sourceV2, true);
   assert.strictEqual(m.deliveryType, 'delivery');
@@ -51,7 +51,7 @@ test('mirror fee math matches the parity commission invariant', () => {
     const m = buildLegacyMirror(order, body);
     // totalAmount Number(BigInt) is parsed from order; mirror embeds legacized
     // presentation fields only, so conservation is checked via fee composition:
-    assert.strictEqual(m.platformFee + m.clickpesaFee, Math.round(price * 0.035) + require('../clickpesa').getUssdPushFee(price));
+    assert.strictEqual(m.platformFee + m.clickpesaFee, 0);
   }
 });
 
