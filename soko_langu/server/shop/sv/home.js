@@ -1,27 +1,26 @@
-/* Soko Vibe — Phase 1 home page (hero + categories + deals + feed + sellers).
-   Renders into the global `view` element; the main product grid reuses
-   feedRegion so the app's existing pagination (sentinel / load more) works. */
+/* Soko Vibe — marketplace home (compact promo + category rail + rails +
+   all-products feed). Renders into the global `view` element; the feed
+   reuses feedRegion so the app's existing pagination keeps working. */
 (function () {
   const C = window.SV.components;
   const { icon, svCard, skel, sectionHead } = C;
 
-  function heroHtml() {
-    return '<section class="sv-hero">'
-      + '<div class="sv-hero-copy">'
-      + '<span class="sv-kicker">' + esc(t('sv_kicker')) + '</span>'
-      + '<h1>' + t('sv_hero_title') + '</h1>'
-      + '<p>' + esc(t('sv_hero_sub')) + '</p>'
-      + '<div class="sv-hero-cta">'
-      + '<a class="sv-btn sv-btn-amber" href="#/">' + esc(t('sv_cta_buy')) + '</a>'
-      + '<a class="sv-btn sv-btn-ghost" href="#/seller">' + esc(t('sv_cta_sell')) + '</a>'
-      + '</div></div>'
-      + '<div class="sv-hero-media" id="svHeroMedia">' + skel(4) + '</div>'
+  function promoHtml() {
+    return '<section class="sv-promo" aria-label="Matangazo">'
+      + '<div class="sv-promo-copy">'
+      + '<b>' + esc(t('sv_promo_t')) + '</b>'
+      + '<p>' + esc(t('sv_promo_p')) + '</p>'
+      + '</div>'
+      + '<div class="sv-promo-cta">'
+      + '<a class="sv-btn sv-btn-promo" href="#/flash">' + esc(t('sv_cta_deals')) + '</a>'
+      + '<a class="sv-btn sv-btn-link" href="#/seller">' + esc(t('sv_cta_sell')) + '</a>'
+      + '</div>'
       + '</section>';
   }
 
-  function catGridHtml() {
+  function catRailHtml() {
     const cats = browseCats();
-    const tiles = cats.slice(0, 12).map((c) => {
+    const tiles = cats.slice(0, 14).map((c) => {
       const count = Feed.list.filter((p) => catMatch(p, c)).length;
       return '<a class="sv-cat-tile" href="#/c/' + encodeURIComponent(c) + '">'
         + '<span class="sv-cat-ic">' + icon('box') + '</span>'
@@ -29,21 +28,19 @@
         + (count ? '<span class="sv-cat-count">' + count + ' ' + esc(t('sv_items')) + '</span>' : '')
         + '</a>';
     }).join('');
-    return '<section class="sv-section">' + sectionHead(t('sv_categories'), t('sv_categories_sub')) + '<div class="sv-cat-grid">' + tiles + '</div></section>';
+    return '<section class="sv-section">' + sectionHead(t('sv_categories'), '') + '<div class="sv-cat-grid" role="list">' + tiles + '</div></section>';
   }
 
-  function dealsHtml() {
-    return '<section class="sv-section" id="svDealsSection">'
-      + sectionHead(t('sv_deals'), t('sv_deals_sub'), '#/flash', t('sv_view_all'))
-      + '<div class="sv-row sv-row-4" id="svDealsRow">' + skel(4) + '</div>'
-      + '</section>';
-  }
-
-  function sellerStripHtml() {
-    return '<section class="sv-section" id="svSellerSection">'
-      + sectionHead(t('sv_sellers'), t('sv_sellers_sub'))
-      + '<div class="sv-seller-strip" id="svSellerRow">' + skel(1) + '</div>'
-      + '</section>';
+  function railHtml(id, title, moreHref) {
+    return '<section class="sv-section" id="' + id + 'Sec">'
+      + sectionHead(title, '', moreHref, t('sv_view_all'))
+      + '<div class="sv-rail-wrap">'
+      + '<button class="sv-rail-arrow prev" type="button" data-rail-prev data-rail="' + id + '" aria-label="Zote zilizopita">'
+      + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m15 18-6-6 6-6"/></svg></button>'
+      + '<div class="sv-rail" data-rail id="' + id + '">' + skel(6) + '</div>'
+      + '<button class="sv-rail-arrow next" type="button" data-rail-next data-rail="' + id + '" aria-label="Inayofuata">'
+      + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m9 18 6-6-6-6"/></svg></button>'
+      + '</div></section>';
   }
 
   function trustHtml() {
@@ -64,27 +61,26 @@
       + '</section>';
   }
 
-  function paintHeroMedia() {
-    const host = document.getElementById('svHeroMedia');
+  function paintRail(id, picks) {
+    const host = document.getElementById(id);
     if (!host) return;
-    const picks = sortFeed(Feed.list).slice(0, 4);
-    if (!picks.length) { host.innerHTML = skel(4); return; }
-    host.innerHTML = picks.map((p) => '<div class="sv-hero-tile">'
-      + (p.images && p.images[0]
-        ? '<img loading="lazy" src="' + esc(p.images[0]) + '" alt="' + esc(p.name) + '" onerror="this.parentElement.innerHTML=\'<div class=&quot;sv-ph&quot;>SOKO</div>\'">'
-        : '<div class="sv-ph">SOKO</div>')
-      + '<span>' + esc(p.name) + '</span></div>').join('');
+    const sec = document.getElementById(id + 'Sec');
+    if (!picks.length) { if (sec) sec.style.display = 'none'; return; }
+    host.innerHTML = picks.map(svCard).join('');
+    if (sec) sec.style.display = '';
   }
 
-  function paintDeals() {
-    const host = document.getElementById('svDealsRow');
-    if (!host) return;
-    let deals = Feed.list.filter((p) => discount(p) && p.stock > 0);
-    if (deals.length < 4) deals = sortFeed(Feed.list).slice(0, 4);
-    const picks = deals.slice(0, 4);
-    host.innerHTML = picks.length ? picks.map(svCard).join('') : '';
-    const sec = document.getElementById('svDealsSection');
-    if (sec && !picks.length) sec.style.display = 'none';
+  function paintRails() {
+    const list = Feed.list;
+
+    let deals = list.filter((p) => discount(p) && p.stock > 0);
+    if (deals.length < 4) deals = sortFeed(list);
+    paintRail('svDealsRow', deals.slice(0, 10));
+
+    const best = list.slice().filter((p) => p.stock > 0).sort((a, b) => (b.soldCount || 0) - (a.soldCount || 0));
+    paintRail('svBestRow', (best[0] && best[0].soldCount ? best : sortFeed(list)).slice(0, 10));
+
+    paintRail('svNewRow', list.slice(0, 10));
   }
 
   function paintSellers() {
@@ -104,10 +100,20 @@
     if (sec) sec.style.display = '';
   }
 
+  function wireRails() {
+    document.querySelectorAll('[data-rail-prev], [data-rail-next]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const rail = document.querySelector('[data-rail="' + btn.dataset.rail + '"]');
+        if (!rail) return;
+        rail.scrollBy({ left: btn.dataset.railPrev ? -rail.clientWidth * 0.8 : rail.clientWidth * 0.8, behavior: 'smooth' });
+      });
+    });
+  }
+
   function paintDynamic() {
-    paintHeroMedia();
-    paintDeals();
+    paintRails();
     paintSellers();
+    wireRails();
   }
 
   async function renderHome() {
@@ -124,9 +130,11 @@
     const sel = document.getElementById('catSelect');
     if (sel) sel.value = '';
 
-    view.innerHTML = heroHtml()
-      + catGridHtml()
-      + dealsHtml()
+    view.innerHTML = promoHtml()
+      + catRailHtml()
+      + railHtml('svDealsRow', t('sv_deals'), '#/flash')
+      + railHtml('svBestRow', t('sv_best'))
+      + railHtml('svNewRow', t('sv_new'))
       + feedRegion(t('feed_new'), t('home_hero_sub'), chipsFor(''))
       + trustHtml()
       + sellerCtaHtml();

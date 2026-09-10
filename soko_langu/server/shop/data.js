@@ -291,8 +291,13 @@ Object.assign(SV_T.sw, {
   sv_view_grid: 'Gridi', sv_view_list: 'Orodha', sv_did_you_mean: 'Ulikusudia',
   sv_no_results: 'Hakuna bidhaa zinazolingana',
   sv_try_diff: 'Jaribu maneno mengine au ondoa vichujio ili kuona bidhaa zaidi.',
-  sv_back_home: 'Rudi kwenye Bidhaa Zote', sv_recent: 'Ulitafuta',
+sv_back_home: 'Rudi kwenye Bidhaa Zote', sv_recent: 'Ulitafuta',
   sv_products: 'Bidhaa', sv_clear: 'Futa historia', sv_sugg_hint: 'Anza kuandika...',
+  sv_promo_t: 'Mauzo makubwa. Bei bora. Uhalisi umehakikiwa.',
+  sv_promo_p: 'Nunua kutoka maduka yaliyothibitishwa, lipa kwa escrow salama, usafirishaji kote Tanzania.',
+  sv_cta_deals: 'Nunua Sasa', sv_best: 'Zinauzwa Zaidi', sv_new: 'Mpya Kwenye Soko',
+  sv_related: 'Bidhaa Zinazohusiana', sv_del_ests: 'Uwasilishaji: siku 1–4 za kazi',
+  cart_items: 'Vipengee', cart_fee: 'Ada ya huduma',
 });
 
 /* ---- Phase 1 redesign strings (en) ---- */
@@ -320,10 +325,15 @@ Object.assign(SV_T.en, {
   sv_sort: 'Sort', sv_sort_rel: 'Relevance', sv_sort_newest: 'Newest',
   sv_sort_price_up: 'Price: Low to High', sv_sort_price_dn: 'Price: High to Low',
   sv_sort_rating: 'Top rated', sv_sort_sold: 'Best selling',
-  sv_sort_disc: 'Biggest discount', sv_sort_name: 'Name A-Z',
+sv_sort_disc: 'Biggest discount', sv_sort_name: 'Name A-Z',
   sv_view_grid: 'Grid', sv_view_list: 'List', sv_did_you_mean: 'Did you mean',
   sv_no_results: 'No matching products',
-  sv_try_diff: 'Try different words or clear filters to see more products.',
-  sv_back_home: 'Back to All Products', sv_recent: 'Recent',
+  sv_try_diff: 'Try different keywords or remove filters to see more products.',
+  sv_back_home: 'Back to All Products', sv_recent: 'Recent searches',
   sv_products: 'Products', sv_clear: 'Clear history', sv_sugg_hint: 'Start typing...',
+  sv_promo_t: 'Big deals. Better prices. Verified authenticity.',
+  sv_promo_p: 'Shop from verified stores, pay safely through escrow, delivered across Tanzania.',
+  sv_cta_deals: 'Shop Now', sv_best: 'Best Sellers', sv_new: 'New Arrivals',
+  sv_related: 'Related Products', sv_del_ests: 'Delivery: 1–4 working days',
+  cart_items: 'Items', cart_fee: 'Service fee',
 });
