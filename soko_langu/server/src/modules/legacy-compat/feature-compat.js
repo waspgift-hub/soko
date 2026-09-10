@@ -1643,6 +1643,66 @@ module.exports = function ({ admin: fbAdmin, db }) {
     }
   });
 
+  // ─── ADMIN — one-off broadcast to all users (in-app + OneSignal) ──────
+  router.post('/admin/broadcast-notification', async (req, res) => {
+    try {
+      const auth = await requireAdmin(req, res);
+      if (!auth.ok) return;
+      if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+      const { title, body } = req.body;
+      if (!title) return res.status(400).json({ error: 'Title is required' });
+
+      // Get all active user IDs
+      const usersSnap = await db.collection('users').get();
+      const userIds = usersSnap.docs.map(doc => doc.id).filter(Boolean);
+
+      if (userIds.length === 0) {
+        return res.json({ success: true, message: 'No users to notify', sentCount: 0 });
+      }
+
+      // Admin broadcast always delivers (compat bulk sender has no prefs gate).
+      const pushResult = await sendOneSignalBulk(db, userIds, title, body || '', {
+        type: 'system',
+        broadcast: 'true',
+      });
+
+      // Save in-app notification for each user (batch of 500)
+      let notifCount = 0;
+      const BATCH_SIZE = 500;
+      for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
+        const batch = db.batch();
+        const chunk = userIds.slice(i, i + BATCH_SIZE);
+        for (const uid of chunk) {
+          const notifRef = db.collection('notifications').doc();
+          batch.set(notifRef, {
+            userId: uid,
+            title: title,
+            body: body || '',
+            data: { type: 'system', broadcast: 'true' },
+            isRead: false,
+            createdAt: A.firestore.FieldValue.serverTimestamp(),
+          });
+          notifCount++;
+        }
+        await batch.commit();
+      }
+
+      console.log(`[Broadcast] Sent to ${userIds.length} users, notifications saved: ${notifCount}`);
+
+      res.json({
+        success: true,
+        message: `Notification sent to ${userIds.length} users`,
+        totalUsers: userIds.length,
+        pushNotifications: pushResult.successCount || 0,
+        inAppNotifications: notifCount,
+      });
+    } catch (e) {
+      console.error('[Broadcast] Error:', e);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   // ─── CRON — release expired escrows + fail stale boosts ───────────────
   router.post('/cron/release-escrows', async (req, res) => {
     try {
