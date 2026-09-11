@@ -1791,7 +1791,8 @@ function productFormHtml(p) {
     + '<div class="field"><label>' + t('product_stock') + '</label><input id="pfStock" type="number" min="0" value="' + (p ? p.stock : '') + '"></div></div>'
     + '<div class="form-row"><div class="field"><label>' + t('product_cat') + '</label><select id="pfCat">' + cats + '</select></div>'
     + '<div class="field"><label>' + t('product_cond') + '</label><select id="pfCond">' + conds + '</select></div></div>'
-    + '<div class="field"><label>' + t('product_subcat') + '</label><input id="pfSub" value="' + esc(p ? p.subcategory : '') + '"></div>'
+    + '<div class="form-row"><div class="field"><label>' + t('product_subcat') + '</label><input id="pfSub" value="' + esc(p ? p.subcategory : '') + '"></div>'
+    + '<div class="field"><label>' + t('product_brand') + '</label><input id="pfBrand" value="' + esc(p ? p.brand : '') + '"></div></div>'
     + '<div class="field"><label>' + t('product_desc') + '</label><textarea id="pfDesc" rows="3">' + esc(p ? p.description : '') + '</textarea></div>'
     + '<div class="field"><label>' + t('product_imgs') + '</label><input id="pfImgs" value="' + esc(p ? (p.images || []).join(', ') : '') + '" placeholder="https://…, https://…"></div>'
     + '<div class="field"><label>' + t('product_loc') + '</label><input id="pfLoc" value="' + esc(p ? p.location : '') + '" placeholder="Mkoa, Wilaya"></div>'
@@ -1822,6 +1823,7 @@ async function saveSellerProduct() {
   const category = document.getElementById('pfCat').value;
   const condition = document.getElementById('pfCond').value;
   const subcategory = (document.getElementById('pfSub').value || '').trim();
+  const brand = (document.getElementById('pfBrand') ? document.getElementById('pfBrand').value : '' || '').trim();
   const description = (document.getElementById('pfDesc').value || '').trim();
   const images = (document.getElementById('pfImgs').value || '').split(',').map((x) => x.trim()).filter(Boolean).slice(0, 8);
   const locTxt = (document.getElementById('pfLoc').value || '').trim();
@@ -1851,7 +1853,7 @@ async function saveSellerProduct() {
     location: location,
     district: district,
     stock: stock,
-    brand: '',
+    brand: brand,
     condition: condition,
     isWholesale: isWs,
     wholesaleTiers: wholesaleTiers,
@@ -1892,6 +1894,24 @@ let orderFilter = 'all';
 
 const ACTIONS = {
   dismissbar: () => {},
+  zoomimg: (el) => {
+    const img = el.tagName === 'IMG' ? el : el.querySelector('img');
+    const src = img && (img.currentSrc || img.src);
+    if (!src) return;
+    let box = document.getElementById('svLightbox');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'svLightbox';
+      box.setAttribute('hidden', '');
+      box.innerHTML = '<img id="svLightboxImg" alt=""><button type="button" data-act="closezoom" aria-label="Funga">×</button>';
+      document.body.appendChild(box);
+      box.addEventListener('click', (e) => { if (e.target === box) closeZoom(); });
+    }
+    document.getElementById('svLightboxImg').src = src;
+    box.hidden = false;
+    document.body.style.overflow = 'hidden';
+  },
+  closezoom: () => closeZoom(),
   opencats: () => openCats(),
   msgstore: (el) => {
     const u = decodeURIComponent(el.dataset.u || '');
@@ -2104,7 +2124,7 @@ function route() {
   if (seg[0] === 'chats' && typeof window.renderChatInbox === 'function') return window.renderChatInbox();
   if (seg[0] === 'chat' && seg[1] && typeof window.renderChatRoom === 'function') {
     const prm = paramsOf();
-    return window.renderChatRoom(seg[1], prm.name ? decodeURIComponent(prm.name) : 'Muuzaji');
+    return window.renderChatRoom(seg[1], prm.name ? decodeURIComponent(prm.name) : 'Muuzaji', prm.product ? decodeURIComponent(prm.product) : '');
   }
   if (seg[0] === 'flash' && typeof window.renderFlashSale === 'function') return window.renderFlashSale();
   if (seg[0] === 'wishlist') return renderWishlist();
@@ -2171,6 +2191,12 @@ document.addEventListener('click', (e) => {
   const fn = ACTIONS[el.dataset.act];
   if (fn) fn(el, e);
 });
+function closeZoom() {
+  const box = document.getElementById('svLightbox');
+  if (box) box.hidden = true;
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeZoom(); });
 
 document.getElementById('searchForm').addEventListener('submit', (e) => {
   e.preventDefault();

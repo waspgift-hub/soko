@@ -373,7 +373,7 @@
     const u = AUTH.currentUser;
     const followBtn = u && u.uid !== p.sellerId
       ? '<button class="btn-outline" id="followBtn" data-following="' + esc(p.sellerId) + '">' + esc(t('follow')) + '</button>' : '';
-    const chatBtn = '<a class="btn-outline" href="#/chat/' + encodeURIComponent(p.sellerId) + '?name=' + encodeURIComponent(p.sellerName || 'Muuzaji') + '">'
+    const chatBtn = '<a class="btn-outline" href="#/chat/' + encodeURIComponent(p.sellerId) + '?name=' + encodeURIComponent(p.sellerName || 'Muuzaji') + '&product=' + encodeURIComponent(p.id) + '">'
       + '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H4l1.5-3.5A8 8 0 1 1 21 12Z"/><path d="M8 12h8M8 8h4"/></svg>'
       + ' ' + esc(t('chat_seller')) + '</a>';
     const socialRow = (followBtn || chatBtn) ? '<div class="rowbtns" style="margin-top:14px">' + chatBtn + followBtn + '</div>' : '';
@@ -542,20 +542,26 @@
 
   function roomIdFor(a, b) { return [a, b].sort().join('_'); }
 
-  async function ensureRoom(otherUid) {
+  async function ensureRoom(otherUid, prod) {
     const u = AUTH.currentUser;
     if (!u) throw new Error(t('need_auth'));
     const roomId = roomIdFor(u.uid, otherUid);
     const snap = await DB.collection('chat_rooms').doc(roomId).get();
     if (snap.exists) return roomId;
-    await DB.collection('chat_rooms').doc(roomId).set({
+    const doc = {
       participants: [u.uid, otherUid],
       last_message: '',
       last_timestamp: FV.serverTimestamp(),
       unread_counts: { [u.uid]: 0, [otherUid]: 0 },
       unread_count_buyer: 0,
       unread_count_seller: 0,
-    });
+    };
+    if (prod && prod.id) {
+      doc.productId = prod.id;
+      doc.productName = prod.name || '';
+      if (prod.price != null) doc.productPrice = Number(prod.price) || 0;
+    }
+    await DB.collection('chat_rooms').doc(roomId).set(doc);
     return roomId;
   }
 
@@ -604,16 +610,27 @@
     chatBadge();
   }
 
-  async function renderChatRoom(otherUid, name) {
+  async function renderChatRoom(otherUid, name, productId) {
     setLang(); setHero(false);
     const u = AUTH.currentUser;
     if (!u) { renderAuthForm('signin'); toast(t('need_auth')); return; }
+    let prod = null;
+    if (productId && typeof getProduct === 'function') { try { prod = await getProduct(productId); } catch (_) {} }
     let roomId;
-    try { roomId = await ensureRoom(otherUid); }
+    try { roomId = await ensureRoom(otherUid, prod); }
     catch (e) { toast(errMsg(e)); return; }
+    let banner = '';
+    if (prod) {
+      const pim = (prod.images && prod.images[0]) || '';
+      banner = '<a class="chat-prod" href="#/p/' + encodeURIComponent(prod.id) + '">'
+        + (pim ? '<img src="' + esc(pim) + '" alt="" onerror="this.remove()">' : '')
+        + '<span class="chat-prod-mid"><b>' + esc(prod.name || '') + '</b><span>' + fmtTZS(prod.price) + '</span></span>'
+        + '<span class="chat-prod-go">→</span></a>';
+    }
     view.innerHTML = '<div class="container-wide"><div class="headline-row"><a class="mini-link" href="#/chats">← ' + esc(t('back')) + '</a>'
       + '<span style="font-family:var(--font-display);font-weight:700;color:var(--ink);font-size:16px">' + esc(name || 'Muuzaji') + '</span></div>'
       + '<div class="chat-card">'
+      + banner
       + '<div class="chat-msgs" id="chatMsgs"><div class="skel" style="height:120px"></div></div>'
       + '<form id="chatForm" class="chat-send">'
       + '<input id="chatText" autocomplete="off" placeholder="' + esc(t('write_msg')) + '">'

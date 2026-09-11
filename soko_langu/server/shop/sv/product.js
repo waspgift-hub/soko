@@ -86,6 +86,9 @@
       wireStickyQty();
       document.body.classList.add('sv-has-buysticky');
     }
+    document.querySelectorAll('.gallery .sv-img, .gallery .main').forEach((g) => {
+      if (!g.dataset.act) { g.setAttribute('data-act', 'zoomimg'); g.style.cursor = 'zoom-in'; }
+    });
     await related(p, id);
   }
 

@@ -222,6 +222,7 @@
       + refineRow(cat, st.sub)
       + '<div class="sv-toolbar"><p class="sv-sr-count"><b>' + total + '</b> ' + esc(t('sv_items_found')) + '</p>' + tools + '</div>'
       + '<div id="svDym"></div>'
+      + '<div id="svSellers"></div>'
       + '<div class="sv-active-chips" id="svActiveChips"></div>'
       + '<div class="sv-layout">' + filterPanelHtml(list, st, cat)
       + '<div class="sv-results"><div class="grid" id="svResultsHost">' + skel(9) + '</div></div>'
@@ -251,6 +252,25 @@
     if (!chips.length) return '';
     return chips.map((ck) => '<span class="sv-active-chip"><span>' + ck.label + '</span>'
       + '<button type="button" aria-label="' + esc(t('sv_f_remove')) + '" data-fil="' + ck.k + '" data-val="' + ck.v + '">&times;</button></span>').join('');
+  }
+
+  function sellersHtml(results, qNorm) {
+    if (!qNorm) return '';
+    const seen = {};
+    const sellers = [];
+    results.forEach((p) => {
+      if (!p.sellerId || seen[p.sellerId]) return;
+      seen[p.sellerId] = 1;
+      sellers.push(p);
+    });
+    if (!sellers.length) return '';
+    const cards = sellers.slice(0, 6).map((p) => '<a class="sv-seller-pill" href="#/store/' + encodeURIComponent(p.sellerId) + '">'
+      + '<span class="sv-seller-av">' + esc((p.sellerName || '?').charAt(0).toUpperCase()) + '</span>'
+      + '<span>' + esc(p.sellerName || 'Muuzaji') + '</span>'
+      + (p.sellerKycApproved ? window.SV.components.verified(p) : '')
+      + '</a>').join('');
+    return '<div class="sv-section-head"><h2 class="sv-section-title">' + esc(t('sv_result_sellers')) + '</h2></div>'
+      + '<div class="sv-seller-strip" role="list">' + cards + '</div>';
   }
 
   function paintResults(results, st) {
@@ -355,6 +375,7 @@
 
     document.getElementById('svActiveChips').innerHTML = chipsHtml(st, cat);
     document.getElementById('svDym').innerHTML = dymHtml(qNorm, total);
+    document.getElementById('svSellers').innerHTML = sellersHtml(results, qNorm);
     paintResults(results, st);
   }
 
