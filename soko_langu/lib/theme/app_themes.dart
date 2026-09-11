@@ -7,10 +7,10 @@ import 'app_typography.dart';
 // persistence but never influences the rendered palette.
 ThemeData buildLightTheme(Color seed) {
   final scheme = const ColorScheme.light(
-    primary: Color(0xFF2D6A4F),
-    onPrimary: Color(0xFFFFFFFF),
-    primaryContainer: Color(0xFFD7EBDD),
-    onPrimaryContainer: Color(0xFF0B2E21),
+    primary: Color(0xFF9CD9B0),
+    onPrimary: Color(0xFF043C26),
+    primaryContainer: Color(0xFFE2F5EB),
+    onPrimaryContainer: Color(0xFF0B3D28),
     inversePrimary: Color(0xFFB8B8B8),
     secondary: Color(0xFF3B3B3B),
     onSecondary: Color(0xFFFFFFFF),
@@ -47,10 +47,10 @@ ThemeData buildLightTheme(Color seed) {
 
 ThemeData buildDarkTheme(Color seed) {
   final scheme = const ColorScheme.dark(
-    primary: Color(0xFF52B788),
-    onPrimary: Color(0xFF052E16),
-    primaryContainer: Color(0xFF1B4332),
-    onPrimaryContainer: Color(0xFFAFE3C7),
+    primary: Color(0xFFA8E6CF),
+    onPrimary: Color(0xFF043C26),
+    primaryContainer: Color(0xFF1B4D33),
+    onPrimaryContainer: Color(0xFFCFF5E3),
     inversePrimary: Color(0xFF303030),
     secondary: Color(0xFFD6D6D6),
     onSecondary: Color(0xFF000000),

@@ -34,16 +34,16 @@ extension AppColorScheme on ColorScheme {
       brightness == Brightness.dark ? const Color(0xFF262626) : const Color(0xFFE5E5E5);
 
   Color get brandPrimary => brightness == Brightness.dark
-      ? const Color(0xFF52B788)
-      : const Color(0xFF2D6A4F);
+      ? const Color(0xFFA8E6CF)
+      : const Color(0xFF9CD9B0);
 
   Color get brandAccent => brightness == Brightness.dark
-      ? const Color(0xFF74C69D)
-      : const Color(0xFF40916C);
+      ? const Color(0xFFB8E8CF)
+      : const Color(0xFF74C89B);
 
   Color get brandSuccess => brightness == Brightness.dark
-      ? const Color(0xFF52B788)
-      : const Color(0xFF2D6A4F);
+      ? const Color(0xFFA8E6CF)
+      : const Color(0xFF9CD9B0);
 
   Color get brandWarning => brightness == Brightness.dark
       ? const Color(0xFFE4E4E7)
@@ -99,8 +99,8 @@ extension AppColorScheme on ColorScheme {
       : const Color(0xFF171717);
 
   Color get successGreen => brightness == Brightness.dark
-      ? const Color(0xFF52B788)
-      : const Color(0xFF2D6A4F);
+      ? const Color(0xFFA8E6CF)
+      : const Color(0xFF9CD9B0);
 
   Color get boostGold => brightness == Brightness.dark
       ? const Color(0xFFF5F5F5)
