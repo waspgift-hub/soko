@@ -92,11 +92,11 @@
     const picks = fill.filter((p) => { if (seen[p.sellerName]) return false; seen[p.sellerName] = 1; return true; }).slice(0, 8);
     const sec = document.getElementById('svSellerSection');
     if (!picks.length) { if (sec) sec.style.display = 'none'; return; }
-    host.innerHTML = picks.map((p) => '<span class="sv-seller-pill">'
+    host.innerHTML = picks.map((p) => '<a class="sv-seller-pill" href="#/store/' + encodeURIComponent(p.sellerId) + '" title="' + esc(t('sv_store_products')) + '">'
       + '<span class="sv-seller-av">' + esc((p.sellerName || '?').charAt(0).toUpperCase()) + '</span>'
       + '<span>' + esc(p.sellerName) + '</span>'
       + (p.sellerKycApproved ? C.verified(p) : '')
-      + '</span>').join('');
+      + '</a>').join('');
     if (sec) sec.style.display = '';
   }
 

@@ -7,7 +7,7 @@
 (function () {
   const FV = firebase.firestore.FieldValue;
   const recentsKey = 'sv_shop_recent';
-  const searchHistKey = 'sv_shop_searchhist';
+  const searchHistKey = 'sv_shop_search_hist';
 
   function readArr(key) {
     try { const v = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(v) ? v : []; }

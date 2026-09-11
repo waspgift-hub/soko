@@ -237,7 +237,10 @@
     if (!host) return;
     host.className = st.view === 'list' ? 'sv-list' : 'grid';
     if (!results.length) {
-      host.innerHTML = empty(t('sv_no_results'), t('sv_try_diff'), t('sv_back_home'));
+      const cats = browseCats().slice(0, 6);
+      const reco = '<div class="sv-reco">' + cats
+        .map((c) => '<a class="sv-chip" href="#/c/' + encodeURIComponent(c) + '">' + esc(c) + '</a>').join('') + '</div>';
+      host.innerHTML = empty(t('sv_no_results'), t('sv_try_diff'), t('sv_back_home')) + reco;
       return;
     }
     host.innerHTML = results.map(svCard).join('');

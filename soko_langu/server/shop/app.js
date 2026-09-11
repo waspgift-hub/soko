@@ -730,6 +730,7 @@ async function renderProduct(id) {
     + '<div class="who"><div class="avatar">' + esc((p.sellerName || 'S').slice(0, 1).toUpperCase()) + '</div>'
     + '<div style="flex:1"><div class="nm">' + esc(p.sellerName) + (p.sellerKycApproved ? ' ' + SELLER_SEAL : '') + '</div>'
     + '<div class="loc">' + esc(p.location || 'Tanzania') + '</div></div></div>'
+    + '<a class="sv-seller-link" href="#/store/' + encodeURIComponent(p.sellerId) + '">' + t('sv_store') + '</a>'
     + (p.sellerPhone ? '<a class="btn-wa btn-block" href="' + waLink(p.sellerPhone, 'Habari, ninauliza kuhusu ' + p.name + '.') + '" target="_blank" rel="noopener">'
       + '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>'
       + esc(t('wa_cta')) + '</a>' : '')
@@ -1773,6 +1774,21 @@ async function saveSellerProduct() {
 
 const ACTIONS = {
   opencats: () => openCats(),
+  msgstore: (el) => {
+    const u = decodeURIComponent(el.dataset.u || '');
+    const n = decodeURIComponent(el.dataset.n || 'Muuzaji');
+    location.hash = '#/chat/' + encodeURIComponent(u) + '?name=' + encodeURIComponent(n);
+  },
+  bnsearch: (el, e) => {
+    e.preventDefault();
+    if (window.innerWidth < 768) {
+      const t = document.getElementById('svMobileSearchT');
+      const form = document.getElementById('searchForm');
+      if (t && form && !form.classList.contains('sv-expanded')) t.click();
+    }
+    setTimeout(() => { const i = document.getElementById('searchInput'); if (i) i.focus(); }, 140);
+    setTimeout(() => { location.hash = '#/search'; }, 240);
+  },
   closecats: () => closeCats(),
   dsub: (el) => fillDrawerSub(decodeURIComponent(el.dataset.cat || '')),
   openprod: (el) => { location.hash = '#/p/' + encodeURIComponent(el.dataset.p); },
@@ -1962,6 +1978,7 @@ function route() {
   }
   if (seg[0] === 'flash' && typeof window.renderFlashSale === 'function') return window.renderFlashSale();
   if (seg[0] === 'wishlist') return renderWishlist();
+  if (seg[0] === 'store' && seg[1] && window.SV.store) return window.SV.store.render(decodeURIComponent(seg[1]));
   if (seg[0] === 'seller') return renderSellerPage(q.t || 'overview');
   if (seg[0] === 'account') { if (q.mode) renderAuthForm(q.mode === 'signup' ? 'signup' : 'signin'); else renderAccount(); return; }
   return renderHome();
@@ -1976,14 +1993,21 @@ function refreshChip() {
   if (bnAcct) bnAcct.textContent = user ? 'Akaunti' : t('nav_signin');
 }
 
-function highlightBottomNav() {
+function highlightActiveNav() {
   const h = location.hash.replace(/^#\/?/, '');
   const seg = (h.split('?')[0]).split('/').filter(Boolean)[0] || '';
-  const map = { '': 'home', cart: 'cart', orders: 'orders', o: 'orders', wishlist: 'account', seller: 'account', account: 'account' };
+  const map = { '': 'home', p: 'home', c: 'cats', search: 'search', orders: 'orders', o: 'orders', wishlist: 'account', seller: 'account', account: 'account' };
   const key = map[seg] || '';
-  const targets = { home: 'a[href="#/"]', cart: 'a[href="#/cart"]', orders: 'a[href="#/orders"]', account: 'a[href="#/account"]' };
+  const targets = { home: 'a[href="#/"]', cats: '[data-bn-cat]', search: 'a[href="#/search"]', orders: 'a[href="#/orders"]', account: 'a[href="#/account"]' };
   const tgt = targets[key] ? document.querySelector(targets[key]) : null;
   $all('[data-bn]').forEach((b) => b.classList.toggle('on', b === tgt));
+  const curPath = location.hash.split('?')[0];
+  $all('.top-links a[data-nav][href^="#"]').forEach((a) => {
+    a.classList.toggle('on', (a.getAttribute('href') || '').split('?')[0] === curPath);
+  });
+  $all('.h-actions a.hl-act[href^="#"]').forEach((a) => {
+    a.classList.toggle('on', (a.getAttribute('href') || '').split('?')[0] === curPath);
+  });
 }
 
 /* ---------- Search + suggestions ---------- */
@@ -2064,7 +2088,7 @@ AUTH.onAuthStateChanged((user) => {
   }
 });
 
-window.addEventListener('hashchange', () => { closeCats(); route(); highlightBottomNav(); });
+window.addEventListener('hashchange', () => { closeCats(); route(); highlightActiveNav(); });
 
 (function init() {
   setTheme();
@@ -2078,6 +2102,6 @@ window.addEventListener('hashchange', () => { closeCats(); route(); highlightBot
   refreshBadge();
   refreshWishBadge();
   refreshChip();
-  highlightBottomNav();
+  highlightActiveNav();
   window.addEventListener('DOMContentLoaded', () => route());
 })();
