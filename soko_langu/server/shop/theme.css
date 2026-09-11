@@ -624,19 +624,22 @@ p { line-height: 1.55; }
   transition: color 0.15s, transform 0.15s;
   padding: 0;
 }
+.sv-fav::after { content: ''; position: absolute; inset: -12px; }
 .sv-fav:hover { color: var(--sv-danger); transform: scale(1.1); }
 .sv-fav.onfav { color: var(--sv-danger); border-color: var(--sv-danger); }
 .sv-fav svg { width: 13px; height: 13px; }
+#offlineBar { transition: opacity 0.25s ease; }
 
 /* Quiet category tag pinned to the image (bottom-left), per spec */
 .sv-cat-tag {
   position: absolute; left: 8px; bottom: 8px; z-index: 2;
   max-width: calc(100% - 16px);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: 9.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
   color: var(--sv-text); background: var(--sv-bg);
   border: 1px solid var(--sv-border);
   padding: 3px 8px; border-radius: 999px;
+  transition: opacity 0.15s;
 }
 
 .sv-body { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
@@ -873,8 +876,7 @@ p { line-height: 1.55; }
 
 @media (prefers-reduced-motion: reduce) {
   .skel { animation: none; }
-  .card { transition: none; }
-  .sv-fav { transition: none; }
+  .card, .sv-fav, .sv-seller-pill, .sv-seller-link, #offlineBar { transition: none; }
 }
 
 /* ----------------------------- Responsive ----------------------------- */
@@ -1144,7 +1146,8 @@ body[data-route='search'] .hero-slider { display: none; }
 .dinfo .stepper button { width: 40px; border: none; background: var(--sv-bg); font-size: 16px; cursor: pointer; color: var(--sv-text); }
 .dinfo .stepper button:hover { background: var(--sv-surface-2); }
 .dinfo .stepper .n { min-width: 40px; text-align: center; font-weight: 700; line-height: 42px; }
-.dinfo .rowbtns { display: flex; gap: 10px; flex-wrap: wrap; }
+.order-filters { display: flex; gap: 8px; flex-wrap: wrap; margin: var(--space-4) 0; }
+.order-list { display: flex; flex-direction: column; gap: var(--space-3); }
 .dinfo .btn-dark { min-height: 46px; padding: 0 26px; font-size: 14px; border-radius: 8px; flex: 1 1 auto; }
 
 .dinfo .seller-card {

@@ -966,6 +966,7 @@ async function renderWishlist() {
 
 /* ---------- Orders ---------- */
 
+const FILTER_STATES = { active: ['pending', 'quoted', 'paid', 'dispatched', 'confirmed'], completed: ['completed'], cancelled: ['cancelled', 'disputed', 'refunded'] };
 function renderOrders() {
   setLang();
   setHero(false);
@@ -975,9 +976,12 @@ function renderOrders() {
     view.innerHTML = '<div class="container-wide">' + emptyHtml(t('need_auth'), '', t('nav_signin')).replace('#/', '#/account') + '</div>';
     return;
   }
+  const fDefs = [{ v: 'all', l: t('sv_all_orders') }, { v: 'active', l: t('sv_active') }, { v: 'completed', l: t('sv_completed') }, { v: 'cancelled', l: t('sv_cancelled') }];
+  const fRow = '<div class="order-filters" role="group">' + fDefs.map((f) => '<button type="button" class="sv-chip' + (orderFilter === f.v ? ' on' : '') + '" data-act="ofilter" data-v="' + f.v + '">' + f.l + '</button>').join('') + '</div>';
   view.innerHTML = '<div class="container-wide"><div class="headline-row"><a class="mini-link" href="#/account">← ' + t('back') + '</a>'
     + '<span style="font-family:var(--font-display);font-weight:700;color:var(--ink);font-size:16px">' + t('orders_my') + '</span></div>'
     + (g && !user ? '<div class="guest-box slim"><span>' + esc(t('guest_name')) + ': ' + esc(g.name || '') + ' · ' + esc(g.phone || '') + '</span></div>' : '')
+    + fRow
     + '<div class="order-list"><div class="skel" style="height:74px"></div><div class="skel" style="height:74px"></div></div></div>';
   const host = $('.order-list');
   if (user) {
@@ -986,7 +990,8 @@ function renderOrders() {
     ]).then(([snap]) => {
       if (!host) return;
       if (!snap) { host.innerHTML = emptyHtml(t('err_generic'), '', t('home_browse')); return; }
-      const orders = snap.docs.map((d) => d.data()).sort((a, b) => tsMillis(b.createdAt) - tsMillis(a.createdAt));
+      let orders = snap.docs.map((d) => d.data()).sort((a, b) => tsMillis(b.createdAt) - tsMillis(a.createdAt));
+      if (orderFilter && orderFilter !== 'all') orders = orders.filter((o) => (FILTER_STATES[orderFilter] || []).includes(o.status));
       if (!orders.length) { host.innerHTML = emptyHtml(t('my_orders_empty'), '', t('home_browse')); return; }
       host.innerHTML = orders.map(orderHtml).join('');
     });
@@ -994,7 +999,8 @@ function renderOrders() {
   }
   apiGet('/api/orders/guest/list').then((data) => {
     if (!host) return;
-    const orders = (data && data.data) || [];
+    let orders = (data && data.data) || [];
+    if (orderFilter && orderFilter !== 'all') orders = orders.filter((o) => (FILTER_STATES[orderFilter] || []).includes(o.status));
     if (!orders.length) { host.innerHTML = emptyHtml(t('my_orders_empty'), '', t('home_browse')); return; }
     host.innerHTML = orders.map(orderHtml).join('');
   }).catch(() => {
@@ -1772,7 +1778,10 @@ async function saveSellerProduct() {
 
 /* ---------- Router + actions ---------- */
 
+let orderFilter = 'all';
+
 const ACTIONS = {
+  dismissbar: () => {},
   opencats: () => openCats(),
   msgstore: (el) => {
     const u = decodeURIComponent(el.dataset.u || '');
@@ -1790,6 +1799,7 @@ const ACTIONS = {
     setTimeout(() => { location.hash = '#/search'; }, 240);
   },
   closecats: () => closeCats(),
+  ofilter: (el) => { orderFilter = el.dataset.v; renderOrders(); },
   dsub: (el) => fillDrawerSub(decodeURIComponent(el.dataset.cat || '')),
   openprod: (el) => { location.hash = '#/p/' + encodeURIComponent(el.dataset.p); },
   qaddcart: (el, e) => { e.preventDefault(); e.stopPropagation(); quickAdd(decodeURIComponent(el.dataset.p)); },
@@ -2103,5 +2113,22 @@ window.addEventListener('hashchange', () => { closeCats(); route(); highlightAct
   refreshWishBadge();
   refreshChip();
   highlightActiveNav();
+
+  /* Slim offline bar — surfaces connectivity state without breaking flow. */
+  (function offlineBar() {
+    const bar = document.createElement('div');
+    bar.id = 'offlineBar';
+    bar.setAttribute('role', 'status');
+    bar.innerHTML = '<span>' + esc(t('offline')) + '</span><button type="button" data-act="dismissbar" class="sv-btn sv-btn-ghost" style="padding:4px 10px;font-size:11.5px">' + esc(t('dismiss')) + '</button>';
+    bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;display:none;align-items:center;justify-content:space-between;background:var(--sv-warning);color:#fff;padding:6px 14px;font-size:12.5px;font-weight:600;';
+    document.body.prepend(bar);
+    function show() { bar.style.display = 'flex'; }
+    function hide() { bar.style.display = 'none'; }
+    window.addEventListener('offline', show);
+    window.addEventListener('online', () => { hide(); location.reload(); });
+    if (!navigator.onLine) show();
+    bar.addEventListener('click', (e) => { if (e.target.closest('[data-act="dismissbar"]')) hide(); });
+  })();
+
   window.addEventListener('DOMContentLoaded', () => route());
 })();
