@@ -152,7 +152,7 @@ function setTheme() {
 }
 
 const SEED_PRESETS = {
-  '#2d6a4f': { c2: '#1b4332', c3: '#40916c', soft: 'rgba(45,106,79,0.1)', ink: '#ffffff' },
+  '#9cd9b0': { c2: '#5fbf8a', c3: '#3e8e67', soft: 'rgba(156,217,176,0.18)', ink: '#043c26' },
   '#a16207': { c2: '#713f12', c3: '#ca8a04', soft: 'rgba(161,98,7,0.12)', ink: '#ffffff' },
   '#1e40af': { c2: '#172554', c3: '#3b82f6', soft: 'rgba(30,64,175,0.12)', ink: '#ffffff' },
   '#6d28d9': { c2: '#4c1d95', c3: '#8b5cf6', soft: 'rgba(109,40,217,0.12)', ink: '#ffffff' },
