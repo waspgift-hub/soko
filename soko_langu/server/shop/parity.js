@@ -58,14 +58,14 @@
     if (!b) return;
     const u = AUTH.currentUser;
     if (!u) { b.hidden = true; return; }
-    DB.collection('chat_rooms').where('participants', 'array-contains', u.uid).get()
-      .then((s) => {
-        let n = 0;
-        s.forEach((d) => { const r = d.data() || {}; n += (r.unread_counts && r.unread_counts[u.uid]) || 0; });
-        if (n > 0) { b.hidden = false; b.textContent = n > 99 ? '99+' : n; }
-        else b.hidden = true;
-      })
-      .catch(() => { b.hidden = true; });
+    const key = 'unread_counts.' + u.uid;
+    const sum = (s) => { let n = 0; s.forEach((d) => { const r = d.data() || {}; n += (r.unread_counts && r.unread_counts[u.uid]) || 0; }); return n; };
+    const paint = (n) => { if (n > 0) { b.hidden = false; b.textContent = n > 99 ? '99+' : n; } else b.hidden = true; };
+    const base = DB.collection('chat_rooms').where('participants', 'array-contains', u.uid);
+    /* Fast path: only rooms with unread (needs composite index; falls back). */
+    base.where(key, '>', 0).get()
+      .then((s) => paint(sum(s)))
+      .catch(() => base.get().then((s) => paint(sum(s))).catch(() => { b.hidden = true; }));
   }
 
   /* ---------- Auth parity: phone OTP + Google ---------- */

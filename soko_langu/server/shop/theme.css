@@ -808,6 +808,10 @@ p { line-height: 1.55; }
 .sv-store-sub .sv-ver { color: var(--sv-success); }
 .sv-store-count { background: var(--sv-surface-2); padding: 2px 8px; border-radius: 999px; }
 .sv-store-metric { font-weight: 700; color: var(--sv-text); }
+.sv-dots { display: inline-flex; gap: 4px; align-items: center; }
+.sv-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: var(--sv-muted); }
+.sv-dot.g { background: var(--sv-success); }
+.sv-dot.a { background: var(--sv-warning); }
 .sv-wish-notes { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
 .sv-wish-note { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid var(--sv-border); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 12.5px; text-decoration: none; color: var(--sv-text); background: var(--sv-bg); }
 .sv-wish-note span { color: var(--sv-muted); font-size: 12px; }

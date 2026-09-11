@@ -68,7 +68,7 @@ const SV_T = {
     password: 'Nenosiri', have_account: 'Una akaunti?', no_account: 'Huna akaunti?',
     submit_signin: 'Ingia', submit_signup: 'Sajili', signout: 'Ondoka',
     profile: 'Akaunti yako', orders_my: 'Agizo Zangu', my_orders_empty: 'Huna agizo bado.',
-    order_statuses: { pending: 'Inafanyiwa kazi', quoted: 'Imehifadhiwa kimasaa', paid: 'Imelipwa', escrow_hold: 'Escrow imeanzishwa', escrow_held: 'Escrow imeanzishwa', dispatched: 'Imesafirishwa', confirmed: 'Imetolewa', completed: 'Imekamilika', cancelled: 'Imeghairiwa', disputed: 'Kuna mzozo', refunded: 'Imerudishiwa', failed: 'Imeshindikana' },
+    order_statuses: { pending: 'Inafanyiwa kazi', quoted: 'Imehifadhiwa kimasaa', paid: 'Imelipwa', escrow_hold: 'Escrow imeanzishwa', escrow_held: 'Escrow imeanzishwa', dispatched: 'Imesafirishwa', confirmed: 'Imetolewa', completed: 'Imekamilika', cancelled: 'Imeghairiwa', disputed: 'Kuna mzozo', refunded: 'Imerudishiwa', failed: 'Imeshindikana', expired: 'Muda umeisha' },
     status_label: 'Hali', order_total: 'Jumla', order_date: 'Tarehe', order_id: 'Oda #', wa_cta: 'Wasiliana kwa WhatsApp', call_seller: 'Piga Simu',
     price: 'Bei', wait_fetch: 'Inapakia...', err_generic: 'Kuna tatizo. Jaribu tena.',
     theme_light: 'Mchana', theme_dark: 'Usiku', lang_label: 'Lugha', to_top: 'Juu',
@@ -134,7 +134,7 @@ const SV_T = {
     password: 'Password', have_account: 'Have an account?', no_account: 'No account yet?',
     submit_signin: 'Sign in', submit_signup: 'Sign up', signout: 'Sign out',
     profile: 'Your account', orders_my: 'My Orders', my_orders_empty: 'No orders yet.',
-    order_statuses: { pending: 'Pending', quoted: 'Price quoted', paid: 'Paid', escrow_hold: 'Escrow active', escrow_held: 'Escrow active', dispatched: 'Dispatched', confirmed: 'Released', completed: 'Completed', cancelled: 'Cancelled', disputed: 'Disputed', refunded: 'Refunded', failed: 'Failed' },
+    order_statuses: { pending: 'Pending', quoted: 'Price quoted', paid: 'Paid', escrow_hold: 'Escrow active', escrow_held: 'Escrow active', dispatched: 'Dispatched', confirmed: 'Released', completed: 'Completed', cancelled: 'Cancelled', disputed: 'Disputed', refunded: 'Refunded', failed: 'Failed', expired: 'Expired' },
     status_label: 'Status', order_total: 'Total', order_date: 'Date', order_id: 'Order #',
     wa_cta: 'Chat on WhatsApp', call_seller: 'Call Seller', price: 'Price', wait_fetch: 'Loading...',
     err_generic: 'Something went wrong. Try again.',
@@ -164,9 +164,9 @@ const SV_T = {
   },
 };
 
-const SV_STATUS_ORDER = [
+  const SV_STATUS_ORDER = [
   'pending', 'quoted', 'paid', 'escrow_hold', 'escrow_held', 'dispatched',
-  'confirmed', 'completed', 'disputed', 'refunded', 'cancelled', 'failed',
+  'confirmed', 'completed', 'disputed', 'refunded', 'cancelled', 'failed', 'expired',
 ];
 
 Object.assign(SV_T.sw, {

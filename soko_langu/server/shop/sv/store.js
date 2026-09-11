@@ -56,9 +56,30 @@
       if (d && !isNaN(d.getTime())) since = d.getFullYear();
     } catch (_) {}
 
+    /* Server-authoritative trust passport (public endpoint). Uses the
+       seller's own profile link when present; levels only — the numeric
+       reliability score is intentionally not exposed. Falls back to
+       product-derived metrics below when unavailable. */
+    let dots = '';
+    try {
+      const ud = u && u.exists ? u.data() : null;
+      const pid = ud && (ud.sellerProfileId || ud.sellerProfileID || ud.sellerId || ud.storeSlug);
+      if (pid && typeof apiGet === 'function') {
+        const r = await reqTimeout(apiGet('/api/v1/trust/sellers/' + encodeURIComponent(pid) + '/passport'), 8000);
+        if (document.body.dataset.route !== 'store') return;
+        const pp = r && (r.data || r.metrics ? (r.data || r) : null);
+        if (pp && Array.isArray(pp.indicators) && pp.indicators.length) {
+          dots = '<span class="sv-dots">' + pp.indicators.map((g) =>
+            '<span class="sv-dot ' + (g.level === 'green' ? 'g' : g.level === 'amber' ? 'a' : 'x') + '" title="' + esc(g.key) + (g.value != null ? ': ' + g.value + '%' : '') + '"></span>'
+          ).join('') + '</span>';
+        }
+      }
+    } catch (_) {}
+
     const metrics = (avg > 0 ? '<span class="sv-store-metric">★ ' + avg.toFixed(1) + ' (' + rc + ')</span>' : '')
       + (sold > 0 ? '<span class="sv-store-metric">' + sold + ' ' + esc(t('sold')) + '</span>' : '')
-      + (since ? '<span class="sv-store-metric">' + esc(t('sv_since')) + ' ' + since + '</span>' : '');
+      + (since ? '<span class="sv-store-metric">' + esc(t('sv_since')) + ' ' + since + '</span>' : '')
+      + dots;
 
     const cats = [...new Set(list.map((p) => p.category).filter(Boolean))];
     const catRow = cats.length > 1

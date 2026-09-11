@@ -28,7 +28,7 @@ const view = document.getElementById('view');
 const toastEl = document.getElementById('toast');
 const NUMF = new Intl.NumberFormat('en-TZ');
 const PAY_STATES = new Set(['paid', 'escrow_hold', 'escrow_held', 'paid_escrow_held', 'pending_escrow_release', 'dispatched', 'en_route', 'confirmed', 'delivered', 'completed']);
-const BAD_STATES = new Set(['failed', 'cancelled']);
+const BAD_STATES = new Set(['failed', 'cancelled', 'expired']);
 
 let lang = 'sw';
 let theme = localStorage.getItem('sv_shop_theme') || 'light';
@@ -1043,7 +1043,7 @@ async function renderWishlist() {
 
 /* ---------- Orders ---------- */
 
-const FILTER_STATES = { active: ['pending', 'quoted', 'paid', 'dispatched', 'confirmed'], completed: ['completed'], cancelled: ['cancelled', 'disputed', 'refunded'] };
+const FILTER_STATES = { active: ['pending', 'quoted', 'paid', 'dispatched', 'confirmed'], completed: ['completed'], cancelled: ['cancelled', 'disputed', 'refunded', 'expired'] };
 function renderOrders() {
   setLang();
   setHero(false);
@@ -1140,10 +1140,13 @@ async function renderOrderDetail(id) {
   const st = order.status || 'pending';
   const timelineIdx = SV_STATUS_ORDER.indexOf(st);
   const pill = PAY_STATES.has(st) ? 'done' : (BAD_STATES.has(st) ? 'bad' : 'wait');
+  const earlyFail = st === 'failed' || st === 'cancelled' || st === 'expired';
   const tl = SV_STATUS_ORDER.map((s, i) => {
-    const done = timelineIdx >= 0 && i < timelineIdx
-      || (s === st)
-      || (PAY_STATES.has(s) && PAY_STATES.has(st));
+    const done = earlyFail
+      ? (s === 'pending' || s === st)
+      : (timelineIdx >= 0 && i < timelineIdx
+        || (s === st)
+        || (PAY_STATES.has(s) && PAY_STATES.has(st)));
     return '<div class="st' + (done ? ' done' : '') + '"><span class="tick">✓</span>' + esc(SV_T[lang].order_statuses[s] || s) + '</div>';
   }).join('');
   view.innerHTML = '<div class="container-wide"><div class="order-detail">'
@@ -1186,9 +1189,12 @@ async function renderOrderDetail(id) {
 function guestOrderHtml(o, id) {
   const st = o.status || 'pending';
   const pill = PAY_STATES.has(st) ? 'done' : (BAD_STATES.has(st) ? 'bad' : 'wait');
+  const earlyFail = st === 'failed' || st === 'cancelled' || st === 'expired';
   const tl = SV_STATUS_ORDER.map((s, i) => {
     const idx = SV_STATUS_ORDER.indexOf(st);
-    const done = (idx >= 0 && i < idx) || (s === st) || (PAY_STATES.has(s) && PAY_STATES.has(st));
+    const done = earlyFail
+      ? (s === 'pending' || s === st)
+      : ((idx >= 0 && i < idx) || (s === st) || (PAY_STATES.has(s) && PAY_STATES.has(st)));
     return '<div class="st' + (done ? ' done' : '') + '"><span class="tick">✓</span>' + esc(SV_T[lang].order_statuses[s] || s) + '</div>';
   }).join('');
   const addr = [o.region, o.district, o.ward, o.street].filter(Boolean).join(', ');
