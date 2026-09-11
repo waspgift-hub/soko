@@ -34,16 +34,16 @@ extension AppColorScheme on ColorScheme {
       brightness == Brightness.dark ? const Color(0xFF262626) : const Color(0xFFE5E5E5);
 
   Color get brandPrimary => brightness == Brightness.dark
-      ? const Color(0xFFFFFFFF)
-      : const Color(0xFF000000);
+      ? const Color(0xFF52B788)
+      : const Color(0xFF2D6A4F);
 
   Color get brandAccent => brightness == Brightness.dark
-      ? const Color(0xFFB0B0B0)
-      : const Color(0xFF333333);
+      ? const Color(0xFF74C69D)
+      : const Color(0xFF40916C);
 
   Color get brandSuccess => brightness == Brightness.dark
-      ? const Color(0xFFD4D4D8)
-      : const Color(0xFF111111);
+      ? const Color(0xFF52B788)
+      : const Color(0xFF2D6A4F);
 
   Color get brandWarning => brightness == Brightness.dark
       ? const Color(0xFFE4E4E7)
@@ -90,7 +90,8 @@ extension AppColorScheme on ColorScheme {
       : const Color(0x08000000);
 
   // WhatsApp CTA buttons keep the official brand green so users instantly
-  // recognize the "chat on WhatsApp" affordance; everything else is grayscale.
+  // recognize the "chat on WhatsApp" affordance; the rest uses the Soko Vibe
+  // green accent on a white/black canvas.
   Color get whatsappGreen => const Color(0xFF25D366);
 
   Color get trendingOrange => brightness == Brightness.dark
@@ -98,8 +99,8 @@ extension AppColorScheme on ColorScheme {
       : const Color(0xFF171717);
 
   Color get successGreen => brightness == Brightness.dark
-      ? const Color(0xFFD4D4D8)
-      : const Color(0xFF111111);
+      ? const Color(0xFF52B788)
+      : const Color(0xFF2D6A4F);
 
   Color get boostGold => brightness == Brightness.dark
       ? const Color(0xFFF5F5F5)

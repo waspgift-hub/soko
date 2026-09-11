@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'app_typography.dart';
 
-// The whole product is a strict black-and-white design language: no chromatic
-// accent is derived from the seed. `seed` is kept for API compatibility with the
-// theme-persistence layer but never influences the rendered palette.
+// Brand rule: Soko Vibe green accent for emphasis (buttons, links, selection),
+// white canvas in light mode and black canvas in dark mode. Grays carry only
+// informational hierarchy. `seed` stays for API compatibility with theme
+// persistence but never influences the rendered palette.
 ThemeData buildLightTheme(Color seed) {
   final scheme = const ColorScheme.light(
-    primary: Color(0xFF000000),
+    primary: Color(0xFF2D6A4F),
     onPrimary: Color(0xFFFFFFFF),
-    primaryContainer: Color(0xFFE3E3E3),
-    onPrimaryContainer: Color(0xFF1C1C1C),
+    primaryContainer: Color(0xFFD7EBDD),
+    onPrimaryContainer: Color(0xFF0B2E21),
     inversePrimary: Color(0xFFB8B8B8),
     secondary: Color(0xFF3B3B3B),
     onSecondary: Color(0xFFFFFFFF),
@@ -46,10 +47,10 @@ ThemeData buildLightTheme(Color seed) {
 
 ThemeData buildDarkTheme(Color seed) {
   final scheme = const ColorScheme.dark(
-    primary: Color(0xFFFFFFFF),
-    onPrimary: Color(0xFF000000),
-    primaryContainer: Color(0xFF232323),
-    onPrimaryContainer: Color(0xFFFFFFFF),
+    primary: Color(0xFF52B788),
+    onPrimary: Color(0xFF052E16),
+    primaryContainer: Color(0xFF1B4332),
+    onPrimaryContainer: Color(0xFFAFE3C7),
     inversePrimary: Color(0xFF303030),
     secondary: Color(0xFFD6D6D6),
     onSecondary: Color(0xFF000000),

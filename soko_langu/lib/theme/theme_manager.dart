@@ -7,7 +7,9 @@ class ThemeManager extends ChangeNotifier {
   static const String _darkKey = 'app_dark_mode';
   static const String _themeModeKey = 'app_theme_mode';
   static const String _seedKey = 'theme_seed_color';
-  static const int _defaultSeed = 0xFF000000;
+  // Soko Vibe brand green; seed drives brandGradient consumers and the
+  // Customize Shop swatch selection, not the primary ColorScheme.
+  static const int _defaultSeed = 0xFF2D6A4F;
 
   ThemeMode _themeMode = ThemeMode.system;
   bool _isDark = false;
