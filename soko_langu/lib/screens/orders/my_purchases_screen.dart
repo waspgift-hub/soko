@@ -76,7 +76,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
         case 'completed':
           return s == 'completed' || s == 'delivery_confirmed';
         case 'failed':
-          return s == 'failed' || s == 'cancelled' || s == 'refunded';
+          return s == 'failed' || s == 'cancelled' || s == 'refunded' || s == 'expired';
         default:
           return true;
       }
@@ -734,7 +734,7 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
         case 'completed':
           return s == 'completed' || s == 'delivery_confirmed';
         case 'failed':
-          return s == 'failed' || s == 'cancelled' || s == 'refunded';
+          return s == 'failed' || s == 'cancelled' || s == 'refunded' || s == 'expired';
         default:
           return true;
       }
@@ -1698,6 +1698,7 @@ class _OrderGlassCard extends StatelessWidget {
     final canDelete =
         status == 'pending' ||
         status == 'failed' ||
+        status == 'expired' ||
         status == 'awaiting_payment' ||
         status == 'awaiting_shipping_quote';
 

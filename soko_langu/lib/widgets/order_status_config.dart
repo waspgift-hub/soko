@@ -81,6 +81,12 @@ OrderStatusInfo orderStatusInfo(String status, ColorScheme cs) {
         icon: Icons.cancel_rounded,
         labelKey: 'cancelled',
       );
+    case 'expired':
+      return OrderStatusInfo(
+        color: cs.error,
+        icon: Icons.timer_off_rounded,
+        labelKey: 'expired',
+      );
     case 'refunded':
       return OrderStatusInfo(
         color: cs.error,

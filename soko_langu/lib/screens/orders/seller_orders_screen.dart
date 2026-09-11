@@ -24,7 +24,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
   Timer? _autoRefreshTimer;
   DateTime? _lastAutoRefresh;
 
-  static const _filters = ['all', 'pending', 'awaiting_shipping_quote', 'awaiting_payment', 'escrow_hold', 'dispatched', 'delivered', 'completed', 'refunded'];
+  static const _filters = ['all', 'pending', 'awaiting_shipping_quote', 'awaiting_payment', 'escrow_hold', 'dispatched', 'delivered', 'completed', 'refunded', 'expired'];
 
   static const _filterLabels = {
     'all': 'all',
@@ -36,6 +36,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
     'delivered': 'delivered',
     'completed': 'completed',
     'refunded': 'refunded',
+    'expired': 'expired',
   };
 
   @override
