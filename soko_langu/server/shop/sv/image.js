@@ -5,16 +5,26 @@
   const C = window.SV.components;
   const { icon } = C;
 
-  /* CDN transformation config. Adjust BASE to the real image host. */
+  /* Display widths per size key — must reflect the real rendered width so
+     the browser picks a small file instead of the largest candidate. */
   const IMG = {
-    base: '',                       /* e.g. 'https://cdn.sokovibe.co.tz' */
+    base: '',
     defaultSize: 400,
     sizes: { thumb: 200, small: 400, medium: 640, large: 1024 },
-    /* Build a resized URL. Most CDNs accept ?w=400 or /w_400/. */
+    sizesAttr: {
+      thumb: '(max-width: 640px) 30vw, 120px',
+      small: '(max-width: 640px) 44vw, 200px',
+      medium: '(max-width: 640px) 44vw, 220px',
+      large: '(max-width: 640px) 96vw, 640px'
+    },
+    /* Build a resized URL. Cloudinary delivery URLs get a real in-path
+       transformation (query params alone do NOT resize on Cloudinary);
+       anything else falls back to width/format query params. */
     resize(url, w) {
       if (!url) return '';
-      if (!this.base) return url + (url.includes('?') ? '&' : '?') + 'w=' + w + '&fm=webp';
-      return this.base + url + '?w=' + w + '&fm=webp';
+      const m = String(url).match(/^(https?:\/\/[^/]+\/[^/]+\/image\/upload\/)(.*)$/);
+      if (m) return m[1] + 'w_' + w + ',f_auto,q_auto/' + m[2];
+      return url + (url.includes('?') ? '&' : '?') + 'w=' + w + '&fm=webp';
     },
     /* srcset string for a given original URL */
     srcset(url) {
@@ -33,6 +43,7 @@
     const loading = opts.lazy !== false ? 'lazy' : 'eager';
     const cls = opts.class ? opts.class : '';
     const style = opts.style ? opts.style : '';
+    const sizesAttr = opts.sizes || IMG.sizesAttr[size] || IMG.sizesAttr.medium;
 
     /* low-res blur placeholder when a tiny URL is provided */
     let blurAttr = '';
@@ -40,10 +51,10 @@
 
     return '<div class="sv-img" style="aspect-ratio:' + (opts.ratio || '1 / 1') + ';overflow:hidden;' + style + '">'
       + '<picture>'
-      + '<source type="image/avif" srcset="' + IMG.srcset(url) + '" sizes="(max-width: 640px) 100vw, ' + w + 'px">'
-      + '<source type="image/webp" srcset="' + IMG.srcset(url) + '" sizes="(max-width: 640px) 100vw, ' + w + 'px">'
+      + '<source type="image/avif" srcset="' + IMG.srcset(url) + '" sizes="' + sizesAttr + '">'
+      + '<source type="image/webp" srcset="' + IMG.srcset(url) + '" sizes="' + sizesAttr + '">'
       + '<img src="' + IMG.resize(url, w) + '" '
-      + 'srcset="' + IMG.srcset(url) + '" sizes="(max-width: 640px) 100vw, ' + w + 'px" '
+      + 'srcset="' + IMG.srcset(url) + '" sizes="' + sizesAttr + '" '
       + 'alt="' + esc(altText) + '" loading="' + loading + '" decoding="async" '
       + 'width="' + w + '" height="' + w + '" '
       + 'class="' + cls + '"' + blurAttr

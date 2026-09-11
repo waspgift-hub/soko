@@ -106,6 +106,13 @@ function toggleWish(id) {
   const added = k < 0;
   if (added) wish.push(id); else wish.splice(k, 1);
   saveWish();
+  try {
+    const px = JSON.parse(localStorage.getItem('sv_shop_wish_px') || '{}');
+    if (added) {
+      const pc = (typeof productCache !== 'undefined' && productCache[id]) || (typeof Feed !== 'undefined' && Feed.list.find((x) => x.id === id)) || null;
+      if (pc && Number(pc.price) > 0) { px[id] = Number(pc.price); localStorage.setItem('sv_shop_wish_px', JSON.stringify(px)); }
+    } else if (px[id] != null) { delete px[id]; localStorage.setItem('sv_shop_wish_px', JSON.stringify(px)); }
+  } catch (_) {}
   refreshWishBadge();
   toast(added ? '✔ ' + t('wish_saved') : '✕ ' + t('wish_removed'));
   return added;
@@ -1015,7 +1022,23 @@ async function renderWishlist() {
   const ids = wish.slice();
   if (!ids.length) { host.innerHTML = emptyHtml(t('wish_empty'), '', t('home_browse')); return; }
   const prods = (await Promise.all(ids.map(getProduct))).filter(Boolean);
-  host.innerHTML = prods.length ? prods.map(cardHtml).join('') : emptyHtml(t('wish_empty'), '', t('home_browse'));
+  let px = {};
+  try { px = JSON.parse(localStorage.getItem('sv_shop_wish_px') || '{}'); } catch (_) {}
+  const byId = {};
+  prods.forEach((p) => { byId[p.id] = p; });
+  const notes = [];
+  prods.forEach((p) => {
+    if ((p.isActive === false || (Number(p.stock) || 0) <= 0)) {
+      notes.push('<a class="sv-wish-note is-off" href="#/p/' + encodeURIComponent(p.id) + '"><b>' + esc(p.name) + '</b><span>' + esc(t('out_stock')) + '</span></a>');
+    } else if (px[p.id] != null && Number(p.price) < Number(px[p.id])) {
+      notes.push('<a class="sv-wish-note is-drop" href="#/p/' + encodeURIComponent(p.id) + '"><b>' + esc(p.name) + '</b><span>▼ ' + esc(t('sv_price_dropped')) + ': ' + fmtTZS(px[p.id]) + ' → ' + fmtTZS(p.price) + '</span></a>');
+    }
+  });
+  ids.forEach((id) => {
+    if (!byId[id]) notes.push('<span class="sv-wish-note is-off"><b>' + esc(String(id).slice(0, 12)) + '</b><span>' + esc(t('out_stock')) + '</span></span>');
+  });
+  host.innerHTML = (notes.length ? '<div class="sv-wish-notes">' + notes.join('') + '</div>' : '')
+    + (prods.length ? prods.map(cardHtml).join('') : emptyHtml(t('wish_empty'), '', t('home_browse')));
 }
 
 /* ---------- Orders ---------- */
@@ -1125,7 +1148,8 @@ async function renderOrderDetail(id) {
   }).join('');
   view.innerHTML = '<div class="container-wide"><div class="order-detail">'
     + '<div class="od-head"><h2>' + t('orders_my') + '</h2>'
-    + '<span class="pill ' + pill + '">' + esc(SV_T[lang].order_statuses[st] || st) + '</span></div>'
+    + '<span class="pill ' + pill + '">' + esc(SV_T[lang].order_statuses[st] || st) + '</span>'
+    + '<button type="button" class="sv-btn sv-btn-outline" data-act="refreshorder" data-p="' + esc(String(order.orderId || id)) + '" style="margin-left:auto">' + esc(t('sv_refresh')) + '</button></div>'
     + '<div class="card-block"><h3>' + t('cart_checkout') + '</h3>'
     + '<div class="line-item"><div class="thumb">' + (order.productImage ? '<img src="' + esc(order.productImage) + '" alt="" onerror="this.remove()">' : '') + '</div>'
     + '<div class="mid"><div class="nm">' + esc(order.productName || 'Agizo') + '</div>'
@@ -1218,6 +1242,7 @@ function renderAccount() {
     + '</div>'
     + '<div><div class="tabs">'
     + '<button class="tab active" data-act="tab" data-tab="orders">' + t('orders_my') + '</button>'
+    + '<button class="tab" data-act="tab" data-tab="following">' + t('following') + '</button>'
     + '<button class="tab" data-act="tab" data-tab="profile">Akaunti</button>'
     + '</div><div id="tabBody"></div></div>'
     + '</div></div>';
@@ -1229,7 +1254,31 @@ function switchTab(tab) {
   const body = document.getElementById('tabBody');
   if (!body) return;
   if (tab === 'orders') { body.innerHTML = '<div class="order-list" id="ordHere"></div>'; loadOrdersInto(body); }
+  else if (tab === 'following') { body.innerHTML = '<div id="followHere"><div class="skel" style="height:64px"></div><div class="skel" style="height:64px"></div></div>'; loadFollowingInto(); }
   else body.innerHTML = profileEditHtml();
+}
+
+async function loadFollowingInto() {
+  const slot = document.getElementById('followHere');
+  if (!slot) return;
+  const user = AUTH.currentUser;
+  if (!user) { slot.innerHTML = emptyHtml(t('need_auth'), '', t('nav_signin')); return; }
+  let ids = [];
+  try {
+    const snap = await DB.collection('users').doc(user.uid).collection('following').limit(60).get();
+    ids = snap.docs.map((d) => d.id);
+  } catch (_) {}
+  if (!ids.length) { slot.innerHTML = emptyHtml(t('sv_no_following'), '', t('home_browse')); return; }
+  const rows = ids.map((fid) => {
+    const p = (typeof Feed !== 'undefined' && Feed.list.find((x) => x.sellerId === fid)) || null;
+    const nm = p ? p.sellerName : 'Muuzaji';
+    return '<div class="cart-item"><div class="avatar">' + esc(String(nm).slice(0, 1).toUpperCase()) + '</div>'
+      + '<div class="mid"><div class="nm">' + esc(nm) + (p && p.sellerKycApproved ? ' ' + SELLER_SEAL : '') + '</div></div>'
+      + '<a class="sv-btn sv-btn-outline" href="#/store/' + encodeURIComponent(fid) + '">' + esc(t('sv_store')) + '</a>'
+      + '<button type="button" class="sv-btn sv-btn-outline" data-act="follow" data-following="' + esc(fid) + '">' + esc(t('following')) + '</button>'
+      + '</div>';
+  }).join('');
+  slot.innerHTML = rows;
 }
 
 async function loadOrdersInto(host) {
@@ -1855,6 +1904,15 @@ const ACTIONS = {
   },
   closecats: () => closeCats(),
   ofilter: (el) => { orderFilter = el.dataset.v; renderOrders(); },
+  refreshorder: (el) => { renderOrderDetail(decodeURIComponent(el.dataset.p || '')); },
+  scat: (el) => {
+    const v = el.dataset.v || '';
+    document.querySelectorAll('[data-act="scat"]').forEach((b) => b.classList.toggle('on', (b.dataset.v || '') === v));
+    const host = document.getElementById('svStoreGrid');
+    if (!host || !window.__storeList || !window.SV.components) return;
+    const items = v ? window.__storeList.filter((p) => p.category === v) : window.__storeList;
+    host.innerHTML = items.map(window.SV.components.svCard).join('');
+  },
   dsub: (el) => fillDrawerSub(decodeURIComponent(el.dataset.cat || '')),
   openprod: (el) => { location.hash = '#/p/' + encodeURIComponent(el.dataset.p); },
   qaddcart: (el, e) => { e.preventDefault(); e.stopPropagation(); quickAdd(decodeURIComponent(el.dataset.p)); },

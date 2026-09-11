@@ -69,6 +69,27 @@
   }
   function clearHist() { try { localStorage.removeItem(HIST_KEY); } catch (e) {} }
 
+  /* Deterministic price-intent parsing ("chini ya 500k", "under 20000",
+     "kati ya 10k na 50k"). Digits only — no AI, no guessing. */
+  let lastIntentQ = '', noIntentMin = false, noIntentMax = false;
+  function intentNum(s) {
+    const m = String(s || '').replace(/,/g, '').match(/[\d.]+/);
+    if (!m) return null;
+    let n = parseFloat(m[0]);
+    if (/k\b/.test(String(s).toLowerCase())) n *= 1000;
+    return n > 0 ? Math.round(n) : null;
+  }
+  function priceIntent(qn) {
+    const t = ' ' + (qn || '') + ' ';
+    let m = t.match(/(?:chini ya|under|below|less than)\s+([\d.,]+\s*k?)/);
+    if (m) { const v = intentNum(m[1]); if (v) return { maxp: v }; }
+    m = t.match(/(?:zaidi ya|above|over|more than)\s+([\d.,]+\s*k?)/);
+    if (m) { const v = intentNum(m[1]); if (v) return { minp: v }; }
+    m = t.match(/(?:kati ya|between)\s+([\d.,]+\s*k?)\s+(?:na|and)\s+([\d.,]+\s*k?)/);
+    if (m) { const a = intentNum(m[1]), b = intentNum(m[2]); if (a && b) return { minp: Math.min(a, b), maxp: Math.max(a, b) }; }
+    return {};
+  }
+
   function curParams() { return Object.assign({}, paramsOf()); }
   function num(v) { const n = parseFloat(v); return isNaN(n) ? null : n; }
 
@@ -272,6 +293,8 @@
     if (k === 'c') { if (p.c && p.c === v) delete p.c; else p.c = v; }
     else if (k === 'verified' || k === 'ws' || k === 'disc') { if (p[k]) delete p[k]; else p[k] = '1'; }
     else if (k === 'star') { if (num(p[k]) === num(v)) delete p[k]; else p[k] = v; }
+    else if (k === 'minp') { noIntentMin = true; delete p[k]; }
+    else if (k === 'maxp') { noIntentMax = true; delete p[k]; }
     else if (k === 'cond' || k === 'brand' || k === 'sub') { if (p[k] === v) delete p[k]; else p[k] = v; }
     else { delete p[k]; }
     goHash(p);
@@ -292,6 +315,8 @@
     const prm = curParams();
     const query = q == null ? (prm.q || '') : q;
     const qNorm = norm(query);
+    if (query !== lastIntentQ) { lastIntentQ = query; noIntentMin = noIntentMax = false; }
+    const intent = priceIntent(qNorm);
     document.body.dataset.route = 'search';
     Feed.mode = { kind: 'query', q: query, c: cat };
     if (query) recordHist(query);
@@ -311,8 +336,8 @@
       brand: prm.brand || '',
       sub: prm.sub || '',
       bQuery: query,
-      minp: num(prm.minp),
-      maxp: num(prm.maxp),
+      minp: num(prm.minp) != null ? num(prm.minp) : ((!noIntentMin && intent.minp != null) ? intent.minp : null),
+      maxp: num(prm.maxp) != null ? num(prm.maxp) : ((!noIntentMax && intent.maxp != null) ? intent.maxp : null),
       star: num(prm.star) || 0,
       sort: prm.sort || 'rel',
       view: prm.view || (localStorage.getItem('sv_shop_view') || 'grid'),

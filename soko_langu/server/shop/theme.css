@@ -807,6 +807,13 @@ p { line-height: 1.55; }
 .sv-store-sub { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; font-size: 12.5px; color: var(--sv-muted); margin-top: 4px; }
 .sv-store-sub .sv-ver { color: var(--sv-success); }
 .sv-store-count { background: var(--sv-surface-2); padding: 2px 8px; border-radius: 999px; }
+.sv-store-metric { font-weight: 700; color: var(--sv-text); }
+.sv-wish-notes { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.sv-wish-note { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid var(--sv-border); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 12.5px; text-decoration: none; color: var(--sv-text); background: var(--sv-bg); }
+.sv-wish-note span { color: var(--sv-muted); font-size: 12px; }
+.sv-wish-note.is-drop { border-color: var(--sv-success); }
+.sv-wish-note.is-drop span { color: var(--sv-success); font-weight: 700; }
+.sv-wish-note.is-off { opacity: 0.75; }
 .sv-store-cta { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .sv-store-msg { gap: 6px; }
 .sv-store .grid { margin-top: var(--space-6); }

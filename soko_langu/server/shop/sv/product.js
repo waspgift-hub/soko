@@ -61,6 +61,16 @@
       + '<div class="sv-rail" data-rail>'
       + list.map(C.svCard).join('')
       + '</div></section>');
+    const mine = Feed.list.filter((x) => x.id !== id && x.sellerId && x.sellerId === p.sellerId && x.stock > 0).slice(0, 10);
+    if (mine.length >= 2) {
+      const storeHref = '#/store/' + encodeURIComponent(p.sellerId);
+      anchor.insertAdjacentHTML('afterend',
+        '<section class="sv-related sv-section">'
+        + C.sectionHead(t('sv_more_seller'), '', storeHref, t('sv_view_all'))
+        + '<div class="sv-rail" data-rail>'
+        + mine.map(C.svCard).join('')
+        + '</div></section>');
+    }
   }
 
   async function wrapped(id) {

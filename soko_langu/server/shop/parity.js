@@ -636,8 +636,9 @@
     } catch (_) { render([]); }
     await markRoomRead(roomId);
     let lastSeen = Date.now();
+    if (window.__chatUnsub) { try { window.__chatUnsub(); } catch (_) {} window.__chatUnsub = null; }
     try {
-      DB.collection('chat_rooms').doc(roomId).collection('messages').where('timestamp', '>', new Date(lastSeen)).onSnapshot((snap) => {
+      const unsub = DB.collection('chat_rooms').doc(roomId).collection('messages').where('timestamp', '>', new Date(lastSeen)).onSnapshot((snap) => {
         if (snap.docs.length) {
           const added = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
           const msgsEl = document.getElementById('chatMsgs');
@@ -657,7 +658,17 @@
           });
         }
       });
+      window.__chatUnsub = unsub;
     } catch (_) {}
+    if (!window.__chatUnsubHook) {
+      window.__chatUnsubHook = true;
+      window.addEventListener('hashchange', () => {
+        if ((location.hash || '').indexOf('#/chat/') !== 0 && window.__chatUnsub) {
+          try { window.__chatUnsub(); } catch (_) {}
+          window.__chatUnsub = null;
+        }
+      });
+    }
     const form = document.getElementById('chatForm');
     if (form) form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -1200,6 +1211,7 @@
       + '<option>' + esc(t('disp_not_received')) + '</option>'
       + '<option>' + esc(t('disp_wrong_item')) + '</option>'
       + '<option>' + esc(t('disp_damaged')) + '</option>'
+      + '<option>' + esc(t('disp_different')) + '</option>'
       + '<option>' + esc(t('disp_other')) + '</option></select></div>'
       + '<div class="field"><label>' + esc(t('dispute_desc')) + '</label><textarea id="dpDesc" rows="3"></textarea></div>'
       + '<div class="rowbtns"><button class="btn-dark" data-act="dispute2" data-o="' + esc(oid) + '">' + esc(t('submit')) + '</button>'
