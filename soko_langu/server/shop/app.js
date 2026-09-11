@@ -796,25 +796,31 @@ else if (el.dataset.act === 'img') {
      }
   };
   /* ---------- SEO: Product structured data ---------- */
-  injectJsonLd({
-    '@context': 'https://schema.org',
-    '@type': 'Product',
-    'name': p.name,
-    'image': (p.images && p.images[0]) ? p.images[0] : undefined,
-    'description': (p.description || '').slice(0, 200),
-    'sku': p.id,
-    'offers': {
-      '@type': 'Offer',
-      'url': location.href,
-      'priceCurrency': 'TZS',
-      'price': Number(p.price) || 0,
-      'availability': (p.stock > 0) ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-      'seller': { '@type': 'Organization', 'name': p.sellerName || 'Soko Vibe' }
+  injectJsonLd({ '@context': 'https://schema.org', '@graph': [
+    {
+      '@type': 'Product',
+      'name': p.name,
+      'image': (p.images && p.images[0]) ? p.images[0] : undefined,
+      'description': (p.description || '').slice(0, 200),
+      'sku': p.id,
+      'offers': {
+        '@type': 'Offer',
+        'url': location.href,
+        'priceCurrency': 'TZS',
+        'price': Number(p.price) || 0,
+        'availability': (p.stock > 0) ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+        'seller': { '@type': 'Organization', 'name': p.sellerName || 'Soko Vibe' }
+      },
+      'aggregateRating': (p.rating > 0 && p.reviewCount > 0)
+        ? { '@type': 'AggregateRating', 'ratingValue': p.rating, 'reviewCount': p.reviewCount, 'bestRating': 5, 'worstRating': 1 }
+        : undefined,
     },
-    'aggregateRating': (p.rating > 0 && p.reviewCount > 0)
-      ? { '@type': 'AggregateRating', 'ratingValue': p.rating, 'reviewCount': p.reviewCount, 'bestRating': 5, 'worstRating': 1 }
-      : undefined,
-  });
+    { '@type': 'BreadcrumbList', 'itemListElement': [
+      { '@type': 'ListItem', 'position': 1, 'name': 'Nyumbani', 'item': location.origin + '/shop/#/' },
+      { '@type': 'ListItem', 'position': 2, 'name': p.category || 'Bidhaa', 'item': location.origin + '/shop/#/c/' + encodeURIComponent(p.category || '') },
+      { '@type': 'ListItem', 'position': 3, 'name': p.name }
+    ] }
+  ] });
   setPageMeta(p.name + ' — Soko Vibe', (p.description || '').slice(0, 160), location.href, (p.images && p.images[0]) ? p.images[0] : undefined);
 
   loadReviews(p.id, p.sellerId);
@@ -1432,6 +1438,7 @@ function renderPaymentScreen(p, qty, variantId, lineTotal, unit, orderId, phone,
     + '<h2>' + t('pay_wait') + '</h2>'
     + '<div class="order-no">' + t('order_id') + ' ' + esc(String(orderId).slice(0, 12)) + '</div>'
     + '<div class="sub">' + fmtTZS(lineTotal) + ' · ' + esc(p.name) + '</div>'
+    + '<div class="sub" style="font-size:12px;color:var(--sv-success)">' + esc(t('escrow_note')) + '</div>'
     + '<div class="spinner" id="paySpin"></div>'
     + '<div id="payState" class="section-muted">' + t('pay_status_pending') + '…</div>'
     + '<div class="status-timeline" id="payTimeline"></div>'
@@ -2034,9 +2041,9 @@ function refreshChip() {
 function highlightActiveNav() {
   const h = location.hash.replace(/^#\/?/, '');
   const seg = (h.split('?')[0]).split('/').filter(Boolean)[0] || '';
-  const map = { '': 'home', p: 'home', c: 'cats', search: 'search', orders: 'orders', o: 'orders', wishlist: 'account', seller: 'account', account: 'account' };
+  const map = { '': 'home', p: 'home', c: 'cats', search: 'search', cart: 'cart', checkout: 'cart', orders: '', o: '', wishlist: 'account', seller: 'account', account: 'account' };
   const key = map[seg] || '';
-  const targets = { home: 'a[href="#/"]', cats: '[data-bn-cat]', search: 'a[href="#/search"]', orders: 'a[href="#/orders"]', account: 'a[href="#/account"]' };
+  const targets = { home: '[data-bn][href="#/"]', cats: '[data-bn-cat]', search: '[data-bn][href="#/search"]', cart: '[data-bn][href="#/cart"]', account: '[data-bn][href="#/account"]' };
   const tgt = targets[key] ? document.querySelector(targets[key]) : null;
   $all('[data-bn]').forEach((b) => b.classList.toggle('on', b === tgt));
   const curPath = location.hash.split('?')[0];
@@ -2128,7 +2135,7 @@ AUTH.onAuthStateChanged((user) => {
   }
 });
 
-window.addEventListener('hashchange', () => { closeCats(); route(); highlightActiveNav(); });
+window.addEventListener('hashchange', () => { closeCats(); route(); highlightActiveNav(); if (window.seoForRoute) window.seoForRoute(); });
 
 (function init() {
   setTheme();
@@ -2163,8 +2170,10 @@ window.addEventListener('hashchange', () => { closeCats(); route(); highlightAct
 /* ---------- SEO / Structured Data (global) ---------- */
   window.injectJsonLd = function (obj) {
     try {
+      document.querySelectorAll('script[data-seo]').forEach((s) => s.remove());
       var s = document.createElement('script');
       s.type = 'application/ld+json';
+      s.setAttribute('data-seo', '1');
       s.textContent = JSON.stringify(obj);
       document.head.appendChild(s);
     } catch (e) { /* non-critical */ }
@@ -2181,7 +2190,7 @@ window.addEventListener('hashchange', () => { closeCats(); route(); highlightAct
     } catch (e) { /* non-critical */ }
   };
   /* SEO route meta (lightweight) */
-  (function seoForRoute() {
+  window.seoForRoute = function () {
     var h = location.hash.replace(/^#\/?/, '');
     var seg = h.split('?')[0].split('/').filter(Boolean);
     var base = location.origin + '/shop';
@@ -2193,8 +2202,13 @@ window.addEventListener('hashchange', () => { closeCats(); route(); highlightAct
       setPageMeta('Matokeo ya Utafutaji — Soko Vibe', 'Tafuta bidhaa, masoko, na wauzaji kwenye Soko Vibe.', base + '/search');
     } else {
       setPageMeta('Soko Vibe — Nunuza Bidhaa Mtandaoni Tanzania', 'Soko la Tanzania.', base + '/', 'https://www.sokovibe.co.tz/assets/icon-512.png');
+      injectJsonLd({ '@context': 'https://schema.org', '@graph': [
+        { '@type': 'Organization', 'name': 'Soko Vibe', 'url': 'https://www.sokovibe.co.tz/', 'description': 'Soko Vibe is a Tanzanian multi-vendor online marketplace connecting buyers with sellers across Tanzania.' },
+        { '@type': 'WebSite', 'name': 'Soko Vibe Duka', 'url': base + '/' }
+      ] });
     }
-  })();
+  };
+  window.seoForRoute();
 })();
 
 window.addEventListener('DOMContentLoaded', () => route());

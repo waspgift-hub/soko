@@ -13,7 +13,7 @@
       + '</div>'
       + '<div class="sv-promo-cta">'
       + '<a class="sv-btn sv-btn-promo" href="#/flash">' + esc(t('sv_cta_deals')) + '</a>'
-      + '<a class="sv-btn sv-btn-link" href="#/seller">' + esc(t('sv_cta_sell')) + '</a>'
+      + '<a class="sv-btn sv-btn-link" href="#/search">' + esc(t('sv_cta_cats')) + '</a>'
       + '</div>'
       + '</section>';
   }
