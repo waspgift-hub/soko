@@ -1,4 +1,4 @@
-/* Soko Vibe Duka — browser app.
+/* Soko Vibe Dukani — browser app.
    Single hash-router SPA. Reads the products collection directly from
    Firestore (same project as the app), mirrors the app's flat one-product
    order flow against the legacy /api orders + ClickPesa endpoints.
@@ -681,7 +681,10 @@ async function renderProduct(id) {
   }
   const bo = boosted(p);
   const soldout = p.stock <= 0;
-const mainImg = p.images[0] || '';
+    const mainImg = p.images[0] || '';
+    const videoHtml = p.videoUrl
+      ? '<div class="sv-pdp-video"><video src="' + esc(p.videoUrl) + '" controls preload="none" playsinline></video></div>'
+      : '';
     const mainImgHtml = (typeof window.SV !== 'undefined' && window.SV.image && window.SV.image.img)
       ? window.SV.image.img(mainImg, p.name, { size: 'large', ratio: '4 / 3', style: 'width:100%', class: 'ss-cover' })
       : '<div class="main"><img id="mainImg" src="' + esc(mainImg) + '" alt="' + esc(p.name) + '" onerror="this.replaceWith(Object.assign(document.createElement(\'div\'),{className:\'ph\',textContent:\'SOKO\'}))"></div>';
@@ -703,8 +706,9 @@ const mainImg = p.images[0] || '';
     : '<span class="tag stock">' + t('in_stock') + ': ' + p.stock + ' ' + esc(p.unit) + '</span>';
 
   view.innerHTML = '<div class="container-wide"><div class="detail">'
-    + '<div class="gallery">'
+      + '<div class="gallery">'
       + mainImgHtml
+      + videoHtml
       + (thumbs ? '<div class="thumbs">' + thumbs + '</div>' : '')
       + '</div>'
     + '<div class="dinfo">'
@@ -723,7 +727,7 @@ const mainImg = p.images[0] || '';
     + variants
     + '<div class="picker"><span class="section-muted">' + t('qty') + ':</span>'
     + '<div class="stepper"><button type="button" data-act="qminus" aria-label="-">−</button><span class="n" id="qtyN">1</span><button type="button" data-act="qplus" aria-label="+">+</button></div>'
-    + '<span class="section-muted" id="stockNote">' + (soldout ? t('out_stock') : (p.maxOrder ? 'max ' + p.maxOrder : '')) + '</span></div>'
+    + '<span class="section-muted" id="stockNote">' + (soldout ? t('out_stock') : ((p.minOrder && p.minOrder > 1 ? 'min ' + p.minOrder + ' · ' : '') + (p.maxOrder ? 'max ' + p.maxOrder : ''))) + '</span></div>'
     + '<div class="rowbtns">'
     + '<button class="icon-btn wish' + (wishHas(p.id) ? ' onfav' : '') + '" data-act="wish" data-p="' + encodeURIComponent(p.id) + '" title="' + esc(t('nav_wish')) + '" aria-label="' + esc(t('nav_wish')) + '">'
     + '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>'
@@ -736,6 +740,9 @@ const mainImg = p.images[0] || '';
     + '<div style="flex:1"><div class="nm">' + esc(p.sellerName) + (p.sellerKycApproved ? ' ' + SELLER_SEAL : '') + '</div>'
     + '<div class="loc">' + esc(p.location || 'Tanzania') + '</div></div></div>'
     + '<a class="sv-seller-link" href="#/store/' + encodeURIComponent(p.sellerId) + '">' + t('sv_store') + '</a>'
+    + (p.sellerPhone ? '<a class="sv-seller-link" href="tel:' + esc(String(p.sellerPhone).replace(/\s+/g, '')) + '">'
+      + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.9a2 2 0 0 1-.5 2.1L8.1 10a16 16 0 0 0 6 6l1.3-1.2a2 2 0 0 1 2.1-.5c.9.3 1.9.6 2.9.7a2 2 0 0 1 1.6 2z"/></svg>'
+      + esc(t('call_seller')) + '</a>' : '')
     + (p.sellerPhone ? '<a class="btn-wa btn-block" href="' + waLink(p.sellerPhone, 'Habari, ninauliza kuhusu ' + p.name + '.') + '" target="_blank" rel="noopener">'
       + '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>'
       + esc(t('wa_cta')) + '</a>' : '')
@@ -783,8 +790,9 @@ const mainImg = p.images[0] || '';
     if (!el) return;
     if (el.dataset.act === 'qplus') { sel.qty++; clampQ(); }
     else if (el.dataset.act === 'qminus') { sel.qty--; clampQ(); }
-    else if (el.dataset.act === 'addcart') { addToCart(p, sel); toast('✔ ' + t('add_to_cart_ok')); }
+    else if (el.dataset.act === 'addcart') { if (blockOwn(p)) return; addToCart(p, sel); toast('✔ ' + t('add_to_cart_ok')); }
     else if (el.dataset.act === 'buynow') {
+      if (blockOwn(p)) return;
       location.hash = '#/checkout?p=' + encodeURIComponent(p.id) + '&q=' + sel.qty + (sel.variantId ? '&v=' + encodeURIComponent(sel.variantId) : '');
     }
 else if (el.dataset.act === 'img') {
@@ -829,7 +837,7 @@ else if (el.dataset.act === 'img') {
 }
 
 function shareWa(p) {
-  const text = (p.name || '') + ' — ' + fmtTZS(p.price) + ' | Soko Vibe Duka: ' + location.href.split('#')[0] + '#/p/' + encodeURIComponent(p.id);
+  const text = (p.name || '') + ' — ' + fmtTZS(p.price) + ' | Soko Vibe Dukani: ' + location.href.split('#')[0] + '#/p/' + encodeURIComponent(p.id);
   return 'https://wa.me/?text=' + encodeURIComponent(text);
 }
 
@@ -893,6 +901,17 @@ async function recomputeProductRating(productId) {
   } catch (_) { /* non-critical */ }
 }
 
+function ownProduct(p) {
+  try {
+    const u = AUTH.currentUser;
+    return !!(u && p && p.sellerId && u.uid === p.sellerId);
+  } catch (_) { return false; }
+}
+function blockOwn(p) {
+  if (ownProduct(p)) { toast(t('cannot_buy_own')); return true; }
+  return false;
+}
+
 function addToCart(p, sel) {
   const q = (sel && sel.qty) || 1;
   const vid = (sel && sel.variantId) || null;
@@ -911,6 +930,7 @@ function addToCart(p, sel) {
 async function quickAdd(id) {
   const p = await getProduct(id);
   if (!p) return;
+  if (blockOwn(p)) return;
   if (p.variants && p.variants.length) {
     location.hash = '#/p/' + encodeURIComponent(id);
     return;
@@ -1793,7 +1813,7 @@ async function saveSellerProduct() {
       await DB.collection('products').add({
         ...base,
         sellerId: user.uid,
-        sellerName: seller.sellerName || user.displayName || 'Duka',
+        sellerName: seller.sellerName || user.displayName || 'Dukani',
         sellerPhone: seller.phone || '',
         rating: 0,
         reviewCount: 0,
@@ -1838,10 +1858,11 @@ const ACTIONS = {
   dsub: (el) => fillDrawerSub(decodeURIComponent(el.dataset.cat || '')),
   openprod: (el) => { location.hash = '#/p/' + encodeURIComponent(el.dataset.p); },
   qaddcart: (el, e) => { e.preventDefault(); e.stopPropagation(); quickAdd(decodeURIComponent(el.dataset.p)); },
-  qbuynow: (el, e) => {
+  qbuynow: async (el, e) => {
     e.preventDefault(); e.stopPropagation();
-    const p = decodeURIComponent(el.dataset.p || '');
-    location.hash = '#/checkout?p=' + encodeURIComponent(p) + '&q=1';
+    const pid = decodeURIComponent(el.dataset.p || '');
+    try { const p = await getProduct(pid); if (p && blockOwn(p)) return; } catch (_) {}
+    location.hash = '#/checkout?p=' + encodeURIComponent(pid) + '&q=1';
   },
   fav: (el, e) => {
     e.preventDefault(); e.stopPropagation();
@@ -1879,7 +1900,7 @@ const ACTIONS = {
     try {
       await DB.collection('users').doc(user.uid).set({
         isSeller: true,
-        sellerName: seller.name || user.displayName || 'Duka',
+        sellerName: seller.name || user.displayName || 'Dukani',
         phone: seller.phone || user.phoneNumber || '',
       }, { merge: true });
       toast('✔ ' + t('seller_you'));
@@ -2143,7 +2164,7 @@ window.addEventListener('hashchange', () => { closeCats(); route(); highlightAct
   updateThemeIcon();
   const si = document.getElementById('searchInput');
   si.placeholder = t('search_ph');
-  document.title = 'Soko Vibe — Duka';
+  document.title = 'Soko Vibe — Dukani';
   buildCats();
   buildHero();
   refreshBadge();
@@ -2204,7 +2225,7 @@ window.addEventListener('hashchange', () => { closeCats(); route(); highlightAct
       setPageMeta('Soko Vibe — Nunuza Bidhaa Mtandaoni Tanzania', 'Soko la Tanzania.', base + '/', 'https://www.sokovibe.co.tz/assets/icon-512.png');
       injectJsonLd({ '@context': 'https://schema.org', '@graph': [
         { '@type': 'Organization', 'name': 'Soko Vibe', 'url': 'https://www.sokovibe.co.tz/', 'description': 'Soko Vibe is a Tanzanian multi-vendor online marketplace connecting buyers with sellers across Tanzania.' },
-        { '@type': 'WebSite', 'name': 'Soko Vibe Duka', 'url': base + '/' }
+        { '@type': 'WebSite', 'name': 'Soko Vibe Dukani', 'url': base + '/' }
       ] });
     }
   };

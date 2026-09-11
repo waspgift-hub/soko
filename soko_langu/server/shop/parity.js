@@ -1,4 +1,4 @@
-/* Soko Vibe Duka — app-service parity module (buyer + seller + auth).
+/* Soko Vibe Dukani — app-service parity module (buyer + seller + auth).
    Mirrors the Flutter app's services on the web shop using the same
    endpoints and Firestore collections the app uses. No new server routes. */
 

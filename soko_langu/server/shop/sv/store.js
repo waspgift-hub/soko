@@ -30,6 +30,9 @@
       + '</div></div>'
       + '<div class="sv-store-cta">'
       + '<button type="button" class="sv-btn sv-btn-outline sv-store-msg" data-act="msgstore" data-u="' + esc(uid) + '" data-n="' + esc(info ? info.name : '') + '">' + CHAT_ICON + esc(t('sv_msg_seller')) + '</button>'
+      + ((typeof AUTH !== 'undefined' && AUTH.currentUser && AUTH.currentUser.uid !== uid)
+        ? '<button type="button" class="sv-btn sv-btn-outline" data-act="follow" data-following="' + esc(uid) + '">' + esc(t('follow')) + '</button>'
+        : '')
       + '</div></div>';
 
     const body = list.length

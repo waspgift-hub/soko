@@ -614,6 +614,8 @@ p { line-height: 1.55; }
 .sv-gallery-thumb.on { border-color: var(--sv-accent); }
 .sv-gallery-thumb-img { width: 100%; height: 100%; object-fit: contain; }
 .sv-gallery-thumb:hover { border-color: var(--sv-accent); }
+.sv-pdp-video { margin-top: 10px; }
+.sv-pdp-video video { width: 100%; max-height: 420px; border-radius: var(--radius-md); background: #000; }
 
 .sv-badge-note {
   position: absolute; top: 8px; right: 8px; z-index: 2;
@@ -805,7 +807,7 @@ p { line-height: 1.55; }
 .sv-store-sub { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; font-size: 12.5px; color: var(--sv-muted); margin-top: 4px; }
 .sv-store-sub .sv-ver { color: var(--sv-success); }
 .sv-store-count { background: var(--sv-surface-2); padding: 2px 8px; border-radius: 999px; }
-.sv-store-cta { margin-left: auto; }
+.sv-store-cta { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .sv-store-msg { gap: 6px; }
 .sv-store .grid { margin-top: var(--space-6); }
 .sv-reco { display: flex; gap: 8px; flex-wrap: wrap; margin-top: var(--space-4); }

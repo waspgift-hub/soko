@@ -1,4 +1,4 @@
-// Soko Vibe Duka — static data: categories, regions/districts, labels.
+// Soko Vibe Dukani — static data: categories, regions/districts, labels.
 // Regions + districts generated from lib/constants/tanzania_districts.dart
 // (CC-BY-4.0 open-admin-data, 31 regions). Labels are sw default + en.
 
@@ -33,7 +33,7 @@ const SV_T = {
   sw: {
     nav_home: 'Nyumbani', nav_categories: 'Kategoria', nav_orders: 'Agizo Zangu',
     nav_account: 'Akaunti', nav_signin: 'Ingia', search_ph: 'Tafuta bidhaa...',
-    splash_p: 'Hujambo! Duka la Soko Vibe linapakia bidhaa zako.',
+    splash_p: 'Hujambo! Soko Vibe Dukani linapakia bidhaa zako.',
     home_hero_kicker: 'Soko la Tanzania', home_hero_title: 'Nunua na kuuza popote Tanzania.',
     home_hero_sub: 'Malipo salama kupitia ClickPesa na escrow — bidhaa unayoipata ndiyo unayolipia.',
     home_new: 'Bidhaa mpya', home_browse: 'Vinjari', featured: 'Zinazoangaziwa',
@@ -69,7 +69,7 @@ const SV_T = {
     submit_signin: 'Ingia', submit_signup: 'Sajili', signout: 'Ondoka',
     profile: 'Akaunti yako', orders_my: 'Agizo Zangu', my_orders_empty: 'Huna agizo bado.',
     order_statuses: { pending: 'Inafanyiwa kazi', quoted: 'Imehifadhiwa kimasaa', paid: 'Imelipwa', escrow_hold: 'Escrow imeanzishwa', escrow_held: 'Escrow imeanzishwa', dispatched: 'Imesafirishwa', confirmed: 'Imetolewa', completed: 'Imekamilika', cancelled: 'Imeghairiwa', disputed: 'Kuna mzozo', refunded: 'Imerudishiwa', failed: 'Imeshindikana' },
-    status_label: 'Hali', order_total: 'Jumla', order_date: 'Tarehe', order_id: 'Oda #', wa_cta: 'Wasiliana kwa WhatsApp',
+    status_label: 'Hali', order_total: 'Jumla', order_date: 'Tarehe', order_id: 'Oda #', wa_cta: 'Wasiliana kwa WhatsApp', call_seller: 'Piga Simu',
     price: 'Bei', wait_fetch: 'Inapakia...', err_generic: 'Kuna tatizo. Jaribu tena.',
     theme_light: 'Mchana', theme_dark: 'Usiku', lang_label: 'Lugha', to_top: 'Juu',
     nav_wish: 'Unavyovipenda', nav_seller: 'Muuzaji', nav_seller_page: 'Kibanda changu',
@@ -136,7 +136,7 @@ const SV_T = {
     profile: 'Your account', orders_my: 'My Orders', my_orders_empty: 'No orders yet.',
     order_statuses: { pending: 'Pending', quoted: 'Price quoted', paid: 'Paid', escrow_hold: 'Escrow active', escrow_held: 'Escrow active', dispatched: 'Dispatched', confirmed: 'Released', completed: 'Completed', cancelled: 'Cancelled', disputed: 'Disputed', refunded: 'Refunded', failed: 'Failed' },
     status_label: 'Status', order_total: 'Total', order_date: 'Date', order_id: 'Order #',
-    wa_cta: 'Chat on WhatsApp', price: 'Price', wait_fetch: 'Loading...',
+    wa_cta: 'Chat on WhatsApp', call_seller: 'Call Seller', price: 'Price', wait_fetch: 'Loading...',
     err_generic: 'Something went wrong. Try again.',
     theme_light: 'Light', theme_dark: 'Dark', lang_label: 'Language', to_top: 'Top',
     nav_wish: 'Wishlist', nav_seller: 'Seller', nav_seller_page: 'My store',
@@ -301,6 +301,7 @@ sv_back_home: 'Rudi kwenye Bidhaa Zote', sv_recent: 'Ulitafuta',
   sv_promo_t: 'Gundua bidhaa kutoka kwa wauzaji wanaoaminika kote Tanzania.',
   sv_promo_p: 'Nunua kutoka maduka yaliyothibitishwa, lipa kwa escrow salama, usafirishaji kote Tanzania.',
   sv_cta_deals: 'Nunua Sasa', sv_cta_cats: 'Chunguza Kategoria', sv_best: 'Zinauzwa Zaidi', sv_new: 'Mpya Kwenye Soko',
+  sv_recently_viewed: 'Umetazama Hivi Karibuni', cannot_buy_own: 'Huwezi kununua bidhaa yako mwenyewe',
   sv_related: 'Bidhaa Zinazohusiana', sv_del_ests: 'Uwasilishaji: siku 1–4 za kazi',
   cart_items: 'Vipengee', cart_fee: 'Ada ya huduma',
 });
@@ -346,6 +347,7 @@ sv_sort_price_up: 'Price: Low to High', sv_sort_price_dn: 'Price: High to Low',
   sv_promo_t: 'Discover products from trusted sellers across Tanzania.',
   sv_promo_p: 'Shop from verified stores, pay safely through escrow, delivered across Tanzania.',
   sv_cta_deals: 'Shop Now', sv_cta_cats: 'Explore Categories', sv_best: 'Best Sellers', sv_new: 'New Arrivals',
+  sv_recently_viewed: 'Recently Viewed', cannot_buy_own: 'You cannot buy your own product',
   sv_related: 'Related Products', sv_del_ests: 'Delivery: 1–4 working days',
   cart_items: 'Items', cart_fee: 'Service fee',
 });

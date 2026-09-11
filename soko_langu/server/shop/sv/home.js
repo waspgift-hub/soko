@@ -113,7 +113,29 @@
   function paintDynamic() {
     paintRails();
     paintSellers();
+    paintRecent();
     wireRails();
+  }
+
+  async function paintRecent() {
+    const host = document.getElementById('svRecentRow');
+    const sec = document.getElementById('svRecentRowSec');
+    if (!host) return;
+    let ids = [];
+    try { ids = (JSON.parse(localStorage.getItem('sv_shop_recent') || '[]') || []).map((x) => x && x.id).filter(Boolean); } catch (_) {}
+    ids = [...new Set(ids)].slice(0, 10);
+    if (!ids.length) { if (sec) sec.style.display = 'none'; return; }
+    const picks = [];
+    for (const id of ids) {
+      let p = Feed.list.find((x) => x.id === id);
+      if (!p && typeof getProduct === 'function') { try { p = await getProduct(id); } catch (_) {} }
+      if (document.body.dataset.route !== 'home') return;
+      if (p) picks.push(p);
+      if (picks.length >= 10) break;
+    }
+    if (!picks.length) { if (sec) sec.style.display = 'none'; return; }
+    host.innerHTML = picks.map(svCard).join('');
+    if (sec) sec.style.display = '';
   }
 
   async function renderHome() {
@@ -133,6 +155,7 @@
     view.innerHTML = promoHtml()
       + trustHtml()
       + catRailHtml()
+      + railHtml('svRecentRow', t('sv_recently_viewed'))
       + railHtml('svDealsRow', t('sv_deals'), '#/flash')
       + railHtml('svBestRow', t('sv_best'))
       + sellerCtaHtml()
