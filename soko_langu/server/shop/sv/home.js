@@ -31,6 +31,26 @@
     return '<section class="sv-section">' + sectionHead(t('sv_categories'), '') + '<div class="sv-cat-grid" role="list">' + tiles + '</div></section>';
   }
 
+  function brandStripHtml() {
+    return '<section class="sv-section" id="svBrandSec">'
+      + sectionHead(t('sv_f_brand'), '')
+      + '<div class="sv-brand-row" id="svBrandRow"></div></section>';
+  }
+
+  function paintBrands() {
+    const host = document.getElementById('svBrandRow');
+    const sec = document.getElementById('svBrandSec');
+    if (!host) return;
+    const brands = [];
+    Feed.list.forEach((p) => {
+      const b = (p.brand || '').trim();
+      if (b && brands.indexOf(b) < 0) brands.push(b);
+    });
+    if (brands.length < 2) { if (sec) sec.style.display = 'none'; return; }
+    host.innerHTML = brands.slice(0, 12).map((b) => '<a class="sv-chip" href="#/search?brand=' + encodeURIComponent(b) + '">' + esc(b) + '</a>').join('');
+    if (sec) sec.style.display = '';
+  }
+
   function railHtml(id, title, moreHref) {
     return '<section class="sv-section" id="' + id + 'Sec">'
       + sectionHead(title, '', moreHref, t('sv_view_all'))
@@ -152,6 +172,7 @@
   function paintDynamic() {
     paintRails();
     paintSellers();
+    paintBrands();
     paintRecent();
     paintFollowed();
     wireRails();
@@ -195,6 +216,7 @@
     view.innerHTML = promoHtml()
       + trustHtml()
       + catRailHtml()
+      + brandStripHtml()
       + railHtml('svRecentRow', t('sv_recently_viewed'))
       + railHtml('svDealsRow', t('sv_deals'), '#/flash')
       + railHtml('svBestRow', t('sv_best'))

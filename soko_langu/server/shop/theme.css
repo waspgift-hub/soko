@@ -739,6 +739,9 @@ p { line-height: 1.55; }
 }
 .sv-chip.on { background: var(--sv-text); color: var(--sv-bg); border-color: var(--sv-text); }
 .sv-chip.sq { width: 100%; justify-content: space-between; }
+.sv-brand-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; -webkit-overflow-scrolling: touch; scrollbar-width: none; margin-top: 10px; }
+.sv-brand-row::-webkit-scrollbar { display: none; }
+.sv-brand-row .sv-chip { flex: 0 0 auto; text-decoration: none; }
 
 .sv-price-row { display: flex; align-items: center; gap: 6px; }
 .sv-price-row input {
