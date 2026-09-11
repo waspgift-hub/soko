@@ -151,6 +151,44 @@ function setTheme() {
   localStorage.setItem('sv_shop_theme', theme);
 }
 
+const SEED_PRESETS = {
+  '#2d6a4f': { c2: '#1b4332', c3: '#40916c', soft: 'rgba(45,106,79,0.1)', ink: '#ffffff' },
+  '#a16207': { c2: '#713f12', c3: '#ca8a04', soft: 'rgba(161,98,7,0.12)', ink: '#ffffff' },
+  '#1e40af': { c2: '#172554', c3: '#3b82f6', soft: 'rgba(30,64,175,0.12)', ink: '#ffffff' },
+  '#6d28d9': { c2: '#4c1d95', c3: '#8b5cf6', soft: 'rgba(109,40,217,0.12)', ink: '#ffffff' },
+  '#0f766e': { c2: '#134e4a', c3: '#14b8a6', soft: 'rgba(15,118,110,0.12)', ink: '#ffffff' },
+  '#be123c': { c2: '#881337', c3: '#f43f5e', soft: 'rgba(190,18,60,0.12)', ink: '#ffffff' },
+};
+let customSeed = localStorage.getItem('sv_shop_seed') || '';
+
+function applySeed() {
+  const root = document.documentElement.style;
+  const p = SEED_PRESETS[customSeed];
+  if (!p) {
+    root.removeProperty('--sv-accent');
+    root.removeProperty('--sv-accent-2');
+    root.removeProperty('--sv-accent-3');
+    root.removeProperty('--sv-accent-soft');
+    root.removeProperty('--sv-accent-ink');
+    return;
+  }
+  root.setProperty('--sv-accent', customSeed);
+  root.setProperty('--sv-accent-2', p.c2);
+  root.setProperty('--sv-accent-3', p.c3);
+  root.setProperty('--sv-accent-soft', p.soft);
+  root.setProperty('--sv-accent-ink', p.ink);
+}
+
+function setSeed(hex) {
+  customSeed = hex && SEED_PRESETS[hex] ? hex : '';
+  localStorage.setItem('sv_shop_seed', customSeed);
+  applySeed();
+  const prev = document.getElementById('custPrev');
+  if (prev) prev.style.background = 'var(--sv-accent)';
+  const sw = document.querySelectorAll('.sv-swatch');
+  sw.forEach((s) => s.classList.toggle('on', (s.dataset.seed || '') === customSeed));
+}
+
 function setLang() {
   lang = localStorage.getItem('sv_shop_lang') || ((navigator.language || 'sw').startsWith('en') ? 'en' : 'sw');
   if (SV_T[lang] == null) lang = 'sw';
@@ -1894,6 +1932,9 @@ let orderFilter = 'all';
 
 const ACTIONS = {
   dismissbar: () => {},
+  customize: () => { const f = window.openCustomize; if (f) f(); },
+  seed: (el) => setSeed(el.dataset.seed || ''),
+  seedreset: () => setSeed(''),
   zoomimg: (el) => {
     const img = el.tagName === 'IMG' ? el : el.querySelector('img');
     const src = img && (img.currentSrc || img.src);
@@ -2250,6 +2291,7 @@ window.addEventListener('hashchange', () => { closeCats(); route(); highlightAct
 
 (function init() {
   setTheme();
+  applySeed();
   setLang();
   updateThemeIcon();
   const si = document.getElementById('searchInput');

@@ -976,6 +976,16 @@
     if (m) m.hidden = true;
   }
 
+  function openCustomize() {
+    const seeds = ['#2d6a4f', '#a16207', '#1e40af', '#6d28d9', '#0f766e', '#be123c'];
+    const sw = seeds.map((hex) => '<button type="button" class="sv-swatch' + (String(localStorage.getItem('sv_shop_seed') || '') === hex ? ' on' : '') + '" style="background:' + hex + '" data-act="seed" data-seed="' + hex + '" aria-label="' + hex + '"></button>').join('');
+    parityModal(t('sv_customize_t'), '<div class="cust-prev" id="custPrev" style="background:var(--sv-accent)">' + esc(t('sv_customize_sub')) + '</div>'
+      + '<div class="sv-swatch-wrap">' + sw + '</div>'
+      + '<div class="rowbtns" style="margin-top:16px"><button class="btn-outline" data-act="seedreset">' + esc(t('sv_customize_reset')) + '</button>'
+      + '<button class="btn-dark" data-act="pmclose">' + esc(t('cancel')) + '</button></div>');
+  }
+  window.openCustomize = openCustomize;
+
   /* ---------- Seller ops: quote / dispatch / OTP ---------- */
 
   function pgOrderId(o) { return o && (o.orderId || o.id); }
