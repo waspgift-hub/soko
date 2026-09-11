@@ -2046,6 +2046,8 @@ function highlightActiveNav() {
   $all('.h-actions a.hl-act[href^="#"]').forEach((a) => {
     a.classList.toggle('on', (a.getAttribute('href') || '').split('?')[0] === curPath);
   });
+  const chatOn = seg === 'chats' || seg === 'chat';
+  $all('.h-actions a[href="#/chats"]').forEach((a) => a.classList.toggle('on', chatOn));
 }
 
 /* ---------- Search + suggestions ---------- */

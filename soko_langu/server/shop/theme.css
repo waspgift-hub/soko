@@ -987,6 +987,10 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px 10px; }
   .trust-strip span:last-child { display: none; }
 }
+@media (max-width: 380px) {
+  .sv-main .brand-name, .sv-main .brand-badge { display: none; }
+  .sv-main .h-actions { gap: 0; }
+}
 
 /* Footer columns (Phase 1 restyle) */
 .sv-footer-grid {

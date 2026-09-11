@@ -49,8 +49,23 @@
   let notifTimer = null;
   function notifPoll(on) {
     clearInterval(notifTimer);
-    if (on) notifBadge();
-    notifTimer = setInterval(notifBadge, 60000);
+    if (on) { notifBadge(); chatBadge(); }
+    notifTimer = setInterval(() => { notifBadge(); chatBadge(); }, 60000);
+  }
+
+  function chatBadge() {
+    const b = document.getElementById('chatBadge');
+    if (!b) return;
+    const u = AUTH.currentUser;
+    if (!u) { b.hidden = true; return; }
+    DB.collection('chat_rooms').where('participants', 'array-contains', u.uid).get()
+      .then((s) => {
+        let n = 0;
+        s.forEach((d) => { const r = d.data() || {}; n += (r.unread_counts && r.unread_counts[u.uid]) || 0; });
+        if (n > 0) { b.hidden = false; b.textContent = n > 99 ? '99+' : n; }
+        else b.hidden = true;
+      })
+      .catch(() => { b.hidden = true; });
   }
 
   /* ---------- Auth parity: phone OTP + Google ---------- */
@@ -586,6 +601,7 @@
         unread_count_seller: 0,
       });
     } catch (_) {}
+    chatBadge();
   }
 
   async function renderChatRoom(otherUid, name) {
@@ -1588,6 +1604,7 @@
   window.afterSignIn = afterSignIn;
   window.notifBadge = notifBadge;
   window.notifPoll = notifPoll;
+  window.chatBadge = chatBadge;
   window.recordRecent = recordRecent;
   window.renderSearchHist = renderSearchHist;
 
