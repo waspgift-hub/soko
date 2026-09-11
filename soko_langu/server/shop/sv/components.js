@@ -31,8 +31,10 @@
   function ratingHtml(p) {
     const r = Number(p.rating) || 0;
     if (r <= 0) return '';
-    return '<span class="sv-rating" title="' + r + ' / 5">' + icon('star') + '<b>' + r.toFixed(1) + '</b>'
-      + '<i>(' + (Number(p.reviewCount) || 0) + ')</i></span>';
+    return '<div class="sv-meta"><span class="sv-rating" title="' + r + ' / 5">' + icon('star') + '<b>' + r.toFixed(1) + '</b>'
+      + '<i>(' + (Number(p.reviewCount) || 0) + ')</i></span>'
+      + (Number(p.soldCount) ? '<span class="sv-sold">' + Number(p.soldCount) + ' ' + esc(t('sold')) + '</span>' : '')
+      + '</div>';
   }
 
   function verified(p) {
@@ -41,41 +43,38 @@
       : '';
   }
 
-  /* Conversion-focused product card. Keeps the .card class so legacy CSS and
-     the app's event delegation keep working; new markup is styled by theme.css. */
+  /* App-style product card (matches the Soko Vibe mobile app ProductCard):
+     rounded image, optional featured/boosted + discount badges, single-line
+     title with verified mark, price, "new" tag, rating row with sold count.
+     The whole card opens the product; quick actions live on the PDP. */
   function svCard(p) {
     const id = encodeURIComponent(p.id);
     const dc = discount(p);
     const bo = boosted(p);
+    const ft = typeof featured === 'function' ? featured(p) : !!p.isFeatured;
     const soldout = p.stock <= 0;
     const old = p.isWholesale && p.wholesaleTiers && p.wholesaleTiers.length
       ? '<del class="sv-old">' + fmtTZS(p.wholesaleTiers[0].pricePerUnit) + '</del>'
       : '';
-    const favCls = 'sv-fav' + (wishHas(p.id) ? ' onfav' : '');
-    const flag = bo ? '<span class="sv-flag">' + esc(bo) + '</span>' : '';
-    const disc = dc ? '<span class="sv-badge-note">−' + dc + '%</span>' : '';
-    const soldov = soldout ? '<span class="sv-soldov">' + esc(t('soldout_ov')) + '</span>' : '';
-    const catTag = p.category ? '<span class="sv-cat-tag">' + esc(p.category) + '</span>' : '';
-    const foot = soldout
-      ? '<span class="sv-note-danger">' + esc(t('out_stock')) + '</span>'
-      : '<button class="sv-qadd" data-act="qaddcart" data-p="' + id + '" type="button" title="' + esc(t('add_cart')) + '" aria-label="' + esc(t('add_cart')) + '">' + icon('cart') + '</button>'
-        + '<button class="sv-qbuy" data-act="qbuynow" data-p="' + id + '" type="button">' + esc(t('sv_buy')) + '</button>';
     const rawImg = (p.images && p.images[0]) ? p.images[0] : '';
     const imgHtml = (typeof window.SV !== 'undefined' && window.SV.image && window.SV.image.img)
       ? window.SV.image.img(rawImg, p.name, { size: 'medium', ratio: '1 / 1' })
       : (rawImg ? '<img loading="lazy" src="' + esc(rawImg) + '" alt="' + esc(p.name) + '" onerror="this.parentElement.classList.add(\'sv-badimg\');this.remove()">' : '<div class="sv-ph">SOKO</div>');
+    const badge = ft
+      ? '<span class="sv-feat">' + icon('check') + esc(t('feat_until')) + '</span>'
+      : (bo ? '<span class="sv-boost">' + esc(t('sv_boosted')) + '</span>' : '');
+    const disc = dc ? '<span class="sv-badge-note">−' + dc + '%</span>' : '';
+    const soldov = soldout ? '<span class="sv-soldov">' + esc(t('soldout_ov')) + '</span>' : '';
+    const condNew = (p.condition || 'new') === 'new'
+      ? '<span class="sv-cond">· ' + esc(t('cond_new')) + '</span>' : '';
 
     return '<div class="card sv-card" data-act="openprod" data-p="' + id + '" role="link" tabindex="0" aria-label="' + esc(p.name) + '">'
-      + '<div class="sv-thumb">' + disc + flag + catTag
-      + '<button class="' + favCls + '" data-act="fav" data-p="' + id + '" type="button" aria-label="' + esc(t('nav_wish')) + '">' + icon('heart') + '</button>'
-      + imgHtml
-      + soldov + '</div>'
+      + '<div class="sv-thumb">' + badge + disc + imgHtml + soldov + '</div>'
       + '<div class="sv-body">'
-      + '<h3 class="sv-title">' + esc(p.name) + ' ' + verified(p) + '</h3>'
+      + '<div class="sv-title-row"><h3 class="sv-title">' + esc(p.name) + '</h3>' + verified(p) + '</div>'
       + '<div class="sv-price"><b>' + fmtTZS(p.price) + '</b>' + old + '</div>'
-      + '<div class="sv-meta">' + ratingHtml(p) + (Number(p.soldCount) ? '<span class="sv-sold">' + (Number(p.soldCount) || 0) + ' ' + esc(t('sold')) + '</span>' : '') + '</div>'
-      + '<div class="sv-seller">' + icon('store') + '<span>' + esc(p.sellerName || 'Muuzaji') + '</span>' + verified(p) + '</div>'
-      + '<div class="sv-foot">' + foot + '</div>'
+      + condNew
+      + ratingHtml(p)
       + '</div></div>';
   }
 
@@ -84,11 +83,9 @@
     for (let i = 0; i < (n || 8); i++) {
       s += '<div class="card sv-card"><div class="sv-thumb"><div class="skel" style="position:absolute;inset:0;border-radius:0"></div></div>'
         + '<div class="sv-body">'
-        + '<div class="skel" style="height:10px;width:38%"></div>'
-        + '<div class="skel" style="height:14px;width:88%;margin-top:8px"></div>'
-        + '<div class="skel" style="height:16px;width:46%;margin-top:10px"></div>'
-        + '<div class="skel" style="height:12px;width:60%;margin-top:10px"></div>'
-        + '<div class="skel" style="height:38px;width:100%;margin-top:12px"></div>'
+        + '<div class="skel" style="height:14px;width:88%;margin-top:2px"></div>'
+        + '<div class="skel" style="height:13px;width:46%;margin-top:8px"></div>'
+        + '<div class="skel" style="height:11px;width:60%;margin-top:8px"></div>'
         + '</div></div>';
     }
     return s;
