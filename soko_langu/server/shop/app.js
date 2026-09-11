@@ -681,10 +681,15 @@ async function renderProduct(id) {
   }
   const bo = boosted(p);
   const soldout = p.stock <= 0;
-  const mainImg = p.images[0] || '';
-  const thumbs = p.images.slice(1, 6).map((u, i) =>
-    '<button data-act="img" data-i="' + (i + 1) + '"><img src="' + esc(u) + '" alt="" onerror="this.remove()"></button>').join('');
-  const attrs = Object.entries(p.attributes || {}).slice(0, 8).map(([k, v]) => '<tr><td>' + esc(k) + '</td><td>' + esc(v) + '</td></tr>').join('');
+const mainImg = p.images[0] || '';
+    const mainImgHtml = (typeof window.SV !== 'undefined' && window.SV.image && window.SV.image.img)
+      ? window.SV.image.img(mainImg, p.name, { size: 'large', ratio: '4 / 3', style: 'width:100%', class: 'ss-cover' })
+      : '<div class="main"><img id="mainImg" src="' + esc(mainImg) + '" alt="' + esc(p.name) + '" onerror="this.replaceWith(Object.assign(document.createElement(\'div\'),{className:\'ph\',textContent:\'SOKO\'}))"></div>';
+    const thumbs = p.images.slice(1, 6).map((u, i) =>
+      '<button data-act="img" data-gi="' + i + '">'
+      + (window.SV && window.SV.image ? window.SV.image.thumb(u, i, i === 0) : '<img src="' + esc(u) + '" alt="" onerror="this.remove()">')
+      + '</button>').join('');
+    const attrs = Object.entries(p.attributes || {}).slice(0, 8).map(([k, v]) => '<tr><td>' + esc(k) + '</td><td>' + esc(v) + '</td></tr>').join('');
   const tiers = p.wholesaleTiers && p.wholesaleTiers.length
     ? '<div class="desc mt24"><h3>Jumla (wholesale)</h3><table class="attrs-table"><tr><td>Idadi</td><td>Bei kwa kipande</td></tr>'
       + p.wholesaleTiers.map((ti) => '<tr><td>' + esc(ti.minQuantity) + '+</td><td>' + fmtTZS(ti.pricePerUnit) + '</td></tr>').join('')
@@ -699,9 +704,9 @@ async function renderProduct(id) {
 
   view.innerHTML = '<div class="container-wide"><div class="detail">'
     + '<div class="gallery">'
-    + '<div class="main"><img id="mainImg" src="' + esc(mainImg) + '" alt="' + esc(p.name) + '" onerror="this.replaceWith(Object.assign(document.createElement(\'div\'),{className:\'ph\',textContent:\'SOKO\'}))"></div>'
-    + (thumbs ? '<div class="thumbs">' + thumbs + '</div>' : '')
-    + '</div>'
+      + mainImgHtml
+      + (thumbs ? '<div class="thumbs">' + thumbs + '</div>' : '')
+      + '</div>'
     + '<div class="dinfo">'
     + '<span class="crumb">' + esc(p.category) + (p.subcategory ? ' / ' + esc(p.subcategory) : '') + '</span>'
     + '<h1>' + esc(p.name) + '</h1>'
@@ -782,13 +787,36 @@ async function renderProduct(id) {
     else if (el.dataset.act === 'buynow') {
       location.hash = '#/checkout?p=' + encodeURIComponent(p.id) + '&q=' + sel.qty + (sel.variantId ? '&v=' + encodeURIComponent(sel.variantId) : '');
     }
-    else if (el.dataset.act === 'img') {
-      const i = Number(el.dataset.i) || 0;
-      const src = p.images[i];
-      const m = document.getElementById('mainImg');
-      if (m && src) m.src = src;
-    }
+else if (el.dataset.act === 'img') {
+       const gi = Number(el.dataset.gi) || 0;
+       const i = gi + 1;
+       const src = p.images[i];
+       const m = document.getElementById('mainImg');
+       if (m && src) m.src = src;
+     }
   };
+  /* ---------- SEO: Product structured data ---------- */
+  injectJsonLd({
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    'name': p.name,
+    'image': (p.images && p.images[0]) ? p.images[0] : undefined,
+    'description': (p.description || '').slice(0, 200),
+    'sku': p.id,
+    'offers': {
+      '@type': 'Offer',
+      'url': location.href,
+      'priceCurrency': 'TZS',
+      'price': Number(p.price) || 0,
+      'availability': (p.stock > 0) ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+      'seller': { '@type': 'Organization', 'name': p.sellerName || 'Soko Vibe' }
+    },
+    'aggregateRating': (p.rating > 0 && p.reviewCount > 0)
+      ? { '@type': 'AggregateRating', 'ratingValue': p.rating, 'reviewCount': p.reviewCount, 'bestRating': 5, 'worstRating': 1 }
+      : undefined,
+  });
+  setPageMeta(p.name + ' — Soko Vibe', (p.description || '').slice(0, 160), location.href, (p.images && p.images[0]) ? p.images[0] : undefined);
+
   loadReviews(p.id, p.sellerId);
   if (typeof window.recordRecent === 'function') window.recordRecent(p.id);
   if (typeof window.parityProductExtras === 'function') window.parityProductExtras(p);
@@ -2130,5 +2158,41 @@ window.addEventListener('hashchange', () => { closeCats(); route(); highlightAct
     bar.addEventListener('click', (e) => { if (e.target.closest('[data-act="dismissbar"]')) hide(); });
   })();
 
-  window.addEventListener('DOMContentLoaded', () => route());
+/* ---------- SEO / Structured Data (global) ---------- */
+  window.injectJsonLd = function (obj) {
+    try {
+      var s = document.createElement('script');
+      s.type = 'application/ld+json';
+      s.textContent = JSON.stringify(obj);
+      document.head.appendChild(s);
+    } catch (e) { /* non-critical */ }
+  };
+  window.setPageMeta = function (title, desc, canonical, ogImg) {
+    try {
+      var t = document.querySelector('title'); if (t) t.textContent = title;
+      var d = document.querySelector('meta[name="description"]'); if (d) d.setAttribute('content', desc);
+      var c = document.querySelector('link[rel="canonical"]'); if (c) c.setAttribute('href', canonical);
+      var ogT = document.querySelector('meta[property="og:title"]'); if (ogT) ogT.setAttribute('content', title);
+      var ogD = document.querySelector('meta[property="og:description"]'); if (ogD) ogD.setAttribute('content', desc);
+      var ogC = document.querySelector('meta[property="og:url"]'); if (ogC) ogC.setAttribute('content', canonical);
+      if (ogImg) { var ogI = document.querySelector('meta[property="og:image"]'); if (ogI) ogI.setAttribute('content', ogImg); }
+    } catch (e) { /* non-critical */ }
+  };
+  /* SEO route meta (lightweight) */
+  (function seoForRoute() {
+    var h = location.hash.replace(/^#\/?/, '');
+    var seg = h.split('?')[0].split('/').filter(Boolean);
+    var base = location.origin + '/shop';
+    if (seg[0] === 'store' && seg[1]) {
+      setPageMeta('Kibanda — Soko Vibe', 'Jadi kwa muuzaji huu kwenye Soko Vibe, soko la Tanzania.', base + '/store/' + encodeURIComponent(seg[1]));
+    } else if (seg[0] === 'c' && seg[1]) {
+      setPageMeta(decodeURIComponent(seg[1]) + ' — Soko Vibe', 'Pata ' + decodeURIComponent(seg[1]) + ' bora kwenye Soko Vibe.', base + '/category/' + encodeURIComponent(seg[1]));
+    } else if (h.indexOf('search') === 0) {
+      setPageMeta('Matokeo ya Utafutaji — Soko Vibe', 'Tafuta bidhaa, masoko, na wauzaji kwenye Soko Vibe.', base + '/search');
+    } else {
+      setPageMeta('Soko Vibe — Nunuza Bidhaa Mtandaoni Tanzania', 'Soko la Tanzania.', base + '/', 'https://www.sokovibe.co.tz/assets/icon-512.png');
+    }
+  })();
 })();
+
+window.addEventListener('DOMContentLoaded', () => route());

@@ -24,7 +24,7 @@
       user: 'M12 8a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c0-4 3.6-6 8-6s8 2 8 6',
       tag: 'M20 4H10L4 10l10 10 10-10V4zM7 8a1 1 0 1 0 0-2 1 1 0 0 0 0 2z',
     };
-    const d = paths[icon] || paths.star;
+    const d = paths[name] || paths.star;
     return '<svg' + (cls ? ' class="' + cls + '"' : '') + ' viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + d + '"/></svg>';
   }
 
@@ -45,7 +45,6 @@
      the app's event delegation keep working; new markup is styled by theme.css. */
   function svCard(p) {
     const id = encodeURIComponent(p.id);
-    const img = p.images && p.images[0] ? p.images[0] : '';
     const dc = discount(p);
     const bo = boosted(p);
     const soldout = p.stock <= 0;
@@ -61,13 +60,15 @@
       ? '<span class="sv-note-danger">' + esc(t('out_stock')) + '</span>'
       : '<button class="sv-qadd" data-act="qaddcart" data-p="' + id + '" type="button" title="' + esc(t('add_cart')) + '" aria-label="' + esc(t('add_cart')) + '">' + icon('cart') + '</button>'
         + '<button class="sv-qbuy" data-act="qbuynow" data-p="' + id + '" type="button">' + esc(t('sv_buy')) + '</button>';
+    const rawImg = (p.images && p.images[0]) ? p.images[0] : '';
+    const imgHtml = (typeof window.SV !== 'undefined' && window.SV.image && window.SV.image.img)
+      ? window.SV.image.img(rawImg, p.name, { size: 'medium', ratio: '1 / 1' })
+      : (rawImg ? '<img loading="lazy" src="' + esc(rawImg) + '" alt="' + esc(p.name) + '" onerror="this.parentElement.classList.add(\'sv-badimg\');this.remove()">' : '<div class="sv-ph">SOKO</div>');
 
     return '<div class="card sv-card" data-act="openprod" data-p="' + id + '" role="link" tabindex="0" aria-label="' + esc(p.name) + '">'
       + '<div class="sv-thumb">' + disc + flag + catTag
       + '<button class="' + favCls + '" data-act="fav" data-p="' + id + '" type="button" aria-label="' + esc(t('nav_wish')) + '">' + icon('heart') + '</button>'
-      + (img
-        ? '<img loading="lazy" src="' + esc(img) + '" alt="' + esc(p.name) + '" onerror="this.parentElement.classList.add(\'sv-badimg\');this.remove()">'
-        : '<div class="sv-ph">SOKO</div>')
+      + imgHtml
       + soldov + '</div>'
       + '<div class="sv-body">'
       + '<h3 class="sv-title">' + esc(p.name) + ' ' + verified(p) + '</h3>'

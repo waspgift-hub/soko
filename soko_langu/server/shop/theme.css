@@ -597,6 +597,17 @@ p { line-height: 1.55; }
 
 .sv-ph { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 700; color: var(--sv-muted); font-size: 13px; letter-spacing: 0.1em; }
 
+/* Responsive image system */
+.sv-img { position: relative; display: block; background: var(--sv-surface-2); overflow: hidden; }
+.sv-img picture { display: block; width: 100%; height: 100%; }
+.sv-img img { width: 100%; height: 100%; object-fit: contain; display: block; transition: transform 0.2s; }
+.sv-card:hover .sv-img img { transform: scale(1.03); }
+.sv-img.ss-cover img { object-fit: cover; }
+.sv-gallery-thumb { width: 56px; height: 56px; border: 2px solid var(--sv-border); border-radius: var(--radius-sm); overflow: hidden; padding: 0; background: var(--sv-surface-2); cursor: pointer; transition: border-color 0.15s; }
+.sv-gallery-thumb.on { border-color: var(--sv-accent); }
+.sv-gallery-thumb-img { width: 100%; height: 100%; object-fit: contain; }
+.sv-gallery-thumb:hover { border-color: var(--sv-accent); }
+
 .sv-badge-note {
   position: absolute; top: 10px; left: 10px; z-index: 2;
   background: var(--sv-accent); color: var(--sv-accent-ink);
