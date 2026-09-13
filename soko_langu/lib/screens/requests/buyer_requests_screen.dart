@@ -9,6 +9,7 @@ import '../../widgets/google_loading.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/ds/ds.dart';
 import '../../widgets/soko_vibe_states.dart';
 
 class BuyerRequestsScreen extends StatefulWidget {
@@ -24,7 +25,6 @@ class _BuyerRequestsScreenState extends State<BuyerRequestsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(title: Text(context.tr('buyer_requests_title'))),
       floatingActionButton: FloatingActionButton.extended(
@@ -37,41 +37,9 @@ class _BuyerRequestsScreenState extends State<BuyerRequestsScreen> {
         stream: _service.getRequests(),
         builder: (context, snap) {
           if (snap.hasError) {
-            final detail = snap.error?.toString() ?? '';
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.error_outline, size: 48, color: cs.error),
-                    const SizedBox(height: 12),
-                    Text(
-                      context.tr('requests_error'),
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: cs.onSurfaceVariant),
-                    ),
-                    if (detail.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        detail,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant.withValues(alpha: 0.6),
-                          fontSize: 11,
-                          fontFamily: 'monospace',
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 12),
-                    TextButton.icon(
-                      onPressed: () => setState(() => _refreshKey++),
-                      icon: const Icon(Icons.refresh, size: 18),
-                      label: Text(context.tr('retry')),
-                    ),
-                  ],
-                ),
-              ),
+            return _ErrorState(
+              detail: snap.error?.toString() ?? '',
+              onRetry: () => setState(() => _refreshKey++),
             );
           }
           if (!snap.hasData) {
@@ -83,12 +51,17 @@ class _BuyerRequestsScreenState extends State<BuyerRequestsScreen> {
               icon: Icons.search_off,
               title: context.tr('requests_empty'),
               subtitle: context.tr('requests_empty_hint'),
+              actionLabel: context.tr('post_request'),
+              onAction: () => context.push(AppRoutes.postBuyerRequest),
             );
           }
           return ListView.builder(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
             itemCount: requests.length,
-            itemBuilder: (context, index) => _buildRequestCard(requests[index]),
+            itemBuilder: (context, index) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _buildRequestCard(requests[index]),
+            ),
           );
         },
       ),
@@ -100,106 +73,158 @@ class _BuyerRequestsScreenState extends State<BuyerRequestsScreen> {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
     final unlocked = req.isUnlockedFor(uid);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+    return DsCard(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.primary.withValues(alpha: 0.5)),
-      ),
+      color: cs.cardBase,
+      radius: 18,
+      border: Border.all(color: cs.primary.withValues(alpha: 0.18)),
+      elevation: DsCardElevation.low,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.search, size: 20, color: cs.primary),
-              const SizedBox(width: 8),
+              DsAvatar(
+                initials: _initials(req.buyerName.isEmpty ? req.buyerUid : req.buyerName),
+                size: DsAvatarSize.md,
+              ),
+              const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  req.title,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      req.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                        height: 1.25,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Icon(Icons.person_outline,
+                            size: 14, color: cs.contentMuted),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            req.buyerName.isEmpty ? req.buyerUid : req.buyerName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: cs.contentMuted,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(Icons.schedule,
+                            size: 13, color: cs.contentMuted),
+                        const SizedBox(width: 3),
+                        Text(
+                          _relativeTime(req.createdAt),
+                          style: TextStyle(fontSize: 12, color: cs.contentMuted),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: cs.secondary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              '${context.tr('request_budget_label')}: ${context.formatPrice(req.budget)}',
-              style: TextStyle(
-                color: cs.secondary,
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
+              const SizedBox(width: 8),
+              DsBadge(
+                label: context.tr(unlocked ? 'contact_unlocked_short' : 'locked_short'),
+                color: unlocked
+                    ? cs.brandSuccess.withValues(alpha: 0.9)
+                    : cs.contentMuted.withValues(alpha: 0.9),
+                icon: unlocked ? Icons.lock_open_rounded : Icons.lock_rounded,
               ),
-            ),
-          ),
-          if (req.description.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(req.description, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
-          ],
-          const SizedBox(height: 8),
-          Text(
-            req.buyerName.isEmpty ? req.buyerUid : req.buyerName,
-            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
+            ],
           ),
           const SizedBox(height: 12),
           Row(
             children: [
-              Expanded(
-                child: unlocked
-                    ? ElevatedButton.icon(
-                        onPressed: () => _openWhatsApp(req.whatsapp),
-                        icon: const Icon(Icons.chat, size: 18),
-                        label: Text(context.tr('whatsapp_contact')),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: cs.whatsappGreen,
-                          foregroundColor: cs.surface,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      )
-                    : OutlinedButton.icon(
-                        onPressed: () => _unlock(req),
-                        icon: const Icon(Icons.lock_open, size: 18),
-                        label: Text(context.tr('unlock_contact')),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: cs.tertiary,
-                          side: BorderSide(color: cs.tertiary),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
+              DsChip(
+                label: '${context.tr('request_budget_label')}: ${context.formatPrice(req.budget)}',
+                chipSize: DsChipSize.sm,
+                selected: false,
+                icon: Icons.monetization_on_outlined,
               ),
+              const SizedBox(width: 8),
+              const Spacer(),
+              if (!unlocked)
+                Icon(Icons.lock, size: 13, color: cs.contentMuted.withValues(alpha: 0.7)),
             ],
           ),
-          if (!unlocked)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Row(
-                children: [
-                  Icon(Icons.lock, size: 13, color: cs.onSurfaceVariant.withValues(alpha: 0.6)),
-                  const SizedBox(width: 4),
-                  Text(
-                    context.tr('locked_contact_hint'),
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: cs.onSurfaceVariant.withValues(alpha: 0.6),
-                    ),
-                  ),
-                ],
-              ),
+          if (req.description.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              req.description,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 13, color: cs.contentSecondary, height: 1.4),
             ),
+          ],
+          const SizedBox(height: 14),
+          if (unlocked)
+            DsButton(
+              label: context.tr('whatsapp_contact'),
+              size: DsButtonSize.sm,
+              fullWidth: true,
+              icon: Icons.chat,
+              onPressed: () => _openWhatsApp(req.whatsapp),
+            )
+          else
+            DsButton(
+              label: context.tr('unlock_contact'),
+              variant: DsButtonVariant.secondary,
+              size: DsButtonSize.sm,
+              fullWidth: true,
+              icon: Icons.lock_open,
+              onPressed: () => _unlock(req),
+            ),
+          if (!unlocked) ...[
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.lock, size: 12, color: cs.contentMuted.withValues(alpha: 0.7)),
+                const SizedBox(width: 4),
+                Text(
+                  context.tr('locked_contact_hint'),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: cs.contentMuted.withValues(alpha: 0.8),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) {
+      final s = parts.first.trim();
+      return s.substring(0, s.length >= 2 ? 2 : 1).toUpperCase();
+    }
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
+  }
+
+  String _relativeTime(DateTime time) {
+    final d = DateTime.now().difference(time);
+    if (d.inSeconds < 10) return context.tr('just_now');
+    if (d.inMinutes < 1) return '${d.inSeconds}s';
+    if (d.inHours < 1) return '${d.inMinutes}m';
+    if (d.inDays < 1) return '${d.inHours}h';
+    return '${d.inDays}d';
   }
 
   Future<void> _unlock(BuyerRequest req) async {
@@ -239,6 +264,79 @@ class _BuyerRequestsScreenState extends State<BuyerRequestsScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(context.tr('phone_number_missing'))),
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  final String detail;
+  final VoidCallback onRetry;
+
+  const _ErrorState({required this.detail, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 88,
+              height: 88,
+              decoration: BoxDecoration(
+                color: cs.error.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+                border: Border.all(color: cs.error.withValues(alpha: 0.2)),
+              ),
+              child: Icon(Icons.cloud_off_rounded, size: 40, color: cs.error.withValues(alpha: 0.85)),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              context.tr('requests_error'),
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: cs.contentPrimary),
+            ),
+            if (detail.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: cs.surfaceSubtle,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: cs.hairline),
+                ),
+                child: Text(
+                  detail,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: cs.contentMuted,
+                    fontSize: 11,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                context.tr('ignore_offline'),
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: cs.contentMuted),
+              ),
+            ],
+            const SizedBox(height: 18),
+            DsButton(
+              label: context.tr('retry'),
+              variant: DsButtonVariant.secondary,
+              size: DsButtonSize.md,
+              fullWidth: false,
+              icon: Icons.refresh_rounded,
+              onPressed: onRetry,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
