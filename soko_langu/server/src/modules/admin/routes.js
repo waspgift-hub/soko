@@ -5,6 +5,7 @@ const { z } = require('zod');
 const adminService = require('./admin-service');
 const activity = require('../../services/activity');
 const { getPrisma } = require('../../config/database');
+const { getFirebaseFirestore } = require('../../config/firebase');
 const { writeAudit, auditFromReq } = require('../../services/audit');
 
 const router = Router();
@@ -51,13 +52,32 @@ router.put(
     const prisma = getPrisma();
     const before = await prisma.user.findUnique({
       where: { id: req.params.userId },
-      select: { accountStatus: true },
+      select: { accountStatus: true, firebaseUid: true },
     });
     const user = await prisma.user.update({
       where: { id: req.params.userId },
       data: { accountStatus: req.body.accountStatus },
-      select: { id: true, accountStatus: true, email: true },
+      select: { id: true, accountStatus: true, email: true, firebaseUid: true },
     });
+
+    // Keep users/{firebaseUid}.isSuspended in sync: the app guards product
+    // writes and BuyerRequests reads through Firestore rules which only check
+    // this flag (notSuspended()). Without the sync, toggling the account to
+    // "active" here would leave those Firestore operations still denied.
+    if (user.firebaseUid && ['active', 'suspended'].includes(req.body.accountStatus)) {
+      try {
+        const fsDb = getFirebaseFirestore();
+        if (fsDb) {
+          await fsDb
+            .collection('users')
+            .doc(user.firebaseUid)
+            .set({ isSuspended: req.body.accountStatus === 'suspended' }, { merge: true });
+        }
+      } catch (e) {
+        console.error('Firestore isSuspended sync failed for ' + user.firebaseUid + ':', e?.message || e);
+      }
+    }
+
     await writeAudit({
       ...auditFromReq(req),
       action: 'user.status.change',

@@ -440,6 +440,7 @@ const Map<String, Map<String, String>> zhTranslations = {
     'locked_short': '已锁定',
     'contact_unlocked_short': '已解锁',
     'ignore_offline': '这可能与网络有关——请确保已连接后再试一次。',
+    'account_suspended_seller': '您的账户已被暂停——请联系管理员以恢复销售。',
     'invalid_whatsapp': '请输入有效的 WhatsApp 号码',
     'enter_budget': '请输入有效预算',
     'whatsapp_contact': 'WhatsApp',

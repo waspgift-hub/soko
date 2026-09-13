@@ -72,6 +72,12 @@ function badge(status) {
   const cls = map[s] || 'mut';
   return '<span class="bdg ' + (s.indexOf('_') > -1 && !map[s] ? 'info' : cls) + '"><span class="dot"></span>' + esc(status) + '</span>';
 }
+function fsFlagBadge(v) {
+  if (v === null || v === undefined) return '<span class="dim">—</span>';
+  return v
+    ? '<span class="bdg bad"><span class="dot"></span>suspended</span>'
+    : '<span class="bdg ok"><span class="dot"></span>active</span>';
+}
 let toastT; function toast(msg, ok) {
   const el = $('toast');
   el.textContent = msg;
@@ -251,6 +257,7 @@ const ACTIONS = {
   kycReject(args) { kycReview(args.uid, args.name, 'reject'); },
   kycRevoke(args) { kycReview(args.uid, args.name, 'revoke'); },
   revenueWithdraw() { revenueWithdraw(); },
+  fsUnFlag(args) { fsUnFlagAcc(args.uid, args.name); },
   escrowRelease(args) { escrowReleaseAction(args); },
   escrowResolve(args) { escrowAdjudicate(args, 'release'); },
   escrowRefund(args) { escrowAdjudicate(args, 'refund'); },
@@ -419,9 +426,10 @@ async function loadUsers() {
   const role = pgState('users', 'role') || '';
   const status = pgState('users', 'status') || '';
   el.innerHTML = usersToolbar() + '<div class="card"><div class="tablewrap"><table class="tbl"><thead><tr>' +
-    '<th>Mtumiaji</th><th>Email</th><th>Simu</th><th>Jukumu</th><th>Hali</th><th>Anajiunga</th><th style="text-align:right">Vitendo</th></tr></thead>' +
-    '<tbody id="uRows"><tr><td colspan="7" class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto 8px"></div>Inapakia…</td></tr></tbody></table></div>' +
-    '<div id="uPag"></div></div>';
+    '<th>Mtumiaji</th><th>Email</th><th>Simu</th><th>Jukumu</th><th>Hali</th><th>Firestore</th><th>Anajiunga</th><th style="text-align:right">Vitendo</th></tr></thead>' +
+    '<tbody id="uRows"><tr><td colspan="8" class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto 8px"></div>Inapakia…</td></tr></tbody></table></div>' +
+    '<div id="uPag"></div></div>' +
+    '<div id="fsCard"></div>';
   const qs = new URLSearchParams({ page, limit: 20 });
   if (q) qs.set('q', q); if (role) qs.set('role', role); if (status) qs.set('accountStatus', status);
   try {
@@ -435,22 +443,24 @@ async function loadUsers() {
         '<td class="mono">' + esc(u.phone || '—') + '</td>' +
         '<td>' + badge(u.role) + '</td>' +
         '<td>' + badge(u.accountStatus) + '</td>' +
+        '<td>' + fsFlagBadge(u.firestoreSuspended) + '</td>' +
         '<td class="dim">' + fmtTime(u.createdAt) + '</td>' +
         '<td class="rowactions">' +
         '<button class="btn sm" data-fn="viewUser" data-args=\'' + JSON.stringify({ id: u.id, name: u.displayName || u.email || u.id }).replace(/'/g, '&#39;') + '\'>Angalia</button>' +
         '<button class="btn sm" data-fn="userStatus" data-args=\'' + JSON.stringify({ id: u.id, name: u.displayName || u.email || u.id }).replace(/'/g, '&#39;') + '\'>Hali</button>' +
         '</td></tr>'
       ).join('')
-      : '<tr><td colspan="7" class="empty">Hakuna watumiaji</td></tr>';
+      : '<tr><td colspan="8" class="empty">Hakuna watumiaji</td></tr>';
     $('uPag').innerHTML = pagerHTML('users', j.data.pagination);
-  } catch (e) { $('uRows').innerHTML = '<tr><td colspan="7" class="empty">' + esc(e.message) + '</td></tr>'; }
+  } catch (e) { $('uRows').innerHTML = '<tr><td colspan="8" class="empty">' + esc(e.message) + '</td></tr>'; }
   bindSection('users');
+  renderFsSuspended();
   touch();
 }
 
 async function changeUserStatus(id, name) {
   openModal(
-    '<h3>Hali ya mtumiaji: ' + esc(name) + '</h3><p class="msub">Badilisha hali ya akaunti</p>' +
+    '<h3>Hali ya mtumiaji: ' + esc(name) + '</h3><p class="msub">Badilisha hali ya akaunti. Chaguo <b>active</b> pia litaondoa alama isSuspended kwenye Firestore.</p>' +
     '<label>Hali mpya</label><select class="field" id="usSel"><option value="active">active</option><option value="pending">pending</option><option value="suspended">suspended</option><option value="deleted">deleted</option></select>' +
     '<label>Sababu (hiari)</label><input class="field" id="usReason" placeholder="Sababu fupi kwa ukaguzi">' +
     '<div class="mfooter"><button class="btn" id="usNo">Futa</button><button class="btn accent" id="usYes">Hifadhi</button></div>'
@@ -517,6 +527,48 @@ async function sendUserNotif(uid, name) {
     await postJSON('/api/admin/send-notification', { userId: uid, title: $('snTitle').value, body: $('snBody').value, type: $('snType').value });
     closeModal(); toast('Arifa imetumwa', true);
   });
+}
+
+// Firestore users/{uid}.isSuspended ni tofauti na accountStatus ya Postgres;
+// hii ni orodha ya akaunti zilizosimamishwa FIRESTORE tu (ndiyo inaziba
+// kuongeza bidhaa / kusoma BuyerRequests), na kitufe cha kuamisha moja kwa moja.
+async function fsUnFlagAcc(uid, name) {
+  if (!(await confirmModal('Amilisha (Firestore)', 'Ondoa isSuspended kwenye akaunti ya ' + esc(name) + '?', 'Ndiyo, amilisha'))) return;
+  await run(async () => {
+    await api('/api/admin/users/' + encodeURIComponent(uid), { method: 'PATCH', body: { updates: { isSuspended: false } } });
+    toast('Akaunti imeamilishwa', true);
+    renderFsSuspended(true);
+    loadUsers();
+  });
+}
+async function renderFsSuspended() {
+  const wrap = $('fsCard');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="card"><div class="cardhead"><h3>Watumiaji waliosimamishwa (Firestore)</h3><button class="btn sm" id="fsRefresh">Onyesha upya</button></div><div class="dsub" style="padding:0 16px 16px"><div class="spinner" style="width:20px;height:20px"></div></div></div>';
+  try {
+    const j = await getJSON('/api/admin/users');
+    const all = (j && j.users || []).filter((u) => u.isSuspended === true);
+    if (!all.length) {
+      wrap.innerHTML = '<div class="card"><div class="cardhead"><h3>Watumiaji waliosimamishwa (Firestore)</h3><button class="btn sm" id="fsRefresh">Onyesha upya</button></div><div class="dsub" style="padding:0 16px 16px">Hakuna akaunti iliyosimamishwa kwenye Firestore.</div></div>';
+      $('fsRefresh').onclick = () => renderFsSuspended();
+      return;
+    }
+    wrap.innerHTML = '<div class="card"><div class="cardhead"><h3>Watumiaji waliosimamishwa (Firestore)</h3><button class="btn sm" id="fsRefresh">Onyesha upya</button></div>' +
+      '<div class="tablewrap" style="max-height:280px;overflow:auto"><table class="tbl"><thead><tr><th>Mtumiaji</th><th>Email / Simu</th><th>UID</th><th style="text-align:right">Vitendo</th></tr></thead><tbody>' +
+      all.map((u) =>
+        '<tr>' +
+        '<td>' + avatarOf(u) + ' ' + esc(u.displayName || u.username || '—') + '</td>' +
+        '<td>' + esc((u.email || '') + (u.phone ? ' · ' + u.phone : '')) + '</td>' +
+        '<td class="mono">' + esc(id12(u.uid)) + '</td>' +
+        '<td class="rowactions"><button class="btn sm accent" data-fn="fsUnFlag" data-args=\'' + JSON.stringify({ uid: u.uid, name: u.displayName || u.email || u.uid }).replace(/'/g, '&#39;') + '\'>Amilisha</button></td>' +
+        '</tr>'
+      ).join('') +
+      '</tbody></table></div></div>';
+    $('fsRefresh').onclick = () => renderFsSuspended();
+    bindSection('users');
+  } catch (e) {
+    wrap.innerHTML = '<div class="card"><div class="cardhead"><h3>Watumiaji waliosimamishwa (Firestore)</h3></div><div class="err">' + esc(e.message) + '</div></div>';
+  }
 }
 
 // ---------------------------------------------------------------------------

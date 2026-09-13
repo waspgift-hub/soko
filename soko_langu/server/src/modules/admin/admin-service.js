@@ -1,4 +1,5 @@
 const { getPrisma } = require('../../config/database');
+const { getFirebaseFirestore } = require('../../config/firebase');
 
 /**
  * Admin dashboard KPIs: revenue, orders, users, disputes, system health.
@@ -72,6 +73,7 @@ async function searchUsers({ q, role, accountStatus, page = 1, limit = 20 }) {
         avatarUrl: true,
         role: true,
         accountStatus: true,
+        firebaseUid: true,
         createdAt: true,
       },
       orderBy: { createdAt: 'desc' },
@@ -81,7 +83,35 @@ async function searchUsers({ q, role, accountStatus, page = 1, limit = 20 }) {
     prisma.user.count({ where }),
   ]);
 
-  return { users, pagination: { page: Number(page), limit: Number(limit), total } };
+  // Firestore rules gate client-side product writes / BuyerRequests reads on
+  // users/{uid}.isSuspended (notSuspended()), which is independent of the
+  // Postgres accountStatus. Surface the Firestore flag so the panel can show
+  // (and from there, fix) mismatches.
+  let fsByUid = {};
+  try {
+    const fsDb = getFirebaseFirestore();
+    if (fsDb) {
+      const uids = users.map((u) => u.firebaseUid).filter(Boolean);
+      if (uids.length) {
+        const snaps = await Promise.all(uids.map((uid) => fsDb.collection('users').doc(uid).get().catch(() => null)));
+        snaps.forEach((s) => {
+          if (s && s.exists) fsByUid[s.id] = s.data() || {};
+        });
+      }
+    }
+  } catch (e) {
+    console.error('Firestore user flag fetch failed:', e?.message || e);
+  }
+
+  return {
+    users: users.map((u) => ({
+      ...u,
+      firebaseUid: u.firebaseUid || null,
+      firestoreSuspended:
+        u.firebaseUid && fsByUid[u.firebaseUid] ? fsByUid[u.firebaseUid].isSuspended === true : null,
+    })),
+    pagination: { page: Number(page), limit: Number(limit), total },
+  };
 }
 
 /**
