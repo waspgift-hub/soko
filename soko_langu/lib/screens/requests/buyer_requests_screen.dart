@@ -37,23 +37,40 @@ class _BuyerRequestsScreenState extends State<BuyerRequestsScreen> {
         stream: _service.getRequests(),
         builder: (context, snap) {
           if (snap.hasError) {
+            final detail = snap.error?.toString() ?? '';
             return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.error_outline, size: 48, color: cs.error),
-                  const SizedBox(height: 12),
-                  Text(
-                    context.tr('requests_error'),
-                    style: TextStyle(color: cs.onSurfaceVariant),
-                  ),
-                  const SizedBox(height: 12),
-                  TextButton.icon(
-                    onPressed: () => setState(() => _refreshKey++),
-                    icon: const Icon(Icons.refresh, size: 18),
-                    label: Text(context.tr('retry')),
-                  ),
-                ],
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.error_outline, size: 48, color: cs.error),
+                    const SizedBox(height: 12),
+                    Text(
+                      context.tr('requests_error'),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: cs.onSurfaceVariant),
+                    ),
+                    if (detail.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        detail,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                          fontSize: 11,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    TextButton.icon(
+                      onPressed: () => setState(() => _refreshKey++),
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: Text(context.tr('retry')),
+                    ),
+                  ],
+                ),
               ),
             );
           }

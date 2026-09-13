@@ -506,11 +506,33 @@ function localizeNotif(lang, title, body) {
 // site, so they must be localized to the recipient's language up front or the
 // final message mixes languages (`Sababu: Payment failed`). Any real provider
 // reason is left untouched — it is the gateway's own text.
+//
+// The gateway (ClickPesa) also returns account-level restriction phrases that
+// describe the PLATFORM merchant account, not the app user ("Complete your KYC
+// to remove this" targets the business account). Echoing them raw tells a
+// seller to do something they cannot do, so map the common ones and any
+// language gets a clean copy instead.
 function localizeDefaultReason(lang, reason) {
   const map = {
     'Payment failed': { sw: 'Malipo yameshindikana', en: 'Payment failed', zh: '付款失败' },
     'payment failed': { sw: 'malipo yameshindikana', en: 'payment failed', zh: '付款失败' },
   };
+  const txn = (sw, en, zh) => ({ sw, en, zh });
+  const lc = String(reason || '').toLowerCase();
+  if (/(daily|per day).{0,30}(api|payment|transaction|request|collect|payout).{0,20}limit|limit.{0,20}reached|limit.{0,20}exceeded/.test(lc)) {
+    return txn(
+      'kikomo cha malipo cha ClickPesa kimefikiwa kwa siku. Jaribu tena baadaye.',
+      'A ClickPesa daily payment limit was reached. Try again later.',
+      '已达到 ClickPesa 每日支付限额。请稍后再试。'
+    )[lang] || reason;
+  }
+  if (/complete.{0,10}kyc|kyc.{0,20}(required|verification)|verify.{0,20}(your|merchant|business|account)/.test(lc)) {
+    return txn(
+      'Kuna kikomo cha akaunti ya malipo ya jukwaa (ClickPesa). Wasiliana na msaada wa Soko Vibe.',
+      'The platform payment account (ClickPesa) has a limit. Contact Soko Vibe support.',
+      '平台支付账户（ClickPesa）有额度限制。请联系 Soko Vibe 客服。'
+    )[lang] || reason;
+  }
   const entry = map[reason];
   if (!entry || lang === 'sw') return reason;
   return entry[lang] || reason;
