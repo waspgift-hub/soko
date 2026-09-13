@@ -1,43 +1,16 @@
 /* Soko Vibe Admin Panel
-   Vanilla no-build SPA. Auth is Firebase (same project as the app); API is the
-   existing v2 + legacy-compat surface on the same origin. A browser-side
-   ADMIN_SECRET (x-admin-secret) fallback is supported for environments where
-   Firebase sign-in is unavailable. */
+   Vanilla no-build SPA. The single login method is ADMIN_SECRET, sent as the
+   x-admin-secret header on the same-origin v2 + legacy-compat API. No
+   Firebase, no Google dependency. */
 'use strict';
 
-// ---------------------------------------------------------------------------
-// Firebase boot
-// ---------------------------------------------------------------------------
-// Firebase is OPTIONAL: secret mode works with zero Google connectivity. If
-// the SDK (CDN) failed to load, boot continues and the login screen explains
-// instead of leaving the splash spinner forever.
-let auth = null;
-let firebaseErr = '';
-try {
-  if (typeof firebase === 'undefined' || !firebase.initializeApp) throw new Error('Firebase SDK haikupakiwa (CDN).');
-  firebase.initializeApp({
-    apiKey: 'AIzaSyBrh5W9VwbC3qTtSTm8LJbTQeYufRGil5s',
-    authDomain: 'sokonimoko-8c171-a8d14.firebaseapp.com',
-    projectId: 'sokonimoko-8c171-a8d14',
-    appId: '1:344682929526:web:5d3732578d6f012ac26e57',
-  });
-  auth = firebase.auth();
-} catch (e) {
-  firebaseErr = (e && e.message) || String(e);
-  console.error('[admin] firebase init failed:', e);
-}
-// getIdToken() can hang when Google is unreachable — never wait forever.
-function tokenWithTimeout(user, ms) {
-  return Promise.race([
-    user.getIdToken(true),
-    new Promise((_, rej) => setTimeout(() => rej(new Error('Token timeout: mtandao wa Google umechelewa.')), ms || 15000)),
-  ]);
-}
 const API = '';
 const SECRET_KEY = 'sv_admin_secret';
 const THEME_KEY = 'sv_admin_theme';
+// A request must never hang the UI forever: abort slow calls so every
+// section either renders or shows its error instead of spinning endlessly.
+const API_TIMEOUT_MS = 30000;
 
-let idToken = null;
 const S = {}; // tiny client cache for cross-section lookups
 
 const $ = (id) => document.getElementById(id);
@@ -94,18 +67,27 @@ function icons() { if (window.lucide) lucide.createIcons(); }
 // ---------------------------------------------------------------------------
 function secret() { try { return localStorage.getItem(SECRET_KEY) || ''; } catch (_) { return ''; } }
 async function api(path, opts = {}) {
-  const headers = { ...(opts.headers || {}) };
-  if (idToken) headers.Authorization = 'Bearer ' + idToken;
-  else if (secret()) headers['x-admin-secret'] = secret();
-  else throw new Error('Jaribu kuingia kwanza');
+  const s = secret();
+  if (!s) throw new Error('Ingia kwanza');
+  const headers = { ...(opts.headers || {}), 'x-admin-secret': s };
   if (opts.body && typeof opts.body === 'object') {
     headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(opts.body);
   }
-  const r = await fetch(API + path, { ...opts, headers });
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), API_TIMEOUT_MS);
+  let r;
+  try {
+    r = await fetch(API + path, { ...opts, headers, signal: ctrl.signal });
+  } catch (e) {
+    throw new Error(e && e.name === 'AbortError' ? 'Ombi limechelewa (timeout). Jaribu tena.' : ('Mtandao: ' + (e && e.message)));
+  } finally {
+    clearTimeout(to);
+  }
   let j = null; try { j = await r.json(); } catch (_) {}
   if (r.status === 401) {
-    if (idToken && auth) auth.signOut().then(() => location.reload());
+    try { localStorage.removeItem(SECRET_KEY); } catch (_) {}
+    showLogin('ADMIN_SECRET haikubaliki — ingia tena.');
     throw new Error((j && j.error) || 'Haijaidhinishwa');
   }
   if (!r.ok) throw new Error((j && j.error) || ('HTTP ' + r.status));
@@ -1230,16 +1212,12 @@ $('themeBtn').addEventListener('click', () => {
 // ---------------------------------------------------------------------------
 // Auth
 // ---------------------------------------------------------------------------
-let booted = false; // watchdog below guarantees the splash always advances
 function showLogin(err) {
-  booted = true;
   $('screen').hidden = true;
   $('loginCard').hidden = false;
-  if (err) $('authErr').textContent = err;
-  else if (firebaseErr) $('authErr').textContent = 'Firebase haipatikani (' + firebaseErr + '). Tumia ADMIN_SECRET kuendelea.';
+  $('authErr').textContent = err || '';
 }
 function showApp() {
-  booted = true;
   $('screen').hidden = true;
   $('loginCard').hidden = true;
   $('app').hidden = false;
@@ -1255,61 +1233,29 @@ function applyTheme() {
   icons();
 }
 
-$('loginTabs').addEventListener('click', (e) => {
-  const t = e.target.closest('.tab');
-  if (!t) return;
-  document.querySelectorAll('#loginTabs .tab').forEach((x) => x.classList.remove('active'));
-  t.classList.add('active');
-  ['pw', 'otp', 'google'].forEach((k) => { $('pane-' + k).hidden = k !== t.dataset.tab; });
-});
-
-$('pwBtn').onclick = () => {
-  const email = $('pwEmail').value.trim();
-  const pass = $('pwPass').value;
-  if (!email || !pass) { $('authErr').textContent = 'Jaza email na neno la siri.'; return; }
-  if (!auth) { $('authErr').textContent = 'Firebase haipatikani. Tumia ADMIN_SECRET kuendelea.'; return; }
-  $('authErr').textContent = '';
-  $('pwBtn').disabled = true;
-  auth.signInWithEmailAndPassword(email, pass).catch((e) => {
-    $('authErr').textContent = 'Hotuba haikufanikiwa: ' + (e && e.message ? e.message : 'jaribu tena');
-    $('pwBtn').disabled = false;
-  });
-};
-$('otpSend').onclick = () => runQuiet(async () => {
-  const email = $('otpEmail').value.trim();
-  if (!email) { $('authErr').textContent = 'Andika email.'; return; }
-  await postJSON('/api/v1/auth/send-email-otp', { email });
-  $('otpRow').hidden = false;
-  $('authErr').textContent = 'Namba ya uthibitisho imetumwa kwa ' + email;
-});
-$('otpVerify').onclick = () => runQuiet(async () => {
-  const email = $('otpEmail').value.trim();
-  const code = $('otpCode').value.trim();
-  const j = await postJSON('/api/v1/auth/otp-sign-in', { email, code });
-  if (!auth) { $('authErr').textContent = 'Firebase haipatikani. Tumia ADMIN_SECRET kuendelea.'; return; }
-  if (j && j.customToken) {
-    await auth.signInWithCustomToken(j.customToken);
-  } else {
-    $('authErr').textContent = 'Namba haikubaliki — jaribu tena.';
-  }
-});
-$('gBtn').onclick = () => {
-  if (!auth) { $('authErr').textContent = 'Firebase haipatikani. Tumia ADMIN_SECRET kuendelea.'; return; }
-  const prov = new firebase.auth.GoogleAuthProvider();
-  auth.signInWithPopup(prov).catch((e) => {
-    $('authErr').textContent = 'Google: ' + (e && e.message ? e.message : 'jaribu tena');
-  });
-};
-$('secretToggle').onclick = () => { $('pane-secret').hidden = !$('pane-secret').hidden; };
-$('secSave').onclick = () => {
+// The single login: verify the secret against the dashboard, then enter.
+async function trySecretLogin() {
   const v = $('secVal').value.trim();
   if (!v) { $('authErr').textContent = 'Andika ADMIN_SECRET.'; return; }
+  $('authErr').textContent = '';
+  $('secSave').disabled = true;
   try { localStorage.setItem(SECRET_KEY, v); } catch (_) {}
-  showApp();
-};
-$('logoutBtn').onclick = async () => {
+  try {
+    await getJSON('/api/v1/admin/dashboard');
+    $('meName').textContent = 'ADMIN_SECRET';
+    $('meRole').textContent = 'secret mode';
+    showApp();
+  } catch (e) {
+    try { localStorage.removeItem(SECRET_KEY); } catch (_) {}
+    showLogin('ADMIN_SECRET haikubaliki: ' + (e && e.message));
+  } finally {
+    $('secSave').disabled = false;
+  }
+}
+$('secSave').onclick = () => { trySecretLogin().catch(handleActionErr); };
+$('secVal').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('secSave').click(); });
+$('logoutBtn').onclick = () => {
   try { localStorage.removeItem(SECRET_KEY); } catch (_) {}
-  if (auth) await auth.signOut().catch(() => {});
   location.reload();
 };
 
@@ -1322,57 +1268,23 @@ window.addEventListener('error', (ev) => {
   showLogin('Runtime: ' + err);
 });
 
-if (auth) {
-  auth.onAuthStateChanged(async (user) => {
-    try {
-      if (user) {
-        idToken = await tokenWithTimeout(user);
-        const me = user;
-        $('meName').textContent = (me.displayName || me.email || 'Admin');
-        $('meRole').textContent = 'admin';
-        if (me.photoURL) $('meAvatar').src = me.photoURL;
-        // Gate: verify we can actually read the admin dashboard.
-        try {
-          await getJSON('/api/v1/admin/dashboard');
-          idToken = await tokenWithTimeout(user);
-          showApp();
-        } catch (e) {
-          idToken = null;
-          showLogin('Unauthorized: akaunti yako haina jukumu la admin.');
-          await auth.signOut().catch(() => {});
-        }
-      } else if (secret()) {
-        // ADMIN_SECRET fallback mode: skip Firebase, call with x-admin-secret.
-        try {
-          await getJSON('/api/v1/admin/dashboard');
-          $('meName').textContent = 'ADMIN_SECRET';
-          $('meRole').textContent = 'secret mode';
-          showApp();
-        } catch (e) {
-          try { localStorage.removeItem(SECRET_KEY); } catch (_) {}
-          showLogin('ADMIN_SECRET haikubaliki: ' + (e && e.message));
-        }
-      } else {
-        showLogin('');
-      }
-    } catch (err) {
-      showLogin('Umeshindikana kuthibitisha: ' + (err && err.message));
+// Boot: a stored secret is verified silently, otherwise show the login.
+// Every path settles — no Firebase, no hanging callbacks, no eternal splash.
+(async () => {
+  try {
+    if (secret()) {
+      await getJSON('/api/v1/admin/dashboard');
+      $('meName').textContent = 'ADMIN_SECRET';
+      $('meRole').textContent = 'secret mode';
+      showApp();
+    } else {
+      showLogin('');
     }
-  });
-} else {
-  // No Firebase SDK: secret mode still works, everything else explains itself.
-  showLogin('');
-}
-
-// Boot watchdog: the splash must always advance. If Auth never calls back
-// (backend blocked, token hanging), force the login screen with guidance.
-setTimeout(() => {
-  if (booted) return;
-  booted = true;
-  $('screen').hidden = true;
-  $('loginCard').hidden = false;
-  $('authErr').textContent = 'Firebase Auth haijajibu (mtandao?). Tumia ADMIN_SECRET kuendelea — bonyeza "Matumizi ya Siri ya Admin".';
-}, 12000);
+  } catch (e) {
+    try { localStorage.removeItem(SECRET_KEY); } catch (_) {}
+    showLogin('ADMIN_SECRET haikubaliki: ' + (e && e.message));
+  }
+})();
 
 // Apply stored theme on first paint
 applyTheme();

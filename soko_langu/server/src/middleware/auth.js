@@ -149,12 +149,9 @@ async function verifyAdmin(req, res, next) {
   next();
 }
 
-// Admin gate with a headless fallback: a correct x-admin-secret alone is
-// sufficient (panel secret mode, curl debugging). Anything else goes through
-// strict Firebase auth + admin role, so suspended/deleted accounts stay
-// blocked exactly as before. A wrong secret never grants anything — it falls
-// through to the strict path, so a logged-in admin with a stale stored secret
-// keeps working via their token.
+// The single admin gate: x-admin-secret only. No Firebase path — the panel
+// and all admin tooling authenticate with the shared secret, so there is
+// exactly one login method on backend and UI alike.
 function authenticateAdmin(req, res, next) {
   const secret = req.headers['x-admin-secret'];
 
@@ -163,7 +160,7 @@ function authenticateAdmin(req, res, next) {
     return next();
   }
 
-  authenticate(req, res, () => verifyAdmin(req, res, next));
+  return res.status(401).json({ error: 'AUTH_REQUIRED' });
 }
 
 // Active-account gate that also passes secret-authenticated admin calls,
