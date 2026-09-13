@@ -116,14 +116,20 @@ class FraudPreventionService {
     required double price,
     required String existingId,
   }) async {
-    await _raiseAlert(
-      sellerId: sellerId,
-      sellerName: sellerName,
-      type: 'duplicate_listing',
-      severity: 'medium',
-      description:
-          'Seller tried to post duplicate of "$productName" (TZS $price) matching active listing $existingId',
-    );
+    // fraud_alerts ni admin-only kwa rules, kwa hiyo ripoti inaweza
+    // kukataliwa kwa mtumiaji wa kawaida — isizuie ujumbe wa duplicate.
+    try {
+      await _raiseAlert(
+        sellerId: sellerId,
+        sellerName: sellerName,
+        type: 'duplicate_listing',
+        severity: 'medium',
+        description:
+            'Seller tried to post duplicate of "$productName" (TZS $price) matching active listing $existingId',
+      );
+    } catch (e) {
+      debugPrint('Fraud reportDuplicateListing error: $e');
+    }
   }
 
   Future<void> checkNewSeller(String sellerId, String sellerName) async {

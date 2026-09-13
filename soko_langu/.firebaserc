@@ -1,5 +1,7 @@
 {
-  "projects": {},
+  "projects": {
+    "default": "sokonimoko-8c171-a8d14"
+  },
   "targets": {
     "sokonimoko-8c171-a8d14": {
       "hosting": {
