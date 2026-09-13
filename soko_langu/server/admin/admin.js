@@ -258,6 +258,8 @@ const ACTIONS = {
   kycRevoke(args) { kycReview(args.uid, args.name, 'revoke'); },
   revenueWithdraw() { revenueWithdraw(); },
   fsUnFlag(args) { fsUnFlagAcc(args.uid, args.name); },
+  viewFsProduct(args) { viewFsProduct(args.id, args.name); },
+  fpToggleActive(args) { fpToggleActive(args.id, args.name); },
   escrowRelease(args) { escrowReleaseAction(args); },
   escrowResolve(args) { escrowAdjudicate(args, 'release'); },
   escrowRefund(args) { escrowAdjudicate(args, 'refund'); },
@@ -570,6 +572,96 @@ async function renderFsSuspended() {
     wrap.innerHTML = '<div class="card"><div class="cardhead"><h3>Watumiaji waliosimamishwa (Firestore)</h3></div><div class="err">' + esc(e.message) + '</div></div>';
   }
 }
+// fmtTime kwa Firestore Timestamp ({seconds}/{_seconds}) au Date/string.
+function fmtTimeAny(v) {
+  if (!v) return '—';
+  if (typeof v === 'object' && v.seconds != null) return fmtTime(new Date(Number(v.seconds) * 1000));
+  if (typeof v === 'object' && v._seconds != null) return fmtTime(new Date(Number(v._seconds) * 1000));
+  return fmtTime(v);
+}
+// Bidhaa halisi za app zinaishi FIRESTORE (app inaandika moja kwa moja kwenye
+// collection products), si Postgres. Kadi hii inazionyesha + inaruhusu
+// Sitisha/Chapisha (isActive) moja kwa moja.
+async function renderFsProducts() {
+  const wrap = $('fpCard');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="card"><div class="cardhead"><h3>Bidhaa (Firestore) — app hizi ndizo zinavyoonekana</h3><button class="btn sm" id="fpRefresh">Onyesha upya</button></div><div class="dsub" style="padding:0 16px 16px"><div class="spinner" style="width:20px;height:20px"></div></div></div>';
+  try {
+    const j = await getJSON('/api/admin/products');
+    const all = (j && j.products || []).slice(0, 50);
+    if (!all.length) {
+      wrap.innerHTML = '<div class="card"><div class="cardhead"><h3>Bidhaa (Firestore)</h3><button class="btn sm" id="fpRefresh">Onyesha upya</button></div><div class="dsub" style="padding:0 16px 16px">Hakuna bidhaa kwenye Firestore.</div></div>';
+      $('fpRefresh').onclick = () => renderFsProducts();
+      return;
+    }
+    wrap.innerHTML = '<div class="card"><div class="cardhead"><h3>Bidhaa (Firestore)</h3><button class="btn sm" id="fpRefresh">Onyesha upya</button></div>' +
+      '<div class="tablewrap" style="max-height:360px;overflow:auto"><table class="tbl"><thead><tr><th>Bidhaa</th><th>Muuzaji</th><th>Kategoria</th><th>Bei</th><th>Hali</th><th>Dawa</th><th style="text-align:right">Vitendo</th></tr></thead><tbody>' +
+      all.map((p) => {
+        const img = (p.images && p.images[0]) || '';
+        const thumb = img && /^https?:\/\//.test(img)
+          ? '<img class="thumb" src="' + esc(img) + '" loading="lazy" onerror="this.style.display=\'none\'">'
+          : '<div class="thumb" style="display:grid;place-items:center;color:var(--muted);font-size:11px">' + ((p.images && p.images.length) || 0) + '</div>';
+        const active = p.isActive !== false;
+        const args = JSON.stringify({ id: p.id, name: p.name || p.id }).replace(/'/g, '&#39;');
+        return '<tr>' +
+          '<td>' + thumb + ' <b>' + esc(p.name || '—') + '</b><div class="dim mono">' + esc(id12(p.id)) + '</div></td>' +
+          '<td>' + esc(p.sellerName || '—') + '</td>' +
+          '<td class="dim">' + esc(p.category || '—') + '</td>' +
+          '<td class="num">' + fmtTZS(p.price) + (p.currency && p.currency !== 'TZS' ? ' ' + esc(p.currency) : '') + '<div class="dim">stock ' + fmtNum(p.stock) + '</div></td>' +
+          '<td>' + (active ? '<span class="bdg ok"><span class="dot"></span>active</span>' : '<span class="bdg mut"><span class="dot"></span>inactive</span>') + '</td>' +
+          '<td class="dim">' + fmtTimeAny(p.createdAt) + '</td>' +
+          '<td class="rowactions">' +
+          '<button class="btn sm" data-fn="viewFsProduct" data-args=\'' + args + '\'>Angalia</button>' +
+          '<button class="btn sm ' + (active ? 'danger' : 'accent') + '" data-fn="fpToggleActive" data-args=\'' + args + '\'>' + (active ? 'Sitisha' : 'Chapisha') + '</button>' +
+          '</td></tr>';
+      }).join('') +
+      '</tbody></table></div></div>';
+    $('fpRefresh').onclick = () => renderFsProducts();
+    bindSection('products');
+  } catch (e) {
+    wrap.innerHTML = '<div class="card"><div class="cardhead"><h3>Bidhaa (Firestore)</h3></div><div class="err">' + esc(e.message) + '</div></div>';
+  }
+}
+async function viewFsProduct(id, name) {
+  openDrawer('<div class="dsub">Inapakia…</div>');
+  try {
+    const j = await getJSON('/api/admin/products');
+    const p = ((j && j.products) || []).find((x) => x.id === id);
+    if (!p) { closeDrawer(); toast('Bidhaa haikuonekana', false); return; }
+    const img = (p.images && p.images[0]) || '';
+    openDrawer(
+      '<h3>' + esc(p.name || '—') + '</h3>' +
+      '<div class="dsub">' + esc(p.category || '') + (p.subcategory ? ' · ' + esc(p.subcategory) : '') + (p.location ? ' · ' + esc(p.location) : '') + '</div>' +
+      (img ? '<div style="margin:10px 0"><img src="' + esc(img) + '" style="max-height:220px;border-radius:14px;width:100%;object-fit:cover" onerror="this.style.display=\'none\'"></div>' : '') +
+      '<dl class="kv">' +
+      '<dt>Bei</dt><dd>' + fmtTZS(p.price) + (p.currency && p.currency !== 'TZS' ? ' ' + esc(p.currency) : '') + '</dd>' +
+      '<dt>Stock</dt><dd>' + fmtNum(p.stock) + (p.isWholesale ? ' · wholesale' : '') + '</dd>' +
+      '<dt>Hali</dt><dd>' + (p.isActive === false ? '<span class="bdg mut">inactive</span>' : '<span class="bdg ok">active</span>') + (p.isFeatured ? ' · featured' : '') + (p.isBoosted ? ' · boosted' : '') + '</dd>' +
+      '<dt>Muuzaji</dt><dd>' + esc(p.sellerName || '—') + (p.sellerPhone ? ' · ' + esc(p.sellerPhone) : '') + '</dd>' +
+      '<dt>KYC ya muuzaji</dt><dd>' + (p.sellerKycApproved ? 'Ndiyo' : 'La') + '</dd>' +
+      '<dt>Maelezo</dt><dd>' + esc((p.description || '—').slice(0, 400)) + '</dd>' +
+      (p.barcode ? '<dt>Barcode</dt><dd class="mono">' + esc(p.barcode) + '</dd>' : '') +
+      '<dt>Imeundwa</dt><dd>' + fmtTimeAny(p.createdAt) + '</dd>' +
+      '</dl>' +
+      '<div class="drawer-actions">' +
+      '<button class="btn sm ' + (p.isActive === false ? 'accent' : 'danger') + '" data-fn="fpToggleActive" data-args=\'' + JSON.stringify({ id: p.id, name: p.name || p.id }).replace(/'/g, '&#39;') + '\'>' + (p.isActive === false ? 'Chapisha' : 'Sitisha') + '</button>' +
+      '</div>'
+    );
+    bindSection('products');
+  } catch (e) { toast(e.message, false); }
+}
+async function fpToggleActive(id, name) {
+  const j = await getJSON('/api/admin/products');
+  const cur = ((j && j.products) || []).find((x) => x.id === id);
+  const to = !(cur && cur.isActive === false);
+  const lab = to ? 'Chapisha' : 'Sitisha';
+  if (!(await confirmModal(lab + ' (Firestore)', lab + ' bidhaa "' + esc(name) + '"?', 'Ndiyo, ' + lab.toLowerCase()))) return;
+  await run(async () => {
+    await api('/api/admin/products/' + encodeURIComponent(id), { method: 'PUT', body: { isActive: to } });
+    toast('Imebadilishwa', true);
+    renderFsProducts();
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Wauzaji
@@ -684,7 +776,8 @@ async function loadProducts() {
   el.innerHTML = productsToolbar() + '<div class="card"><div class="tablewrap"><table class="tbl"><thead><tr>' +
     '<th>Bidhaa</th><th>Duka</th><th>Kategoria</th><th>Bei</th><th>Hali</th><th>Dawa</th><th style="text-align:right">Vitendo</th></tr></thead>' +
     '<tbody id="pRows"><tr><td colspan="7" class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto 8px"></div>Inapakia…</td></tr></tbody></table></div>' +
-    '<div id="pPag"></div></div>';
+    '<div id="pPag"></div></div>' +
+    '<div id="fpCard"></div>';
   const qs = new URLSearchParams({ page, limit: 20 });
   if (q) qs.set('q', q); if (st) qs.set('status', st);
   try {
@@ -707,6 +800,7 @@ async function loadProducts() {
     $('pPag').innerHTML = pagerHTML('products', j.data.pagination);
   } catch (e) { $('pRows').innerHTML = '<tr><td colspan="7" class="empty">' + esc(e.message) + '</td></tr>'; }
   bindSection('products'); touch();
+  renderFsProducts();
 }
 async function productModerate(id, title) {
   openModal(
