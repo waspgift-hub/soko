@@ -118,6 +118,15 @@ function openDrawer(html) {
 function closeDrawer() { $('drawerOverlay').hidden = true; $('drawer').hidden = true; }
 $('drawerOverlay').addEventListener('click', closeDrawer);
 $('drawerClose').addEventListener('click', closeDrawer);
+// Vitufe vya ndani ya drawer (data-fn): delegation moja inayofanya kazi
+// kwa detail zote, kwani bindSection() inafunga section tu, si drawer.
+$('drawerBody').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-fn]');
+  if (!b || b.disabled) return;
+  e.stopPropagation();
+  const fn = ACTIONS[b.dataset.fn.replace(/^sv\./, '')];
+  if (fn) { try { fn(JSON.parse(b.dataset.args || '{}'), b); } catch (err) { handleActionErr(err); } }
+});
 
 function confirmModal(title, msg, btnLabel, danger) {
   return new Promise((resolve) => {
@@ -709,6 +718,32 @@ async function loadOrders() {
   } catch (e) { $('oRows').innerHTML = '<tr><td colspan="8" class="empty">' + esc(e.message) + '</td></tr>'; }
   bindSection('orders'); touch();
 }
+// Detail ya agizo inayoongozwa na HATUA ilipo (kazi/service inayofanyika
+// muda huo): timeline ya hatua + kadi ya "sasa kinafanyika" yenye taarifa
+// na vitendo vinavyohusiana na hatua hiyo, kisha wahusika/bidhaa/pesa.
+const ORDER_PHASES = ['Agizo limewekwa', 'Malipo (escrow)', 'Usafirishaji', 'Imewasili', 'Imekamilika'];
+function orderWork(o) {
+  const s = String(o.status || '');
+  const buyerName = (o.buyer && (o.buyer.displayName || o.buyer.email)) || 'mnunuzi';
+  const buyerContact = (o.buyer && (o.buyer.phone || o.buyer.email)) || '—';
+  const storeName = (o.seller && o.seller.storeName) || 'muuzaji';
+  const pre = ['draft', 'published', 'address_required', 'pending_shipping_fee', 'shipping_fee_submitted', 'shipping_fee_review', 'awaiting_escrow_payment', 'payment_pending'];
+  if (pre.includes(s)) return { phase: 1, tone: 'warn', title: 'Inasubiri malipo', desc: 'Agizo lipo lakini ' + buyerName + ' hajalipa bado.', extra: '<dt>Kiasi kinachosubiriwa</dt><dd>' + fmtTZS(o.totalAmount) + '</dd><dt>Mawasiliano ya mnunuzi</dt><dd>' + esc(buyerContact) + '</dd>' };
+  if (s === 'in_escrow') return { phase: 2, tone: 'info', title: 'Pesa ziko escrow', desc: 'Malipo yamepokelewa na yanashikiliwa. Hatua inayofuata: ' + storeName + ' atume bidhaa.', extra: (o.escrowHold ? '<dt>Escrow</dt><dd>' + fmtTZS(o.escrowHold.amount) + ' · ' + badge(o.escrowHold.status) + '</dd>' : '<dt>Escrow</dt><dd>' + fmtTZS(o.totalAmount) + '</dd>') };
+  if (s === 'ready_to_dispatch') return { phase: 2, tone: 'info', title: 'Tayari kusafirishwa', desc: storeName + ' anatakiwa kuandaa na kutuma bidhaa sasa.', extra: '<dt>Muuzaji</dt><dd>' + esc(storeName) + '</dd>' };
+  if (['dispatched', 'in_transit', 'out_for_delivery', 'delivery_attempted'].includes(s)) return { phase: 2, tone: 'info', title: 'Inasafirishwa sasa', desc: 'Bidhaa iko njiani kuelekea kwa mnunuzi.', extra: '<dt>Msafirishaji</dt><dd>' + esc(o.courierName || '—') + (o.trackingNumber ? ' · <span class="mono">' + esc(o.trackingNumber) + '</span>' : '') + '<div class="dim">' + esc(o.shippingMethod || '') + '</div></dd>' };
+  if (['delivered', 'inspection_period', 'otp_pending'].includes(s)) return { phase: 3, tone: 'info', title: 'Imewasili — inasubiri ukamilishaji', desc: 'Mnunuzi amepokea. Inasubiri uthibitisho wa kupokea ili pesa iachiwe.', extra: '<dt>Iliwasilishwa</dt><dd>' + fmtTime(o.deliveredAt) + '</dd>' };
+  if (['completed', 'wallet_credited', 'payout_pending', 'payout_complete'].includes(s)) return { phase: 4, tone: 'ok', title: 'Imekamilika', desc: 'Agizo limefungwa salama. Tume ya jukwaa imerekodiwa.', extra: '<dt>Tume iliyopatikana</dt><dd>' + fmtTZS(o.platformCommission) + '</dd><dt>Ilikamilishwa</dt><dd>' + fmtTime(o.completedAt) + '</dd>' };
+  if (s === 'disputed') {
+    const d = o.dispute || {};
+    const canResolve = d.id && d.status !== 'resolved';
+    return { phase: -1, tone: 'bad', title: 'Mgogoro unaendelea', desc: 'Agizo limesimama kwenye utatuzi. ' + (d.reason ? 'Sababu: ' + d.reason + '.' : ''), extra: '<dt>Hali ya mgogoro</dt><dd>' + badge(d.status || 'disputed') + '</dd>', action: canResolve ? '<button class="btn sm accent" data-fn="disputeResolve" data-args=\'' + JSON.stringify({ id: d.id, num: o.orderNumber || o.id, total: o.totalAmount || 0 }).replace(/'/g, '&#39;') + '\'>Suluhisha mgogoro</button>' : '' };
+  }
+  if (s === 'refund_pending') return { phase: -1, tone: 'warn', title: 'Rejesho linasubiri kutekelezwa', desc: 'Pesa zinatarajiwa kurudishwa kwa mnunuzi.', extra: '<dt>Kiasi</dt><dd>' + fmtTZS(o.totalAmount) + '</dd>' };
+  if (s === 'refunded') return { phase: -1, tone: 'mut', title: 'Pesa zimerejeshwa', desc: 'Agizo limefungwa kwa marejesho.', extra: '' };
+  if (['cancelled', 'canceled', 'failed', 'expired'].includes(s)) return { phase: -1, tone: 'mut', title: 'Agizo limefungwa', desc: 'Hali ya mwisho: ' + s + '.', extra: '<dt>Imefungwa</dt><dd>' + fmtTime(o.cancelledAt || o.updatedAt) + '</dd>' };
+  return { phase: -1, tone: 'info', title: 'Hali: ' + s, desc: '', extra: '' };
+}
 async function viewOrderDetail(id, num, status) {
   openDrawer('<div class="dsub">Inapakia…</div>');
   try {
@@ -716,24 +751,31 @@ async function viewOrderDetail(id, num, status) {
     const d = (j.data && j.data.orders) || [];
     const o = d.find((x) => x.id === id) || d[0];
     if (!o) { closeDrawer(); toast('Agizo halikuonekana', false); return; }
+    const work = orderWork(o);
+    const stepTimes = [o.placedAt || o.createdAt, o.paidAt || (o.escrowHold ? o.escrowHold.createdAt : null), o.dispatchedAt, o.deliveredAt, o.completedAt];
+    const steps = ORDER_PHASES.map((lab, i) => {
+      const done = !!stepTimes[i] || (work.phase >= 0 && i < work.phase);
+      const now = work.phase === i;
+      return '<li class="step ' + (done ? 'done' : (now ? 'now' : 'todo')) + '"><span class="sdot"></span><div><b>' + lab + '</b><div class="dim">' + (stepTimes[i] ? fmtTime(stepTimes[i]) : (now ? 'inafanyika sasa' : '—')) + '</div></div></li>';
+    }).join('');
     const items = (o.items || []).map((it) =>
-      '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span>' + esc(it.snapshot && it.snapshot.title) + ' × ' + fmtNum(it.quantity) + '</span><span class="num">' + fmtTZS(it.totalPrice) + '</span></div>').join('');
-    const snap = o.productSnapshot || {};
+      '<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)"><span>' + esc((it.snapshot && it.snapshot.title) || it.productId || 'Bidhaa') + ' × ' + fmtNum(it.quantity) + '</span><span class="num">' + fmtTZS(it.totalPrice) + '</span></div>').join('');
     openDrawer(
       '<h3>Agizo ' + esc(o.orderNumber || id12(o.id)) + '</h3>' +
-      '<div class="dsub">' + badge(o.status) + '</div>' +
-      '<dl class="kv">' +
-      '<dt>Mnunuzi</dt><dd>' + esc((o.buyer && (o.buyer.displayName || o.buyer.email)) || id12(o.buyer && o.buyer.id) || '—') + '<div class="dim">' + esc((o.buyer && o.buyer.phone) || '') + '</div></dd>' +
-      '<dt>Muuzaji</dt><dd>' + esc((o.seller && o.seller.storeName) || '—') + '</dd>' +
-      '<dt>Jumla</dt><dd>' + fmtTZS(o.totalAmount) + '<div class="dim">bidhaa ' + fmtTZS(o.productPrice) + ' · usafiri ' + fmtTZS(o.shippingFee) + '</div></dd>' +
-      '<dt>Commission</dt><dd>' + fmtTZS(o.platformCommission) + '</dd>' +
-      (o.escrowHold ? '<dt>Escrow</dt><dd>' + fmtTZS(o.escrowHold.amount) + ' · ' + badge(o.escrowHold.status) + '</dd>' : '') +
-      (o.dispute ? '<dt>Mgogoro</dt><dd>' + badge(o.dispute.status) + ' · ' + esc(o.dispute.reason || '') + '</dd>' : '') +
-      '<dt>Usafirishaji</dt><dd>' + esc(o.courierName || '—') + ' ' + esc(o.trackingNumber || '') + '<div class="dim">' + esc(o.shippingMethod || '') + '</div></dd>' +
-      '<dt>Iliwekwa / ikamilishwa</dt><dd>' + fmtTime(o.placedAt || o.createdAt) + ' / ' + fmtTime(o.completedAt) + '</dd>' +
-      '</dl>' +
+      '<div class="dsub mono">' + esc(id12(o.id)) + ' · ' + fmtTime(o.placedAt || o.createdAt) + '</div>' +
+      '<div class="worknow ' + work.tone + '"><div class="wrow"><span class="wtag">SASA</span>' + badge(o.status) + '</div>' +
+      '<div class="wtitle">' + esc(work.title) + '</div><div class="wdesc">' + esc(work.desc) + '</div>' +
+      (work.extra ? '<dl class="kv" style="margin:10px 0 0">' + work.extra + '</dl>' : '') +
+      (work.action ? '<div class="drawer-actions" style="margin-top:10px">' + work.action + '</div>' : '') + '</div>' +
+      '<div class="dsub" style="margin-top:14px">Hatua za agizo</div><ol class="steps">' + steps + '</ol>' +
+      '<hr class="hr"><div class="dsub">Wahusika</div><dl class="kv">' +
+      '<dt>Mnunuzi</dt><dd>' + esc((o.buyer && (o.buyer.displayName || o.buyer.email)) || '—') + '<div class="dim">' + esc((o.buyer && o.buyer.phone) || '') + '</div></dd>' +
+      '<dt>Muuzaji</dt><dd>' + esc((o.seller && o.seller.storeName) || '—') + '</dd></dl>' +
       (items ? '<hr class="hr"><div class="dsub">Bidhaa</div>' + items : '') +
-      (snap && (snap.buyerContact || snap.sellerContact || snap.address) ? '<hr class="hr"><div class="dsub">Anwani kutoka kwenye picha</div><div class="dim">' + esc(JSON.stringify(snap.address || snap.buyerContact || snap.sellerContact || '')).slice(0, 300) + '</div>' : '')
+      '<hr class="hr"><div class="dsub">Pesa</div><dl class="kv">' +
+      '<dt>Jumla</dt><dd>' + fmtTZS(o.totalAmount) + '</dd>' +
+      '<dt>Bidhaa / usafiri</dt><dd>' + fmtTZS(o.productPrice) + ' / ' + fmtTZS(o.shippingFee) + '</dd>' +
+      '<dt>Tume</dt><dd>' + fmtTZS(o.platformCommission) + '</dd></dl>'
     );
   } catch (e) { toast(e.message, false); }
 }
