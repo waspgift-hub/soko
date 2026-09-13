@@ -80,12 +80,176 @@ function fsFlagBadge(v) {
 }
 let toastT; function toast(msg, ok) {
   const el = $('toast');
-  el.textContent = msg;
+  el.textContent = LANG === 'en' ? trText(msg) : msg;
   el.className = 'toast show ' + (ok ? 'ok' : 'bad');
   clearTimeout(toastT);
   toastT = setTimeout(() => (el.className = 'toast'), 3400);
 }
 function icons() { if (window.lucide) lucide.createIcons(); }
+
+// ---------------------------------------------------------------------------
+// Language: Swahili (default) + English. The panel always renders Swahili
+// first; when EN is active a MutationObserver translates inserted content
+// with a longest-match phrase dictionary, so sections, drawers, modals and
+// toasts all flip without touching every string call site. The nav and page
+// titles use explicit maps so toggling English -> Swahili restores cleanly.
+// ---------------------------------------------------------------------------
+const LANG_KEY = 'sv_admin_lang';
+let LANG = 'sw';
+try { LANG = localStorage.getItem(LANG_KEY) || 'sw'; } catch (_) {}
+const NAV_SW = {
+  'nav-dashboard': 'Dashibodi', 'grp-manage': 'Usimamizi', 'nav-users': 'Watumiaji', 'nav-sellers': 'Wauzaji',
+  'nav-products': 'Bidhaa', 'nav-orders': 'Maagizo', 'grp-protect': 'Ulinzi na Mahusiano',
+  'nav-disputes': 'Migogoro', 'nav-refunds': 'Marejesho', 'nav-reports': 'Ripoti & Ulinzi',
+  'nav-kyc': 'Wathibitisho (KYC)', 'grp-sales': 'Mauzo', 'nav-promos': 'Boost & Flash Sales',
+  'grp-finance': 'Fedha', 'nav-revenue': 'Mapato ya Jukwaa', 'nav-finance': 'Fedha & Ledger',
+  'nav-referrals': 'Rufaa', 'grp-comm': 'Mawasiliano', 'nav-broadcasts': 'Matangazo ya Broad',
+  'nav-audit': 'Ukaguzi (Audit)', 'grp-stats': 'Takwimu', 'nav-stats': 'Takwimu za Matumizi',
+};
+const NAV_EN = {
+  'nav-dashboard': 'Dashboard', 'grp-manage': 'Management', 'nav-users': 'Users', 'nav-sellers': 'Sellers',
+  'nav-products': 'Products', 'nav-orders': 'Orders', 'grp-protect': 'Protection & Relations',
+  'nav-disputes': 'Disputes', 'nav-refunds': 'Refunds', 'nav-reports': 'Reports & Safety',
+  'nav-kyc': 'Verifications (KYC)', 'grp-sales': 'Sales', 'nav-promos': 'Boost & Flash Sales',
+  'grp-finance': 'Finance', 'nav-revenue': 'Platform Revenue', 'nav-finance': 'Finance & Ledger',
+  'nav-referrals': 'Referrals', 'grp-comm': 'Communication', 'nav-broadcasts': 'Broadcasts',
+  'nav-audit': 'Audit', 'grp-stats': 'Stats', 'nav-stats': 'Usage Statistics',
+};
+const TITLES_EN = {
+  dashboard: 'Dashboard', users: 'Users', sellers: 'Sellers', products: 'Products', orders: 'Orders',
+  disputes: 'Disputes', refunds: 'Refunds', reports: 'Reports & Safety', kyc: 'Verifications (KYC)',
+  promos: 'Boost & Flash Sales', revenue: 'Platform Revenue', finance: 'Finance & Ledger',
+  referrals: 'Referrals', broadcasts: 'Broadcasts', audit: 'Audit', stats: 'Usage Statistics',
+};
+const SW2EN = {
+  // Nav / titles
+  'Dashibodi': 'Dashboard', 'Watumiaji': 'Users', 'Wauzaji': 'Sellers', 'Bidhaa': 'Products',
+  'Migogoro': 'Disputes', 'Marejesho': 'Refunds', 'Maelezo ya jumla': 'Overview',
+  // Dashboard
+  'Inapakia dashibodi…': 'Loading dashboard…',
+  'Hali ya soko kwa mtazamo mmoja': 'Market at a glance',
+  'Wapya leo: ': 'New today: ', 'Kamili: ': 'Completed: ',
+  'Watumiaji': 'Users', 'Maagizo': 'Orders', 'Mapato ya Tume': 'Commission Revenue',
+  'Escrow Inashikiliwa': 'Escrow Held', 'Bidhaa': 'Products',
+  'tume iliyokusanywa': 'collected commission', 'jumla dukani': 'total in stores',
+  'thamani ya bidhaa zilizouzwa': 'value of goods sold', 'holdi': 'holds',
+  'Mapato ya kila siku (siku 30)': 'Daily revenue (30 days)',
+  'pesa / tume / watumiaji': 'money / commission / users',
+  'Maagizo kwa hali': 'Orders by status', 'Angalia zote': 'View all',
+  'Maagizo ya hivi punde': 'Recent orders', 'Agizo': 'Order', 'Mnunuzi': 'Buyer', 'Jumla': 'Total',
+  'Hakuna maagizo bado': 'No orders yet',
+  'Kazi zinazosubiri': 'Pending tasks', 'bonyeza kwenda': 'click to open',
+  'Withdrawals zinazosubiri': 'Pending withdrawals', 'Migogoro wazi': 'Open disputes',
+  'Wauzaji wanaosubiri uthibitisho': 'Sellers awaiting verification',
+  'Marejesho yanayosubiri': 'Pending refunds',
+  'Mtandaoni sasa hivi': 'Online right now', 'Dakika 1': '1 min', 'Dakika 5': '5 min',
+  'Dakika 15': '15 min', 'Saa 1': '1 hour', 'Siku 1': '1 day',
+  // Common UI
+  'Inapakia…': 'Loading…', 'Inapakia': 'Loading', 'Hakuna watumiaji': 'No users',
+  'Hakuna bidhaa': 'No products', 'Hakuna wauzaji': 'No sellers', 'Hakuna maagizo': 'No orders',
+  'Hakuna rekodi': 'No records', 'ANGALIA': 'VIEW',
+  'Angalia': 'View', 'Chuja': 'Filter', 'Futa': 'Cancel', 'Hifadhi': 'Save', 'Tuma': 'Send',
+  'Tuma arifa': 'Send notification', 'Thibitisha': 'Verify', 'Kataa': 'Reject',
+  'Sitisha': 'Suspend', 'Chapisha': 'Publish', 'Amilisha': 'Activate', 'Ondoa': 'Remove',
+  'Onyesha upya': 'Refresh', 'Sasisha': 'Refresh',
+  'Hali ya bidhaa': 'Product status', 'Hali ya mtumiaji': 'User status', 'Hali ya akaunti': 'Account status',
+  'Hali mpya': 'New status', 'Hali: yote': 'Status: all', 'Sababu (hiari)': 'Reason (optional)',
+  'Sababu': 'Reason', 'Hali imebadilishwa': 'Status updated', 'Imebadilishwa': 'Updated',
+  'Vitendo': 'Actions', 'Firestore': 'Firestore', 'Hali': 'Status', 'Makosa': 'Errors',
+  // Users
+  'Tafuta: email, namba, jina, username…': 'Search: email, phone, name, username…',
+  'Jukumu: yote': 'Role: all', 'Jukumu': 'Role', 'Anajiunga': 'Joined', 'Mtumiaji': 'User',
+  'Simu': 'Phone', 'Email imethibitishwa': 'Email verified', 'Simu imethibitishwa': 'Phone verified',
+  'Aliungana': 'Joined', 'Duka': 'Shop', 'Anwani': 'Addresses', 'Vifaa': 'Devices',
+  'Maagizo (mnunuzi)': 'Orders (buyer)', 'Maagizo (muuzaji)': 'Orders (seller)',
+  'Firebase UID': 'Firebase UID', 'hakuna': 'none', 'Ndiyo': 'Yes', 'La': 'No',
+  'Badilisha hali ya akaunti. Chaguo <b>active</b> pia litaondoa alama isSuspended kwenye Firestore.':
+    'Change account status. Choosing <b>active</b> also clears the isSuspended flag on Firestore.',
+  'Sababu fupi kwa ukaguzi': 'Short reason for audit',
+  'Hakuna akaunti iliyosimamishwa kwenye Firestore.': 'No accounts are suspended in Firestore.',
+  'Watumiaji waliosimamishwa (Firestore)': 'Suspended users (Firestore)',
+  'Bidhaa (Firestore)': 'Products (Firestore)',
+  'Bidhaa (Firestore) — app hizi ndizo zinavyoonekana': 'Products (Firestore) — these are what the app shows',
+  'Hakuna bidhaa kwenye Firestore.': 'No products in Firestore.',
+  'Bidhaa haikuonekana': 'Product not found',
+  // Sellers
+  'Wauzaji': 'Sellers', 'Tafuta duka / anwani…': 'Search shop / address…',
+  'Uthibitisho: yote': 'Verification: all', 'Uthibitisho': 'Verification',
+  'Mmiliki': 'Owner', 'Rrating': 'Rating', 'Mauzo / Mapato': 'Sales / Revenue',
+  'Salio': 'Balance', 'Mauzo': 'Sales', 'Muuzaji hakupatikana kwenye ukurasa wa kwanza': 'Seller not found on first page',
+  'Uthibitisha uamuzi huu? Unatengenezwa kwenye rekodi ya ukaguzi.': 'Confirm this decision? It is written to the audit log.',
+  'Rudi pending': 'Back to pending', 'Tafuta wauzaji…': 'Search sellers…',
+  // Products
+  'Tafuta bidhaa…': 'Search products…', 'Kategoria': 'Category', 'Dawa': 'Created',
+  'stock': 'stock', 'Chagua hali mpya ya uchapishaji': 'Choose a new publish status',
+  'Kwa nini hali hii?': 'Why this status?',
+  // Orders
+  'Namba ya agizo / simu / email / duka…': 'Order number / phone / email / shop…',
+  'Hali: Yote': 'Status: all', 'Thibisha': 'Verify',
+  // Drawers / details
+  'Inafifia': 'Fading', 'Imeondolewa': 'Removed', 'Imeandaliwa': 'Prepared',
+  // Pager
+  'rekodi': 'records', 'ukurasa': 'page', 'Awali': 'Prev', 'Ijayo': 'Next',
+  // Auth
+  'Andika ADMIN_SECRET.': 'Enter ADMIN_SECRET.', 'Ingia': 'Sign in',
+  'ADMIN_SECRET haikubaliki': 'ADMIN_SECRET rejected',
+  'ADMIN_SECRET haikubaliki — ingia tena.': 'ADMIN_SECRET rejected — sign in again.',
+  'Haijaidhinishwa': 'Unauthorized', 'Ingia kwanza': 'Sign in first',
+  'Mtandao: ': 'Network: ', 'Ombi limechelewa (timeout). Jaribu tena.': 'Request timed out. Try again.',
+  'Sasisha': 'Refresh', 'Badilisha lugha': 'Language',
+  // Confirms / generic
+  'Imefanyika': 'Done', 'imefanyika': 'done', 'Inaendeshwa…': 'Running…',
+};
+function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+const SW2EN_PAIRS = Object.entries(SW2EN).sort((a, b) => b[0].length - a[0].length);
+const EN_RE = new RegExp(
+  SW2EN_PAIRS.map(([k]) => (/^[\p{L}\p{N}]+$/u.test(k) ? '\\b' + escRe(k) + '\\b' : escRe(k))).join('|'),
+  'gu'
+);
+function trText(s) { return String(s).replace(EN_RE, (m) => (SW2EN[m] || m)); }
+function applyLang(root) {
+  if (LANG !== 'en') return;
+  root = root || document.body;
+  if (root.nodeType === 3) { root.nodeValue = trText(root.nodeValue); return; }
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+  let n;
+  const skipSel = 'script,style,textarea,select,option,input';
+  while ((n = walker.nextNode())) {
+    const p = n.parentNode;
+    if (!p || (p.nodeType === 1 && p.matches && p.matches(skipSel))) continue;
+    if (p && p.dataset && p.dataset.i18n) continue;
+    const v = n.nodeValue;
+    if (v) { const t = trText(v); if (t !== v) n.nodeValue = t; }
+  }
+  if (root.querySelectorAll) {
+    root.querySelectorAll('input[placeholder],textarea[placeholder]').forEach((el) => {
+      const pl = el.getAttribute('placeholder') || '';
+      const t = trText(pl);
+      if (t !== pl) el.setAttribute('placeholder', t);
+    });
+  }
+}
+function applyNav() {
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    const k = el.dataset.i18n;
+    el.textContent = (LANG === 'en' ? NAV_EN[k] : NAV_SW[k]) || el.textContent;
+  });
+}
+function titleFor(sec) { return (LANG === 'en' ? TITLES_EN[sec] : '') || TITLES[sec] || sec; }
+function langLabel() { return LANG === 'en' ? 'EN · SW' : 'SW · EN'; }
+let langTimer = null;
+new MutationObserver((muts) => {
+  if (LANG !== 'en') return;
+  let target = null;
+  for (const mu of muts) {
+    for (const node of mu.addedNodes) {
+      if (node.nodeType === 1 || node.nodeType === 3) { if (!target) target = node; }
+    }
+  }
+  if (!target) return;
+  if (langTimer) clearTimeout(langTimer);
+  langTimer = setTimeout(() => applyLang(target), 80);
+}).observe(document.body, { childList: true, subtree: true });
 
 // ---------------------------------------------------------------------------
 // API
@@ -237,6 +401,7 @@ const ACTIONS = {
   userStatus(args) { changeUserStatus(args.id, args.name); },
   userNotif(args) { sendUserNotif(args.uid, args.name); },
   viewUser(args) { viewUserDetail(args.id); },
+  viewFsUser(args) { viewFsUserDetail(args.id); },
   sellerVerify(args) { sellerVerify(args.id, args.name, 'verify'); },
   sellerReject(args) { sellerVerify(args.id, args.name, 'reject'); },
   sellerPending(args) { sellerVerify(args.id, args.name, 'pending'); },
@@ -244,6 +409,7 @@ const ACTIONS = {
   productModerate(args) { productModerate(args.id, args.title); },
   viewProduct(args) { viewProductDetail(args.id, args.title); },
   viewOrder(args) { viewOrderDetail(args.id, args.num, args.status); },
+  viewFsOrder(args) { viewFsOrder(args.id, args.num); },
   disputeResolve(args) { disputeResolve(args.id, args.num, args.total); },
   viewDispute(args) { viewDisputeDetail(args.id); },
   refundProcess(args) { refundProcess(args.id, args.num); },
@@ -314,6 +480,8 @@ async function loadDashboard() {
     const gmv = Number(m.gmv || 0);
     const orderGroups = (m.ordersByStatus || []).slice().sort((a, b) => b.count - a.count).slice(0, 8);
     const orders = (recent && recent.data && recent.data.orders) || [];
+    const fsOrders = (await getJSON('/api/admin/orders').catch(() => ({ orders: [] }))).orders || [];
+    const recents = mergeRecent(orders, fsOrders);
     const queue = [
       { sec: 'finance', ic: 'banknote', lab: 'Withdrawals zinazosubiri', n: Number(m.withdrawalsPending || 0) },
       { sec: 'disputes', ic: 'scale', lab: 'Migogoro wazi', n: Number(m.disputesOpen || k.activeDisputes || 0) },
@@ -341,12 +509,12 @@ async function loadDashboard() {
       '<div class="grid cols2" style="margin-top:18px">' +
       '<div class="card"><div class="cardhead"><h3>Maagizo ya hivi punde</h3><div class="spacer"></div><button class="linklike" data-goto="orders" style="margin:0">Angalia zote</button></div>' +
       '<div class="tablewrap"><table class="tbl"><thead><tr><th>Agizo</th><th>Mnunuzi</th><th style="text-align:right">Jumla</th><th>Hali</th><th></th></tr></thead><tbody>' +
-      (orders.length ? orders.map((o) => '<tr>' +
-        '<td class="mono"><b>' + esc(o.orderNumber || id12(o.id)) + '</b><div class="dim">' + fmtTime(o.createdAt) + '</div></td>' +
+      (recents.length ? recents.map((o) => '<tr>' +
+        '<td class="mono"><b>' + esc(o.orderNumber || id12(o.id)) + '</b>' + (o.fs ? ' <span class="bdg mut">FS</span>' : '') + '<div class="dim">' + fmtTimeAny(o.createdAt) + '</div></td>' +
         '<td>' + esc((o.buyer && (o.buyer.displayName || o.buyer.email)) || '—') + '</td>' +
         '<td class="num">' + fmtTZS(o.totalAmount) + '</td>' +
         '<td>' + badge(o.status) + '</td>' +
-        '<td class="rowactions"><button class="btn sm" data-fn="viewOrder" data-args=\'' + JSON.stringify({ id: o.id, num: o.orderNumber || o.id, status: o.status }).replace(/'/g, '&#39;') + '\'>Angalia</button></td>' +
+        '<td class="rowactions"><button class="btn sm" data-fn="' + (o.fs ? 'viewFsOrder' : 'viewOrder') + '" data-args=\'' + JSON.stringify({ id: o.id, num: o.orderNumber || o.id, status: o.status }).replace(/'/g, '&#39;') + '\'>' + (o.fs ? 'Angalia' : 'Angalia') + '</button></td>' +
         '</tr>').join('') : '<tr><td colspan="5" class="empty">Hakuna maagizo bado</td></tr>') +
       '</tbody></table></div></div>' +
 
@@ -438,20 +606,26 @@ async function loadUsers() {
     const j = await getJSON('/api/v1/admin/users?' + qs.toString());
     const d = (j.data && j.data.users) || [];
     $('uRows').innerHTML = d.length
-      ? d.map((u) =>
-        '<tr>' +
-        '<td>' + avatarOf(u) + ' ' + esc(u.displayName || u.username || '—') + '</td>' +
+      ? d.map((u) => {
+        const isFs = u.src === 'fs';
+        const name = u.displayName || u.username || u.id;
+        const args = JSON.stringify({ id: u.id, name }).replace(/'/g, '&#39;');
+        return '<tr>' +
+        '<td>' + avatarOf(u) + ' ' + esc(u.displayName || u.username || '—') + (isFs ? ' <span class="bdg mut">FS</span>' : ' <span class="bdg ok">PG</span>') + '</td>' +
         '<td>' + esc(u.email || '—') + '</td>' +
         '<td class="mono">' + esc(u.phone || '—') + '</td>' +
         '<td>' + badge(u.role) + '</td>' +
         '<td>' + badge(u.accountStatus) + '</td>' +
         '<td>' + fsFlagBadge(u.firestoreSuspended) + '</td>' +
-        '<td class="dim">' + fmtTime(u.createdAt) + '</td>' +
+        '<td class="dim">' + fmtTimeAny(u.createdAt) + '</td>' +
         '<td class="rowactions">' +
-        '<button class="btn sm" data-fn="viewUser" data-args=\'' + JSON.stringify({ id: u.id, name: u.displayName || u.email || u.id }).replace(/'/g, '&#39;') + '\'>Angalia</button>' +
-        '<button class="btn sm" data-fn="userStatus" data-args=\'' + JSON.stringify({ id: u.id, name: u.displayName || u.email || u.id }).replace(/'/g, '&#39;') + '\'>Hali</button>' +
-        '</td></tr>'
-      ).join('')
+        (isFs
+          ? '<button class="btn sm" data-fn="viewFsUser" data-args=\'' + args + '\'>Angalia</button>' +
+            (u.firestoreSuspended ? '<button class="btn sm accent" data-fn="fsUnFlag" data-args=\'' + args + '\'>Amilisha</button>' : '')
+          : '<button class="btn sm" data-fn="viewUser" data-args=\'' + args + '\'>Angalia</button>' +
+            '<button class="btn sm" data-fn="userStatus" data-args=\'' + args + '\'>Hali</button>') +
+        '</td></tr>';
+      }).join('')
       : '<tr><td colspan="8" class="empty">Hakuna watumiaji</td></tr>';
     $('uPag').innerHTML = pagerHTML('users', j.data.pagination);
   } catch (e) { $('uRows').innerHTML = '<tr><td colspan="8" class="empty">' + esc(e.message) + '</td></tr>'; }
@@ -511,6 +685,30 @@ async function viewUserDetail(id) {
       '<div class="drawer-actions">' +
       (d.firebaseUid ? '<button class="btn sm accent" data-fn="userNotif" data-args=\'' + JSON.stringify({ uid: d.firebaseUid, name: d.displayName || d.email || d.id }).replace(/'/g, '&#39;') + '\'>Tuma arifa</button>' : '') +
       '<button class="btn sm" data-fn="userStatus" data-args=\'' + JSON.stringify({ id: d.id, name: d.displayName || d.email || d.id }).replace(/'/g, '&#39;') + '\'>Hali ya akaunti</button>' +
+      '</div>'
+    );
+    bindSection('users');
+  } catch (e) { toast(e.message, false); }
+}
+async function viewFsUserDetail(id) {
+  openDrawer('<div class="dsub">Inapakia…</div>');
+  try {
+    const j = await getJSON('/api/admin/users');
+    const u = ((j && j.users) || []).find((x) => String(x.uid) === String(id) || String(x.id) === String(id));
+    if (!u) { closeDrawer(); toast('Mtumiaji hakupatikana kwenye Firestore', false); return; }
+    const args = JSON.stringify({ uid: u.uid || u.id, name: u.displayName || u.email || u.uid || u.id }).replace(/'/g, '&#39;');
+    openDrawer(
+      '<h3>' + esc(u.displayName || u.username || 'Mtumiaji') + '</h3>' +
+      '<div class="dsub">' + esc(u.email || '') + (u.phone ? ' · ' + esc(u.phone) : '') + '</div>' +
+      '<dl class="kv">' +
+      '<dt>Firebase UID</dt><dd class="mono">' + esc(id12(u.uid || u.id)) + '</dd>' +
+      '<dt>Hali (Firestore)</dt><dd>' + fsFlagBadge(u.isSuspended === true) + '</dd>' +
+      '<dt>Username</dt><dd>' + esc(u.username || '—') + '</dd>' +
+      '<dt>Imeundwa</dt><dd>' + fmtTimeAny(u.createdAt) + '</dd>' +
+      '</dl>' +
+      '<div class="drawer-actions">' +
+      (u.isSuspended === true ? '<button class="btn sm accent" data-fn="fsUnFlag" data-args=\'' + args + '\'>Amilisha (Firestore)</button>' : '') +
+      (u.uid || u.id ? '<button class="btn sm" data-fn="userNotif" data-args=\'' + args + '\'>Tuma arifa</button>' : '') +
       '</div>'
     );
     bindSection('users');
@@ -871,7 +1069,8 @@ async function loadOrders() {
   el.innerHTML = ordersToolbar() + '<div class="card"><div class="tablewrap"><table class="tbl"><thead><tr>' +
     '<th>No.</th><th>Mnunuzi</th><th>Duka (muuzaji)</th><th>Jumla</th><th>Hali</th><th>Escrow</th><th>Iliundwa</th><th style="text-align:right">Vitendo</th></tr></thead>' +
     '<tbody id="oRows"><tr><td colspan="8" class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto 8px"></div>Inapakia…</td></tr></tbody></table></div>' +
-    '<div id="oPag"></div></div>';
+    '<div id="oPag"></div></div>' +
+    '<div id="foCard"></div>';
   const qs = new URLSearchParams({ page, limit: 20 });
   if (q) qs.set('q', q); if (st) qs.set('status', st);
   try {
@@ -893,6 +1092,46 @@ async function loadOrders() {
     $('oPag').innerHTML = pagerHTML('orders', j.data.pagination);
   } catch (e) { $('oRows').innerHTML = '<tr><td colspan="8" class="empty">' + esc(e.message) + '</td></tr>'; }
   bindSection('orders'); touch();
+  renderFsOrders();
+}
+// Maagizo halisi ya app yanaishi FIRESTORE; kadi hii inayapatia admin mwonekano
+// na kufungua drawer moja kwa moja (oonloadOrders).
+async function renderFsOrders() {
+  const wrap = $('foCard');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="card"><div class="cardhead"><h3>Maagizo (Firestore) — app ndiyo yanayoandika hapa</h3><button class="btn sm" id="foRefresh">Onyesha upya</button></div><div class="dsub" style="padding:0 16px 16px"><div class="spinner" style="width:20px;height:20px"></div></div></div>';
+  try {
+    const [oj, uj] = await Promise.all([getJSON('/api/admin/orders'), getJSON('/api/admin/users').catch(() => null)]);
+    const all = ((oj && oj.orders) || []).slice(0, 50);
+    const umap = {};
+    if (uj && uj.users) uj.users.forEach((u) => { umap[u.uid || u.id] = u; });
+    if (!all.length) {
+      wrap.innerHTML = '<div class="card"><div class="cardhead"><h3>Maagizo (Firestore)</h3><button class="btn sm" id="foRefresh">Onyesha upya</button></div><div class="dsub" style="padding:0 16px 16px">Hakuna maagizo kwenye Firestore.</div></div>';
+      $('foRefresh').onclick = () => renderFsOrders();
+      return;
+    }
+    wrap.innerHTML = '<div class="card"><div class="cardhead"><h3>Maagizo (Firestore)</h3><button class="btn sm" id="foRefresh">Onyesha upya</button></div>' +
+      '<div class="tablewrap" style="max-height:360px;overflow:auto"><table class="tbl"><thead><tr><th>No.</th><th>Mnunuzi</th><th>Muuzaji</th><th>Jumla</th><th>Hali</th><th>Imeundwa</th><th style="text-align:right">Vitendo</th></tr></thead><tbody>' +
+      all.map((o) => {
+        const buyer = umap[o.buyerId] || {};
+        const seller = umap[o.sellerId] || {};
+        const args = JSON.stringify({ id: o.id, num: o.orderNumber || o.orderId || o.id }).replace(/'/g, '&#39;');
+        return '<tr>' +
+          '<td class="mono"><b>' + esc(o.orderNumber || o.orderId || id12(o.id)) + '</b>' + (o.orderNumber ? '<div class="dim mono">' + esc(id12(o.id)) + '</div>' : '') + '</td>' +
+          '<td>' + esc(buyer.displayName || buyer.username || o.buyerId || '—') + '</td>' +
+          '<td>' + esc(seller.displayName || o.sellerId || '—') + '</td>' +
+          '<td class="num">' + fmtTZS(Number(o.totalAmount || o.amount || 0)) + '</td>' +
+          '<td>' + badge(o.status) + '</td>' +
+          '<td class="dim">' + fmtTimeAny(o.createdAt) + '</td>' +
+          '<td class="rowactions"><button class="btn sm" data-fn="viewFsOrder" data-args=\'' + args + '\'>Angalia</button></td>' +
+          '</tr>';
+      }).join('') +
+      '</tbody></table></div></div>';
+    $('foRefresh').onclick = () => renderFsOrders();
+    bindSection('orders');
+  } catch (e) {
+    wrap.innerHTML = '<div class="card"><div class="cardhead"><h3>Maagizo (Firestore)</h3></div><div class="err">' + esc(e.message) + '</div></div>';
+  }
 }
 // Detail ya agizo inayoongozwa na HATUA ilipo (kazi/service inayofanyika
 // muda huo): timeline ya hatua + kadi ya "sasa kinafanyika" yenye taarifa
@@ -955,6 +1194,65 @@ async function viewOrderDetail(id, num, status) {
       adminEscrowCard(o)
     );
   } catch (e) { toast(e.message, false); }
+}
+
+// Drawer kwa agizo la FIRESTORE (legacy): id ni doc id ya orders collection,
+// hali na pesa zinachukuliwa raw; v2 escrow huenda isijasawazishwa hapa.
+async function viewFsOrder(id, num) {
+  openDrawer('<div class="dsub">Inapakia…</div>');
+  try {
+    const [oj, uj] = await Promise.all([getJSON('/api/admin/orders'), getJSON('/api/admin/users').catch(() => null)]);
+    const o = ((oj && oj.orders) || []).find((x) => x.id === id);
+    if (!o) { closeDrawer(); toast('Agizo halikuonekana', false); return; }
+    const umap = {};
+    if (uj && uj.users) uj.users.forEach((u) => { umap[u.uid || u.id] = u; });
+    const buyer = umap[o.buyerId] || {};
+    const seller = umap[o.sellerId] || {};
+    const items = Array.isArray(o.items) ? o.items : [];
+    const total = Number(o.totalAmount || o.amount || 0);
+    const ship = Number(o.shippingCost || o.shippingFee || 0);
+    const actSec = document.querySelector('.section.active');
+    openDrawer(
+      '<h3>Agizo ' + esc(o.orderNumber || o.orderId || '#' + id12(o.id)) + '</h3>' +
+      '<div class="dsub mono">' + esc(id12(o.id)) + ' · ' + fmtTimeAny(o.createdAt) + '</div>' +
+      '<div class="worknow info"><div class="wrow"><span class="wtag">FIRESTORE</span>' + badge(o.status) + '</div>' +
+      '<div class="wtitle">Hali: ' + esc(o.status || '—') + '</div>' +
+      '<div class="wdesc">Agizo la Firestore (legacy) — huduma za v2 (escrow, malipo) zinaweza kuwa hazijasawazishwa hapa.</div></div>' +
+      '<div class="dsub" style="margin-top:12px">Wahusika</div><dl class="kv">' +
+      '<dt>Mnunuzi</dt><dd>' + esc(buyer.displayName || buyer.username || o.buyerId || '—') + '<div class="dim">' + esc((buyer.phone || '') + (buyer.email ? ' · ' + buyer.email : '')) + '</div></dd>' +
+      '<dt>Muuzaji</dt><dd>' + esc(seller.displayName || o.sellerId || '—') + '</dd></dl>' +
+      (items.length ? '<div class="dsub">Bidhaa</div>' + items.slice(0, 40).map((it) =>
+        '<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)"><span>' + esc(it.title || it.productName || (it.snapshot && it.snapshot.title) || it.productId || 'Bidhaa') + ' × ' + fmtNum(it.qty || it.quantity || 1) + '</span><span class="num">' + fmtTZS(it.price || it.totalPrice || it.amount || 0) + '</span></div>').join('') : '') +
+      '<hr class="hr"><div class="dsub">Pesa</div><dl class="kv">' +
+      '<dt>Jumla</dt><dd>' + fmtTZS(total) + '</dd>' +
+      (ship ? '<dt>Usafiri</dt><dd>' + fmtTZS(ship) + '</dd>' : '') +
+      '</dl>'
+    );
+    if (actSec) bindSection(actSec.dataset.sec);
+  } catch (e) { toast(e.message, false); }
+}
+function fsToDate(v) {
+  if (!v) return null;
+  if (v.seconds != null || v._seconds != null) return new Date(Number(v.seconds != null ? v.seconds : v._seconds) * 1000);
+  return v;
+}
+function mergeRecent(pgRows, fsRows) {
+  const seen = new Set([...pgRows.map((o) => o.id || ''), ...pgRows.map((o) => o.legacyFirestoreId || '').filter(Boolean)]);
+  const fsNorm = (fsRows || []).filter((o) => !seen.has(o.id)).slice(0, 6).map((o) => {
+    const buyer = (o.buyer && (o.buyer.displayName || o.buyer.name)) || o.buyerName || o.buyerId || '—';
+    return {
+      id: o.id,
+      orderNumber: o.orderNumber || o.orderId,
+      createdAt: fsToDate(o.createdAt),
+      buyer: { displayName: buyer, email: '' },
+      totalAmount: Number(o.totalAmount || o.amount || 0),
+      status: o.status || 'unknown',
+      fs: true,
+    };
+  });
+  return [...pgRows.slice(0, 6).map((o) => ({ ...o, fs: false })), ...fsNorm]
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+    .slice(0, 6);
 }
 
 // Kadi ya Amana katika drawer la agizo: endapo agizo linashikilia escrow,
@@ -1851,7 +2149,7 @@ function showSection(sec) {
   document.querySelector('.nav-item[data-sec="' + sec + '"]').classList.add('active');
   document.querySelectorAll('.section').forEach((s) => s.classList.remove('active'));
   $('sec-' + sec).classList.add('active');
-  $('pageTitle').textContent = TITLES[sec] || sec;
+  $('pageTitle').textContent = titleFor(sec);
   $('lastUpd').textContent = 'Inapakia…';
   LOADERS[sec] && LOADERS[sec]();
   $('sidebar').classList.remove('open');
@@ -1874,6 +2172,15 @@ $('themeBtn').addEventListener('click', () => {
   $('themeBtn').innerHTML = '<i data-lucide="' + (on ? 'sun' : 'moon') + '"></i>';
   icons();
 });
+$('langBtn').addEventListener('click', () => {
+  LANG = LANG === 'en' ? 'sw' : 'en';
+  try { localStorage.setItem(LANG_KEY, LANG); } catch (_) {}
+  applyNav();
+  const sec = document.querySelector('.section.active') ? document.querySelector('.section.active').dataset.sec : null;
+  if (sec && LOADERS[sec]) LOADERS[sec]();
+  if (LANG === 'en' && !(sec && LOADERS[sec])) applyLang(document.body);
+  $('langBtn').textContent = langLabel();
+});
 
 // ---------------------------------------------------------------------------
 // Auth
@@ -1889,6 +2196,9 @@ function showApp() {
   $('app').hidden = false;
   document.title = 'Soko Vibe Admin';
   applyTheme();
+  applyNav();
+  $('langBtn').textContent = langLabel();
+  if (LANG === 'en') applyLang(document.body);
   showSection('dashboard');
 }
 function applyTheme() {

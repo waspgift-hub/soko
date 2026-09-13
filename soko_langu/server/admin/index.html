@@ -49,28 +49,28 @@
       </div>
     </div>
     <nav id="nav">
-      <button class="nav-item active" data-sec="dashboard"><i data-lucide="layout-dashboard"></i><span>Dashibodi</span></button>
-      <div class="grp">Usimamizi</div>
-      <button class="nav-item" data-sec="users"><i data-lucide="users"></i><span>Watumiaji</span></button>
-      <button class="nav-item" data-sec="sellers"><i data-lucide="store"></i><span>Wauzaji</span></button>
-      <button class="nav-item" data-sec="products"><i data-lucide="package"></i><span>Bidhaa</span></button>
-      <button class="nav-item" data-sec="orders"><i data-lucide="shopping-cart"></i><span>Maagizo</span></button>
-      <div class="grp">Ulinzi na Mahusiano</div>
-      <button class="nav-item" data-sec="disputes"><i data-lucide="scale"></i><span>Migogoro</span></button>
-      <button class="nav-item" data-sec="refunds"><i data-lucide="rotate-ccw"></i><span>Marejesho</span></button>
-      <button class="nav-item" data-sec="reports"><i data-lucide="shield-alert"></i><span>Ripoti & Ulinzi</span></button>
-      <button class="nav-item" data-sec="kyc"><i data-lucide="badge-check"></i><span>Wathibitisho (KYC)</span></button>
-      <div class="grp">Mauzo</div>
-      <button class="nav-item" data-sec="promos"><i data-lucide="megaphone"></i><span>Boost & Flash Sales</span></button>
-      <div class="grp">Fedha</div>
-      <button class="nav-item" data-sec="revenue"><i data-lucide="banknote"></i><span>Mapato ya Jukwaa</span></button>
-      <button class="nav-item" data-sec="finance"><i data-lucide="wallet"></i><span>Fedha & Ledger</span></button>
-      <button class="nav-item" data-sec="referrals"><i data-lucide="gift"></i><span>Rufaa</span></button>
-      <div class="grp">Mawasiliano</div>
-      <button class="nav-item" data-sec="broadcasts"><i data-lucide="megaphone"></i><span>Matangazo ya Broad</span></button>
-      <button class="nav-item" data-sec="audit"><i data-lucide="scroll-text"></i><span>Ukaguzi (Audit)</span></button>
-      <div class="grp">Takwimu</div>
-      <button class="nav-item" data-sec="stats"><i data-lucide="activity"></i><span>Takwimu za Matumizi</span></button>
+      <button class="nav-item active" data-sec="dashboard"><i data-lucide="layout-dashboard"></i><span data-i18n="nav-dashboard">Dashibodi</span></button>
+      <div class="grp" data-i18n="grp-manage">Usimamizi</div>
+      <button class="nav-item" data-sec="users"><i data-lucide="users"></i><span data-i18n="nav-users">Watumiaji</span></button>
+      <button class="nav-item" data-sec="sellers"><i data-lucide="store"></i><span data-i18n="nav-sellers">Wauzaji</span></button>
+      <button class="nav-item" data-sec="products"><i data-lucide="package"></i><span data-i18n="nav-products">Bidhaa</span></button>
+      <button class="nav-item" data-sec="orders"><i data-lucide="shopping-cart"></i><span data-i18n="nav-orders">Maagizo</span></button>
+      <div class="grp" data-i18n="grp-protect">Ulinzi na Mahusiano</div>
+      <button class="nav-item" data-sec="disputes"><i data-lucide="scale"></i><span data-i18n="nav-disputes">Migogoro</span></button>
+      <button class="nav-item" data-sec="refunds"><i data-lucide="rotate-ccw"></i><span data-i18n="nav-refunds">Marejesho</span></button>
+      <button class="nav-item" data-sec="reports"><i data-lucide="shield-alert"></i><span data-i18n="nav-reports">Ripoti & Ulinzi</span></button>
+      <button class="nav-item" data-sec="kyc"><i data-lucide="badge-check"></i><span data-i18n="nav-kyc">Wathibitisho (KYC)</span></button>
+      <div class="grp" data-i18n="grp-sales">Mauzo</div>
+      <button class="nav-item" data-sec="promos"><i data-lucide="megaphone"></i><span data-i18n="nav-promos">Boost & Flash Sales</span></button>
+      <div class="grp" data-i18n="grp-finance">Fedha</div>
+      <button class="nav-item" data-sec="revenue"><i data-lucide="banknote"></i><span data-i18n="nav-revenue">Mapato ya Jukwaa</span></button>
+      <button class="nav-item" data-sec="finance"><i data-lucide="wallet"></i><span data-i18n="nav-finance">Fedha & Ledger</span></button>
+      <button class="nav-item" data-sec="referrals"><i data-lucide="gift"></i><span data-i18n="nav-referrals">Rufaa</span></button>
+      <div class="grp" data-i18n="grp-comm">Mawasiliano</div>
+      <button class="nav-item" data-sec="broadcasts"><i data-lucide="megaphone"></i><span data-i18n="nav-broadcasts">Matangazo ya Broad</span></button>
+      <button class="nav-item" data-sec="audit"><i data-lucide="scroll-text"></i><span data-i18n="nav-audit">Ukaguzi (Audit)</span></button>
+      <div class="grp" data-i18n="grp-stats">Takwimu</div>
+      <button class="nav-item" data-sec="stats"><i data-lucide="activity"></i><span data-i18n="nav-stats">Takwimu za Matumizi</span></button>
     </nav>
     <div class="me">
       <img id="meAvatar" alt="" src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23e2f5eb'/><text x='16' y='21' font-family='Arial' font-size='14' font-weight='600' fill='%23043c26' text-anchor='middle'>?</text></svg>">
@@ -85,6 +85,7 @@
       <h2 id="pageTitle">Dashibodi</h2>
       <div class="spacer"></div>
       <span class="lastupd" id="lastUpd"></span>
+      <button class="btn sm" id="langBtn">SW · EN</button>
       <button class="iconbtn" id="refreshBtn" title="Sasisha"><i data-lucide="refresh-cw"></i></button>
       <button class="iconbtn" id="themeBtn" title="Badilisha rangi"><i data-lucide="moon"></i></button>
     </div>
