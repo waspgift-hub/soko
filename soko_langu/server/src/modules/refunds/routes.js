@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { authenticate, requireActive, verifyAdmin } = require('../../middleware/auth');
+const { authenticate, authenticateAdmin, requireActive, verifyAdmin } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validation');
 const { z } = require('zod');
 const refundService = require('./refund-service');
@@ -38,12 +38,12 @@ router.post(
 // Admin executes a pending/failed refund (releases escrow + disburses).
 router.put(
   '/:refundId/process',
-  authenticate,
+  authenticateAdmin,
   verifyAdmin,
   async (req, res) => {
     const result = await refundService.processRefund({
       refundId: req.params.refundId,
-      processedBy: req.user.id,
+      processedBy: req.user?.id || 'admin',
     });
     await writeAudit({
       ...auditFromReq(req),

@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { authenticate, requireActive, verifyAdmin } = require('../../middleware/auth');
+const { authenticate, authenticateAdmin, requireActive, verifyAdmin } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validation');
 const { z } = require('zod');
 const service = require('./product-service');
@@ -233,7 +233,7 @@ router.delete('/:id', authenticate, requireActive, async (req, res) => {
 // Moderate (admin): published/suspended/rejected/draft
 router.put(
   '/:id/moderate',
-  authenticate,
+  authenticateAdmin,
   verifyAdmin,
   validate({
     body: z.object({

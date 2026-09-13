@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { authenticate, verifyAdmin, requireActive } = require('../../middleware/auth');
+const { authenticateAdmin, requireActiveAdmin } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validation');
 const { z } = require('zod');
 const adminService = require('./admin-service');
@@ -8,8 +8,9 @@ const { writeAudit, auditFromReq } = require('../../services/audit');
 
 const router = Router();
 
-// All admin routes require both auth and admin role.
-router.use(authenticate, verifyAdmin);
+// All admin routes require admin access: a correct x-admin-secret alone, or
+// strict Firebase auth + admin role (suspended/deleted stay blocked).
+router.use(authenticateAdmin);
 
 // Dashboard KPIs
 router.get('/dashboard', async (req, res) => {
@@ -38,7 +39,7 @@ router.get(
 // User management: update account status (suspend/activate/delete marker)
 router.put(
   '/users/:userId/status',
-  requireActive,
+  requireActiveAdmin,
   validate({
     body: z.object({
       accountStatus: z.enum(['active', 'pending', 'suspended', 'deleted']),
@@ -84,23 +85,42 @@ router.get(
   }
 );
 
-// Financial: list orders (with dispute/escrow status) for admin review
+// Financial: list orders (with dispute/escrow status) for admin review.
 router.get(
   '/orders',
   validate({
     query: z.object({
       status: z.string().optional(),
+      q: z.string().optional(),
       page: z.coerce.number().int().min(1).default(1),
       limit: z.coerce.number().int().min(1).max(100).default(20),
     }),
   }),
   async (req, res) => {
     const prisma = getPrisma();
-    const where = req.query.status ? { status: req.query.status } : {};
+    const where = {
+      ...(req.query.status ? { status: req.query.status } : {}),
+      ...(req.query.q
+        ? {
+            OR: [
+              { orderNumber: { contains: req.query.q, mode: 'insensitive' } },
+              { buyer: { email: { contains: req.query.q, mode: 'insensitive' } } },
+              { buyer: { phone: { contains: req.query.q } } },
+              { seller: { storeName: { contains: req.query.q, mode: 'insensitive' } } },
+            ],
+          }
+        : {}),
+    };
     const [orders, total] = await Promise.all([
       prisma.order.findMany({
         where,
-        include: { items: true, escrowHold: true, dispute: true },
+        include: {
+          buyer: { select: { id: true, email: true, phone: true, displayName: true } },
+          seller: { select: { id: true, storeName: true, userId: true } },
+          items: true,
+          escrowHold: true,
+          dispute: { select: { id: true, status: true, reason: true } },
+        },
         orderBy: { createdAt: 'desc' },
         take: Number(req.query.limit),
         skip: (Number(req.query.page) - 1) * Number(req.query.limit),
@@ -263,4 +283,249 @@ router.post(
   }
 );
 
+// ---- Admin list/detail endpoints for the browser panel (read-only unless
+// stated). These keep the panel on the v2 Postgres engine as the source of
+// truth instead of the Firestore mirrors. ----
+
+// Sellers: every seller profile with its owner, wallet and traffic counters.
+router.get(
+  '/sellers',
+  validate({
+    query: z.object({
+      q: z.string().optional(),
+      verificationStatus: z.string().optional(),
+      sellerStatus: z.string().optional(),
+      page: z.coerce.number().int().min(1).default(1),
+      limit: z.coerce.number().int().min(1).max(100).default(20),
+    }),
+  }),
+  async (req, res) => {
+    const prisma = getPrisma();
+    const where = {
+      ...(req.query.q
+        ? {
+            OR: [
+              { storeName: { contains: req.query.q, mode: 'insensitive' } },
+              { storeSlug: { contains: req.query.q, mode: 'insensitive' } },
+              { user: { email: { contains: req.query.q, mode: 'insensitive' } } },
+              { user: { phone: { contains: req.query.q } } },
+            ],
+          }
+        : {}),
+      ...(req.query.verificationStatus ? { verificationStatus: req.query.verificationStatus } : {}),
+      ...(req.query.sellerStatus ? { sellerStatus: req.query.sellerStatus } : {}),
+    };
+    const [sellers, total] = await Promise.all([
+      prisma.sellerProfile.findMany({
+        where,
+        include: {
+          user: { select: { id: true, email: true, phone: true, displayName: true, avatarUrl: true, accountStatus: true } },
+          wallet: { select: { availableBalance: true, pendingBalance: true, frozenBalance: true, totalEarned: true, totalWithdrawn: true, status: true } },
+          _count: { select: { products: true, orders: true, withdrawals: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: Number(req.query.limit),
+        skip: (Number(req.query.page) - 1) * Number(req.query.limit),
+      }),
+      prisma.sellerProfile.count({ where }),
+    ]);
+    res.json({ success: true, data: { sellers, pagination: { page: Number(req.query.page), limit: Number(req.query.limit), total } } });
+  }
+);
+
+// Seller verification: approve / reject / reset a storefront. Only touches the
+// v2 profile (Postgres); the Firestore KYC mirror stays on legacy endpoints.
+router.put(
+  '/sellers/:sellerId/verification',
+  validate({
+    body: z.object({
+      action: z.enum(['verify', 'reject', 'pending']),
+    }),
+  }),
+  async (req, res) => {
+    const prisma = getPrisma();
+    const seller = await prisma.sellerProfile.findUnique({ where: { id: req.params.sellerId } });
+    if (!seller) return res.status(404).json({ error: 'SELLER_NOT_FOUND' });
+    const action = req.body.action;
+    const data =
+      action === 'verify'
+        ? { verificationStatus: 'verified', sellerStatus: seller.sellerStatus === 'rejected' ? 'active' : seller.sellerStatus }
+        : action === 'reject'
+          ? { verificationStatus: 'rejected', sellerStatus: 'rejected' }
+          : { verificationStatus: 'pending' };
+    const updated = await prisma.sellerProfile.update({ where: { id: req.params.sellerId }, data });
+    await writeAudit({
+      ...auditFromReq(req),
+      action: 'seller.verification',
+      entityType: 'seller_profile',
+      entityId: req.params.sellerId,
+      oldState: { verificationStatus: seller.verificationStatus, sellerStatus: seller.sellerStatus },
+      newState: data,
+    });
+    res.json({ success: true, data: updated });
+  }
+);
+
+// Products: every product (any status) with store + category + first media.
+router.get(
+  '/products',
+  validate({
+    query: z.object({
+      q: z.string().optional(),
+      status: z.string().optional(),
+      categoryId: z.string().optional(),
+      page: z.coerce.number().int().min(1).default(1),
+      limit: z.coerce.number().int().min(1).max(100).default(20),
+    }),
+  }),
+  async (req, res) => {
+    const prisma = getPrisma();
+    const where = {
+      deletedAt: null,
+      ...(req.query.q
+        ? {
+            OR: [
+              { title: { contains: req.query.q, mode: 'insensitive' } },
+              { slug: { contains: req.query.q, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+      ...(req.query.status ? { status: req.query.status } : {}),
+      ...(req.query.categoryId ? { categoryId: req.query.categoryId } : {}),
+    };
+    const [products, total] = await Promise.all([
+      prisma.product.findMany({
+        where,
+        include: {
+          seller: { select: { id: true, storeName: true, storeSlug: true } },
+          category: { select: { id: true, name: true } },
+          media: { select: { r2Key: true, thumbnailR2Key: true, type: true }, orderBy: { sortOrder: 'asc' } },
+          boosts: { select: { plan: true, status: true, expiresAt: true }, orderBy: { createdAt: 'desc' }, take: 1 },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: Number(req.query.limit),
+        skip: (Number(req.query.page) - 1) * Number(req.query.limit),
+      }),
+      prisma.product.count({ where }),
+    ]);
+    res.json({ success: true, data: { products, pagination: { page: Number(req.query.page), limit: Number(req.query.limit), total } } });
+  }
+);
+
+// User detail for the panel drawer: profile + verification + storefront + wallet.
+router.get(
+  '/users/:userId',
+  validate({ params: z.object({ userId: z.string().uuid() }) }),
+  async (req, res) => {
+    const prisma = getPrisma();
+    const [user, buyerOrders, sellerOrders] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: req.params.userId },
+        include: {
+          sellerProfile: { include: { wallet: true } },
+          devices: { select: { platform: true, appVersion: true, lastActiveAt: true }, take: 5 },
+          addresses: { orderBy: { isDefault: 'desc' }, take: 10 },
+        },
+      }),
+      prisma.order.groupBy({ by: ['status'], where: { buyerId: req.params.userId }, _count: { _all: true }, _sum: { totalAmount: true } }),
+      prisma.order.groupBy({ by: ['status'], where: { seller: { userId: req.params.userId } }, _count: { status: true } }),
+    ]);
+    if (!user) return res.status(404).json({ error: 'USER_NOT_FOUND' });
+    res.json({ success: true, data: { user, buyerOrders, sellerOrders } });
+  }
+);
+
+// Disputes across the platform (open → under_review → resolved).
+router.get(
+  '/disputes',
+  validate({
+    query: z.object({
+      status: z.string().optional(),
+      page: z.coerce.number().int().min(1).default(1),
+      limit: z.coerce.number().int().min(1).max(100).default(20),
+    }),
+  }),
+  async (req, res) => {
+    const prisma = getPrisma();
+    const where = req.query.status ? { status: req.query.status } : {};
+    const [disputes, total] = await Promise.all([
+      prisma.dispute.findMany({
+        where,
+        include: {
+          order: { select: { id: true, orderNumber: true, totalAmount: true, status: true } },
+          filer: { select: { id: true, email: true, phone: true, displayName: true } },
+          evidence: { select: { id: true, type: true, description: true, createdAt: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: Number(req.query.limit),
+        skip: (Number(req.query.page) - 1) * Number(req.query.limit),
+      }),
+      prisma.dispute.count({ where }),
+    ]);
+    res.json({ success: true, data: { disputes, pagination: { page: Number(req.query.page), limit: Number(req.query.limit), total } } });
+  }
+);
+
+// Refunds across the platform (pending → processing → completed/failed).
+router.get(
+  '/refunds',
+  validate({
+    query: z.object({
+      status: z.string().optional(),
+      page: z.coerce.number().int().min(1).default(1),
+      limit: z.coerce.number().int().min(1).max(100).default(20),
+    }),
+  }),
+  async (req, res) => {
+    const prisma = getPrisma();
+    const where = req.query.status ? { status: req.query.status } : {};
+    const [refunds, total] = await Promise.all([
+      prisma.refund.findMany({
+        where,
+        include: {
+          order: { select: { id: true, orderNumber: true, totalAmount: true, status: true } },
+          payment: { select: { id: true, provider: true, status: true, amount: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: Number(req.query.limit),
+        skip: (Number(req.query.page) - 1) * Number(req.query.limit),
+      }),
+      prisma.refund.count({ where }),
+    ]);
+    res.json({ success: true, data: { refunds, pagination: { page: Number(req.query.page), limit: Number(req.query.limit), total } } });
+  }
+);
+
+// Referrals for reward review (pending → complete).
+router.get(
+  '/referrals',
+  validate({
+    query: z.object({
+      status: z.string().optional(),
+      page: z.coerce.number().int().min(1).default(1),
+      limit: z.coerce.number().int().min(1).max(100).default(20),
+    }),
+  }),
+  async (req, res) => {
+    const prisma = getPrisma();
+    const where = req.query.status ? { status: req.query.status } : {};
+    const [referrals, total] = await Promise.all([
+      prisma.referral.findMany({
+        where,
+        include: {
+          referrer: { select: { id: true, email: true, phone: true, displayName: true } },
+          referred: { select: { id: true, email: true, phone: true, displayName: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: Number(req.query.limit),
+        skip: (Number(req.query.page) - 1) * Number(req.query.limit),
+      }),
+      prisma.referral.count({ where }),
+    ]);
+    res.json({ success: true, data: { referrals, pagination: { page: Number(req.query.page), limit: Number(req.query.limit), total } } });
+  }
+);
+
+// Orders: allow quick lookup by order number / buyer contact alongside the
+// status filter the existing endpoint already supports.
 module.exports = router;

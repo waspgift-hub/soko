@@ -1,0 +1,1338 @@
+/* Soko Vibe Admin Panel
+   Vanilla no-build SPA. Auth is Firebase (same project as the app); API is the
+   existing v2 + legacy-compat surface on the same origin. A browser-side
+   ADMIN_SECRET (x-admin-secret) fallback is supported for environments where
+   Firebase sign-in is unavailable. */
+'use strict';
+
+// ---------------------------------------------------------------------------
+// Firebase boot
+// ---------------------------------------------------------------------------
+firebase.initializeApp({
+  apiKey: 'AIzaSyBrh5W9VwbC3qTtSTm8LJbTQeYufRGil5s',
+  authDomain: 'sokonimoko-8c171-a8d14.firebaseapp.com',
+  projectId: 'sokonimoko-8c171-a8d14',
+  appId: '1:344682929526:web:5d3732578d6f012ac26e57',
+});
+const auth = firebase.auth();
+const API = '';
+const SECRET_KEY = 'sv_admin_secret';
+const THEME_KEY = 'sv_admin_theme';
+
+let idToken = null;
+const S = {}; // tiny client cache for cross-section lookups
+
+const $ = (id) => document.getElementById(id);
+function esc(v) {
+  return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+function fmtNum(v) { return (Math.round(Number(v) || 0)).toLocaleString('en-US'); }
+function fmtTZS(v) { return 'TSh ' + fmtNum(v); }
+function fmtTime(v) {
+  if (!v) return '—';
+  const d = new Date(v);
+  if (isNaN(d)) return esc(String(v));
+  return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+function money(v) { return '<span class="num">' + fmtTZS(v) + '</span>'; }
+function id12(v) { return v ? String(v).slice(0, 8) : '—'; }
+function avatarOf(u) {
+  const src = u && u.avatarUrl && /^https?:\/\//.test(u.avatarUrl) ? u.avatarUrl : null;
+  const name = (u && (u.displayName || u.storeName || '')) || (u && u.email) || '?';
+  return src
+    ? '<img class="thumb" src="' + esc(src) + '" alt="' + esc(name) + '" loading="lazy">'
+    : '<div class="thumb" style="display:grid;place-items:center;background:var(--okbg);color:var(--sv-accent-strong);font-weight:700;font-size:14px">' + esc(name.charAt(0).toUpperCase()) + '</div>';
+}
+function badge(status) {
+  const s = String(status || '?').toLowerCase();
+  const map = {
+    completed: 'ok', delivered: 'ok', completedorder: 'ok', wallet_credited: 'ok', payout_complete: 'ok',
+    active: 'ok', approved: 'ok', verified: 'ok', resolved: 'ok', done: 'ok', success: 'ok', processed: 'ok',
+    published: 'ok', actioned: 'ok',
+    pending: 'warn', awaiting_escrow_payment: 'warn', in_escrow: 'info', payment_pending: 'warn',
+    processing: 'info', payout_pending: 'warn', under_review: 'warn', requested: 'warn', eligibility_check: 'warn',
+    pending_payment: 'warn', shipping_fee_review: 'warn', review_required: 'warn', submitted: 'info',
+    dispatched: 'info', in_transit: 'info', ready_to_dispatch: 'info', out_for_delivery: 'info',
+    suspended: 'bad', rejected: 'bad', deleted: 'bad', cancelled: 'bad', canceled: 'bad', failed: 'bad',
+    disputed: 'bad', refund_pending: 'warn', refunded: 'mut', dismissed: 'bad', expired: 'mut',
+    draft: 'mut', blockchain_: 'mut', not_seller: 'mut', profile_required: 'warn', active_draft: 'mut',
+  };
+  const cls = map[s] || 'mut';
+  return '<span class="bdg ' + (s.indexOf('_') > -1 && !map[s] ? 'info' : cls) + '"><span class="dot"></span>' + esc(status) + '</span>';
+}
+let toastT; function toast(msg, ok) {
+  const el = $('toast');
+  el.textContent = msg;
+  el.className = 'toast show ' + (ok ? 'ok' : 'bad');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => (el.className = 'toast'), 3400);
+}
+function icons() { if (window.lucide) lucide.createIcons(); }
+
+// ---------------------------------------------------------------------------
+// API
+// ---------------------------------------------------------------------------
+function secret() { try { return localStorage.getItem(SECRET_KEY) || ''; } catch (_) { return ''; } }
+async function api(path, opts = {}) {
+  const headers = { ...(opts.headers || {}) };
+  if (idToken) headers.Authorization = 'Bearer ' + idToken;
+  else if (secret()) headers['x-admin-secret'] = secret();
+  else throw new Error('Jaribu kuingia kwanza');
+  if (opts.body && typeof opts.body === 'object') {
+    headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(opts.body);
+  }
+  const r = await fetch(API + path, { ...opts, headers });
+  let j = null; try { j = await r.json(); } catch (_) {}
+  if (r.status === 401) {
+    if (idToken) auth.signOut().then(() => location.reload());
+    throw new Error((j && j.error) || 'Haijaidhinishwa');
+  }
+  if (!r.ok) throw new Error((j && j.error) || ('HTTP ' + r.status));
+  return j;
+}
+const getJSON = (p) => api(p);
+const putJSON = (p, b) => api(p, { method: 'PUT', body: b });
+const postJSON = (p, b) => api(p, { method: 'POST', body: b });
+
+// ---------------------------------------------------------------------------
+// UI shell: modal / drawer / confirm
+// ---------------------------------------------------------------------------
+function openModal(html) {
+  $('modalOverlay').hidden = false;
+  $('modalRoot').hidden = false;
+  $('modalRoot').innerHTML = '<div class="modal">' + html + '</div>';
+  icons();
+}
+function closeModal() { $('modalRoot').hidden = true; $('modalOverlay').hidden = true; $('modalRoot').innerHTML = ''; }
+$('modalOverlay').addEventListener('click', closeModal);
+
+function openDrawer(html) {
+  $('drawerOverlay').hidden = false;
+  $('drawer').hidden = false;
+  $('drawerBody').innerHTML = html;
+  icons();
+}
+function closeDrawer() { $('drawerOverlay').hidden = true; $('drawer').hidden = true; }
+$('drawerOverlay').addEventListener('click', closeDrawer);
+$('drawerClose').addEventListener('click', closeDrawer);
+
+function confirmModal(title, msg, btnLabel, danger) {
+  return new Promise((resolve) => {
+    openModal(
+      '<h3>' + esc(title) + '</h3>' +
+      '<p class="msub">' + esc(msg) + '</p>' +
+      '<div class="mfooter">' +
+      '<button class="btn" id="cfNo">Futa</button>' +
+      '<button class="btn ' + (danger ? 'danger' : 'accent') + '" id="cfYes">' + esc(btnLabel || 'Ndiyo') + '</button>' +
+      '</div>'
+    );
+    $('cfNo').onclick = () => { closeModal(); resolve(false); };
+    $('cfYes').onclick = () => { closeModal(); resolve(true); };
+  });
+}
+
+function handleActionErr(e) {
+  toast((e && e.message) || 'Imeshindikana', false);
+  console.error(e);
+}
+
+function run(fn) {
+  setBusy(true);
+  fn().catch(handleActionErr).finally(() => setBusy(false));
+}
+function runQuiet(fn) {
+  fn().catch(handleActionErr);
+}
+
+// ---------------------------------------------------------------------------
+// Sections
+// ---------------------------------------------------------------------------
+const TITLES = {
+  dashboard: 'Dashibodi', users: 'Watumiaji', sellers: 'Wauzaji', products: 'Bidhaa',
+  orders: 'Maagizo', disputes: 'Migogoro', refunds: 'Marejesho', reports: 'Ripoti & Ulinzi',
+  finance: 'Fedha & Ledger', referrals: 'Rufaa', broadcasts: 'Matangazo ya Broad', audit: 'Ukaguzi (Audit)',
+};
+const Pg = {};
+function pgState(sec, field) {
+  Pg[sec] = Pg[sec] || { page: 1, limit: 20 };
+  return Pg[sec][field];
+}
+function setPg(sec, field, v) { Pg[sec] = (Pg[sec] || { page: 1, limit: 20 }); Pg[sec][field] = v; }
+
+const secEl = (sec) => $('sec-' + sec);
+function setBusy(b) { $('app').classList.toggle('busy', b); }
+function touch() { $('lastUpd').textContent = 'Imejibiwa ' + new Date().toLocaleTimeString(); }
+function pagerHTML(sec, pag) {
+  const total = (pag && pag.total) || 0;
+  const page = (pag && pag.page) || 1;
+  const pages = Math.max(1, Math.ceil(total / ((pag && pag.limit) || 20)));
+  return '<div class="pager"><span>' + fmtNum(total) + ' rekodi &middot; ukurasa ' + page + '/' + pages + '</span>' +
+    '<button class="btn sm" data-act="page" data-dir="-1"' + (page <= 1 ? ' disabled' : '') + '>Awali</button>' +
+    '<button class="btn sm" data-act="page" data-dir="1"' + (page >= pages ? ' disabled' : '') + '>Ijayo</button></div>';
+}
+// Wire pager/nav buttons inside a section using data-act + data-fn
+function bindSection(sec) {
+  const el = secEl(sec);
+  el.querySelectorAll('[data-act="page"]').forEach((b) => {
+    b.addEventListener('click', () => {
+      setPg(sec, 'page', Math.max(1, (pgState(sec, 'page') || 1) + Number(b.dataset.dir)));
+      LOADERS[sec]();
+    });
+  });
+  el.querySelectorAll('[data-fn]').forEach((b) => {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const fn = ACTIONS[b.dataset.fn.replace(/^sv\./, '')];
+      if (fn) fn(JSON.parse(b.dataset.args || '{}'), b);
+    });
+  });
+  icons();
+}
+
+// ---------------------------------------------------------------------------
+// ACTION registry (buttons/menus delegate here)
+// ---------------------------------------------------------------------------
+const ACTIONS = {
+  userStatus(args) { changeUserStatus(args.id, args.name); },
+  userNotif(args) { sendUserNotif(args.uid, args.name); },
+  viewUser(args) { viewUserDetail(args.id); },
+  sellerVerify(args) { sellerVerify(args.id, args.name, 'verify'); },
+  sellerReject(args) { sellerVerify(args.id, args.name, 'reject'); },
+  sellerPending(args) { sellerVerify(args.id, args.name, 'pending'); },
+  viewSeller(args) { viewSellerDetail(args.id); },
+  productModerate(args) { productModerate(args.id, args.title); },
+  viewProduct(args) { viewProductDetail(args.id, args.title); },
+  viewOrder(args) { viewOrderDetail(args.id, args.num, args.status); },
+  disputeResolve(args) { disputeResolve(args.id, args.num, args.total); },
+  viewDispute(args) { viewDisputeDetail(args.id); },
+  refundProcess(args) { refundProcess(args.id, args.num); },
+  withdrawalProcess(args) { withdrawalOp(args.id, 'process'); },
+  withdrawalRetry(args) { withdrawalOp(args.id, 'retry'); },
+  withdrawalConfirm(args) { withdrawalOp(args.id, 'confirm'); },
+  reportReview(args) { reportReview(args.id, args.status); },
+  referralComplete(args) { referralComplete(args.id); },
+  reconciliationRun() { reconciliationRun(); },
+};
+
+// ---------------------------------------------------------------------------
+// Dashibodi
+// ---------------------------------------------------------------------------
+let charts = {};
+function destroyCharts() { Object.keys(charts).forEach((k) => { try { charts[k].destroy(); } catch (_) {} }); charts = {}; }
+function chartBase() {
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+  return {
+    grid: { color: dark ? '#23352a' : '#eef1ef' },
+    ticks: { color: dark ? '#93a69b' : '#5b6b63', font: { size: 11 } },
+  };
+}
+
+async function loadDashboard() {
+  const el = secEl('dashboard');
+  el.innerHTML = '<div class="sectionempty"><div class="spinner" style="margin:0 auto 12px"></div>Inapakia dashibodi…</div>';
+  try {
+    const [dash, metrics, ts, online] = await Promise.all([
+      getJSON('/api/v1/admin/dashboard'),
+      getJSON('/api/v1/admin/metrics'),
+      getJSON('/api/admin/timeseries?days=30').catch(() => null),
+      getJSON('/api/admin/online').catch(() => null),
+    ]);
+    const k = (dash.data && dash.data.kpis) || {};
+    const m = (metrics && metrics.data) || {};
+    const onl = (online && online.success) ? online : null;
+
+    const gmv = Number(m.gmv || 0);
+    const orderGroups = (m.ordersByStatus || []).slice().sort((a, b) => b.count - a.count).slice(0, 8);
+    const q = (s) => '%23' + encodeURIComponent(s).replace(/%23/g, '');
+
+    el.innerHTML =
+      '<div class="grid kpis">' +
+      kpi('Watumiaji', fmtNum(k.users), 'Wapya leo: ' + fmtNum(k.newUsersToday), 'users') +
+      kpi('Bidhaa', fmtNum(k.products), 'jumla ya duka', 'package') +
+      kpi('Maagizo', fmtNum(k.orders), 'Kamili: ' + fmtNum(k.completedOrders), 'shopping-cart') +
+      kpi('Mapato ya Tume', fmtTZS(k.commissionRevenue), 'commission iliyokusanywa', 'trending-up') +
+      kpi('Escrow Inashikiliwa', fmtTZS(k.escrowHeld), fmtNum((m.escrowHolding || {}).count || 0) + ' holdi', 'lock') +
+      kpi('GMV', fmtTZS(gmv), 'bidhaa zilizouzwa', 'coins') +
+      kpi('Migogoro wazi', fmtNum(k.activeDisputes), fmtNum((m.disputesOpen || 0)) + ' inaendelea', 'scale') +
+      kpi('Withdrawals zinazosubiri', fmtNum(m.withdrawalsPending || 0), 'pending + processing', 'banknote') +
+      '</div>' +
+
+      '<div class="grid cols2" style="margin-top:18px">' +
+      '<div class="card"><div class="cardhead"><h3>Mapato ya kila siku (siku 30)</h3><div class="spacer"></div><span class="hint3">money / commission / users</span></div><div class="chartbox"><canvas id="chartTs"></canvas></div></div>' +
+      '<div class="card"><div class="cardhead"><h3>Maagizo kwa hali</h3></div><div class="chartbox"><canvas id="chartOrds"></canvas></div></div>' +
+      '</div>' +
+
+      (onl ? '<div class="card" style="margin-top:18px"><div class="cardhead"><h3>Mtandaoni sasa hivi</h3></div><div class="summRow">' +
+        onlChip('Dakika 1', onl.lastMinute) + onlChip('Dakika 5', onl.last5Min) + onlChip('Dakika 15', onl.last15Min) +
+        onlChip('Saa 1', onl.lastHour) + onlChip('Siku 1', onl.lastDay) + '</div></div>' : '') +
+
+      '<div class="grid cols2" style="margin-top:18px">' +
+      cardQuick('Tahadhari zinajibiwa', 'mock') +
+      '</div>';
+    // mocks removed — extra quiet section
+    el.querySelector('.grid.kpis + .grid.cols2') && el.querySelector('.grid.kpis + .grid.cols2').remove();
+    if (!onl) {
+      el.querySelectorAll('.card')[0] && el.querySelector('.grid.cols2') && (el.querySelector('.grid.cols2').style.removeProperty ? null : null);
+    }
+
+    destroyCharts();
+    if (ts && ts.series && ts.series.length) {
+      charts.ts = new Chart($('chartTs'), {
+        type: 'line',
+        data: {
+          labels: ts.series.map((s) => s.date.slice(5)),
+          datasets: [
+            { label: 'Money', data: ts.series.map((s) => s.money), borderColor: '#2f9e5f', backgroundColor: 'rgba(47,158,95,.12)', fill: true, tension: .3, pointRadius: 0 },
+            { label: 'Commission', data: ts.series.map((s) => s.commission), borderColor: '#b7791f', backgroundColor: 'transparent', borderDash: [4, 3], tension: .3, pointRadius: 0 },
+            { label: 'Users', data: ts.series.map((s) => s.users), borderColor: '#2563eb', backgroundColor: 'transparent', tension: .3, pointRadius: 0, yAxisID: 'y1' },
+          ],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+          scales: { y: Object.assign({ beginAtZero: true }, { grid: chartBase().grid, ticks: chartBase().ticks }), y1: { position: 'right', grid: { display: false }, ticks: chartBase().ticks }, x: { grid: { display: false } } },
+          plugins: { legend: { labels: { boxWidth: 12, color: chartBase().ticks.color } } },
+        },
+      });
+    }
+    if (orderGroups.length) {
+      charts.ord = new Chart($('chartOrds'), {
+        type: 'doughnut',
+        data: {
+          labels: orderGroups.map((g) => g.status),
+          datasets: [{ data: orderGroups.map((g) => g.count), backgroundColor: ['#2f9e5f', '#7da8ff', '#e3a94d', '#f07070', '#2586e3', '#9b7dd8', '#49c3a0', '#d8a5e0'] }],
+        },
+        options: { responsive: true, maintainAspectRatio: false, cutout: '62%', plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 }, color: chartBase().ticks.color } } } },
+      });
+    }
+    el.querySelectorAll('canvas').forEach((c) => { if (c && !c.id) c.remove(); });
+  } catch (e) {
+    el.innerHTML = '<div class="card"><div class="cardhead"><h3>Dashibodi</h3></div><div class="err">' + esc(e.message) + '</div></div>';
+  }
+  touch(); icons();
+}
+function kpi(lab, val, sub, ic) {
+  return '<div class="kpi"><div class="lab">' + esc(lab) + '</div><div class="val">' + val + '</div><div class="sub">' + esc(sub) + '</div><div class="ic"><i data-lucide="' + esc(ic) + '"></i></div></div>';
+}
+function onlChip(lab, v) {
+  return '<span class="bdg ' + (Number(v) > 0 ? 'ok' : 'mut') + '">' + esc(lab) + ': <b style="margin-left:4px">' + fmtNum(v) + '</b></span>';
+}
+function cardQuick(t, body) { return '<div class="card"><div class="cardhead"><h3>' + esc(t) + '</h3></div>' + body + '</div>'; }
+
+// ---------------------------------------------------------------------------
+// Watumiaji
+// ---------------------------------------------------------------------------
+function usersToolbar() {
+  return '<div class="toolbar">' +
+    '<input class="field q" id="uQ" placeholder="Tafuta: email, namba, jina, username…">' +
+    '<select class="select-xs" id="uRole"><option value="">Jukumu: yote</option><option>buyer</option><option>seller</option><option>admin</option><option>super_admin</option></select>' +
+    '<select class="select-xs" id="uStatus"><option value="">Hali: yote</option><option>active</option><option>pending</option><option>restricted</option><option>suspended</option><option>deletion_pending</option><option>deleted</option></select>' +
+    '<button class="btn" id="uGo">Chuja</button><div class="spacer"></div><button class="btn sm" data-fn="nope" data-act="none" onclick="return false" hidden></button>' +
+    '</div>';
+}
+async function loadUsers() {
+  const el = secEl('users');
+  const page = pgState('users', 'page') || 1;
+  const q = pgState('users', 'q') || '';
+  const role = pgState('users', 'role') || '';
+  const status = pgState('users', 'status') || '';
+  el.innerHTML = usersToolbar() + '<div class="card"><div class="tablewrap"><table class="tbl"><thead><tr>' +
+    '<th>Mtumiaji</th><th>Email</th><th>Simu</th><th>Jukumu</th><th>Hali</th><th>Anajiunga</th><th style="text-align:right">Vitendo</th></tr></thead>' +
+    '<tbody id="uRows"><tr><td colspan="7" class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto 8px"></div>Inapakia…</td></tr></tbody></table></div>' +
+    '<div id="uPag"></div></div>';
+  const qs = new URLSearchParams({ page, limit: 20 });
+  if (q) qs.set('q', q); if (role) qs.set('role', role); if (status) qs.set('accountStatus', status);
+  try {
+    const j = await getJSON('/api/v1/admin/users?' + qs.toString());
+    const d = (j.data && j.data.users) || [];
+    $('uRows').innerHTML = d.length
+      ? d.map((u) =>
+        '<tr>' +
+        '<td>' + avatarOf(u) + ' ' + esc(u.displayName || u.username || '—') + '</td>' +
+        '<td>' + esc(u.email || '—') + '</td>' +
+        '<td class="mono">' + esc(u.phone || '—') + '</td>' +
+        '<td>' + badge(u.role) + '</td>' +
+        '<td>' + badge(u.accountStatus) + '</td>' +
+        '<td class="dim">' + fmtTime(u.createdAt) + '</td>' +
+        '<td class="rowactions">' +
+        '<button class="btn sm" data-fn="viewUser" data-args=\'' + JSON.stringify({ id: u.id, name: u.displayName || u.email || u.id }).replace(/'/g, '&#39;') + '\'>Angalia</button>' +
+        '<button class="btn sm" data-fn="userStatus" data-args=\'' + JSON.stringify({ id: u.id, name: u.displayName || u.email || u.id }).replace(/'/g, '&#39;') + '\'>Hali</button>' +
+        '</td></tr>'
+      ).join('')
+      : '<tr><td colspan="7" class="empty">Hakuna watumiaji</td></tr>';
+    $('uPag').innerHTML = pagerHTML('users', j.data.pagination);
+  } catch (e) { $('uRows').innerHTML = '<tr><td colspan="7" class="empty">' + esc(e.message) + '</td></tr>'; }
+  bindSection('users');
+  touch();
+}
+
+async function changeUserStatus(id, name) {
+  openModal(
+    '<h3>Hali ya mtumiaji: ' + esc(name) + '</h3><p class="msub">Badilisha hali ya akaunti</p>' +
+    '<label>Hali mpya</label><select class="field" id="usSel"><option value="active">active</option><option value="pending">pending</option><option value="suspended">suspended</option><option value="deleted">deleted</option></select>' +
+    '<label>Sababu (hiari)</label><input class="field" id="usReason" placeholder="Sababu fupi kwa ukaguzi">' +
+    '<div class="mfooter"><button class="btn" id="usNo">Futa</button><button class="btn accent" id="usYes">Hifadhi</button></div>'
+  );
+  $('usNo').onclick = closeModal;
+  $('usYes').onclick = () => run(async () => {
+    await putJSON('/api/v1/admin/users/' + id + '/status', { accountStatus: $('usSel').value, reason: $('usReason').value || undefined });
+    closeModal(); toast('Hali imebadilishwa', true); loadUsers();
+  });
+}
+
+async function viewUserDetail(id) {
+  openDrawer('<div class="dsub">Tayari inapakia…</div>');
+  try {
+    const j = await getJSON('/api/v1/admin/users/' + id);
+    const d = (j.data || {}).user || {};
+    const sp = d.sellerProfile || {};
+    const w = sp.wallet || {};
+    const buyGroups = (j.data.buyerOrders || []);
+    const sellGroups = (j.data.sellerOrders || []);
+    const buyerTotal = buyGroups.reduce((a, g) => a + Number(g._sum.totalAmount || 0), 0);
+    const sellerTotal = sellGroups.reduce((a, g) => a + Number(g._count.status || 0), 0);
+    const ku = (g) => g.status + ' (' + (g._count._all || g._count.status || g._count) + ')';
+    openDrawer(
+      '<div class="dsub"></div><h3>' + esc(d.displayName || d.username || 'Mtumiaji') + '</h3>' +
+      '<div class="dsub">' + esc(d.email || '') + (d.phone ? ' · ' + esc(d.phone) : '') + '</div>' +
+      '<dl class="kv">' +
+      '<dt>Firebase UID</dt><dd class="mono">' + esc(id12(d.firebaseUid || d.id)) + '</dd>' +
+      '<dt>ID</dt><dd class="mono">' + esc(id12(d.id)) + '</dd>' +
+      '<dt>Jukumu</dt><dd>' + badge(d.role) + '</dd>' +
+      '<dt>Hali</dt><dd>' + badge(d.accountStatus) + '</dd>' +
+      '<dt>Email imethibitishwa</dt><dd>' + (d.emailVerified ? 'Ndiyo' : 'La') + '</dd>' +
+      '<dt>Simu imethibitishwa</dt><dd>' + (d.phoneVerified ? 'Ndiyo' : 'La') + '</dd>' +
+      '<dt>Aliungana</dt><dd>' + fmtTime(d.createdAt) + '</dd>' +
+      (sp.id ? '<dt>Duka</dt><dd>' + esc(sp.storeName || '—') + ' (' + badge(sp.verificationStatus) + ' · ' + badge(sp.sellerStatus) + ')</dd>' : '') +
+      (sp.id ? '<dt>Rrating ya duka</dt><dd>' + Number(sp.reliabilityScore || 0).toFixed(1) + '/5</dd>' : '') +
+      (w.availableBalance != null ? '<dt>Salio la duka</dt><dd>' + fmtTZS(w.availableBalance) + ' <span class="dim">pending ' + fmtTZS(w.pendingBalance) + '</span></dd>' : '') +
+      (sp.id ? '<dt>Mauzo duka</dt><dd>' + fmtNum(sp.totalSales) + ' · ' + fmtTZS(sp.totalRevenue) + '</dd>' : '') +
+      '<dt>Maagizo (mnunuzi)</dt><dd>' + (buyGroups.length ? buyGroups.map(ku).join(', ') : 'hakuna') + ' <b>' + fmtTZS(buyerTotal) + '</b></dd>' +
+      '<dt>Maagizo (muuzaji)</dt><dd>' + (sellGroups.length ? sellGroups.map(ku).join(', ') : 'hakuna') + ' (' + fmtNum(sellerTotal) + ')</dd>' +
+      '</dl>' +
+      (d.addresses && d.addresses.length ? '<hr class="hr"><div class="dsub">Anwani (' + d.addresses.length + ')</div>' +
+        d.addresses.slice(0, 5).map((a) => esc(a.addressLine1) + ' ' + esc(a.city || '')).join('<br>') : '') +
+      (d.devices && d.devices.length ? '<hr class="hr"><div class="dsub">Vifaa (' + d.devices.length + ')</div>' +
+        d.devices.map((dv) => esc(dv.platform || '?') + ' v' + esc(dv.appVersion || '?')).join('<br>') : '') +
+      '<div class="drawer-actions">' +
+      (d.firebaseUid ? '<button class="btn sm accent" data-fn="userNotif" data-args=\'' + JSON.stringify({ uid: d.firebaseUid, name: d.displayName || d.email || d.id }).replace(/'/g, '&#39;') + '\'>Tuma arifa</button>' : '') +
+      '<button class="btn sm" data-fn="userStatus" data-args=\'' + JSON.stringify({ id: d.id, name: d.displayName || d.email || d.id }).replace(/'/g, '&#39;') + '\'>Hali ya akaunti</button>' +
+      '</div>'
+    );
+    bindSection('users');
+  } catch (e) { toast(e.message, false); }
+}
+async function sendUserNotif(uid, name) {
+  openModal(
+    '<h3>Arifa kwa ' + esc(name) + '</h3>' +
+    '<label>Kichwa</label><input class="field" id="snTitle" placeholder="Kichwa cha arifa">' +
+    '<label>Maandishi</label><textarea class="field" id="snBody" placeholder="Ujumbe…"></textarea>' +
+    '<label>Aina</label><select class="field" id="snType"><option value="system">system</option><option value="order">order</option><option value="message">message</option><option value="promo">promo</option></select>' +
+    '<div class="mfooter"><button class="btn" id="snNo">Futa</button><button class="btn accent" id="snYes">Tuma</button></div>'
+  );
+  $('snNo').onclick = closeModal;
+  $('snYes').onclick = () => run(async () => {
+    await postJSON('/api/admin/send-notification', { userId: uid, title: $('snTitle').value, body: $('snBody').value, type: $('snType').value });
+    closeModal(); toast('Arifa imetumwa', true);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Wauzaji
+// ---------------------------------------------------------------------------
+function sellersToolbar() {
+  return '<div class="toolbar">' +
+    '<input class="field q" id="svQ" placeholder="Tafuta duka / anwani…">' +
+    '<select class="select-xs" id="svV"><option value="">Uthibitisho: yote</option><option value="pending">pending</option><option value="verified">verified</option><option value="unverified">unverified</option><option value="rejected">rejected</option></select>' +
+    '<button class="btn" id="svGo">Chuja</button>' +
+    '</div>';
+}
+async function loadSellers() {
+  const el = secEl('sellers');
+  const page = pgState('sellers', 'page') || 1;
+  const q = pgState('sellers', 'q') || '';
+  const v = pgState('sellers', 'v') || '';
+  el.innerHTML = sellersToolbar() + '<div class="card"><div class="tablewrap"><table class="tbl"><thead><tr>' +
+    '<th>Duka</th><th>Mmiliki</th><th>Uthibitisho</th><th>Hali</th><th>Rrating</th><th>Mauzo / Mapato</th><th>Salio</th><th style="text-align:right">Vitendo</th></tr></thead>' +
+    '<tbody id="svRows"><tr><td colspan="8" class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto 8px"></div>Inapakia…</td></tr></tbody></table></div>' +
+    '<div id="svPag"></div></div>';
+  const qs = new URLSearchParams({ page, limit: 20 });
+  if (q) qs.set('q', q); if (v) qs.set('verificationStatus', v);
+  try {
+    const j = await getJSON('/api/v1/admin/sellers?' + qs.toString());
+    const d = (j.data && j.data.sellers) || [];
+    $('svRows').innerHTML = d.length ? d.map((s) => {
+      const w = s.wallet || {};
+      const args = JSON.stringify({ id: s.id, name: s.storeName || s.id }).replace(/'/g, '&#39;');
+      return '<tr>' +
+        '<td><b>' + esc(s.storeName || '—') + '</b><div class="dim">' + esc(s.storeSlug || '') + '</div></td>' +
+        '<td>' + esc((s.user && (s.user.displayName || s.user.email)) || '—') + '<div class="dim">' + (s.user && esc(s.user.phone || '')) + '</div></td>' +
+        '<td>' + badge(s.verificationStatus) + '</td>' +
+        '<td>' + badge(s.sellerStatus) + '</td>' +
+        '<td>' + Number(s.reliabilityScore || 0).toFixed(1) + '<div class="dim">' + Math.round((s.onTimeDispatchRate || 1) * 100) + '%</div></td>' +
+        '<td>' + fmtNum(s.totalSales) + '<div class="dim">' + fmtTZS(s.totalRevenue) + '</div></td>' +
+        '<td>' + fmtTZS(w.availableBalance) + '<div class="dim">frozen ' + fmtTZS(w.frozenBalance) + '</div></td>' +
+        '<td class="rowactions">' +
+        '<button class="btn sm" data-fn="viewSeller" data-args=\'' + args + '\'>Angalia</button>' +
+        (s.verificationStatus !== 'verified' ? '<button class="btn sm accent" data-fn="sellerVerify" data-args=\'' + args + '\'>Thibitisha</button>' : '') +
+        (s.verificationStatus === 'pending' || s.verificationStatus === 'verified' ? '<button class="btn sm danger" data-fn="sellerReject" data-args=\'' + args + '\'>Kataa</button>' : '') +
+        '</td></tr>';
+    }).join('') : '<tr><td colspan="8" class="empty">Hakuna wauzaji</td></tr>';
+    $('svPag').innerHTML = pagerHTML('sellers', j.data.pagination);
+  } catch (e) { $('svRows').innerHTML = '<tr><td colspan="8" class="empty">' + esc(e.message) + '</td></tr>'; }
+  bindSection('sellers'); touch();
+}
+async function sellerVerify(id, name, action) {
+  const labels = { verify: 'Thibitisha', reject: 'Kataa', pending: 'Rudi pending' };
+  const ok = await confirmModal(labels[action] + ': ' + name, 'Uthibitisha uamuzi huu? Unatengenezwa kwenye rekodi ya ukaguzi.', labels[action], action === 'reject');
+  if (!ok) return;
+  run(async () => {
+    await putJSON('/api/v1/admin/sellers/' + id + '/verification', { action });
+    toast(labels[action] + ' — imefanyika', true); loadSellers();
+  });
+}
+async function viewSellerDetail(id) {
+  openDrawer('<div class="dsub">Inapakia…</div>');
+  try {
+    const j = await getJSON('/api/v1/admin/sellers');
+    // fetch single via list page 1 with slug/marker — use list with big limit then filter
+    const all = (j.data && j.data.sellers) || [];
+    const s = all.find((x) => x.id === id);
+    if (!s) { closeDrawer(); toast('Muuzaji hakupatikana kwenye ukurasa wa kwanza', false); return; }
+    const w = s.wallet || {};
+    const u = s.user || {};
+    openDrawer(
+      '<h3>' + esc(s.storeName || 'Duka') + '</h3>' +
+      '<div class="dsub">@' + esc(s.storeSlug || '') + '</div>' +
+      '<dl class="kv">' +
+      '<dt>Mmiliki</dt><dd>' + esc(u.displayName || u.email || '—') + '</dd>' +
+      '<dt>Simu / email</dt><dd>' + esc(u.phone || '—') + ' · ' + esc(u.email || '—') + '</dd>' +
+      '<dt>Uthibitisho</dt><dd>' + badge(s.verificationStatus) + ' · ' + badge(s.sellerStatus) + '</dd>' +
+      '<dt>Maelezo</dt><dd>' + esc(s.storeDescription || '—') + '</dd>' +
+      '<dt>Biashara</dt><dd>' + esc(s.businessType || '—') + '<div class="dim">' + esc(s.businessRegistrationNumber || s.taxId || '') + '</div></dd>' +
+      '<dt>Rrating</dt><dd>' + Number(s.reliabilityScore || 0).toFixed(1) + '/5 · on-time ' + Math.round((s.onTimeDispatchRate || 1) * 100) + '% · dispute ' + Number(s.disputeRate || 0).toFixed(4) + '</dd>' +
+      '<dt>Mauzo</dt><dd>' + fmtNum(s.totalSales) + ' · ' + fmtTZS(s.totalRevenue) + '</dd>' +
+      '<dt>AI kitengo</dt><dd>' + Number(s.avgShippingResponseHours || 0).toFixed(1) + 'h</dd>' +
+      '<dt>Salio</dt><dd>' + fmtTZS(w.availableBalance) + ' <span class="dim">+pending ' + fmtTZS(w.pendingBalance) + '</span></dd>' +
+      '<dt>Imetolewa</dt><dd>' + fmtTZS(w.totalWithdrawn) + '</dd>' +
+      '<dt>Bidhaa / maagizo / withdrawals</dt><dd>' + fmtNum(s._count && s._count.products) + ' / ' + fmtNum(s._count && s._count.orders) + ' / ' + fmtNum(s._count && s._count.withdrawals) + '</dd>' +
+      '</dl>' +
+      '<div class="drawer-actions">' +
+      '<button class="btn sm accent" data-fn="sellerVerify" data-args=\'' + JSON.stringify({ id: s.id, name: s.storeName || s.id }).replace(/'/g, '&#39;') + '\'>Thibitisha</button>' +
+      '<button class="btn sm danger" data-fn="sellerReject" data-args=\'' + JSON.stringify({ id: s.id, name: s.storeName || s.id }).replace(/'/g, '&#39;') + '\'>Kataa</button>' +
+      '</div>'
+    );
+    bindSection('sellers');
+  } catch (e) { toast(e.message, false); }
+}
+
+// ---------------------------------------------------------------------------
+// Bidhaa
+// ---------------------------------------------------------------------------
+function productsToolbar() {
+  return '<div class="toolbar">' +
+    '<input class="field q" id="pQ" placeholder="Tafuta bidhaa…">' +
+    '<select class="select-xs" id="pStatus"><option value="">Hali: yote</option><option>draft</option><option>published</option><option>suspended</option><option>rejected</option><option>deleted</option></select>' +
+    '<button class="btn" id="pGo">Chuja</button>' +
+    '</div>';
+}
+function thumbOf(media) {
+  const m = (media && media[0]) || {};
+  const url = m.thumbnailR2Key || m.r2Key;
+  if (url && /^https?:\/\//.test(url)) return '<img class="thumb" src="' + esc(url) + '" loading="lazy" onerror="this.style.display=\'none\'">';
+  return '<div class="thumb" style="display:grid;place-items:center;color:var(--muted);font-size:11px">' + (media ? media.length : 0) + '</div>';
+}
+async function loadProducts() {
+  const el = secEl('products');
+  const page = pgState('products', 'page') || 1;
+  const q = pgState('products', 'q') || '';
+  const st = pgState('products', 'st') || '';
+  el.innerHTML = productsToolbar() + '<div class="card"><div class="tablewrap"><table class="tbl"><thead><tr>' +
+    '<th>Bidhaa</th><th>Duka</th><th>Kategoria</th><th>Bei</th><th>Hali</th><th>Dawa</th><th style="text-align:right">Vitendo</th></tr></thead>' +
+    '<tbody id="pRows"><tr><td colspan="7" class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto 8px"></div>Inapakia…</td></tr></tbody></table></div>' +
+    '<div id="pPag"></div></div>';
+  const qs = new URLSearchParams({ page, limit: 20 });
+  if (q) qs.set('q', q); if (st) qs.set('status', st);
+  try {
+    const j = await getJSON('/api/v1/admin/products?' + qs.toString());
+    const d = (j.data && j.data.products) || [];
+    $('pRows').innerHTML = d.length ? d.map((p) => {
+      const args = JSON.stringify({ id: p.id, title: p.title || p.id }).replace(/'/g, '&#39;');
+      return '<tr>' +
+        '<td>' + thumbOf(p.media) + ' <b>' + esc(p.title || '—') + '</b><div class="dim mono">' + esc(id12(p.id)) + '</div></td>' +
+        '<td>' + esc((p.seller && p.seller.storeName) || '—') + '</td>' +
+        '<td class="dim">' + esc((p.category && p.category.name) || '—') + '</td>' +
+        '<td class="num">' + fmtTZS(p.price) + '<div class="dim">stock ' + fmtNum(p.stock) + '</div></td>' +
+        '<td>' + badge(p.status) + '<div class="dim">' + esc(p.condition || '') + '</div></td>' +
+        '<td class="dim">' + fmtTime(p.createdAt) + '</td>' +
+        '<td class="rowactions">' +
+        '<button class="btn sm" data-fn="viewProduct" data-args=\'' + args + '\'>Angalia</button>' +
+        '<button class="btn sm" data-fn="productModerate" data-args=\'' + args + '\'>Hali</button>' +
+        '</td></tr>';
+    }).join('') : '<tr><td colspan="7" class="empty">Hakuna bidhaa</td></tr>';
+    $('pPag').innerHTML = pagerHTML('products', j.data.pagination);
+  } catch (e) { $('pRows').innerHTML = '<tr><td colspan="7" class="empty">' + esc(e.message) + '</td></tr>'; }
+  bindSection('products'); touch();
+}
+async function productModerate(id, title) {
+  openModal(
+    '<h3>Hali ya bidhaa: ' + esc(title) + '</h3><p class="msub">Chagua hali mpya ya uchapishaji</p>' +
+    '<div class="radio-row" id="pMoRow">' +
+    ['published', 'suspended', 'rejected', 'draft'].map((s) => '<button class="radio-chip" data-v="' + s + '">' + s + '</button>').join('') +
+    '</div>' +
+    '<label>Sababu (hiari)</label><input class="field" id="pMoReason" placeholder="Kwa nini hali hii?">' +
+    '<div class="mfooter"><button class="btn" id="pMoNo">Futa</button><button class="btn accent" id="pMoYes">Hifadhi</button></div>'
+  );
+  let pick = 'published';
+  $('pMoRow').querySelectorAll('.radio-chip').forEach((c) => c.addEventListener('click', () => {
+    $('pMoRow').querySelectorAll('.radio-chip').forEach((x) => x.classList.remove('on'));
+    c.classList.add('on'); pick = c.dataset.v;
+  }));
+  $('pMoNo').onclick = closeModal;
+  $('pMoYes').onclick = () => run(async () => {
+    await putJSON('/api/v1/products/' + id + '/moderate', { status: pick, reason: $('pMoReason').value || undefined });
+    closeModal(); toast('Hali imebadilishwa -> ' + pick, true); loadProducts();
+  });
+}
+async function viewProductDetail(id, title) {
+  openDrawer('<div class="dsub">Inapakia…</div>');
+  try {
+    const qs = new URLSearchParams({ page: 1, limit: 50 });
+    const j = await getJSON('/api/v1/admin/products?' + qs.toString());
+    const d = (j.data && j.data.products) || [];
+    const p = d.find((x) => x.id === id);
+    if (!p) { closeDrawer(); toast('Bidhaa haikuonekana', false); return; }
+    const b = (p.boosts && p.boosts[0]) || {};
+    openDrawer(
+      '<h3>' + esc(p.title || '—') + '</h3>' +
+      '<div class="dsub">' + esc(p.slug || '') + ' · ' + esc((p.category && p.category.name) || '') + '</div>' +
+      '<dl class="kv">' +
+      '<dt>Bei</dt><dd>' + fmtTZS(p.price) + (p.originalPrice ? ' <span class="dim">(was ' + fmtTZS(p.originalPrice) + ')</span>' : '') + '</dd>' +
+      '<dt>Hali / stock</dt><dd>' + badge(p.status) + ' · ' + esc(p.condition || '') + ' · ' + fmtNum(p.stock) + '</dd>' +
+      '<dt>Duka</dt><dd>' + esc((p.seller && p.seller.storeName) || '—') + '</dd>' +
+      '<dt>Maelezo</dt><dd>' + esc((p.description || '—').slice(0, 400)) + '</dd>' +
+      p.weightGrams ? '<dt>Uzito</dt><dd>' + fmtNum(p.weightGrams) + 'g</dd>' : '' +
+      '<dt>Picha</dt><dd>' + fmtNum((p.media || []).length) + ' ' + (p.media || []).map((m) => (m.r2Key && /^https?:\/\//.test(m.r2Key)) ? '<a href="' + esc(m.r2Key) + '" target="_blank" rel="noopener">[picha]</a> ' : '').join('') + '</dd>' +
+      (b.id ? '<dt>Boost</dt><dd>' + esc(b.plan || '—') + ' · ' + badge(b.status) + ' · hadi ' + fmtTime(b.expiresAt) + '</dd>' : '') +
+      '<dt>Imeundwa</dt><dd>' + fmtTime(p.createdAt) + '</dd>' +
+      '</dl>' +
+      '<div class="drawer-actions">' +
+      '<button class="btn sm accent" data-fn="productModerate" data-args=\'' + JSON.stringify({ id: p.id, title: p.title || p.id }).replace(/'/g, '&#39;') + '\'>Hali ya uchapishaji</button>' +
+      '</div>'
+    );
+    bindSection('products');
+  } catch (e) { toast(e.message, false); }
+}
+
+// ---------------------------------------------------------------------------
+// Maagizo
+// ---------------------------------------------------------------------------
+function ordersToolbar() {
+  return '<div class="toolbar">' +
+    '<input class="field q" id="oQ" placeholder="Namba ya agizo / simu / email / duka…">' +
+    '<select class="select-xs" id="oStatus"><option value="">Hali: yote</option>' +
+    '<option>draft</option><option>awaiting_escrow_payment</option><option>in_escrow</option><option>ready_to_dispatch</option><option>dispatched</option><option>delivered</option><option>inspection_period</option><option>otp_pending</option><option>completed</option><option>wallet_credited</option><option>payout_pending</option><option>payout_complete</option><option>disputed</option><option>refund_pending</option><option>refunded</option><option>cancelled</option><option>expired</option><option>failed</option></select>' +
+    '<button class="btn" id="oGo">Chuja</button>' +
+    '</div>';
+}
+async function loadOrders() {
+  const el = secEl('orders');
+  const page = pgState('orders', 'page') || 1;
+  const q = pgState('orders', 'q') || '';
+  const st = pgState('orders', 'st') || '';
+  el.innerHTML = ordersToolbar() + '<div class="card"><div class="tablewrap"><table class="tbl"><thead><tr>' +
+    '<th>No.</th><th>Mnunuzi</th><th>Duka (muuzaji)</th><th>Jumla</th><th>Hali</th><th>Escrow</th><th>Iliundwa</th><th style="text-align:right">Vitendo</th></tr></thead>' +
+    '<tbody id="oRows"><tr><td colspan="8" class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto 8px"></div>Inapakia…</td></tr></tbody></table></div>' +
+    '<div id="oPag"></div></div>';
+  const qs = new URLSearchParams({ page, limit: 20 });
+  if (q) qs.set('q', q); if (st) qs.set('status', st);
+  try {
+    const j = await getJSON('/api/v1/admin/orders?' + qs.toString());
+    const d = (j.data && j.data.orders) || [];
+    $('oRows').innerHTML = d.length ? d.map((o) => {
+      const disp = o.dispute ? badge('disputed') : (o.escrowHold ? badge('in_escrow') : '');
+      return '<tr>' +
+        '<td class="mono"><b>' + esc(o.orderNumber || id12(o.id)) + '</b></td>' +
+        '<td>' + esc((o.buyer && (o.buyer.displayName || o.buyer.email)) || '—') + '<div class="dim mono">' + esc((o.buyer && o.buyer.phone) || '') + '</div></td>' +
+        '<td>' + esc((o.seller && o.seller.storeName) || '—') + '</td>' +
+        '<td class="num">' + fmtTZS(o.totalAmount) + '</td>' +
+        '<td>' + badge(o.status) + '</td>' +
+        '<td>' + (disp || '—') + '</td>' +
+        '<td class="dim">' + fmtTime(o.placedAt || o.createdAt) + '</td>' +
+        '<td class="rowactions"><button class="btn sm" data-fn="viewOrder" data-args=\'' + JSON.stringify({ id: o.id, num: o.orderNumber || o.id, status: o.status }).replace(/'/g, '&#39;') + '\'>Angalia</button></td>' +
+        '</tr>';
+    }).join('') : '<tr><td colspan="8" class="empty">Hakuna maagizo</td></tr>';
+    $('oPag').innerHTML = pagerHTML('orders', j.data.pagination);
+  } catch (e) { $('oRows').innerHTML = '<tr><td colspan="8" class="empty">' + esc(e.message) + '</td></tr>'; }
+  bindSection('orders'); touch();
+}
+async function viewOrderDetail(id, num, status) {
+  openDrawer('<div class="dsub">Inapakia…</div>');
+  try {
+    const j = await getJSON('/api/v1/admin/orders?q=' + encodeURIComponent(num));
+    const d = (j.data && j.data.orders) || [];
+    const o = d.find((x) => x.id === id) || d[0];
+    if (!o) { closeDrawer(); toast('Agizo halikuonekana', false); return; }
+    const items = (o.items || []).map((it) =>
+      '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span>' + esc(it.snapshot && it.snapshot.title) + ' × ' + fmtNum(it.quantity) + '</span><span class="num">' + fmtTZS(it.totalPrice) + '</span></div>').join('');
+    const snap = o.productSnapshot || {};
+    openDrawer(
+      '<h3>Agizo ' + esc(o.orderNumber || id12(o.id)) + '</h3>' +
+      '<div class="dsub">' + badge(o.status) + '</div>' +
+      '<dl class="kv">' +
+      '<dt>Mnunuzi</dt><dd>' + esc((o.buyer && (o.buyer.displayName || o.buyer.email)) || id12(o.buyer && o.buyer.id) || '—') + '<div class="dim">' + esc((o.buyer && o.buyer.phone) || '') + '</div></dd>' +
+      '<dt>Muuzaji</dt><dd>' + esc((o.seller && o.seller.storeName) || '—') + '</dd>' +
+      '<dt>Jumla</dt><dd>' + fmtTZS(o.totalAmount) + '<div class="dim">bidhaa ' + fmtTZS(o.productPrice) + ' · usafiri ' + fmtTZS(o.shippingFee) + '</div></dd>' +
+      '<dt>Commission</dt><dd>' + fmtTZS(o.platformCommission) + '</dd>' +
+      (o.escrowHold ? '<dt>Escrow</dt><dd>' + fmtTZS(o.escrowHold.amount) + ' · ' + badge(o.escrowHold.status) + '</dd>' : '') +
+      (o.dispute ? '<dt>Mgogoro</dt><dd>' + badge(o.dispute.status) + ' · ' + esc(o.dispute.reason || '') + '</dd>' : '') +
+      '<dt>Usafirishaji</dt><dd>' + esc(o.courierName || '—') + ' ' + esc(o.trackingNumber || '') + '<div class="dim">' + esc(o.shippingMethod || '') + '</div></dd>' +
+      '<dt>Iliwekwa / ikamilishwa</dt><dd>' + fmtTime(o.placedAt || o.createdAt) + ' / ' + fmtTime(o.completedAt) + '</dd>' +
+      '</dl>' +
+      (items ? '<hr class="hr"><div class="dsub">Bidhaa</div>' + items : '') +
+      (snap && (snap.buyerContact || snap.sellerContact || snap.address) ? '<hr class="hr"><div class="dsub">Anwani kutoka kwenye picha</div><div class="dim">' + esc(JSON.stringify(snap.address || snap.buyerContact || snap.sellerContact || '')).slice(0, 300) + '</div>' : '')
+    );
+  } catch (e) { toast(e.message, false); }
+}
+
+// ---------------------------------------------------------------------------
+// Migogoro
+// ---------------------------------------------------------------------------
+function disputesToolbar() {
+  return '<div class="toolbar"><select class="select-xs" id="dStatus"><option value="">Hali: yote</option><option value="open">open</option><option value="under_review">under_review</option><option value="resolved">resolved</option></select>' +
+    '<button class="btn" id="dGo">Chuja</button></div>';
+}
+function disputeReason(r) {
+  const pretty = { WRONG_ITEM: 'Bidhaa yenye makosa', DAMAGED_ITEM: 'Imekwisha ama kuharibika', FAKE_ITEM: 'Bidhaa ghushi', NOT_RECEIVED: 'Haijafika', QUALITY_ISSUE: 'Ubora haufai', BUYER_FRAUD: 'Udanganyifu wa mnunuzi' };
+  return pretty[r] || r;
+}
+async function loadDisputes() {
+  const el = secEl('disputes');
+  const page = pgState('disputes', 'page') || 1;
+  const st = pgState('disputes', 'st') || '';
+  el.innerHTML = disputesToolbar() + '<div class="card"><div class="tablewrap"><table class="tbl"><thead><tr>' +
+    '<th>Agizo</th><th>Aliyependa</th><th>Sababu</th><th>Hali</th><th>Kiasi</th><th>Iliundwa</th><th style="text-align:right">Vitendo</th></tr></thead>' +
+    '<tbody id="dRows"><tr><td colspan="7" class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto 8px"></div>Inapakia…</td></tr></tbody></table></div>' +
+    '<div id="dPag"></div></div>';
+  const qs = new URLSearchParams({ page, limit: 20 });
+  if (st) qs.set('status', st);
+  try {
+    const j = await getJSON('/api/v1/admin/disputes?' + qs.toString());
+    const d = (j.data && j.data.disputes) || [];
+    $('dRows').innerHTML = d.length ? d.map((dis) => {
+      const args = JSON.stringify({ id: dis.id, num: (dis.order && dis.order.orderNumber) || dis.orderId, total: (dis.order && dis.order.totalAmount) || 0 }).replace(/'/g, '&#39;');
+      return '<tr>' +
+        '<td class="mono"><b>' + esc((dis.order && dis.order.orderNumber) || id12(dis.orderId)) + '</b></td>' +
+        '<td>' + esc((dis.filer && (dis.filer.displayName || dis.filer.email)) || '—') + '</td>' +
+        '<td>' + esc(disputeReason(dis.reason)) + '<div class="dim">' + esc((dis.description || '').slice(0, 60)) + '</div></td>' +
+        '<td>' + badge(dis.status) + '</td>' +
+        '<td class="num">' + fmtTZS((dis.order && dis.order.totalAmount) || 0) + '</td>' +
+        '<td class="dim">' + fmtTime(dis.createdAt) + '</td>' +
+        '<td class="rowactions">' +
+        '<button class="btn sm" data-fn="viewDispute" data-args=\'' + JSON.stringify({ id: dis.id }).replace(/'/g, '&#39;') + '\'>Angalia</button>' +
+        (dis.status !== 'resolved' ? '<button class="btn sm accent" data-fn="disputeResolve" data-args=\'' + args + '\'>Suluhisha</button>' : '') +
+        '</td></tr>';
+    }).join('') : '<tr><td colspan="7" class="empty">Hakuna migogoro</td></tr>';
+    $('dPag').innerHTML = pagerHTML('disputes', j.data.pagination);
+  } catch (e) { $('dRows').innerHTML = '<tr><td colspan="7" class="empty">' + esc(e.message) + '</td></tr>'; }
+  bindSection('disputes'); touch();
+}
+async function viewDisputeDetail(id) {
+  openDrawer('<div class="dsub">Inapakia…</div>');
+  try {
+    const qs = new URLSearchParams({ page: 1, limit: 50 });
+    const j = await getJSON('/api/v1/admin/disputes?' + qs.toString());
+    const all = (j.data && j.data.disputes) || [];
+    const dis = all.find((x) => x.id === id);
+    if (!dis) { closeDrawer(); toast('Mgogoro haukuonekana', false); return; }
+    const evs = (dis.evidence || []);
+    openDrawer(
+      '<h3>Mgogoro kwenye ' + esc((dis.order && dis.order.orderNumber) || id12(dis.orderId)) + '</h3>' +
+      '<div class="dsub">' + badge(dis.status) + ' · ' + esc(disputeReason(dis.reason)) + '</div>' +
+      '<dl class="kv">' +
+      '<dt>Aliiweka</dt><dd>' + esc((dis.filer && (dis.filer.displayName || dis.filer.email)) || '—') + '</dd>' +
+      '<dt>Maelezo</dt><dd>' + esc(dis.description || '—') + '</dd>' +
+      '<dt>Kiasi kwenye escrow</dt><dd>' + fmtTZS((dis.order && dis.order.totalAmount) || 0) + '</dd>' +
+      '<dt>Uamuzi</dt><dd>' + esc(dis.resolution || '—') + ' ' + (dis.resolvedAt ? '(' + fmtTime(dis.resolvedAt) + ')' : '') + '</dd>' +
+      '</dl>' +
+      (evs.length ? '<hr class="hr"><div class="dsub">Ushahidi (' + evs.length + ')</div>' + evs.map((e) =>
+        '<div style="padding:8px 0;border-bottom:1px solid var(--border)"><b>' + esc(e.type) + '</b> · ' + fmtTime(e.createdAt) +
+        (e.description ? '<div class="dim">' + esc(e.description) + '</div>' : '') +
+        (e.r2Key && /^https?:\/\//.test(e.r2Key) ? '<div><a href="' + esc(e.r2Key) + '" target="_blank" rel="noopener" class="btn sm">Ona ushahidi</a></div>' : '') + '</div>').join('') : '')
+    );
+  } catch (e) { toast(e.message, false); }
+}
+async function disputeResolve(id, num, total) {
+  openModal(
+    '<h3>Suluhisha mgogoro: ' + esc(num) + '</h3>' +
+    '<p class="msub">Kiasi cha escrow: ' + fmtTZS(total) + '. Kwa PARTIAL Jumla ya mnunuzi+muuzaji inapaswa kuwa sawa na escrow.</p>' +
+    '<div class="radio-row" id="drRow">' +
+    '<button class="radio-chip" data-v="FULL_REFUND">FULL_REFUND (mnunuzi anapata zote)</button>' +
+    '<button class="radio-chip" data-v="FULL_TO_SELLER">FULL_TO_SELLER (muuzaji anapata zote)</button>' +
+    '<button class="radio-chip" data-v="PARTIAL">PARTIAL</button></div>' +
+    '<div id="drPart" hidden>' +
+    '<label>Kiasi cha mnunuzi (TSh)</label><input class="field" id="drBuyer" type="number" min="0" value="0">' +
+    '<label>Kiasi cha muuzaji (TSh)</label><input class="field" id="drSeller" type="number" min="0" value="0">' +
+    '</div>' +
+    '<div class="mfooter"><button class="btn" id="drNo">Futa</button><button class="btn accent" id="drYes">Tengeneza Uamuzi</button></div>'
+  );
+  let pick = 'FULL_REFUND';
+  $('drRow').querySelectorAll('.radio-chip').forEach((c) => c.addEventListener('click', () => {
+    $('drRow').querySelectorAll('.radio-chip').forEach((x) => x.classList.remove('on'));
+    c.classList.add('on'); pick = c.dataset.v; $('drPart').hidden = pick !== 'PARTIAL';
+  }));
+  $('drNo').onclick = closeModal;
+  $('drYes').onclick = () => run(async () => {
+    const body = { resolution: pick };
+    if (pick === 'PARTIAL') { body.buyerAmount = Math.round(Number($('drBuyer').value)); body.sellerAmount = Math.round(Number($('drSeller').value)); }
+    await putJSON('/api/v1/disputes/' + id + '/resolve', body);
+    closeModal(); toast('Uamuzi umetengenezwa', true); loadDisputes();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Marejesho
+// ---------------------------------------------------------------------------
+function refundsToolbar() {
+  return '<div class="toolbar"><select class="select-xs" id="rStatus"><option value="">Hali: yote</option><option value="pending">pending</option><option value="processing">processing</option><option value="completed">completed</option><option value="failed">failed</option></select>' +
+    '<button class="btn" id="rGo">Chuja</button></div>';
+}
+async function loadRefunds() {
+  const el = secEl('refunds');
+  const page = pgState('refunds', 'page') || 1;
+  const st = pgState('refunds', 'st') || '';
+  el.innerHTML = refundsToolbar() + '<div class="card"><div class="tablewrap"><table class="tbl"><thead><tr>' +
+    '<th>Agizo</th><th>Kiasi</th><th>Njia</th><th>Sababu</th><th>Hali</th><th>Iliundwa</th><th style="text-align:right">Vitendo</th></tr></thead>' +
+    '<tbody id="rRows"><tr><td colspan="7" class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto 8px"></div>Inapakia…</td></tr></tbody></table></div>' +
+    '<div id="rPag"></div></div>';
+  const qs = new URLSearchParams({ page, limit: 20 });
+  if (st) qs.set('status', st);
+  try {
+    const j = await getJSON('/api/v1/admin/refunds?' + qs.toString());
+    const d = (j.data && j.data.refunds) || [];
+    $('rRows').innerHTML = d.length ? d.map((rf) => {
+      const args = JSON.stringify({ id: rf.id, num: (rf.order && rf.order.orderNumber) || rf.orderId }).replace(/'/g, '&#39;');
+      return '<tr>' +
+        '<td class="mono"><b>' + esc((rf.order && rf.order.orderNumber) || id12(rf.orderId)) + '</b></td>' +
+        '<td class="num">' + fmtTZS(rf.amount) + '</td>' +
+        '<td>' + badge(rf.mode) + '</td>' +
+        '<td class="dim">' + esc((rf.reason || '').slice(0, 50)) + '</td>' +
+        '<td>' + badge(rf.status) + '</td>' +
+        '<td class="dim">' + fmtTime(rf.createdAt) + '</td>' +
+        '<td class="rowactions">' +
+        (rf.status === 'pending' || rf.status === 'failed' ? '<button class="btn sm accent" data-fn="refundProcess" data-args=\'' + args + '\'>Tengeneza</button>' : '<span class="dim">—</span>') +
+        '</td></tr>';
+    }).join('') : '<tr><td colspan="7" class="empty">Hakuna marejesho</td></tr>';
+    $('rPag').innerHTML = pagerHTML('refunds', j.data.pagination);
+  } catch (e) { $('rRows').innerHTML = '<tr><td colspan="7" class="empty">' + esc(e.message) + '</td></tr>'; }
+  bindSection('refunds'); touch();
+}
+async function refundProcess(id, num) {
+  const ok = await confirmModal('Tengeneza marejesho kwenda ' + num, 'Hii hutoa escrow na kuwasilisha kwa mnunuzi. Hakika?', 'Tengeneza', false);
+  if (!ok) return;
+  run(async () => {
+    await putJSON('/api/v1/refunds/' + id + '/process');
+    toast('Marejesho yanatengenezwa', true); loadRefunds();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Ripoti & Ulinzi (moderation)
+// ---------------------------------------------------------------------------
+function reportsToolbar() {
+  return '<div class="toolbar"><select class="select-xs" id="rpStatus"><option value="">Hali: yote</option><option value="pending">pending</option><option value="reviewed">reviewed</option><option value="actioned">actioned</option><option value="dismissed">dismissed</option></select>' +
+    '<select class="select-xs" id="rpType"><option value="">Aina: yote</option><option value="product">product</option><option value="user">user</option></select>' +
+    '<button class="btn" id="rpGo">Chuja</button></div>';
+}
+async function loadReports() {
+  const el = secEl('reports');
+  const page = pgState('reports', 'page') || 1;
+  const st = pgState('reports', 'st') || '';
+  const ty = pgState('reports', 'ty') || '';
+  el.innerHTML = reportsToolbar() + '<div class="card"><div class="tablewrap"><table class="tbl"><thead><tr>' +
+    '<th>Aliyeripoti</th><th>Aina</th><th>Sababu</th><th>Hali</th><th>Iliundwa</th><th style="text-align:right">Vitendo</th></tr></thead>' +
+    '<tbody id="rpRows"><tr><td colspan="6" class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto 8px"></div>Inapakia…</td></tr></tbody></table></div>' +
+    '<div id="rpPag"></div></div>';
+  const qs = new URLSearchParams({ page, limit: 20 });
+  if (st) qs.set('status', st); if (ty) qs.set('targetType', ty);
+  try {
+    const j = await getJSON('/api/v1/moderation?' + qs.toString());
+    const d = (j.data && j.data.items) || [];
+    $('rpRows').innerHTML = d.length ? d.map((rp) => {
+      const args = JSON.stringify({ id: rp.id, status: rp.status }).replace(/'/g, '&#39;');
+      return '<tr>' +
+        '<td>' + esc((rp.reporter && (rp.reporter.email || rp.reporter.phone)) || id12(rp.reporterId)) + '</td>' +
+        '<td>' + badge(rp.targetType) + ' <div class="dim mono">' + esc(id12(rp.targetId)) + '</div></td>' +
+        '<td>' + esc(rp.reason) + '<div class="dim">' + esc((rp.description || '').slice(0, 50)) + '</div></td>' +
+        '<td>' + badge(rp.status) + '</td>' +
+        '<td class="dim">' + fmtTime(rp.createdAt) + '</td>' +
+        '<td class="rowactions">' +
+        (rp.status === 'pending' ? ['reviewed', 'actioned', 'dismissed'].map((s) =>
+          '<button class="btn sm ' + (s === 'dismissed' ? 'danger' : (s === 'actioned' ? 'accent' : '')) + '" data-fn="reportReview" data-args=\'' + JSON.stringify({ id: rp.id, status: s }).replace(/'/g, '&#39;') + '\'>' + s + '</button>'
+        ).join('') : '<span class="dim">imehakikiwa</span>') +
+        '</td></tr>';
+    }).join('') : '<tr><td colspan="6" class="empty">Hakuna ripoti</td></tr>';
+    $('rpPag').innerHTML = pagerHTML('reports', j.data.pagination);
+  } catch (e) { $('rpRows').innerHTML = '<tr><td colspan="6" class="empty">' + esc(e.message) + '</td></tr>'; }
+  bindSection('reports'); touch();
+}
+async function reportReview(id, status) {
+  run(async () => {
+    await putJSON('/api/v1/moderation/' + id + '/review', { status });
+    toast('Ripoti -> ' + status, true); loadReports();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Fedha: KPI + Ledger + Withdrawals + Rekodi
+// ---------------------------------------------------------------------------
+function financeTabs(active) {
+  const tabs = { main: 'Fedha', ledger: 'Ledger', withdrawals: 'Withdrawals', recon: 'Rekodi (Reconciliation)' };
+  return '<div class="toolbar" style="margin-bottom:14px">' + Object.keys(tabs).map((k) =>
+    '<button class="radio-chip ' + (active === k ? 'on' : '') + '" data-ftab="' + k + '">' + tabs[k] + '</button>').join('') + '</div>';
+}
+async function loadFinance(focus) {
+  const el = secEl('finance');
+  const f = focus || pgState('finance', 'f') || 'main';
+  setPg('finance', 'f', f);
+  el.innerHTML = financeTabs(f) + '<div class="finBody"></div>';
+  if (f === 'main') loadFinanceMain();
+  else if (f === 'ledger') loadLedger();
+  else if (f === 'withdrawals') loadWithdrawals();
+  else loadRecon();
+  el.querySelectorAll('[data-ftab]').forEach((b) => b.addEventListener('click', () => loadFinance(b.dataset.ftab)));
+}
+async function loadFinanceMain() {
+  const body = $('finance').querySelector('.finBody');
+  body.innerHTML = '<div class="sectionempty"><div class="spinner" style="margin:0 auto 12px"></div>Inapakia…</div>';
+  try {
+    const [dash, met] = await Promise.all([getJSON('/api/v1/admin/dashboard'), getJSON('/api/v1/admin/metrics')]);
+    const k = (dash.data && dash.data.kpis) || {};
+    const m = (met.data && met.data) || {};
+    body.innerHTML =
+      '<div class="grid kpis">' +
+      kpi('Mapato ya Tume', fmtTZS(k.commissionRevenue), 'jumla', 'trending-up') +
+      kpi('Escrow inashikiliwa', fmtTZS(k.escrowHeld), fmtNum((m.escrowHolding || {}).count || 0) + ' includes', 'lock') +
+      kpi('GMV', fmtTZS(m.gmv), 'jumla ya mauzo', 'coins') +
+      kpi('Withdrawals zinazosubiri', fmtNum(m.withdrawalsPending || 0), 'pending + processing', 'banknote') +
+      '</div>' +
+      '<div class="grid cols2" style="margin-top:18px">' +
+      '<div class="card"><div class="cardhead"><h3>Maagizo (fedha)</h3></div>' +
+      '<table class="tbl"><thead><tr><th>Hali</th><th>Hesabu</th><th>Jumla</th></tr></thead><tbody>' +
+      (m.ordersByStatus || []).map((g) => '<tr><td>' + badge(g.status) + '</td><td>' + fmtNum(g.count) + '</td><td class="num">' + fmtTZS(g.totalAmount) + '</td></tr>').join('') +
+      '</tbody></table></div>' +
+      '<div class="card"><div class="cardhead"><h3>Malipo</h3></div>' +
+      '<table class="tbl"><thead><tr><th>Hali</th><th>Hesabu</th><th>Jumla</th></tr></thead><tbody>' +
+      (m.paymentsByStatus || []).map((g) => '<tr><td>' + badge(g.status) + '</td><td>' + fmtNum(g.count) + '</td><td class="num">' + fmtTZS(g.totalAmount) + '</td></tr>').join('') +
+      '</tbody></table></div></div>';
+  } catch (e) { body.innerHTML = '<div class="card"><div class="err">' + esc(e.message) + '</div></div>'; }
+  touch(); icons();
+}
+async function loadLedger() {
+  const body = $('finance').querySelector('.finBody');
+  const page = pgState('finance', 'page') || 1;
+  body.innerHTML = '<div class="card"><div class="tablewrap"><table class="tbl"><thead><tr>' +
+    '<th>Wakati</th><th>Duka</th><th>Aina</th><th>Kiasi</th><th>Salio baada</th><th>Rejea</th></tr></thead>' +
+    '<tbody id="lgRows"><tr><td colspan="6" class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto 8px"></div></td></tr></tbody></table></div><div id="lgPag"></div></div>';
+  try {
+    const j = await getJSON('/api/v1/admin/ledger?page=' + page + '&limit=30');
+    const d = (j.data && j.data.entries) || [];
+    $('lgRows').innerHTML = d.length ? d.map((e) => '<tr>' +
+      '<td class="dim">' + fmtTime(e.createdAt) + '</td>' +
+      '<td>' + esc((e.wallet && e.wallet.seller && e.wallet.seller.storeName) || '—') + '</td>' +
+      '<td>' + badge(e.type) + '</td>' +
+      '<td class="num">' + (Number(e.amount) < 0 ? '-' : '+') + fmtTZS(Math.abs(e.amount)) + '</td>' +
+      '<td class="num">' + fmtTZS(e.balanceAfter) + '</td>' +
+      '<td class="dim mono">' + esc(e.referenceType || '') + ' ' + esc(id12(e.referenceId)) + '</td></tr>').join('')
+      : '<tr><td colspan="6" class="empty">Hakuna ledgers</td></tr>';
+    $('lgPag').innerHTML = pagerHTML('finance', j.data.pagination);
+  } catch (e) { $('lgRows').innerHTML = '<tr><td colspan="6" class="empty">' + esc(e.message) + '</td></tr>'; }
+  bindSection('finance'); touch();
+}
+function withdrawalsToolbar() {
+  return '<div class="toolbar">' +
+    '<select class="select-xs" id="wStatus"><option value="">Hali: yote</option><option value="pending">pending</option><option value="processing">processing</option><option value="completed">completed</option><option value="failed">failed</option><option value="cancelled">cancelled</option></select>' +
+    '<button class="btn" id="wGo">Chuja</button></div>';
+}
+async function loadWithdrawals() {
+  const body = $('finance').querySelector('.finBody');
+  const page = pgState('finance', 'page') || 1;
+  const st = pgState('finance', 'wst') || '';
+  body.innerHTML = '<div class="card">' + withdrawalsToolbar() + '<div class="tablewrap"><table class="tbl"><thead><tr>' +
+    '<th>Duka</th><th>Kiasi</th><th>Hali</th><th>Payout ID</th><th>Iliundwa</th><th style="text-align:right">Vitendo</th></tr></thead>' +
+    '<tbody id="wRows"><tr><td colspan="6" class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto 8px"></div></td></tr></tbody></table></div><div id="wPag"></div></div>';
+  const qs = new URLSearchParams({ page, limit: 20 });
+  if (st) qs.set('status', st);
+  try {
+    const j = await getJSON('/api/v1/admin/withdrawals?' + qs.toString());
+    const d = (j.data && j.data.withdrawals) || [];
+    $('wRows').innerHTML = d.length ? d.map((w) => {
+      const args = JSON.stringify({ id: w.id }).replace(/'/g, '&#39;');
+      return '<tr>' +
+        '<td>' + esc((w.seller && w.seller.storeName) || '—') + '</td>' +
+        '<td class="num">' + fmtTZS(w.amount) + '</td>' +
+        '<td>' + badge(w.status) + '</td>' +
+        '<td class="dim mono">' + esc(id12(w.providerPayoutId)) + '</td>' +
+        '<td class="dim">' + fmtTime(w.createdAt) + '</td>' +
+        '<td class="rowactions">' +
+        (w.status === 'pending' ? '<button class="btn sm accent" data-fn="withdrawalProcess" data-args=\'' + args + '\'>Tuma Payout</button>' : '') +
+        ((w.status === 'failed') ? '<button class="btn sm" data-fn="withdrawalRetry" data-args=\'' + args + '\'>Jaribu tena</button>' : '') +
+        (w.status === 'processing' ? '<button class="btn sm accent" data-fn="withdrawalConfirm" data-args=\'' + args + '\'>Thibitisha</button>' : '') +
+        '</td></tr>';
+    }).join('') : '<tr><td colspan="6" class="empty">Hakuna withdrawals</td></tr>';
+    $('wPag').innerHTML = pagerHTML('finance', j.data.pagination);
+  } catch (e) { $('wRows').innerHTML = '<tr><td colspan="6" class="empty">' + esc(e.message) + '</td></tr>'; }
+  bindSection('finance'); touch();
+}
+async function withdrawalOp(id, op) {
+  const map = { process: 'Tuma payout ya TSh kwenda ClickPesa?', retry: 'Jaribu tena payout iliyoshindikana?', confirm: 'Thibitisha payout imekamilika (inahitajika kama provider hairudishi callback)?' };
+  const ok = await confirmModal('Withdrawal: ' + op, map[op] || 'Hakika?', op === 'retry' ? 'Jaribu tena' : 'Ndiyo', false);
+  if (!ok) return;
+  run(async () => {
+    if (op === 'confirm') {
+      const j = await postJSON('/api/v1/admin/withdrawals/' + id + '/confirm', {});
+      toast('Imethibitishwa: ' + ((j.data && (j.data.status || j.data.providerPayoutId)) || 'ok'), true);
+    } else {
+      await postJSON('/api/v1/admin/withdrawals/' + id + '/' + op, {});
+      toast('Operation imetumwa -> ' + op, true);
+    }
+    loadFinance('withdrawals');
+  });
+}
+function fnReconList(runs) {
+  return (runs || []).map((r) => '<tr>' +
+    '<td>' + fmtTime(r.createdAt) + '</td><td>' + esc(r.provider || '—') + '</td>' +
+    '<td class="num">' + fmtTZS(r.internalTotal) + '</td><td class="num">' + fmtTZS(r.providerTotal) + '</td>' +
+    '<td class="num">' + fmtTZS(r.difference) + '</td><td>' + badge(r.status) + '</td></tr>').join('');
+}
+async function loadRecon() {
+  const body = $('finance').querySelector('.finBody');
+  body.innerHTML = '<div class="card"><div class="cardhead"><h3>Rekodi (Reconciliation)</h3><div class="spacer"></div>' +
+    '<button class="btn sm accent" id="rcRun">Tengeneza Rekodi Mpya</button></div>' +
+    '<div class="tablewrap"><table class="tbl"><thead><tr><th>Wakati</th><th>Provider</th><th>Ndani</th><th>Kwa upande wa provider</th><th>Tofauti</th><th>Hali</th></tr></thead>' +
+    '<tbody id="rcRows"><tr><td colspan="6" class="empty">Inapakia…</td></tr></tbody></table></div><div id="rcPag"></div></div>';
+  try {
+    const j = await getJSON('/api/v1/reconciliation?page=1&limit=20');
+    const runs = (j.data && (j.data.runs || j.data.items || j.data.rows || j.data)) || [];
+    const list = Array.isArray(runs) ? runs : [];
+    $('rcRows').innerHTML = list.length ? fnReconList(list) : '<tr><td colspan="6" class="empty">Hakuna rekodi</td></tr>';
+  } catch (e) { $('rcRows').innerHTML = '<tr><td colspan="6" class="empty">' + esc(e.message) + '</td></tr>'; }
+  $('rcRun').addEventListener('click', () => ACTIONS.reconciliationRun());
+  touch();
+}
+async function reconciliationRun() {
+  openModal(
+    '<h3>Tengeneza Rekodi</h3><p class="msub">Linganisha malipo na provider kwa kipindi.</p>' +
+    '<label>Provider</label><select class="field" id="rcProvider"><option value="clickpesa">clickpesa</option></select>' +
+    '<div class="formgrid"><div><label>Kuanzia</label><input class="field" id="rcStart" type="datetime-local"></div>' +
+    '<div><label>Hadi</label><input class="field" id="rcEnd" type="datetime-local"></div></div>' +
+    '<div class="mfooter"><button class="btn" id="rcNo">Futa</button><button class="btn accent" id="rcYes">Run</button></div>'
+  );
+  $('rcNo').onclick = closeModal;
+  $('rcYes').onclick = () => run(async () => {
+    const start = new Date($('rcStart').value || Date.now() - 30 * 864e5);
+    const end = new Date($('rcEnd').value || Date.now());
+    await postJSON('/api/v1/reconciliation/run', { provider: $('rcProvider').value, periodStart: start.toISOString(), periodEnd: end.toISOString() });
+    closeModal(); toast('Rekodi imeanzishwa', true); loadFinance('recon');
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Rufaa
+// ---------------------------------------------------------------------------
+function referralsToolbar() {
+  return '<div class="toolbar"><select class="select-xs" id="rfStatus"><option value="">Hali: yote</option><option value="pending">pending</option><option value="completed">completed</option></select>' +
+    '<button class="btn" id="rfGo">Chuja</button></div>';
+}
+async function loadReferrals() {
+  const el = secEl('referrals');
+  const page = pgState('referrals', 'page') || 1;
+  const st = pgState('referrals', 'st') || '';
+  el.innerHTML = referralsToolbar() + '<div class="card"><div class="tablewrap"><table class="tbl"><thead><tr>' +
+    '<th>Aliyerufuku</th><th>Aliyesajiliwa</th><th>Code</th><th>Hali</th><th>Reward</th><th>Iliundwa</th><th style="text-align:right">Vitendo</th></tr></thead>' +
+    '<tbody id="rfRows"><tr><td colspan="7" class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto 8px"></div>Inapakia…</td></tr></tbody></table></div>' +
+    '<div id="rfPag"></div></div>';
+  const qs = new URLSearchParams({ page, limit: 20 });
+  if (st) qs.set('status', st);
+  try {
+    const j = await getJSON('/api/v1/admin/referrals?' + qs.toString());
+    const d = (j.data && j.data.referrals) || [];
+    $('rfRows').innerHTML = d.length ? d.map((rf) => {
+      const args = JSON.stringify({ id: rf.id }).replace(/'/g, '&#39;');
+      return '<tr>' +
+        '<td>' + esc((rf.referrer && (rf.referrer.displayName || rf.referrer.email)) || '—') + '</td>' +
+        '<td>' + esc((rf.referred && (rf.referred.displayName || rf.referred.email)) || '—') + '</td>' +
+        '<td class="mono">' + esc(rf.code || '—') + '</td>' +
+        '<td>' + badge(rf.status) + '</td>' +
+        '<td>' + esc(rf.rewardType || '—') + ' <span class="num">' + fmtTZS(rf.rewardAmount) + '</span></td>' +
+        '<td class="dim">' + fmtTime(rf.createdAt) + '</td>' +
+        '<td class="rowactions">' +
+        (rf.status !== 'completed' ? '<button class="btn sm accent" data-fn="referralComplete" data-args=\'' + args + '\'>Kamilisha</button>' : '<span class="dim">—</span>') +
+        '</td></tr>';
+    }).join('') : '<tr><td colspan="7" class="empty">Hakuna rufaa</td></tr>';
+    $('rfPag').innerHTML = pagerHTML('referrals', j.data.pagination);
+  } catch (e) { $('rfRows').innerHTML = '<tr><td colspan="7" class="empty">' + esc(e.message) + '</td></tr>'; }
+  bindSection('referrals'); touch();
+}
+async function referralComplete(id) {
+  openModal(
+    '<h3>Kamilisha rufaa</h3><p class="msub">Toa zawadi kwa mwanzilishi</p>' +
+    '<label>Aina ya zawadi</label><select class="field" id="rCType"><option value="voucher">voucher</option><option value="boost_credit">boost_credit</option><option value="visibility_credit">visibility_credit</option></select>' +
+    '<label>Kiasi (TSh)</label><input class="field" id="rCAmt" type="number" min="0" value="0">' +
+    '<label>Kitendo cha kuhitimu</label><input class="field" id="rCAct" placeholder="k.m. first_order">' +
+    '<div class="mfooter"><button class="btn" id="rcN">Futa</button><button class="btn accent" id="rcY">Toa</button></div>'
+  );
+  $('rcN').onclick = closeModal;
+  $('rcY').onclick = () => run(async () => {
+    await postJSON('/api/v1/referrals/' + id + '/complete', {
+      rewardType: $('rCType').value,
+      rewardAmount: Math.round(Number($('rCAmt').value) || 0),
+      qualifyingAction: $('rCAct').value || 'manual',
+    });
+    closeModal(); toast('Rufaa imekamilishwa', true); loadReferrals();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Matangazo ya Broad
+// ---------------------------------------------------------------------------
+async function loadBroadcasts() {
+  const el = secEl('broadcasts');
+  el.innerHTML =
+    '<div class="card" style="max-width:720px">' +
+    '<div class="cardhead"><h3>Tuma matangazo kwa watumiaji wote</h3></div>' +
+    '<p class="intro">Ujumbe huu utapelekwa kwa watumiaji wote waliosajiliwa kwa push (OneSignal) na ndani ya app. Tumia kwa matangazo ya dharura au tangazo.</p>' +
+    '<label>Kichwa</label><input class="field" id="bcTitle" placeholder="K.m. Tamasha la Soko Vibe">' +
+    '<label>Maandishi</label><textarea class="field" id="bcBody" placeholder="Ujumbe mfupi…"></textarea>' +
+    '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:10px">' +
+    '<button class="btn accent" id="bcSend">Tuma kwa wote</button></div>' +
+    '<div id="bcOut" style="margin-top:14px"></div></div>';
+  $('bcSend').onclick = () => run(async () => {
+    const title = $('bcTitle').value.trim();
+    if (!title) { toast('Andika kichwa', false); return; }
+    const j = await postJSON('/api/admin/broadcast-notification', { title, body: $('bcBody').value });
+    $('bcOut').innerHTML = '<div class="bdg ok" style="margin-top:6px">Imetumwa kwa <b>&nbsp;' + fmtNum((j && j.totalUsers) || 0) + '&nbsp;</b> watumiaji · push ' + fmtNum((j && j.pushNotifications) || 0) + ' · in-app ' + fmtNum((j && j.inAppNotifications) || 0) + '</div>';
+    toast('Matangazo yametumwa', true);
+  });
+  touch();
+}
+
+// ---------------------------------------------------------------------------
+// Ukaguzi
+// ---------------------------------------------------------------------------
+function auditToolbar() {
+  return '<div class="toolbar">' +
+    '<input class="field q" id="aQ" placeholder="Tafuta action / entity…">' +
+    '<button class="btn" id="aGo">Chuja</button></div>';
+}
+async function loadAudit() {
+  const el = secEl('audit');
+  const page = pgState('audit', 'page') || 1;
+  const q = pgState('audit', 'q') || '';
+  el.innerHTML = auditToolbar() + '<div class="card"><div class="tablewrap"><table class="tbl"><thead><tr>' +
+    '<th>Wakati</th><th>Mtendaji</th><th>Kitendo</th><th>Kiunzi</th><th>Entity</th><th>IP</th></tr></thead>' +
+    '<tbody id="aRows"><tr><td colspan="6" class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto 8px"></div>Inapakia…</td></tr></tbody></table></div>' +
+    '<div id="aPag"></div></div>';
+  const qs = new URLSearchParams({ page, limit: 30 });
+  if (q) qs.set('action', q);
+  try {
+    const j = await getJSON('/api/v1/admin/audit-logs?' + qs.toString());
+    const d = (j.data && j.data.entries) || [];
+    $('aRows').innerHTML = d.length ? d.map((a) => '<tr>' +
+      '<td class="dim">' + fmtTime(a.createdAt) + '</td>' +
+      '<td class="mono">' + esc(id12(a.actorId)) + ' <span class="dim">' + esc(a.actorType || '') + '</span></td>' +
+      '<td><b>' + esc(a.action) + '</b>' + (a.newState ? '<div class="dim">' + esc(JSON.stringify(a.newState).slice(0, 60)) + '</div>' : '') + '</td>' +
+      '<td>' + badge(a.entityType) + '</td>' +
+      '<td class="mono dim">' + esc(id12(a.entityId)) + '</td>' +
+      '<td class="dim mono">' + esc(String(a.ipAddress || '')) + '</td></tr>').join('')
+      : '<tr><td colspan="6" class="empty">Hakuna ukaguzi</td></tr>';
+    $('aPag').innerHTML = pagerHTML('audit', j.data.pagination);
+  } catch (e) { $('aRows').innerHTML = '<tr><td colspan="6" class="empty">' + esc(e.message) + '</td></tr>'; }
+  bindSection('audit'); touch();
+}
+
+// ---------------------------------------------------------------------------
+// Loader registry + filter wiring
+// ---------------------------------------------------------------------------
+const LOADERS = {
+  dashboard: loadDashboard, users: loadUsers, sellers: loadSellers, products: loadProducts,
+  orders: loadOrders, disputes: loadDisputes, refunds: loadRefunds, reports: loadReports,
+  finance: loadFinance, referrals: loadReferrals, broadcasts: loadBroadcasts, audit: loadAudit,
+};
+function bindToolbar(sec, qId, goId, qKey) {
+  const el = secEl(sec);
+  const q = el.querySelector('#' + qId);
+  const go = el.querySelector('#' + goId);
+  if (!go) return;
+  go.addEventListener('click', () => {
+    if (q) setPg(sec, qKey, q.value.trim());
+    setPg(sec, 'page', 1);
+    LOADERS[sec]();
+  });
+  if (q) q.addEventListener('keydown', (e) => { if (e.key === 'Enter') go.click(); });
+}
+function bindSelect(sec, selId, key) {
+  const el = secEl(sec);
+  const s = el.querySelector('#' + selId);
+  if (s) s.addEventListener('change', () => { setPg(sec, key, s.value); setPg(sec, 'page', 1); LOADERS[sec](); });
+}
+
+// Nav + shell
+function showSection(sec) {
+  document.querySelectorAll('.nav-item').forEach((b) => b.classList.remove('active'));
+  document.querySelector('.nav-item[data-sec="' + sec + '"]').classList.add('active');
+  document.querySelectorAll('.section').forEach((s) => s.classList.remove('active'));
+  $('sec-' + sec).classList.add('active');
+  $('pageTitle').textContent = TITLES[sec] || sec;
+  $('lastUpd').textContent = 'Inapakia…';
+  LOADERS[sec] && LOADERS[sec]();
+  $('sidebar').classList.remove('open');
+  window.scrollTo(0, 0);
+}
+$('nav').addEventListener('click', (e) => {
+  const b = e.target.closest('.nav-item');
+  if (b) showSection(b.dataset.sec);
+});
+$('refreshBtn').addEventListener('click', () => {
+  const sec = document.querySelector('.section.active').dataset.sec;
+  setPg(sec, 'page', 1);
+  LOADERS[sec]();
+});
+$('menuBtn').addEventListener('click', () => $('sidebar').classList.toggle('open'));
+$('themeBtn').addEventListener('click', () => {
+  const on = document.documentElement.getAttribute('data-theme') !== 'dark';
+  document.documentElement.setAttribute('data-theme', on ? 'dark' : 'light');
+  try { localStorage.setItem(THEME_KEY, on ? 'dark' : 'light'); } catch (_) {}
+  $('themeBtn').innerHTML = '<i data-lucide="' + (on ? 'sun' : 'moon') + '"></i>';
+  icons();
+});
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+function showLogin(err) {
+  $('screen').hidden = true;
+  $('loginCard').hidden = false;
+  if (err) $('authErr').textContent = err;
+}
+function showApp() {
+  $('screen').hidden = true;
+  $('loginCard').hidden = true;
+  $('app').hidden = false;
+  document.title = 'Soko Vibe Admin';
+  applyTheme();
+  showSection('dashboard');
+}
+function applyTheme() {
+  let t = 'light';
+  try { t = localStorage.getItem(THEME_KEY) || 'light'; } catch (_) {}
+  document.documentElement.setAttribute('data-theme', t);
+  $('themeBtn').innerHTML = '<i data-lucide="' + (t === 'dark' ? 'sun' : 'moon') + '"></i>';
+  icons();
+}
+
+$('loginTabs').addEventListener('click', (e) => {
+  const t = e.target.closest('.tab');
+  if (!t) return;
+  document.querySelectorAll('#loginTabs .tab').forEach((x) => x.classList.remove('active'));
+  t.classList.add('active');
+  ['pw', 'otp', 'google'].forEach((k) => { $('pane-' + k).hidden = k !== t.dataset.tab; });
+});
+
+$('pwBtn').onclick = () => {
+  const email = $('pwEmail').value.trim();
+  const pass = $('pwPass').value;
+  if (!email || !pass) { $('authErr').textContent = 'Jaza email na neno la siri.'; return; }
+  $('authErr').textContent = '';
+  $('pwBtn').disabled = true;
+  auth.signInWithEmailAndPassword(email, pass).catch((e) => {
+    $('authErr').textContent = 'Hotuba haikufanikiwa: ' + (e && e.message ? e.message : 'jaribu tena');
+    $('pwBtn').disabled = false;
+  });
+};
+$('otpSend').onclick = () => runQuiet(async () => {
+  const email = $('otpEmail').value.trim();
+  if (!email) { $('authErr').textContent = 'Andika email.'; return; }
+  await postJSON('/api/v1/auth/send-email-otp', { email });
+  $('otpRow').hidden = false;
+  $('authErr').textContent = 'Namba ya uthibitisho imetumwa kwa ' + email;
+});
+$('otpVerify').onclick = () => runQuiet(async () => {
+  const email = $('otpEmail').value.trim();
+  const code = $('otpCode').value.trim();
+  const j = await postJSON('/api/v1/auth/otp-sign-in', { email, code });
+  if (j && j.customToken) {
+    await auth.signInWithCustomToken(j.customToken);
+  } else {
+    $('authErr').textContent = 'Namba haikubaliki — jaribu tena.';
+  }
+});
+$('gBtn').onclick = () => {
+  const prov = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(prov).catch((e) => {
+    $('authErr').textContent = 'Google: ' + (e && e.message ? e.message : 'jaribu tena');
+  });
+};
+$('secretToggle').onclick = () => { $('pane-secret').hidden = !$('pane-secret').hidden; };
+$('secSave').onclick = () => {
+  const v = $('secVal').value.trim();
+  if (!v) { $('authErr').textContent = 'Andika ADMIN_SECRET.'; return; }
+  try { localStorage.setItem(SECRET_KEY, v); } catch (_) {}
+  showApp();
+};
+$('logoutBtn').onclick = async () => {
+  try { localStorage.removeItem(SECRET_KEY); } catch (_) {}
+  await auth.signOut().catch(() => {});
+  location.reload();
+};
+
+// ---------------------------------------------------------------------------
+// Boot
+// ---------------------------------------------------------------------------
+window.addEventListener('error', (ev) => {
+  const err = (ev && ev.message) || 'unknown';
+  if ($('app') && !$('app').hidden) { toast(err, false); return; }
+  showLogin('Runtime: ' + err);
+});
+
+auth.onAuthStateChanged(async (user) => {
+  try {
+    if (user) {
+      idToken = await user.getIdToken(true);
+      const me = user;
+      $('meName').textContent = (me.displayName || me.email || 'Admin');
+      $('meRole').textContent = 'admin';
+      if (me.photoURL) $('meAvatar').src = me.photoURL;
+      // Gate: verify we can actually read the admin dashboard.
+      try {
+        await getJSON('/api/v1/admin/dashboard');
+        idToken = await user.getIdToken(true);
+        showApp();
+      } catch (e) {
+        idToken = null;
+        showLogin('Unauthorized: akaunti yako haina jukumu la admin.');
+        await auth.signOut().catch(() => {});
+      }
+    } else if (secret()) {
+      // ADMIN_SECRET fallback mode: skip Firebase, call with x-admin-secret.
+      try {
+        await getJSON('/api/v1/admin/dashboard');
+        $('meName').textContent = 'ADMIN_SECRET';
+        $('meRole').textContent = 'secret mode';
+        showApp();
+      } catch (e) {
+        try { localStorage.removeItem(SECRET_KEY); } catch (_) {}
+        showLogin('ADMIN_SECRET haikubaliki: ' + (e && e.message));
+      }
+    } else {
+      showLogin('');
+    }
+  } catch (err) {
+    showLogin('Umeshindikana kuthibitisha: ' + (err && err.message));
+  }
+});
+
+// Apply stored theme on first paint
+applyTheme();

@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { authenticate, requireActive, verifyAdmin } = require('../../middleware/auth');
+const { authenticate, authenticateAdmin, requireActive, verifyAdmin } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validation');
 const { z } = require('zod');
 const service = require('./referral-service');
@@ -42,7 +42,7 @@ router.get('/mine', authenticate, requireActive, async (req, res) => {
 // Complete after qualifying action (admin/system)
 router.post(
   '/:id/complete',
-  authenticate,
+  authenticateAdmin,
   verifyAdmin,
   validate({
     body: z.object({

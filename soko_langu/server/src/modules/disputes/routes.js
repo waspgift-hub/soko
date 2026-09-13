@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { authenticate, requireActive, verifyAdmin } = require('../../middleware/auth');
+const { authenticate, authenticateAdmin, requireActive, verifyAdmin } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validation');
 const { z } = require('zod');
 const disputeService = require('./dispute-service');
@@ -69,7 +69,7 @@ router.get('/:disputeId/evidence', authenticate, requireActive, async (req, res)
 // together cover the escrow exactly (buyerAmount + sellerAmount).
 router.put(
   '/:disputeId/resolve',
-  authenticate,
+  authenticateAdmin,
   verifyAdmin,
   validate({
     body: z.object({
@@ -81,7 +81,7 @@ router.put(
   async (req, res) => {
     const dispute = await disputeService.resolveDispute({
       disputeId: req.params.disputeId,
-      resolvedBy: req.user.id,
+      resolvedBy: req.user?.id || 'admin',
       resolution: req.body.resolution,
       buyerAmount: req.body.buyerAmount,
       sellerAmount: req.body.sellerAmount,

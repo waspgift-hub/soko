@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { authenticate, requireActive, verifyAdmin } = require('../../middleware/auth');
+const { authenticate, authenticateAdmin, requireActive, verifyAdmin } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validation');
 const { z } = require('zod');
 const service = require('./moderation-service');
@@ -49,7 +49,7 @@ router.post(
 // List reports (admin)
 router.get(
   '/',
-  authenticate,
+  authenticateAdmin,
   verifyAdmin,
   validate({
     query: z.object({
@@ -68,7 +68,7 @@ router.get(
 // Review a report (admin)
 router.put(
   '/:id/review',
-  authenticate,
+  authenticateAdmin,
   verifyAdmin,
   validate({
     body: z.object({
@@ -80,7 +80,7 @@ router.put(
       const report = await service.reviewReport({
         id: req.params.id,
         status: req.body.status,
-        reviewedBy: req.user.id,
+        reviewedBy: req.user?.id || 'admin',
       });
       await writeAudit({
         ...auditFromReq(req),

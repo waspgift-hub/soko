@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { authenticate, verifyAdmin } = require('../../middleware/auth');
+const { authenticateAdmin } = require('../../middleware/auth');
 const { validate } = require('../../middleware/validation');
 const { z } = require('zod');
 const service = require('./reconciliation-service');
@@ -7,7 +7,7 @@ const { writeAudit, auditFromReq } = require('../../services/audit');
 
 const router = Router();
 
-router.use(authenticate, verifyAdmin);
+router.use(authenticateAdmin);
 
 // Run a reconciliation for a period (admin)
 router.post(

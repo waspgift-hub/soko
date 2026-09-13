@@ -66,9 +66,11 @@ app.use((req, res, next) => {
 // still fold it onto www ourselves — unless SERVE_APEX=1, in which case the
 // apex serves the SAME landing site directly (canonical/og tags stay www).
 // Other sokovibe.co.tz subdomains are folded onto www too (path + query
-// preserved). The admin subdomain keeps its root->/admin mapping. Non-Soko
-// hosts (Render origin, health checks) are left alone so the platform health
-// checks stay 200.
+// preserved). The admin subdomain serves the browser panel directly at its
+// root: every non-API path is rewritten onto the /admin static mount so
+// admin.sokovibe.co.tz/ == admin.sokovibe.co.tz/admin == .../admin on www.
+// Non-Soko hosts (Render origin, health checks) are left alone so the
+// platform health checks stay 200.
 const CANONICAL_HOST = 'https://www.sokovibe.co.tz';
 const DOMAIN = 'sokovibe.co.tz';
 const WWW_HOST = `www.${DOMAIN}`;
@@ -78,14 +80,19 @@ app.use((req, res, next) => {
   const host = (req.hostname || '').toLowerCase();
   if (!host.endsWith(DOMAIN)) return next();
   if (host === `admin.${DOMAIN}` || host === `www.admin.${DOMAIN}`) {
-    return res.redirect(301, `${CANONICAL_HOST}/admin${req.path === '/' ? '' : req.path}`);
+    const p = req.path;
+    // API, health and app-link paths pass through so the admin host can also
+    // be used as an API endpoint if needed; everything else is the panel.
+    if (p.startsWith('/api') || p.startsWith('/health') || p.startsWith('/.well-known')) return next();
+    const q = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+    // Rewrite onto the /admin static mount, but never double-prefix: the panel
+    // already uses absolute /admin/* asset paths that must survive unchanged.
+    req.url = `${p.startsWith('/admin') ? '' : '/admin'}${p === '/' ? '/' : p}${q}`;
+    return next();
   }
   if (host === DOMAIN) {
     if (SERVE_APEX) return next();
     return res.redirect(301, `${CANONICAL_HOST}${req.originalUrl}`);
-  }
-  if (host === `admin.${DOMAIN}` && (req.path === '/' || req.path === '')) {
-    return res.redirect(301, `${CANONICAL_HOST}/admin`);
   }
   if (host !== WWW_HOST) {
     return res.redirect(301, `${CANONICAL_HOST}${req.originalUrl}`);
@@ -152,12 +159,8 @@ app.use((req, res, next) => {
 
 // Public assets: browser admin dashboard at /admin and the landing site at /
 // (the landing files mirror the Firebase Hosting site). The admin hostname is
-// redirected to /admin so the bare domain lands on the panel; every other host
-// gets the landing page.
-app.get('/', (req, res, next) => {
-  if ((req.hostname || '').endsWith('admin.sokovibe.co.tz')) return res.redirect(301, '/admin');
-  next();
-});
+// rewritten onto /admin above, so the bare domain lands on the panel; every
+// other host gets the landing page.
 
 // Universal/App Links verification files for the native apps. Served with an
 // explicit JSON content-type because apple-app-site-association has no file
