@@ -3,6 +3,7 @@ const { authenticateAdmin, requireActiveAdmin } = require('../../middleware/auth
 const { validate } = require('../../middleware/validation');
 const { z } = require('zod');
 const adminService = require('./admin-service');
+const activity = require('../../services/activity');
 const { getPrisma } = require('../../config/database');
 const { writeAudit, auditFromReq } = require('../../services/audit');
 
@@ -536,4 +537,35 @@ router.get(
 
 // Orders: allow quick lookup by order number / buyer contact alongside the
 // status filter the existing endpoint already supports.
+
+// ---- Usage analytics (Redis request tracker + lastLoginAt actives) ----
+// Active users, rolling windows: day = 24h, week = 7d, month = 30d, year = 365d.
+router.get('/analytics/active', async (req, res) => {
+  const data = await activity.getActiveStats();
+  res.json({ success: true, data });
+});
+// Request totals per bucket + distinct actives + avg requests per active user.
+router.get(
+  '/analytics/requests',
+  validate({ query: z.object({ granularity: z.enum(['min', 'hour', 'day', 'month', 'year']).default('day') }) }),
+  async (req, res) => {
+    const data = await activity.getRequestSeries(req.query.granularity);
+    res.json({ success: true, data });
+  }
+);
+// Top users by request count over the last N days.
+router.get(
+  '/analytics/users/top',
+  validate({
+    query: z.object({
+      days: z.coerce.number().int().min(1).max(365).default(7),
+      limit: z.coerce.number().int().min(1).max(50).default(20),
+    }),
+  }),
+  async (req, res) => {
+    const data = await activity.getTopUsers(req.query.days, req.query.limit);
+    res.json({ success: true, data });
+  }
+);
+
 module.exports = router;

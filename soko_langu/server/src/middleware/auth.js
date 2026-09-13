@@ -1,5 +1,6 @@
 const { getFirebaseAuth } = require('../config/firebase');
 const { getPrisma } = require('../config/database');
+const { recordUserActivity } = require('../services/activity');
 const config = require('../config');
 
 // Verify Firebase ID token and attach user to request
@@ -47,6 +48,7 @@ async function authenticate(req, res, next) {
     }
 
     req.user = user;
+    recordUserActivity(user.id);
     next();
   } catch (error) {
     if (error.code === 'auth/id-token-expired') {
@@ -93,6 +95,7 @@ async function optionalAuth(req, res, next) {
     });
 
     req.user = user;
+    if (user) recordUserActivity(user.id);
     next();
   } catch (error) {
     req.user = null;

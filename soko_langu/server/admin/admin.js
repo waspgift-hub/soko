@@ -154,6 +154,7 @@ const TITLES = {
   dashboard: 'Dashibodi', users: 'Watumiaji', sellers: 'Wauzaji', products: 'Bidhaa',
   orders: 'Maagizo', disputes: 'Migogoro', refunds: 'Marejesho', reports: 'Ripoti & Ulinzi',
   finance: 'Fedha & Ledger', referrals: 'Rufaa', broadcasts: 'Matangazo ya Broad', audit: 'Ukaguzi (Audit)',
+  stats: 'Takwimu za Matumizi',
 };
 const Pg = {};
 function pgState(sec, field) {
@@ -1194,12 +1195,111 @@ async function loadAudit() {
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Takwimu za matumizi: watumiaji hai (siku/wiki/mwezi/mwaka), requests kwa
+// kipindi, na orodha ya watumiaji wanaofanya requests nyingi zaidi.
+// ---------------------------------------------------------------------------
+const RG_LABEL = { min: 'Dakika', hour: 'Saa', day: 'Siku', month: 'Mwezi', year: 'Mwaka' };
+const TD_LABEL = { 1: 'Leo', 7: 'Siku 7', 30: 'Siku 30' };
+function pctOf(part, total) {
+  part = Number(part) || 0; total = Number(total) || 0;
+  if (!total) return '—';
+  return (Math.round((part / total) * 1000) / 10) + '% ya jumla';
+}
+async function loadStats() {
+  const el = secEl('stats');
+  const rg = pgState('stats', 'rg') || 'day';
+  const tdays = pgState('stats', 'tdays') || 7;
+  el.innerHTML = '<div class="sectionempty"><div class="spinner" style="margin:0 auto 12px"></div>Inapakia takwimu…</div>';
+  try {
+    const [act, req, top] = await Promise.all([
+      getJSON('/api/v1/admin/analytics/active'),
+      getJSON('/api/v1/admin/analytics/requests?granularity=' + rg).catch(() => null),
+      getJSON('/api/v1/admin/analytics/users/top?days=' + tdays + '&limit=20').catch(() => null),
+    ]);
+    const a = (act && act.data) || {};
+    const r = (req && req.data) || {};
+    const t = (top && top.data) || {};
+    const users = t.users || [];
+    const series14 = a.series14 || [];
+
+    el.innerHTML =
+      '<div class="ov-head"><div><h2>Watumiaji hai</h2><p class="dim">Kulingana na muda wa mwisho kuingia (rolling windows)</p></div></div>' +
+      '<div class="grid kpis">' +
+      kpi('Hai leo (24h)', fmtNum(a.day), pctOf(a.day, a.totalUsers), 'zap') +
+      kpi('Hai wiki (7d)', fmtNum(a.week), pctOf(a.week, a.totalUsers), 'calendar') +
+      kpi('Hai mwezi (30d)', fmtNum(a.month), pctOf(a.month, a.totalUsers), 'calendar-days') +
+      kpi('Hai mwaka (365d)', fmtNum(a.year), pctOf(a.year, a.totalUsers), 'globe') +
+      '</div>' +
+
+      '<div class="grid cols2" style="margin-top:18px">' +
+      '<div class="card"><div class="cardhead"><h3>Watumiaji hai kila siku (siku 14)</h3></div><div class="chartbox"><canvas id="stActChart"></canvas></div></div>' +
+      '<div class="card"><div class="cardhead"><h3>Requests kwa ' + esc((RG_LABEL[rg] || rg).toLowerCase()) + '</h3><div class="spacer"></div><span class="hint3">jumla ' + fmtNum(r.spanTotal) + ' · wastani ' + esc(String(r.perUserAvg == null ? '—' : r.perUserAvg)) + ' / mtumiaji</span></div>' +
+      '<div class="toolbar" style="margin-bottom:10px">' + Object.keys(RG_LABEL).map((g) =>
+        '<button class="radio-chip' + (g === rg ? ' on' : '') + '" data-rg="' + g + '">' + RG_LABEL[g] + '</button>').join('') + '</div>' +
+      '<div class="chartbox"><canvas id="stReqChart"></canvas></div>' +
+      (r.tracked === false ? '<p class="hint">Bado hakuna data ya requests — inakusanywa kuanzia sasa, itaonekana baada ya muda mfupi.</p>' : '') +
+      '</div></div>' +
+
+      '<div class="card" style="margin-top:18px"><div class="cardhead"><h3>Watumiaji wanaofanya requests nyingi</h3><div class="spacer"></div><span class="hint3">kila mtumiaji anafanya requests ngapi</span></div>' +
+      '<div class="toolbar" style="margin-bottom:10px">' + Object.keys(TD_LABEL).map((d) =>
+        '<button class="radio-chip' + (Number(d) === Number(tdays) ? ' on' : '') + '" data-td="' + d + '">' + TD_LABEL[d] + '</button>').join('') + '</div>' +
+      '<div class="tablewrap"><table class="tbl"><thead><tr><th>#</th><th>Mtumiaji</th><th>Jukumu</th><th style="text-align:right">Requests</th><th style="text-align:right">Wastani / siku</th><th>Alionekana</th></tr></thead><tbody>' +
+      (users.length ? users.map((u) => '<tr>' +
+        '<td class="dim">' + u.rank + '</td>' +
+        '<td><b>' + esc(u.displayName || u.email || u.phone || id12(u.userId)) + '</b>' + (u.email ? '<div class="dim">' + esc(u.email) + '</div>' : '') + '</td>' +
+        '<td>' + (u.role ? badge(u.role) : '—') + '</td>' +
+        '<td class="num">' + fmtNum(u.requests) + '</td>' +
+        '<td class="num">' + esc(String(u.avgPerDay)) + '</td>' +
+        '<td class="dim">' + fmtTime(u.lastLoginAt) + '</td></tr>').join('')
+        : '<tr><td colspan="6" class="empty">' + ((t.tracked === false) ? 'Bado hakuna data — inakusanywa kuanzia sasa.' : 'Hakuna data kwa kipindi hiki') + '</td></tr>') +
+      '</tbody></table></div></div>';
+    el.querySelectorAll('[data-rg]').forEach((b) => b.addEventListener('click', () => { setPg('stats', 'rg', b.dataset.rg); loadStats(); }));
+    el.querySelectorAll('[data-td]').forEach((b) => b.addEventListener('click', () => { setPg('stats', 'tdays', Number(b.dataset.td)); loadStats(); }));
+
+    destroyCharts();
+    if (window.Chart && series14.length) {
+      charts.stAct = new Chart($('stActChart'), {
+        type: 'bar',
+        data: {
+          labels: series14.map((s) => String(s.date || '').slice(5)),
+          datasets: [{ label: 'Watumiaji hai', data: series14.map((s) => s.users), backgroundColor: 'rgba(47,158,95,.55)', borderRadius: 4 }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          scales: { y: Object.assign({ beginAtZero: true, ticks: Object.assign({ precision: 0 }, chartBase().ticks) }, { grid: chartBase().grid }), x: Object.assign({}, { grid: { display: false }, ticks: chartBase().ticks }) },
+          plugins: { legend: { display: false } },
+        },
+      });
+    }
+    const pts = r.points || [];
+    if (window.Chart && pts.length) {
+      charts.stReq = new Chart($('stReqChart'), {
+        type: 'line',
+        data: {
+          labels: pts.map((p) => p.t),
+          datasets: [{ label: 'Requests', data: pts.map((p) => p.total), borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,.12)', fill: true, tension: .3, pointRadius: 0 }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+          scales: { y: Object.assign({ beginAtZero: true, ticks: Object.assign({ precision: 0 }, chartBase().ticks) }, { grid: chartBase().grid }), x: { grid: { display: false }, ticks: chartBase().ticks } },
+          plugins: { legend: { display: false } },
+        },
+      });
+    }
+  } catch (e) {
+    el.innerHTML = '<div class="card"><div class="cardhead"><h3>Takwimu</h3></div><div class="err">' + esc(e.message) + '</div></div>';
+  }
+  touch(); icons();
+}
+
 // Loader registry + filter wiring
 // ---------------------------------------------------------------------------
 const LOADERS = {
   dashboard: loadDashboard, users: loadUsers, sellers: loadSellers, products: loadProducts,
   orders: loadOrders, disputes: loadDisputes, refunds: loadRefunds, reports: loadReports,
   finance: loadFinance, referrals: loadReferrals, broadcasts: loadBroadcasts, audit: loadAudit,
+  stats: loadStats,
 };
 function bindToolbar(sec, qId, goId, qKey) {
   const el = secEl(sec);

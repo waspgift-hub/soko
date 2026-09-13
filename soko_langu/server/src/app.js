@@ -60,6 +60,15 @@ app.use((req, res, next) => {
   next();
 });
 
+// Usage analytics: count every /api hit for request-rate stats (per min /
+// hour / day / month / year). Fire-and-forget inside the service — it never
+// blocks or fails requests, and skips silently when Redis is unreachable.
+const { recordApiHit } = require('./services/activity');
+app.use((req, res, next) => {
+  if (req.path && req.path.startsWith('/api')) recordApiHit();
+  next();
+});
+
 // Canonical domain: www.sokovibe.co.tz is the official host. Render redirects
 // the apex (sokovibe.co.tz) to www at the edge before the app; if a request
 // ever reaches the app on the apex (e.g. the edge redirect is removed) we
