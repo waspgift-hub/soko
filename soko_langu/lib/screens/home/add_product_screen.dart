@@ -554,11 +554,16 @@ class _AddProductScreenState extends State<AddProductScreen> {
       final internalMsg = e is NetworkError ? '${e.message} ${e.originalError}' : msg;
       if (msg.contains('permission') || msg.contains('PERMISSION_DENIED') ||
           msg.contains('caller does not have permission')) {
+        // Onyesha pia hatua iliyoshindwa (kutoka step=...) ili ripoti iwe sahihi.
+        final detail = internalMsg.length > 140
+            ? '${internalMsg.substring(0, 140)}…'
+            : internalMsg;
         messenger.showSnackBar(
           SnackBar(
             content: Text(
-              '${context.tr('error')}: ${context.tr('permission_denied')}. ${context.tr('try_again')}',
+              '${context.tr('error')}: ${context.tr('permission_denied')}. ${context.tr('try_again')}\n$detail',
             ),
+            duration: const Duration(seconds: 8),
           ),
         );
       } else if (internalMsg.contains('KYC') || internalMsg.contains('kyc')) {

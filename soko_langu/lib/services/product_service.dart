@@ -94,6 +94,9 @@ class ProductService {
     String condition = 'new',
     String? barcode,
   }) async {
+    // Hatua inayofanyika sasa — ikiwa kosa limetokea, lebo hii inaambatanishwa
+    // na ujumbe ili mtumiaji/admin ajue kilichoshindwa (auth, kyc, upload...).
+    var step = 'auth';
     try {
       final user = _auth.currentUser;
       if (user == null) throw Exception("User not logged in");
@@ -102,6 +105,7 @@ class ProductService {
       await user.reload();
       await user.getIdToken(true);
 
+      step = 'kyc-check';
       final userDoc = await _db.collection('users').doc(user.uid).get();
       final userData = userDoc.data();
       final kycApproved = userData?['kyc']?['approved'] == true;
@@ -121,24 +125,28 @@ class ProductService {
         }
       }
 
+      step = 'upload-images';
       List<String> imageUrls = [];
       for (var file in imageFiles) {
         final url = await uploadImage(file);
         imageUrls.add(url);
       }
 
+      step = 'upload-video';
       String? resolvedVideoUrl = videoUrl;
       if (videoFile != null) {
         resolvedVideoUrl = await CloudinaryService.uploadVideo(videoFile);
       }
 
+      step = 'save-product';
       String sellerName = user.displayName ?? user.email ?? 'Anonymous';
       String sellerPhone = '';
       bool sellerKycApproved = true;
 
       if (userDoc.exists) {
         final data = userDoc.data()!;
-        sellerPhone = data['phone'] as String? ?? '';
+        final phone = data['phone'];
+        sellerPhone = phone is String ? phone : '';
       }
 
       await _writeProduct(
@@ -149,8 +157,9 @@ class ProductService {
         imageMetadata, resolvedVideoUrl,
       );
     } catch (e) {
+      if (e is NetworkError && e.message.startsWith('KYC required')) rethrow;
       throw NetworkError(
-          message: "Failed to add product: $e",
+          message: "Failed to add product at step=$step: $e",
           userMessage: translateError(e),
           originalError: e,
         );
