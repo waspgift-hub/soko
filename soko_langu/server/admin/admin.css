@@ -54,6 +54,10 @@
   --shadow-md: 0 8px 28px rgba(0, 0, 0, .5);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
+/* The UA [hidden]->display:none loses to any author display rule (e.g.
+   #modalRoot's grid, .screen's grid), leaving invisible full-screen layers
+   that swallow all clicks/focus. Enforce it so hidden truly hides. */
+[hidden] { display: none !important; }
 html, body { height: 100%; }
 body {
   background: var(--bg); color: var(--fg);
