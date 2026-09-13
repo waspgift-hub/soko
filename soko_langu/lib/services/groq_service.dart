@@ -9,9 +9,11 @@ import '../utils/rate_limiter.dart';
 
 class GroqService implements AiService {
   // API key is NEVER stored in the Flutter app — all calls go through server proxy.
+  // Groq iliondoa Llama/Mixtral models (2026) — hizi ndizo live sasa.
+  // Vision haipo tena Groq, kwa hiyo identifyImage itarudi tupu hadi model mpya ije.
   final String _visionModel = 'llama-3.2-90b-vision-preview';
-  final String _textModel = 'llama-3.3-70b-versatile';
-  final String _fallbackTextModel = 'mixtral-8x7b-32768';
+  final String _textModel = 'openai/gpt-oss-120b';
+  final String _fallbackTextModel = 'openai/gpt-oss-20b';
   final String _proxyUrl = '${ApiConfig.baseUrl}/api/ai/chat';
 
   static final GroqService _instance = GroqService._internal();
