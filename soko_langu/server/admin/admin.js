@@ -905,7 +905,7 @@ async function loadFinance(focus) {
   el.querySelectorAll('[data-ftab]').forEach((b) => b.addEventListener('click', () => loadFinance(b.dataset.ftab)));
 }
 async function loadFinanceMain() {
-  const body = $('finance').querySelector('.finBody');
+  const body = secEl('finance').querySelector('.finBody');
   body.innerHTML = '<div class="sectionempty"><div class="spinner" style="margin:0 auto 12px"></div>Inapakia…</div>';
   try {
     const [dash, met] = await Promise.all([getJSON('/api/v1/admin/dashboard'), getJSON('/api/v1/admin/metrics')]);
@@ -931,7 +931,7 @@ async function loadFinanceMain() {
   touch(); icons();
 }
 async function loadLedger() {
-  const body = $('finance').querySelector('.finBody');
+  const body = secEl('finance').querySelector('.finBody');
   const page = pgState('finance', 'page') || 1;
   body.innerHTML = '<div class="card"><div class="tablewrap"><table class="tbl"><thead><tr>' +
     '<th>Wakati</th><th>Duka</th><th>Aina</th><th>Kiasi</th><th>Salio baada</th><th>Rejea</th></tr></thead>' +
@@ -957,7 +957,7 @@ function withdrawalsToolbar() {
     '<button class="btn" id="wGo">Chuja</button></div>';
 }
 async function loadWithdrawals() {
-  const body = $('finance').querySelector('.finBody');
+  const body = secEl('finance').querySelector('.finBody');
   const page = pgState('finance', 'page') || 1;
   const st = pgState('finance', 'wst') || '';
   body.innerHTML = '<div class="card">' + withdrawalsToolbar() + '<div class="tablewrap"><table class="tbl"><thead><tr>' +
@@ -1008,7 +1008,7 @@ function fnReconList(runs) {
     '<td class="num">' + fmtTZS(r.difference) + '</td><td>' + badge(r.status) + '</td></tr>').join('');
 }
 async function loadRecon() {
-  const body = $('finance').querySelector('.finBody');
+  const body = secEl('finance').querySelector('.finBody');
   body.innerHTML = '<div class="card"><div class="cardhead"><h3>Rekodi (Reconciliation)</h3><div class="spacer"></div>' +
     '<button class="btn sm accent" id="rcRun">Tengeneza Rekodi Mpya</button></div>' +
     '<div class="tablewrap"><table class="tbl"><thead><tr><th>Wakati</th><th>Provider</th><th>Ndani</th><th>Kwa upande wa provider</th><th>Tofauti</th><th>Hali</th></tr></thead>' +
