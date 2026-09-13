@@ -33,11 +33,49 @@ function client() {
       r.on('ready', () => { redisReady = true; });
       r.on('close', () => { redisReady = false; });
       r.on('end', () => { redisReady = false; });
+      // The client may have connected before our listeners attached.
+      if (r.status === 'ready') redisReady = true;
     }
     return redisReady ? r : null;
   } catch (_) {
     return null;
   }
+}
+
+// One-time backfill: seed lastLoginAt from the Firestore user_sessions
+// mirror so active-user counts are meaningful even for accounts created
+// before per-request tracking existed. Runs once per process, only when
+// there are users with no login timestamp at all.
+let backfillDone = false;
+async function backfillLastLogin() {
+  if (backfillDone) return;
+  backfillDone = true;
+  try {
+    const prisma = getPrisma();
+    if (!prisma) return;
+    const nullCount = await prisma.user.count({ where: { lastLoginAt: null } });
+    if (!nullCount) return;
+    const { getFirebaseFirestore } = require('../config/firebase');
+    const db = getFirebaseFirestore();
+    if (!db) return;
+    const snap = await db.collection('user_sessions').get();
+    const ops = [];
+    const flush = async () => { const batch = ops.splice(0); if (batch.length) await Promise.all(batch); };
+    for (const doc of snap.docs.slice(0, 5000)) {
+      const d = doc.data() || {};
+      const ts = d.lastActive;
+      const at = ts ? (ts.toDate ? ts.toDate() : new Date(ts)) : null;
+      if (!at || isNaN(at.getTime())) continue;
+      ops.push(
+        prisma.user.updateMany({
+          where: { firebaseUid: doc.id, OR: [{ lastLoginAt: null }, { lastLoginAt: { lt: at } }] },
+          data: { lastLoginAt: at },
+        }).catch(() => {})
+      );
+      if (ops.length >= 200) await flush();
+    }
+    await flush();
+  } catch (_) {}
 }
 
 function fire(promise) {
@@ -108,6 +146,7 @@ async function getActiveStats() {
   try {
     const prisma = getPrisma();
     if (!prisma) return fallback;
+    await backfillLastLogin();
     const now = Date.now();
     const cut = (ms) => new Date(now - ms);
     const [day, week, month, year, totalUsers] = await Promise.all([
