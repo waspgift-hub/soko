@@ -230,64 +230,104 @@ function chartBase() {
   };
 }
 
+// Overview ya dashibodi — muundo umeongozwa na template ya Adminator v4
+// (puikinsh/Adminator-admin-dashboard, leseni ya MIT): safu ya KPI zenye
+// trend, chati kuu + doughnut, jedwali la maagizo ya hivi punde, na foleni
+// ya kazi zinazosubiri hatua (todo).
+function trendChip(cur, prev) {
+  cur = Number(cur) || 0; prev = Number(prev) || 0;
+  if (!prev) return cur > 0 ? '<span class="trend info">mpya</span>' : '';
+  const p = Math.round(((cur - prev) / prev) * 100);
+  if (p === 0) return '<span class="trend">0%</span>';
+  return '<span class="trend ' + (p > 0 ? 'ok' : 'bad') + '">' + (p > 0 ? '+' : '') + p + '%</span>';
+}
+function queueTotal(j) { return (j && j.data && j.data.pagination && j.data.pagination.total) || 0; }
 async function loadDashboard() {
   const el = secEl('dashboard');
   el.innerHTML = '<div class="sectionempty"><div class="spinner" style="margin:0 auto 12px"></div>Inapakia dashibodi…</div>';
   try {
-    const [dash, metrics, ts, online] = await Promise.all([
+    const [dash, metrics, ts, online, recent, pendSellers, pendRefunds] = await Promise.all([
       getJSON('/api/v1/admin/dashboard'),
       getJSON('/api/v1/admin/metrics'),
       getJSON('/api/admin/timeseries?days=30').catch(() => null),
       getJSON('/api/admin/online').catch(() => null),
+      getJSON('/api/v1/admin/orders?limit=6').catch(() => null),
+      getJSON('/api/v1/admin/sellers?verificationStatus=pending&limit=1').catch(() => null),
+      getJSON('/api/v1/admin/refunds?status=pending&limit=1').catch(() => null),
     ]);
     const k = (dash.data && dash.data.kpis) || {};
     const m = (metrics && metrics.data) || {};
-    const onl = (online && online.success) ? online : null;
+    const onl = (online && (online.online || online)) || null;
+    const series = (ts && ts.series) || [];
+    const last = series[series.length - 1] || {};
+    const prev = series[series.length - 2] || {};
 
     const gmv = Number(m.gmv || 0);
     const orderGroups = (m.ordersByStatus || []).slice().sort((a, b) => b.count - a.count).slice(0, 8);
-    const q = (s) => '%23' + encodeURIComponent(s).replace(/%23/g, '');
+    const orders = (recent && recent.data && recent.data.orders) || [];
+    const queue = [
+      { sec: 'finance', ic: 'banknote', lab: 'Withdrawals zinazosubiri', n: Number(m.withdrawalsPending || 0) },
+      { sec: 'disputes', ic: 'scale', lab: 'Migogoro wazi', n: Number(m.disputesOpen || k.activeDisputes || 0) },
+      { sec: 'sellers', ic: 'store', lab: 'Wauzaji wanaosubiri uthibitisho', n: queueTotal(pendSellers) },
+      { sec: 'refunds', ic: 'rotate-ccw', lab: 'Marejesho yanayosubiri', n: queueTotal(pendRefunds) },
+    ];
 
     el.innerHTML =
+      '<div class="ov-head"><div><h2>Maelezo ya jumla</h2><p class="dim">Hali ya soko kwa mtazamo mmoja</p></div>' +
+      '<button class="btn sm" data-ov="refresh"><i data-lucide="refresh-cw"></i>Sasisha</button></div>' +
       '<div class="grid kpis">' +
-      kpi('Watumiaji', fmtNum(k.users), 'Wapya leo: ' + fmtNum(k.newUsersToday), 'users') +
-      kpi('Bidhaa', fmtNum(k.products), 'jumla ya duka', 'package') +
+      kpi('Watumiaji', fmtNum(k.users), 'Wapya leo: ' + fmtNum(k.newUsersToday), 'users', trendChip(last.users, prev.users)) +
       kpi('Maagizo', fmtNum(k.orders), 'Kamili: ' + fmtNum(k.completedOrders), 'shopping-cart') +
-      kpi('Mapato ya Tume', fmtTZS(k.commissionRevenue), 'commission iliyokusanywa', 'trending-up') +
+      kpi('GMV', fmtTZS(gmv), 'thamani ya bidhaa zilizouzwa', 'coins', trendChip(last.money, prev.money)) +
+      kpi('Mapato ya Tume', fmtTZS(k.commissionRevenue), 'tume iliyokusanywa', 'trending-up') +
       kpi('Escrow Inashikiliwa', fmtTZS(k.escrowHeld), fmtNum((m.escrowHolding || {}).count || 0) + ' holdi', 'lock') +
-      kpi('GMV', fmtTZS(gmv), 'bidhaa zilizouzwa', 'coins') +
-      kpi('Migogoro wazi', fmtNum(k.activeDisputes), fmtNum((m.disputesOpen || 0)) + ' inaendelea', 'scale') +
-      kpi('Withdrawals zinazosubiri', fmtNum(m.withdrawalsPending || 0), 'pending + processing', 'banknote') +
+      kpi('Bidhaa', fmtNum(k.products), 'jumla dukani', 'package') +
       '</div>' +
 
       '<div class="grid cols2" style="margin-top:18px">' +
-      '<div class="card"><div class="cardhead"><h3>Mapato ya kila siku (siku 30)</h3><div class="spacer"></div><span class="hint3">money / commission / users</span></div><div class="chartbox"><canvas id="chartTs"></canvas></div></div>' +
-      '<div class="card"><div class="cardhead"><h3>Maagizo kwa hali</h3></div><div class="chartbox"><canvas id="chartOrds"></canvas></div></div>' +
+      '<div class="card"><div class="cardhead"><h3>Mapato ya kila siku (siku 30)</h3><div class="spacer"></div><span class="hint3">pesa / tume / watumiaji</span></div><div class="chartbox"><canvas id="chartTs"></canvas></div></div>' +
+      '<div class="card"><div class="cardhead"><h3>Maagizo kwa hali</h3><div class="spacer"></div><button class="linklike" data-goto="orders" style="margin:0">Angalia zote</button></div><div class="chartbox"><canvas id="chartOrds"></canvas></div></div>' +
       '</div>' +
 
-      (onl ? '<div class="card" style="margin-top:18px"><div class="cardhead"><h3>Mtandaoni sasa hivi</h3></div><div class="summRow">' +
+      '<div class="grid cols2" style="margin-top:18px">' +
+      '<div class="card"><div class="cardhead"><h3>Maagizo ya hivi punde</h3><div class="spacer"></div><button class="linklike" data-goto="orders" style="margin:0">Angalia zote</button></div>' +
+      '<div class="tablewrap"><table class="tbl"><thead><tr><th>Agizo</th><th>Mnunuzi</th><th style="text-align:right">Jumla</th><th>Hali</th><th></th></tr></thead><tbody>' +
+      (orders.length ? orders.map((o) => '<tr>' +
+        '<td class="mono"><b>' + esc(o.orderNumber || id12(o.id)) + '</b><div class="dim">' + fmtTime(o.createdAt) + '</div></td>' +
+        '<td>' + esc((o.buyer && (o.buyer.displayName || o.buyer.email)) || '—') + '</td>' +
+        '<td class="num">' + fmtTZS(o.totalAmount) + '</td>' +
+        '<td>' + badge(o.status) + '</td>' +
+        '<td class="rowactions"><button class="btn sm" data-fn="viewOrder" data-args=\'' + JSON.stringify({ id: o.id, num: o.orderNumber || o.id, status: o.status }).replace(/'/g, '&#39;') + '\'>Angalia</button></td>' +
+        '</tr>').join('') : '<tr><td colspan="5" class="empty">Hakuna maagizo bado</td></tr>') +
+      '</tbody></table></div></div>' +
+
+      '<div class="card"><div class="cardhead"><h3>Kazi zinazosubiri</h3><div class="spacer"></div><span class="hint3">bonyeza kwenda</span></div>' +
+      '<div class="queue">' +
+      queue.map((q) => '<button class="qrow' + (q.n ? '' : ' zero') + '" data-goto="' + q.sec + '">' +
+        '<span class="qic"><i data-lucide="' + q.ic + '"></i></span>' +
+        '<span class="qlab">' + esc(q.lab) + '</span>' +
+        '<span class="qn">' + fmtNum(q.n) + '</span>' +
+        '<i data-lucide="chevron-right" class="qgo"></i></button>').join('') +
+      '</div>' +
+      (onl ? '<div class="cardhead" style="margin:14px 0 8px"><h3>Mtandaoni sasa hivi</h3></div><div class="summRow">' +
         onlChip('Dakika 1', onl.lastMinute) + onlChip('Dakika 5', onl.last5Min) + onlChip('Dakika 15', onl.last15Min) +
-        onlChip('Saa 1', onl.lastHour) + onlChip('Siku 1', onl.lastDay) + '</div></div>' : '') +
-
-      '<div class="grid cols2" style="margin-top:18px">' +
-      cardQuick('Tahadhari zinajibiwa', 'mock') +
+        onlChip('Saa 1', onl.lastHour) + onlChip('Siku 1', onl.lastDay) + '</div>' : '') +
+      '</div>' +
       '</div>';
-    // mocks removed — extra quiet section
-    el.querySelector('.grid.kpis + .grid.cols2') && el.querySelector('.grid.kpis + .grid.cols2').remove();
-    if (!onl) {
-      el.querySelectorAll('.card')[0] && el.querySelector('.grid.cols2') && (el.querySelector('.grid.cols2').style.removeProperty ? null : null);
-    }
+    el.querySelectorAll('[data-goto]').forEach((b) => b.addEventListener('click', () => showSection(b.dataset.goto)));
+    el.querySelector('[data-ov="refresh"]').addEventListener('click', () => loadDashboard());
+    bindSection('dashboard');
 
     destroyCharts();
-    if (ts && ts.series && ts.series.length) {
+    if (window.Chart && series.length) {
       charts.ts = new Chart($('chartTs'), {
         type: 'line',
         data: {
-          labels: ts.series.map((s) => s.date.slice(5)),
+          labels: series.map((s) => String(s.date || '').slice(5)),
           datasets: [
-            { label: 'Money', data: ts.series.map((s) => s.money), borderColor: '#2f9e5f', backgroundColor: 'rgba(47,158,95,.12)', fill: true, tension: .3, pointRadius: 0 },
-            { label: 'Commission', data: ts.series.map((s) => s.commission), borderColor: '#b7791f', backgroundColor: 'transparent', borderDash: [4, 3], tension: .3, pointRadius: 0 },
-            { label: 'Users', data: ts.series.map((s) => s.users), borderColor: '#2563eb', backgroundColor: 'transparent', tension: .3, pointRadius: 0, yAxisID: 'y1' },
+            { label: 'Money', data: series.map((s) => s.money), borderColor: '#2f9e5f', backgroundColor: 'rgba(47,158,95,.12)', fill: true, tension: .3, pointRadius: 0 },
+            { label: 'Commission', data: series.map((s) => s.commission), borderColor: '#b7791f', backgroundColor: 'transparent', borderDash: [4, 3], tension: .3, pointRadius: 0 },
+            { label: 'Users', data: series.map((s) => s.users), borderColor: '#2563eb', backgroundColor: 'transparent', tension: .3, pointRadius: 0, yAxisID: 'y1' },
           ],
         },
         options: {
@@ -297,7 +337,7 @@ async function loadDashboard() {
         },
       });
     }
-    if (orderGroups.length) {
+    if (window.Chart && orderGroups.length) {
       charts.ord = new Chart($('chartOrds'), {
         type: 'doughnut',
         data: {
@@ -313,8 +353,8 @@ async function loadDashboard() {
   }
   touch(); icons();
 }
-function kpi(lab, val, sub, ic) {
-  return '<div class="kpi"><div class="lab">' + esc(lab) + '</div><div class="val">' + val + '</div><div class="sub">' + esc(sub) + '</div><div class="ic"><i data-lucide="' + esc(ic) + '"></i></div></div>';
+function kpi(lab, val, sub, ic, trend) {
+  return '<div class="kpi"><div class="lab">' + esc(lab) + '</div><div class="val">' + val + '</div><div class="sub">' + esc(sub) + (trend ? ' ' + trend : '') + '</div><div class="ic"><i data-lucide="' + esc(ic) + '"></i></div></div>';
 }
 function onlChip(lab, v) {
   return '<span class="bdg ' + (Number(v) > 0 ? 'ok' : 'mut') + '">' + esc(lab) + ': <b style="margin-left:4px">' + fmtNum(v) + '</b></span>';
