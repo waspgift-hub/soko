@@ -462,6 +462,208 @@ router.get('/finance-summary', async (req, res) => {
   }
 });
 
+// ---- Boost analytics (admin) ----
+// Lists products that are currently boosted and the full boost purchase
+// history (from revenue_transactions type='boost'). Both read straight from
+// Firestore — the live data the app actually uses.
+router.get('/analytics/boosts', async (req, res) => {
+  try {
+    if (!(await adminGate(req, res))) return;
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const [activeSnap, histSnap] = await Promise.allSettled([
+      db.collection('products').where('isBoosted', '==', true).limit(200).get(),
+      // Filter boost rows in JS: type+timestamp needs a composite index that
+      // isn't guaranteed to exist; a single timestamp desc is always servable.
+      db.collection('revenue_transactions').orderBy('timestamp', 'desc').limit(300).get(),
+    ]);
+
+    const active = [];
+    if (activeSnap.status === 'fulfilled') {
+      const now = Date.now();
+      for (const doc of activeSnap.value.docs) {
+        const d = doc.data();
+        const until = d.boostedUntil && d.boostedUntil.toDate ? d.boostedUntil.toDate() : (d.boostedUntil instanceof Date ? d.boostedUntil : null);
+        if (until && until.getTime() < now) continue; // stale flag → not really active
+        active.push({
+          id: doc.id,
+          title: d.title || d.name || '—',
+          image: d.imageUrl && Array.isArray(d.imageUrl) ? d.imageUrl[0] : (d.mainImage || d.image || ''),
+          price: d.price || 0,
+          tier: d.boostTier || '—',
+          boostedUntil: until ? until.toISOString() : d.boostedUntil,
+          sellerId: d.sellerId || '',
+          sellerName: d.sellerName || '',
+        });
+      }
+      // One pass to fill seller display names (batch get)
+      const sellerIds = [...new Set(active.map((a) => a.sellerId).filter(Boolean))];
+      const nameMap = {};
+      await Promise.all(sellerIds.map(async (sid) => {
+        try {
+          const u = await db.collection('users').doc(sid).get();
+          if (u.exists) nameMap[sid] = u.data().displayName || u.data().email || '';
+        } catch (_) {}
+      }));
+      active.forEach((a) => { if (!a.sellerName) a.sellerName = nameMap[a.sellerId] || ''; });
+    }
+
+    const history = [];
+    if (histSnap.status === 'fulfilled') {
+      const sellerIds = [...new Set(histSnap.value.docs.map((doc) => doc.data().userId).filter(Boolean))];
+      const nameMap = {};
+      await Promise.all(sellerIds.map(async (sid) => {
+        try {
+          const u = await db.collection('users').doc(sid).get();
+          if (u.exists) nameMap[sid] = u.data().displayName || u.data().email || '';
+        } catch (_) {}
+      }));
+      histSnap.value.docs.forEach((doc) => {
+        const d = doc.data();
+        // the query has no type filter (composite index risk), so keep only boosts
+        if (d.type !== 'boost') return;
+        const ts = d.timestamp && d.timestamp.toDate ? d.timestamp.toDate() : null;
+        history.push({
+          id: doc.id,
+          sellerId: d.userId || '',
+          sellerName: nameMap[d.userId] || '',
+          tier: d.boostTier || (d.description || '').split(' ')[0] || '—',
+          amount: d.amount || 0,
+          commission: d.sokoLanguCommission || 0,
+          description: d.description || '',
+          timestamp: ts ? ts.toISOString() : null,
+        });
+      });
+    }
+
+    res.json({ activeCount: active.length, active, history });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ---- Flash sale analytics (admin) ----
+// Every flash_sales doc (active, scheduled, ended) with seller + duration +
+// performance so the admin can see who created which promotion and when it
+// runs. Firebase Timestamps are down-converted to ISO strings for the panel.
+router.get('/analytics/flash-sales', async (req, res) => {
+  try {
+    if (!(await adminGate(req, res))) return;
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const snap = await db.collection('flash_sales').orderBy('createdAt', 'desc').limit(300).get();
+    const now = Date.now();
+    const flashSales = snap.docs.map((doc) => {
+      const d = doc.data();
+      const toISO = (v) => (v && v.toDate ? v.toDate() : v instanceof Date ? v : null) ? ((v.toDate ? v.toDate() : v).toISOString()) : null;
+      const start = toISO(d.startTime);
+      const end = toISO(d.endTime);
+      let status = 'ended';
+      if (d.isActive === false) status = 'disabled';
+      else if (end && new Date(end).getTime() > now && start && new Date(start).getTime() <= now) status = 'active';
+      else if (start && new Date(start).getTime() > now) status = 'scheduled';
+      return {
+        id: doc.id,
+        productId: d.productId || '',
+        productImage: d.productImage || '',
+        productName: d.productName || '',
+        sellerId: d.sellerId || '',
+        sellerName: d.sellerName || d.sellerPhone || '',
+        location: d.location || '',
+        originalPrice: d.originalPrice || 0,
+        salePrice: d.salePrice || 0,
+        discountPercent: d.discountPercent || 0,
+        stock: d.stock || 0,
+        soldCount: d.soldCount || 0,
+        startTime: start,
+        endTime: end,
+        isActive: d.isActive !== false,
+        status,
+      };
+    });
+
+    const counts = { active: 0, scheduled: 0, ended: 0, disabled: 0 };
+    flashSales.forEach((f) => { counts[f.status] = (counts[f.status] || 0) + 1; });
+
+    res.json({ counts, flashSales });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ---- Platform revenue ledger ----
+// revenue_transactions is the single source of platform earnings (commissions
+// on orders + boost fees + refunds). Paged desc so the panel can browse.
+router.get('/revenue-ledger', async (req, res) => {
+  try {
+    if (!(await adminGate(req, res))) return;
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+    const snap = await db.collection('revenue_transactions').orderBy('timestamp', 'desc').limit(limit + offset).get();
+    const docs = snap.docs.slice(offset, offset + limit);
+
+    const sellerIds = [...new Set(docs.map((d) => d.data().userId).filter(Boolean))];
+    const nameMap = {};
+    await Promise.all(sellerIds.map(async (sid) => {
+      try {
+        const u = await db.collection('users').doc(sid).get();
+        if (u.exists) nameMap[sid] = u.data().displayName || u.data().email || '';
+      } catch (_) {}
+    }));
+
+    const entries = docs.map((doc) => {
+      const d = doc.data();
+      const ts = d.timestamp && d.timestamp.toDate ? d.timestamp.toDate() : null;
+      return {
+        id: doc.id,
+        userId: d.userId || '',
+        userName: nameMap[d.userId] || '',
+        type: d.type || 'other',
+        amount: d.amount || 0,
+        commission: d.sokoLanguCommission || 0,
+        orderId: d.orderId || '',
+        description: d.description || '',
+        timestamp: ts ? ts.toISOString() : null,
+      };
+    });
+
+    res.json({ entries, total: snap.docs.length, limit, offset });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ---- Admin platform withdrawals (money taken OUT of platform revenue) ----
+router.get('/revenue-withdrawals', async (req, res) => {
+  try {
+    if (!(await adminGate(req, res))) return;
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+    const snap = await db.collection('admin_withdrawals').orderBy('createdAt', 'desc').limit(limit).get();
+    const withdrawals = snap.docs.map((doc) => {
+      const d = doc.data();
+      const ts = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate() : null;
+      return {
+        id: doc.id,
+        userId: d.userId || '',
+        amount: d.amount || 0,
+        fee: d.fee || 0,
+        netAmount: d.netAmount || d.amount || 0,
+        phone: d.phone || '',
+        payoutId: d.payoutId || '',
+        status: d.status || 'pending',
+        createdAt: ts ? ts.toISOString() : null,
+      };
+    });
+    res.json({ withdrawals, total: withdrawals.length });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ---- ClickPesa visibility ----
 router.get('/clickpesa/transactions', async (req, res) => {
   try {
@@ -725,6 +927,76 @@ router.post('/kyc/review', async (req, res) => {
     clearAdminCache();
 
     res.json({ success: true, message: `KYC ${status}` });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ---- KYC all statuses (admin) ----
+router.get('/kyc/all', async (req, res) => {
+  try {
+    if (!(await adminGate(req, res))) return;
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const snap = await db.collection('users')
+      .where('kyc.status', 'in', ['approved', 'pending', 'rejected', 'revoked'])
+      .limit(200)
+      .get();
+
+    const all = snap.docs.map((doc) => ({
+      uid: doc.id,
+      displayName: doc.data().displayName || '',
+      email: doc.data().email || '',
+      phone: doc.data().phone || '',
+      kyc: doc.data().kyc || {},
+    })).sort((a, b) => {
+      const ta = a.kyc.submittedAt && (a.kyc.submittedAt.seconds || a.kyc.submittedAt.toDate ? a.kyc.submittedAt.toDate().getTime() : a.kyc.submittedAt);
+      const tb = b.kyc.submittedAt && (b.kyc.submittedAt.seconds || b.kyc.submittedAt.toDate ? b.kyc.submittedAt.toDate().getTime() : b.kyc.submittedAt);
+      return (tb || 0) - (ta || 0);
+    });
+
+    res.json({ all });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ---- KYC revoke (admin) ----
+router.post('/kyc/revoke', async (req, res) => {
+  try {
+    if (!(await adminGate(req, res))) return;
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const { userId, reason } = req.body;
+    if (!userId) return res.status(400).json({ error: 'Missing userId' });
+
+    await db.collection('users').doc(userId).update({
+      'kyc.status': 'revoked',
+      'kyc.approved': false,
+      'kyc.revokedAt': admin.firestore.FieldValue.serverTimestamp(),
+      'kyc.reviewNotes': reason || 'KYC imefutwa na admin.',
+    });
+
+    await updateSellerKycOnProducts(userId, false);
+
+    await db.collection('audit_log').add({
+      userId,
+      type: 'kyc_revoked',
+      amount: 0,
+      reason: `KYC revoked by admin. Reason: ${reason || ''}`,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await db.collection('notifications').add({
+      userId,
+      title: 'KYC Imefutwa',
+      body: `KYC yako imefutwa na admin. Sababu: ${reason || 'Wasiliana na msaada'}. Tuma tena KYC yako.`,
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    clearAdminCache();
+    res.json({ success: true, message: 'KYC revoked' });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
   }

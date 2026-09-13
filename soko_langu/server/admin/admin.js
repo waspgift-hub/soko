@@ -27,6 +27,25 @@ function fmtTime(v) {
   if (isNaN(d)) return esc(String(v));
   return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
+// Inasa Firestore Timestamp ({seconds,...}), ISO string, na Date bila kuteleza.
+function tsToISO(v) {
+  if (!v) return '';
+  if (v instanceof Date) return v.toISOString();
+  if (typeof v === 'string') return v;
+  if (typeof v === 'object') {
+    const sec = v.seconds != null ? v.seconds : v._seconds;
+    if (sec != null) return new Date(Number(sec) * 1000).toISOString();
+    return '';
+  }
+  return '';
+}
+function fmtDay(v) {
+  const iso = tsToISO(v);
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d)) return '—';
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
 function money(v) { return '<span class="num">' + fmtTZS(v) + '</span>'; }
 function id12(v) { return v ? String(v).slice(0, 8) : '—'; }
 function avatarOf(u) {
@@ -162,6 +181,9 @@ function runQuiet(fn) {
 const TITLES = {
   dashboard: 'Dashibodi', users: 'Watumiaji', sellers: 'Wauzaji', products: 'Bidhaa',
   orders: 'Maagizo', disputes: 'Migogoro', refunds: 'Marejesho', reports: 'Ripoti & Ulinzi',
+  kyc: 'Wathibitisho (KYC)',
+  promos: 'Boost & Flash Sales',
+  revenue: 'Mapato ya Jukwaa',
   finance: 'Fedha & Ledger', referrals: 'Rufaa', broadcasts: 'Matangazo ya Broad', audit: 'Ukaguzi (Audit)',
   stats: 'Takwimu za Matumizi',
 };
@@ -225,6 +247,14 @@ const ACTIONS = {
   reportReview(args) { reportReview(args.id, args.status); },
   referralComplete(args) { referralComplete(args.id); },
   reconciliationRun() { reconciliationRun(); },
+  kycApprove(args) { kycReview(args.uid, args.name, 'approve'); },
+  kycReject(args) { kycReview(args.uid, args.name, 'reject'); },
+  kycRevoke(args) { kycReview(args.uid, args.name, 'revoke'); },
+  revenueWithdraw() { revenueWithdraw(); },
+  escrowRelease(args) { escrowReleaseAction(args); },
+  escrowResolve(args) { escrowAdjudicate(args, 'release'); },
+  escrowRefund(args) { escrowAdjudicate(args, 'refund'); },
+  escrowTransfer(args) { escrowTransferAction(args); },
 };
 
 // ---------------------------------------------------------------------------
@@ -775,9 +805,92 @@ async function viewOrderDetail(id, num, status) {
       '<hr class="hr"><div class="dsub">Pesa</div><dl class="kv">' +
       '<dt>Jumla</dt><dd>' + fmtTZS(o.totalAmount) + '</dd>' +
       '<dt>Bidhaa / usafiri</dt><dd>' + fmtTZS(o.productPrice) + ' / ' + fmtTZS(o.shippingFee) + '</dd>' +
-      '<dt>Tume</dt><dd>' + fmtTZS(o.platformCommission) + '</dd></dl>'
+      '<dt>Tume</dt><dd>' + fmtTZS(o.platformCommission) + '</dd></dl>' +
+      adminEscrowCard(o)
     );
   } catch (e) { toast(e.message, false); }
+}
+
+// Kadi ya Amana katika drawer la agizo: endapo agizo linashikilia escrow,
+// admin ana vitendo vya kufungua kwa muuzaji, kutolea mnunuzi (refund), au
+// kuhamisha fedha kwa namba anayochagua mwenyewe. orderId ni id ya Firestore
+// kwa maagizo ya zamani, au id ya v2 kama haijasawazishwa (essc id inaonyeshwa).
+function adminEscrowCard(o) {
+  const s = String(o.status || '');
+  // statuses asanézo la legacy Firestore pekee
+  const legacyStatus = ['escrow_hold', 'paid_escrow_hold', 'paid_escrow_held'].includes(s);
+  // v2 na legacy zote zinaweza kuwa in_escrow/diputed — hazionyeshwi bila legacyFirestoreId
+  const mirrored = !!o.legacyFirestoreId && (s === 'disputed' || ['in_escrow', 'dispatched', 'awaiting_escrow_payment', 'payment_pending', 'ready_to_dispatch'].includes(s));
+  if (!legacyStatus && !mirrored) return '';
+  const escrowId = o.legacyFirestoreId || o.id;
+  const holds = legacyStatus || (mirrored && s === 'in_escrow');
+  const disputed = s === 'disputed';
+  const mk = (fn, label, extra) => '<button class="btn sm ' + (extra || '') + '" data-fn="' + fn + '" data-args=\'' +
+    JSON.stringify({ orderId: escrowId, num: o.orderNumber || o.id }).replace(/'/g, '&#39;') + '\'>' + label + '</button>';
+  let buttons = '';
+  if (holds) buttons += mk('escrowRelease', 'Fungua → Muuzaji', 'accent') + ' ';
+  if (disputed) {
+    buttons += mk('escrowResolve', 'Toa kwa Muuzaji', 'accent') + ' ';
+    buttons += mk('escrowRefund', 'Rejesha kwa Mnunuzi', 'danger') + ' ';
+  }
+  buttons += mk('escrowTransfer', 'Hamisha kwa namba…', '');
+  return '<hr class="hr"><div class="dsub">Amana (Escrow) — Vitendo vya Admin</div>' +
+    '<div class="dim mono" style="margin:2px 0 8px">Id ya amana: ' + esc(escrowId) + '</div>' +
+    '<div class="drawer-actions">' + buttons + '</div>' +
+    '<p class="hint">Refund na hamisho hutumia ClickPesa payout kwenye namba halisi. Thibitisha id ya amana kabla ya kutuma.</p>';
+}
+async function escrowReleaseAction(args) {
+  const ok = await confirmModal('Fungua Amana', 'Fungua escrow ya agizo ' + args.num + ' na kuweka pesa kwa salio la muuzaji?', 'Fungua', false);
+  if (!ok) return;
+  run(async () => {
+    const j = await postJSON('/api/escrow/admin-release', { orderId: args.orderId });
+    toast((j && j.message) || 'Amana imefunguliwa', true);
+    loadOrders();
+  });
+}
+async function escrowAdjudicate(args, mode) {
+  const isRefund = mode === 'refund';
+  const ok = await confirmModal(
+    isRefund ? 'Rejesha kwa Mnunuzi' : 'Toa kwa Muuzaji',
+    isRefund
+      ? 'Tuma refund KAMILI ya agizo ' + args.num + ' kwa namba ya mnunuzi kupitia ClickPesa?'
+      : 'Kamilisha mgogoro wa ' + args.num + ' na kutoa pesa zote kwa muuzaji?',
+    isRefund ? 'Tuma Refund' : 'Toa kwa Muuzaji',
+    isRefund
+  );
+  if (!ok) return;
+  const notes = isRefund ? prompt('Sababu / Maelezo (kwa mnunuzi)') : prompt('Maelezo ya uamuzi');
+  if (notes === null) return;
+  run(async () => {
+    const j = await postJSON('/api/escrow/admin-resolve-dispute', { orderId: args.orderId, resolution: isRefund ? 'refund' : 'release', note: notes });
+    toast((j && j.message) || 'Mgogoro umesuluhishwa', true);
+    loadOrders();
+  });
+}
+async function escrowTransferAction(args) {
+  openModal(
+    '<h3>Hamisha Fedha (Admin Transfer)</h3>' +
+    '<p class="msub">Agizo: ' + esc(args.num) + ' · Id ya amana: <span class="mono">' + esc(args.orderId) + '</span></p>' +
+    '<label class="lab">Kiasi (TZS)</label><input id="trAmt" class="field" type="number" inputmode="numeric" min="1000" placeholder="e.g. 50000">' +
+    '<label class="lab">Namba ya kupokea (ClickPesa)</label><input id="trPhone" class="field" type="tel" inputmode="tel" placeholder="e.g. 0712345678">' +
+    '<label class="lab">Maelezo (si lazima)</label><input id="trNote" class="field" type="text" placeholder="Sababu ya hamisho">' +
+    '<div class="err" id="trErr"></div>' +
+    '<div class="mfooter"><button class="btn" id="trNo">Futa</button><button class="btn danger" id="trYes">Tuma Transfer</button></div>'
+  );
+  $('trNo').onclick = closeModal;
+  $('trYes').onclick = () => {
+    const amount = Math.round(Number($('trAmt').value) || 0);
+    const phone = $('trPhone').value.trim();
+    const note = $('trNote').value.trim();
+    if (amount <= 0) { $('trErr').textContent = 'Andika kiasi halali.'; return; }
+    if (!phone) { $('trErr').textContent = 'Andika namba ya kupokea.'; return; }
+    run(async () => {
+      const j = await postJSON('/api/escrow/admin-transfer', { orderId: args.orderId, amount, phone, note });
+      closeModal();
+      toast((j && j.message) || 'Transfer imetumwa', true);
+      loadOrders();
+    });
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1335,11 +1448,236 @@ async function loadStats() {
   touch(); icons();
 }
 
+// ---------------------------------------------------------------------------
+// Promos: Boost & Flash Sale analytics
+// ---------------------------------------------------------------------------
+function promoTabs(active) {
+  const tabs = { boosts: 'Boosts (Mapandikizo)', flash: 'Flash Sales' };
+  return '<div class="toolbar" style="margin-bottom:14px">' + Object.keys(tabs).map((k) =>
+    '<button class="radio-chip ' + (active === k ? 'on' : '') + '" data-ptab="' + k + '">' + tabs[k] + '</button>').join('') + '</div>';
+}
+async function loadPromos(focus) {
+  const el = secEl('promos');
+  const f = focus || pgState('promos', 'f') || 'boosts';
+  setPg('promos', 'f', f);
+  el.innerHTML = promoTabs(f) + '<div class="finBody"></div>';
+  loadPromoPane(f);
+  el.querySelectorAll('[data-ptab]').forEach((b) => b.addEventListener('click', () => loadPromos(b.dataset.ptab)));
+}
+async function loadPromoPane(f) {
+  const body = secEl('promos').querySelector('.finBody');
+  body.innerHTML = '<div class="sectionempty"><div class="spinner" style="margin:0 auto 12px"></div>Inapakia…</div>';
+  try {
+    if (f === 'boosts') {
+      const j = await getJSON('/api/admin/analytics/boosts');
+      const act = j.active || [];
+      const hist = j.history || [];
+      const rev = hist.reduce((s, h) => s + (Number(h.commission) || 0), 0);
+      body.innerHTML =
+        '<div class="grid kpis">' +
+        kpi('Boosts zinazoendesha', fmtNum(act.length), 'sasa hivi', 'megaphone') +
+        kpi('Mapato ya Boost', fmtTZS(rev), 'tume zilizolipwa', 'coins') +
+        kpi('Historia (manunuzi)', fmtNum(hist.length), 'miamala yote', 'history') +
+        '</div>' +
+        '<div class="card" style="margin-top:16px"><div class="cardhead"><h3>Boosts zinazoendesha sasa</h3></div>' +
+        '<div class="tablewrap"><table class="tbl"><thead><tr><th>Bidhaa</th><th>Muuzaji</th><th>Daraja</th><th>Bei</th><th>Inaisha</th></tr></thead><tbody>' +
+        (act.length ? act.map((a) => '<tr><td>' + (a.image ? '<img class="thumb" style="width:30px;height:30px" src="' + esc(a.image) + '" alt="">' : '') + ' ' + esc(a.title) + '</td>' +
+          '<td>' + esc(a.sellerName || a.sellerId || '—') + '</td><td>' + badge(a.tier) + '</td><td class="num">' + fmtTZS(a.price) + '</td><td class="dim">' + fmtTime(a.boostedUntil) + '</td></tr>').join('')
+          : '<tr><td colspan="5" class="empty">Hakuna boosts zinazoendesha</td></tr>') +
+        '</tbody></table></div></div>' +
+        '<div class="card" style="margin-top:12px"><div class="cardhead"><h3>Historia ya manunuzi ya Boost</h3></div>' +
+        '<div class="tablewrap"><table class="tbl"><thead><tr><th>Wakati</th><th>Muuzaji</th><th>Daraja</th><th>Kiasi</th><th>Tume ya jukwaa</th></tr></thead><tbody>' +
+        (hist.length ? hist.map((h) => '<tr><td class="dim">' + fmtTime(h.timestamp) + '</td><td>' + esc(h.sellerName || h.sellerId || '—') + '</td><td>' + badge(h.tier) + '</td><td class="num">' + fmtTZS(h.amount) + '</td><td class="num">' + fmtTZS(h.commission) + '</td></tr>').join('')
+          : '<tr><td colspan="5" class="empty">Hakuna historia bado</td></tr>') +
+        '</tbody></table></div></div>';
+    } else {
+      const j = await getJSON('/api/admin/analytics/flash-sales');
+      const fs = j.flashSales || [];
+      const c = j.counts || {};
+      body.innerHTML =
+        '<div class="grid kpis">' +
+        kpi('Zinazoendesha', fmtNum(c.active || 0), 'flash sales sasa', 'zap') +
+        kpi('Zimeratibiwa', fmtNum(c.scheduled || 0), 'hazijaanza', 'calendar-clock') +
+        kpi('Zimekwisha', fmtNum((c.ended || 0) + (c.disabled || 0)), 'zamani/fungwa', 'check') +
+        '</div>' +
+        '<div class="card" style="margin-top:16px"><div class="tablewrap"><table class="tbl"><thead><tr>' +
+        '<th>Bidhaa</th><th>Muuzaji</th><th>Punguzo</th><th>Bei (Asili → Sale)</th><th>Kuanza</th><th>Inaisha</th><th>Stock/Umauzo</th><th>Hali</th></tr></thead><tbody>' +
+        (fs.length ? fs.map((x) => '<tr>' +
+          '<td>' + (x.productImage ? '<img class="thumb" style="width:30px;height:30px" src="' + esc(x.productImage) + '" alt="">' : '') + ' ' + esc(x.productName || id12(x.productId)) + '</td>' +
+          '<td>' + esc(x.sellerName || '—') + '<div class="dim">' + esc(x.location || '') + '</div></td>' +
+          '<td class="num">' + (x.discountPercent || 0) + '%</td>' +
+          '<td class="num">' + fmtTZS(x.originalPrice) + ' → ' + fmtTZS(x.salePrice) + '</td>' +
+          '<td class="dim">' + fmtDay(x.startTime) + '</td><td class="dim">' + fmtDay(x.endTime) + '</td>' +
+          '<td class="num">' + fmtNum(x.stock) + '/' + fmtNum(x.soldCount) + '</td>' +
+          '<td>' + badge(x.status) + '</td></tr>').join('')
+          : '<tr><td colspan="8" class="empty">Hakuna flash sales</td></tr>') +
+        '</tbody></table></div></div>';
+    }
+  } catch (e) { body.innerHTML = '<div class="card"><div class="err">' + esc(e.message) + '</div></div>'; }
+  touch(); icons();
+}
+
+// ---------------------------------------------------------------------------
+// Mapato ya Jukwaa: fees (commission + boost) + admin withdrawal
+// ---------------------------------------------------------------------------
+async function loadRevenue() {
+  const el = secEl('revenue');
+  el.innerHTML = '<div class="sectionempty"><div class="spinner" style="margin:0 auto 12px"></div>Inapakia…</div>';
+  try {
+    const [fin, led, wd] = await Promise.all([
+      getJSON('/api/admin/finance-summary'),
+      getJSON('/api/admin/revenue-ledger?limit=60'),
+      getJSON('/api/admin/revenue-withdrawals?limit=50'),
+    ]);
+    const e = fin.availableBalance != null ? fin : {};
+    el.innerHTML =
+      '<div class="grid kpis">' +
+      kpi('Tume ya Mauzo', fmtTZS(fin.totalCommissions || 0), 'commission fee', 'percent') +
+      kpi('Ada za Boost', fmtTZS(fin.totalBoostRevenue || 0), 'boost fee', 'megaphone') +
+      kpi('Jumla ya Mapato', fmtTZS(fin.totalAdminBalance || 0), 'commission + boost', 'coins') +
+      kpi('Inapatikana kuondolewa', fmtTZS(fin.availableBalance || 0), 'baada ya withdrawals', 'banknote') +
+      '</div>' +
+      '<div class="toolbar" style="margin:14px 0 8px"><button class="btn accent" id="revWithdrawBtn" data-fn="revenueWithdraw">Toa Mapato (Withdraw) → ClickPesa</button></div>' +
+      '<div class="grid cols2" style="margin-top:6px">' +
+      '<div class="card"><div class="cardhead"><h3>Ledger ya Mapato (commission/boost)</h3></div>' +
+      '<div class="tablewrap"><table class="tbl"><thead><tr><th>Wakati</th><th>Mtumiaji</th><th>Aina</th><th>Kiasi</th><th>Tume</th></tr></thead><tbody>' +
+      revRows(led.entries || []) +
+      '</tbody></table></div></div>' +
+      '<div class="card"><div class="cardhead"><h3>Withdrawals za Admin</h3></div>' +
+      '<div class="tablewrap"><table class="tbl"><thead><tr><th>Wakati</th><th>Kiasi</th><th>Fee</th><th>Net</th><th>Simu</th><th>Hali</th></tr></thead><tbody>' +
+      wdRows((wd.withdrawals || [])) +
+      '</tbody></table></div></div>' +
+      '</div>';
+  } catch (e) { el.innerHTML = '<div class="card"><div class="err">' + esc(e.message) + '</div></div>'; }
+  bindSection('revenue'); touch(); icons();
+}
+function revRows(entries) {
+  if (!entries.length) return '<tr><td colspan="5" class="empty">Hakuna mapato bado</td></tr>';
+  return entries.map((x) => '<tr><td class="dim">' + fmtTime(x.timestamp) + '</td>' +
+    '<td>' + esc(x.userName || id12(x.userId)) + '<div class="dim mono">' + esc(id12(x.userId)) + '</div></td>' +
+    '<td>' + badge(x.type) + '</td>' +
+    '<td class="num">' + fmtTZS(x.amount) + '</td>' +
+    '<td class="num">' + fmtTZS(x.commission) + '</td></tr>').join('');
+}
+function wdRows(rows) {
+  if (!rows.length) return '<tr><td colspan="6" class="empty">Hakuna withdrawals za admin</td></tr>';
+  return rows.map((x) => '<tr><td class="dim">' + fmtTime(x.createdAt) + '</td>' +
+    '<td class="num">' + fmtTZS(x.amount) + '</td><td class="num">' + fmtTZS(x.fee) + '</td>' +
+    '<td class="num">' + fmtTZS(x.netAmount) + '</td><td class="mono">' + esc(x.phone || '') + '</td>' +
+    '<td>' + badge(x.status) + '</td></tr>').join('');
+}
+async function revenueWithdraw() {
+  openModal(
+    '<h3>Toa Mapato ya Jukwaa</h3>' +
+    '<p class="msub">Fedha zitatumwa kwa namba yako kupitia ClickPesa payout.</p>' +
+    '<label class="lab">Kiasi (TZS)</label><input id="rwAmt" class="field" type="number" inputmode="numeric" min="1000" placeholder="e.g. 100000">' +
+    '<label class="lab">Namba yako (ClickPesa)</label><input id="rwPhone" class="field" type="tel" inputmode="tel" placeholder="e.g. 0712345678">' +
+    '<div class="err" id="rwErr"></div>' +
+    '<div class="mfooter"><button class="btn" id="rwNo">Futa</button><button class="btn accent" id="rwYes">Tuma Withdraw</button></div>'
+  );
+  $('rwNo').onclick = closeModal;
+  $('rwYes').onclick = () => {
+    const amount = Math.round(Number($('rwAmt').value) || 0);
+    const phone = $('rwPhone').value.trim();
+    if (amount <= 0) { $('rwErr').textContent = 'Andika kiasi halali.'; return; }
+    if (!phone) { $('rwErr').textContent = 'Andika namba.'; return; }
+    run(async () => {
+      const j = await postJSON('/api/admin/withdraw', { amount, phone });
+      closeModal();
+      toast((j && j.message) || 'Withdraw imetumwa', true);
+      loadRevenue();
+    });
+  };
+}
+
+// ---------------------------------------------------------------------------
+// KYC admin approve/reject/revoke
+// ---------------------------------------------------------------------------
+function kycTabs(active) {
+  const tabs = { pending: 'Zinazosubiri', all: 'Zote' };
+  return '<div class="toolbar" style="margin-bottom:14px">' + Object.keys(tabs).map((k) =>
+    '<button class="radio-chip ' + (active === k ? 'on' : '') + '" data-ktab="' + k + '">' + tabs[k] + '</button>').join('') + '</div>';
+}
+async function loadKyc(focus) {
+  const el = secEl('kyc');
+  const f = focus || pgState('kyc', 'f') || 'pending';
+  setPg('kyc', 'f', f);
+  el.innerHTML = kycTabs(f) + '<div class="finBody"></div>';
+  loadKycList(f);
+  el.querySelectorAll('[data-ktab]').forEach((b) => b.addEventListener('click', () => loadKyc(b.dataset.ktab)));
+}
+async function loadKycList(f) {
+  const body = secEl('kyc').querySelector('.finBody');
+  body.innerHTML = '<div class="card"><div class="sectionempty"><div class="spinner" style="margin:0 auto 12px"></div>Inapakia…</div></div>';
+  try {
+    const j = f === 'pending' ? await getJSON('/api/admin/kyc/pending') : await getJSON('/api/admin/kyc/all');
+    const rows = f === 'pending' ? (j.pending || []) : (j.all || []);
+    body.innerHTML = '<div class="card"><div class="tablewrap"><table class="tbl"><thead><tr>' +
+      '<th>Mtumiaji</th><th>Aina ya Kitambulisho</th><th>Nambari</th><th>Iliwasilishwa</th><th>Hali</th><th style="text-align:right">Vitendo</th></tr></thead><tbody>' +
+      (rows.length ? rows.map((u) => {
+        const k = u.kyc || {};
+        const st = k.status || 'none';
+        const args = JSON.stringify({ uid: u.uid, name: u.displayName || u.email || u.uid }).replace(/'/g, '&#39;');
+        let actions = '<span class="dim">—</span>';
+        if (st === 'pending') {
+          actions =
+            '<button class="btn sm accent" data-fn="kycApprove" data-args=\'' + args + '\'>Kubali</button> ' +
+            '<button class="btn sm danger" data-fn="kycReject" data-args=\'' + args + '\'>Kataa</button>';
+        } else if (st === 'approved') {
+          actions = '<button class="btn sm" data-fn="kycRevoke" data-args=\'' + args + '\'>Futa (Revoke)</button>';
+        }
+        return '<tr>' +
+          '<td>' + avatarOf({ displayName: u.displayName, avatarUrl: '', email: u.email }) + ' <b>' + esc(u.displayName || '—') + '</b><div class="dim">' + esc(u.email || '') + ' · ' + esc(u.phone || '') + '</div></td>' +
+          '<td>' + esc(k.idType || '—') + '</td>' +
+          '<td class="mono">' + esc(k.idNumber || '—') + '</td>' +
+          '<td class="dim">' + fmtDay(k.submittedAt) + '</td>' +
+          '<td>' + badge(st) + '</td>' +
+          '<td class="rowactions">' + actions + '</td></tr>';
+      }).join('') : '<tr><td colspan="6" class="empty">Hakuna wasilisho la KYC</td></tr>') +
+      '</tbody></table></div></div>';
+  } catch (e) {
+    body.innerHTML = '<div class="card"><div class="err">' + esc(e.message) + '</div></div>';
+  }
+  bindSection('kyc'); touch(); icons();
+}
+async function kycReview(uid, name, action) {
+  if (action === 'reject') {
+    const reason = prompt('Sababu ya kukataa KYC ya ' + name);
+    if (reason === null) return;
+    run(async () => {
+      const j = await postJSON('/api/admin/kyc/review', { userId: uid, approve: false, notes: reason });
+      toast((j && j.message) || 'KYC imekataliwa', true);
+      loadKyc(pgState('kyc', 'f'));
+    });
+    return;
+  }
+  if (action === 'revoke') {
+    const ok = await confirmModal('Futa KYC', 'Futa kibali cha KYC cha ' + name + '? Bidhaa zake zitaondolewa kibali cha kuuza.', 'Futa', true);
+    if (!ok) return;
+    const reason = prompt('Sababu ya kufuta');
+    run(async () => {
+      const j = await postJSON('/api/admin/kyc/revoke', { userId: uid, reason: reason || '' });
+      toast((j && j.message) || 'KYC imefutwa', true);
+      loadKyc(pgState('kyc', 'f'));
+    });
+    return;
+  }
+  const ok = await confirmModal('Kubali KYC', 'Kubali KYC ya ' + name + ' na amruhusu kuuza bidhaa?', 'Kubali', false);
+  if (!ok) return;
+  run(async () => {
+    const j = await postJSON('/api/admin/kyc/review', { userId: uid, approve: true, notes: '' });
+    toast((j && j.message) || 'KYC imekubaliwa', true);
+    loadKyc(pgState('kyc', 'f'));
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Loader registry + filter wiring
 // ---------------------------------------------------------------------------
 const LOADERS = {
   dashboard: loadDashboard, users: loadUsers, sellers: loadSellers, products: loadProducts,
   orders: loadOrders, disputes: loadDisputes, refunds: loadRefunds, reports: loadReports,
+  kyc: loadKyc, promos: loadPromos, revenue: loadRevenue,
   finance: loadFinance, referrals: loadReferrals, broadcasts: loadBroadcasts, audit: loadAudit,
   stats: loadStats,
 };

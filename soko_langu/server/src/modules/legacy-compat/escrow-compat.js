@@ -4,7 +4,7 @@
 const express = require('express');
 const admin = require('firebase-admin');
 const { getFirebaseFirestore } = require('../../config/firebase');
-const { requireUser, checkSuspended } = require('./auth-helpers');
+const { requireUser, requireAdmin, checkSuspended } = require('./auth-helpers');
 const { sendOneSignalNotification, notifyAdmins } = require('./notify');
 const { sendSms } = require('../../services/sms-service');
 const { clickpesaPayout, getPayoutFee } = require('../../../clickpesa');
@@ -623,6 +623,349 @@ router.post('/dispute', async (req, res) => {
     res.json({ success: true, message: 'Dispute imefunguliwa. Admin atakagua na kutoa uamuzi.' });
   } catch (e) {
     console.error('Escrow dispute error:', e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================================
+// 🛡 ADMIN — Force release escrow to the seller (x-admin-secret or admin token)
+// ============================================================
+router.post('/admin-release', async (req, res) => {
+  try {
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
+    const { orderId } = req.body;
+    if (!orderId) return res.status(400).json({ error: 'Missing orderId' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    let txDoc = await db.collection('transactions').doc(orderId).get();
+    let orderDoc = null;
+    if (!txDoc.exists) {
+      orderDoc = await db.collection('orders').doc(orderId).get();
+    }
+    if (!txDoc.exists && (!orderDoc || !orderDoc.exists)) {
+      return res.status(404).json({ error: 'Transaction/Order not found' });
+    }
+
+    let sellerId, sellerReceives, productName;
+    if (txDoc.exists) {
+      const tx = txDoc.data();
+      sellerId = tx.sellerId;
+      sellerReceives = tx.sellerReceives || tx.productPrice || 0;
+      productName = tx.productName || 'Product';
+      if (tx.escrowReleased) return res.status(400).json({ error: 'Escrow already released' });
+      await txDoc.ref.update({
+        status: 'delivered',
+        escrowReleased: true,
+        escrowReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } else {
+      const order = orderDoc.data();
+      sellerId = order.sellerId;
+      sellerReceives = order.totalAmount || 0;
+      productName = order.items?.map((i) => i.name).join(', ') || 'Product';
+      if (order.escrowReleased) return res.status(400).json({ error: 'Escrow already released' });
+      await orderDoc.ref.update({
+        status: 'delivered',
+        escrowReleased: true,
+        escrowReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+
+    if (sellerId) {
+      const sellerDoc = await db.collection('users').doc(sellerId).get();
+      const pending = sellerDoc.exists ? (sellerDoc.data().pendingEscrow || 0) : 0;
+      const actualPending = Math.min(sellerReceives, pending);
+      await db.collection('users').doc(sellerId).update({
+        sellerBalance: admin.firestore.FieldValue.increment(sellerReceives),
+        pendingEscrow: admin.firestore.FieldValue.increment(-actualPending),
+      });
+      await db.collection('revenue_transactions').add({
+        userId: sellerId,
+        type: 'sale',
+        amount: sellerReceives,
+        orderId,
+        description: `Sale (admin release): ${productName} - TZS ${sellerReceives}`,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      await db.collection('notifications').add({
+        userId: sellerId,
+        title: 'Admin Amefungua Escrow!',
+        body: `${productName} — TZS ${sellerReceives.toLocaleString()} zimewekwa salio lako.`,
+        type: 'escrow_release',
+        data: { orderId, adminRelease: true },
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      try {
+        await sendOneSignalNotification(sellerId, 'Admin Amefungua Escrow!', `${productName} — TZS ${sellerReceives.toLocaleString()} zimewekwa salio lako.`, { type: 'escrow_release', orderId, adminRelease: true });
+      } catch (_) {}
+    }
+
+    res.json({ success: true, message: 'Escrow force-released by admin' });
+  } catch (e) {
+    console.error('Escrow admin-release error:', e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================================
+// ⚖️ ADMIN — Resolve a dispute: 'release' funds to seller OR 'refund'
+// the buyer in full via ClickPesa payout.
+// ============================================================
+router.post('/admin-resolve-dispute', async (req, res) => {
+  try {
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
+
+    const { orderId, resolution, note } = req.body;
+    if (!orderId || !resolution) return res.status(400).json({ error: 'Missing orderId or resolution' });
+    if (!['release', 'refund'].includes(resolution)) {
+      return res.status(400).json({ error: 'Resolution must be "release" or "refund"' });
+    }
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const txDoc = await db.collection('transactions').doc(orderId).get();
+    if (!txDoc.exists) return res.status(404).json({ error: 'Transaction not found' });
+    const tx = txDoc.data();
+    if (tx.status !== 'disputed') {
+      return res.status(400).json({ error: `Cannot resolve from status: ${tx.status}` });
+    }
+
+    if (resolution === 'release') {
+      const sellerId = tx.sellerId;
+      const sellerReceives = tx.sellerReceives || 0;
+      const sellerDoc = await db.collection('users').doc(sellerId).get();
+      const pendingBefore = sellerDoc.exists ? (sellerDoc.data().pendingEscrow || 0) : 0;
+      const actualPending = Math.min(sellerReceives, pendingBefore);
+
+      await txDoc.ref.update({
+        status: 'delivered',
+        escrowReleased: true,
+        escrowReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
+        'disputeInfo.resolved': true,
+        'disputeInfo.resolution': 'released_to_seller',
+        'disputeInfo.adminNote': note || '',
+      });
+
+      if (sellerId && sellerReceives > 0) {
+        await db.collection('users').doc(sellerId).update({
+          sellerBalance: admin.firestore.FieldValue.increment(sellerReceives),
+          pendingEscrow: admin.firestore.FieldValue.increment(-actualPending),
+        });
+      }
+
+      const notifyBody = `Admin ameamua pesa zitolewe kwa muuzaji. ${note || ''}`;
+      await db.collection('notifications').add({
+        userId: tx.buyerId,
+        title: '⚖️ Uamuzi wa Mgogoro',
+        body: notifyBody,
+        isRead: false,
+        data: { type: 'dispute_resolved', transactionId: orderId },
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      try { await sendOneSignalNotification(tx.buyerId, '⚖️ Uamuzi wa Mgogoro', notifyBody, { type: 'dispute_resolved', transactionId: orderId }); } catch (_) {}
+      if (sellerId) {
+        await db.collection('notifications').add({
+          userId: sellerId,
+          title: '⚖️ Uamuzi wa Mgogoro',
+          body: `Admin ameamua pesa zikutolee. ${note || ''}`,
+          isRead: false,
+          data: { type: 'dispute_resolved', transactionId: orderId },
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        try { await sendOneSignalNotification(sellerId, '⚖️ Uamuzi wa Mgogoro', `Admin ameamua pesa zikutolee. ${note || ''}`, { type: 'dispute_resolved', transactionId: orderId }); } catch (_) {}
+      }
+      return res.json({ success: true, message: 'Dispute resolved: funds released to seller' });
+    }
+
+    // resolution === 'refund' → FULL refund to buyer (ClickPesa payout)
+    const productPrice = tx.productPrice || 0;
+    const sellerReceives = tx.sellerReceives || 0;
+    const sellerId = tx.sellerId;
+    const buyerPhone = tx.buyerPhone || '';
+    const productName = tx.productName || 'Product';
+
+    if (!buyerPhone) return res.status(400).json({ error: 'Buyer phone number not found for refund' });
+
+    const refundAmount = productPrice;
+    try {
+      await clickpesaPayout({
+        amount: refundAmount,
+        phoneNumber: buyerPhone,
+        orderReference: `disputerefund${orderId}`.replace(/[^a-zA-Z0-9]/g, ''),
+      });
+    } catch (payoutErr) {
+      return res.status(502).json({ error: `Refund payment failed: ${payoutErr.message}` });
+    }
+
+    await txDoc.ref.update({
+      status: 'refunded',
+      escrowReleased: true,
+      escrowReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
+      'disputeInfo.resolved': true,
+      'disputeInfo.resolution': 'refunded_to_buyer',
+      'disputeInfo.refundedAmount': refundAmount,
+      'disputeInfo.adminNote': note || '',
+    });
+
+    if (sellerId && sellerReceives > 0) {
+      const sellerDoc = await db.collection('users').doc(sellerId).get();
+      const refundPending = sellerDoc.exists ? (sellerDoc.data().pendingEscrow || 0) : 0;
+      const actualPending = Math.min(sellerReceives, refundPending);
+      const currentBalance = sellerDoc.exists ? (sellerDoc.data().sellerBalance || 0) : 0;
+      const gatewayFee = getPayoutFee(refundAmount);
+      const sellerPenalty = Math.min(gatewayFee, sellerReceives, Math.max(0, currentBalance));
+      const updateBlock = {
+        pendingEscrow: admin.firestore.FieldValue.increment(-actualPending),
+        totalSales: admin.firestore.FieldValue.increment(-1),
+        grossSalesVolume: admin.firestore.FieldValue.increment(-productPrice),
+      };
+      if (sellerPenalty > 0) updateBlock.sellerBalance = admin.firestore.FieldValue.increment(-sellerPenalty);
+      await db.collection('users').doc(sellerId).update(updateBlock);
+    }
+
+    await db.collection('revenue_transactions').add({
+      userId: 'platform',
+      amount: -productPrice,
+      type: 'refund',
+      orderId,
+      description: `Refund (dispute): ${productName} - TZS ${productPrice}`,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    const refundBody = `Refund kamili ya TZS ${refundAmount.toLocaleString()} kwa ${productName} imetumwa kwa namba yako.`;
+    await db.collection('notifications').add({
+      userId: tx.buyerId,
+      title: '💸 Pesa Zimerudishwa Kamili',
+      body: refundBody,
+      isRead: false,
+      data: { type: 'refund', orderId },
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    try { await sendOneSignalNotification(tx.buyerId, '💸 Pesa Zimerudishwa Kamili', refundBody, { type: 'refund', orderId }); } catch (_) {}
+
+    if (sellerId) {
+      await db.collection('notifications').add({
+        userId: sellerId,
+        title: '❌ Mgogoro Umekamilika',
+        body: `${productName} imerefundiwa mnunuzi. Pesa zimetolewa kwenye pendingEscrow yako.`,
+        isRead: false,
+        data: { type: 'refund', orderId },
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      try { await sendOneSignalNotification(sellerId, '❌ Mgogoro Umekamilika', `${productName} imerefundiwa mnunuzi. Pesa zimetolewa kwenye pendingEscrow yako.`, { type: 'refund', orderId }); } catch (_) {}
+    }
+
+    res.json({ success: true, message: 'Dispute resolved: refund sent to buyer' });
+  } catch (e) {
+    console.error('Escrow admin-resolve-dispute error:', e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================================
+// 💸 ADMIN — Transaction transfer: cancel the order and pay an
+// arbitrary amount to whichever phone the admin decides. Any part
+// not transferred is credited back to the seller so money never
+// vanishes from the platform.
+// ============================================================
+router.post('/admin-transfer', async (req, res) => {
+  try {
+    const auth = await requireAdmin(req, res);
+    if (!auth.ok) return;
+
+    const { orderId, amount, phone, note } = req.body;
+    if (!orderId || !phone) return res.status(400).json({ error: 'Missing orderId or phone' });
+    if (!amount || Number(amount) <= 0) return res.status(400).json({ error: 'Invalid amount' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const txDoc = await db.collection('transactions').doc(orderId).get();
+    if (!txDoc.exists) return res.status(404).json({ error: 'Transaction not found' });
+    const tx = txDoc.data();
+    if (tx.escrowReleased === true) return res.status(400).json({ error: 'Escrow already released/resolved' });
+
+    const escrowTotal = tx.sellerReceives || tx.productPrice || 0;
+    if (escrowTotal <= 0) return res.status(400).json({ error: 'No escrow funds on this transaction' });
+    const transferAmount = Math.min(Number(amount), escrowTotal);
+
+    // ClickPesa payout to the admin's chosen recipient
+    try {
+      await clickpesaPayout({
+        amount: transferAmount,
+        phoneNumber: String(phone),
+        orderReference: `admintransfer${orderId}`.replace(/[^a-zA-Z0-9]/g, ''),
+      });
+    } catch (payoutErr) {
+      return res.status(502).json({ error: `Transfer payment failed: ${payoutErr.message}` });
+    }
+
+    await txDoc.ref.update({
+      status: 'refunded',
+      escrowReleased: true,
+      escrowReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
+      adminTransfer: true,
+      transferAmount,
+      transferPhone: String(phone),
+      transferNote: note || '',
+      transferredAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    const sellerId = tx.sellerId;
+    if (sellerId) {
+      const sellerDoc = await db.collection('users').doc(sellerId).get();
+      const pending = sellerDoc.exists ? (sellerDoc.data().pendingEscrow || 0) : 0;
+      const actualPending = Math.min(escrowTotal, pending);
+      const remainder = escrowTotal - transferAmount;
+      const updateBlock = {
+        pendingEscrow: admin.firestore.FieldValue.increment(-actualPending),
+      };
+      if (remainder > 0) {
+        updateBlock.sellerBalance = admin.firestore.FieldValue.increment(remainder);
+      }
+      await db.collection('users').doc(sellerId).update(updateBlock);
+
+      await db.collection('revenue_transactions').add({
+        userId: 'platform',
+        amount: -escrowTotal,
+        type: 'admin_transfer',
+        orderId,
+        description: `Admin transfer: TZS ${transferAmount} kwa ${phone} (${tx.productName || 'Product'}). Salio TZS ${remainder} limewekwa kwa muuzaji.`,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      await db.collection('notifications').add({
+        userId: sellerId,
+        title: '⚠️ Order Inerejeshwa na Admin',
+        body: `${tx.productName || 'Bidhaa'} order imefutwa na admin. Pesa imehamishwa na salio limewekwa. ${note || ''}`,
+        isRead: false,
+        data: { type: 'admin_transfer', orderId },
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+
+    await db.collection('notifications').add({
+      userId: tx.buyerId,
+      title: '⚠️ Order Ineresolved by Admin',
+      body: `Admin amekamilisha mgogoro wa ${tx.productName || 'Bidhaa'}. ${note || ''}`,
+      isRead: false,
+      data: { type: 'admin_transfer', orderId },
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    notifyAdmins(
+      '💰 Admin Transfer Imetumwa',
+      `TZS ${transferAmount.toLocaleString()} → ${phone} kwa order ${orderId}.`,
+      { type: 'admin_transfer', orderId },
+    );
+
+    res.json({
+      success: true,
+      message: `Transfer TZS ${transferAmount.toLocaleString()} kwa ${phone} imetumwa. Salio limewekwa kwa muuzaji.`,
+      transferred: transferAmount,
+    });
+  } catch (e) {
+    console.error('Escrow admin-transfer error:', e);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
