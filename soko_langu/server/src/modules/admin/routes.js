@@ -111,7 +111,7 @@ router.get(
           }
         : {}),
     };
-    const [orders, total] = await Promise.all([
+    const [orderRows, total] = await Promise.all([
       prisma.order.findMany({
         where,
         include: {
@@ -119,7 +119,7 @@ router.get(
           seller: { select: { id: true, storeName: true, userId: true } },
           items: true,
           escrowHold: true,
-          dispute: { select: { id: true, status: true, reason: true } },
+          disputes: { select: { id: true, status: true, reason: true }, orderBy: { createdAt: 'desc' }, take: 1 },
         },
         orderBy: { createdAt: 'desc' },
         take: Number(req.query.limit),
@@ -127,6 +127,8 @@ router.get(
       }),
       prisma.order.count({ where }),
     ]);
+    // The panel shows one dispute per order: expose the latest as `dispute`.
+    const orders = orderRows.map(({ disputes, ...o }) => ({ ...o, dispute: disputes[0] || null }));
     res.json({
       success: true,
       data: { orders, pagination: { page: Number(req.query.page), limit: Number(req.query.limit), total } },
@@ -315,12 +317,12 @@ router.get(
       ...(req.query.verificationStatus ? { verificationStatus: req.query.verificationStatus } : {}),
       ...(req.query.sellerStatus ? { sellerStatus: req.query.sellerStatus } : {}),
     };
-    const [sellers, total] = await Promise.all([
+    const [sellerRows, total] = await Promise.all([
       prisma.sellerProfile.findMany({
         where,
         include: {
           user: { select: { id: true, email: true, phone: true, displayName: true, avatarUrl: true, accountStatus: true } },
-          wallet: { select: { availableBalance: true, pendingBalance: true, frozenBalance: true, totalEarned: true, totalWithdrawn: true, status: true } },
+          wallets: { select: { availableBalance: true, pendingBalance: true, frozenBalance: true, totalEarned: true, totalWithdrawn: true, status: true }, orderBy: { createdAt: 'desc' }, take: 1 },
           _count: { select: { products: true, orders: true, withdrawals: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -329,6 +331,8 @@ router.get(
       }),
       prisma.sellerProfile.count({ where }),
     ]);
+    // sellerId is unique on wallets: expose the single wallet as `wallet`.
+    const sellers = sellerRows.map(({ wallets, ...s }) => ({ ...s, wallet: wallets[0] || null }));
     res.json({ success: true, data: { sellers, pagination: { page: Number(req.query.page), limit: Number(req.query.limit), total } } });
   }
 );
@@ -422,7 +426,7 @@ router.get(
       prisma.user.findUnique({
         where: { id: req.params.userId },
         include: {
-          sellerProfile: { include: { wallet: true } },
+          sellerProfile: { include: { wallets: { orderBy: { createdAt: 'desc' }, take: 1 } } },
           devices: { select: { platform: true, appVersion: true, lastActiveAt: true }, take: 5 },
           addresses: { orderBy: { isDefault: 'desc' }, take: 10 },
         },
@@ -431,6 +435,10 @@ router.get(
       prisma.order.groupBy({ by: ['status'], where: { seller: { userId: req.params.userId } }, _count: { status: true } }),
     ]);
     if (!user) return res.status(404).json({ error: 'USER_NOT_FOUND' });
+    if (user.sellerProfile) {
+      const { wallets, ...sp } = user.sellerProfile;
+      user.sellerProfile = { ...sp, wallet: wallets[0] || null };
+    }
     res.json({ success: true, data: { user, buyerOrders, sellerOrders } });
   }
 );
