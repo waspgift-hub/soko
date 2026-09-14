@@ -615,17 +615,26 @@ router.put(
     try {
       await settingsService.saveSettings(req.body?.patch || {});
       const masked = await settingsService.getSettingsMasked();
-      await writeAudit({
-        ...auditFromReq(req),
-        action: 'settings_update',
-        entityType: 'settings',
-        entityId: 'admin_settings',
-        reason: 'Admin updated platform settings',
-      });
+      try {
+        await writeAudit({
+          ...auditFromReq(req),
+          action: 'settings_update',
+          entityType: 'settings',
+          entityId: 'admin_settings',
+          reason: 'Admin updated platform settings',
+        });
+      } catch (ae) {
+        // Audit stays best-effort: a ledger hiccup must never fail a settings
+        // save that already succeeded.
+        console.error('[admin:settings] audit write skipped:', ae?.message || ae);
+      }
       res.json({ success: true, data: masked });
     } catch (e) {
       console.error('[admin:settings] save failed:', e?.message || e);
-      next(e);
+      res.status(500).json({
+        success: false,
+        error: (e && e.message) || 'Kuna hitilafu ya ndani wakati wa kuhifadhi mipangilio.',
+      });
     }
   }
 );

@@ -113,7 +113,7 @@ function safeMerge(base, patch) {
     Object.keys(DEFAULTS[group]).forEach((key) => {
       if (!Object.prototype.hasOwnProperty.call(patchGroup, key)) return;
       const val = patchGroup[key];
-      if (SECRET_FIELDS.has(key) && (!val || val === '******')) return bill;
+      if (SECRET_FIELDS.has(key) && (!val || val === '******')) return;
       if (val && typeof val === 'object' && !Array.isArray(val) && typeof out[group][key] === 'object') {
         out[group][key] = { ...(baseGroup[key] || {}), ...val };
         return;
