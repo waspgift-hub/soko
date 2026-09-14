@@ -7,10 +7,13 @@ import 'app_typography.dart';
 // persistence but never influences the rendered palette.
 ThemeData buildLightTheme(Color seed) {
   final scheme = const ColorScheme.light(
-    primary: Color(0xFF9CD9B0),
-    onPrimary: Color(0xFF043C26),
-    primaryContainer: Color(0xFFE2F5EB),
-    onPrimaryContainer: Color(0xFF0B3D28),
+    // Single-source brand green shared across light and dark: #00B0B9
+    // (turquoise teal). One value, both modes → the brand always looks the
+    // same regardless of the selected theme (§brand identity single-source).
+    primary: Color(0xFF00B0B9),
+    onPrimary: Color(0xFF001F24),
+    primaryContainer: Color(0xFFE0F7F8),
+    onPrimaryContainer: Color(0xFF00363D),
     inversePrimary: Color(0xFFB8B8B8),
     secondary: Color(0xFF3B3B3B),
     onSecondary: Color(0xFFFFFFFF),
@@ -47,8 +50,8 @@ ThemeData buildLightTheme(Color seed) {
 
 ThemeData buildDarkTheme(Color seed) {
   final scheme = const ColorScheme.dark(
-    primary: Color(0xFFA8E6CF),
-    onPrimary: Color(0xFF043C26),
+    primary: Color(0xFF00B0B9),
+    onPrimary: Color(0xFFFFFFFF),
     primaryContainer: Color(0xFF1B4D33),
     onPrimaryContainer: Color(0xFFCFF5E3),
     inversePrimary: Color(0xFF303030),
