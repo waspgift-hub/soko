@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'app_transitions.dart';
 import '../models/product_model.dart';
+import '../models/soko_media_item.dart';
 import '../screens/auth/auth_gate.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/register_screen.dart';
@@ -60,6 +61,9 @@ import '../screens/requests/post_buyer_request_screen.dart';
 import '../screens/report/admin_reports_screen.dart';
 import '../screens/ai/ai_assistant_screen.dart';
 import '../screens/seller/seller_analytics_screen.dart';
+import '../screens/media/media_library_screen.dart';
+import '../screens/media/now_playing_screen.dart';
+import '../screens/media/video_player_screen.dart';
 
 import '../screens/legal/privacy_policy_screen.dart';
 import '../screens/legal/terms_of_service_screen.dart';
@@ -477,6 +481,25 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.termsOfService,
         pageBuilder: (context, state) => _premiumPage(const TermsOfServiceScreen()),
+      ),
+      // Local media player — deliberately OUTSIDE _authRequiredRoutes so that
+      // anyone (including guests filling carts) can browse their own device.
+      GoRoute(
+        path: AppRoutes.mediaLibrary,
+        pageBuilder: (context, state) => _premiumPage(const MediaLibraryScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.nowPlaying,
+        pageBuilder: (context, state) => _premiumPage(const NowPlayingScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.videoPlayer,
+        pageBuilder: (context, state) {
+          final extra = state.extra;
+          final item = extra is SokoMediaItem ? extra : null;
+          if (item == null) return _premiumPage(const _MissingRouteData());
+          return _premiumPage(VideoPlayerScreen(item: item));
+        },
       ),
     ],
   );

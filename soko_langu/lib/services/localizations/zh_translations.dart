@@ -2005,5 +2005,15 @@ const Map<String, Map<String, String>> zhTranslations = {
     'withdrawal_processing': '提现处理中',
     'withdrawal_success': '提现已提交！我们将尽快与您联系。',
     'yes_delete': '删除',
+    // 本地媒体播放器
+    'media': '音乐与视频',
+    'media_library': '音乐与视频',
+    'now_playing': '正在播放',
+    'music': '音乐',
+    'videos': '视频',
+    'import_files': '导入文件',
+    'no_media': '暂无曲目',
+    'permission_media_desc': 'Soko Vibe 需要读取您设备上的音乐和视频文件。',
+    'allow_access': '允许访问',
   },
 };

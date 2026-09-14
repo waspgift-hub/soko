@@ -2179,6 +2179,17 @@ class LocalizationService {
       'wrong_pin': 'PIN si sahihi',
       'yes_delete': 'Ndiyo, Futa',
       'youtube_music': 'YouTube Music',
+      // Local media player
+      'media': 'Muziki & Video',
+      'media_library': 'Muziki na Video',
+      'now_playing': 'Inacheza Sasa',
+      'music': 'Muziki',
+      'videos': 'Video',
+      'import_files': 'Ingiza Faili',
+      'no_media': 'Hakuna wimbo',
+      'permission_media_desc':
+          'Soko Vibe inahitaji ruhusa ya kusoma muziki na video kwenye kifaa chako.',
+      'allow_access': 'Ruhusu Upatikanaji',
     },
     'en': {
       'you_save': 'You save',
@@ -4385,6 +4396,17 @@ class LocalizationService {
       'withdraw_phone_hint': 'M-Pesa phone number',
       'withdrawal_processing': 'Processing...',
       'yes_delete': 'Yes, Delete',
+      // Local media player
+      'media': 'Music & Video',
+      'media_library': 'Music & Video',
+      'now_playing': 'Now Playing',
+      'music': 'Music',
+      'videos': 'Videos',
+      'import_files': 'Import Files',
+      'no_media': 'No track',
+      'permission_media_desc':
+          'Soko Vibe needs permission to read music and videos on your device.',
+      'allow_access': 'Allow Access',
     },
     ...zhTranslations,
   };

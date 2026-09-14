@@ -87,6 +87,11 @@ dependencies:
   speech_to_text: ^7.0.0
   mobile_scanner: ^6.0.0
   safe_text: ^2.1.7
+  # Local storage media player: just_audio + background/service notification,
+  # on_audio_query scans the device MediaStore for songs/videos.
+  just_audio: ^0.10.6
+  just_audio_background: ^0.0.1-beta.17
+  on_audio_query: ^2.9.0
 
 
 

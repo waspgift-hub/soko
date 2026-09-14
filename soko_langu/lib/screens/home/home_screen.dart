@@ -575,6 +575,17 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
               const SizedBox(height: AppInsets.sm),
+              // Local media player quick action — device music & video
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppInsets.lg),
+                child: _quickActionChip(
+                  cs,
+                  Icons.music_note_rounded,
+                  context.tr('media'),
+                  () => context.push(AppRoutes.mediaLibrary),
+                ),
+              ),
+              const SizedBox(height: AppInsets.sm),
               // Banners
               BannerRotator(flashSales: _flashSales.values.toList()),
               const SizedBox(height: AppInsets.sm),

@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'package:provider/provider.dart';
 import 'package:safe_text/safe_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -81,6 +82,20 @@ void main() async {
   await themeManager.load();
 
   await SafeTextFilter.init(language: Language.swahili);
+
+  // Background audio: registering the service before any AudioPlayer exists
+  // makes notification + lock-screen controls work from the first playback.
+  if (!kIsWeb) {
+    try {
+      await JustAudioBackground.init(
+        androidNotificationChannelId: 'com.soko_vibe.media.playback',
+        androidNotificationChannelName: 'Soko Vibe muziki',
+        androidNotificationOngoing: true,
+      );
+    } catch (e) {
+      debugPrint('JustAudioBackground: init failed — $e');
+    }
+  }
 
   // --- Firebase initialization (blocking — required before any Firestore call) ---
   try {
