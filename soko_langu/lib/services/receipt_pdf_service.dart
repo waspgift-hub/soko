@@ -8,8 +8,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
 
 class ReceiptPdfService {
-  static const _primaryColor = PdfColor.fromInt(0xFF2D6A4F);
-  static const _accentColor = PdfColor.fromInt(0xFF40916C);
+  static const _primaryColor = PdfColor.fromInt(0xFF009624);
+  static const _accentColor = PdfColor.fromInt(0xFF00C853);
   static const _greyColor = PdfColor.fromInt(0xFF6B7280);
 
   static Future<Uint8List> generate({

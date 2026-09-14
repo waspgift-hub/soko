@@ -32,8 +32,14 @@ class DsPrice extends StatelessWidget {
     final pct = hasDiscount
         ? ((1 - price / oldPrice!) * 100).round()
         : 0;
-    final priceStyle =
-        AppTypography.amount(color ?? (large ? cs.primary : cs.onSurface));
+    final priceStyle = AppTypography.amount(
+      color ?? cs.onSurface,
+    ).copyWith(
+      // Large prices stay primary-text colored (spec: prominence comes from
+      // bold JetBrains Mono type, not a green fill).
+      fontSize: large ? 18 : null,
+      fontWeight: large ? FontWeight.w700 : null,
+    );
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.center,
       spacing: 6,
@@ -57,12 +63,14 @@ class DsPrice extends StatelessWidget {
             padding:
                 const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
-              color: cs.errorContainer,
+              // Sale = good → green commerce chip, black on #00C853 keeps
+              // 9.4:1 regardless of theme.
+              color: cs.primary,
               borderRadius: BorderRadius.circular(999),
             ),
             child: Text(
               '-$pct%',
-              style: AppTypography.statusChip(cs.onErrorContainer),
+              style: AppTypography.statusChip(cs.onPrimary),
             ),
           ),
         ],

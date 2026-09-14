@@ -131,12 +131,6 @@
       + '<div class="sv-seller-strip" id="svSellerRow" role="list"></div></section>';
   }
 
-  function followStripHtml() {
-    return '<section class="sv-section" id="svFollowSec" style="display:none">'
-      + sectionHead(t('sv_followed_sellers'), '')
-      + '<div class="sv-seller-strip" id="svFollowRow" role="list"></div></section>';
-  }
-
   function sellerPill(p) {
     return '<a class="sv-seller-pill" href="#/store/' + encodeURIComponent(p.sellerId) + '" title="' + esc(t('sv_store_products')) + '">'
       + '<span class="sv-seller-av">' + esc((p.sellerName || '?').charAt(0).toUpperCase()) + '</span>'
@@ -145,36 +139,11 @@
       + '</a>';
   }
 
-  async function paintFollowed() {
-    const host = document.getElementById('svFollowRow');
-    const sec = document.getElementById('svFollowSec');
-    if (!host) return;
-    const u = (typeof AUTH !== 'undefined' && AUTH.currentUser) || null;
-    if (!u) { if (sec) sec.style.display = 'none'; return; }
-    let ids = [];
-    try {
-      const snap = await DB.collection('users').doc(u.uid).collection('following').limit(20).get();
-      ids = snap.docs.map((d) => d.id);
-    } catch (_) {}
-    if (document.body.dataset.route !== 'home') return;
-    if (!ids.length) { if (sec) sec.style.display = 'none'; return; }
-    const seen = {};
-    const picks = [];
-    ids.forEach((fid) => {
-      const p = Feed.list.find((x) => x.sellerId === fid && x.sellerName);
-      if (p && !seen[fid]) { seen[fid] = 1; picks.push(p); }
-    });
-    if (!picks.length) { if (sec) sec.style.display = 'none'; return; }
-    host.innerHTML = picks.slice(0, 10).map(sellerPill).join('');
-    if (sec) sec.style.display = '';
-  }
-
   function paintDynamic() {
     paintRails();
     paintSellers();
     paintBrands();
     paintRecent();
-    paintFollowed();
     wireRails();
   }
 
@@ -221,7 +190,6 @@
       + railHtml('svDealsRow', t('sv_deals'), '#/flash')
       + railHtml('svBestRow', t('sv_best'))
       + sellerStripHtml()
-      + followStripHtml()
       + sellerCtaHtml()
       + feedRegion(t('feed_all'), t('home_hero_sub'), chipsFor(''));
 

@@ -283,10 +283,9 @@ class ProductService {
       "condition": condition,
       "rating": 0.0,
       "reviewCount": 0,
-      "soldCount": 0,
       "isActive": true,
-      "isFeatured": false,
-      "featuredUntil": null,
+      // isFeatured/featuredUntil/isBoosted/boostedUntil/boostTier/soldCount are
+      // intentionally omitted: server owns them and rules reject them on create.
       "sellerKycApproved": sellerKycApproved,
       "searchKeywords": searchKeywords,
       "barcode": barcode,

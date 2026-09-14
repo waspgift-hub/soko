@@ -15,8 +15,6 @@ class FeedPostCard extends StatefulWidget {
   final Product product;
   final bool isLiked;
   final bool isSaved;
-  final bool isFollowing;
-  final bool showFollowButton;
   final int likeCount;
   final int commentCount;
   final String? badgeLabel;
@@ -30,7 +28,6 @@ class FeedPostCard extends StatefulWidget {
   final ValueChanged<bool>? onSave;
   final VoidCallback? onComment;
   final VoidCallback? onShare;
-  final ValueChanged<bool>? onFollow;
   final VoidCallback? onMore;
   final VoidCallback? onSellerTap;
 
@@ -39,8 +36,6 @@ class FeedPostCard extends StatefulWidget {
     required this.product,
     this.isLiked = false,
     this.isSaved = false,
-    this.isFollowing = false,
-    this.showFollowButton = true,
     this.likeCount = 0,
     this.commentCount = 0,
     this.badgeLabel,
@@ -54,7 +49,6 @@ class FeedPostCard extends StatefulWidget {
     this.onSave,
     this.onComment,
     this.onShare,
-    this.onFollow,
     this.onMore,
     this.onSellerTap,
   });
@@ -66,7 +60,6 @@ class FeedPostCard extends StatefulWidget {
 class _FeedPostCardState extends State<FeedPostCard> {
   late bool _liked = widget.isLiked;
   late bool _saved = widget.isSaved;
-  late bool _following = widget.isFollowing;
   int _page = 0;
   final _pageCtrl = PageController();
 
@@ -202,17 +195,7 @@ class _FeedPostCardState extends State<FeedPostCard> {
               ),
             ),
           ),
-          if (widget.showFollowButton)
-            TextButton(
-              onPressed: () async {
-                if (!await _guard()) return;
-                setState(() => _following = !_following);
-                widget.onFollow?.call(_following);
-              },
-              child: Text(_following
-                  ? context.tr('following', 'Following')
-                  : context.tr('follow', 'Follow')),
-            ),
+          const SizedBox(width: AppSpacing.s2),
           IconButton(
             icon: const Icon(Icons.more_vert),
             onPressed: widget.onMore,

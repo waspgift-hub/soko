@@ -1,48 +1,48 @@
 import 'package:flutter/material.dart';
 import 'app_typography.dart';
 
-// Brand rule: Soko Vibe green accent for emphasis (buttons, links, selection),
-// white canvas in light mode and black canvas in dark mode. Grays carry only
-// informational hierarchy. `seed` stays for API compatibility with theme
-// persistence but never influences the rendered palette.
+// Brand rule (§brand system): BLACK + WHITE canvas with a single GREEN accent
+// #00C853 for emphasis (commerce CTAs, links, selection). Green-on-white text
+// #00C853 only reaches ~2.2:1, so surface text/icons use Deep Green #009624
+// (3.9:1) via SokoColors.brandOnSurface; #00C853 is reserved for fills paired
+// with black text (9.4:1). Grays carry only informational hierarchy. `seed`
+// stays for API compatibility with theme persistence but never influences the
+// rendered palette.
 ThemeData buildLightTheme(Color seed) {
   final scheme = const ColorScheme.light(
-    // Single-source brand green shared across light and dark: #00B0B9
-    // (turquoise teal). One value, both modes → the brand always looks the
-    // same regardless of the selected theme (§brand identity single-source).
-    primary: Color(0xFF00B0B9),
-    onPrimary: Color(0xFF001F24),
-    primaryContainer: Color(0xFFE0F7F8),
-    onPrimaryContainer: Color(0xFF00363D),
-    inversePrimary: Color(0xFFB8B8B8),
-    secondary: Color(0xFF3B3B3B),
+    primary: Color(0xFF00C853),
+    onPrimary: Color(0xFF000000),
+    primaryContainer: Color(0xFFE8F5E9),
+    onPrimaryContainer: Color(0xFF00210B),
+    inversePrimary: Color(0xFF00C853),
+    secondary: Color(0xFF1A1A1A),
     onSecondary: Color(0xFFFFFFFF),
-    secondaryContainer: Color(0xFFEBEBEB),
-    onSecondaryContainer: Color(0xFF1C1C1C),
-    tertiary: Color(0xFF5C5C5C),
+    secondaryContainer: Color(0xFFE8E8E8),
+    onSecondaryContainer: Color(0xFF1A1A1A),
+    tertiary: Color(0xFF6B6B6B),
     onTertiary: Color(0xFFFFFFFF),
     tertiaryContainer: Color(0xFFF0F0F0),
-    onTertiaryContainer: Color(0xFF1C1C1C),
-    error: Color(0xFFBA1A1A),
+    onTertiaryContainer: Color(0xFF1A1A1A),
+    error: Color(0xFFD32F2F),
     onError: Color(0xFFFFFFFF),
     errorContainer: Color(0xFFFFDAD6),
     onErrorContainer: Color(0xFF410002),
-    surface: Color(0xFFFAFAFA),
-    onSurface: Color(0xFF09090B),
-    surfaceDim: Color(0xFFD9D9D9),
-    surfaceBright: Color(0xFFFAFAFA),
+    surface: Color(0xFFFFFFFF),
+    onSurface: Color(0xFF000000),
+    surfaceDim: Color(0xFFE5E5E5),
+    surfaceBright: Color(0xFFFFFFFF),
     surfaceContainerLowest: Color(0xFFFFFFFF),
-    surfaceContainerLow: Color(0xFFF4F4F5),
-    surfaceContainer: Color(0xFFECECEE),
-    surfaceContainerHigh: Color(0xFFE4E4E7),
-    surfaceContainerHighest: Color(0xFFD4D4D8),
-    onSurfaceVariant: Color(0xFF52525B),
+    surfaceContainerLow: Color(0xFFF7F7F7),
+    surfaceContainer: Color(0xFFF2F2F2),
+    surfaceContainerHigh: Color(0xFFECECEC),
+    surfaceContainerHighest: Color(0xFFE5E5E5),
+    onSurfaceVariant: Color(0xFF6B6B6B),
     outline: Color(0xFF747474),
-    outlineVariant: Color(0xFFE4E4E7),
+    outlineVariant: Color(0xFFE5E5E5),
     shadow: Color(0xFF000000),
     scrim: Color(0xFF000000),
-    inverseSurface: Color(0xFF121212),
-    onInverseSurface: Color(0xFFF5F5F5),
+    inverseSurface: Color(0xFF0B0B0B),
+    onInverseSurface: Color(0xFFF7F7F7),
   );
 
   return _buildTheme(scheme);
@@ -50,12 +50,12 @@ ThemeData buildLightTheme(Color seed) {
 
 ThemeData buildDarkTheme(Color seed) {
   final scheme = const ColorScheme.dark(
-    primary: Color(0xFF00B0B9),
-    onPrimary: Color(0xFFFFFFFF),
-    primaryContainer: Color(0xFF1B4D33),
-    onPrimaryContainer: Color(0xFFCFF5E3),
-    inversePrimary: Color(0xFF303030),
-    secondary: Color(0xFFD6D6D6),
+    primary: Color(0xFF00C853),
+    onPrimary: Color(0xFF000000),
+    primaryContainer: Color(0xFF10381C),
+    onPrimaryContainer: Color(0xFFB7F7C9),
+    inversePrimary: Color(0xFF009624),
+    secondary: Color(0xFFE8E8E8),
     onSecondary: Color(0xFF000000),
     secondaryContainer: Color(0xFF2A2A2A),
     onSecondaryContainer: Color(0xFFEBEBEB),
@@ -63,26 +63,26 @@ ThemeData buildDarkTheme(Color seed) {
     onTertiary: Color(0xFF000000),
     tertiaryContainer: Color(0xFF333333),
     onTertiaryContainer: Color(0xFFF0F0F0),
-    error: Color(0xFFF2B8B5),
-    onError: Color(0xFF601410),
+    error: Color(0xFFD32F2F),
+    onError: Color(0xFFFFFFFF),
     errorContainer: Color(0xFF8C1D18),
     onErrorContainer: Color(0xFFFFDAD6),
-    surface: Color(0xFF000000),
-    onSurface: Color(0xFFF4F4F5),
-    surfaceDim: Color(0xFF0D0D0D),
-    surfaceBright: Color(0xFF1F1F1F),
-    surfaceContainerLowest: Color(0xFF0A0A0A),
+    surface: Color(0xFF0B0B0B),
+    onSurface: Color(0xFFFFFFFF),
+    surfaceDim: Color(0xFF0B0B0B),
+    surfaceBright: Color(0xFF1E1E1E),
+    surfaceContainerLowest: Color(0xFF070707),
     surfaceContainerLow: Color(0xFF121212),
-    surfaceContainer: Color(0xFF171717),
-    surfaceContainerHigh: Color(0xFF1E1E1E),
-    surfaceContainerHighest: Color(0xFF27272A),
-    onSurfaceVariant: Color(0xFFA1A1AA),
+    surfaceContainer: Color(0xFF161616),
+    surfaceContainerHigh: Color(0xFF1C1C1C),
+    surfaceContainerHighest: Color(0xFF232323),
+    onSurfaceVariant: Color(0xFFA7A7A7),
     outline: Color(0xFF8E8E93),
-    outlineVariant: Color(0xFF2E2E32),
+    outlineVariant: Color(0xFF292929),
     shadow: Color(0xFF000000),
     scrim: Color(0xFF000000),
-    inverseSurface: Color(0xFFF4F4F5),
-    onInverseSurface: Color(0xFF0A0A0A),
+    inverseSurface: Color(0xFFF7F7F7),
+    onInverseSurface: Color(0xFF0B0B0B),
   );
 
   return _buildTheme(scheme);
@@ -90,26 +90,32 @@ ThemeData buildDarkTheme(Color seed) {
 
 ThemeData _buildTheme(ColorScheme scheme) {
   final isDark = scheme.brightness == Brightness.dark;
-  final glassBorder = isDark
-      ? const Color(0x2AFFFFFF)
-      : const Color(0x08000000);
 
-  final glassCard = isDark
-      ? const Color(0xFF171717).withValues(alpha: 0.65)
-      : const Color(0xFFFFFFFF).withValues(alpha: 0.82);
+  // Surfaces prefer solid, opaque fills for legibility; glass
+  // translucency is retained only for the floating nav bar and
+  // bottom sheets where layering is intentional.
+  final cardSurface = isDark ? scheme.surfaceContainerLow : scheme.surface;
+  final sheetSurface = isDark ? scheme.surfaceContainerLow : scheme.surface;
 
-  final glassSheet = isDark
-      ? const Color(0xFF121212).withValues(alpha: 0.75)
-      : const Color(0xFFFFFFFF).withValues(alpha: 0.88);
+  final brand = SokoColors(
+    commerce: const Color(0xFF00C853),
+    onCommerce: const Color(0xFF000000),
+    successText: isDark ? const Color(0xFF00C853) : const Color(0xFF009624),
+    warning: const Color(0xFFF59E0B),
+    brandOnSurface: isDark ? const Color(0xFF00C853) : const Color(0xFF009624),
+    deepGreen: const Color(0xFF009624),
+  );
 
   final base = ThemeData(
     useMaterial3: true,
     brightness: scheme.brightness,
     colorScheme: scheme,
+    extensions: [brand],
   );
 
   return base.copyWith(
     colorScheme: scheme,
+    extensions: [brand],
     scaffoldBackgroundColor: scheme.surface,
     textTheme: AppTypography.apply(base.textTheme, scheme),
     // Android 12+ sparkle ripple + consistent material transitions for the
@@ -198,8 +204,9 @@ ThemeData _buildTheme(ColorScheme scheme) {
 
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        backgroundColor: scheme.primary,
-        foregroundColor: scheme.onPrimary,
+        // PRIMARY BUTTON — black (light) / white (dark) for authority.
+        backgroundColor: isDark ? Colors.white : Colors.black,
+        foregroundColor: isDark ? Colors.black : Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
@@ -216,8 +223,9 @@ ThemeData _buildTheme(ColorScheme scheme) {
 
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: scheme.primary,
-        foregroundColor: scheme.onPrimary,
+        // Same authority treatment as Elevated for consistency.
+        backgroundColor: isDark ? Colors.white : Colors.black,
+        foregroundColor: isDark ? Colors.black : Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
@@ -231,7 +239,8 @@ ThemeData _buildTheme(ColorScheme scheme) {
 
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        foregroundColor: scheme.primary,
+        // SECONDARY BUTTON — outlined neutral, not green.
+        foregroundColor: scheme.onSurface,
         side: BorderSide(color: scheme.outlineVariant),
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
         shape: RoundedRectangleBorder(
@@ -256,12 +265,10 @@ ThemeData _buildTheme(ColorScheme scheme) {
 
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: isDark
-          ? const Color(0xFF171717).withValues(alpha: 0.55)
-          : const Color(0xFFF4F4F5).withValues(alpha: 0.7),
+      fillColor: isDark ? scheme.surfaceContainerLow : const Color(0xFFF7F7F7),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
+        borderSide: BorderSide(color: scheme.outlineVariant),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -269,7 +276,7 @@ ThemeData _buildTheme(ColorScheme scheme) {
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
+        borderSide: BorderSide(color: scheme.outlineVariant),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -295,17 +302,15 @@ ThemeData _buildTheme(ColorScheme scheme) {
     ),
 
     chipTheme: ChipThemeData(
-      backgroundColor: isDark
-          ? const Color(0xFF171717).withValues(alpha: 0.55)
-          : const Color(0xFFF4F4F5).withValues(alpha: 0.7),
-      selectedColor: scheme.primary.withValues(alpha: 0.12),
+      backgroundColor: isDark ? scheme.surfaceContainerLow : const Color(0xFFF7F7F7),
+      selectedColor: scheme.primary.withValues(alpha: 0.15),
       labelStyle: TextStyle(color: scheme.onSurface),
       secondaryLabelStyle: const TextStyle(
         fontSize: 10,
         fontWeight: FontWeight.w600,
         letterSpacing: 0.5,
       ),
-      side: BorderSide.none,
+      side: BorderSide(color: scheme.outlineVariant),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
       ),
@@ -313,43 +318,40 @@ ThemeData _buildTheme(ColorScheme scheme) {
     ),
 
     dividerTheme: DividerThemeData(
-      color: isDark
-          ? const Color(0xFF2E2E32)
-          : const Color(0xFFE4E4E7),
+      color: scheme.outlineVariant,
       thickness: 0.5,
       space: 1,
     ),
 
     snackBarTheme: SnackBarThemeData(
-      backgroundColor: isDark
-          ? const Color(0xFF1E1E1E).withValues(alpha: 0.75)
-          : const Color(0xFFFFFFFF).withValues(alpha: 0.88),
+      backgroundColor: isDark ? scheme.surfaceContainerHigh : scheme.surface,
       contentTextStyle: TextStyle(color: scheme.onSurface),
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: glassBorder),
+        side: BorderSide(color: scheme.outlineVariant),
       ),
       actionTextColor: scheme.primary,
       width: 440,
     ),
 
     dialogTheme: DialogThemeData(
-      backgroundColor: glassCard,
+      backgroundColor: cardSurface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: scheme.outlineVariant),
       ),
       elevation: 8,
     ),
 
     cardTheme: CardThemeData(
-      color: glassCard,
+      color: cardSurface,
       elevation: 0,
       surfaceTintColor: Colors.transparent,
       shadowColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.35)),
+        side: BorderSide(color: scheme.outlineVariant),
       ),
       clipBehavior: Clip.antiAlias,
     ),
@@ -415,11 +417,11 @@ ThemeData _buildTheme(ColorScheme scheme) {
 
     menuTheme: MenuThemeData(
       style: MenuStyle(
-        backgroundColor: WidgetStatePropertyAll(glassCard),
+        backgroundColor: WidgetStatePropertyAll(cardSurface),
         shape: WidgetStatePropertyAll(
           RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: glassBorder),
+            side: BorderSide(color: scheme.outlineVariant),
           ),
         ),
         elevation: WidgetStatePropertyAll(4),
@@ -449,7 +451,7 @@ ThemeData _buildTheme(ColorScheme scheme) {
     ),
 
     bottomSheetTheme: BottomSheetThemeData(
-      backgroundColor: glassSheet,
+      backgroundColor: sheetSurface,
       surfaceTintColor: Colors.transparent,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -458,16 +460,16 @@ ThemeData _buildTheme(ColorScheme scheme) {
     ),
 
     popupMenuTheme: PopupMenuThemeData(
-      color: glassCard,
+      color: cardSurface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: glassBorder),
+        side: BorderSide(color: scheme.outlineVariant),
       ),
       elevation: 4,
     ),
 
     drawerTheme: DrawerThemeData(
-      backgroundColor: glassSheet,
+      backgroundColor: sheetSurface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.only(
           topRight: Radius.circular(20),
@@ -484,16 +486,18 @@ ThemeData _buildTheme(ColorScheme scheme) {
     ),
 
     timePickerTheme: TimePickerThemeData(
-      backgroundColor: glassCard,
+      backgroundColor: cardSurface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: scheme.outlineVariant),
       ),
     ),
 
     datePickerTheme: DatePickerThemeData(
-      backgroundColor: glassCard,
+      backgroundColor: cardSurface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: scheme.outlineVariant),
       ),
       headerBackgroundColor: scheme.primary,
       headerForegroundColor: scheme.onPrimary,
@@ -501,15 +505,94 @@ ThemeData _buildTheme(ColorScheme scheme) {
 
     tooltipTheme: TooltipThemeData(
       decoration: BoxDecoration(
-        color: isDark
-            ? const Color(0xFF1E1E1E).withValues(alpha: 0.85)
-            : const Color(0xFF1A1A1A).withValues(alpha: 0.85),
+        color: isDark ? scheme.inverseSurface : const Color(0xFF1A1A1A),
         borderRadius: BorderRadius.circular(8),
       ),
       textStyle: TextStyle(
-        color: isDark ? Colors.white : scheme.onSurface,
+        color: isDark ? scheme.onInverseSurface : Colors.white,
         fontSize: 12,
       ),
     ),
   );
+}
+
+/// Brand tokens beyond the Material [ColorScheme].
+///
+/// [commerce] is the single #00C853 fill for marketplace CTAs (buy/sell/pay)
+/// and always pairs with black [onCommerce] text (9.4:1). [successText] and
+/// [brandOnSurface] are the surface-legible green tones — light mode Deep
+/// Green #009624 (3.9:1) because #00C853 text on white only reaches ~2.2:1.
+@immutable
+class SokoColors extends ThemeExtension<SokoColors> {
+  /// #00C853 commerce fill (buy/sell/pay, selected states).
+  final Color commerce;
+
+  /// Text/icons placed on [commerce] fills (black).
+  final Color onCommerce;
+
+  /// Green for success text/icons sitting on a plain surface.
+  final Color successText;
+
+  /// #F59E0B warning/pending accents.
+  final Color warning;
+
+  /// Green legible as text/icons on a plain surface (light: #009624, dark: #00C853).
+  final Color brandOnSurface;
+
+  /// Deep green #009624 for tints, charts and separators.
+  final Color deepGreen;
+
+  const SokoColors({
+    required this.commerce,
+    required this.onCommerce,
+    required this.successText,
+    required this.warning,
+    required this.brandOnSurface,
+    required this.deepGreen,
+  });
+
+  /// Resolves the active [SokoColors]. Falls back to plain green values so a
+  /// widget never crashes on an unextended theme.
+  static SokoColors of(BuildContext context) =>
+      Theme.of(context).extension<SokoColors>() ??
+      const SokoColors(
+        commerce: Color(0xFF00C853),
+        onCommerce: Color(0xFF000000),
+        successText: Color(0xFF009624),
+        warning: Color(0xFFF59E0B),
+        brandOnSurface: Color(0xFF009624),
+        deepGreen: Color(0xFF009624),
+      );
+
+  @override
+  SokoColors copyWith({
+    Color? commerce,
+    Color? onCommerce,
+    Color? successText,
+    Color? warning,
+    Color? brandOnSurface,
+    Color? deepGreen,
+  }) {
+    return SokoColors(
+      commerce: commerce ?? this.commerce,
+      onCommerce: onCommerce ?? this.onCommerce,
+      successText: successText ?? this.successText,
+      warning: warning ?? this.warning,
+      brandOnSurface: brandOnSurface ?? this.brandOnSurface,
+      deepGreen: deepGreen ?? this.deepGreen,
+    );
+  }
+
+  @override
+  SokoColors lerp(ThemeExtension<SokoColors>? other, double t) {
+    if (other is! SokoColors) return this;
+    return SokoColors(
+      commerce: Color.lerp(commerce, other.commerce, t)!,
+      onCommerce: Color.lerp(onCommerce, other.onCommerce, t)!,
+      successText: Color.lerp(successText, other.successText, t)!,
+      warning: Color.lerp(warning, other.warning, t)!,
+      brandOnSurface: Color.lerp(brandOnSurface, other.brandOnSurface, t)!,
+      deepGreen: Color.lerp(deepGreen, other.deepGreen, t)!,
+    );
+  }
 }

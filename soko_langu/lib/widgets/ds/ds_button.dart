@@ -68,24 +68,30 @@ class DsButton extends StatelessWidget {
     final disabled = !_enabled;
 
     final (Color fill, Color fg, BorderSide side) = switch (variant) {
+      // Primary stays the #00C853 commerce CTA (black-on-green 9.4:1). The
+      // black/white "authority" control lives in the Elevated/FilledButton
+      // theme; green is reserved for marketplace buy/sell/pay actions.
       DsButtonVariant.primary => (
           scheme.primary,
           scheme.onPrimary,
           BorderSide.none,
         ),
+      // Secondary = outlined neutral (spec: not green); quiet third-tier
+      // actions are linear/stripped so green never reads as a "selectable"
+      // state outside commerce.
       DsButtonVariant.secondary => (
           Colors.transparent,
-          scheme.primary,
-          BorderSide(color: scheme.primary, width: 1.5),
+          scheme.onSurface,
+          BorderSide(color: scheme.outlineVariant, width: 1.5),
         ),
       DsButtonVariant.tonal => (
-          scheme.primary.withValues(alpha: 0.12),
-          scheme.primary,
+          scheme.surfaceContainerHighest,
+          scheme.onSurface,
           BorderSide.none,
         ),
       DsButtonVariant.ghost => (
           Colors.transparent,
-          scheme.primary,
+          scheme.onSurfaceVariant,
           BorderSide.none,
         ),
       DsButtonVariant.danger => (scheme.error, scheme.onError, BorderSide.none),

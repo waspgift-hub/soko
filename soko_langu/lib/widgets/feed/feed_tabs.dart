@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import '../../extensions/context_tr.dart';
 import '../../theme/app_dimens.dart';
 
-/// Social feed selector: For You / Following / Nearby / Trending.
+/// Social feed selector: For You / Nearby / Trending.
 /// The selected tab is filled; others are outlined chips.
-enum FeedTab { forYou, following, nearby, trending }
+enum FeedTab { forYou, nearby, trending }
 
 class FeedTabs extends StatelessWidget {
   final FeedTab selected;
@@ -20,8 +20,6 @@ class FeedTabs extends StatelessWidget {
     switch (t) {
       case FeedTab.forYou:
         return context.tr('for_you', 'For You');
-      case FeedTab.following:
-        return context.tr('following', 'Following');
       case FeedTab.nearby:
         return context.tr('nearby', 'Nearby');
       case FeedTab.trending:

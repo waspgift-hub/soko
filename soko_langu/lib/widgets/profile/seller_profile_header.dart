@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import '../../theme/app_dimens.dart';
 import '../ds/ds.dart';
 
-/// Seller-specific profile header with storefront badge, rating and follow/chat
-/// action buttons.
+/// Seller-specific profile header with storefront badge, rating and chat
+/// action button.
 class SellerProfileHeader extends StatelessWidget {
   final String name;
   final String? imageUrl;
@@ -11,8 +11,6 @@ class SellerProfileHeader extends StatelessWidget {
   final double rating;
   final int reviewCount;
   final bool isVerified;
-  final bool isFollowing;
-  final VoidCallback? onFollow;
   final VoidCallback? onChat;
   final VoidCallback? onAvatarTap;
 
@@ -24,8 +22,6 @@ class SellerProfileHeader extends StatelessWidget {
     this.rating = 0,
     this.reviewCount = 0,
     this.isVerified = false,
-    this.isFollowing = false,
-    this.onFollow,
     this.onChat,
     this.onAvatarTap,
   });
@@ -138,21 +134,6 @@ class SellerProfileHeader extends StatelessWidget {
         const SizedBox(height: AppSpacing.s4),
         Row(
           children: [
-            if (onFollow != null)
-              Expanded(
-                child: DsButton(
-                  onPressed: onFollow,
-                  variant: isFollowing ? DsButtonVariant.secondary : DsButtonVariant.primary,
-                  size: DsButtonSize.md,
-                  fullWidth: true,
-                  label: isFollowing ? 'Following' : 'Follow',
-                  icon: isFollowing
-                      ? Icons.person_remove_outlined
-                      : Icons.person_add_outlined,
-                ),
-              ),
-            if (onFollow != null && onChat != null)
-              const SizedBox(width: AppSpacing.s3),
             if (onChat != null)
               Expanded(
                 child: DsButton(

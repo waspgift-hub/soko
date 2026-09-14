@@ -1,5 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'api_config.dart';
 
 class FraudAlert {
@@ -94,17 +97,31 @@ class FraudPreventionService {
     required String description,
     String? productId,
   }) async {
-    await _db.collection('fraud_alerts').add({
-      'sellerId': sellerId,
-      'sellerName': sellerName,
-      'type': type,
-      'severity': severity,
-      'description': description,
-      'productId': productId,
-      'resolved': false,
-      'detectedAt': FieldValue.serverTimestamp(),
-    });
-    debugPrint('FRAUD ALERT [$severity]: $description');
+    // fraud_alerts is admin-only in Firestore rules, so a direct client write
+    // is rejected. Route through the server endpoint instead — the server admin
+    // SDK owns the collection and applies a 1h dedupe window per seller+type.
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      final token = await user?.getIdToken();
+      await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/fraud/alerts'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'sellerId': sellerId,
+          'sellerName': sellerName,
+          'type': type,
+          'severity': severity,
+          'description': description,
+          'productId': productId,
+        }),
+      );
+      debugPrint('FRAUD ALERT [$severity]: $description');
+    } catch (e) {
+      debugPrint('Fraud alert delivery failed: $e');
+    }
   }
 
   /// Logs an alert when a seller tries to post a listing that duplicates an
@@ -116,8 +133,8 @@ class FraudPreventionService {
     required double price,
     required String existingId,
   }) async {
-    // fraud_alerts ni admin-only kwa rules, kwa hiyo ripoti inaweza
-    // kukataliwa kwa mtumiaji wa kawaida — isizuie ujumbe wa duplicate.
+    // Best-effort: server route applies a 1h dedupe window per seller+type, so
+    // a failed/duplicate delivery is non-fatal.
     try {
       await _raiseAlert(
         sellerId: sellerId,

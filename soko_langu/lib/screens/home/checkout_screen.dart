@@ -15,7 +15,6 @@ import '../../services/api_config.dart';
 import '../../widgets/input_field.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
-import '../../widgets/location_map_widget.dart';
 import '../../widgets/soko_vibe_loading.dart';
 import '../../utils/phone_utils.dart';
 import '../../services/user_service.dart';
@@ -230,14 +229,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     } catch (_) {}
   }
 
-  void _onPinChanged(double lat, double lng) {
-    setState(() {
-      _latitude = lat;
-      _longitude = lng;
-    });
-    _reverseGeocode(lat, lng);
-  }
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -334,16 +325,29 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 ),
                 if (_latitude != null && _longitude != null) ...[
                   const SizedBox(height: 16),
-                  _buildSectionTitle(context, cs, Icons.map_outlined, context.tr('view_map')),
-                  const SizedBox(height: 8),
-                  LocationMapWidget(
-                    targetLat: _latitude,
-                    targetLng: _longitude,
-                    height: 200,
-                    showDistance: true,
-                    interactive: true,
-                    draggablePin: true,
-                    onLocationChanged: _onPinChanged,
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: cs.primary.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.my_location, size: 18, color: cs.primary),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            context.tr('coordinates_confirmed', 'Eneo limekamatwa'),
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cs.primary),
+                          ),
+                        ),
+                        Text(
+                          '${_latitude!.toStringAsFixed(5)}, ${_longitude!.toStringAsFixed(5)}',
+                          style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ],

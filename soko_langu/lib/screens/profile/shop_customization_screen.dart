@@ -12,12 +12,12 @@ class ShopCustomizationScreen extends StatefulWidget {
 
 class _ShopCustomizationScreenState extends State<ShopCustomizationScreen> {
   List<Color> _presetColors() => [
-        const Color(0xFF9CD9B0),
+        const Color(0xFF00C853),
+        const Color(0xFF009624),
         const Color(0xFF000000),
         const Color(0xFF1C1C1C),
         const Color(0xFF3B3B3B),
         const Color(0xFF616161),
-        const Color(0xFF9E9E9E),
         const Color(0xFFFFFFFF),
       ];
 

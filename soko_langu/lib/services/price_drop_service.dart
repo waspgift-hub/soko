@@ -54,67 +54,42 @@ class PriceDropService {
     required String sellerPhone,
     required String productId,
     String productImage = '',
+    required String priceDropId,
   }) async {
     try {
-      final users = await _db.collection('users').limit(500).get();
-      final batch = _db.batch();
-      final List<String> fcmTokens = [];
-
-      for (var userDoc in users.docs) {
-        final notifRef = _db.collection('notifications').doc();
-        batch.set(notifRef, {
-          'userId': userDoc.id,
-          'type': 'price_drop',
-          'title': 'Punguzo Kubwa! $productName',
-          'body': 'Ilishuka kutoka $originalPrice hadi $newPrice! Bonyeza kununua.',
+      // Fan-out is SERVER-OWNED: Firestore rules reject client writes to other
+      // users' notification rows (userId must equal request.auth.uid). The
+      // server endpoint writes the in-app rows via the admin SDK, sends the
+      // OneSignal push (prefs-gated), and applies a 6h per-product cooldown.
+      final user = _auth.currentUser;
+      final token = await user?.getIdToken();
+      final resp = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/price-drop/broadcast'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'priceDropId': priceDropId,
           'productName': productName,
-          'productId': productId,
-          'sellerPhone': sellerPhone,
           'originalPrice': originalPrice,
           'newPrice': newPrice,
-          'image': productImage,
-          'data': {
-            'type': 'price_drop',
-            'image': productImage,
-          },
-          'isRead': false,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-        final token = userDoc.data()['fcmToken'] as String?;
-        if (token != null && token.isNotEmpty) {
-          fcmTokens.add(token);
-        }
-      }
-
-      await batch.commit();
-
-      // Send FCM push notifications
-      if (fcmTokens.isNotEmpty) {
-        try {
-          await http.post(
-            Uri.parse('${ApiConfig.baseUrl}/api/send-bulk-notification'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'title': 'Punguzo Kubwa! $productName',
-              'body': 'Ilishuka kutoka $originalPrice hadi $newPrice! Bonyeza kununua.',
-              'tokens': fcmTokens,
-              'data': {
-                'type': 'price_drop',
-                'productId': productId,
-                'productName': productName,
-                'sellerPhone': sellerPhone,
-                'originalPrice': originalPrice.toString(),
-                'newPrice': newPrice.toString(),
-                'image': productImage,
-              },
-            }),
-          );
-        } catch (e) {
-          debugPrint('broadcastPriceDrop FCM error: $e');
+          'discountPercent': discountPercent,
+          'sellerPhone': sellerPhone,
+          'productId': productId,
+          'productImage': productImage,
+        }),
+      );
+      if (resp.statusCode != 200) {
+        final body = jsonDecode(resp.body);
+        final msg = body['error'] ?? 'Broadcast failed';
+        if (body['error'] != null && resp.statusCode == 429) {
+          debugPrint('PriceDrop broadcast cooldown: $msg');
+          return;
         }
       }
     } catch (e) {
-      debugPrint('broadcastPriceDrop error: $e');
+      debugPrint('broadcastToAllUsers error: $e');
     }
   }
 

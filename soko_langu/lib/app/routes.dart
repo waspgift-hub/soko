@@ -59,5 +59,4 @@ static const String cart = '/cart';
   static const String buyerRequests = '/buyer-requests';
   static const String postBuyerRequest = '/post-buyer-request';
   static const String verifyEmail = '/verify-email';
-  static const String followList = '/follow-list';
 }

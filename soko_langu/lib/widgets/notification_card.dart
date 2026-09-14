@@ -141,8 +141,6 @@ class NotificationCard extends StatelessWidget {
         return Icons.payments_outlined;
       case 'promo':
         return Icons.local_offer_outlined;
-      case 'follow':
-        return Icons.person_add_alt_1_outlined;
       default:
         return Icons.notifications_outlined;
     }

@@ -41,8 +41,6 @@ model User {
   sellerProfile     SellerProfile?
   orders            Order[]         @relation("BuyerOrders")
   feedPosts         FeedPost[]
-  follows           Follow[]        @relation("Following")
-  followers         Follow[]        @relation("Followers")
   likes             Like[]
   comments          Comment[]
   saves             Save[]
@@ -574,19 +572,6 @@ model FeedPost {
   user    User     @relation(fields: [userId], references: [id])
 
   @@map("feed_posts")
-}
-
-model Follow {
-  id          String   @id @default(uuid()) @db.Uuid
-  followerId  String   @map("follower_id") @db.Uuid
-  followingId String   @map("following_id") @db.Uuid
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  follower  User @relation("Following", fields: [followerId], references: [id])
-  following User @relation("Followers", fields: [followingId], references: [id])
-
-  @@unique([followerId, followingId])
-  @@map("follows")
 }
 
 model Like {

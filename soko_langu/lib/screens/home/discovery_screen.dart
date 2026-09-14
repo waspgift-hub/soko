@@ -7,7 +7,6 @@ import '../../main.dart';
 import '../../services/product_service.dart';
 import '../../services/localization_service.dart';
 import '../../services/flash_sale_service.dart';
-import '../../services/follow_service.dart';
 import '../../models/product_model.dart';
 import '../../models/flash_sale_model.dart';
 import '../../widgets/feed/feed_tabs.dart';
@@ -33,11 +32,9 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
   bool get wantKeepAlive => true;
   final ProductService _productService = ProductService();
   final FlashSaleService _flashSaleService = FlashSaleService();
-  final FollowService _followService = FollowService();
   Map<String, FlashSale> _flashSales = {};
   StreamSubscription? _flashSub;
   FeedTab _tab = FeedTab.forYou;
-  Set<String> _followedIds = {};
   String _userLocation = '';
 
   @override
@@ -53,12 +50,6 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
-      final following =
-          await _followService.getFollowing(user.uid).first;
-      final ids = following
-          .map((e) => (e['sellerId'] ?? e['uid'] ?? '').toString())
-          .where((s) => s.isNotEmpty)
-          .toSet();
       String location = '';
       try {
         final doc = await FirebaseFirestore.instance
@@ -69,7 +60,6 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
       } catch (_) {}
       if (mounted) {
         setState(() {
-          _followedIds = ids;
           _userLocation = location;
         });
       }
@@ -118,10 +108,6 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
 
   List<Product> _forTab(List<Product> all) {
     switch (_tab) {
-      case FeedTab.following:
-        return all
-            .where((p) => _followedIds.contains(p.sellerId))
-            .toList();
       case FeedTab.nearby:
         final q = _userLocation.trim().toLowerCase();
         if (q.isEmpty) return [];
@@ -269,15 +255,6 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
 
   Widget _emptyForTab(BuildContext context) {
     switch (_tab) {
-      case FeedTab.following:
-        return DsEmptyState(
-          icon: Icons.people_outline,
-          title: context.tr('follow_sellers_empty',
-              'Follow sellers to see their latest products here.'),
-          actionLabel: context.tr('discover_sellers', 'Discover Sellers'),
-          onAction: () =>
-              setState(() => _tab = FeedTab.forYou),
-        );
       case FeedTab.nearby:
         if (_userLocation.isEmpty) {
           return DsEmptyState(

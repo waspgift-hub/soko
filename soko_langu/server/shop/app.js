@@ -1286,7 +1286,6 @@ function renderAccount() {
     + '</div>'
     + '<div><div class="tabs">'
     + '<button class="tab active" data-act="tab" data-tab="orders">' + t('orders_my') + '</button>'
-    + '<button class="tab" data-act="tab" data-tab="following">' + t('following') + '</button>'
     + '<button class="tab" data-act="tab" data-tab="profile">Akaunti</button>'
     + '</div><div id="tabBody"></div></div>'
     + '</div></div>';
@@ -1298,31 +1297,7 @@ function switchTab(tab) {
   const body = document.getElementById('tabBody');
   if (!body) return;
   if (tab === 'orders') { body.innerHTML = '<div class="order-list" id="ordHere"></div>'; loadOrdersInto(body); }
-  else if (tab === 'following') { body.innerHTML = '<div id="followHere"><div class="skel" style="height:64px"></div><div class="skel" style="height:64px"></div></div>'; loadFollowingInto(); }
   else body.innerHTML = profileEditHtml();
-}
-
-async function loadFollowingInto() {
-  const slot = document.getElementById('followHere');
-  if (!slot) return;
-  const user = AUTH.currentUser;
-  if (!user) { slot.innerHTML = emptyHtml(t('need_auth'), '', t('nav_signin')); return; }
-  let ids = [];
-  try {
-    const snap = await DB.collection('users').doc(user.uid).collection('following').limit(60).get();
-    ids = snap.docs.map((d) => d.id);
-  } catch (_) {}
-  if (!ids.length) { slot.innerHTML = emptyHtml(t('sv_no_following'), '', t('home_browse')); return; }
-  const rows = ids.map((fid) => {
-    const p = (typeof Feed !== 'undefined' && Feed.list.find((x) => x.sellerId === fid)) || null;
-    const nm = p ? p.sellerName : 'Muuzaji';
-    return '<div class="cart-item"><div class="avatar">' + esc(String(nm).slice(0, 1).toUpperCase()) + '</div>'
-      + '<div class="mid"><div class="nm">' + esc(nm) + (p && p.sellerKycApproved ? ' ' + SELLER_SEAL : '') + '</div></div>'
-      + '<a class="sv-btn sv-btn-outline" href="#/store/' + encodeURIComponent(fid) + '">' + esc(t('sv_store')) + '</a>'
-      + '<button type="button" class="sv-btn sv-btn-outline" data-act="follow" data-following="' + esc(fid) + '">' + esc(t('following')) + '</button>'
-      + '</div>';
-  }).join('');
-  slot.innerHTML = rows;
 }
 
 async function loadOrdersInto(host) {

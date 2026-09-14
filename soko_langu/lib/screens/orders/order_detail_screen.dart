@@ -20,7 +20,6 @@ import '../../widgets/google_loading.dart';
 import '../../widgets/soko_vibe_loading.dart';
 import '../../widgets/payment_banner.dart';
 import '../../widgets/payment_result_dialog.dart';
-import '../../widgets/location_map_widget.dart';
 import '../../widgets/call_seller_button.dart';
 import '../../utils/phone_utils.dart';
 import '../../utils/rate_limiter.dart';
@@ -1371,12 +1370,23 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
               if (address['latitude'] != null && address['longitude'] != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: LocationMapWidget(
-                    targetLat: (address['latitude'] as num).toDouble(),
-                    targetLng: (address['longitude'] as num).toDouble(),
-                    height: 160,
-                    showDistance: true,
-                    interactive: false,
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.location_on,
+                        size: 16,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        context.tr('view_address', 'Delivery location'),
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               const SizedBox(height: 12),

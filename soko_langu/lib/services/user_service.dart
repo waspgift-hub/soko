@@ -276,8 +276,24 @@ class UserService {
     return results.values.toList();
   }
 
+  /// Whitelist of client-writable profile fields. Everything else (trust,
+  /// financial, admin state) is server-owned and rejected by Firestore rules.
+  static const _storefrontAllowedFields = {
+    'displayName', 'username', 'bio', 'location', 'mood',
+    'shopBanner', 'shopBannerColor', 'shopAccentColor',
+    'profileImage', 'paymentNumbers',
+  };
+
   Future<void> updateStorefront(String uid, Map<String, dynamic> data) async {
-    await _db.collection('users').doc(uid).update(data);
+    final update = <String, dynamic>{};
+    for (final entry in data.entries) {
+      if (_storefrontAllowedFields.contains(entry.key)) {
+        update[entry.key] = entry.value;
+      }
+    }
+    if (update.isNotEmpty) {
+      await _db.collection('users').doc(uid).update(update);
+    }
   }
 
   Future<void> deleteMyAccount() async {

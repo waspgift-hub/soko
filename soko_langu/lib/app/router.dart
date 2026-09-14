@@ -26,7 +26,6 @@ import '../screens/profile/profile_screen.dart';
 import '../screens/profile/public_profile_screen.dart';
 import '../screens/profile/settings_screen.dart';
 import '../screens/profile/edit_profile_screen.dart';
-import '../screens/profile/follow_list_screen.dart';
 import '../screens/profile/shop_customization_screen.dart';
 import '../screens/profile/wishlist_screen.dart';
 import '../screens/profile/my_ads_screen.dart';
@@ -274,14 +273,6 @@ GoRouter buildRouter() {
       GoRoute(
         path: AppRoutes.editProfile,
         pageBuilder: (context, state) => _premiumPage(const EditProfileScreen()),
-      ),
-      GoRoute(
-        path: '${AppRoutes.followList}/:userId',
-        pageBuilder: (context, state) {
-          final userId = state.pathParameters['userId']!;
-          final tab = int.tryParse(state.uri.queryParameters['tab'] ?? '0') ?? 0;
-          return _premiumPage(FollowListScreen(userId: userId, initialTab: tab));
-        },
       ),
       GoRoute(
         path: AppRoutes.shopCustomization,

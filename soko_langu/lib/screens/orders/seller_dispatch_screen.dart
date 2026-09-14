@@ -8,7 +8,6 @@ import '../../services/api_config.dart';
 import '../../extensions/context_tr.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/google_loading.dart';
-import '../../widgets/location_map_widget.dart';
 import '../../widgets/ds/ds.dart';
 
 /// Seller flow after escrow: hela ikiwekwa escrow, seller anaweka gharama ya
@@ -223,10 +222,6 @@ class _SellerDispatchScreenState extends State<SellerDispatchScreen> {
                       if (buyerName.isNotEmpty) _infoRow(cs, Icons.person_outline, context.tr('buyer_label'), buyerName),
                       if (buyerPhone.isNotEmpty) _infoRow(cs, Icons.phone_outlined, context.tr('phone'), buyerPhone.toString()),
                       if (addr != null) _infoRow(cs, Icons.place_outlined, context.tr('address'), '${addr['region'] ?? ''}, ${addr['district'] ?? ''}${(addr['ward'] as String? ?? '').isNotEmpty ? ', ${addr['ward']}' : ''}, ${addr['street'] ?? ''}'),
-                      if (addr != null && addr['latitude'] != null && addr['longitude'] != null) ...[
-                        const SizedBox(height: 8),
-                        ClipRRect(borderRadius: BorderRadius.circular(12), child: LocationMapWidget(targetLat: (addr['latitude'] as num).toDouble(), targetLng: (addr['longitude'] as num).toDouble(), targetLabel: buyerName, height: 120, showDistance: true, interactive: false)),
-                      ],
                       const SizedBox(height: 12),
                       // ── Step 1: Seller sets shipping cost after escrow ──
                       if (!hasShipping) ...[

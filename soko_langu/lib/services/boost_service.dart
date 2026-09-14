@@ -70,20 +70,23 @@ class BoostService {
     required String productId,
     required BoostTier tier,
   }) async {
+    // Boost activation is SERVER-OWNED: the ClickPesa webhook writes the
+    // boost fields atomically inside the same batch as the transaction status
+    // (server/index.js webhook handler). Firestore rules reject client writes
+    // to isBoosted/isFeatured, so writing here would silently fail. Instead we
+    // poll the product (public read) until the webhook commits so the UI
+    // reflects the boost without a manual reload. Reads are public, so this
+    // never trips the rules.
     try {
-      final now = DateTime.now();
-      final boostedUntil = now.add(Duration(days: tier.durationDays));
-
-      await _db.collection('products').doc(productId).update({
-        'isBoosted': true,
-        'boostedUntil': Timestamp.fromDate(boostedUntil),
-        'boostTier': tier.name,
-        'isFeatured': true,
-        'featuredUntil': Timestamp.fromDate(boostedUntil),
-      });
+      for (var i = 0; i < 10; i++) {
+        final snap = await _db.collection('products').doc(productId).get();
+        final data = snap.data();
+        if (data != null && data['isBoosted'] == true) return;
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+      debugPrint('BoostService: boost not confirmed after poll window');
     } catch (e) {
-      debugPrint('BoostService handleBoostPaymentSuccess: $e');
-      rethrow;
+      debugPrint('BoostService handleBoostPaymentSuccess verify: $e');
     }
   }
 

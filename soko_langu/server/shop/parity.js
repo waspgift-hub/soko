@@ -334,62 +334,18 @@
       : emptyHtml(t('empty_filter'), '', t('home_browse'));
   }
 
-  /* ---------- Follow sellers ---------- */
-
-  function followKey(el) { return { sellerUid: decodeURIComponent(el.dataset.s || ''), btn: el }; }
-
-  async function toggleFollow(btn, sellerUid) {
-    const u = AUTH.currentUser;
-    if (!u) { renderAuthForm('signin'); toast(t('need_auth')); return; }
-    if (u.uid === sellerUid) { toast(t('cannot_follow_self')); return; }
-    try {
-      const ref = DB.collection('users').doc(u.uid).collection('following').doc(sellerUid);
-      const snap = await ref.get().catch(() => null);
-      const is = snap && snap.exists;
-      const batch = DB.batch();
-      if (is) {
-        batch.delete(ref);
-        batch.delete(DB.collection('users').doc(sellerUid).collection('followers').doc(u.uid));
-        batch.update(DB.collection('users').doc(u.uid), { followingCount: FV.increment(-1) });
-        batch.update(DB.collection('users').doc(sellerUid), { followersCount: FV.increment(-1) });
-      } else {
-        batch.set(ref, { userId: sellerUid, followedAt: FV.serverTimestamp() });
-        batch.set(DB.collection('users').doc(sellerUid).collection('followers').doc(u.uid), { userId: u.uid, followedAt: FV.serverTimestamp() });
-        batch.update(DB.collection('users').doc(u.uid), { followingCount: FV.increment(1) });
-        batch.update(DB.collection('users').doc(sellerUid), { followersCount: FV.increment(1) });
-      }
-      await batch.commit();
-      const t = btn;
-      t.textContent = is ? t('follow') : t('following');
-      t.classList.toggle('on', !is);
-    } catch (e) { toast(errMsg(e)); }
-  }
-
-  /* ---------- Product extras: comments + chat + follow---------- */
+  /* ---------- Product extras: comments + chat ---------- */
 
   async function parityProductExtras(p) {
     const host = document.getElementById('revHost');
     if (!host) return;
     const u = AUTH.currentUser;
-    const followBtn = u && u.uid !== p.sellerId
-      ? '<button class="btn-outline" id="followBtn" data-following="' + esc(p.sellerId) + '">' + esc(t('follow')) + '</button>' : '';
     const chatBtn = '<a class="btn-outline" href="#/chat/' + encodeURIComponent(p.sellerId) + '?name=' + encodeURIComponent(p.sellerName || 'Muuzaji') + '&product=' + encodeURIComponent(p.id) + '">'
       + '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H4l1.5-3.5A8 8 0 1 1 21 12Z"/><path d="M8 12h8M8 8h4"/></svg>'
       + ' ' + esc(t('chat_seller')) + '</a>';
-    const socialRow = (followBtn || chatBtn) ? '<div class="rowbtns" style="margin-top:14px">' + chatBtn + followBtn + '</div>' : '';
+    const socialRow = chatBtn ? '<div class="rowbtns" style="margin-top:14px">' + chatBtn + '</div>' : '';
     const commentWrap = '<div class="reviews" id="commentsHost" style="max-width:720px;margin:26px auto 0"></div>';
     host.insertAdjacentHTML('afterend', socialRow + commentWrap);
-    if (u && u.uid !== p.sellerId) {
-      DB.collection('users').doc(u.uid).collection('following').doc(p.sellerId).get()
-        .then((s) => {
-          const b = document.getElementById('followBtn');
-          if (b && s.exists) {
-            b.classList.add('on');
-            b.textContent = t('following');
-          }
-        })
-        .catch(() => {});
-    }
     loadComments(p.id, p.sellerId, u);
   }
 
@@ -1577,7 +1533,6 @@
     phverify: () => phoneOtpStep2(),
     phback: () => renderAuthForm('signin'),
     trendchip: (el) => searchSubmit(el.dataset.q || '', ''),
-    follow: (el) => toggleFollow(el, decodeURIComponent(el.dataset.following || el.dataset.s || '')),
     addcomment: (el) => sendComment(decodeURIComponent(el.dataset.p || '')),
     addreply: (el) => sendReply(decodeURIComponent(el.dataset.p || ''), decodeURIComponent(el.dataset.c || ''), el),
     togglereplies: (el) => toggleReplies(decodeURIComponent(el.dataset.p || ''), decodeURIComponent(el.dataset.c || ''), el),

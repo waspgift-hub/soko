@@ -63,23 +63,6 @@ service cloud.firestore {
         && incoming.get('isSuspended', false) != true;
     }
 
-    // Social counters (followers/following) may move by exactly +-1 per
-    // write by any signed-in, non-suspended user. Follow/unfollow batches
-    // touch the OTHER party's counters, so owner-only writes would break
-    // follows entirely. Values can never jump or go negative; every other
-    // field stays owner-only.
-    function socialCounterDeltaOnly() {
-      let changed = request.resource.data.diff(resource.data).affectedKeys();
-      let oldFollowers = resource.data.get('followersCount', 0);
-      let newFollowers = request.resource.data.get('followersCount', oldFollowers);
-      let oldFollowing = resource.data.get('followingCount', 0);
-      let newFollowing = request.resource.data.get('followingCount', oldFollowing);
-      return changed.hasOnly(['followersCount', 'followingCount'])
-        && (newFollowers == oldFollowers + 1 || newFollowers == oldFollowers - 1 || newFollowers == oldFollowers)
-        && (newFollowing == oldFollowing + 1 || newFollowing == oldFollowing - 1 || newFollowing == oldFollowing)
-        && newFollowers >= 0 && newFollowing >= 0;
-    }
-
     // ─── USERS ──────────────────────────────────────────────
     match /users/{userId} {
       allow read: if isSignedIn();
@@ -88,24 +71,8 @@ service cloud.firestore {
       allow create: if isOwner(userId) && noSensitiveCreateFields();
       // Clients may update their own profile BUT NOT financial, trust,
       // or boost fields. Only the admin SDK (server webhook) may touch those.
-      // Exception: social counter +-1 moves (follow/unfollow across users).
-      allow update: if (isOwner(userId) && noSensitiveFieldChanges()) || isAdmin() || (isSignedIn() && notSuspended() && socialCounterDeltaOnly());
+      allow update: if (isOwner(userId) && noSensitiveFieldChanges()) || isAdmin();
       allow delete: if isOwner(userId) || isAdmin();
-
-      match /following/{followingId} {
-        allow read: if isOwner(userId);
-        // Owner manages own following list only (create/delete, no edits).
-        allow create, delete: if isOwner(userId) && notSuspended();
-        allow update: if false;
-      }
-
-      match /followers/{followerId} {
-        allow read: if isOwner(userId);
-        // Any signed-in user may add/remove ONLY their own follower entry
-        // (this is how A follows B). Nobody may edit entries or forge others.
-        allow create, delete: if isSignedIn() && notSuspended() && followerId == request.auth.uid;
-        allow update: if false;
-      }
 
       match /admin_withdrawals/{wdId} {
         allow read, write: if isOwner(userId);
@@ -119,7 +86,17 @@ service cloud.firestore {
     // ─── PRODUCTS ───────────────────────────────────────────
     match /products/{productId} {
       allow read: if true;
-      allow create: if isSignedIn() && notSuspended() && request.resource.data.sellerId == request.auth.uid;
+      // Create must not bootstrap boost/featured/sales state (server owns those
+      // via the ClickPesa webhook and purchase flow), and cannot start with a
+      // pre-inflated rating — otherwise a client could list a product with
+      // isBoosted:true + rating:5.0 and get a free featured placement.
+      allow create: if isSignedIn() && notSuspended() && request.resource.data.sellerId == request.auth.uid
+        && !request.resource.data.keys().hasAny([
+          'isBoosted', 'boostedUntil', 'boostTier',
+          'isFeatured', 'featuredUntil', 'soldCount'
+        ])
+        && request.resource.data.get('rating', 0) == 0
+        && request.resource.data.get('reviewCount', 0) == 0;
       allow update: if isSignedIn() && notSuspended() && (
         // seller owns the product AND is not tampering with boost fields
         (resource.data.sellerId == request.auth.uid && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
@@ -169,9 +146,14 @@ service cloud.firestore {
         isAdmin()
       );
       allow create: if isSignedIn() && request.resource.data.buyerId == request.auth.uid;
+      // Order lifecycle (status, escrow release, dispatch proof, OTP gen) is
+      // SERVER-OWNED via /api/orders/*. Clients may only soft-delete their own
+      // row or, for sellers, persist a previously missing shipping cost.
       allow update: if isSignedIn() && (
-        resource.data.buyerId == request.auth.uid ||
-        resource.data.sellerId == request.auth.uid ||
+        (resource.data.buyerId == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedForBuyer'])) ||
+        (resource.data.sellerId == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedForSeller', 'shippingCost', 'totalAmount'])) ||
         isAdmin()
       );
       allow delete: if isAdmin();
@@ -430,28 +412,54 @@ service cloud.firestore {
     }
 
     // ─── GROUPS ─────────────────────────────────────────────
+    // Client stores participantIds + adminIds + createdBy (NOT 'members' — the
+    // old rules referenced a field the client never writes, which blocked all
+    // group reads/writes). Admin management (makeAdmin/removeAdmin/deleteGroup
+    // /update details) is restricted to the creator or an existing admin. Any
+    // participant may still send messages (updates lastMessage* fields) or
+    // leave; a non-admin participant can never add themselves to adminIds.
     match /groups/{groupId} {
-      allow read: if isSignedIn() && (
-        resource.data.members.hasAny([request.auth.uid]) ||
-        isAdmin()
-      );
-      allow create: if isSignedIn();
+      function isGroupCreator() {
+        return resource.data.createdBy == request.auth.uid;
+      }
+
+      function isGroupAdmin() {
+        return resource.data.adminIds.hasAny([request.auth.uid]);
+      }
+
+      function isGroupParticipant() {
+        return resource.data.participantIds.hasAny([request.auth.uid]);
+      }
+
+      allow read: if isSignedIn() && (isGroupParticipant() || isAdmin());
+      // Creator must be a member of their own group and the only initial admin.
+      allow create: if isSignedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.participantIds.hasAny([request.auth.uid])
+        && request.resource.data.adminIds.hasAll([request.auth.uid])
+        && request.resource.data.adminIds.size() == 1;
       allow update: if isSignedIn() && (
-        resource.data.members.hasAny([request.auth.uid]) ||
-        isAdmin()
+        isAdmin() || isGroupCreator() || isGroupAdmin()
+        // message-send system writes by any member
+        || (isGroupParticipant()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'lastMessage', 'lastMessageTime', 'unreadCount'
+            ]))
+        // a non-admin participant may only remove themselves when leaving:
+        // adminIds must never gain the user's own uid (blocks self-promotion).
+        || (isGroupParticipant() && !isGroupAdmin()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participantIds', 'adminIds'])
+            && !request.resource.data.adminIds.hasAny([request.auth.uid]))
       );
-      allow delete: if isSignedIn() && (
-        resource.data.createdBy == request.auth.uid ||
-        isAdmin()
-      );
+      allow delete: if isSignedIn() && (isGroupCreator() || isAdmin());
 
       match /messages/{msgId} {
         allow read: if isSignedIn() && (
-          get(/databases/$(database)/documents/groups/$(groupId)).data.members.hasAny([request.auth.uid]) ||
+          get(/databases/$(database)/documents/groups/$(groupId)).data.participantIds.hasAny([request.auth.uid]) ||
           isAdmin()
         );
         allow create: if isSignedIn() && (
-          get(/databases/$(database)/documents/groups/$(groupId)).data.members.hasAny([request.auth.uid]) ||
+          get(/databases/$(database)/documents/groups/$(groupId)).data.participantIds.hasAny([request.auth.uid]) ||
           isAdmin()
         );
         allow update: if isSignedIn() && (resource.data.senderId == request.auth.uid || isAdmin());
