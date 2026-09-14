@@ -2178,6 +2178,93 @@ app.post('/api/send-bulk-notification', async (req, res) => {
 });
 
 // ============================================================
+// 💸 PRICE DROP — broadcast to all users
+// ============================================================
+// Clients must NOT write in-app notification rows for OTHER users directly —
+// Firestore rules require userId == request.auth.uid on notification create,
+// so a client batch would be rejected. This endpoint owns the fan-out via the
+// admin SDK: in-app rows + OneSignal push (respecting notification prefs, no
+// bypass). Gated to the price-drop owner AND a 6h per-product cooldown so a
+// seller can't spam the whole user base on every edit.
+app.post('/api/price-drop/broadcast', async (req, res) => {
+  try {
+    const auth = await requireUser(req, res);
+    if (!auth.ok) return;
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const { priceDropId, productName, originalPrice, newPrice, discountPercent, sellerPhone, productId, productImage } = req.body || {};
+    if (!priceDropId || !productId) {
+      return res.status(400).json({ error: 'Missing required fields (priceDropId, productId)' });
+    }
+
+    // Only the seller who owns the price drop may broadcast it.
+    const priceDropDoc = await db.collection('price_drops').doc(priceDropId).get();
+    if (!priceDropDoc.exists) return res.status(404).json({ error: 'Price drop not found' });
+    const priceDrop = priceDropDoc.data();
+    if (priceDrop.sellerId !== auth.uid) {
+      return res.status(403).json({ error: 'Only the seller can broadcast this price drop' });
+    }
+    if (priceDrop.isActive === false) {
+      return res.status(400).json({ error: 'Price drop is inactive' });
+    }
+
+    // Cooldown: one broadcast per product per 6 hours.
+    const since = new Date(Date.now() - 6 * 60 * 60 * 1000);
+    const recent = await db.collection('notifications')
+      .where('type', '==', 'price_drop')
+      .where('data.productId', '==', productId)
+      .where('createdAt', '>=', since)
+      .limit(1)
+      .get();
+    if (!recent.empty) {
+      return res.status(429).json({ error: 'Mtangazo umeshatumwa kwa bidhaa hii. Jaribu baadaye.' });
+    }
+
+    const usersSnap = await db.collection('users').limit(500).get();
+    const batch = db.batch();
+    const fcmTokens = [];
+
+    for (const userDoc of usersSnap.docs) {
+      const uid = userDoc.id;
+      const notifRef = db.collection('notifications').doc();
+      batch.set(notifRef, {
+        userId: uid,
+        type: 'price_drop',
+        title: `Punguzo Kubwa! ${productName || ''}`,
+        body: `Ilishuka kutoka ${originalPrice} hadi ${newPrice}! Bonyeza kununua.`,
+        productName: productName || '',
+        productId,
+        sellerPhone: sellerPhone || '',
+        originalPrice: originalPrice || 0,
+        newPrice: newPrice || 0,
+        image: productImage || '',
+        data: { type: 'price_drop', image: productImage || '' },
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      const token = userDoc.data().fcmToken;
+      if (token && typeof token === 'string' && token.length > 0) fcmTokens.push(token);
+    }
+
+    await batch.commit();
+
+    // Push: prefs-gated (marketing channel). fcmTokens are unused by the new
+    // OneSignal flow (external ids), kept for legacy FCM-compatible monitors.
+    const userIds = usersSnap.docs.map((d) => d.id);
+    let pushSent = 0;
+    if (userIds.length > 0) {
+      const osResult = await sendOneSignalBulk(userIds, `Punguzo Kubwa! ${productName || ''}`, `Ilishuka kutoka ${originalPrice} hadi ${newPrice}!`, { type: 'price_drop', productId });
+      pushSent = osResult.successCount;
+    }
+
+    res.json({ success: true, notifications: usersSnap.docs.length, pushSent });
+  } catch (e) {
+    console.error('/api/price-drop/broadcast error:', e?.message || e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================================
 // 🔒 ESCROW — Seller marks order as dispatched with proof
 // ============================================================
 app.post('/api/escrow/dispatch', async (req, res) => {
@@ -6567,6 +6654,60 @@ app.patch('/api/fraud/alerts/:id/dismiss', asyncHandler(async (req, res) => {
     await db.collection('fraud_alerts').doc(req.params.id).update({ resolved: true });
     res.json({ success: true });
   } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}));
+
+// Report a fraud alert (client-side heuristics)
+// Clients must NOT write to the fraud_alerts collection directly — the
+// Firestore rules are admin-only to prevent forged alerts. This endpoint lets
+// signed-in users report suspicious activity so the admin SDK (which bypasses
+// client rules) records it under a server-owned document.
+app.post('/api/fraud/alerts', asyncHandler(async (req, res) => {
+  try {
+    const auth = await requireUser(req, res);
+    if (!auth.ok) return;
+
+    const { sellerId, sellerName, type, severity, description, productId } = req.body || {};
+    if (!sellerId || !type || !description) {
+      return res.status(400).json({ error: 'Missing required fields (sellerId, type, description)' });
+    }
+
+    const validTypes = ['duplicate_listing', 'new_seller', 'bulk_high_value', 'rapid_listing', 'high_value_tx', 'non_kyc_payment', 'suspicious'];
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({ error: 'Invalid alert type' });
+    }
+    const severityNorm = ['low', 'medium', 'high', 'critical'].includes(severity) ? severity : 'low';
+
+    // Light dedupe: skip an identical unresolved alert for the same seller+type
+    // created in the last hour so spammy client retries don't flood the panel.
+    const since = new Date(Date.now() - 60 * 60 * 1000);
+    const recent = await db.collection('fraud_alerts')
+      .where('sellerId', '==', sellerId)
+      .where('type', '==', type)
+      .where('resolved', '==', false)
+      .where('createdAt', '>=', since)
+      .limit(1)
+      .get();
+    if (!recent.empty) {
+      return res.json({ success: true, deduped: true });
+    }
+
+    await db.collection('fraud_alerts').add({
+      sellerId,
+      sellerName: sellerName || '',
+      type,
+      severity: severityNorm,
+      description: String(description).slice(0, 500),
+      productId: productId || null,
+      resolved: false,
+      reportedBy: auth.uid,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      detectedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    res.json({ success: true });
+  } catch (e) {
+    console.error('/api/fraud/alerts POST error:', e?.message || e);
     res.status(500).json({ error: 'Internal server error' });
   }
 }));
