@@ -147,8 +147,15 @@ class _CartScreenState extends State<CartScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.shopping_cart_outlined,
-              size: 72, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.9, end: 1.0),
+            duration: const Duration(milliseconds: 900),
+            curve: Curves.easeOutBack,
+            builder: (context, scale, child) =>
+                Transform.scale(scale: scale, child: child),
+            child: Icon(Icons.shopping_cart_checkout_outlined,
+                size: 76, color: cs.primary.withValues(alpha: 0.85)),
+          ),
           const SizedBox(height: AppSpacing.s3),
           Text(
             context.tr('empty_cart', 'Empty Cart'),
