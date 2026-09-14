@@ -307,6 +307,13 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width
 .intro { font-size: 13px; color: var(--muted); margin-bottom: 16px; line-height: 1.6; }
 .summRow { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 
+/* ---------- Settings ---------- */
+.settings-wrap { display: flex; flex-direction: column; gap: 16px; }
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 12px; }
+.settings-group h4 { margin: 0 0 8px; font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.settings-group .lab.chk { display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; }
+.settings-group .lab.chk input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--sv-accent); }
+
 @media (max-width: 900px) {
   #menuBtn { display: inline-flex; }
   aside#sidebar { transform: translateX(-100%); box-shadow: var(--shadow-md); }

@@ -104,7 +104,7 @@ const NAV_SW = {
   'nav-kyc': 'Wathibitisho (KYC)', 'grp-sales': 'Mauzo', 'nav-promos': 'Boost & Flash Sales',
   'grp-finance': 'Fedha', 'nav-revenue': 'Mapato ya Jukwaa', 'nav-finance': 'Fedha & Ledger',
   'nav-referrals': 'Rufaa', 'grp-comm': 'Mawasiliano', 'nav-broadcasts': 'Matangazo ya Broad',
-  'nav-audit': 'Ukaguzi (Audit)', 'grp-stats': 'Takwimu', 'nav-stats': 'Takwimu za Matumizi',
+  'nav-audit': 'Ukaguzi (Audit)', 'nav-settings': 'Mipangilio', 'grp-stats': 'Takwimu', 'nav-stats': 'Takwimu za Matumizi',
 };
 const NAV_EN = {
   'nav-dashboard': 'Dashboard', 'grp-manage': 'Management', 'nav-users': 'Users', 'nav-sellers': 'Sellers',
@@ -113,13 +113,13 @@ const NAV_EN = {
   'nav-kyc': 'Verifications (KYC)', 'grp-sales': 'Sales', 'nav-promos': 'Boost & Flash Sales',
   'grp-finance': 'Finance', 'nav-revenue': 'Platform Revenue', 'nav-finance': 'Finance & Ledger',
   'nav-referrals': 'Referrals', 'grp-comm': 'Communication', 'nav-broadcasts': 'Broadcasts',
-  'nav-audit': 'Audit', 'grp-stats': 'Stats', 'nav-stats': 'Usage Statistics',
+  'nav-audit': 'Audit', 'nav-settings': 'Settings', 'grp-stats': 'Stats', 'nav-stats': 'Usage Statistics',
 };
 const TITLES_EN = {
   dashboard: 'Dashboard', users: 'Users', sellers: 'Sellers', products: 'Products', orders: 'Orders',
   disputes: 'Disputes', refunds: 'Refunds', reports: 'Reports & Safety', kyc: 'Verifications (KYC)',
   promos: 'Boost & Flash Sales', revenue: 'Platform Revenue', finance: 'Finance & Ledger',
-  referrals: 'Referrals', broadcasts: 'Broadcasts', audit: 'Audit', stats: 'Usage Statistics',
+  referrals: 'Referrals', broadcasts: 'Broadcasts', audit: 'Audit', stats: 'Usage Statistics', settings: 'Settings',
 };
 const SW2EN = {
   // Nav / titles
@@ -199,6 +199,20 @@ const SW2EN = {
   'Sasisha': 'Refresh', 'Badilisha lugha': 'Language',
   // Confirms / generic
   'Imefanyika': 'Done', 'imefanyika': 'done', 'Inaendeshwa…': 'Running…',
+  'Mipangilio': 'Settings', 'Mipangilio ya Jumla': 'General Settings', 'Jina na Nembo': 'Name & Logo',
+  'Muda na Eneo': 'Time & Region', 'Mawasiliano ya Msingi': 'Basic Contact',
+  'Watumiaji na Ufikiaji': 'Users & Access', 'Usajili': 'Registration', 'Roles & Permissions': 'Roles & Permissions',
+  'Usalama wa Watumiaji': 'User Security', 'Malipo na Sarafu': 'Payments & Currency',
+  'Sarafu': 'Currency', 'Kodi': 'Tax', 'Njia za Malipo': 'Payment Gateways',
+  'Barua pepe na Taarifa': 'Email & Notifications', 'SMTP': 'SMTP', 'SMS Gateway': 'SMS Gateway',
+  'Violezo': 'Templates', 'Viunganishi na API Keys': 'Integrations & API Keys',
+  'Analytics': 'Analytics', 'Kuingia kwa Mitandao': 'Social Login', 'Hifadhi ya Wingu': 'Cloud Storage',
+  'Usalama na Matengenezo': 'Security & Maintenance', 'Hali ya Matengenezo': 'Maintenance Mode',
+  'IP Whitelist / Blacklist': 'IP Whitelist / Blacklist', 'Nakala ya Akiba': 'Backup',
+  'Utendaji na Uboreshaji': 'Performance & Optimization', 'Cache': 'Cache', 'Upakiaji': 'Upload',
+  'Inapakia mipangilio…': 'Loading settings…', 'Hifadhi mipangilio': 'Save settings',
+  'Mipangilio imehifadhiwa': 'Settings saved', 'Imeshindwa kuhifadhi mipangilio': 'Failed to save settings',
+  'Futa cache': 'Clear cache', 'Imefutwa': 'Cleared',
 };
 function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 const SW2EN_PAIRS = Object.entries(SW2EN).sort((a, b) => b[0].length - a[0].length);
@@ -355,7 +369,7 @@ const TITLES = {
   promos: 'Boost & Flash Sales',
   revenue: 'Mapato ya Jukwaa',
   finance: 'Fedha & Ledger', referrals: 'Rufaa', broadcasts: 'Matangazo ya Broad', audit: 'Ukaguzi (Audit)',
-  stats: 'Takwimu za Matumizi',
+  stats: 'Takwimu za Matumizi', settings: 'Mipangilio',
 };
 const Pg = {};
 function pgState(sec, field) {
@@ -2116,6 +2130,207 @@ async function kycReview(uid, name, action) {
 }
 
 // ---------------------------------------------------------------------------
+// Settings (Mipangilio) — 7 groups, Firestore-backed, secrets masked as ******
+// ---------------------------------------------------------------------------
+async function loadSettings() {
+  const el = secEl('settings');
+  el.innerHTML = '<div class="card"><div class="sectionempty"><div class="spinner" style="margin:0 auto 12px"></div>Inapakia mipangilio…</div></div>';
+  try {
+    const j = await getJSON('/api/v1/admin/settings');
+    const s = (j && j.data) || j || {};
+    const g = s.general || {}, ra = s.registrationAndAuth || {}, pc = s.paymentsAndCurrency || {}, gw = (pc.gateways || {}),
+      em = s.emailNotifications || {}, it = s.integrations || {}, oa = (it.oauth || {}), og = (oa.google || {}), of = (oa.facebook || {}),
+      sm = s.securityMaintenance || {}, pf = s.performance || {};
+    const chk = (v) => v ? 'checked' : '';
+    const sel = (cur, val) => cur === val ? ' selected' : '';
+    el.innerHTML =
+      '<div class="settings-wrap">' +
+      // 1 Jumla
+      '<div class="card"><h3 data-i18n="grp-general">Mipangilio ya Jumla</h3>' +
+      '<div class="settings-grid">' +
+      '<div class="settings-group"><h4>Jina na Nembo</h4>' +
+      '<label class="lab">Jina la jukwaa</label><input id="st-general-platformName" class="field" value="' + esc(g.platformName || '') + '">' +
+      '<label class="lab">Tagline</label><input id="st-general-tagline" class="field" value="' + esc(g.tagline || '') + '">' +
+      '<label class="lab">Logo URL</label><input id="st-general-logoUrl" class="field" value="' + esc(g.logoUrl || '') + '" placeholder="https://">' +
+      '</div>' +
+      '<div class="settings-group"><h4>Muda na Eneo</h4>' +
+      '<label class="lab">Timezone</label><input id="st-general-timezone" class="field" value="' + esc(g.timezone || '') + '">' +
+      '<label class="lab">Lugha</label><select id="st-general-language" class="field"><option value="sw"' + sel(g.language, 'sw') + '>sw</option><option value="en"' + sel(g.language, 'en') + '>en</option></select>' +
+      '<label class="lab">Date format</label><select id="st-general-dateFormat" class="field"><option value="short"' + sel(g.dateFormat, 'short') + '>short</option><option value="long"' + sel(g.dateFormat, 'long') + '>long</option></select>' +
+      '<label class="lab">Time format</label><select id="st-general-timeFormat" class="field"><option value="24h"' + sel(g.timeFormat, '24h') + '>24h</option><option value="12h"' + sel(g.timeFormat, '12h') + '>12h</option></select>' +
+      '</div>' +
+      '<div class="settings-group"><h4>Mawasiliano ya Msingi</h4>' +
+      '<label class="lab">Admin email</label><input id="st-general-adminEmail" class="field" value="' + esc(g.adminEmail || '') + '">' +
+      '<label class="lab">Support email</label><input id="st-general-supportEmail" class="field" value="' + esc(g.supportEmail || '') + '">' +
+      '<label class="lab">Support phone</label><input id="st-general-supportPhone" class="field" value="' + esc(g.supportPhone || '') + '">' +
+      '</div></div></div>' +
+      // 2 Watumiaji na Ufikiaji
+      '<div class="card"><h3>Watumiaji na Ufikiaji</h3><div class="settings-grid">' +
+      '<div class="settings-group"><h4>Usajili</h4>' +
+      '<label class="lab chk"><input type="checkbox" id="st-ra-allowRegistration" ' + chk(ra.allowRegistration) + '> Ruhusu usajili</label>' +
+      '<label class="lab chk"><input type="checkbox" id="st-ra-allowSellerSignup" ' + chk(ra.allowSellerSignup) + '> Ruhusu wauzaji kujisajili</label>' +
+      '<label class="lab">Default role</label><select id="st-ra-defaultUserRole" class="field"><option value="buyer"' + sel(ra.defaultUserRole, 'buyer') + '>buyer</option><option value="seller"' + sel(ra.defaultUserRole, 'seller') + '>seller</option></select>' +
+      '</div>' +
+      '<div class="settings-group"><h4>Roles & Permissions</h4><p class="dim">Roles: buyer / seller / admin (in-app)</p>' +
+      '<label class="lab chk"><input type="checkbox" id="st-ra-requireEmailVerification" ' + chk(ra.requireEmailVerification) + '> Lazimisha uthibitisho wa email</label>' +
+      '<label class="lab chk"><input type="checkbox" id="st-ra-requirePhoneVerification" ' + chk(ra.requirePhoneVerification) + '> Lazimisha uthibitisho wa simu</label>' +
+      '</div>' +
+      '<div class="settings-group"><h4>Usalama wa Watumiaji</h4>' +
+      '<label class="lab chk"><input type="checkbox" id="st-ra-enable2FA" ' + chk(ra.enable2FA) + '> Washa 2FA</label>' +
+      '<label class="lab">Muda wa session (dak)</label><input id="st-ra-sessionTimeoutMinutes" class="field" type="number" value="' + esc(ra.sessionTimeoutMinutes || 60) + '">' +
+      '</div></div></div>' +
+      // 3 Malipo na Sarafu
+      '<div class="card"><h3>Malipo na Sarafu</h3><div class="settings-grid">' +
+      '<div class="settings-group"><h4>Sarafu</h4>' +
+      '<label class="lab">Sarafu</label><select id="st-pc-currency" class="field"><option value="TZS"' + sel(pc.currency, 'TZS') + '>TZS</option><option value="USD"' + sel(pc.currency, 'USD') + '>USD</option></select>' +
+      '<label class="lab">Kodi (%)</label><input id="st-pc-taxRatePct" class="field" type="number" step="0.01" value="' + esc(pc.taxRatePct ?? 0) + '">' +
+      '<label class="lab">Tume ya jukwaa (%)</label><input id="st-pc-platformCommissionPct" class="field" type="number" step="0.01" value="' + esc(pc.platformCommissionPct ?? 0) + '">' +
+      '</div>' +
+      '<div class="settings-group"><h4>Escrow</h4>' +
+      '<label class="lab chk"><input type="checkbox" id="st-pc-enableEscrow" ' + chk(pc.enableEscrow) + '> Washa escrow</label>' +
+      '<label class="lab">Siku kabla ya auto-release</label><input id="st-pc-escrowReleaseDays" class="field" type="number" value="' + esc(pc.escrowReleaseDays ?? 7) + '">' +
+      '<label class="lab">Gateway kuu</label><select id="st-pc-primaryGateway" class="field"><option value="clickpesa"' + sel(pc.primaryGateway, 'clickpesa') + '>ClickPesa</option><option value="azamPay"' + sel(pc.primaryGateway, 'azamPay') + '>AzamPay</option><option value="selcom"' + sel(pc.primaryGateway, 'selcom') + '>Selcom</option><option value="stripe"' + sel(pc.primaryGateway, 'stripe') + '>Stripe</option><option value="paypal"' + sel(pc.primaryGateway, 'paypal') + '>PayPal</option></select>' +
+      '</div>' +
+      '<div class="settings-group"><h4>Njia za Malipo</h4>' +
+      '<label class="lab">ClickPesa merchantId</label><input id="st-gw-clickpesa-merchantId" class="field" value="' + esc((gw.clickpesa || {}).merchantId || '') + '">' +
+      '<label class="lab">ClickPesa apiKey</label><input id="st-gw-clickpesa-apiKey" class="field" value="' + esc((gw.clickpesa || {}).apiKey || '') + '" placeholder="****** ikiwa imewekwa">' +
+      '<label class="lab">ClickPesa secret</label><input id="st-gw-clickpesa-secretKey" class="field" type="password" value="' + esc((gw.clickpesa || {}).secretKey || '') + '" placeholder="******">' +
+      '<label class="lab">AzamPay secret</label><input id="st-gw-azamPay-secretKey" class="field" type="password" value="' + esc((gw.azamPay || {}).secretKey || '') + '" placeholder="******">' +
+      '<label class="lab">Selcom secret</label><input id="st-gw-selcom-secretKey" class="field" type="password" value="' + esc((gw.selcom || {}).secretKey || '') + '" placeholder="******">' +
+      '<label class="lab">Stripe secret</label><input id="st-gw-stripe-secretKey" class="field" type="password" value="' + esc((gw.stripe || {}).secretKey || '') + '" placeholder="******">' +
+      '<label class="lab">PayPal secret</label><input id="st-gw-paypal-secretKey" class="field" type="password" value="' + esc((gw.paypal || {}).secretKey || '') + '" placeholder="******">' +
+      '</div></div></div>' +
+      // 4 Barua pepe na Taarifa
+      '<div class="card"><h3>Barua pepe na Taarifa</h3><div class="settings-grid">' +
+      '<div class="settings-group"><h4>SMTP</h4>' +
+      '<label class="lab">Host</label><input id="st-em-smtpHost" class="field" value="' + esc(em.smtpHost || '') + '">' +
+      '<label class="lab">Port</label><input id="st-em-smtpPort" class="field" type="number" value="' + esc(em.smtpPort || 587) + '">' +
+      '<label class="lab chk"><input type="checkbox" id="st-em-smtpSecure" ' + chk(em.smtpSecure) + '> TLS/secure</label>' +
+      '<label class="lab">SMTP user</label><input id="st-em-smtpUser" class="field" value="' + esc(em.smtpUser || '') + '" placeholder="******">' +
+      '<label class="lab">SMTP pass</label><input id="st-em-smtpPass" class="field" type="password" value="' + esc(em.smtpPass || '') + '" placeholder="******">' +
+      '<label class="lab">From email</label><input id="st-em-fromEmail" class="field" value="' + esc(em.fromEmail || '') + '">' +
+      '<label class="lab">From name</label><input id="st-em-fromName" class="field" value="' + esc(em.fromName || '') + '">' +
+      '</div>' +
+      '<div class="settings-group"><h4>SMS Gateway</h4><p class="dim">Beem / Twilio — tumia apiKey/secret hapa</p>' +
+      '<label class="lab">Provider</label><select id="st-em-smsProvider" class="field"><option value="beem"' + sel((s.sms && s.sms.provider) || 'beem', 'beem') + '>Beem</option><option value="twilio"' + sel((s.sms && s.sms.provider) || '', 'twilio') + '>Twilio</option></select>' +
+      '</div>' +
+      '<div class="settings-group"><h4>Violezo</h4>' +
+      '<label class="lab">Buyer signature</label><textarea id="st-em-signatures-buyer" class="field" rows="2">' + esc((em.signatures || {}).buyer || '') + '</textarea>' +
+      '<label class="lab">Seller signature</label><textarea id="st-em-signatures-seller" class="field" rows="2">' + esc((em.signatures || {}).seller || '') + '</textarea>' +
+      '</div></div></div>' +
+      // 5 Viunganishi
+      '<div class="card"><h3>Viunganishi na API Keys</h3><div class="settings-grid">' +
+      '<div class="settings-group"><h4>Analytics</h4>' +
+      '<label class="lab">GA Measurement ID</label><input id="st-it-analyticsId" class="field" value="' + esc(it.analyticsId || '') + '">' +
+      '<label class="lab">FB Pixel ID</label><input id="st-it-pixelId" class="field" value="' + esc(it.pixelId || '') + '">' +
+      '</div>' +
+      '<div class="settings-group"><h4>Kuingia kwa Mitandao</h4>' +
+      '<label class="lab">Google clientId</label><input id="st-it-oauth-google-clientId" class="field" value="' + esc(og.clientId || '') + '">' +
+      '<label class="lab">Google clientSecret</label><input id="st-it-oauth-google-clientSecret" class="field" type="password" value="' + esc(og.clientSecret || '') + '" placeholder="******">' +
+      '<label class="lab">Facebook appId</label><input id="st-it-oauth-facebook-appId" class="field" value="' + esc(of.appId || '') + '">' +
+      '<label class="lab">Facebook appSecret</label><input id="st-it-oauth-facebook-appSecret" class="field" type="password" value="' + esc(of.appSecret || '') + '" placeholder="******">' +
+      '</div>' +
+      '<div class="settings-group"><h4>Hifadhi ya Wingu</h4>' +
+      '<label class="lab">S3 bucket</label><input id="st-it-s3Bucket" class="field" value="' + esc(it.s3Bucket || '') + '">' +
+      '</div></div></div>' +
+      // 6 Usalama na Matengenezo
+      '<div class="card"><h3>Usalama na Matengenezo</h3><div class="settings-grid">' +
+      '<div class="settings-group"><h4>Hali ya Matengenezo</h4>' +
+      '<label class="lab chk"><input type="checkbox" id="st-sm-maintenanceMode" ' + chk(sm.maintenanceMode) + '> Washa maintenance mode</label>' +
+      '<label class="lab">Sababu</label><textarea id="st-sm-maintenanceReason" class="field" rows="2">' + esc(sm.maintenanceReason || '') + '</textarea>' +
+      '<label class="lab chk"><input type="checkbox" id="st-sm-allowSuspendedLogin" ' + chk(sm.allowSuspendedLogin) + '> Ruhusu suspended kuingia</label>' +
+      '</div>' +
+      '<div class="settings-group"><h4>IP Whitelist / Blacklist</h4>' +
+      '<label class="lab">Whitelist (comma)</label><textarea id="st-sm-ipWhitelist" class="field" rows="2">' + esc(sm.ipWhitelist || '') + '</textarea>' +
+      '<label class="lab">Blacklist (comma)</label><textarea id="st-sm-ipBlacklist" class="field" rows="2">' + esc(sm.ipBlacklist || '') + '</textarea>' +
+      '</div>' +
+      '<div class="settings-group"><h4>Nakala ya Akiba</h4>' +
+      '<label class="lab">Ratiba</label><select id="st-sm-backupSchedule" class="field"><option value="daily"' + sel(sm.backupSchedule, 'daily') + '>daily</option><option value="weekly"' + sel(sm.backupSchedule, 'weekly') + '>weekly</option><option value="off"' + sel(sm.backupSchedule, 'off') + '>off</option></select>' +
+      '</div></div></div>' +
+      // 7 Utendaji
+      '<div class="card"><h3>Utendaji na Uboreshaji</h3><div class="settings-grid">' +
+      '<div class="settings-group"><h4>Cache</h4>' +
+      '<label class="lab chk"><input type="checkbox" id="st-pf-enableCache" ' + chk(pf.enableCache) + '> Washa cache</label>' +
+      '<label class="lab">TTL (sec)</label><input id="st-pf-cacheTtlSeconds" class="field" type="number" value="' + esc(pf.cacheTtlSeconds ?? 300) + '">' +
+      '</div>' +
+      '<div class="settings-group"><h4>Upakiaji</h4>' +
+      '<label class="lab">Max upload MB</label><input id="st-pf-maxUploadMB" class="field" type="number" value="' + esc(pf.maxUploadMB ?? 5) + '">' +
+      '<label class="lab">Image max MB</label><input id="st-pf-imageMaxMB" class="field" type="number" value="' + esc(pf.imageMaxMB ?? 5) + '">' +
+      '<label class="lab chk"><input type="checkbox" id="st-pf-enableCompression" ' + chk(pf.enableCompression) + '> Washa compression</label>' +
+      '<label class="lab">API rate limit /min</label><input id="st-pf-apiRateLimitPerMin" class="field" type="number" value="' + esc(pf.apiRateLimitPerMin ?? 300) + '">' +
+      '</div></div></div>' +
+      '<div class="card" style="display:flex;gap:10px;align-items:center"><button class="btn accent" id="st-save">Hifadhi mipangilio</button><span class="dim" id="st-msg"></span><button class="btn" id="st-clearCache" style="margin-left:auto">Futa cache</button></div>' +
+      '</div>';
+    $('st-save').addEventListener('click', saveSettings);
+    $('st-clearCache').addEventListener('click', async () => {
+      $('st-msg').textContent = 'Inaendeshwa…';
+      try { await postJSON('/api/v1/admin/cache/clear', {}).catch(() => postJSON('/api/admin/cache/clear', {})); $('st-msg').textContent = 'Imefutwa'; toast('Cache imefutwa', true); } catch (e) { $('st-msg').textContent = esc(e.message); }
+    });
+    bindSection('settings'); touch(); icons();
+    if (LANG === 'en') applyLang(el);
+  } catch (e) { el.innerHTML = '<div class="card"><div class="err">' + esc(e.message) + '</div></div>'; }
+}
+
+async function saveSettings() {
+  const v = (id) => { const el = $(id); return el ? el.value : ''; };
+  const c = (id) => { const el = $(id); return el ? !!el.checked : false; };
+  const n = (id, d) => { const x = Number(v(id)); return Number.isFinite(x) ? x : d; };
+  const patch = {
+    general: {
+      platformName: v('st-general-platformName'), tagline: v('st-general-tagline'), logoUrl: v('st-general-logoUrl'),
+      timezone: v('st-general-timezone'), language: v('st-general-language'), dateFormat: v('st-general-dateFormat'), timeFormat: v('st-general-timeFormat'),
+      adminEmail: v('st-general-adminEmail'), supportEmail: v('st-general-supportEmail'), supportPhone: v('st-general-supportPhone'),
+    },
+    registrationAndAuth: {
+      allowRegistration: c('st-ra-allowRegistration'), allowSellerSignup: c('st-ra-allowSellerSignup'), defaultUserRole: v('st-ra-defaultUserRole'),
+      requireEmailVerification: c('st-ra-requireEmailVerification'), requirePhoneVerification: c('st-ra-requirePhoneVerification'),
+      enable2FA: c('st-ra-enable2FA'), sessionTimeoutMinutes: n('st-ra-sessionTimeoutMinutes', 60),
+    },
+    paymentsAndCurrency: {
+      currency: v('st-pc-currency'), taxRatePct: n('st-pc-taxRatePct', 0), platformCommissionPct: n('st-pc-platformCommissionPct', 0),
+      enableEscrow: c('st-pc-enableEscrow'), escrowReleaseDays: n('st-pc-escrowReleaseDays', 7), primaryGateway: v('st-pc-primaryGateway'),
+      gateways: {
+        clickpesa: { merchantId: v('st-gw-clickpesa-merchantId'), apiKey: v('st-gw-clickpesa-apiKey'), secretKey: v('st-gw-clickpesa-secretKey') },
+        azamPay: { secretKey: v('st-gw-azamPay-secretKey') },
+        selcom: { secretKey: v('st-gw-selcom-secretKey') },
+        stripe: { secretKey: v('st-gw-stripe-secretKey') },
+        paypal: { secretKey: v('st-gw-paypal-secretKey') },
+      },
+    },
+    emailNotifications: {
+      smtpHost: v('st-em-smtpHost'), smtpPort: n('st-em-smtpPort', 587), smtpSecure: c('st-em-smtpSecure'),
+      smtpUser: v('st-em-smtpUser'), smtpPass: v('st-em-smtpPass'),
+      fromEmail: v('st-em-fromEmail'), fromName: v('st-em-fromName'),
+      signatures: { buyer: v('st-em-signatures-buyer'), seller: v('st-em-signatures-seller') },
+    },
+    integrations: {
+      analyticsId: v('st-it-analyticsId'), pixelId: v('st-it-pixelId'), s3Bucket: v('st-it-s3Bucket'),
+      oauth: {
+        google: { clientId: v('st-it-oauth-google-clientId'), clientSecret: v('st-it-oauth-google-clientSecret') },
+        facebook: { appId: v('st-it-oauth-facebook-appId'), appSecret: v('st-it-oauth-facebook-appSecret') },
+      },
+    },
+    securityMaintenance: {
+      maintenanceMode: c('st-sm-maintenanceMode'), maintenanceReason: v('st-sm-maintenanceReason'),
+      allowSuspendedLogin: c('st-sm-allowSuspendedLogin'), ipWhitelist: v('st-sm-ipWhitelist'), ipBlacklist: v('st-sm-ipBlacklist'),
+      backupSchedule: v('st-sm-backupSchedule'),
+    },
+    performance: {
+      enableCache: c('st-pf-enableCache'), cacheTtlSeconds: n('st-pf-cacheTtlSeconds', 300),
+      maxUploadMB: n('st-pf-maxUploadMB', 5), imageMaxMB: n('st-pf-imageMaxMB', 5),
+      enableCompression: c('st-pf-enableCompression'), apiRateLimitPerMin: n('st-pf-apiRateLimitPerMin', 300),
+    },
+  };
+  $('st-msg').textContent = 'Inaendeshwa…';
+  try {
+    await putJSON('/api/v1/admin/settings', { patch });
+    $('st-msg').textContent = 'Mipangilio imehifadhiwa';
+    toast('Mipangilio imehifadhiwa', true);
+    loadSettings();
+  } catch (e) { $('st-msg').textContent = esc(e.message); toast(esc(e.message), false); }
+}
+
+// ---------------------------------------------------------------------------
 // Loader registry + filter wiring
 // ---------------------------------------------------------------------------
 const LOADERS = {
@@ -2123,7 +2338,7 @@ const LOADERS = {
   orders: loadOrders, disputes: loadDisputes, refunds: loadRefunds, reports: loadReports,
   kyc: loadKyc, promos: loadPromos, revenue: loadRevenue,
   finance: loadFinance, referrals: loadReferrals, broadcasts: loadBroadcasts, audit: loadAudit,
-  stats: loadStats,
+  stats: loadStats, settings: loadSettings,
 };
 function bindToolbar(sec, qId, goId, qKey) {
   const el = secEl(sec);

@@ -3,6 +3,7 @@ const { authenticateAdmin, requireActiveAdmin } = require('../../middleware/auth
 const { validate } = require('../../middleware/validation');
 const { z } = require('zod');
 const adminService = require('./admin-service');
+const settingsService = require('./settings-service');
 const activity = require('../../services/activity');
 const { getPrisma } = require('../../config/database');
 const { getFirebaseFirestore } = require('../../config/firebase');
@@ -585,6 +586,47 @@ router.get(
   async (req, res) => {
     const data = await activity.getTopUsers(req.query.days, req.query.limit);
     res.json({ success: true, data });
+  }
+);
+
+// ---- Platform settings (admin "Mipangilio") ----
+// Masked read (secrets stay server-side; SECRET_FIELDS are returned as
+// '******' so the SPA bundle never receives gateway/SMTP credentials).
+router.get('/settings', async (req, res, next) => {
+  try {
+    const masked = await settingsService.getSettingsMasked();
+    res.json({ success: true, data: masked });
+  } catch (e) {
+    console.error('[admin:settings] masked read failed:', e?.message || e);
+    next(e);
+  }
+});
+
+// Merge a partial map of groups/keys over current settings.
+// Any key not present in DEFAULTS is rejected inside safeMerge.
+router.put(
+  '/settings',
+  validate({
+    body: z.object({
+      patch: z.record(z.string(), z.any()).optional().default({}),
+    }),
+  }),
+  async (req, res, next) => {
+    try {
+      await settingsService.saveSettings(req.body?.patch || {});
+      const masked = await settingsService.getSettingsMasked();
+      await writeAudit({
+        ...auditFromReq(req),
+        action: 'settings_update',
+        entityType: 'settings',
+        entityId: 'admin_settings',
+        reason: 'Admin updated platform settings',
+      });
+      res.json({ success: true, data: masked });
+    } catch (e) {
+      console.error('[admin:settings] save failed:', e?.message || e);
+      next(e);
+    }
   }
 );
 
