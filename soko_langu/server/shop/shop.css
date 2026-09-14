@@ -1708,3 +1708,80 @@ border-radius: 50%;
 .headline-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 18px 0 14px; }
 .who .nm { font-weight: 700; }
 .section-muted { color: var(--fg2); font-size: 13px; }
+
+/* ============ PRO redesign v2 (login/create/cart + animation icons) ============ */
+
+.auth-wrap { animation: fadeUp .35s ease both; }
+.form-card { border: 1px solid var(--hairline); box-shadow: 0 12px 30px -18px rgba(10, 25, 17, .35); }
+.form-card h2 { display: flex; align-items: center; gap: 9px; }
+.form-card h2::before { content: ''; width: 22px; height: 22px; border-radius: 7px; background: var(--accent-soft); display: inline-grid; place-items: center; animation: softPulse 2.4s ease-in-out infinite; }
+
+.auth-shield { display: flex; align-items: center; gap: 9px; margin: 0 0 12px; padding: 10px 12px; border: 1px dashed var(--hairline-2); border-radius: 12px; background: var(--accent-soft); animation: softPulse 3s ease-in-out infinite; }
+.auth-shield svg { width: 17px; height: 17px; color: var(--good); flex-shrink: 0; }
+.auth-shield span { font-size: 12px; color: var(--fg2); line-height: 1.45; }
+
+.google-btn { display: flex; align-items: center; justify-content: flex-start; gap: 12px; width: 100%; padding: 12px 16px; border: 1.5px solid var(--hairline-2); border-radius: 13px; background: var(--card); cursor: pointer; font-weight: 600; color: var(--ink); transition: transform .14s ease, box-shadow .2s ease, border-color .2s ease; animation: fadeUp .4s .08s ease both; }
+.google-btn:hover { transform: translateY(-1px); border-color: rgba(120, 90, 200, .5); box-shadow: 0 8px 22px -12px rgba(120, 90, 200, .35); }
+.google-btn:active { transform: scale(.97); }
+.google-btn svg { width: 20px; height: 20px; animation: wiggle 5s ease-in-out infinite; }
+
+.auth-divider { display: flex; align-items: center; gap: 12px; margin: 16px 0 4px; color: var(--mute); font-size: 12px; }
+.auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--hairline); }
+
+.create-acc-pick { display: grid; gap: 9px; margin: 14px 0 6px; }
+.create-acc-pick .btn-block { display: flex; align-items: center; justify-content: flex-start; gap: 10px; text-align: left; animation: fadeUp .4s .14s ease both; }
+.create-acc-pick .btn-block.btn-dark { background: linear-gradient(135deg, var(--accent), var(--accent-2, var(--accent))); color: var(--accent-ink); }
+.create-acc-pick .btn-block svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+.acc-perk { display: flex; align-items: center; gap: 9px; margin-top: 8px; font-size: 12.5px; color: var(--fg2); animation: fadeUp .4s .2s ease both; }
+.acc-perk svg { width: 15px; height: 15px; color: var(--good); flex-shrink: 0; }
+
+/* ---------- Cart redesign (orders stack) ---------- */
+
+.cart-grid { align-items: start; }
+.cart-group { overflow: hidden; animation: fadeUp .4s ease both; }
+.cart-group .ghead { background: var(--accent-soft); }
+.cart-group .ghead svg { animation: softPulse 3s ease-in-out infinite; }
+
+.cart-item { position: relative; transition: background .18s ease, opacity .25s ease, transform .18s ease; }
+.cart-item:hover { background: var(--panel-alt, var(--surface-3, var(--surface-2))); }
+.cart-item .thumb { overflow: hidden; box-shadow: 0 4px 14px -8px rgba(0,0,0,.25); }
+.cart-item .thumb img { transition: transform .3s ease; }
+.cart-item:hover .thumb img { transform: scale(1.06); }
+.cart-item.removing { opacity: 0; transform: translateX(28px); }
+.cart-item .stepper button { transition: background .15s ease, transform .1s ease; }
+.cart-item .stepper button:active { transform: scale(.88); }
+
+.cart-item .escrow-line { display: flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 11px; color: var(--good); }
+.cart-item .escrow-line svg { width: 13px; height: 13px; animation: softPulse 3.4s ease-in-out infinite; }
+
+.checkout-bar { position: sticky; bottom: 12px; border: 1px solid var(--hairline); border-radius: 16px; box-shadow: 0 14px 34px -20px rgba(0,0,0,.4); background: var(--card); }
+.checkout-bar .btn-accent { position: relative; overflow: hidden; animation: softPulse 2.8s ease-in-out infinite; }
+.checkout-bar .btn-accent::after { content: '🛍'; position: absolute; right: 12px; animation: floaty 2.2s ease-in-out infinite; }
+
+/* ---------- Animation icons (app wide) ---------- */
+
+@keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes softPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(45, 106, 79, .18); } 50% { box-shadow: 0 0 0 8px rgba(45, 106, 79, 0); } }
+@keyframes wiggle { 0%, 88%, 100% { transform: rotate(0); } 90% { transform: rotate(-9deg); } 93% { transform: rotate(7deg); } 96% { transform: rotate(-5deg); } }
+@keyframes floaty { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+
+.toast { animation: toastIn .25s ease both; }
+@keyframes toastIn { from { opacity: 0; transform: translateY(14px) scale(.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+.vbadge, .badge-cnt { transition: transform .16s ease; }
+.badge-cnt { animation: softPulse 3s ease-in-out infinite; }
+.vbadge:hover { transform: scale(1.12); }
+
+.wish-badge { transition: transform .2s cubic-bezier(.34,1.56,.64,1); }
+.wish-badge:hover { transform: scale(1.18); }
+
+.stepper .n { transition: transform .14s ease; }
+.stepper:active .n { transform: scale(1.18); }
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-wrap, .form-card h2::before, .auth-shield, .google-btn, .create-acc-pick .btn-block,
+  .acc-perk, .cart-group, .cart-item, .checkout-bar .btn-accent, .toast, .badge-cnt {
+    animation: none !important;
+  }
+}
