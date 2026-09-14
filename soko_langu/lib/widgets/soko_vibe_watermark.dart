@@ -11,39 +11,41 @@ class SokoVibeWatermark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final iconSize = compact ? 14.0 : 18.0;
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 8 : 10,
-        vertical: compact ? 5 : 6,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.35),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Image.asset(
-            'assets/app_icon.png',
-            width: iconSize,
-            height: iconSize,
-            errorBuilder: (_, _, _) => Icon(
-              Icons.storefront,
+    // Product-protection brand mark. Intentional choice: monochrome (single
+    // white silhouette, no backdrop box) so it never obscures the photo or
+    // fights the color grading — deterrence comes from the mark, not a banner.
+    return IgnorePointer(
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0.0, end: 1.0),
+        duration: const Duration(milliseconds: 480),
+        curve: Curves.easeOutCubic,
+        builder: (context, t, child) => Opacity(
+          opacity: t,
+          child: Transform.translate(
+            offset: Offset(0, (1 - t) * 6),
+            child: child,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.storefront_rounded,
               size: iconSize,
               color: Colors.white,
             ),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            'Soko Vibe',
-            style: TextStyle(
-              fontSize: compact ? 9 : 11,
-              fontWeight: FontWeight.w700,
-              color: Colors.white.withValues(alpha: opacity),
-              letterSpacing: 0.5,
+            const SizedBox(width: 4),
+            Text(
+              'Soko Vibe',
+              style: TextStyle(
+                fontSize: compact ? 9 : 11,
+                fontWeight: FontWeight.w700,
+                color: Colors.white.withValues(alpha: opacity),
+                letterSpacing: 0.5,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

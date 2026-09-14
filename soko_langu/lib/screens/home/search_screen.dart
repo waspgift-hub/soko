@@ -246,9 +246,38 @@ class _SearchScreenState extends State<SearchScreen>
   /// update) and silently disappears on failure or on an empty result set.
   Future<void> _maybeLoadAiSummary(SearchResponse resp) async {
     final products = resp.results.where((r) => r.type == 'product').toList();
-    if (resp.total == 0 || products.isEmpty) return;
-
     final locale = AppConfig.of(context).langCode;
+
+    // AI keeps search priority even when the catalog has no DB match: a
+    // grounded not-found context (buildNotFoundCatalogContext) turns an empty
+    // result into sourced suggestions instead of a silent dead-end (§62 AI
+    // priority, G-catalog notFoundInApp). Nothing below may invent facts.
+    final hasMatches = resp.total > 0 && products.isNotEmpty;
+    if (!hasMatches) {
+      // No DB-grounded rows: answer with an explicitly-labelled, off-app
+      // guidance fallback so the buyer still gets useful direction (§62.
+      setState(() {
+        _aiSummary = null;
+        _aiSummaryLoading = false;
+        _aiSummaryFailed = false;
+      });
+      if (_aiSummaryQuery == resp.query.trim()) return;
+      if (!mounted) return;
+      final fallback = await AiService.instance.generateSearchSummary(
+        query: resp.query,
+        groundedContext: AiService.buildNotFoundCatalogContext(resp.query),
+        total: 0,
+        locale: locale,
+      );
+      if (!mounted) return;
+      setState(() {
+        _aiSummary = fallback;
+        _aiSummaryLoading = false;
+        _aiSummaryQuery = resp.query.trim();
+      });
+      _aiSummaryFailed = false;
+      return;
+    }
     final sameQuery = _aiSummaryQuery == resp.query.trim();
     if (sameQuery && !_aiSummaryLoading) return; // already answered
 
