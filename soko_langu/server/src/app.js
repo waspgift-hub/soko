@@ -296,6 +296,7 @@ try {
   app.use('/api', generalLimiter, compat.featureCompatRouter);
   app.use('/api/escrow', generalLimiter, compat.escrowRouter);
   app.use('/api', generalLimiter, compat.ordersCompatRouter);
+  app.use('/api', generalLimiter, compat.trustCompatRouter);
   app.use('/api', generalLimiter, compat.moderationCompatRouter);
   app.use('/api/admin', adminLimiter, compat.adminCompatRouter);
   app.use('/api', adminLimiter, compat.adminCompatPublic);

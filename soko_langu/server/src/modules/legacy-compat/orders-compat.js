@@ -20,6 +20,7 @@ try {
 }
 
 const db = getFirebaseFirestore();
+const shippingValidation = require('../shipping/shipping-validation');
 const MAX_DAILY_SALE_AMOUNT = config.business.maxDailySaleAmount;
 const PLATFORM_COMMISSION_PERCENT = config.business.platformCommissionPercent;
 
@@ -72,12 +73,32 @@ async function applyTransition(db, docRef, order, newStatus, uid, note) {
         throw err;
       }
       const totalAmount = (order.productPrice || 0) + shippingCost;
+      const buyerAddrMap =
+        order.deliveryAddress && typeof order.deliveryAddress === 'object'
+          ? order.deliveryAddress
+          : {};
+      const validation = shippingValidation.validateShippingQuote({
+        amount: shippingCost,
+        shippingAddress: {
+          region: order.region || buyerAddrMap.region || '',
+          city: order.district || buyerAddrMap.district || '',
+        },
+        sellerRegion: order.sellerRegion || '',
+      });
       await docRef.update({
         ...base,
         status: 'quoted',
         shippingCost,
         totalAmount,
-        shippingQuote: { amount: shippingCost, setAt: timestamp, setBy: uid },
+        shippingQuote: {
+          amount: shippingCost,
+          setAt: timestamp,
+          setBy: uid,
+          verdict: validation.verdict,
+          distanceTier: validation.distanceTier,
+          reason: validation.reason || null,
+          baseline: validation.baseline,
+        },
       });
       return { status: 'quoted', shippingCost, totalAmount };
     }

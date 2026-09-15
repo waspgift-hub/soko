@@ -431,7 +431,22 @@ router.post('/set-shipping-cost', async function (req, res) {
     var productPrice = Number(data.productPrice || 0);
     var totalAmount = productPrice + shippingCost;
     var batch = db.batch();
-    var shippingQuote = { amount: shippingCost, setAt: admin.firestore.FieldValue.serverTimestamp(), setBy: auth.uid };
+    var shippingValidation = require('../src/modules/shipping/shipping-validation');
+    var buyerAddrMap = (data.deliveryAddress && typeof data.deliveryAddress === 'object') ? data.deliveryAddress : {};
+    var validation = shippingValidation.validateShippingQuote({
+      amount: shippingCost,
+      shippingAddress: { region: data.region || buyerAddrMap.region || '', city: data.district || buyerAddrMap.district || '' },
+      sellerRegion: data.sellerRegion || '',
+    });
+    var shippingQuote = {
+      amount: shippingCost,
+      setAt: admin.firestore.FieldValue.serverTimestamp(),
+      setBy: auth.uid,
+      verdict: validation.verdict,
+      distanceTier: validation.distanceTier,
+      reason: validation.reason || null,
+      baseline: validation.baseline,
+    };
     batch.set(txRef, { shippingCost: shippingCost, totalAmount: totalAmount, shippingQuote: shippingQuote, shippingCostSetAt: admin.firestore.FieldValue.serverTimestamp(), shippingCostSetBy: auth.uid }, { merge: true });
     batch.set(orderRef, { shippingCost: shippingCost, totalAmount: totalAmount, shippingQuote: shippingQuote, shippingCostSetAt: admin.firestore.FieldValue.serverTimestamp(), shippingCostSetBy: auth.uid }, { merge: true });
     batch.set(db.collection('notifications').doc(), { userId: data.buyerId, title: 'Gharama ya usafirishaji', body: 'Muuzaji ameweka gharama ya usafirishaji TZS ' + shippingCost + '. Tayarisha kupokea mzigo.', type: 'shipping_cost_set', orderId: orderId, isRead: false, createdAt: admin.firestore.FieldValue.serverTimestamp() });

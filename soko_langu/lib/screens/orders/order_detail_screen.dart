@@ -22,6 +22,7 @@ import '../../widgets/soko_vibe_loading.dart';
 import '../../widgets/payment_banner.dart';
 import '../../widgets/payment_result_dialog.dart';
 import '../../widgets/call_seller_button.dart';
+import '../../widgets/trust_passport_card.dart';
 import '../../utils/phone_utils.dart';
 import '../../utils/rate_limiter.dart';
 
@@ -273,6 +274,62 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         s == OrderStatus.otpPending;
   }
 
+  /// Shipping-quote verdict written by the server at set-shipping-cost time
+  /// (NORMAL / REVIEW_REQUIRED / BLOCKED + distance tier + reason).
+  Map<String, dynamic>? get _shippingQuote {
+    final q = d['shippingQuote'];
+    if (q is Map<String, dynamic>) return q;
+    if (q is Map) return Map<String, dynamic>.from(q);
+    return null;
+  }
+
+  /// Colour/icon/message for the gouging verdict surfaced next to a quote.
+  Widget _buildVerdictChip(ColorScheme cs) {
+    final quote = _shippingQuote;
+    final verdict = quote?['verdict'] as String? ?? 'NORMAL';
+    final isBlocked = verdict == 'BLOCKED';
+    final isReview = verdict == 'REVIEW_REQUIRED';
+    final color = isBlocked
+        ? cs.error
+        : isReview
+            ? cs.brandWarning
+            : cs.successGreen;
+    final icon = isBlocked
+        ? Icons.gpp_bad_outlined
+        : isReview
+            ? Icons.gpp_maybe_outlined
+            : Icons.gpp_good_outlined;
+    final msg = isBlocked
+        ? context.tr('verdict_blocked', 'Bei imewekewa alama ya hatari — tafadhali wasiliana na msaada.')
+        : isReview
+            ? context.tr('verdict_review', 'Inahitaji ukaguzi — bei iko juu kuliko kawaida kwa umbali huu.')
+            : context.tr('verdict_normal', 'Bei ya usafirishaji ni ya haki.');
+    final reason = quote?['reason'] as String?;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              msg + (isReview || isBlocked ? ' (${reason ?? ''})' : ''),
+              style: TextStyle(fontSize: 12, color: color, height: 1.3),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   bool get _isPaidState =>
       _isEscrowStatus ||
       const {
@@ -403,6 +460,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                       const SizedBox(height: 12),
                     ],
                     _buildActions(context, cs),
+                    const SizedBox(height: 12),
+                    if ((d['sellerId'] as String? ?? '').isNotEmpty)
+                      TrustPassportCard(sellerId: d['sellerId'] as String),
                     const SizedBox(height: 80),
                   ],
                 ),
@@ -1154,12 +1214,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                     context.tr('product_price'),
                     'TZS ${_nf(price.toInt())}',
                   ),
-                  if (shippingCost != null && shippingCost > 0)
+                  if (shippingCost != null && shippingCost > 0) ...[
                     _tableRow(
                       cs,
                       context.tr('shipping_cost'),
                       'TZS ${_nf(shippingCost.toInt())}',
                     ),
+                    if (_shippingQuote?.containsKey('verdict') ?? false) ...[
+                      const SizedBox(height: 8),
+                      _buildVerdictChip(cs),
+                    ],
+                  ],
                   if (discount != null && discount > 0)
                     _tableRow(
                       cs,
@@ -1977,6 +2042,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                     style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: cs.primary)),
               ],
             ),
+            if (_shippingQuote?.containsKey('verdict') ?? false) ...[
+              const SizedBox(height: 8),
+              _buildVerdictChip(cs),
+            ],
             const SizedBox(height: 12),
             Container(height: 1, color: cs.primary.withValues(alpha: 0.08)),
             const SizedBox(height: 12),
