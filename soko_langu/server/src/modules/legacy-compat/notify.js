@@ -5,6 +5,12 @@ const axios = require('axios');
 const { randomUUID } = require('crypto');
 const config = require('../../config');
 const { getFirebaseFirestore } = require('../../config/firebase');
+const { createBreaker } = require('../../utils/circuit-breaker');
+
+// OneSignal outages are common enough that we should not hammer them: after 3
+// consecutive failures the breaker opens and push notifications are skipped
+// until it half-opens for a probe.
+const oneSignalBreaker = createBreaker('onesignal', { failureThreshold: 3 });
 
 async function sendOneSignalNotification(userId, title, body, data = {}) {
   if (!userId) return null;
@@ -15,19 +21,22 @@ async function sendOneSignalNotification(userId, title, body, data = {}) {
     return null;
   }
   try {
-    const resp = await axios.post('https://onesignal.com/api/v1/notifications', {
-      app_id: appId,
-      idempotency_key: randomUUID(),
-      include_external_user_ids: [userId],
-      channel_for_external_user_ids: 'push',
-      headings: { en: title || '', sw: title || '' },
-      contents: { en: body || '', sw: body || '' },
-      data: { ...(data || {}), type: (data && data.type) || 'general' },
-    }, {
-      headers: { Authorization: `Basic ${apiKey}`, 'Content-Type': 'application/json' },
-      timeout: 15000,
-    });
-    return resp.data || null;
+    const resp = await oneSignalBreaker.call(
+      () => axios.post('https://onesignal.com/api/v1/notifications', {
+        app_id: appId,
+        idempotency_key: randomUUID(),
+        include_external_user_ids: [userId],
+        channel_for_external_user_ids: 'push',
+        headings: { en: title || '', sw: title || '' },
+        contents: { en: body || '', sw: body || '' },
+        data: { ...(data || {}), type: (data && data.type) || 'general' },
+      }, {
+        headers: { Authorization: `Basic ${apiKey}`, 'Content-Type': 'application/json' },
+        timeout: 15000,
+      }),
+      () => null,
+    );
+    return resp || null;
   } catch (e) {
     console.error('[OS-COMPAT] send failed:', e.response?.data ? JSON.stringify(e.response.data) : e.message);
     return null;

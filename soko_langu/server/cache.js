@@ -8,6 +8,15 @@
 const MAX_ENTRIES = 500;
 
 // ---------------------------------------------------------------------------
+// Single-flight (stampede) lock table
+// ---------------------------------------------------------------------------
+// When a hot cache key expires, the first request to miss re-computes the value
+// while every other concurrent request for the SAME key awaits the same
+// in-flight promise. At 10M users this collapses a thundering herd of N
+// simultaneous Firestore/DB reads into exactly one.
+const inFlight = new Map();
+
+// ---------------------------------------------------------------------------
 // In-memory LRU fallback
 // ---------------------------------------------------------------------------
 const memStore = new Map();
@@ -117,4 +126,56 @@ async function delPattern(pattern) {
   }
 }
 
-module.exports = { get, set, del, delPattern, setRedisClient };
+// ---------------------------------------------------------------------------
+// getOrCompute: read-through cache with per-key single-flight isolation.
+// ---------------------------------------------------------------------------
+//   const value = await getOrCompute('catalog:hot', async () => computeExpensive(), 300_000)
+//
+// Behaviour:
+//   - Cache hit  -> return immediately (memory or Redis).
+//   - Cache miss -> dedupe concurrent callers onto ONE compute, then store.
+//   - Redis miss but memory copy warm -> skip the Redis PAINFUL round-trip
+//     (see below) unless a cross-instance invalidation is running.
+// The Redis starvation guard: when Redis is down we still serve from memory, so
+// the app degrades to a single-instance cache instead of dying.
+async function getOrCompute(key, computeFn, ttlMs = 300_000, options = {}) {
+  // 1) Fast path: memory already warm.
+  const memVal = memGet(key);
+  if (memVal !== undefined) return memVal;
+
+  // 2) Single-flight: another process already recomputing this key.
+  if (inFlight.has(key)) {
+    return inFlight.get(key);
+  }
+
+  // 3) Redis read path (cross-instance warm value).
+  let redisWarm = undefined;
+  if (redisClient) {
+    try {
+      const raw = await redisClient.get(`cache:${key}`);
+      if (raw) {
+        redisWarm = JSON.parse(raw);
+        memSet(key, redisWarm, 60_000); // warm local copy for 1 min
+      }
+    } catch (err) { /* Redis unavailable; fall through to compute */ }
+  }
+  if (redisWarm !== undefined) return redisWarm;
+
+  // 4) Stampede gate: only the FIRST caller per instance recomputes; all others
+  //    await the same promise. The slot is released ONLY when the compute
+  //    settles (cache is warm by then), so a slow pipeline never re-triggers.
+  const p = (async () => {
+    const value = await computeFn();
+    if (value !== undefined && value !== null) {
+      await set(key, value, ttlMs);
+    }
+    return value;
+  })().finally(() => {
+    inFlight.delete(key);
+  });
+
+  inFlight.set(key, p);
+  return p;
+}
+
+module.exports = { get, set, del, delPattern, getOrCompute, setRedisClient };

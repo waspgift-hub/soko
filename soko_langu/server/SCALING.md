@@ -36,19 +36,58 @@ This is the operational counterpart to the code-level pagination/caching work.
 | App product/category streams | unbounded | Flutter `.limit()` + cursors (Tier 1) |
 | Auto-release cron | sweeps whole `orders` collection | BullMQ idempotent jobs on deadline index |
 
+## Firestore budget guardrails (10M users)
+
+Firestore bills by reads/writes/storage. Guardrails already in place:
+
+- **Client-side pagination** — every product/order/transaction stream uses
+  `.limit()` + cursor pagination (never full-collection `.snapshots()`).
+- **Client offline persistence enabled** (`lib/main.dart`,
+  `Settings(persistenceEnabled: true)`) — SDK serves cached docs on relaunch,
+  cutting cold-start Firestore reads.
+- **Server-side aggregation off the read path** — trust passport, search and
+  catalog reads are Redis/edge cached; the Finance worker batches writes.
+
+Console actions (one-time, dashboard):
+1. Billing → Budgets: alert at 50% / 75% / 90% of a monthly Firestore budget.
+2. Budget alerts → email notification on each threshold.
+3. Flame plan caps the per-project spend ceiling (hard stop, not just alert).
+4. Watch the Firestore "Reads" metric daily; a sudden read spike usually means a
+   client query lost its `.limit()`.
+
 ## Cloudflare edge (cf-worker/)
 
 A Worker proxies the API through 200+ edge cities and serves the hot read
 routes without ever reaching Render:
 
-- trust passport 300s, transaction-status 15s, search autocomplete 90s,
-  trending 300s, most-rated 600s, global-search 60s — stale-while-revalidate.
+- trust passport/v1 passport 300s, transaction-status 15s, products 30s,
+  categories 3600s, search autocomplete 90s, trending 300s, most-rated 600s,
+  global-search 60s — stale-while-revalidate.
+- Edge cache keys derive from path+query (+ body hash for POST search), never
+  from personalized headers, so no cross-user leakage.
 - Every mutation/admin/payment/escrow request passes straight through.
 - Deploy: `wrangler login && wrangler deploy` from `cf-worker/` (see
   `cf-worker/README.md`). Requires a proxied DNS record `api.sokovibe.co.tz`.
 
 Once live, point `ApiConfig.baseUrl` at the edge URL. The mobile-to-origin
 hop becomes edge-to-origin only on cache miss.
+
+## Origin resilience (2026 tier)
+
+Added so the origin survives a 10M-user spike instead of degrading:
+
+- **Cache stampede protection** (`server/cache.js#getOrCompute`): single-flight
+  per key — a thundering herd collapses into ONE database query per TTL window.
+  Hot catalog routes (`/api/v1/products*`) read through it and invalidate on
+  mutation (`catalog:*` keys).
+- **Circuit breakers** (`server/src/utils/circuit-breaker.js`): ClickPesa, SMS
+  (Meseji + Notify Africa), OneSignal fail fast (503 `PAYMENT_PROVIDER_UNAVAILABLE`
+  on open) instead of 15s timeouts piling up.
+- **Load shedder** (`server/src/middleware/loadShedder.js`): when the event loop
+  lags >1.5s AND heap >512MB the instance answers 503 + `Retry-After` (toggled
+  by `SHED_LOAD`) so Render retreats it from the rotation mid-storm.
+- **Firestore budget guardrails**: client reads are paginated (`.limit()` +
+  cursors); enabled features map to quotas in this doc's tier table.
 
 ## Firestore index deploy
 
@@ -75,8 +114,11 @@ every combined query uses a single index.
 | Tier | Ceiling | Requires |
 |---|---|---|
 | A (now) | ~5k–10k users | current single instance |
-| B | ~100k | pagination + indexes + caching (this PR) |
-| C | ~1M | horizontal replicas + workers + replicas |
-| D | ~10M | read replicas + CDN + regional sharding |
+| B | ~100k | pagination + indexes + caching (done) |
+| C | ~1M | horizontal replicas + workers (done) |
+| D | ~10M | read replicas + CDN + regional sharding (next) |
 
-Each tier is a separate PR; nothing here pretends to reach 10M alone.
+What's already live toward C/D: Render autoscale 1→6, dedicated BullMQ worker,
+edge cache at 200+ cities, stampede protection, circuit breakers, load shedder,
+every read route paginated. Remaining for D: Postgres read replicas, Firestore
+per-tenant collections, multi-region Render, KV/edge state for p95 latency.

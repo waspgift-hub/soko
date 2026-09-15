@@ -3,8 +3,14 @@
 // as a single local-format STRING, not an array.
 const axios = require('axios');
 const config = require('../config');
+const { createBreaker } = require('../utils/circuit-breaker');
 
 const NOTIFY_SMS_BASE = 'https://api.notify.africa';
+
+// Per-provider breakers: a down SMS provider fails fast instead of holding the
+// request for 15s×2 timeouts on every OTP send.
+const mesejiBreaker = createBreaker('sms-meseji', { failureThreshold: 3 });
+const notifyBreaker = createBreaker('sms-notify-africa', { failureThreshold: 3 });
 
 function toLocal(phone) {
   const digits = String(phone).replace(/\D/g, '');
@@ -26,14 +32,18 @@ async function sendViaMeseji(phone, message) {
   const senders = configured === 'MESEJI' ? ['MESEJI'] : [configured, 'MESEJI'];
   for (const sender of senders) {
     try {
-      const resp = await axios.post('https://meseji.co.tz/api/v1/sms/send', {
-        sender_id: sender,
-        message,
-        contacts: local,
-      }, {
-        headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
-        timeout: 15000,
-      });
+      const resp = await mesejiBreaker.call(
+        () => axios.post('https://meseji.co.tz/api/v1/sms/send', {
+          sender_id: sender,
+          message,
+          contacts: local,
+        }, {
+          headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+          timeout: 15000,
+        }),
+        () => null,
+      );
+      if (!resp) return false; // breaker OPEN — skip straight to the other sender
       console.log(`[SMS] meseji ok sender=${sender} to=${local} batch=${resp.data?.batch_id || ''}`);
       return true;
     } catch (e) {
@@ -49,14 +59,18 @@ async function sendViaNotifyAfrica(phone, message) {
   const senderId = process.env.NOTIFY_AFRICA_SENDER_ID;
   if (!apiKey || !senderId) return false;
   try {
-    const resp = await axios.post(`${NOTIFY_SMS_BASE}/api/v1/api/messages/send`, {
-      phone_number: toInternational(phone),
-      message,
-      sender_id: senderId,
-    }, {
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      timeout: 15000,
-    });
+    const resp = await notifyBreaker.call(
+      () => axios.post(`${NOTIFY_SMS_BASE}/api/v1/api/messages/send`, {
+        phone_number: toInternational(phone),
+        message,
+        sender_id: senderId,
+      }, {
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        timeout: 15000,
+      }),
+      () => null,
+    );
+    if (!resp) return false; // breaker OPEN — report no delivery
     const data = resp.data || {};
     const ok = data.status === 200 || (data.data && data.data.messageId);
     if (ok) console.log(`[SMS] notify-africa ok to=${toInternational(phone)}`);

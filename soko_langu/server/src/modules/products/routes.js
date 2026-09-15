@@ -5,6 +5,7 @@ const { z } = require('zod');
 const service = require('./product-service');
 const { getPrisma } = require('../../config/database');
 const { writeAudit, auditFromReq } = require('../../services/audit');
+const cache = require('../../../cache');
 
 const router = Router();
 
@@ -36,6 +37,17 @@ function serviceError(res, e) {
   return res.status(e.status || 500).json({ error: e.message || 'Product operation failed' });
 }
 
+// A write to a product invalidates its detail entry by id and slug plus every
+// filtered list. Runs after the response so a slow Redis scan never blocks
+// the mutation; the next read simply re-warms the value.
+function invalidateProductCache(product) {
+  const id = product?.id;
+  const slug = product?.slug;
+  if (id) cache.del(`catalog:product:v1:${id}`);
+  if (slug) cache.del(`catalog:product:v1:${slug}`);
+  cache.delPattern('catalog:list:v1:*');
+}
+
 // Public catalog
 router.get(
   '/',
@@ -50,7 +62,10 @@ router.get(
     }),
   }),
   async (req, res) => {
-    const data = await service.listProducts(req.query);
+    // Key the cache entry on the full filter set so distinct listings stay
+    // separate; single-flight prevents a herd from re-running the same query.
+    const key = `catalog:list:v1:${JSON.stringify(req.query)}`;
+    const data = await cache.getOrCompute(key, () => service.listProducts(req.query), 30 * 1000);
     res.json({ success: true, data });
   }
 );
@@ -58,12 +73,19 @@ router.get(
 // Public categories
 router.get('/categories', async (req, res) => {
   const prisma = getPrisma();
-  const categories = await prisma.category.findMany({
-    where: { isActive: true },
-    select: { id: true, name: true, slug: true, parentId: true, iconUrl: true, sortOrder: true },
-    orderBy: { sortOrder: 'asc' },
-  });
-  res.json({ success: true, data: categories });
+  // Category list is near-static and shared by every visitor: route it through
+  // the two-tier cache so the in-memory copy (and then Redis) absorbs the
+  // cluster-wide read before Prisma is ever called. Single-flight inside
+  // getOrCompute collapses a thundering herd into one DB query per expiry.
+  const data = await cache.getOrCompute('catalog:categories:v1', async () => {
+    const categories = await prisma.category.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, slug: true, parentId: true, iconUrl: true, sortOrder: true },
+      orderBy: { sortOrder: 'asc' },
+    });
+    return categories;
+  }, 3600 * 1000);
+  res.json({ success: true, data });
 });
 
 // Seller's own products (drafts included)
@@ -84,7 +106,11 @@ router.get('/seller', authenticate, requireActive, async (req, res) => {
 // Public detail by id or slug
 router.get('/:idOrSlug', async (req, res) => {
   try {
-    const data = await service.getProduct(req.params.idOrSlug);
+    const data = await cache.getOrCompute(
+      `catalog:product:v1:${req.params.idOrSlug}`,
+      () => service.getProduct(req.params.idOrSlug),
+      30 * 1000
+    );
     res.json({ success: true, data });
   } catch (e) {
     serviceError(res, e);
@@ -104,6 +130,7 @@ router.post(
         sellerProfileId: profile.id,
         data: req.body,
       });
+      invalidateProductCache(product);
       await writeAudit({
         ...auditFromReq(req),
         action: 'product.create',
@@ -131,6 +158,7 @@ router.put(
         sellerProfileId: profile.id,
         data: req.body,
       });
+      invalidateProductCache(product);
       res.json({ success: true, data: product });
     } catch (e) {
       serviceError(res, e);
@@ -147,6 +175,7 @@ router.post('/:id/publish', authenticate, requireActive, async (req, res) => {
       sellerProfileId: profile.id,
       status: 'published',
     });
+    invalidateProductCache(product);
     await writeAudit({
       ...auditFromReq(req),
       action: 'product.publish',
@@ -167,6 +196,7 @@ router.post('/:id/unpublish', authenticate, requireActive, async (req, res) => {
       sellerProfileId: profile.id,
       status: 'draft',
     });
+    invalidateProductCache(product);
     res.json({ success: true, data: product });
   } catch (e) {
     serviceError(res, e);
@@ -206,6 +236,7 @@ router.post(
         sellerProfileId: profile.id,
         items: req.body.items,
       });
+      invalidateProductCache({ id: req.params.id });
       res.status(201).json({ success: true, data: rows });
     } catch (e) {
       serviceError(res, e);
@@ -218,6 +249,7 @@ router.delete('/:id', authenticate, requireActive, async (req, res) => {
   try {
     const profile = await service.requireSellerProfile(req.user.id);
     const product = await service.softDelete({ id: req.params.id, sellerProfileId: profile.id });
+    invalidateProductCache(product);
     await writeAudit({
       ...auditFromReq(req),
       action: 'product.delete',
@@ -244,6 +276,7 @@ router.put(
   async (req, res) => {
     try {
       const product = await service.moderate({ id: req.params.id, status: req.body.status });
+      invalidateProductCache(product);
       await writeAudit({
         ...auditFromReq(req),
         action: 'product.moderate',

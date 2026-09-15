@@ -5,15 +5,17 @@
 // origin (and its Firestore/Redis reads) only gets hit on a cache miss.
 //
 // Caching policy (all mutations + non-whitelisted paths proxy straight through):
-//   GET  /api/trust/passport/:sellerId   -> cache 300s, keyed by path only
-//                                           (response is seller-agnostic, so all
-//                                           viewers share ONE edge entry)
-//   GET  /api/transaction-status/:id     -> cache 15s, keyed by path + token hash
-//   POST /api/search/global-search       -> cache 60s, keyed by path + body hash
-//   POST /api/search/autocomplete        -> cache 90s, keyed by path + body hash
-//   POST /api/search/trending            -> cache 300s, keyed by path + body hash
-//   POST /api/search/most-rated          -> cache 600s, keyed by path + body hash
-//   everything else                      -> passthrough (never cached)
+//   GET  /api/trust/passport/:sellerId        -> cache 300s, keyed by path only
+//   GET  /api/v1/trust/sellers/:id/passport    -> cache 300s, keyed by path only
+//   GET  /api/transaction-status/:id           -> cache 15s, keyed by path + token hash
+//   GET  /api/v1/products/categories           -> cache 3600s, keyed by path only
+//   GET  /api/v1/products?...                  -> cache 30s, keyed by path+query only
+//   GET  /api/v1/products/:idOrSlug            -> cache 30s, keyed by path only
+//   POST /api/search/global-search             -> cache 60s, keyed by path + body hash
+//   POST /api/search/autocomplete              -> cache 90s, keyed by path + body hash
+//   POST /api/search/trending                  -> cache 300s, keyed by path + body hash
+//   POST /api/search/most-rated                -> cache 600s, keyed by path + body hash
+//   everything else                            -> passthrough (never cached)
 //
 // Stale-while-revalidate: an expired-but-present entry is served immediately
 // and refreshed in the background, so a thundering herd never reaches Render.
@@ -22,9 +24,25 @@ const ORIGIN = (typeof ORIGIN_URL !== 'undefined' && ORIGIN_URL)
   ? ORIGIN_URL
   : 'https://soko-langu-server.onrender.com';
 
+// All cache rules evaluated top-to-bottom; first match wins.
 const CACHE_RULES = [
+  // --- Trust passport (v2 + legacy paths) ---
   { match: (m) => m.pathname.startsWith('/api/trust/passport/'), ttl: 300, keyAuth: false, keyBody: false },
+  { match: (m) => m.pathname.startsWith('/api/v1/trust/sellers/') && m.pathname.endsWith('/passport'), ttl: 300, keyAuth: false, keyBody: false },
+
+  // --- Transaction status (personalised, short TTL) ---
   { match: (m) => m.pathname.startsWith('/api/transaction-status/'), ttl: 15, keyAuth: true, keyBody: false },
+
+  // --- Catalog: categories rarely change ---
+  { match: (m) => m.method === 'GET' && m.pathname === '/api/v1/products/categories', ttl: 3600, keyAuth: false, keyBody: false },
+
+  // --- Catalog: product list (public browse, varies by query string) ---
+  { match: (m) => m.method === 'GET' && m.pathname === '/api/v1/products', ttl: 30, keyAuth: false, keyBody: false },
+
+  // --- Catalog: product detail (very hot, varies by id/slug) ---
+  { match: (m) => m.method === 'GET' && m.pathname.startsWith('/api/v1/products/') && !m.pathname.includes('/categories'), ttl: 30, keyAuth: false, keyBody: false },
+
+  // --- Search endpoints (POST, keyed by body) ---
   { match: (m) => m.method === 'POST' && m.pathname === '/api/search/autocomplete', ttl: 90, keyAuth: false, keyBody: true },
   { match: (m) => m.method === 'POST' && m.pathname === '/api/search/trending', ttl: 300, keyAuth: false, keyBody: true },
   { match: (m) => m.method === 'POST' && m.pathname === '/api/search/most-rated', ttl: 600, keyAuth: false, keyBody: true },

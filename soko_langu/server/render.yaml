@@ -33,6 +33,16 @@ services:
         value: "10"
       - key: PORT
         value: "10000"
+      # Event-loop shedder switch: answers 503 + Retry-After when the loop lags
+      # past 1500ms AND heap exceeds 512MB, letting the orchestrator retarget.
+      - key: SHED_LOAD
+        value: "true"
+      # Bigger libuv threadpool: multiple instances × 10 pool = more parallel
+      # crypto/Prisma client calls per instance (each pool thread is one DB op).
+      - key: UV_THREADPOOL_SIZE
+        value: "10"
+      - key: NODE_OPTIONS
+        value: "--max-old-space-size=1024"
     disk:
       name: tmp
       mountPath: /tmp

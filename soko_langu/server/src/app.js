@@ -41,6 +41,11 @@ const app = express();
 // Trust proxy for Nginx
 app.set('trust proxy', 1);
 
+// Load shedder must run FIRST: it answers 503 before any handler can spend
+// effort on a request when the event loop or heap is saturated.
+const { loadShedder } = require('./middleware/loadShedder');
+app.use(loadShedder());
+
 // Compression
 app.use(compression());
 

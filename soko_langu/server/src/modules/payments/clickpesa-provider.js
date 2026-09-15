@@ -2,8 +2,13 @@ const crypto = require('crypto');
 const axios = require('axios');
 const config = require('../../config');
 const PaymentProvider = require('./provider-interface');
+const { createBreaker } = require('../../utils/circuit-breaker');
 
 const CLICKPESA_BASE_URL = process.env.CLICKPESA_API_URL || 'https://api.clickpesa.com/third-parties';
+
+// Fail fast when ClickPesa is down: 3 consecutive failures open the breaker and
+// payment initiation is declined immediately instead of queueing 15s+ timeouts.
+const clickPesaBreaker = createBreaker('clickpesa', { failureThreshold: 3 });
 
 // Token cache (JWT expires in 1 hour)
 let _token = null;
@@ -59,13 +64,20 @@ async function api(method, path, body, query) {
     }
   }
   const qs = params.toString();
-  const resp = await axios({
-    method,
-    url: `${CLICKPESA_BASE_URL}${path}${qs ? `?${qs}` : ''}`,
-    data: finalBody,
-    headers: { Authorization: token, 'Content-Type': 'application/json' },
-  });
-  return resp.data;
+  // Route the whole call through the breaker: on OPEN the fallback (null) is
+  // returned and the caller decides how to degrade.
+  return clickPesaBreaker.call(
+    () => axios({
+      method,
+      url: `${CLICKPESA_BASE_URL}${path}${qs ? `?${qs}` : ''}`,
+      data: finalBody,
+      headers: { Authorization: token, 'Content-Type': 'application/json' },
+      timeout: 15000,
+    }).then((resp) => resp.data),
+    // Breaker OPEN: surface a 503 so the caller degrades with a clean message
+    // instead of crashing on a null provider response.
+    () => { const err = new Error('PAYMENT_PROVIDER_UNAVAILABLE'); err.status = 503; throw err; },
+  );
 }
 
 class ClickPesaProvider extends PaymentProvider {
