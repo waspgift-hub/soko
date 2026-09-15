@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import '../../widgets/product_cached_image.dart';
 import '../../extensions/context_tr.dart';
 import '../../models/transaction_model.dart';
+import '../../models/order_statuses.dart';
 import '../../services/api_config.dart';
 import '../../services/clickpesa_service.dart';
 import '../../app/routes.dart';
@@ -222,54 +223,49 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   String get status => d['status'] as String? ?? 'pending';
 
   bool get _isPaidState =>
-      status == 'paid_escrow_hold' ||
-      status == 'escrow_hold' ||
-      status == 'paid_escrow_held' ||
-      status == 'dispatched' ||
-      status == 'delivered' ||
-      status == 'delivery_confirmed' ||
-      status == 'completed';
+      _isEscrowStatus ||
+      const {
+        OrderStatus.paid,
+        OrderStatus.dispatched,
+        OrderStatus.inTransit,
+        OrderStatus.outForDelivery,
+        OrderStatus.deliveryAttempted,
+        OrderStatus.delivered,
+        OrderStatus.inspectionPeriod,
+        OrderStatus.otpPending,
+        OrderStatus.completed,
+        OrderStatus.walletCredited,
+        OrderStatus.payoutPending,
+        OrderStatus.payoutComplete,
+        OrderStatus.disputed,
+        OrderStatus.refundPending,
+        OrderStatus.refunded,
+      }.contains(status);
 
-  /// Legacy + current escrow statuses from each era of the server. All three
-  /// must be treated as "money safely held, waiting for the seller to ship".
+  /// Money safely held (or still to be shipped), covering every escrow-era
+  /// status from both engines. Drives seller dispatch gating.
   bool get _isEscrowStatus =>
-      status == 'escrow_hold' ||
-      status == 'paid_escrow_hold' ||
-      status == 'paid_escrow_held';
+      canonicalStatusOf(status) == OrderStatus.inEscrow ||
+      status == OrderStatus.readyToDispatch;
 
-  bool get _isCompletedState =>
-      status == 'delivered' ||
-      status == 'delivery_confirmed' ||
-      status == 'confirmed' ||
-      status == 'completed';
+  bool get _isCompletedState {
+    final s = canonicalStatusOf(status);
+    return const {
+      OrderStatus.delivered,
+      OrderStatus.inspectionPeriod,
+      OrderStatus.otpPending,
+      OrderStatus.completed,
+      OrderStatus.walletCredited,
+      OrderStatus.payoutPending,
+      OrderStatus.payoutComplete,
+      OrderStatus.refunded,
+    }.contains(s);
+  }
 
   String _nf(num n) => NumberFormat('#,###', 'en').format(n);
 
-  int _currentStep() {
-    switch (status) {
-      case 'pending':
-        return 0;
-      case 'awaiting_shipping_quote':
-        return 0;
-      case 'quoted':
-        case 'awaiting_payment':
-        case 'paid':
-          return 1;
-        case 'paid_escrow_hold':
-        case 'escrow_hold':
-          return 2;
-        case 'dispatched':
-          return 3;
-        case 'delivered':
-        case 'delivery_confirmed':
-        case 'confirmed':
-          return 4;
-        case 'completed':
-          return 5;
-        default:
-          return 0;
-    }
-  }
+  /// Position on the seven-stage Trust-Commerce journey (see TrustStage).
+  int _currentStep() => trustStageOf(status).index;
 
   String _formatCountdown(Duration d) {
     if (d.isNegative || d == Duration.zero) return '\u2014';
@@ -624,15 +620,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       statusSubtitle = reason is String && reason.isNotEmpty
           ? reason
           : context.tr('payment_failed_short');
-    } else if (status == 'escrow_hold' ||
-        status == 'paid_escrow_hold' ||
-        status == 'dispatched' ||
-        status == 'delivered' ||
-        status == 'delivery_confirmed' ||
-        status == 'completed') {
-      final amt = (d['totalAmount'] is num ? d['totalAmount'] as num : 0).toDouble();
+    } else if (_isPaidState) {
+      final amt =
+          (d['totalAmount'] is num ? d['totalAmount'] as num : 0).toDouble();
       statusSubtitle = '${context.tr('paid_label')} \u2022 TZS ${_nf(amt)}';
-    } else if (status == 'quoted' || status == 'awaiting_payment') {
+    } else if (status == OrderStatus.quoted ||
+        status == OrderStatus.awaitingPayment ||
+        status == OrderStatus.awaitingEscrowPayment ||
+        status == OrderStatus.paymentPending) {
       statusSubtitle = context.tr('awaiting_payment');
     }
 
@@ -690,38 +685,33 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   }
 
   Widget _buildTimeline(BuildContext context, ColorScheme cs) {
-    final steps = [
-      _StepData(
-        context.tr('step_shipping_quote'),
-        Icons.local_shipping_outlined,
-        cs.onSurfaceVariant,
-      ),
-      _StepData(
-        context.tr('waiting_payment'),
-        Icons.account_balance_wallet_outlined,
-        cs.tertiary,
-      ),
-      _StepData(
-        context.tr('step_in_escrow'),
-        Icons.verified_user_outlined,
-        cs.secondary,
-      ),
-      _StepData(
-        context.tr('shipped'),
-        Icons.inventory_2_outlined,
-        cs.successGreen,
-      ),
-      _StepData(
-        context.tr('confirmed'),
-        Icons.check_circle_outline,
-        cs.successGreen,
-      ),
-      _StepData(
-        context.tr('completed'),
-        Icons.check_circle_rounded,
-        cs.primary,
-      ),
-    ];
+    const stageIcons = <TrustStage, IconData>{
+      TrustStage.initiation: Icons.shopping_bag_outlined,
+      TrustStage.pricing: Icons.rate_review_outlined,
+      TrustStage.transaction: Icons.payments_outlined,
+      TrustStage.hold: Icons.verified_user_outlined,
+      TrustStage.logistics: Icons.local_shipping_outlined,
+      TrustStage.verification: Icons.verified_outlined,
+      TrustStage.settlement: Icons.account_balance_wallet_outlined,
+    };
+    Color stageColor(TrustStage s) => switch (s) {
+      TrustStage.initiation => cs.onSurfaceVariant,
+      TrustStage.pricing => cs.tertiary,
+      TrustStage.transaction => cs.primary,
+      TrustStage.hold => cs.secondary,
+      TrustStage.logistics => cs.tertiary,
+      TrustStage.verification => cs.successGreen,
+      TrustStage.settlement => cs.successGreen,
+    };
+    final steps = TrustStage.values
+        .map(
+          (s) => _StepData(
+            context.tr(s.labelKey),
+            stageIcons[s]!,
+            stageColor(s),
+          ),
+        )
+        .toList();
     final current = _currentStep();
 
     return Container(
@@ -2214,7 +2204,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   Widget _buildBottomBar(BuildContext context, ColorScheme cs) {
     final sellerId = d['sellerId'] as String? ?? '';
     final sellerName = d['sellerName'] as String? ?? '';
-    final showTracking = status == 'dispatched';
+    final isLogisticsStatus =
+        const {
+          OrderStatus.dispatched,
+          OrderStatus.inTransit,
+          OrderStatus.outForDelivery,
+          OrderStatus.deliveryAttempted,
+        }.contains(status);
+    final showTracking = isLogisticsStatus;
     final showReceipt = _isCompletedState;
 
     return Container(

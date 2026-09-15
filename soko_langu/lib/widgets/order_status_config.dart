@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../extensions/context_tr.dart';
+import '../models/order_statuses.dart';
 import '../theme/app_colors.dart';
 
 class OrderStatusInfo {
@@ -16,90 +17,148 @@ class OrderStatusInfo {
   String label(BuildContext context) => context.tr(labelKey);
 }
 
-OrderStatusInfo orderStatusInfo(String status, ColorScheme cs) {
+OrderStatusInfo orderStatusInfo(String rawStatus, ColorScheme cs) {
+  // Normalize legacy aliases first so both engines render identically.
+  final status = canonicalStatusOf(rawStatus);
   switch (status) {
-    case 'awaiting_shipping_quote':
+    case OrderStatus.draft:
+    case OrderStatus.pending:
+    case OrderStatus.published:
+      return OrderStatusInfo(
+        color: cs.primary,
+        icon: Icons.hourglass_empty_rounded,
+        labelKey: status == OrderStatus.pending
+            ? 'pending'
+            : '${status}_label',
+      );
+    case OrderStatus.addressRequired:
+    case OrderStatus.awaitingShippingQuote:
       return OrderStatusInfo(
         color: cs.onSurfaceVariant,
         icon: Icons.rate_review_outlined,
-        labelKey: 'awaiting_shipping_quote_label',
+        labelKey: '${status}_label',
       );
-    case 'awaiting_payment':
+    case OrderStatus.pendingShippingFee:
       return OrderStatusInfo(
         color: cs.onSurfaceVariant,
-        icon: Icons.account_balance_wallet_outlined,
-        labelKey: 'awaiting_payment',
+        icon: Icons.local_shipping_outlined,
+        labelKey: '${status}_label',
       );
-    case 'quoted':
+    case OrderStatus.shippingFeeSubmitted:
+    case OrderStatus.shippingFeeReview:
+    case OrderStatus.quoted:
       return OrderStatusInfo(
         color: cs.tertiary,
-        icon: Icons.description_outlined,
-        labelKey: 'quoted',
+        icon: status == OrderStatus.quoted
+            ? Icons.description_outlined
+            : Icons.receipt_long_outlined,
+        labelKey: status == OrderStatus.quoted ? 'quoted' : '${status}_label',
       );
-    case 'paid':
+    case OrderStatus.awaitingPayment:
+    case OrderStatus.awaitingEscrowPayment:
+    case OrderStatus.paymentPending:
+      return OrderStatusInfo(
+        color: cs.primary,
+        icon: Icons.account_balance_wallet_outlined,
+        labelKey: status == OrderStatus.awaitingPayment
+            ? 'awaiting_payment'
+            : '${status}_label',
+      );
+    case OrderStatus.paid:
       return OrderStatusInfo(
         color: cs.primary,
         icon: Icons.payments_outlined,
         labelKey: 'paid',
       );
-    case 'escrow_hold':
-    case 'paid_escrow_hold':
-    case 'paid_escrow_held':
+    case OrderStatus.inEscrow:
       return OrderStatusInfo(
         color: cs.secondary,
         icon: Icons.verified_user_outlined,
-        labelKey: 'secured_in_escrow',
+        labelKey: 'in_escrow_label',
       );
-    case 'dispatched':
+    case OrderStatus.readyToDispatch:
+      return OrderStatusInfo(
+        color: cs.secondary,
+        icon: Icons.outbox_rounded,
+        labelKey: '${status}_label',
+      );
+    case OrderStatus.disputed:
+    case OrderStatus.refundPending:
+      return OrderStatusInfo(
+        color: cs.error,
+        icon: status == OrderStatus.disputed
+            ? Icons.gavel_rounded
+            : Icons.hourglass_full_rounded,
+        labelKey: '${status}_label',
+      );
+    case OrderStatus.dispatched:
+    case OrderStatus.inTransit:
+    case OrderStatus.outForDelivery:
+    case OrderStatus.deliveryAttempted:
       return OrderStatusInfo(
         color: cs.tertiary,
-        icon: Icons.local_shipping_outlined,
-        labelKey: 'dispatched_label',
+        icon: status == OrderStatus.dispatched
+            ? Icons.local_shipping_outlined
+            : Icons.route_rounded,
+        labelKey: status == OrderStatus.dispatched
+            ? 'dispatched_label'
+            : '${status}_label',
       );
-    case 'delivered':
-    case 'delivery_confirmed':
+    case OrderStatus.delivered:
       return OrderStatusInfo(
         color: cs.successGreen,
         icon: Icons.inventory_rounded,
         labelKey: 'delivered',
       );
-    case 'confirmed':
-      return OrderStatusInfo(
-        color: cs.tertiary,
-        icon: Icons.verified_outlined,
-        labelKey: 'confirmed',
-      );
-    case 'completed':
+    case OrderStatus.inspectionPeriod:
       return OrderStatusInfo(
         color: cs.successGreen,
-        icon: Icons.check_circle_rounded,
-        labelKey: 'completed',
+        icon: Icons.security_update_good_outlined,
+        labelKey: '${status}_label',
       );
-    case 'cancelled':
+    case OrderStatus.otpPending:
+      return OrderStatusInfo(
+        color: cs.tertiary,
+        icon: Icons.pin_rounded,
+        labelKey: '${status}_label',
+      );
+    case OrderStatus.completed:
+    case OrderStatus.walletCredited:
+    case OrderStatus.payoutPending:
+    case OrderStatus.payoutComplete:
+      return OrderStatusInfo(
+        color: cs.successGreen,
+        icon: status == OrderStatus.completed
+            ? Icons.check_circle_rounded
+            : Icons.account_balance_wallet_outlined,
+        labelKey: status == OrderStatus.completed
+            ? 'completed'
+            : '${status}_label',
+      );
+    case OrderStatus.cancelled:
       return OrderStatusInfo(
         color: cs.error,
         icon: Icons.cancel_rounded,
         labelKey: 'cancelled',
       );
-    case 'expired':
+    case OrderStatus.expired:
       return OrderStatusInfo(
         color: cs.error,
         icon: Icons.timer_off_rounded,
         labelKey: 'expired',
       );
-    case 'refunded':
+    case OrderStatus.refunded:
       return OrderStatusInfo(
         color: cs.error,
         icon: Icons.replay_rounded,
         labelKey: 'refunded',
       );
-    case 'failed':
+    case OrderStatus.failed:
       return OrderStatusInfo(
         color: cs.error,
         icon: Icons.error_outline_rounded,
         labelKey: 'failed',
       );
-    case 'pending':
     default:
       return OrderStatusInfo(
         color: cs.primary,

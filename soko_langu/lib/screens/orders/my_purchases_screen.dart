@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import '../../models/transaction_model.dart';
+import '../../models/order_statuses.dart';
 import '../../services/api_config.dart';
 import '../../services/clickpesa_service.dart';
 import '../../services/rating_service.dart';
@@ -65,18 +66,49 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
       final s = (d.data() as Map)['status'] as String? ?? '';
       switch (_selectedFilter) {
         case 'pending':
-          return s == 'pending' ||
-              s == 'awaiting_shipping_quote' ||
-              s == 'awaiting_payment';
+          return const {
+            OrderStatus.pending,
+            OrderStatus.awaitingShippingQuote,
+            OrderStatus.awaitingPayment,
+            OrderStatus.addressRequired,
+            OrderStatus.pendingShippingFee,
+            OrderStatus.shippingFeeSubmitted,
+            OrderStatus.shippingFeeReview,
+            OrderStatus.quoted,
+            OrderStatus.awaitingEscrowPayment,
+            OrderStatus.paymentPending,
+          }.contains(s);
         case 'active':
-          return s == 'paid_escrow_held' ||
-              s == 'escrow_hold' ||
-              s == 'dispatched' ||
-              s == 'delivered';
+          return const {
+            OrderStatus.paid,
+            OrderStatus.paidEscrowHeld,
+            OrderStatus.escrowHold,
+            OrderStatus.inEscrow,
+            OrderStatus.readyToDispatch,
+            OrderStatus.dispatched,
+            OrderStatus.inTransit,
+            OrderStatus.outForDelivery,
+            OrderStatus.deliveryAttempted,
+            OrderStatus.delivered,
+            OrderStatus.inspectionPeriod,
+            OrderStatus.otpPending,
+            OrderStatus.disputed,
+            OrderStatus.refundPending,
+          }.contains(s);
         case 'completed':
-          return s == 'completed' || s == 'delivery_confirmed';
+          return const {
+            OrderStatus.completed,
+            OrderStatus.walletCredited,
+            OrderStatus.payoutPending,
+            OrderStatus.payoutComplete,
+          }.contains(s);
         case 'failed':
-          return s == 'failed' || s == 'cancelled' || s == 'refunded' || s == 'expired';
+          return const {
+            OrderStatus.failed,
+            OrderStatus.cancelled,
+            OrderStatus.refunded,
+            OrderStatus.expired,
+          }.contains(s);
         default:
           return true;
       }
@@ -558,18 +590,42 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
         .toList();
     final active = visible.where((d) {
       final s = (d.data() as Map)['status'] as String? ?? '';
-      return s == 'pending' ||
-          s == 'awaiting_shipping_quote' ||
-          s == 'awaiting_payment' ||
-          s == 'quoted' ||
-          s == 'paid_escrow_hold' ||
-          s == 'escrow_hold' ||
-          s == 'dispatched' ||
-          s == 'delivered';
+      return const {
+        OrderStatus.pending,
+        OrderStatus.awaitingShippingQuote,
+        OrderStatus.awaitingPayment,
+        OrderStatus.quoted,
+        OrderStatus.addressRequired,
+        OrderStatus.pendingShippingFee,
+        OrderStatus.shippingFeeSubmitted,
+        OrderStatus.shippingFeeReview,
+        OrderStatus.awaitingEscrowPayment,
+        OrderStatus.paymentPending,
+        OrderStatus.paid,
+        OrderStatus.paidEscrowHeld,
+        OrderStatus.escrowHold,
+        OrderStatus.inEscrow,
+        OrderStatus.readyToDispatch,
+        OrderStatus.dispatched,
+        OrderStatus.inTransit,
+        OrderStatus.outForDelivery,
+        OrderStatus.deliveryAttempted,
+        OrderStatus.delivered,
+        OrderStatus.inspectionPeriod,
+        OrderStatus.otpPending,
+        OrderStatus.disputed,
+        OrderStatus.refundPending,
+      }.contains(s);
     }).length;
     final completed = visible.where((d) {
       final s = (d.data() as Map)['status'] as String? ?? '';
-      return s == 'completed' || s == 'delivery_confirmed';
+      return const {
+        OrderStatus.completed,
+        OrderStatus.deliveryConfirmed,
+        OrderStatus.walletCredited,
+        OrderStatus.payoutPending,
+        OrderStatus.payoutComplete,
+      }.contains(s);
     }).length;
 
     return Padding(
@@ -810,19 +866,23 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
   }
 
   String _escrowLabel(String status) {
-    switch (status) {
-      case 'paid_escrow_held':
-      case 'escrow_hold':
-        return context.tr('secured_in_escrow');
-      case 'dispatched':
+    switch (canonicalStatusOf(status)) {
+      case OrderStatus.inEscrow:
+        return context.tr('in_escrow_label');
+      case OrderStatus.dispatched:
+      case OrderStatus.inTransit:
+      case OrderStatus.outForDelivery:
         return context.tr('dispatched_label');
-      case 'delivered':
-      case 'delivery_confirmed':
-      case 'completed':
+      case OrderStatus.delivered:
         return context.tr('delivered_and_completed');
-      case 'failed':
+      case OrderStatus.completed:
+      case OrderStatus.walletCredited:
+      case OrderStatus.payoutPending:
+      case OrderStatus.payoutComplete:
+        return context.tr('delivered_and_completed');
+      case OrderStatus.failed:
         return context.tr('failed');
-      case 'refunded':
+      case OrderStatus.refunded:
         return context.tr('refunded');
       default:
         return context.tr('pending');
@@ -2062,38 +2122,17 @@ class _CompactTimeline extends StatelessWidget {
     );
   }
 
-  int _currentIndex() {
-    switch (status) {
-      case 'pending':
-        return 0;
-      case 'awaiting_shipping_quote':
-        return 1;
-      case 'awaiting_payment':
-        return 2;
-      case 'paid_escrow_held':
-      case 'escrow_hold':
-        return 3;
-      case 'dispatched':
-        return 4;
-      case 'delivered':
-      case 'delivery_confirmed':
-        return 5;
-      case 'completed':
-        return 6;
-      default:
-        return 0;
-    }
-  }
+  int _currentIndex() => trustStageOf(status).index;
 
   List<_TimelineStep> _buildSteps() {
     return [
       _TimelineStep('', Icons.access_time_rounded, cs.onSurfaceVariant),
+      _TimelineStep('', Icons.rate_review_outlined, cs.tertiary),
+      _TimelineStep('', Icons.payments_outlined, cs.primary),
+      _TimelineStep('', Icons.verified_user_outlined, cs.secondary),
       _TimelineStep('', Icons.local_shipping_outlined, cs.tertiary),
-      _TimelineStep('', Icons.account_balance_wallet_outlined, cs.secondary),
-      _TimelineStep('', Icons.verified_user_outlined, cs.primary),
-      _TimelineStep('', Icons.inventory_2_outlined, cs.successGreen),
-      _TimelineStep('', Icons.check_circle_outline, cs.successGreen),
-      _TimelineStep('', Icons.check_circle_rounded, cs.successGreen),
+      _TimelineStep('', Icons.verified_outlined, cs.successGreen),
+      _TimelineStep('', Icons.account_balance_wallet_outlined, cs.successGreen),
     ];
   }
 }

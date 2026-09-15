@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import '../models/transaction_model.dart';
+import '../models/order_statuses.dart';
 import 'api_config.dart';
 import 'fraud_prevention_service.dart';
 
@@ -135,14 +136,30 @@ class PaymentService {
   }
 
   bool _isPaidStatus(String status) {
-    return status == 'escrow_hold' ||
-        status == 'paid_escrow_hold' ||
-        status == 'paid_escrow_held' ||
-        status == 'dispatched' ||
-        status == 'delivered' ||
-        status == 'delivery_confirmed' ||
-        status == 'confirmed' ||
-        status == 'completed' ||
-        status == 'refunded';
+    return const {
+          OrderStatus.escrowHold,
+          OrderStatus.paidEscrowHold,
+          OrderStatus.paidEscrowHeld,
+          OrderStatus.dispatched,
+          OrderStatus.delivered,
+          OrderStatus.deliveryConfirmed,
+          OrderStatus.confirmed,
+          OrderStatus.completed,
+          OrderStatus.refunded,
+          OrderStatus.paid,
+          OrderStatus.inEscrow,
+          OrderStatus.readyToDispatch,
+          OrderStatus.inTransit,
+          OrderStatus.outForDelivery,
+          OrderStatus.deliveryAttempted,
+          OrderStatus.inspectionPeriod,
+          OrderStatus.otpPending,
+          OrderStatus.walletCredited,
+          OrderStatus.payoutPending,
+          OrderStatus.payoutComplete,
+          OrderStatus.disputed,
+          OrderStatus.refundPending,
+        }
+        .contains(status);
   }
 }

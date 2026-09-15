@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../extensions/context_tr.dart';
 import '../../widgets/google_loading.dart';
 import '../../widgets/order_status_config.dart';
+import '../../models/order_statuses.dart';
 import '../../app/routes.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/ds/ds.dart';
@@ -24,19 +25,36 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
   Timer? _autoRefreshTimer;
   DateTime? _lastAutoRefresh;
 
-  static const _filters = ['all', 'pending', 'awaiting_shipping_quote', 'awaiting_payment', 'escrow_hold', 'dispatched', 'delivered', 'completed', 'refunded', 'expired'];
+  static const _filters = [
+    'all',
+    'pending',
+    'awaiting_shipping_quote',
+    'awaiting_payment',
+    'escrow_hold',
+    'dispatched',
+    'delivered',
+    'completed',
+    'refunded',
+    'expired',
+    'in_transit',
+    'inspection_period',
+    'disputed',
+  ];
 
   static const _filterLabels = {
     'all': 'all',
     'pending': 'pending',
     'awaiting_shipping_quote': 'awaiting_shipping_quote_label',
     'awaiting_payment': 'awaiting_payment_label',
-    'escrow_hold': 'escrow_hold_label',
+    'escrow_hold': 'in_escrow_label',
     'dispatched': 'dispatched_label',
     'delivered': 'delivered',
     'completed': 'completed',
     'refunded': 'refunded',
     'expired': 'expired',
+    'in_transit': 'in_transit_label',
+    'inspection_period': 'inspection_period_label',
+    'disputed': 'disputed_label',
   };
 
   @override
@@ -142,10 +160,29 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
 
   Widget _buildStatsHeader(ColorScheme cs, List<QueryDocumentSnapshot> allDocs) {
     final visible = allDocs.where((d) => (d.data() as Map)['deletedForSeller'] != true).toList();
-    final awaitingQuote = visible.where((d) => (d.data() as Map)['status'] == 'awaiting_shipping_quote').length;
+    final awaitingQuote = visible.where((d) {
+      final s = (d.data() as Map)['status'] as String? ?? '';
+      return const {
+        OrderStatus.awaitingShippingQuote,
+        OrderStatus.pendingShippingFee,
+        OrderStatus.shippingFeeSubmitted,
+        OrderStatus.shippingFeeReview,
+      }.contains(s);
+    }).length;
     final needsAction = visible.where((d) {
       final s = (d.data() as Map)['status'] as String? ?? '';
-      return s == 'awaiting_shipping_quote' || s == 'awaiting_payment' || s == 'escrow_hold' || s == 'paid_escrow_hold';
+      return const {
+        OrderStatus.awaitingShippingQuote,
+        OrderStatus.pendingShippingFee,
+        OrderStatus.awaitingPayment,
+        OrderStatus.awaitingEscrowPayment,
+        OrderStatus.paymentPending,
+        OrderStatus.escrowHold,
+        OrderStatus.paidEscrowHold,
+        OrderStatus.readyToDispatch,
+        OrderStatus.inEscrow,
+        OrderStatus.disputed,
+      }.contains(s);
     }).length;
 
     return Padding(
@@ -363,7 +400,10 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                         _infoRow(cs, Icons.payments_outlined, context.tr('total_payment'),
                             'TZS ${NumberFormat('#,###').format(totalAmount)}',
                             bold: true),
-                      if (status == 'escrow_hold' || status == 'paid_escrow_hold') ...[
+                      if (status == 'escrow_hold' ||
+                          status == 'paid_escrow_hold' ||
+                          status == 'in_escrow' ||
+                          status == 'ready_to_dispatch') ...[
                         const SizedBox(height: 12),
                         DsButton(
                           label: context.tr('mark_shipped'),
@@ -390,7 +430,12 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                           if (status == 'delivered' ||
                               status == 'completed' ||
                               status == 'delivery_confirmed' ||
-                              status == 'confirmed') ...[
+                              status == 'confirmed' ||
+                              const {
+                                OrderStatus.walletCredited,
+                                OrderStatus.payoutPending,
+                                OrderStatus.payoutComplete,
+                              }.contains(status)) ...[
                             Expanded(
                               child: DsButton(
                                 label: context.tr('view_receipt'),

@@ -54,12 +54,36 @@ enum TransactionStatus {
   awaitingShippingQuote,
   awaitingPayment,
   paidEscrowHeld,
+  escrowHold,
   dispatched,
   delivered,
   completed,
   failed,
   refunded,
-  escrowHold,
+  draft,
+  published,
+  addressRequired,
+  pendingShippingFee,
+  shippingFeeSubmitted,
+  shippingFeeReview,
+  quoted,
+  awaitingEscrowPayment,
+  paymentPending,
+  paid,
+  inEscrow,
+  readyToDispatch,
+  inTransit,
+  outForDelivery,
+  deliveryAttempted,
+  inspectionPeriod,
+  otpPending,
+  walletCredited,
+  payoutPending,
+  payoutComplete,
+  disputed,
+  refundPending,
+  cancelled,
+  expired,
 }
 
 class MarketplaceTransaction {
@@ -233,39 +257,149 @@ class MarketplaceTransaction {
 
   static String _statusToString(TransactionStatus s) {
     switch (s) {
-      case TransactionStatus.escrowHold:
-        return 'escrow_hold';
+      case TransactionStatus.pending:
+        return 'pending';
+      case TransactionStatus.draft:
+        return 'draft';
+      case TransactionStatus.published:
+        return 'published';
+      case TransactionStatus.addressRequired:
+        return 'address_required';
       case TransactionStatus.awaitingShippingQuote:
         return 'awaiting_shipping_quote';
+      case TransactionStatus.pendingShippingFee:
+        return 'pending_shipping_fee';
+      case TransactionStatus.shippingFeeSubmitted:
+        return 'shipping_fee_submitted';
+      case TransactionStatus.shippingFeeReview:
+        return 'shipping_fee_review';
+      case TransactionStatus.quoted:
+        return 'quoted';
       case TransactionStatus.awaitingPayment:
         return 'awaiting_payment';
+      case TransactionStatus.awaitingEscrowPayment:
+        return 'awaiting_escrow_payment';
+      case TransactionStatus.paymentPending:
+        return 'payment_pending';
+      case TransactionStatus.paid:
+        return 'paid';
+      case TransactionStatus.escrowHold:
+        return 'escrow_hold';
       case TransactionStatus.paidEscrowHeld:
         return 'paid_escrow_held';
-      default:
-        return s.toString().split('.').last;
+      case TransactionStatus.inEscrow:
+        return 'in_escrow';
+      case TransactionStatus.readyToDispatch:
+        return 'ready_to_dispatch';
+      case TransactionStatus.dispatched:
+        return 'dispatched';
+      case TransactionStatus.inTransit:
+        return 'in_transit';
+      case TransactionStatus.outForDelivery:
+        return 'out_for_delivery';
+      case TransactionStatus.deliveryAttempted:
+        return 'delivery_attempted';
+      case TransactionStatus.delivered:
+        return 'delivered';
+      case TransactionStatus.inspectionPeriod:
+        return 'inspection_period';
+      case TransactionStatus.otpPending:
+        return 'otp_pending';
+      case TransactionStatus.completed:
+        return 'completed';
+      case TransactionStatus.walletCredited:
+        return 'wallet_credited';
+      case TransactionStatus.payoutPending:
+        return 'payout_pending';
+      case TransactionStatus.payoutComplete:
+        return 'payout_complete';
+      case TransactionStatus.disputed:
+        return 'disputed';
+      case TransactionStatus.refundPending:
+        return 'refund_pending';
+      case TransactionStatus.refunded:
+        return 'refunded';
+      case TransactionStatus.cancelled:
+        return 'cancelled';
+      case TransactionStatus.expired:
+        return 'expired';
+      case TransactionStatus.failed:
+        return 'failed';
     }
   }
 
   static TransactionStatus parseStatus(String status) {
     switch (status) {
-      case 'completed':
-        return TransactionStatus.completed;
-      case 'failed':
-        return TransactionStatus.failed;
-      case 'refunded':
-        return TransactionStatus.refunded;
-      case 'escrow_hold':
-        return TransactionStatus.escrowHold;
-      case 'delivered':
-        return TransactionStatus.delivered;
+      case 'draft':
+        return TransactionStatus.draft;
+      case 'published':
+        return TransactionStatus.published;
+      case 'address_required':
+        return TransactionStatus.addressRequired;
       case 'awaiting_shipping_quote':
         return TransactionStatus.awaitingShippingQuote;
+      case 'pending_shipping_fee':
+        return TransactionStatus.pendingShippingFee;
+      case 'shipping_fee_submitted':
+        return TransactionStatus.shippingFeeSubmitted;
+      case 'shipping_fee_review':
+        return TransactionStatus.shippingFeeReview;
+      case 'quoted':
+        return TransactionStatus.quoted;
       case 'awaiting_payment':
         return TransactionStatus.awaitingPayment;
+      case 'awaiting_escrow_payment':
+        return TransactionStatus.awaitingEscrowPayment;
+      case 'payment_pending':
+        return TransactionStatus.paymentPending;
+      case 'paid':
+        return TransactionStatus.paid;
+      case 'escrow_hold':
+        return TransactionStatus.escrowHold;
+      case 'paid_escrow_hold':
       case 'paid_escrow_held':
         return TransactionStatus.paidEscrowHeld;
+      case 'in_escrow':
+        return TransactionStatus.inEscrow;
+      case 'ready_to_dispatch':
+        return TransactionStatus.readyToDispatch;
       case 'dispatched':
         return TransactionStatus.dispatched;
+      case 'in_transit':
+        return TransactionStatus.inTransit;
+      case 'out_for_delivery':
+        return TransactionStatus.outForDelivery;
+      case 'delivery_attempted':
+        return TransactionStatus.deliveryAttempted;
+      case 'delivered':
+        return TransactionStatus.delivered;
+      case 'delivery_confirmed':
+      case 'confirmed':
+        return TransactionStatus.delivered;
+      case 'inspection_period':
+        return TransactionStatus.inspectionPeriod;
+      case 'otp_pending':
+        return TransactionStatus.otpPending;
+      case 'completed':
+        return TransactionStatus.completed;
+      case 'wallet_credited':
+        return TransactionStatus.walletCredited;
+      case 'payout_pending':
+        return TransactionStatus.payoutPending;
+      case 'payout_complete':
+        return TransactionStatus.payoutComplete;
+      case 'disputed':
+        return TransactionStatus.disputed;
+      case 'refund_pending':
+        return TransactionStatus.refundPending;
+      case 'refunded':
+        return TransactionStatus.refunded;
+      case 'cancelled':
+        return TransactionStatus.cancelled;
+      case 'expired':
+        return TransactionStatus.expired;
+      case 'failed':
+        return TransactionStatus.failed;
       default:
         return TransactionStatus.pending;
     }
