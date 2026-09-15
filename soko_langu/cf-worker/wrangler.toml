@@ -1,0 +1,15 @@
+name = "soko-api-edge"
+main = "worker.js"
+compatibility_date = "2024-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Route: new subdomain `api.sokovibe.co.tz` fronting the Render origin.
+# To route on the MAIN zone instead (web + api same origin), change to:
+#   pattern = "sokovibe.co.tz/api/*"
+[[routes]]
+pattern = "api.sokovibe.co.tz/*"
+zone_name = "sokovibe.co.tz"
+
+# Origin override (leave as the Render service in normal operation).
+[vars]
+ORIGIN_URL = "https://soko-langu-server.onrender.com"

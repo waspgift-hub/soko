@@ -36,6 +36,20 @@ This is the operational counterpart to the code-level pagination/caching work.
 | App product/category streams | unbounded | Flutter `.limit()` + cursors (Tier 1) |
 | Auto-release cron | sweeps whole `orders` collection | BullMQ idempotent jobs on deadline index |
 
+## Cloudflare edge (cf-worker/)
+
+A Worker proxies the API through 200+ edge cities and serves the hot read
+routes without ever reaching Render:
+
+- trust passport 300s, transaction-status 15s, search autocomplete 90s,
+  trending 300s, most-rated 600s, global-search 60s — stale-while-revalidate.
+- Every mutation/admin/payment/escrow request passes straight through.
+- Deploy: `wrangler login && wrangler deploy` from `cf-worker/` (see
+  `cf-worker/README.md`). Requires a proxied DNS record `api.sokovibe.co.tz`.
+
+Once live, point `ApiConfig.baseUrl` at the edge URL. The mobile-to-origin
+hop becomes edge-to-origin only on cache miss.
+
 ## Firestore index deploy
 
 ```
