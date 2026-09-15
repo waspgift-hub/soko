@@ -24,6 +24,8 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
   String _filter = 'all';
   Timer? _autoRefreshTimer;
   DateTime? _lastAutoRefresh;
+  Timer? _ticker;
+  int _now = DateTime.now().millisecondsSinceEpoch;
 
   static const _filters = [
     'all',
@@ -60,11 +62,15 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
   @override
   void initState() {
     super.initState();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _now = DateTime.now().millisecondsSinceEpoch);
+    });
   }
 
   @override
   void dispose() {
     _autoRefreshTimer?.cancel();
+    _ticker?.cancel();
     super.dispose();
   }
 
@@ -382,6 +388,10 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                       const SizedBox(height: 12),
                       Container(height: 1, color: cs.primary.withValues(alpha: 0.08)),
                       const SizedBox(height: 10),
+                      if (_sellerDisputeInfo(d) != null) ...[
+                        _buildSellerDisputeBanner(cs, d),
+                        const SizedBox(height: 10),
+                      ],
                       if (buyerName.isNotEmpty)
                         _infoRow(cs, Icons.person_outline, context.tr('buyer_label'), buyerName),
                       _infoRow(cs, Icons.receipt_outlined, context.tr('order_id'), txId),
@@ -400,6 +410,11 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                         _infoRow(cs, Icons.payments_outlined, context.tr('total_payment'),
                             'TZS ${NumberFormat('#,###').format(totalAmount)}',
                             bold: true),
+                      _buildSellerTimers(cs, d),
+                      if (_sellerShippingQuote(d) != null) ...[
+                        const SizedBox(height: 6),
+                        _buildSellerVerdictChip(cs, d),
+                      ],
                       if (status == 'escrow_hold' ||
                           status == 'paid_escrow_hold' ||
                           status == 'in_escrow' ||
@@ -466,6 +481,210 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Map<String, dynamic>? _sellerShippingQuote(Map<String, dynamic> d) {
+    final q = d['shippingQuote'];
+    if (q is Map<String, dynamic>) return q;
+    if (q is Map) return Map<String, dynamic>.from(q);
+    return null;
+  }
+
+  Map<String, dynamic>? _sellerDisputeInfo(Map<String, dynamic> d) {
+    final di = d['disputeInfo'];
+    if (di is Map<String, dynamic>) return di;
+    if (di is Map) return Map<String, dynamic>.from(di);
+    return null;
+  }
+
+  DateTime? _asDate(dynamic v) {
+    if (v is Timestamp) return v.toDate();
+    if (v is DateTime) return v;
+    if (v is String) return DateTime.tryParse(v);
+    return null;
+  }
+
+  String _msLeft(DateTime? deadline) {
+    if (deadline == null) return '';
+    final diff = deadline.difference(DateTime.fromMillisecondsSinceEpoch(_now));
+    if (diff.isNegative) return '00:00:00';
+    String two(int n) => n.toString().padLeft(2, '0');
+    if (diff.inDays >= 1) {
+      return '${diff.inDays}d ${two(diff.inHours % 24)}:${two(diff.inMinutes % 60)}:${two(diff.inSeconds % 60)}';
+    }
+    return '${two(diff.inHours)}:${two(diff.inMinutes % 60)}:${two(diff.inSeconds % 60)}';
+  }
+
+  /// Live countdowns the seller cares about: when escrow auto-releases to them
+  /// (48h after dispatch) and how long the buyer has left to inspect.
+  Widget _buildSellerTimers(ColorScheme cs, Map<String, dynamic> d) {
+    final status = d['status'] as String? ?? '';
+    final inTransit = const {
+      'dispatched', 'in_transit', 'out_for_delivery', 'delivery_attempted',
+    }.contains(status);
+    final inspecting = const {
+      'delivered', 'inspection_period', 'otp_pending',
+    }.contains(status);
+    final autoDead = inTransit
+        ? (_asDate(d['autoReleaseDeadline']) ??
+            (_asDate(d['dispatchedAt'])?.add(const Duration(hours: 48))))
+        : null;
+    final inspectDead = inspecting ? _asDate(d['inspectionDeadline']) : null;
+    if (autoDead == null && inspectDead == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 6,
+        children: [
+          if (autoDead != null)
+            _timerChip(cs, Icons.timer_outlined,
+                '${context.tr('auto_release_countdown_hint')}  ${_msLeft(autoDead)}'),
+          if (inspectDead != null)
+            _timerChip(cs, Icons.access_time_filled,
+                '${context.tr('inspection_deadline_hint')}  ${_msLeft(inspectDead)}'),
+        ],
+      ),
+    );
+  }
+
+  Widget _timerChip(ColorScheme cs, IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: cs.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: cs.primary),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(text,
+                style: TextStyle(fontSize: 11.5, color: cs.onSurface),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Same shipping-quote verdict the buyer sees, on the seller side too.
+  Widget _buildSellerVerdictChip(ColorScheme cs, Map<String, dynamic> d) {
+    final q = _sellerShippingQuote(d)!;
+    final verdict = (q['verdict'] as String? ?? 'NORMAL').toUpperCase();
+    final reason = q['reason']?.toString() ?? '';
+    final tier = q['distanceTier']?.toString() ?? '';
+    final (icon, color, label) = switch (verdict) {
+      'BLOCKED' => (
+          Icons.block,
+          cs.error,
+          context.tr('verdict_blocked'),
+        ),
+      'REVIEW_REQUIRED' => (
+          Icons.warning_amber_rounded,
+          cs.brandWarning,
+          context.tr('verdict_review_required'),
+        ),
+      _ => (
+          Icons.check_circle_outline,
+          cs.successGreen,
+          context.tr('verdict_normal'),
+        ),
+    };
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color.withValues(alpha: 0.35)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                tier.isNotEmpty && reason.isNotEmpty && verdict != 'NORMAL'
+                    ? '$label • $tier • $reason'
+                    : label,
+                style: TextStyle(
+                    fontSize: 11.5,
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                    height: 1.2),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Compact open-case banner for the seller: what the buyer claimed, how many
+  /// photos, and the resolution status once an admin decides.
+  Widget _buildSellerDisputeBanner(ColorScheme cs, Map<String, dynamic> d) {
+    final info = _sellerDisputeInfo(d)!;
+    final resolved = info['resolved'] == true;
+    final resolution = info['resolution']?.toString() ?? 'released_to_seller';
+    final reason = info['reason']?.toString() ?? '';
+    final evidenceCount = info['evidenceUrls'] is List
+        ? (info['evidenceUrls'] as List).length
+        : 0;
+    final color = resolved ? cs.successGreen : cs.error;
+    final title = resolved
+        ? context.tr('dispute_resolution_label') +
+            (resolution == 'refunded_to_buyer'
+                ? context.tr('dispute_refunded')
+                : context.tr('dispute_released'))
+        : context.tr('dispute_case_title');
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(resolved ? Icons.gavel_outlined : Icons.gavel, size: 16, color: color),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(title,
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                        color: color)),
+              ),
+            ],
+          ),
+          if (reason.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(reason,
+                style: TextStyle(
+                    fontSize: 12,
+                    color: cs.onSurface.withValues(alpha: 0.8),
+                    height: 1.3)),
+          ],
+          if (evidenceCount > 0) ...[
+            const SizedBox(height: 2),
+            Text('${context.tr('dispute_evidence_label')} • $evidenceCount',
+                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+          ],
+        ],
       ),
     );
   }

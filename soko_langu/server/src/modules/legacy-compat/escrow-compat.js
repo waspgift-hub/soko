@@ -76,11 +76,21 @@ router.post('/dispatch', async (req, res) => {
       busName: req.body.busName || '',
       plateNumber: req.body.plateNumber || '',
       dispatchedAt: admin.firestore.FieldValue.serverTimestamp(),
-      // v2 auto-release deadline: release to the seller 48h after dispatch when
-      // the buyer never confirms (matches the /cron/auto-release cutoff).
       autoReleaseDeadline: new Date(Date.now() + 48 * 60 * 60 * 1000),
       escrowHeldAt: tx.escrowHeldAt || tx.completedAt || null,
     });
+    const dispatchMirror = await db.collection('orders').doc(orderId).get();
+    if (dispatchMirror.exists) {
+      await dispatchMirror.ref.update({
+        status: 'dispatched',
+        flowStage: 'in_transit',
+        dispatchProof,
+        busName: req.body.busName || '',
+        plateNumber: req.body.plateNumber || '',
+        dispatchedAt: admin.firestore.FieldValue.serverTimestamp(),
+        autoReleaseDeadline: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      });
+    }
 
     // Notify buyer
     await db.collection('notifications').add({
@@ -259,6 +269,15 @@ router.post('/release', async (req, res) => {
       flowStage: 'wallet_credited',
       walletCreditedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+    if (orderDoc && orderDoc.exists && txDoc.exists) {
+      await orderDoc.ref.update({
+        status: 'delivered',
+        escrowReleased: true,
+        escrowReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
+        confirmedBy: 'buyer_release',
+        flowStage: 'wallet_credited',
+      });
+    }
 
     const sellerDoc = await db.collection('users').doc(sellerId).get();
     const balanceBefore = sellerDoc.exists ? (sellerDoc.data().sellerBalance || 0) : 0;
@@ -500,6 +519,16 @@ router.post('/cancel', async (req, res) => {
       refundFee: cancelPayoutFee,
       cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+    const cancelMirror = await db.collection('orders').doc(orderId).get();
+    if (cancelMirror.exists) {
+      await cancelMirror.ref.update({
+        status: 'refunded',
+        escrowReleased: true,
+        cancellationType: 'buyer_cancel',
+        refundFee: cancelPayoutFee,
+        cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
 
     // Deduct from seller's pendingEscrow
     if (sellerId && sellerReceives > 0) {
@@ -770,6 +799,17 @@ router.post('/admin-resolve-dispute', async (req, res) => {
         'disputeInfo.resolution': 'released_to_seller',
         'disputeInfo.adminNote': note || '',
       });
+      const resolveOrder = await db.collection('orders').doc(orderId).get();
+      if (resolveOrder.exists) {
+        await resolveOrder.ref.update({
+          status: 'delivered',
+          escrowReleased: true,
+          escrowReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
+          'disputeInfo.resolved': true,
+          'disputeInfo.resolution': 'released_to_seller',
+          'disputeInfo.adminNote': note || '',
+        });
+      }
 
       if (sellerId && sellerReceives > 0) {
         await db.collection('users').doc(sellerId).update({
@@ -831,6 +871,18 @@ router.post('/admin-resolve-dispute', async (req, res) => {
       'disputeInfo.refundedAmount': refundAmount,
       'disputeInfo.adminNote': note || '',
     });
+    const resolveOrderRefund = await db.collection('orders').doc(orderId).get();
+    if (resolveOrderRefund.exists) {
+      await resolveOrderRefund.ref.update({
+        status: 'refunded',
+        escrowReleased: true,
+        escrowReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
+        'disputeInfo.resolved': true,
+        'disputeInfo.resolution': 'refunded_to_buyer',
+        'disputeInfo.refundedAmount': refundAmount,
+        'disputeInfo.adminNote': note || '',
+      });
+    }
 
     if (sellerId && sellerReceives > 0) {
       const sellerDoc = await db.collection('users').doc(sellerId).get();
