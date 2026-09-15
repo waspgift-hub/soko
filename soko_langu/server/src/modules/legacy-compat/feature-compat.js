@@ -94,7 +94,7 @@ async function getUserSmsLang(db, userId) {
   }
 }
 
-const NOTIFY_SMS_BASE = 'https://api.notify.africa';
+const NOTIFY_SMS_BASE = config.sms.notifyAfricaBaseUrl;
 
 function toInternational(phone) {
   const d = String(phone).replace(/\D/g, '');
@@ -141,7 +141,7 @@ async function sendSms(phone, message) {
       const senders = configured === 'MESEJI' ? ['MESEJI'] : [configured, 'MESEJI'];
       for (const sender of senders) {
         try {
-          const resp = await axios.post('https://meseji.co.tz/api/v1/sms/send', {
+          const resp = await axios.post(config.sms.mesejiBaseUrl, {
             sender_id: sender,
             message,
             contacts: local,
@@ -232,7 +232,7 @@ async function sendOneSignalBulk(db, userIds, title, body, data = {}) {
   for (let i = 0; i < userIds.length; i += batchSize) {
     const chunk = userIds.slice(i, i + batchSize);
     try {
-      const resp = await axios.post('https://onesignal.com/api/v1/notifications', {
+      const resp = await axios.post(`${config.onesignal.baseUrl}/notifications`, {
         app_id: appId,
         include_external_user_ids: chunk,
         channel_for_external_user_ids: 'push',
@@ -515,7 +515,7 @@ module.exports = function ({ admin: fbAdmin, db }) {
         const senders = configured === 'MESEJI' ? ['MESEJI'] : [configured, 'MESEJI'];
         for (const sender of senders) {
           try {
-            const resp = await axios.post('https://meseji.co.tz/api/v1/sms/send', {
+            const resp = await axios.post(config.sms.mesejiBaseUrl, {
               sender_id: sender,
               message,
               contacts: local,
@@ -1620,7 +1620,7 @@ module.exports = function ({ admin: fbAdmin, db }) {
       const publicId = match[1];
 
       const resp = await axios.post(
-        'https://api.cloudinary.com/v1_1/dgbsohnl4/image/destroy',
+        config.cloudinary.destroyUrl,
         new URLSearchParams({
           public_id: publicId,
           timestamp: String(Math.floor(Date.now() / 1000)),

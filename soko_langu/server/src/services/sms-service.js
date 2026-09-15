@@ -5,7 +5,7 @@ const axios = require('axios');
 const config = require('../config');
 const { createBreaker } = require('../utils/circuit-breaker');
 
-const NOTIFY_SMS_BASE = 'https://api.notify.africa';
+const NOTIFY_SMS_BASE = config.sms.notifyAfricaBaseUrl;
 
 // Per-provider breakers: a down SMS provider fails fast instead of holding the
 // request for 15s×2 timeouts on every OTP send.
@@ -33,7 +33,7 @@ async function sendViaMeseji(phone, message) {
   for (const sender of senders) {
     try {
       const resp = await mesejiBreaker.call(
-        () => axios.post('https://meseji.co.tz/api/v1/sms/send', {
+        () => axios.post(config.sms.mesejiBaseUrl, {
           sender_id: sender,
           message,
           contacts: local,

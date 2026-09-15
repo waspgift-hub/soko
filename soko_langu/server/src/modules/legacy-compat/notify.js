@@ -22,7 +22,7 @@ async function sendOneSignalNotification(userId, title, body, data = {}) {
   }
   try {
     const resp = await oneSignalBreaker.call(
-      () => axios.post('https://onesignal.com/api/v1/notifications', {
+      () => axios.post(`${config.onesignal.baseUrl}/notifications`, {
         app_id: appId,
         idempotency_key: randomUUID(),
         include_external_user_ids: [userId],

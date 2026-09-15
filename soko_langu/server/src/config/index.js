@@ -50,17 +50,27 @@ const config = {
     mesejiApiKey: process.env.MESEJI_API_KEY,
     mesejiSenderId: process.env.MESEJI_SENDER_ID || 'MESEJI',
     notifyAfricaApiKey: process.env.NOTIFY_AFRICA_API_KEY,
+    // Base URLs are env-swappable so the whole stack can point at ANY SMS
+    // provider (free or paid) without touching code — migration = env change.
+    mesejiBaseUrl: process.env.MESEJI_BASE_URL || 'https://meseji.co.tz/api/v1/sms/send',
+    notifyAfricaBaseUrl: process.env.NOTIFY_AFRICA_SMS_BASE_URL || 'https://api.notify.africa',
   },
   
   // Push Notifications
   onesignal: {
     appId: process.env.ONE_SIGNAL_APP_ID,
     apiKey: process.env.ONE_SIGNAL_REST_API_KEY,
+    baseUrl: process.env.ONE_SIGNAL_BASE_URL || 'https://onesignal.com/api/v1',
   },
   
   // AI
   groq: {
     apiKey: process.env.GROQ_API_KEY,
+  },
+  
+  // Cloudinary (legacy image cleanup; app media now lives in R2)
+  cloudinary: {
+    destroyUrl: process.env.CLOUDINARY_DESTROY_URL || 'https://api.cloudinary.com/v1_1/dgbsohnl4/image/destroy',
   },
   
   // Security
