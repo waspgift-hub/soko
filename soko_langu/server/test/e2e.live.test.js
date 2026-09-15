@@ -14,10 +14,11 @@ const assert = require('node:assert/strict');
 const BASE = process.env.E2E_BASE_URL || 'https://soko-langu-server.onrender.com';
 
 // The production server rate-limits at 30 requests/min per IP, so the security
-// sweep must pace itself or it trips 429 before reaching the endpoints.
+// sweep must pace itself below that or it trips 429/503 before reaching the
+// endpoints. ~2.2s spacing keeps a 65-test sweep near 27 req/min.
 let _lastRequestAt = 0;
 async function req(method, path, body) {
-  const wait = 1300 - (Date.now() - _lastRequestAt);
+  const wait = 2200 - (Date.now() - _lastRequestAt);
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   _lastRequestAt = Date.now();
   const res = await fetch(`${BASE}${path}`, {
@@ -86,6 +87,17 @@ test('POST /api/auth/check-email → 200 boolean exists', async () => {
   const r = await req('POST', '/api/auth/check-email', { email: 'unused-e2e@example.com' });
   assert.equal(r.status, 200);
   assert.ok(typeof r.json?.exists === 'boolean');
+});
+
+// Phase C: the trust passport is public reading material for buyers deciding
+// whether to pay — verify the Firestore-backed passport renders a seller.
+test('GET /api/trust/passport/:sellerId → 200 public passport', async () => {
+  const r = await req('GET', '/api/trust/passport/e2e-seller');
+  assert.equal(r.status, 200);
+  assert.equal(r.json?.success, true);
+  assert.ok(r.json?.data?.seller, 'expected a seller object');
+  assert.equal(r.json?.data?.metrics?.activeDisputes, 0);
+  assert.ok(Array.isArray(r.json?.data?.indicators));
 });
 
 test('auth check endpoints reject missing payload → 400', async () => {
@@ -169,6 +181,21 @@ const PROTECTED_ENDPOINTS = [
   ['POST', '/api/admin/broadcast-notification', {}],
   ['POST', '/api/cron/release-escrows', {}],
   ['POST', '/api/escrow/release', {}],
+  // Phase A–E v2 Trust-Commerce gates: every owner-scoped action must reject
+  // unauthenticated callers BEFORE touching any order data.
+  ['POST', '/api/orders/transition', { orderId: 'x', to: 'quoted' }],
+  ['POST', '/api/orders/set-shipping-cost', { orderId: 'x', shippingCost: 2000 }],
+  ['POST', '/api/orders/delivery-arrival', { orderId: 'x' }],
+  ['POST', '/api/orders/generate-delivery-otp', { orderId: 'x' }],
+  ['POST', '/api/orders/verify-delivery', { orderId: 'x', otp: '0000' }],
+  ['POST', '/api/orders/open-dispute', { orderId: 'x' }],
+  ['POST', '/api/escrow/dispatch', { orderId: 'x', userId: 'x' }],
+  ['POST', '/api/escrow/buyer-transport', { orderId: 'x', userId: 'x' }],
+  ['POST', '/api/escrow/dispute', { orderId: 'x', userId: 'x', reason: 'e2e' }],
+  ['POST', '/api/escrow/admin-release', {}],
+  ['POST', '/api/escrow/admin-resolve-dispute', {}],
+  ['POST', '/api/orders/cron/auto-release', {}],
+  ['POST', '/api/payouts/seller/withdraw', { userId: 'x', amount: 100, phone: '0712345678' }],
   ['POST', '/api/moderation/check-text', { text: 'test' }],
 ];
 
