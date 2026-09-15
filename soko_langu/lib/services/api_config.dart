@@ -1,5 +1,7 @@
 class ApiConfig {
-  static const String baseUrl = 'https://soko-langu-server.onrender.com';
+  // Edge-cached via the Cloudflare Worker (soko-api-edge); the Render origin
+  // is only hit on a worker cache miss.
+  static const String baseUrl = 'https://api.sokovibe.co.tz';
 
   /// Backend v2 (Trust-Commerce) base: all new endpoints live under /api/v1.
   /// Use v1('/auth/send-otp') instead of '$baseUrl/api/auth/send-otp'.
