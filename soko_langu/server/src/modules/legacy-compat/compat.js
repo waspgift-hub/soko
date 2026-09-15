@@ -83,6 +83,7 @@ function setupCompat(app) {
     admin,
     db,
     redis,
+    cache,
     requireUser,
     sendOneSignalNotification,
     clickpesaPayout,

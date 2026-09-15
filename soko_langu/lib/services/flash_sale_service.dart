@@ -24,6 +24,7 @@ class FlashSaleService {
     return _db
         .collection('flash_sales')
         .where('isActive', isEqualTo: true)
+        .limit(20)
         .snapshots()
         .map((snap) {
           try {
@@ -63,6 +64,7 @@ class FlashSaleService {
     return _db
         .collection('flash_sales')
         .where('productId', isEqualTo: productId)
+        .limit(5)
         .snapshots()
         .map((snap) {
       if (snap.docs.isEmpty) return null;
@@ -81,6 +83,7 @@ class FlashSaleService {
     return _db
         .collection('flash_sales')
         .where('sellerId', isEqualTo: user.uid)
+        .limit(50)
         .snapshots()
         .map((snap) {
           try {

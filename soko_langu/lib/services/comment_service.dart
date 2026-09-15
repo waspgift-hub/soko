@@ -172,6 +172,7 @@ class CommentService {
   Stream<List<ProductComment>> getComments(String productId) {
     return _commentsRef(productId)
         .orderBy('createdAt', descending: true)
+        .limit(100)
         .snapshots()
         .map(
           (snap) => snap.docs
@@ -188,6 +189,7 @@ class CommentService {
   Stream<List<CommentReply>> getReplies(String productId, String commentId) {
     return _repliesRef(productId, commentId)
         .orderBy('createdAt')
+        .limit(50)
         .snapshots()
         .map(
           (snap) => snap.docs

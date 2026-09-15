@@ -750,6 +750,8 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
       stream: FirebaseFirestore.instance
           .collection('orders')
           .where('sellerId', isEqualTo: user.uid)
+          .orderBy('createdAt', descending: true)
+          .limit(150)
           .snapshots(),
       builder: (context, snap) {
         if (!snap.hasData) return const SizedBox.shrink();

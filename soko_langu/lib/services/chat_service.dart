@@ -103,6 +103,7 @@ Stream<List<ChatRoom>> getRooms() {
         .collection('chat_rooms')
         .where('participants', arrayContains: userId)
         .orderBy('last_timestamp', descending: true)
+        .limit(50)
         .snapshots()
         .map((snap) {
       final rooms = snap.docs

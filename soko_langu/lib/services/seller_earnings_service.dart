@@ -63,6 +63,8 @@ class SellerEarningsService {
     return _db
         .collection('transactions')
         .where('sellerId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .limit(100)
         .snapshots()
         .map((snap) => snap.docs
             .map((doc) => MarketplaceTransaction.fromMap(doc.id, doc.data()))
@@ -78,6 +80,8 @@ class SellerEarningsService {
     return _db
         .collection('payouts')
         .where('userId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .limit(100)
         .snapshots()
         .map((snap) => snap.docs
             .where((doc) => doc.data()['type'] == 'seller_withdrawal')
@@ -93,6 +97,7 @@ class SellerEarningsService {
         .collection('payouts')
         .where('userId', isEqualTo: uid)
         .orderBy('createdAt', descending: true)
+        .limit(100)
         .snapshots()
         .map((snap) => snap.docs.map((d) => ({'id': d.id, ...d.data()})).toList());
   }

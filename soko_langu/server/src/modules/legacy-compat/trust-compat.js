@@ -48,6 +48,19 @@ router.get('/trust/passport/:sellerId', async function (req, res) {
     const sellerId = req.params.sellerId;
     if (!sellerId) return res.status(400).json({ error: 'sellerId required' });
 
+    // Two-tier cache: passport reads up to 600 Firestore docs per request and
+    // is viewed on every seller profile — serve 5-min stale copies instead.
+    const cacheKey = `trust-passport:${sellerId}`;
+    const cache = req.app.locals.cache;
+    if (cache) {
+      try {
+        const cached = await cache.get(cacheKey);
+        if (cached) {
+          return res.json({ success: true, data: cached });
+        }
+      } catch (_) {}
+    }
+
     let userSnap = null;
     try {
       userSnap = await db.collection('users').doc(sellerId).get();
@@ -106,27 +119,30 @@ router.get('/trust/passport/:sellerId', async function (req, res) {
       },
     ];
 
-    res.json({
-      success: true,
-      data: {
-        seller: {
-          id: sellerId,
-          storeName,
-          reliabilityScore,
-          verificationStatus,
-        },
-        metrics: {
-          totalOrders,
-          completedOrders,
-          onTimeDispatches,
-          activeDisputes,
-          fulfillmentRate,
-          dispatchRate,
-          disputeRate,
-        },
-        indicators,
+    const body = {
+      seller: {
+        id: sellerId,
+        storeName,
+        reliabilityScore,
+        verificationStatus,
       },
-    });
+      metrics: {
+        totalOrders,
+        completedOrders,
+        onTimeDispatches,
+        activeDisputes,
+        fulfillmentRate,
+        dispatchRate,
+        disputeRate,
+      },
+      indicators,
+    };
+    if (cache) {
+      try {
+        await cache.set(cacheKey, body, 300_000);
+      } catch (_) {}
+    }
+    res.json({ success: true, data: body });
   } catch (e) {
     console.error('[TRUST-PASSPORT]', e.message);
     res.status(500).json({ error: 'Internal server error' });

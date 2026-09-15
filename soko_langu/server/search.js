@@ -268,35 +268,78 @@ router.post('/global-search', async (req, res) => {
     let searchQuery = intent.searchQuery;
     const extraKeywords = intent.synonyms;
 
-    // Suggest a typo correction; auto-apply only when confidence is high.
-    let correction = null;
-    let correctionCandidate = null;
-    if (searchQuery.length >= 3) {
-      correctionCandidate = await fuzzyCorrect(searchQuery);
-      if (correctionCandidate) correction = correctionCandidate.word;
+    // The Firestore reads (fuzzyCorrect + runSources) are query-only work; the
+    // price/location filters below run in-memory per request. Cache the raw
+    // pipeline per query for 60s so repeat searches (same query, different
+    // filters/page) reuse the reads instead of hammering the index.
+    let cacheHit = null;
+    const pipelineKey = `global-search:${type}:${searchQuery.trim().toLowerCase()}`;
+    if (cache) {
+      try {
+        cacheHit = await cache.get(pipelineKey);
+      } catch (_) {}
     }
 
-    const sourceTypes = type === 'all' ? ['products', 'users', 'categories'] : [type];
-
-    const { results, allResults, total } = await runSources(
-      sourceTypes, searchQuery, extraKeywords, MAX_RESULTS_PER_SOURCE,
-    );
-
+    let correction = null;
+    let correctionCandidate = null;
+    let results = null;
+    let allResults = [];
+    let total = 0;
     let autoCorrected = false;
     let searchedQuery = searchQuery;
+    const sourceTypes = type === 'all' ? ['products', 'users', 'categories'] : [type];
 
-    // §06–§07: only rewrite the query when nothing matched AND confidence is
-    // high; otherwise keep the suggestion chip for the client to offer.
-    if (total === 0 && isHighConfidence(correctionCandidate)) {
-      searchedQuery = correctionCandidate.word;
-      const corrected = await runSources(sourceTypes, searchedQuery, extraKeywords, MAX_RESULTS_PER_SOURCE);
-      if (corrected.total > 0) {
-        autoCorrected = true;
-        searchQuery = searchedQuery;
-        results = corrected.results;
-        allResults = corrected.allResults;
-        total = corrected.total;
-        correction = null;
+    if (cacheHit) {
+      correction = cacheHit.correction;
+      correctionCandidate = cacheHit.correctionCandidate;
+      results = cacheHit.results;
+      allResults = cacheHit.allResults;
+      total = cacheHit.total;
+      autoCorrected = cacheHit.autoCorrected;
+      searchedQuery = cacheHit.searchedQuery;
+      searchQuery = cacheHit.searchQuery;
+    } else {
+      // Suggest a typo correction; auto-apply only when confidence is high.
+      if (searchQuery.length >= 3) {
+        correctionCandidate = await fuzzyCorrect(searchQuery);
+        if (correctionCandidate) correction = correctionCandidate.word;
+      }
+
+      const run = await runSources(
+        sourceTypes, searchQuery, extraKeywords, MAX_RESULTS_PER_SOURCE,
+      );
+      results = run.results;
+      allResults = run.allResults;
+      total = run.total;
+
+      // §06–§07: only rewrite the query when nothing matched AND confidence is
+      // high; otherwise keep the suggestion chip for the client to offer.
+      if (total === 0 && isHighConfidence(correctionCandidate)) {
+        searchedQuery = correctionCandidate.word;
+        const corrected = await runSources(sourceTypes, searchedQuery, extraKeywords, MAX_RESULTS_PER_SOURCE);
+        if (corrected.total > 0) {
+          autoCorrected = true;
+          searchQuery = searchedQuery;
+          results = corrected.results;
+          allResults = corrected.allResults;
+          total = corrected.total;
+          correction = null;
+        }
+      }
+
+      if (cache) {
+        try {
+          await cache.set(pipelineKey, {
+            correction,
+            correctionCandidate,
+            results,
+            allResults,
+            total,
+            autoCorrected,
+            searchedQuery,
+            searchQuery,
+          }, 60 * 1000);
+        } catch (_) {}
       }
     }
 

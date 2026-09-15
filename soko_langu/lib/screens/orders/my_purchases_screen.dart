@@ -957,6 +957,8 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
         stream: FirebaseFirestore.instance
             .collection('transactions')
             .where('buyerId', isEqualTo: user.uid)
+            .orderBy('createdAt', descending: true)
+            .limit(150)
             .snapshots(),
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting &&

@@ -97,6 +97,8 @@ class PriceDropService {
     return _db
         .collection('price_drops')
         .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(100)
         .snapshots()
         .map((snap) => snap.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList()
           ..sort((a, b) {

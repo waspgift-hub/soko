@@ -82,6 +82,7 @@ class StatusService {
         .collection('statuses')
         .where('userId', isEqualTo: _uid)
         .where('expiresAt', isGreaterThan: Timestamp.now())
+        .limit(50)
         .snapshots()
         .map((snap) => snap.docs
             .map((doc) => StatusUpdate.fromMap(doc.id, doc.data()))
@@ -98,6 +99,7 @@ class StatusService {
     return _db
         .collection('statuses')
         .where('expiresAt', isGreaterThan: Timestamp.now())
+        .limit(300)
         .snapshots()
         .map((snap) {
       final Map<String, List<StatusUpdate>> grouped = {};

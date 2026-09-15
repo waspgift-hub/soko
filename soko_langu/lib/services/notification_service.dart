@@ -348,6 +348,8 @@ class NotificationService {
     return _db
         .collection('notifications')
         .where('userId', isEqualTo: user.uid)
+        .orderBy('createdAt', descending: true)
+        .limit(60)
         .snapshots()
         .map((snap) {
           final list =
@@ -482,6 +484,8 @@ class NotificationService {
     _fallbackSub = _db
         .collection('notifications')
         .where('userId', isEqualTo: user.uid)
+        .orderBy('createdAt', descending: true)
+        .limit(30)
         .snapshots()
         .listen((snap) async {
           for (final change in snap.docChanges) {

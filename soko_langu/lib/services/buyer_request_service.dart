@@ -12,6 +12,7 @@ class BuyerRequestService {
     return _db
         .collection(collection)
         .orderBy('createdAt', descending: true)
+        .limit(60)
         .snapshots()
         .map((snap) {
       // BuyerRequest.fromFirestore tolerates legacy shapes (string budgets,

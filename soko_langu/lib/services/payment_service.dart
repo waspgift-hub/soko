@@ -67,6 +67,8 @@ class PaymentService {
     return _db
         .collection('transactions')
         .where('sellerId', isEqualTo: user.uid)
+        .orderBy('createdAt', descending: true)
+        .limit(100)
         .snapshots()
         .map(
           (snap) => snap.docs
@@ -82,6 +84,8 @@ class PaymentService {
     return _db
         .collection('transactions')
         .where('buyerId', isEqualTo: user.uid)
+        .orderBy('createdAt', descending: true)
+        .limit(100)
         .snapshots()
         .map(
           (snap) => snap.docs

@@ -406,6 +406,8 @@ class ProductService {
     return _db
         .collection("products")
         .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(limit)
         .snapshots()
         .map((snapshot) {
       final products = snapshot.docs
@@ -420,6 +422,7 @@ class ProductService {
     return _db
         .collection("products")
         .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
         .limit(limitAmt + 10)
         .snapshots()
         .map((snapshot) {
@@ -437,6 +440,8 @@ class ProductService {
         .collection("products")
         .where("category", isEqualTo: category)
         .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(50)
         .snapshots()
         .map((snapshot) {
           final products = snapshot.docs
@@ -456,6 +461,8 @@ class ProductService {
         .where("category", isEqualTo: category)
         .where("subcategory", isEqualTo: subcategory)
         .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(50)
         .snapshots()
         .map((snapshot) {
           final products = snapshot.docs
@@ -556,6 +563,8 @@ class ProductService {
       return _db
           .collection("products")
           .where('isActive', isEqualTo: true)
+          .orderBy('createdAt', descending: true)
+          .limit(50)
           .snapshots()
           .map((snapshot) {
             final products = snapshot.docs
@@ -570,6 +579,8 @@ class ProductService {
         .collection("products")
         .where("brand", isEqualTo: brand)
         .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(50)
         .snapshots()
         .map((snapshot) {
           final products = snapshot.docs
@@ -587,6 +598,8 @@ class ProductService {
     return _db
         .collection("products")
         .where("sellerId", isEqualTo: user.uid)
+        .orderBy('createdAt', descending: true)
+        .limit(100)
         .snapshots(includeMetadataChanges: true)
         .map((snapshot) {
           final products = snapshot.docs
@@ -606,6 +619,8 @@ class ProductService {
         .collection("products")
         .where("sellerId", isEqualTo: sellerId)
         .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(50)
         .snapshots()
         .map((snapshot) {
           final products = snapshot.docs
@@ -773,6 +788,7 @@ class ProductService {
         .collection("products")
         .where("isBoosted", isEqualTo: true)
         .where('isActive', isEqualTo: true)
+        .limit(100)
         .snapshots()
         .map((snapshot) {
       final products = snapshot.docs

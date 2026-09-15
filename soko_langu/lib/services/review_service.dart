@@ -151,6 +151,8 @@ class ReviewService {
     return _db
         .collection("reviews")
         .where("productId", isEqualTo: productId)
+        .orderBy('createdAt', descending: true)
+        .limit(100)
         .snapshots()
         .map((snapshot) {
           final reviews = snapshot.docs

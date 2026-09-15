@@ -1,0 +1,54 @@
+# Render infrastructure for Soko Vibe server.
+#
+# Why the split:
+#   - `soko-langu-api` runs the HTTP surface (Express). Finance/media workers
+#     are OFF in-process (FINANCE_WORKER_IN_PROCESS=false) so web replicas stay
+#     request-only and scale horizontally behind the load balancer.
+#   - `soko-langu-worker` runs src/workers/index.js as its own service so heavy
+#     jobs (autorelease sweeps, image processing) never steal web capacity.
+#
+# Scale up horizontally with `replicas` (both services pull the same image).
+
+services:
+  - type: web
+    name: soko-langu-api
+    runtime: node
+    plan: starter
+    rootDir: server
+    buildCommand: npm ci && npx prisma generate
+    startCommand: node --optimize-for-size --expose-gc src/index.js
+    healthCheckPath: /health
+    numInstances: 1
+    scaling:
+      minInstances: 1
+      maxInstances: 6
+      targetMemoryPercent: 75
+      targetCPUPercent: 70
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: FINANCE_WORKER_IN_PROCESS
+        value: "false"
+      - key: DATABASE_POOL_LIMIT
+        value: "10"
+      - key: PORT
+        value: "10000"
+    disk:
+      name: tmp
+      mountPath: /tmp
+      sizeGB: 1
+    # Secrets come from the Render dashboard; do not inline them here.
+
+  - type: worker
+    name: soko-langu-worker
+    runtime: node
+    plan: starter
+    rootDir: server
+    buildCommand: npm ci && npx prisma generate
+    startCommand: npm run worker
+    numInstances: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: FINANCE_WORKER_IN_PROCESS
+        value: "false"
