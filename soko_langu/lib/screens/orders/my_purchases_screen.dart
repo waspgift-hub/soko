@@ -22,6 +22,7 @@ import '../../widgets/soko_vibe_loading.dart';
 import '../../widgets/order_status_config.dart';
 import 'package:go_router/go_router.dart';
 import '../../widgets/product_cached_image.dart';
+import '../../widgets/raise_dispute_dialog.dart';
 
 class MyPurchasesScreen extends StatefulWidget {
   const MyPurchasesScreen({super.key});
@@ -350,44 +351,16 @@ class _MyPurchasesScreenState extends State<MyPurchasesScreen> {
   }
 
   Future<void> _raiseDispute(String txId) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(context.tr('dispute_title')),
-        content: Text(context.tr('dispute_notify_admin')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(context.tr('cancel')),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(context.tr('open')),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     setState(() => _disputingTxId = txId);
-    try {
-      final resp = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/escrow/dispute'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${await user.getIdToken()}',
-        },
-        body: jsonEncode({'orderId': txId, 'userId': user.uid}),
-      );
-      final result = jsonDecode(resp.body);
-      if (resp.statusCode == 200 && result['success'] == true) {
-        _showSuccess(context.tr('dispute_opened_msg'));
-      } else {
-        _showError(result['error'] ?? context.tr('dispute_failed'));
-      }
-    } catch (e) {
-      _showError(context.trError(e));
+    final opened = await showRaiseDisputeDialog(
+      context,
+      txId: txId,
+      userId: user.uid,
+    );
+    if (mounted && opened == true) {
+      _showSuccess(context.tr('dispute_opened_msg'));
     }
     setState(() => _disputingTxId = null);
   }

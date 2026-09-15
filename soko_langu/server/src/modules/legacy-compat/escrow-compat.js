@@ -580,23 +580,33 @@ router.post('/dispute', async (req, res) => {
     if (tx.buyerId !== userId) {
       return res.status(403).json({ error: 'Only the buyer can raise a dispute' });
     }
-    if (tx.status !== 'dispatched' && tx.status !== 'escrow_hold') {
+    const disputeValidStates = [
+      'dispatched', 'in_transit', 'out_for_delivery', 'delivery_attempted',
+      'delivered', 'inspection_period',
+      'escrow_hold', 'paid_escrow_hold', 'paid_escrow_held', 'in_escrow',
+    ];
+    if (disputeValidStates.indexOf(tx.status) === -1) {
       return res.status(400).json({ error: `Cannot dispute from status: ${tx.status}` });
     }
     if (tx.escrowReleased === true) {
       return res.status(400).json({ error: 'Escrow already released, cannot dispute' });
     }
 
-    // Change to disputed status — funds stay held
-    await txDoc.ref.update({
-      status: 'disputed',
-      disputeInfo: {
-        reason: reason || 'Sijapata mzigo',
-        evidenceUrls: evidenceUrls || [],
-        raisedAt: admin.firestore.FieldValue.serverTimestamp(),
-        resolved: false,
-      },
-    });
+    const disputeInfo = {
+      reason: reason || 'Sijapata mzigo',
+      evidenceUrls: evidenceUrls || [],
+      raisedBy: userId,
+      raisedAt: admin.firestore.FieldValue.serverTimestamp(),
+      resolved: false,
+    };
+    const batch = db.batch();
+    batch.set(txDoc.ref, { status: 'disputed', disputeInfo }, { merge: true });
+    const orderRef = db.collection('orders').doc(orderId);
+    const orderSnap = await orderRef.get();
+    if (orderSnap.exists) {
+      batch.set(orderRef, { status: 'disputed', disputeInfo }, { merge: true });
+    }
+    await batch.commit();
 
     const productName = tx.productName || 'Bidhaa';
 

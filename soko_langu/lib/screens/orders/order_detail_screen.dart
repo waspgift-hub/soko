@@ -23,6 +23,7 @@ import '../../widgets/payment_banner.dart';
 import '../../widgets/payment_result_dialog.dart';
 import '../../widgets/call_seller_button.dart';
 import '../../widgets/trust_passport_card.dart';
+import '../../widgets/raise_dispute_dialog.dart';
 import '../../utils/phone_utils.dart';
 import '../../utils/rate_limiter.dart';
 
@@ -283,6 +284,111 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     return null;
   }
 
+  Map<String, dynamic>? get _disputeInfo {
+    final di = d['disputeInfo'];
+    if (di is Map<String, dynamic>) return di;
+    if (di is Map) return Map<String, dynamic>.from(di);
+    return null;
+  }
+
+  /// Open-case summary for both parties: what was claimed and the evidence.
+  Widget _buildDisputeCard(ColorScheme cs) {
+    final info = _disputeInfo!;
+    final reason = info['reason']?.toString() ?? '';
+    final urls = info['evidenceUrls'] is List
+        ? List<String>.from(info['evidenceUrls'] as List)
+        : <String>[];
+    final isBuyer = (d['buyerId'] as String? ?? '') ==
+        FirebaseAuth.instance.currentUser?.uid;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.errorContainer.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: cs.error.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.gavel, color: cs.error, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  context.tr('dispute_case_title', 'Mgogoro Uko Chini ya Uchunguzi'),
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: cs.onErrorContainer),
+                ),
+              ),
+            ],
+          ),
+          if (reason.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              reason,
+              style: TextStyle(fontSize: 13, color: cs.onErrorContainer.withValues(alpha: 0.85), height: 1.35),
+            ),
+          ],
+          if (urls.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              context.tr('dispute_evidence_label', 'Ushahidi uliowasilishwa'),
+              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: cs.onErrorContainer),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 72,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: urls.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
+                itemBuilder: (context, i) => GestureDetector(
+                  onTap: () => _openEvidenceViewer(urls[i]),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: ProductCachedImage(
+                      url: urls[i],
+                      width: 72,
+                      height: 72,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          Text(
+            isBuyer
+                ? context.tr('dispute_held_buyer', 'Pesa zinabaki escrow hadi admin atoe uamuzi. Muuzaji na admin wanaweza kuona ushahidi wako.')
+                : context.tr('dispute_held_seller', 'Pesa zinabaki escrow hadi admin atoe uamuzi. Pitia ushahidi na ungana na msaada ukihitaji kujibu.'),
+            style: TextStyle(fontSize: 11.5, color: cs.onErrorContainer.withValues(alpha: 0.75), height: 1.35),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openEvidenceViewer(String url) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.black,
+        child: InteractiveViewer(
+          maxScale: 5,
+          child: Image.network(
+            url,
+            fit: BoxFit.contain,
+            loadingBuilder: (_, child, progress) =>
+                progress == null ? child : const Center(child: CircularProgressIndicator()),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Colour/icon/message for the gouging verdict surfaced next to a quote.
   Widget _buildVerdictChip(ColorScheme cs) {
     final quote = _shippingQuote;
@@ -461,6 +567,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                     ],
                     _buildActions(context, cs),
                     const SizedBox(height: 12),
+                    if (_disputeInfo != null) ...[
+                      _buildDisputeCard(cs),
+                      const SizedBox(height: 12),
+                    ],
                     if ((d['sellerId'] as String? ?? '').isNotEmpty)
                       TrustPassportCard(sellerId: d['sellerId'] as String),
                     const SizedBox(height: 80),
@@ -2623,62 +2733,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   }
 
   Future<void> _raiseDispute(String txId) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(context.tr('dispute_title')),
-        content: Text(context.tr('dispute_notify_admin')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(context.tr('cancel')),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(context.tr('open')),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     setState(() => _disputingTxId = txId);
-    try {
-      final resp = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/escrow/dispute'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${await user.getIdToken()}',
-        },
-        body: jsonEncode({'orderId': txId, 'userId': user.uid}),
+    final opened = await showRaiseDisputeDialog(
+      context,
+      txId: txId,
+      userId: user.uid,
+    );
+    if (mounted && opened == true) {
+      HapticFeedback.mediumImpact();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.tr('dispute_opened_msg')),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
-      final result = jsonDecode(resp.body);
-      if (resp.statusCode == 200 && result['success'] == true) {
-        if (mounted)
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(context.tr('dispute_opened_msg')),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-      } else {
-        if (mounted)
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(result['error'] ?? context.tr('dispute_failed')),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-      }
-    } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(context.trError(e)),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
     }
     if (mounted) setState(() => _disputingTxId = null);
   }
