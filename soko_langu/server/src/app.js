@@ -78,8 +78,9 @@ app.use((req, res, next) => {
 // preserved). The admin subdomain serves the browser panel directly at its
 // root: every non-API path is rewritten onto the /admin static mount so
 // admin.sokovibe.co.tz/ == admin.sokovibe.co.tz/admin == .../admin on www.
-// Non-Soko hosts (Render origin, health checks) are left alone so the
-// platform health checks stay 200.
+// The api subdomain is the edge-cached API host (Cloudflare Worker in front),
+// so it passes through untouched. Non-Soko hosts (Render origin, health
+// checks) are left alone so the platform health checks stay 200.
 const CANONICAL_HOST = 'https://www.sokovibe.co.tz';
 const DOMAIN = 'sokovibe.co.tz';
 const WWW_HOST = `www.${DOMAIN}`;
@@ -99,6 +100,8 @@ app.use((req, res, next) => {
     req.url = `${p.startsWith('/admin') ? '' : '/admin'}${p === '/' ? '/' : p}${q}`;
     return next();
   }
+  // api host is dedicated to the API edge worker — never fold onto www.
+  if (host === `api.${DOMAIN}` || host === `www.api.${DOMAIN}`) return next();
   if (host === DOMAIN) {
     if (SERVE_APEX) return next();
     return res.redirect(301, `${CANONICAL_HOST}${req.originalUrl}`);
