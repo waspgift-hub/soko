@@ -13,6 +13,9 @@ const config = {
   // Database
   database: {
     url: process.env.DATABASE_URL || 'postgresql://sokovibe:password@localhost:5432/sokovibe',
+    // Optional Postgres read replica (Render offers native read replicas). When
+    // set, hot catalog reads route to it; fall back to primary if unset.
+    replicaUrl: process.env.DATABASE_URL_REPLICA || '',
   },
   
   // Redis

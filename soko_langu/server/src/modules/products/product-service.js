@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { getPrisma } = require('../../config/database');
+const { getReadPrisma } = require('../../config/database');
 
 function httpError(status, message) {
   const err = new Error(message);
@@ -121,7 +122,9 @@ async function softDelete({ id, sellerProfileId }) {
 }
 
 async function listProducts({ q, categoryId, minPrice, maxPrice, page = 1, limit = 20 }) {
-  const prisma = getPrisma();
+  // Catalog reads go through the read replica when one is configured: public
+  // browsing tolerates lag and must never compete for primary connections.
+  const prisma = getReadPrisma();
   const where = { status: 'published', deletedAt: null };
   if (categoryId) where.categoryId = categoryId;
   if (minPrice != null || maxPrice != null) {
@@ -165,7 +168,7 @@ async function listSellerProducts({ sellerProfileId, page = 1, limit = 20 }) {
 }
 
 async function getProduct(idOrSlug) {
-  const prisma = getPrisma();
+  const prisma = getReadPrisma();
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
   const product = await prisma.product.findFirst({
     where: {

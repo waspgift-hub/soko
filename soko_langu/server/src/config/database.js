@@ -3,22 +3,45 @@ const config = require('./index');
 
 let prisma = null;
 
-function getPrisma() {
-  if (!prisma) {
-    // Cap the Prisma pool explicitly. Without this, Prisma uses num_cpus*2+1
-    // connections/instance — multiplied across N web instances that exhausts
-    // Postgres (default max_connections=100). Append connection_limit to the
-    // URL query so the engine honours it; scale by raising instance count.
-    const poolLimit = parseInt(process.env.DATABASE_POOL_LIMIT) || 10;
-    const url = new URL(config.database.url);
-    if (!url.searchParams.has('connection_limit')) {
-      url.searchParams.set('connection_limit', String(poolLimit));
-    }
-    prisma = new PrismaClient({
+// Build a PrismaClient bound to `url` with a fixed pool cap. The cap exists
+// because Prisma otherwise opens num_cpus*2+1 connections per instance and
+// N web instances × open sockets exhausts Postgres (max_connections=100).
+function buildClient(url) {
+  const poolLimit = parseInt(process.env.DATABASE_POOL_LIMIT) || 10;
+  const u = new URL(url);
+  if (!u.searchParams.has('connection_limit')) {
+    u.searchParams.set('connection_limit', String(poolLimit));
+  }
+  let client;
+  try {
+    client = new PrismaClient({
       log: config.nodeEnv === 'development' ? ['query', 'error', 'warn'] : ['error'],
       errorFormat: 'minimal',
-      datasources: { db: { url: url.toString() } },
+      datasources: { db: { url: u.toString() } },
     });
+  } catch (e) {
+    console.error('[DB] PrismaClient init failed:', e.message);
+    throw e;
+  }
+  return client;
+}
+
+// Read replica: when DATABASE_URL_REPLICA is set, hot catalog reads route here
+// (products/categories) while every write stays on the primary. No replica yet
+// => readonly falls back to the same instance (behaviour unchanged).
+let readPrisma = null;
+
+function getReadPrisma() {
+  if (!config.database.replicaUrl) return getPrisma();
+  if (!readPrisma) {
+    readPrisma = buildClient(config.database.replicaUrl);
+  }
+  return readPrisma;
+}
+
+function getPrisma() {
+  if (!prisma) {
+    prisma = buildClient(config.database.url);
   }
   return prisma;
 }
@@ -40,6 +63,10 @@ async function disconnectDatabase() {
     await prisma.$disconnect();
     console.log('[DB] PostgreSQL disconnected');
   }
+  if (readPrisma && readPrisma !== prisma) {
+    await readPrisma.$disconnect();
+    console.log('[DB] PostgreSQL replica disconnected');
+  }
 }
 
-module.exports = { getPrisma, connectDatabase, disconnectDatabase };
+module.exports = { getPrisma, getReadPrisma, connectDatabase, disconnectDatabase };

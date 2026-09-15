@@ -13,3 +13,11 @@ zone_name = "sokovibe.co.tz"
 # Origin override (leave as the Render service in normal operation).
 [vars]
 ORIGIN_URL = "https://soko-langu-server.onrender.com"
+
+# Optional multi-region origins. Set per-continent when regional Render
+# replicas exist; requests from that continent's edge cities route to them for
+# public catalog + search reads. Leave empty (or unset) to keep single-origin.
+#   REGION_ORIGIN_AF = "https://soko-langu-africa.onrender.com"
+#   REGION_ORIGIN_EU = "https://soko-langu-eu.onrender.com"
+#   REGION_ORIGIN_AS = "https://soko-langu-asia.onrender.com"
+#   REGION_ORIGIN_NA = "https://soko-langu-na.onrender.com"

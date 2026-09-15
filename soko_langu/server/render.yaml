@@ -31,6 +31,10 @@ services:
         value: "false"
       - key: DATABASE_POOL_LIMIT
         value: "10"
+      # Optional Postgres read replica (Render:  Databases -> your-DB -> Read
+      # replicas -> Create). Leave unset to keep ALL traffic on the primary.
+      - key: DATABASE_URL_REPLICA
+        # value: postgres://...  (paste the replica internal URL here)
       - key: PORT
         value: "10000"
       # Event-loop shedder switch: answers 503 + Retry-After when the loop lags

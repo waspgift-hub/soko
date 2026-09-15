@@ -1,8 +1,13 @@
 // Cloudflare Worker: Soko Vibe API edge cache + reverse proxy.
 //
-// Sits in front of the Render origin (soko-langu-server.onrender.com) and
-// serves the hot read routes from the edge (200+ Cloudflare cities) so the
-// origin (and its Firestore/Redis reads) only gets hit on a cache miss.
+// Sits in front of the Render origin(s) and serves the hot read routes from
+// the edge (200+ Cloudflare cities) so the origin (and its Firestore/Redis
+// reads) only gets hit on a cache miss.
+//
+// Regional routing: when REGION_ORIGIN_* vars are set, public catalog + search
+// reads are proxied to the nearest regional Render replica (per Cloudflare
+// continent). Personalised/auth paths always stay on the primary ORIGIN so
+// stateful writes and redirects are never split across regions.
 //
 // Caching policy (all mutations + non-whitelisted paths proxy straight through):
 //   GET  /api/trust/passport/:sellerId        -> cache 300s, keyed by path only
@@ -23,6 +28,35 @@
 const ORIGIN = (typeof ORIGIN_URL !== 'undefined' && ORIGIN_URL)
   ? ORIGIN_URL
   : 'https://soko-langu-server.onrender.com';
+
+// Regional origins (optional, for the 10M multi-region tier). Keys are
+// Cloudflare continent codes; each maps to a regional Render replica. Leave a
+// key empty and that continent falls back to the primary ORIGIN. Add matching
+// env vars (`REGION_ORIGIN_*`) in wrangler.toml [vars] when replicas exist.
+const REGIONAL_ORIGINS = {
+  /* e.g. AF: 'https://soko-africa.onrender.com' */
+  AF: (typeof REGION_ORIGIN_AF !== 'undefined' && REGION_ORIGIN_AF) ? REGION_ORIGIN_AF : '',
+  EU: (typeof REGION_ORIGIN_EU !== 'undefined' && REGION_ORIGIN_EU) ? REGION_ORIGIN_EU : '',
+  AS: (typeof REGION_ORIGIN_AS !== 'undefined' && REGION_ORIGIN_AS) ? REGION_ORIGIN_AS : '',
+  NA: (typeof REGION_ORIGIN_NA !== 'undefined' && REGION_ORIGIN_NA) ? REGION_ORIGIN_NA : '',
+};
+
+// Only meaningful for region-agnostic (public catalog) reads; personalised
+// paths (auth, payments) MUST stay on the primary so regional replicas can
+// never serve a redirect/consistency mismatch. This is enforced in resolveOrigin.
+const REGION_ROUTABLE = (m) =>
+  (m.method === 'GET' && m.pathname.startsWith('/api/v1/products')) ||
+  (m.method === 'POST' && m.pathname === '/api/search/trending') ||
+  (m.method === 'POST' && m.pathname === '/api/search/most-rated');
+
+function resolveOrigin(request, meta) {
+  const continent = request.cf?.continent || '';
+  if (REGION_ROUTABLE(meta)) {
+    const regional = REGIONAL_ORIGINS[continent];
+    if (regional) return regional;
+  }
+  return ORIGIN;
+}
 
 // All cache rules evaluated top-to-bottom; first match wins.
 const CACHE_RULES = [
@@ -78,17 +112,19 @@ export default {
     const method = request.method;
     const pathname = url.pathname;
     const meta = { method, pathname };
+    const origin = resolveOrigin(request, meta);
 
     // Passthrough everything that isn't on the cache whitelist.
     const rule = CACHE_RULES.find((r) => r.match(meta));
     if (!rule) {
-      return proxyToOrigin(request, url);
+      return proxyToOrigin(request, url, origin);
     }
 
     const cache = caches.default;
-    const cacheKey = new Request(`${ORIGIN}${pathname}`, { method: method, headers: request.headers });
     const cacheKeyFinal = await buildCacheKey(request, meta, rule);
-    const cacheUrl = new URL(`${ORIGIN}${cacheKeyFinal}`);
+    // Include the resolved origin in the key: the same path served from
+    // different regions must not share a cache entry with a foreign origin.
+    const cacheUrl = new URL(`${origin}${cacheKeyFinal}`);
     const keyWithPath = new Request(cacheUrl, { method: method });
 
     const cachedRes = await cache.match(keyWithPath);
@@ -100,12 +136,12 @@ export default {
         return cloneResponse(cachedRes);
       }
       // Stale hit — serve immediately, revalidate in background.
-      ctx.waitUntil(revalidateAndStore(cache, keyWithPath, request, url, rule, cacheKeyFinal));
+      ctx.waitUntil(revalidateAndStore(cache, keyWithPath, request, url, rule, cacheKeyFinal, origin));
       return cloneResponse(cachedRes);
     }
 
     // Cold miss — fetch from origin and store.
-    const originRes = await proxyFetch(request, url);
+    const originRes = await proxyFetch(request, url, origin);
     if (originRes.status === 200) {
       ctx.waitUntil(cache.put(keyWithPath, tagResponse(originRes.clone())));
     }
@@ -113,9 +149,9 @@ export default {
   },
 };
 
-async function revalidateAndStore(cache, keyWithPath, request, url, rule, cacheKeyFinal) {
+async function revalidateAndStore(cache, keyWithPath, request, url, rule, cacheKeyFinal, origin) {
   try {
-    const originRes = await proxyFetch(request, url);
+    const originRes = await proxyFetch(request, url, origin);
     if (originRes.status === 200) {
       await cache.put(keyWithPath, tagResponse(originRes));
     }
@@ -124,8 +160,8 @@ async function revalidateAndStore(cache, keyWithPath, request, url, rule, cacheK
   }
 }
 
-async function proxyFetch(request, url) {
-  const target = new URL(url.pathname + url.search, ORIGIN);
+async function proxyFetch(request, url, origin) {
+  const target = new URL(url.pathname + url.search, origin || ORIGIN);
   const headers = new Headers(request.headers);
   headers.delete('host');
   headers.set('x-edge-colo', 'cf');
@@ -133,6 +169,7 @@ async function proxyFetch(request, url) {
   // applies but its general rate limiter stays fair (shared across clients).
   headers.set('x-forwarded-proto', 'https');
   headers.set('x-forwarded-host', url.hostname);
+  headers.set('x-soko-origin', origin || ORIGIN);
   const init = {
     method: request.method,
     headers,
@@ -142,8 +179,8 @@ async function proxyFetch(request, url) {
   return fetch(target, init);
 }
 
-function proxyToOrigin(request, url) {
-  return proxyFetch(request, url);
+function proxyToOrigin(request, url, origin) {
+  return proxyFetch(request, url, origin);
 }
 
 function tagResponse(res) {

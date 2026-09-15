@@ -89,6 +89,31 @@ Added so the origin survives a 10M-user spike instead of degrading:
 - **Firestore budget guardrails**: client reads are paginated (`.limit()` +
   cursors); enabled features map to quotas in this doc's tier table.
 
+## Postgres read replicas (Tier D groundwork)
+
+Render Postgres supports dedicated read replicas. The server already routes the
+hot public catalog reads (`products`, `categories`) through the replica when one
+exists and falls back to the primary when not:
+
+- Set `DATABASE_URL_REPLICA` (Render: your-DB → Read replicas → Create, paste
+  the replica's internal URL). Code gate is `database.js#getReadPrisma()`.
+- Every write stays on the primary (`getPrisma`); the replica is used ONLY for
+  cache-safe catalog reads, so even seconds of lag are invisible behind the
+  30s-1h cache TTLs.
+- Per-instance pool cap applies to both URLs (`connection_limit=10`).
+
+## Cloudflare regional routing (Tier D groundwork)
+
+`cf-worker` resolves the visitor's continent (`request.cf.continent`) and, when
+`REGION_ORIGIN_AF/EU/AS/NA` vars are set, proxies public catalog + search reads
+to the nearest regional Render replica. Key guarantees:
+
+- Only **region-agnostic GET/POST** public reads are routable; auth/payment/
+  mutation paths always hit the primary ORIGIN so state never splits.
+- Cache keys embed the resolved origin, so regions never share a stale entry.
+- With no regional vars set (default) everything behaves exactly as today:
+  single origin, single cache.
+
 ## Firestore index deploy
 
 ```
@@ -120,5 +145,7 @@ every combined query uses a single index.
 
 What's already live toward C/D: Render autoscale 1→6, dedicated BullMQ worker,
 edge cache at 200+ cities, stampede protection, circuit breakers, load shedder,
-every read route paginated. Remaining for D: Postgres read replicas, Firestore
-per-tenant collections, multi-region Render, KV/edge state for p95 latency.
+every read route paginated. Groundwork for D: `DATABASE_URL_REPLICA` read
+replica routing (products/categories), Cloudflare regional-origin routing.
+Remaining for true multi-region D: provisioning the actual Postgres read replica
++ regional Render replicas, Firestore per-tenant collections, KV/edge state.

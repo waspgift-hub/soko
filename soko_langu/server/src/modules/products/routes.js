@@ -3,7 +3,7 @@ const { authenticate, authenticateAdmin, requireActive, verifyAdmin } = require(
 const { validate } = require('../../middleware/validation');
 const { z } = require('zod');
 const service = require('./product-service');
-const { getPrisma } = require('../../config/database');
+const { getReadPrisma } = require('../../config/database');
 const { writeAudit, auditFromReq } = require('../../services/audit');
 const cache = require('../../../cache');
 
@@ -72,7 +72,7 @@ router.get(
 
 // Public categories
 router.get('/categories', async (req, res) => {
-  const prisma = getPrisma();
+  const prisma = getReadPrisma();
   // Category list is near-static and shared by every visitor: route it through
   // the two-tier cache so the in-memory copy (and then Redis) absorbs the
   // cluster-wide read before Prisma is ever called. Single-flight inside
