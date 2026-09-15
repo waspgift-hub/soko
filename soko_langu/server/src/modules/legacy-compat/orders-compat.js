@@ -32,6 +32,120 @@ function sanitize(str) {
   return str.replace(/<[^>]*>/g, '').trim().slice(0, 1000);
 }
 
+// v2 auto-release window: 48h after dispatch (matches /cron/auto-release).
+const AUTO_RELEASE_MS = 48 * 60 * 60 * 1000;
+// Historical spellings of "funds held" produced by the engine over time.
+const ESCROW_STATES = ['pending', 'quoted', 'escrow_hold', 'paid_escrow_hold', 'paid_escrow_held', 'in_escrow', 'ready_to_dispatch'];
+const DISPATCH_STATES = ['escrow_hold', 'paid_escrow_hold', 'paid_escrow_held', 'in_escrow', 'ready_to_dispatch'];
+const TRANSIT_STATES = ['dispatched', 'in_transit', 'out_for_delivery', 'delivery_attempted'];
+const INSPECTION_STATES = ['delivered', 'inspection_period', 'otp_pending'];
+const RELEASABLE_STATES = [...TRANSIT_STATES, ...INSPECTION_STATES];
+
+// Role-guarded Firestore order state machine for the app-facing lifecycle.
+// The full money moves (escrow release / payout) stay in /api/escrow/* and
+// /api/orders/verify-delivery — this endpoint only flips the state.
+const TRANSITION_RULES = {
+  quoted: { actors: ['seller', 'admin'], from: ESCROW_STATES },
+  dispatched: { actors: ['seller', 'admin'], from: DISPATCH_STATES },
+  in_transit: { actors: ['seller', 'admin'], from: TRANSIT_STATES },
+  out_for_delivery: { actors: ['seller', 'admin'], from: TRANSIT_STATES },
+  delivered: { actors: ['buyer', 'seller', 'admin'], from: RELEASABLE_STATES },
+  inspection_period: { actors: ['buyer', 'seller', 'admin'], from: RELEASABLE_STATES },
+  confirmed: { actors: ['buyer', 'admin'], from: RELEASABLE_STATES },
+  delivery_confirmed: { actors: ['buyer', 'admin'], from: RELEASABLE_STATES },
+  disputed: { actors: ['buyer', 'admin'], from: [...DISPATCH_STATES, ...TRANSIT_STATES, 'delivered', 'inspection_period'] },
+  cancelled: { actors: ['buyer', 'admin'], from: ESCROW_STATES },
+};
+
+// Applies a non-monetary state change onto the Firestore `orders` doc and
+// returns the updated projection. Throws { status, message } on bad input.
+async function applyTransition(db, docRef, order, newStatus, uid, note) {
+  const timestamp = admin.firestore.FieldValue.serverTimestamp();
+  const base = { updatedAt: timestamp };
+  switch (newStatus) {
+    case 'quoted': {
+      let shippingCost = 0;
+      try { shippingCost = Math.round(Number((JSON.parse(note || '{}') || {}).shippingCost || 0)); } catch (_) {}
+      if (!(shippingCost > 0)) {
+        const err = new Error('Cannot transition: valid shippingCost required');
+        err.status = 400;
+        throw err;
+      }
+      const totalAmount = (order.productPrice || 0) + shippingCost;
+      await docRef.update({
+        ...base,
+        status: 'quoted',
+        shippingCost,
+        totalAmount,
+        shippingQuote: { amount: shippingCost, setAt: timestamp, setBy: uid },
+      });
+      return { status: 'quoted', shippingCost, totalAmount };
+    }
+    case 'dispatched': {
+      await docRef.update({
+        ...base,
+        status: 'dispatched',
+        dispatchedAt: timestamp,
+        flowStage: 'in_transit',
+        autoReleaseDeadline: new Date(Date.now() + AUTO_RELEASE_MS),
+        dispatchProof: { note: note || '', dispatchedAt: timestamp },
+      });
+      return { status: 'dispatched', flowStage: 'in_transit' };
+    }
+    case 'in_transit': {
+      await docRef.update({ ...base, status: 'in_transit', flowStage: 'in_transit', inTransitAt: timestamp });
+      return { status: 'in_transit', flowStage: 'in_transit' };
+    }
+    case 'out_for_delivery': {
+      await docRef.update({ ...base, status: 'out_for_delivery', flowStage: 'out_for_delivery', outForDeliveryAt: timestamp });
+      return { status: 'out_for_delivery', flowStage: 'out_for_delivery' };
+    }
+    case 'delivered':
+    case 'inspection_period': {
+      await docRef.update({
+        ...base,
+        status: 'delivered',
+        deliveredAt: timestamp,
+        flowStage: 'inspection_period',
+        inspectionMinutes: 30,
+        inspectionDeadline: new Date(Date.now() + 30 * 60 * 1000),
+        arrivalConfirmedBy: uid,
+      });
+      return { status: 'delivered', flowStage: 'inspection_period' };
+    }
+    case 'confirmed':
+    case 'delivery_confirmed': {
+      // Marks the buyer's confirmation; the actual money release runs through
+      // /api/escrow/release or /api/orders/verify-delivery.
+      await docRef.update({ ...base, confirmedBy: uid, deliveryConfirmedAt: timestamp });
+      return { status: order.status, confirmedBy: uid };
+    }
+    case 'disputed': {
+      await docRef.update({
+        ...base,
+        status: 'disputed',
+        disputeInfo: {
+          reason: note || 'Sijapata mzigo',
+          evidenceUrls: [],
+          raisedAt: timestamp,
+          resolved: false,
+          raisedBy: uid,
+        },
+      });
+      return { status: 'disputed' };
+    }
+    case 'cancelled': {
+      await docRef.update({ ...base, status: 'cancelled', cancelledAt: timestamp, cancelledBy: uid });
+      return { status: 'cancelled' };
+    }
+    default: {
+      const err = new Error(`Unknown transition target: ${newStatus}`);
+      err.status = 400;
+      throw err;
+    }
+  }
+}
+
 async function verifyAuthToken(req) {
   const { getFirebaseAuth } = require('../../config/firebase');
   const authHeader = req.headers.authorization || req.headers['Authorization'] || '';
@@ -291,9 +405,26 @@ router.get('/transaction-status/:orderId', async (req, res) => {
 
     const data = doc.data();
     if (!(await isOwnerOrAdmin(req, res, data.buyerId || data.userId || ''))) return;
+    // Canonical v2 read model for the app: prefer the explicit flowStage the
+    // engine now writes, else derive from the legacy status string.
+    const LEGACY_TO_V2 = {
+      pending: 'payment_pending', escrow_hold: 'in_escrow', paid_escrow_hold: 'in_escrow',
+      paid_escrow_held: 'in_escrow', quoted: 'shipping_fee_submitted',
+      dispatched: 'in_transit', delivered: 'delivered', completed: 'wallet_credited',
+      disputed: 'disputed', refunded: 'refunded', cancelled: 'cancelled', failed: 'failed',
+    };
+    const v2Status = data.flowStage || LEGACY_TO_V2[data.status] || data.status || 'pending';
+    const toIso = (v) => (v ? (v.toDate ? v.toDate().toISOString() : new Date(v).toISOString()) : null);
     const result = {
       success: true,
       status: data.status || 'pending',
+      v2Status,
+      flowStage: data.flowStage || null,
+      escrowReleased: data.escrowReleased === true,
+      inspectionDeadline: toIso(data.inspectionDeadline),
+      autoReleaseDeadline: toIso(data.autoReleaseDeadline),
+      walletCreditedAt: toIso(data.walletCreditedAt),
+      escrowReleasedAt: toIso(data.escrowReleasedAt || data.completedAt),
       failureReason: data.failureReason || null,
       completedAt: data.completedAt || null,
     };
@@ -394,11 +525,18 @@ router.post('/orders/transition', async (req, res) => {
 
     // Role-based transition enforcement: buyer can't dispatch, seller can't confirm, etc.
     const actorRole = isAdmin ? 'admin' : isSeller ? 'seller' : 'buyer';
-    if (!orderEngine.canActorTransition(actorRole, newStatus)) {
+    const rule = TRANSITION_RULES[newStatus];
+    if (!rule) {
+      return res.status(400).json({ error: `Unknown transition target: ${newStatus}` });
+    }
+    if (rule.actors.indexOf(actorRole) === -1) {
       return res.status(403).json({ error: `Role '${actorRole}' cannot transition order to '${newStatus}'` });
     }
+    if (rule.from.indexOf(order.status) === -1) {
+      return res.status(400).json({ error: `Cannot transition from status: ${order.status}` });
+    }
 
-    const result = await orderEngine.transitionOrder(db, orderId, newStatus, decoded.uid, { note });
+    const result = await applyTransition(db, doc.ref, order, newStatus, decoded.uid, note);
 
     // Real-time status notifications: buyer on quote, buyer on dispatch
     // Payment confirmations are NOT sent here — the ClickPesa webhook is the

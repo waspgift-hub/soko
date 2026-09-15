@@ -50,7 +50,9 @@ router.post('/dispatch', async (req, res) => {
     if (tx.sellerId !== userId) {
       return res.status(403).json({ error: 'Only the seller can dispatch' });
     }
-    if (tx.status !== 'escrow_hold') {
+    // Accept every spelling of "funds held" the engine has produced over time.
+    const dispatchableStates = ['escrow_hold', 'paid_escrow_hold', 'paid_escrow_held', 'in_escrow', 'ready_to_dispatch'];
+    if (dispatchableStates.indexOf(tx.status) === -1) {
       return res.status(400).json({ error: `Cannot dispatch from status: ${tx.status}` });
     }
     if (tx.escrowReleased === true) {
@@ -69,10 +71,15 @@ router.post('/dispatch', async (req, res) => {
 
     await txDoc.ref.update({
       status: 'dispatched',
+      flowStage: 'in_transit',
       dispatchProof,
       busName: req.body.busName || '',
       plateNumber: req.body.plateNumber || '',
       dispatchedAt: admin.firestore.FieldValue.serverTimestamp(),
+      // v2 auto-release deadline: release to the seller 48h after dispatch when
+      // the buyer never confirms (matches the /cron/auto-release cutoff).
+      autoReleaseDeadline: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      escrowHeldAt: tx.escrowHeldAt || tx.completedAt || null,
     });
 
     // Notify buyer
@@ -201,7 +208,9 @@ router.post('/release', async (req, res) => {
       if (tx.buyerId !== userId) {
         return res.status(403).json({ error: 'Only the buyer can confirm delivery' });
       }
-      if (tx.status !== 'dispatched') {
+      // Money must still be in escrow; any post-dispatch stage is releasable.
+      const releasableStates = ['dispatched', 'in_transit', 'out_for_delivery', 'delivery_attempted', 'delivered', 'inspection_period', 'otp_pending'];
+      if (releasableStates.indexOf(tx.status) === -1) {
         return res.status(400).json({ error: `Seller must dispatch the order first. Current status: ${tx.status}` });
       }
       if (tx.escrowReleased === true) {
@@ -246,6 +255,9 @@ router.post('/release', async (req, res) => {
       status: 'delivered',
       escrowReleased: true,
       escrowReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
+      confirmedBy: 'buyer_release',
+      flowStage: 'wallet_credited',
+      walletCreditedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
     const sellerDoc = await db.collection('users').doc(sellerId).get();
@@ -440,7 +452,8 @@ router.post('/cancel', async (req, res) => {
     if (tx.buyerId !== userId) {
       return res.status(403).json({ error: 'Only the buyer can cancel this order' });
     }
-    if (tx.status !== 'escrow_hold' && tx.status !== 'paid_escrow_held') {
+    const cancelableStates = ['escrow_hold', 'paid_escrow_hold', 'paid_escrow_held', 'in_escrow'];
+    if (cancelableStates.indexOf(tx.status) === -1) {
       return res.status(400).json({ error: `Cannot cancel from status: ${tx.status}` });
     }
     if (tx.escrowReleased === true) {

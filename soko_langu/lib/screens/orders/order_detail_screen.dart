@@ -42,6 +42,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   Timer? _countdownTimer;
   Timer? _autoRefreshTimer;
   Duration? _remaining;
+  Timer? _deadlinesTimer;
+  Duration _inspectionLeft = Duration.zero;
+  Duration _autoReleaseLeft = Duration.zero;
+  bool _arriving = false;
   bool _isLoading = true;
   String? _releasingTxId;
   String? _disputingTxId;
@@ -173,6 +177,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   }
 
   void _startCountdown() {
+    // Second-granularity ticker feeding every live counter: ETA, escrow
+    // auto-release (48h) and the 30-min inspection window.
+    _updateDeadlineCounters();
+    _deadlinesTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => _updateDeadlineCounters(),
+    );
     final est = d['estimatedDelivery'] as Timestamp?;
     if (est != null) {
       _updateRemaining(est);
@@ -180,6 +191,29 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         const Duration(seconds: 1),
         (_) => _updateRemaining(est),
       );
+    }
+  }
+
+  DateTime _countdownDate(dynamic v) {
+    if (v is Timestamp) return v.toDate();
+    if (v is DateTime) return v;
+    if (v is String) return DateTime.tryParse(v) ?? DateTime.now();
+    return DateTime.now();
+  }
+
+  void _updateDeadlineCounters() {
+    final now = DateTime.now();
+    final insp = d['inspectionDeadline'];
+    final ar = d['autoReleaseDeadline'];
+    final i = insp == null ? null : _countdownDate(insp).difference(now);
+    final a = ar == null ? null : _countdownDate(ar).difference(now);
+    final ni = (i != null && !i.isNegative) ? i : Duration.zero;
+    final na = (a != null && !a.isNegative) ? a : Duration.zero;
+    if (ni != _inspectionLeft || na != _autoReleaseLeft) {
+      setState(() {
+        _inspectionLeft = ni;
+        _autoReleaseLeft = na;
+      });
     }
   }
 
@@ -204,6 +238,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     WidgetsBinding.instance.removeObserver(this);
     _pulseController.dispose();
     _countdownTimer?.cancel();
+    _deadlinesTimer?.cancel();
     _autoRefreshTimer?.cancel();
     _gatewayFeeDebounce?.cancel();
     _orderSub?.cancel();
@@ -221,6 +256,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
 
   Map<String, dynamic> get d => _liveData.isNotEmpty ? _liveData : widget.data;
   String get status => d['status'] as String? ?? 'pending';
+
+  /// True while the goods are travelling (any engine spelling, raw or v2).
+  bool get _inTransitState {
+    final s = canonicalStatusOf(status);
+    return s == OrderStatus.inTransit ||
+        s == OrderStatus.outForDelivery ||
+        s == OrderStatus.deliveryAttempted;
+  }
+
+  /// True once goods arrived and the inspection window is (or was) running.
+  bool get _inInspectionState {
+    final s = canonicalStatusOf(status);
+    return s == OrderStatus.delivered ||
+        s == OrderStatus.inspectionPeriod ||
+        s == OrderStatus.otpPending;
+  }
 
   bool get _isPaidState =>
       _isEscrowStatus ||
@@ -1545,17 +1596,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     final user = FirebaseAuth.instance.currentUser;
     final isBuyer = user != null && d['buyerId'] == user.uid;
     final isSeller = user != null && d['sellerId'] == user.uid;
-    final canConfirm = status == 'delivered' || status == 'dispatched';
-    final canDispute =
-        status == 'paid_escrow_hold' ||
-        status == 'paid_escrow_held' ||
-        status == 'escrow_hold' ||
-        status == 'dispatched' ||
-        status == 'delivered';
-    final canCancel =
-        status == 'paid_escrow_hold' ||
-        status == 'paid_escrow_held' ||
-        status == 'escrow_hold';
+    final canConfirm = _inTransitState || _inInspectionState || status == 'delivered';
+    final canDispute = _isEscrowStatus || _inTransitState || _inInspectionState;
+    final canCancel = _isEscrowStatus;
 
     if ((status == 'pending' || status == 'awaiting_shipping_quote') && isBuyer) {
       return Container(
@@ -1742,11 +1785,31 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       ),
       child: Column(
         children: [
+          if (canConfirm && isBuyer && _inTransitState) ...[
+            _buildArrivalCard(cs),
+            const SizedBox(height: 12),
+          ],
+          if (canConfirm && d['escrowReleased'] != true) ...[
+            if (_autoReleaseLeft > Duration.zero && _inTransitState)
+              _buildDeadlineChip(
+                cs,
+                Icons.lock_clock,
+                context.tr('auto_release_countdown_hint', 'Pesa zitolewe kiotomatiki baada ya'),
+                _formatCountdown(_autoReleaseLeft),
+              ),
+            if (_inspectionLeft > Duration.zero && _inInspectionState)
+              _buildDeadlineChip(
+                cs,
+                Icons.history_edu,
+                context.tr('inspection_deadline_hint', 'Ukague bidhaa na uthibitishe kabla ya'),
+                _formatCountdown(_inspectionLeft),
+              ),
+          ],
           if (canConfirm && status == 'dispatched' && isBuyer)
             _buildBuyerOtpCard(cs),
           if (canConfirm && status == 'dispatched' && isSeller)
             _buildSellerOtpForm(cs),
-          if (canConfirm && status != 'dispatched')
+          if (canConfirm && !_inTransitState)
             SizedBox(
               width: double.infinity,
               height: 48,
@@ -2068,6 +2131,86 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     );
   }
 
+  /// Buyer-facing "goods arrived" gate that opens the 30-min inspection
+  /// window (server POST /api/orders/delivery-arrival).
+  Widget _buildArrivalCard(ColorScheme cs) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.inventory_2_outlined, color: cs.primary, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                context.tr('goods_arrived_title', 'Mzigo Umefika?'),
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: cs.onSurface),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            context.tr('goods_arrived_body', 'Thibitisha mzigo umefika ili kufungua dirisha la ukaguzi (dakika 30). Pesa zitasalia kwenye escrow hadi uthibitishe upokeaji.'),
+            style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant, height: 1.4),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: ElevatedButton.icon(
+              onPressed: _arriving ? null : _confirmArrival,
+              icon: _arriving
+                  ? const GoogleLoading(size: 18, strokeWidth: 2)
+                  : const Icon(Icons.check_circle_outline, size: 18),
+              label: Text(
+                _arriving
+                    ? context.tr('confirming_label')
+                    : context.tr('goods_arrived_button', 'Nimepokea — Fungua Ukaguzi'),
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: cs.primary,
+                foregroundColor: cs.surface,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeadlineChip(ColorScheme cs, IconData icon, String label, String value) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.12)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: cs.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(label, style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
+          ),
+          Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: cs.primary)),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSellerOtpForm(ColorScheme cs) {
     return Container(
       padding: const EdgeInsets.all(18),
@@ -2323,6 +2466,44 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         ),
       ),
     );
+  }
+
+  Future<void> _confirmArrival() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    setState(() => _arriving = true);
+    HapticFeedback.lightImpact();
+    try {
+      final resp = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/orders/delivery-arrival'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${await user.getIdToken()}',
+        },
+        body: jsonEncode({'orderId': widget.docId}),
+      );
+      final result = jsonDecode(resp.body);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['success'] == true
+                ? context.tr('arrival_confirmed_msg', 'Mzigo umefika. Dirisha la ukaguzi limefunguliwa — thibitisha upokeaji kabla ya dakika 30.')
+                : (result['error'] ?? context.tr('confirm_failed_msg'))),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: result['success'] == true ? null : Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${context.tr('confirm_failed_msg')}: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    }
+    if (mounted) setState(() => _arriving = false);
   }
 
   Future<void> _confirmDelivery(String txId) async {

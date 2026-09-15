@@ -9,6 +9,17 @@ const OTP_MAX_ATTEMPTS = 3;
 const OTP_LOCKOUT_HOURS = 24;
 const BCRYPT_ROUNDS = 10;
 
+// v2 Trust-Commerce windows (mirrors order-service.js DEFAULT_TIMERS):
+// the buyer inspects for 30 min after arrival; escrow auto-releases to the
+// seller 48h after dispatch when the buyer never confirms.
+const INSPECTION_MINUTES = 30;
+const AUTO_RELEASE_MS = 48 * 60 * 60 * 1000;
+
+const TRANSIT_STATES = ['dispatched', 'in_transit', 'out_for_delivery', 'delivery_attempted'];
+const INSPECTION_STATES = ['delivered', 'inspection_period', 'otp_pending'];
+// Any state where confirming receipt is legitimate (money is still in escrow).
+const RELEASABLE_STATES = TRANSIT_STATES.concat(INSPECTION_STATES);
+
 function generateOtp(length) {
   length = length || OTP_LENGTH;
   var max = Math.pow(10, length);
@@ -48,7 +59,7 @@ router.post('/generate-delivery-otp', async function (req, res) {
     var sellerId = (tx && tx.sellerId) || (order && order.sellerId);
     if (sellerId !== auth.uid) return res.status(403).json({ error: 'Only the seller can generate delivery OTP' });
     var status = (tx && tx.status) || (order && order.status);
-    if (status !== 'dispatched') return res.status(400).json({ error: 'OTP can only be generated after dispatch. Current: ' + status });
+    if (RELEASABLE_STATES.indexOf(status) === -1) return res.status(400).json({ error: 'OTP can only be generated after dispatch. Current: ' + status });
     var lockedUntil = (tx && tx.deliveryOtpLockedUntil) || (order && order.deliveryOtpLockedUntil);
     if (lockedUntil) {
       var lockDate = (lockedUntil && lockedUntil.toDate) ? lockedUntil.toDate() : new Date(lockedUntil);
@@ -116,7 +127,7 @@ router.post('/verify-delivery', async function (req, res) {
     var sellerId = (tx && tx.sellerId) || (order && order.sellerId);
     if (sellerId !== auth.uid) return res.status(403).json({ error: 'Only the seller can verify delivery OTP' });
     var status = (tx && tx.status) || (order && order.status);
-    if (status !== 'dispatched') return res.status(400).json({ error: 'Order must be dispatched. Current: ' + status });
+    if (RELEASABLE_STATES.indexOf(status) === -1) return res.status(400).json({ error: 'Order must be dispatched. Current: ' + status });
     if ((tx && tx.escrowReleased === true) || (order && order.escrowReleased === true)) return res.status(400).json({ error: 'Escrow already released' });
     if (status === 'disputed' || (tx && tx.disputeInfo && tx.disputeInfo.resolved === false)) return res.status(400).json({ error: 'Order is under dispute. Admin must resolve first.' });
     var otpHash = (tx && tx.deliveryOtpHash) || (order && order.deliveryOtpHash);
@@ -166,6 +177,8 @@ router.post('/verify-delivery', async function (req, res) {
         escrowReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
         completedAt: admin.firestore.FieldValue.serverTimestamp(),
         confirmedBy: 'otp',
+        flowStage: 'wallet_credited',
+        walletCreditedAt: admin.firestore.FieldValue.serverTimestamp(),
         deliveryOtpVerifiedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       var sellerDoc = await db.collection('users').doc(sellerId).get();
@@ -256,6 +269,73 @@ router.post('/verify-delivery', async function (req, res) {
   }
 });
 
+router.post('/delivery-arrival', async function (req, res) {
+  try {
+    var orderId = req.body.orderId;
+    if (!orderId) return res.status(400).json({ error: 'Missing orderId' });
+    var locals = req.app.locals;
+    var admin = locals.admin;
+    var db = locals.db;
+    var requireUser = locals.requireUser;
+    var sendOneSignalNotification = locals.sendOneSignalNotification;
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    var auth = await requireUser(req, res);
+    if (!auth.ok) return;
+    var txDoc = await db.collection('transactions').doc(orderId).get();
+    var orderDoc = await db.collection('orders').doc(orderId).get();
+    var tx = txDoc.exists ? txDoc.data() : null;
+    var order = orderDoc.exists ? orderDoc.data() : null;
+    if (!tx && !order) return res.status(404).json({ error: 'Order not found' });
+    var buyerId = (tx && tx.buyerId) || (order && order.buyerId);
+    var sellerId = (tx && tx.sellerId) || (order && order.sellerId);
+    // Either the buyer (goods arrived) or the seller/deliverer can open the
+    // inspection window; admins may mark arrival during dispute cleanup.
+    var isBuyer = buyerId === auth.uid;
+    var isSeller = sellerId === auth.uid;
+    var isAdminUser = false;
+    try {
+      var actorDoc = await db.collection('users').doc(auth.uid).get();
+      isAdminUser = actorDoc.exists && actorDoc.data().isAdmin === true;
+    } catch (_) {}
+    if (!isBuyer && !isSeller && !isAdminUser) return res.status(403).json({ error: 'Only the buyer or seller can confirm arrival' });
+    var status = (tx && tx.status) || (order && order.status);
+    if (TRANSIT_STATES.indexOf(status) === -1) return res.status(400).json({ error: 'Arrival can only be confirmed while in transit. Current: ' + status });
+    if ((tx && tx.escrowReleased === true) || (order && order.escrowReleased === true)) return res.status(400).json({ error: 'Escrow already released' });
+    if ((tx && tx.disputeInfo && tx.disputeInfo.resolved === false) || (order && order.disputeInfo && order.disputeInfo.resolved === false)) return res.status(400).json({ error: 'Order is under dispute' });
+
+    var inspectionDeadline = new Date(Date.now() + INSPECTION_MINUTES * 60 * 1000);
+    var arrivalData = {
+      status: 'delivered',
+      deliveredAt: admin.firestore.FieldValue.serverTimestamp(),
+      arrivalConfirmedBy: auth.uid,
+      inspectionMinutes: INSPECTION_MINUTES,
+      inspectionDeadline: inspectionDeadline,
+      flowStage: 'inspection_period',
+    };
+    if (txDoc.exists) await txDoc.ref.update(arrivalData);
+    if (orderDoc.exists) await orderDoc.ref.update(arrivalData);
+    var productName = (tx && tx.productName) || (order && order.productName) || 'Bidhaa';
+    var counterpartId = isBuyer ? sellerId : buyerId;
+    if (counterpartId) {
+      try {
+        await db.collection('notifications').add({
+          userId: counterpartId, title: 'Mzigo Umefika!',
+          body: productName + ' umefika. Dirisha la ukaguzi la dakika ' + INSPECTION_MINUTES + ' limefunguliwa.',
+          isRead: false, data: { type: 'delivered', transactionId: orderId },
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (_) {}
+      try {
+        await sendOneSignalNotification(counterpartId, 'Mzigo Umefika!', productName + ' umefika. Ukague na uthibitishe upokeaji kwenye app.', { type: 'delivered', transactionId: orderId });
+      } catch (_) {}
+    }
+    res.json({ success: true, message: 'Mzigo umefika. Thibitisha upokeaji kabla ya ' + INSPECTION_MINUTES + ' dakika.', inspectionDeadline: inspectionDeadline.toISOString(), inspectionMinutes: INSPECTION_MINUTES });
+  } catch (e) {
+    log('DELIVERY-ARRIVAL', 'error: ' + e.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 router.post('/open-dispute', async function (req, res) {
   try {
     var orderId = req.body.orderId;
@@ -279,7 +359,7 @@ router.post('/open-dispute', async function (req, res) {
     var buyerId = (tx && tx.buyerId) || (order && order.buyerId);
     if (buyerId !== auth.uid) return res.status(403).json({ error: 'Only the buyer can open a dispute' });
     var status = (tx && tx.status) || (order && order.status);
-    var validStatuses = ['dispatched', 'escrow_hold', 'paid_escrow_hold'];
+    var validStatuses = ['dispatched', 'in_transit', 'out_for_delivery', 'delivery_attempted', 'delivered', 'inspection_period', 'escrow_hold', 'paid_escrow_hold', 'paid_escrow_held', 'in_escrow'];
     if (validStatuses.indexOf(status) === -1) return res.status(400).json({ error: 'Cannot dispute from status: ' + status });
     if ((tx && tx.escrowReleased === true) || (order && order.escrowReleased === true)) return res.status(400).json({ error: 'Escrow already released, cannot dispute' });
     var disputeInfo = {
@@ -345,13 +425,15 @@ router.post('/set-shipping-cost', async function (req, res) {
     if (!docSnap.exists) return res.status(404).json({ error: 'Order not found' });
     var data = docSnap.data();
     if (data.sellerId !== auth.uid) return res.status(403).json({ error: 'Only seller can set shipping cost' });
-    if (data.status !== 'escrow_hold' && data.status !== 'paid_escrow_held' && data.status !== 'escrow_hold' ) return res.status(400).json({ error: 'Order not in escrow' });
+    var escrowStates = ['escrow_hold', 'paid_escrow_hold', 'paid_escrow_held', 'in_escrow', 'ready_to_dispatch'];
+    if (escrowStates.indexOf(data.status) === -1) return res.status(400).json({ error: 'Order not in escrow. Current: ' + data.status });
     if (data.shippingCost && data.shippingCost > 0) return res.status(400).json({ error: 'Shipping cost already set' });
     var productPrice = Number(data.productPrice || 0);
     var totalAmount = productPrice + shippingCost;
     var batch = db.batch();
-    batch.set(txRef, { shippingCost: shippingCost, totalAmount: totalAmount, shippingCostSetAt: admin.firestore.FieldValue.serverTimestamp(), shippingCostSetBy: auth.uid }, { merge: true });
-    batch.set(orderRef, { shippingCost: shippingCost, totalAmount: totalAmount, shippingCostSetAt: admin.firestore.FieldValue.serverTimestamp(), shippingCostSetBy: auth.uid }, { merge: true });
+    var shippingQuote = { amount: shippingCost, setAt: admin.firestore.FieldValue.serverTimestamp(), setBy: auth.uid };
+    batch.set(txRef, { shippingCost: shippingCost, totalAmount: totalAmount, shippingQuote: shippingQuote, shippingCostSetAt: admin.firestore.FieldValue.serverTimestamp(), shippingCostSetBy: auth.uid }, { merge: true });
+    batch.set(orderRef, { shippingCost: shippingCost, totalAmount: totalAmount, shippingQuote: shippingQuote, shippingCostSetAt: admin.firestore.FieldValue.serverTimestamp(), shippingCostSetBy: auth.uid }, { merge: true });
     batch.set(db.collection('notifications').doc(), { userId: data.buyerId, title: 'Gharama ya usafirishaji', body: 'Muuzaji ameweka gharama ya usafirishaji TZS ' + shippingCost + '. Tayarisha kupokea mzigo.', type: 'shipping_cost_set', orderId: orderId, isRead: false, createdAt: admin.firestore.FieldValue.serverTimestamp() });
     await batch.commit();
     if (locals.sendOneSignalNotification && data.buyerId) {
@@ -381,26 +463,16 @@ router.post('/cron/auto-release', async function (req, res) {
     if (secBuf.length !== hdrBuf.length || !crypto.timingSafeEqual(secBuf, hdrBuf)) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
-    var AUTO_RELEASE_MS = 48 * 60 * 60 * 1000;
     var cutoff = new Date(Date.now() - AUTO_RELEASE_MS);
-    var txSnap = await db.collection('transactions')
-      .where('status', '==', 'dispatched')
-      .where('escrowReleased', '==', false)
-      .where('dispatchedAt', '<=', cutoff)
-      .limit(50)
-      .get();
-    var results = [];
-    for (var i = 0; i < txSnap.docs.length; i++) {
-      var doc = txSnap.docs[i];
-      var tx = doc.data();
+
+    async function finalizeOne(doc, tx, confirmedBy, description) {
+      if (tx.disputeInfo && tx.disputeInfo.resolved === false) return { skipped: 'dispute' };
       var orderId = doc.id;
-      if (tx.disputeInfo && tx.disputeInfo.resolved === false) continue;
-      if (!tx.shippingCost && !tx.dispatchProof && !tx.buyerTransport) continue;
       if (redis) {
         try {
           var lockResult = await redis.set('auto-release:lock:' + orderId, 'cron', 'EX', 60, 'NX');
-          if (lockResult !== 'OK') continue;
-        } catch (_) { continue; }
+          if (lockResult !== 'OK') return { skipped: 'locked' };
+        } catch (_) { return { skipped: 'locked' }; }
       }
       try {
         var sellerReceives = tx.sellerReceives || tx.totalAmount || 0;
@@ -411,7 +483,9 @@ router.post('/cron/auto-release', async function (req, res) {
           status: 'completed', escrowReleased: true,
           escrowReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
           completedAt: admin.firestore.FieldValue.serverTimestamp(),
-          confirmedBy: 'auto_release_48h',
+          confirmedBy: confirmedBy,
+          flowStage: 'wallet_credited',
+          walletCreditedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
         var orderDoc = await db.collection('orders').doc(orderId).get();
         if (orderDoc.exists) {
@@ -419,6 +493,8 @@ router.post('/cron/auto-release', async function (req, res) {
             status: 'completed', escrowReleased: true,
             escrowReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
             completedAt: admin.firestore.FieldValue.serverTimestamp(),
+            confirmedBy: confirmedBy,
+            flowStage: 'wallet_credited',
           });
         }
         var sellerDoc = await db.collection('users').doc(sellerId).get();
@@ -430,7 +506,7 @@ router.post('/cron/auto-release', async function (req, res) {
         });
         await db.collection('revenue_transactions').add({
           userId: sellerId, type: 'sale', amount: sellerReceives, orderId: orderId,
-          description: 'Auto-release 48h: ' + productName + ' - TZS ' + sellerReceives,
+          description: description + ' ' + productName + ' - TZS ' + sellerReceives,
           timestamp: admin.firestore.FieldValue.serverTimestamp(),
         });
         var sellerPhone = tx.sellerPhone || '';
@@ -454,13 +530,13 @@ router.post('/cron/auto-release', async function (req, res) {
         try {
           await db.collection('notifications').add({
             userId: sellerId, title: 'Oda Imekamilika (Otomatiki)',
-            body: productName + ' imekamilika automatically baada ya masaa 48.',
+            body: productName + ' imekamilika automatically.',
             isRead: false, data: { type: 'auto_release', transactionId: orderId },
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
           });
         } catch (_) {}
         try {
-          await sendOneSignalNotification(sellerId, 'Oda Imekamilika', productName + ' imekamilika automatically baada ya masaa 48.', { type: 'auto_release', transactionId: orderId });
+          await sendOneSignalNotification(sellerId, 'Oda Imekamilika', productName + ' imekamilika automatically.', { type: 'auto_release', transactionId: orderId });
         } catch (_) {}
         try {
           await db.collection('notifications').add({
@@ -473,15 +549,46 @@ router.post('/cron/auto-release', async function (req, res) {
         try {
           await sendOneSignalNotification(buyerId, 'Oda Imekamilika', productName + ' imekamilika automatically.', { type: 'auto_release', transactionId: orderId });
         } catch (_) {}
-        results.push({ orderId: orderId, status: 'released' });
+        return { orderId: orderId, status: 'released' };
       } catch (e) {
         log('AUTO-RELEASE', 'Error for ' + orderId + ': ' + e.message);
-        results.push({ orderId: orderId, status: 'error', error: e.message });
+        return { orderId: orderId, status: 'error', error: e.message };
       } finally {
         if (redis) {
           try { await redis.del('auto-release:lock:' + orderId); } catch (_) {}
         }
       }
+    }
+
+    var results = [];
+    // Pass 1: dispatched and unconfirmed after 48h.
+    var txSnap = await db.collection('transactions')
+      .where('status', '==', 'dispatched')
+      .where('escrowReleased', '==', false)
+      .where('dispatchedAt', '<=', cutoff)
+      .limit(50)
+      .get();
+    for (var i = 0; i < txSnap.docs.length; i++) {
+      var doc1 = txSnap.docs[i];
+      var tx1 = doc1.data();
+      if (!tx1.shippingCost && !tx1.dispatchProof && !tx1.buyerTransport) continue;
+      var r1 = await finalizeOne(doc1, tx1, 'auto_release_48h', 'Auto-release 48h:');
+      if (r1 && r1.status === 'released') results.push(r1);
+    }
+    // Pass 2: the 30-min inspection window expired without the buyer raising
+    // an issue — auto-confirm receipt and release to the seller.
+    var now = new Date();
+    var inspSnap = await db.collection('transactions')
+      .where('status', '==', 'delivered')
+      .where('escrowReleased', '==', false)
+      .where('inspectionDeadline', '<=', now)
+      .limit(50)
+      .get();
+    for (var j = 0; j < inspSnap.docs.length; j++) {
+      var doc2 = inspSnap.docs[j];
+      var tx2 = doc2.data();
+      var r2 = await finalizeOne(doc2, tx2, 'auto_release_inspection', 'Auto-release (inspection):');
+      if (r2 && r2.status === 'released') results.push(r2);
     }
     res.json({ success: true, processed: results.length, results: results });
   } catch (e) {
