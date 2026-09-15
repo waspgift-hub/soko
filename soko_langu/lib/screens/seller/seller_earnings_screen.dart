@@ -613,7 +613,7 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
   Widget _buildWithdrawalHistory(ColorScheme cs, NumberFormat nf) {
     return StreamBuilder<List<WithdrawalRequest>>(
       stream: _service.streamWithdrawals(),
-      builder: (context, snap) {
+builder: (context, snap) {
         if (snap.hasError) {
           return _emptyCard(context.tr('error_loading_withdrawals'), cs);
         }
@@ -622,7 +622,25 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
           return _emptyCard(context.tr('no_withdrawals'), cs);
         }
         return Column(
-          children: withdrawals.map((w) => Padding(
+          children: withdrawals.map((w) {
+            final isDone = w.status == WithdrawalStatus.completed;
+            final isFailed = w.status == WithdrawalStatus.failed;
+            final tileColor = isDone
+                ? cs.successGreen.withValues(alpha: 0.12)
+                : isFailed
+                    ? cs.errorContainer
+                    : cs.primary.withValues(alpha: 0.08);
+            final tileIcon = isDone
+                ? Icons.check_circle
+                : isFailed
+                    ? Icons.cancel
+                    : Icons.hourglass_top;
+            final tileIconColor = isDone
+                ? cs.successGreen
+                : isFailed
+                    ? cs.error
+                    : cs.primary;
+            return Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: DsCard(
               radius: 14,
@@ -632,18 +650,12 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: w.status == WithdrawalStatus.completed
-                          ? cs.successGreen.withValues(alpha: 0.12)
-                        : cs.errorContainer,
+                      color: tileColor,
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
-                    w.status == WithdrawalStatus.completed
-                        ? Icons.check_circle
-                        : Icons.cancel,
-                    color: w.status == WithdrawalStatus.completed
-                        ? cs.successGreen
-                        : cs.error,
+                    tileIcon,
+                    color: tileIconColor,
                     size: 20,
                   ),
                 ),
@@ -658,19 +670,21 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        w.status == WithdrawalStatus.completed
+                        isDone
                             ? context.trParams('withdrawal_fee_detail', {
                                 'fee': nf.format(w.fee),
                                 'date': DateFormat('MMM dd, yyyy HH:mm').format(w.createdAt),
                               })
-                            : context.trParams('withdrawal_failed_detail', {
-                                'reason': w.failureReason ?? context.tr('unknown'),
-                              }),
+                            : isFailed
+                                ? context.trParams('withdrawal_failed_detail', {
+                                    'reason': w.failureReason ?? context.tr('unknown'),
+                                  })
+                                : context.tr('withdrawal_processing'),
                         style: TextStyle(
                           fontSize: 11,
-                          color: w.status == WithdrawalStatus.completed
-                              ? cs.onSurface.withValues(alpha: 0.51)
-                              : cs.error,
+                          color: isFailed
+                              ? cs.error
+                              : cs.onSurface.withValues(alpha: 0.51),
                         ),
                       ),
                     ],
@@ -681,15 +695,15 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 15,
-                    color: cs.error,
+                    color: isFailed ? cs.error : cs.primary,
                   ),
                 ),
               ],
             ),
-          ),
-        )).toList(),
-      );
-    },
+          ));
+          }).toList(),
+        );
+      },
   );
 }
 

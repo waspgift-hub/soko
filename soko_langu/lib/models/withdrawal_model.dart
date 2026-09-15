@@ -30,15 +30,17 @@ class WithdrawalRequest {
   });
 
   factory WithdrawalRequest.fromMap(String id, Map<String, dynamic> data) {
+    final status = _parseStatus(data['status'] ?? 'pending');
     return WithdrawalRequest(
       id: id,
       userId: data['userId'] ?? '',
       userName: data['userName'] ?? '',
-      phone: data['phone'] ?? '',
+      // Compat engine writes userPhone; legacy docs used phone.
+      phone: _first(data, ['phone', 'userPhone']),
       amount: (data['amount'] ?? 0).toDouble(),
       fee: (data['fee'] ?? 2000).toDouble(),
       netAmount: (data['netAmount'] ?? 0).toDouble(),
-      status: _parseStatus(data['status'] ?? 'pending'),
+      status: status,
       createdAt: data['createdAt'] is Timestamp
           ? (data['createdAt'] as Timestamp).toDate()
           : DateTime.now(),
@@ -47,6 +49,14 @@ class WithdrawalRequest {
           : null,
       failureReason: data['failureReason'],
     );
+  }
+
+  static String _first(Map<String, dynamic> data, List<String> keys) {
+    for (final k in keys) {
+      final v = data[k];
+      if (v is String && v.isNotEmpty) return v;
+    }
+    return '';
   }
 
   Map<String, dynamic> toMap() => {
@@ -65,10 +75,12 @@ class WithdrawalRequest {
   static WithdrawalStatus _parseStatus(String status) {
     switch (status) {
       case 'completed':
+      case 'success':
         return WithdrawalStatus.completed;
       case 'failed':
         return WithdrawalStatus.failed;
       default:
+        // 'pending'/'processing': async payout in flight.
         return WithdrawalStatus.pending;
     }
   }

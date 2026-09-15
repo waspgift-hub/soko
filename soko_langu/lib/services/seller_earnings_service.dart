@@ -73,11 +73,14 @@ class SellerEarningsService {
   Stream<List<WithdrawalRequest>> streamWithdrawals() {
     final uid = _uid;
     if (uid == null) return Stream.value([]);
+    // Server writes seller withdrawals to the `payouts` collection (compat
+    // engine); the legacy `withdrawals` collection is no longer written.
     return _db
-        .collection('withdrawals')
+        .collection('payouts')
         .where('userId', isEqualTo: uid)
         .snapshots()
         .map((snap) => snap.docs
+            .where((doc) => doc.data()['type'] == 'seller_withdrawal')
             .map((doc) => WithdrawalRequest.fromMap(doc.id, doc.data()))
             .toList()
           ..sort((a, b) => b.createdAt.compareTo(a.createdAt)));
