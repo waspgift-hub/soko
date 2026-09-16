@@ -26,6 +26,7 @@ const productRouter = require('./modules/products/routes');
 const referralRouter = require('./modules/referrals/routes');
 const moderationRouter = require('./modules/moderation/routes');
 const reconciliationRouter = require('./modules/reconciliation/routes');
+const notificationRouter = require('./modules/notifications/routes');
 const { seoRouter, NOT_FOUND_HTML } = require('./seo/routes');
 const legacyShopRouter = require('./modules/legacy-shop/routes');
 
@@ -279,6 +280,7 @@ app.use('/api/v1/products', productRouter);
 app.use('/api/v1/referrals', referralRouter);
 app.use('/api/v1/moderation', moderationRouter);
 app.use('/api/v1/reconciliation', reconciliationRouter);
+app.use('/api/v1/notifications', notificationRouter);
 
 // Legacy web-shop: v2-backed checkout/status under the ORIGINAL /api paths so
 // the shop SPA needs no client change. Mounted before legacy-compat so these

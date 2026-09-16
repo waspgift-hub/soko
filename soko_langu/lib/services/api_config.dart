@@ -25,6 +25,11 @@ class ApiConfig {
   /// sellers would see an empty wallet (their money still lives in Firestore).
   static const bool kUseWalletApi = false;
 
+  /// Phase B notifications bridge switch: when true, the in-app notification
+  /// center reads from /api/v1/notifications (Postgres) instead of Firestore.
+  /// Push delivery (OneSignal) is unchanged; only the persistent inbox migrates.
+  static const bool kUseNotificationsApi = false;
+
   /// Master test mode — false = production for all features (fraud, etc.)
   static const bool kIsTestMode = false;
 

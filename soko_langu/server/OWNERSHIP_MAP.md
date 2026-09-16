@@ -51,7 +51,8 @@ Legend: **A** = authoritative, **M** = mirror/compat (to be retired), **C** = cl
 
 1. `/api/v1/*` — v2 modules, Postgres: auth, users/settings, sellers, orders,
    payments, shipping, handover, wallet, disputes, refunds, media, feed,
-   search, share, trust, admin, products, referrals, moderation, reconciliation.
+   search, share, trust, admin, products, referrals, moderation, reconciliation,
+   notifications.
 2. `/api` → `legacyShopRouter` — v2-backed checkout/status (Postgres) for the
    web shop SPA, before legacy compat so Postgres wins.
 3. `/api` → `legacy-compat` mounts — **mark as compatibility, removal path exists**:
@@ -200,4 +201,9 @@ Orders catch-all: participant cannot mutate `status` inline (state machine).
    Remaining: OPS runs the migration (§5 item 15), then the coordinated
    release+wallet flip (§5 items 8, 13–15), then legacy `/api/payouts/*`
    retirement.
-4. Notifications → Postgres app-facing rows.
+4. Notifications → Postgres app-facing rows: DONE. Server module
+   (`notification-service` + routes at `/api/v1/notifications`), Prisma indexes,
+   client `NotificationApiClient` + `kUseNotificationsApi` flag, screen wiring,
+   dual-use `markAllRead`/`deleteAll`, and auth-rejection + unit tests all
+   landed. Push delivery (OneSignal) is unchanged; only the persistent in-app
+   inbox migrated. Flag stays false until production cutover.

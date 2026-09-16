@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/notification_service.dart';
 import '../../services/notification_lang.dart';
+import '../../services/notification_api.dart';
+import '../../services/api_config.dart';
 import '../../models/notification_item.dart';
 import '../../extensions/context_tr.dart';
 import '../../app/routes.dart';
@@ -22,6 +24,7 @@ class NotificationScreen extends StatefulWidget {
 
 class _NotificationScreenState extends State<NotificationScreen> {
   final NotificationService _notifService = NotificationService();
+  final NotificationApiClient _api = NotificationApiClient();
   DateTime? _lastTileTapAt;
 
   @override
@@ -34,6 +37,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
         appBar: AppBar(title: Text(context.tr('notifications'))),
         body: Center(child: Text(context.tr('login_required'))),
       );
+    }
+
+    if (ApiConfig.kUseNotificationsApi) {
+      return _buildV1Body(cs);
     }
 
     return StreamBuilder<QuerySnapshot>(
@@ -100,10 +107,15 @@ class _NotificationScreenState extends State<NotificationScreen> {
   }
 
   Future<void> _markAllRead() async {
-    await _notifService.markAllAsRead();
+    if (ApiConfig.kUseNotificationsApi) {
+      await _api.markAllRead();
+    } else {
+      await _notifService.markAllAsRead();
+    }
     if (mounted) {
       SokoSnackbar.info(context, context.tr('mark_all_read'));
     }
+    if (mounted) setState(() {});
   }
 
   /// Batch-deletes every notification and shows how many were removed so the
@@ -126,6 +138,32 @@ class _NotificationScreenState extends State<NotificationScreen> {
     for (final doc in docs) {
       if (await _notifService.deleteNotification(doc.id)) deleted++;
     }
+    if (!mounted) return;
+    SokoSnackbar.show(
+      context,
+      message: context.tr(
+        'deleted_notifications_count',
+        '$deleted ${context.tr('notifications_deleted', 'notifications deleted')}',
+      ),
+      duration: const Duration(seconds: 2),
+    );
+  }
+
+  /// v1-backed batch delete: the server deletes the whole inbox in one call
+  /// (no count needed, so a generic confirmation + short success message).
+  Future<void> _deleteAllV1() async {
+    final confirmed = await SokoDialog.show(
+      context,
+      variant: SokoDialogVariant.danger,
+      icon: Icons.delete_outline_rounded,
+      title: context.tr('clear_all'),
+      message: context.tr('confirm_clear_notifications', 'Delete all notifications?'),
+      confirmLabel: context.tr('clear_all'),
+      cancelLabel: context.tr('cancel', 'Cancel'),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final deleted = await _api.deleteAll();
     if (!mounted) return;
     SokoSnackbar.show(
       context,
@@ -263,6 +301,65 @@ class _NotificationScreenState extends State<NotificationScreen> {
     );
   }
 
+  Widget _buildV1NotificationList(ColorScheme cs, List<NotificationItem> items) {
+    return ListView.separated(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 20),
+      itemCount: items.length,
+      separatorBuilder: (_, _) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        final item = items[index];
+        return Dismissible(
+          key: ValueKey(item.id),
+          direction: DismissDirection.endToStart,
+          background: Container(
+            color: cs.error,
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 20),
+            child: Icon(Icons.delete_outline, color: cs.surface),
+          ),
+          confirmDismiss: (_) async {
+            final deleted = await _api.delete(item.id);
+            if (mounted) {
+              SokoSnackbar.show(
+                context,
+                message: deleted
+                    ? context.tr('notification_deleted')
+                    : context.tr('something_wrong'),
+                type: deleted ? SokoSnackType.success : SokoSnackType.error,
+              );
+            }
+            return deleted;
+          },
+          child: _buildV1Tile(cs, item),
+        );
+      },
+    );
+  }
+
+  Widget _buildV1Tile(ColorScheme cs, NotificationItem item) {
+    var title = item.title;
+    var body = item.body;
+    if (item.type != 'chat' && item.type != 'group_chat') {
+      final localized = NotificationLang.localize(
+        AppConfig.maybeOf(context)?.langCode ?? 'sw',
+        title,
+        body,
+      );
+      title = localized.title;
+      body = localized.body;
+    }
+
+    final rawData = {'type': item.type, 'senderId': item.otherUserId, 'senderName': item.otherUserName, 'senderAvatar': item.otherUserImage, 'productId': item.productId, 'image': item.productImage};
+
+    return NotificationCard(
+      item: item,
+      onTap: () {
+        if (!item.isRead) _api.markRead(item.id);
+        _openFromTile(context, item.type, rawData);
+      },
+    );
+  }
+
   Scaffold _buildLoadingScaffold(ColorScheme cs) {
     return Scaffold(
       backgroundColor: cs.surface,
@@ -299,6 +396,59 @@ class _NotificationScreenState extends State<NotificationScreen> {
         ),
       ),
       bottomNavigationBar: const AdBanner(),
+    );
+  }
+
+  /// v1-backed notification list (Postgres /api/v1/notifications). The server
+  /// envelope maps into the same tile model as the Firestore docs, so the
+  /// remaining UI (card render, tap routing, swipe delete) is shared.
+  Widget _buildV1Body(ColorScheme cs) {
+    return FutureBuilder<({List<NotificationItem> notifications, int unreadCount})>(
+      future: _api.fetchNotifications(),
+      builder: (context, snap) {
+        if (snap.hasError) return _buildErrorScaffold(cs);
+        if (!snap.hasData) return _buildLoadingScaffold(cs);
+
+        final items = snap.data!.notifications;
+        final unreadCount = snap.data!.unreadCount;
+
+        return Scaffold(
+          backgroundColor: cs.surface,
+          appBar: AppBar(
+            title: Text(context.tr('notifications')),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.settings_outlined),
+                onPressed: () => context.push(AppRoutes.notificationPreferences),
+              ),
+              if (unreadCount > 0)
+                TextButton(
+                  onPressed: () => _markAllRead(),
+                  child: Text('${context.tr('mark_all_read')} ($unreadCount)'),
+                ),
+              if (items.isNotEmpty)
+                IconButton(
+                  icon: const Icon(Icons.delete_sweep_outlined),
+                  tooltip: context.tr('clear_all'),
+                  onPressed: () => _deleteAllV1(),
+                ),
+            ],
+          ),
+          body: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [cs.surface, cs.surfaceContainerLow.withValues(alpha: 0.3)],
+              ),
+            ),
+            child: items.isEmpty
+                ? _emptyState(context)
+                : _buildV1NotificationList(cs, items),
+          ),
+          bottomNavigationBar: const AdBanner(),
+        );
+      },
     );
   }
 
