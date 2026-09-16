@@ -452,6 +452,9 @@ model Withdrawal {
   amount           BigInt    @db.BigInt
   provider         String    @db.VarChar(50)
   providerPayoutId String?   @map("provider_payout_id") @db.VarChar(200)
+  // Destination phone captured at request time so the payout target is
+  // auditable and immune to later profile phone edits.
+  phoneNumber      String?   @map("phone_number") @db.VarChar(20)
   status           String    @default("pending") @db.VarChar(20)
   idempotencyKey   String    @unique @map("idempotency_key") @db.VarChar(100)
   processedAt      DateTime? @map("processed_at")

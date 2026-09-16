@@ -139,6 +139,18 @@ Orders catch-all: participant cannot mutate `status` inline (state machine).
     flows into the Postgres wallet instead. The release flip must ship together
     with (or immediately before) the wallet UI flip (§5 items 8, 11, §6.3) so
     sellers can see and withdraw their earnings.
+14. Withdrawal destination phone is now captured and audited: `Withdrawal`
+    gained `phoneNumber` (`withdrawals.phone_number`,
+
+    schema.prisma); `requestWithdrawal` persists the phone submitted in the
+    request; `processWithdrawal` pays to the stored phone via the exported
+    `withdrawalPayoutPhone(withdrawal)` helper (falls back to the seller profile
+    phone for rows created before the column existed; tested). Client: seller
+    earnings service + dashboard balance card + home-widget balance read the
+    Postgres wallet behind `kUseWalletApi`; withdrawal history maps the v1 status
+    set (pending/processing/completed) onto the legacy tile contract.
+    DEPLOY NOTE: `prisma db push`/migrate must apply the new column before
+    `kUseWalletApi` is flipped — `GET /api/v1/wallet/withdrawals` selects it.
 
 ## 6. Next (Phase B) candidates, in dependency order
 
@@ -151,8 +163,9 @@ Orders catch-all: participant cannot mutate `status` inline (state machine).
    dispute off legacy-compat onto `/api/v1/orders`.
 3. Payouts → Postgres with idempotency + audit. Server core already existed
    (`wallet-service` + `/api/v1/wallet`); this session: `ensureWallet` money-safety
-   fix on both settle paths, OTP-issue authorization, and the flag-gated client
-   bridge (`kUseWalletApi`). Remaining: buyer-OTP display wiring + release-path
-   flip (§5 item 13), then seller wallet/withdrawal UI flip, then legacy
-   `/api/payouts/*` retirement.
+   fix on both settle paths, OTP-issue authorization, destination-phone
+   persistence + payout fallback, and the flag-gated client bridge
+   (`kUseWalletApi`) incl. seller earnings screen, dashboard balance card, and
+   home-widget balance. Remaining: coordinated release+wallet flip (§5 items 8,
+   13–14), then legacy `/api/payouts/*` retirement.
 4. Notifications → Postgres app-facing rows.

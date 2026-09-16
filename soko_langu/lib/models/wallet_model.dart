@@ -103,6 +103,7 @@ class WithdrawalData {
   final String status;
   final String? providerPayoutId;
   final String? idempotencyKey;
+  final String? phoneNumber;
   final DateTime? createdAt;
 
   const WithdrawalData({
@@ -112,6 +113,7 @@ class WithdrawalData {
     required this.status,
     this.providerPayoutId,
     this.idempotencyKey,
+    this.phoneNumber,
     this.createdAt,
   });
 
@@ -123,6 +125,7 @@ class WithdrawalData {
       status: json['status']?.toString() ?? 'pending',
       providerPayoutId: json['providerPayoutId']?.toString(),
       idempotencyKey: json['idempotencyKey']?.toString(),
+      phoneNumber: json['phoneNumber']?.toString(),
       createdAt: _dateOf(json['createdAt']),
     );
   }

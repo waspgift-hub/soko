@@ -43,6 +43,7 @@ Map<String, dynamic> _withdrawalJson() => {
   'sellerId': 'sp-1',
   'amount': 30000,
   'provider': 'clickpesa',
+  'phoneNumber': '+255712345678',
   'status': 'pending',
   'idempotencyKey': 'withdrawal_sp-1_1726400000000',
   'createdAt': '2026-09-16T09:00:00Z',
@@ -93,7 +94,13 @@ void main() {
       expect(w.id, 'wd-1');
       expect(w.amount, 30000);
       expect(w.status, 'pending');
+      expect(w.phoneNumber, '+255712345678');
       expect(w.providerPayoutId, isNull);
+    });
+
+    test('tolerates a missing phoneNumber (rows created before persistence)', () {
+      final w = WithdrawalData.fromApi({..._withdrawalJson()..remove('phoneNumber')});
+      expect(w.phoneNumber, isNull);
     });
   });
 
@@ -139,6 +146,7 @@ void main() {
       expect(rows, hasLength(1));
       expect(rows.single.amount, 30000);
       expect(rows.single.status, 'pending');
+      expect(rows.single.phoneNumber, '+255712345678');
     });
   });
 

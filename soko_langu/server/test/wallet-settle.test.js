@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { ensureWallet } = require('../src/modules/wallet/wallet-service');
+const { ensureWallet, withdrawalPayoutPhone } = require('../src/modules/wallet/wallet-service');
 const { releaseEscrowAndSettle } = require('../src/modules/handover/handover-service');
 
 // Minimal in-memory Prisma-like client covering the subset of tx.* calls that
@@ -146,4 +146,28 @@ test('settlement with an existing wallet increments its balance, not a new row',
   assert.equal(tx._store.wallet.length, 1);
   assert.equal(tx._store.wallet[0].availableBalance, 90000);
   assert.equal(tx._store.wallet[0].totalEarned, 90000);
+});
+
+test('withdrawalPayoutPhone prefers the phone captured at request time', () => {
+  assert.equal(
+    withdrawalPayoutPhone({
+      phoneNumber: '+255712345678',
+      seller: { user: { phone: '+255700000000' } },
+    }),
+    '+255712345678',
+  );
+});
+
+test('withdrawalPayoutPhone falls back to the profile phone for legacy rows', () => {
+  assert.equal(
+    withdrawalPayoutPhone({
+      phoneNumber: null,
+      seller: { user: { phone: '+255700000000' } },
+    }),
+    '+255700000000',
+  );
+});
+
+test('withdrawalPayoutPhone returns null when no phone source exists', () => {
+  assert.equal(withdrawalPayoutPhone({ phoneNumber: null }), null);
 });

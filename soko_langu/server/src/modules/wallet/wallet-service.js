@@ -126,6 +126,9 @@ async function requestWithdrawal({ sellerId, amount, phoneNumber }) {
           amount,
           provider: 'clickpesa',
           status: 'pending',
+          // Persist the destination phone at request time so the payout target
+          // is auditable and immune to later profile phone edits.
+          phoneNumber: phoneNumber || null,
           idempotencyKey,
         },
       });
@@ -174,7 +177,7 @@ async function processWithdrawal({ withdrawalId, executedBy = 'system' }) {
       const payout = await provider.initiatePayout({
         amount: Number(withdrawal.amount),
         orderReference: `W${withdrawal.id}`,
-        phoneNumber: withdrawal.seller?.user?.phone,
+        phoneNumber: withdrawalPayoutPhone(withdrawal),
       });
 
       const updated = await tx.withdrawal.update({
@@ -253,6 +256,15 @@ async function postWalletEntryTx(tx, data) {
   return tx.walletLedgerEntry.create({ data });
 }
 
+/**
+ * Payout destination phone for a withdrawal row. Prefer the phone captured at
+ * request time; fall back to the seller's profile phone for rows created
+ * before the phoneNumber column existed.
+ */
+function withdrawalPayoutPhone(withdrawal) {
+  return withdrawal.phoneNumber || withdrawal.seller?.user?.phone || null;
+}
+
 function httpError(status, message) {
   const err = new Error(message);
   err.status = status;
@@ -266,4 +278,5 @@ module.exports = {
   requestWithdrawal,
   processWithdrawal,
   confirmPayout,
+  withdrawalPayoutPhone,
 };

@@ -8,6 +8,8 @@ import '../../services/product_service.dart';
 import '../../services/payment_service.dart';
 import '../../services/widget_service.dart';
 import '../../services/balance_privacy_service.dart';
+import '../../services/seller_earnings_service.dart';
+import '../../services/api_config.dart';
 import '../../extensions/context_tr.dart';
 import '../../models/product_model.dart';
 import '../../models/transaction_model.dart';
@@ -48,17 +50,30 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     }
   }
 
-  void _updateWidget(List<MarketplaceTransaction> transactions) {
+  Future<void> _updateWidget(List<MarketplaceTransaction> transactions) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
+    final pendingCount = transactions.where(
+      (t) => t.status == TransactionStatus.pending,
+    ).length;
+    final nf = NumberFormat('#,###', 'en');
+
+    if (ApiConfig.kUseWalletApi) {
+      // Home-widget money must mirror the Postgres wallet, not the Firestore
+      // sellerBalance the seller UI stopped writing to in this mode.
+      final earnings = await SellerEarningsService().getEarnings();
+      WidgetService.updateWidget(
+        sales: 'TZS ${nf.format(earnings.totalSales)}',
+        orders: '$pendingCount',
+        balance: 'TZS ${nf.format(earnings.balance)}',
+      );
+      return;
+    }
+
     FirebaseFirestore.instance.collection('users').doc(uid).get().then((doc) {
       final data = doc.data();
       final balance = (data?['sellerBalance'] as num? ?? 0);
       final totalSales = (data?['totalSales'] as num? ?? 0);
-      final nf = NumberFormat('#,###', 'en');
-      final pendingCount = transactions.where(
-        (t) => t.status == TransactionStatus.pending,
-      ).length;
       WidgetService.updateWidget(
         sales: 'TZS ${nf.format(totalSales)}',
         orders: '$pendingCount',
@@ -431,72 +446,101 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   Widget _buildEarningsCard() {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
     final cs = Theme.of(context).colorScheme;
+    final nf = NumberFormat('#,###', 'en');
+    if (ApiConfig.kUseWalletApi) {
+      // Postgres wallet is the money source of truth in this mode; the Firestore
+      // sellerBalance snapshot would show stale/empty amounts.
+      return FutureBuilder<SellerEarningsData>(
+        future: SellerEarningsService().getEarnings(),
+        builder: (context, snap) {
+          final data = snap.data ?? const SellerEarningsData();
+          return _earningsCardBody(
+            cs: cs,
+            nf: nf,
+            balance: data.balance.toInt(),
+            totalSales: data.totalSales,
+          );
+        },
+      );
+    }
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
       builder: (context, snap) {
-        final balance = (snap.data?.data() as Map<String, dynamic>?)?['sellerBalance'] as num? ?? 0;
-        final totalSales = (snap.data?.data() as Map<String, dynamic>?)?['totalSales'] as num? ?? 0;
-        final nf = NumberFormat('#,###', 'en');
-        return GestureDetector(
-          onTap: () => context.push(AppRoutes.sellerEarnings),
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [cs.primary, cs.primary.withValues(alpha: 0.75)],
-              ),
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(color: cs.primary.withValues(alpha: 0.3), blurRadius: 24, offset: const Offset(0, 10)),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: cs.surface.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(Icons.account_balance_wallet_rounded, color: cs.surface, size: 24),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(context.tr('seller_earnings'),
-                        style: TextStyle(color: cs.surface, fontSize: 17, fontWeight: FontWeight.bold)),
-                    ),
-                    Consumer<BalancePrivacyService>(
-                      builder: (ctx, privacy, _) => GestureDetector(
-                        onTap: privacy.toggle,
-                        child: Icon(
-                          privacy.hideBalances ? Icons.visibility_off : Icons.visibility,
-                          color: cs.surface.withValues(alpha: 0.7), size: 20,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(Icons.arrow_forward_ios_rounded, color: cs.surface.withValues(alpha: 0.7), size: 16),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Consumer<BalancePrivacyService>(
-                  builder: (ctx, privacy, _) => Text(
-                    privacy.hideBalances ? 'TZS ****' : 'TZS ${nf.format(balance)}',
-                    style: TextStyle(color: cs.surface, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: -1)),
-                ),
-                const SizedBox(height: 4),
-                Text(context.tr('seller_earnings_subtitle').replaceFirst('{0}', '$totalSales'),
-                  style: TextStyle(color: cs.surface.withValues(alpha: 0.8), fontSize: 13)),
-              ],
-            ),
-          ),
+        final d = snap.data?.data() as Map<String, dynamic>?;
+        return _earningsCardBody(
+          cs: cs,
+          nf: nf,
+          balance: (d?['sellerBalance'] as num? ?? 0).toInt(),
+          totalSales: (d?['totalSales'] as num? ?? 0).toInt(),
         );
       },
+    );
+  }
+
+  Widget _earningsCardBody({
+    required ColorScheme cs,
+    required NumberFormat nf,
+    required int balance,
+    required int totalSales,
+  }) {
+    return GestureDetector(
+      onTap: () => context.push(AppRoutes.sellerEarnings),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [cs.primary, cs.primary.withValues(alpha: 0.75)],
+          ),
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(color: cs.primary.withValues(alpha: 0.3), blurRadius: 24, offset: const Offset(0, 10)),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: cs.surface.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.account_balance_wallet_rounded, color: cs.surface, size: 24),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(context.tr('seller_earnings'),
+                    style: TextStyle(color: cs.surface, fontSize: 17, fontWeight: FontWeight.bold)),
+                ),
+                Consumer<BalancePrivacyService>(
+                  builder: (ctx, privacy, _) => GestureDetector(
+                    onTap: privacy.toggle,
+                    child: Icon(
+                      privacy.hideBalances ? Icons.visibility_off : Icons.visibility,
+                      color: cs.surface.withValues(alpha: 0.7), size: 20,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(Icons.arrow_forward_ios_rounded, color: cs.surface.withValues(alpha: 0.7), size: 16),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Consumer<BalancePrivacyService>(
+              builder: (ctx, privacy, _) => Text(
+                privacy.hideBalances ? 'TZS ****' : 'TZS ${nf.format(balance)}',
+                style: TextStyle(color: cs.surface, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: -1)),
+            ),
+            const SizedBox(height: 4),
+            Text(context.tr('seller_earnings_subtitle').replaceFirst('{0}', '$totalSales'),
+              style: TextStyle(color: cs.surface.withValues(alpha: 0.8), fontSize: 13)),
+          ],
+        ),
+      ),
     );
   }
 
