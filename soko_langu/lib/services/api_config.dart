@@ -47,6 +47,14 @@ class ApiConfig {
   /// catalog.
   static const bool kUseSearchApi = false;
 
+  /// Phase D reviews bridge switch: when true, review reads/writes go through
+  /// /api/v1/reviews (Postgres) instead of the Firestore `reviews` collection.
+  /// List reads become one-shot fetches (the v1 API is HTTP, not a stream);
+  /// writes upsert by (userId, productId), and "helpful" + seller replies route
+  /// to the API too. Keep false until the product backfill has run, otherwise
+  /// reviews reference product ids that only exist in Firestore.
+  static const bool kUseReviewsApi = false;
+
   /// Master test mode — false = production for all features (fraud, etc.)
   static const bool kIsTestMode = false;
 

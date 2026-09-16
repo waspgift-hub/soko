@@ -228,3 +228,19 @@ Orders catch-all: participant cannot mutate `status` inline (state machine).
    most-rated and record-click still use the legacy endpoints. 5 client unit
    tests. Flag stays false until the product backfill has run, otherwise search
    would return zero Postgres rows while Firestore still holds the catalog.
+7. Reviews → Postgres: DONE (module + client bridge). New `Review` Prisma model
+   (opaque productId/sellerId/userId refs — legacy Firestore doc ids or UIDs
+   that survive both eras — plus rating, comment, images, helpful, likedBy,
+   seller reply, verified-purchase flag; indexes on productId+createdAt,
+   sellerId, userId+productId). New `/api/v1/reviews` module (`review-service`
+   + routes): list by product (paginated), seller summary (avg + star
+   distribution), my-review lookup, upsert by (userId, productId), helpful
+   toggle, seller reply; delete-by-user intentionally absent (not in the app).
+   Client: `ReviewApiClient` + `kUseReviewsApi` flag; `ReviewService` and
+   `RatingService` reads/writes route through the API in flag mode (list reads
+   become one-shot streams because v1 is HTTP, not realtime), with Firestore as
+   the default. Self-review and invalid-rating are rejected server-side.
+   7 client unit tests + 4 server auth tests. Flag stays false until the
+   product backfill has run (reviews reference product ids that only exist in
+   Firestore); the stream→poll read trade-off is acceptable inside the frozen
+   migration window.

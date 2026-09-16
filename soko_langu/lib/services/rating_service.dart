@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import '../models/review_model.dart';
 import 'notification_service.dart';
 import 'api_config.dart';
+import 'review_api.dart';
 
 class SellerRating {
   final double averageRating;
@@ -30,8 +31,27 @@ class SellerRating {
 
 class RatingService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final ReviewApiClient _api;
+
+  RatingService({ReviewApiClient? api}) : _api = api ?? ReviewApiClient();
 
   Future<SellerRating> getSellerRating(String sellerId) async {
+    if (ApiConfig.kUseReviewsApi) {
+      try {
+        final s = await _api.fetchSellerSummary(sellerId: sellerId);
+        return SellerRating(
+          averageRating: s.averageRating,
+          totalReviews: s.totalReviews,
+          fiveStar: s.fiveStar,
+          fourStar: s.fourStar,
+          threeStar: s.threeStar,
+          twoStar: s.twoStar,
+          oneStar: s.oneStar,
+        );
+      } catch (_) {
+        return SellerRating();
+      }
+    }
     try {
       final snap = await _db
           .collection('reviews')
@@ -70,6 +90,25 @@ class RatingService {
   }
 
   Stream<SellerRating> streamSellerRating(String sellerId) {
+    if (ApiConfig.kUseReviewsApi) {
+      // v1 is HTTP, not a stream — emit a single summary snapshot.
+      return Stream.fromFuture(() async {
+        try {
+          final s = await _api.fetchSellerSummary(sellerId: sellerId);
+          return SellerRating(
+            averageRating: s.averageRating,
+            totalReviews: s.totalReviews,
+            fiveStar: s.fiveStar,
+            fourStar: s.fourStar,
+            threeStar: s.threeStar,
+            twoStar: s.twoStar,
+            oneStar: s.oneStar,
+          );
+        } catch (_) {
+          return SellerRating();
+        }
+      }());
+    }
     return _db
         .collection('reviews')
         .where('sellerId', isEqualTo: sellerId)
@@ -108,6 +147,13 @@ class RatingService {
     required String productId,
     required String userId,
   }) async {
+    if (ApiConfig.kUseReviewsApi) {
+      try {
+        return await _api.fetchMyReview(productId);
+      } catch (_) {
+        return null;
+      }
+    }
     final snap = await _db
         .collection('reviews')
         .where('productId', isEqualTo: productId)
@@ -128,6 +174,27 @@ class RatingService {
     required String comment,
     bool isVerifiedPurchase = false,
   }) async {
+    if (ApiConfig.kUseReviewsApi) {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception('Not logged in');
+      await _api.upsertReview(
+        productId: productId,
+        rating: rating,
+        comment: comment,
+        sellerId: sellerId,
+      );
+      try {
+        if (user.uid != sellerId) {
+          await NotificationService().sendNotification(
+            userId: sellerId,
+            title: 'New Rating!',
+            body: '$userName rated you $rating stars',
+            data: { 'type': 'review', 'rating': rating.toString() },
+          );
+        }
+      } catch (_) {}
+      return;
+    }
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) await user.getIdToken(true);
 

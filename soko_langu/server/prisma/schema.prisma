@@ -641,6 +641,35 @@ model Notification {
   @@map("notifications")
 }
 
+// Product reviews. References (productId/sellerId/userId) are opaque strings —
+// the app sends a legacy Firestore product doc id (pre-backfill) or a Postgres
+// UUID (post-backfill), a Firebase UID for users. No FK relations on purpose:
+// the underlying rows may not exist in Postgres until the backfill runs, and
+// Prisma would reject unknown UUIDs. Mirrors the Firestore `reviews` docs that
+// are the current source of truth (Phase D bridge).
+model Review {
+  id                String    @id @default(uuid()) @db.Uuid
+  productId         String    @map("product_id") @db.VarChar(128)
+  sellerId          String    @map("seller_id") @db.VarChar(128)
+  userId            String    @map("user_id") @db.VarChar(128)
+  userName          String    @map("user_name") @db.VarChar(100)
+  userImage         String?   @map("user_image") @db.Text
+  rating            Int       @db.SmallInt
+  comment           String?   @db.Text
+  images            Json      @default("[]")
+  helpfulCount      Int       @default(0) @map("helpful_count")
+  likedBy           Json      @default("[]")
+  isVerifiedPurchase Boolean  @default(false) @map("is_verified_purchase")
+  sellerReply       String?   @map("seller_reply") @db.Text
+  sellerReplyAt     DateTime? @map("seller_reply_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  @@index([productId, createdAt(sort: Desc)])
+  @@index([sellerId])
+  @@index([userId, productId])
+  @@map("reviews")
+}
+
 model Referral {
   id               String    @id @default(uuid()) @db.Uuid
   referrerId       String    @map("referrer_id") @db.Uuid
