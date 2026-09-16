@@ -209,3 +209,11 @@ Orders catch-all: participant cannot mutate `status` inline (state machine).
    "mark related" endpoint), dual-use service paths, and auth-rejection + unit
    tests all landed. Push delivery (OneSignal) is unchanged; only the persistent
    in-app inbox migrated. Flag stays false until production cutover.
+5. Trust passport → Postgres: DONE (client bridge). The v1 trust module
+   (`/api/v1/trust`) already existed; this session added Firebase-UID resolution
+   to `trust-passport.js` (accepts both SellerProfile.id and SellerProfile.userId,
+   so the app's order-detail sellerId — a Firebase UID — works unchanged),
+   built `TrustApiClient` + `kUseTrustApi` flag, and wired `TrustPassportCard`
+   to read /api/v1/trust/sellers/:id/passport behind the flag. 4 client unit
+   tests + 2 server auth tests. Keep the flag false until product/order backfill
+   + verification flows are live, otherwise passports show near-empty metrics.

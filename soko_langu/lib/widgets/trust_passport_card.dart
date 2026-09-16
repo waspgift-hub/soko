@@ -3,10 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/api_config.dart';
+import '../services/trust_api.dart';
 import '../theme/app_colors.dart';
 import '../extensions/context_tr.dart';
 
-/// Firestore-native seller Trust Passport (GET /api/trust/passport/:sellerId).
+/// Seller Trust Passport. Reads /api/trust/passport/:sellerId (legacy
+/// Firestore compat) by default, or /api/v1/trust/sellers/:id/passport
+/// (Postgres) via [TrustApiClient] when [ApiConfig.kUseTrustApi] is on.
 /// Loads the seller's verification, fulfillment, dispatch and dispute
 /// indicators and renders them as a compact card. Fails silently when the
 /// passport is unavailable so the order page never breaks.
@@ -46,16 +49,22 @@ class _TrustPassportCardState extends State<TrustPassportCard> {
       if (user != null) 'Authorization': 'Bearer ${await user.getIdToken()}',
     };
     try {
-      final resp = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/trust/passport/${widget.sellerId}'),
-        headers: headers,
-      );
-      final result = jsonDecode(resp.body);
-      if (!mounted) return;
-      setState(() {
-        _data = result['data'] is Map
+      Map<String, dynamic>? data;
+      if (ApiConfig.kUseTrustApi) {
+        data = await TrustApiClient().fetchPassport(widget.sellerId);
+      } else {
+        final resp = await http.get(
+          Uri.parse('${ApiConfig.baseUrl}/api/trust/passport/${widget.sellerId}'),
+          headers: headers,
+        );
+        final result = jsonDecode(resp.body);
+        data = result['data'] is Map
             ? Map<String, dynamic>.from(result['data'])
             : null;
+      }
+      if (!mounted) return;
+      setState(() {
+        _data = data;
         _loading = false;
       });
     } catch (_) {

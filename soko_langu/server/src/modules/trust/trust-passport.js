@@ -7,9 +7,14 @@ const { getPrisma } = require('../../config/database');
  */
 async function getTrustPassport({ sellerId }) {
   const prisma = getPrisma();
-  const seller = await prisma.sellerProfile.findUnique({
-    where: { id: sellerId },
-  });
+
+  // Accept both the Postgres SellerProfile UUID and the Firebase UID (User.id /
+  // SellerProfile.userId).  Client order docs carry the Firebase UID; admin or
+  // internal callers may pass the Postgres UUID directly.
+  let seller = await prisma.sellerProfile.findUnique({ where: { id: sellerId } });
+  if (!seller) {
+    seller = await prisma.sellerProfile.findUnique({ where: { userId: sellerId } });
+  }
   if (!seller) throw httpError(404, 'SELLER_NOT_FOUND');
 
   // Aggregate order metrics

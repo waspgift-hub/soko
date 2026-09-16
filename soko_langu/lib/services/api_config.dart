@@ -30,6 +30,15 @@ class ApiConfig {
   /// Push delivery (OneSignal) is unchanged; only the persistent inbox migrates.
   static const bool kUseNotificationsApi = false;
 
+  /// Phase C trust bridge switch: when true, TrustPassportCard reads the seller
+  /// trust passport from /api/v1/trust/sellers/:id/passport (Postgres) instead
+  /// of the legacy Firestore compat endpoint /api/trust/passport/:id. The v1
+  /// endpoint resolves sellers by Firebase UID (SellerProfile.userId) as well
+  /// as by Postgres UUID, so app order-detail sellerId (a Firebase UID) works
+  /// unchanged. Keep false until product/order backfill + verification flows
+  /// are live in production, otherwise passports show near-empty metrics.
+  static const bool kUseTrustApi = false;
+
   /// Master test mode — false = production for all features (fraud, etc.)
   static const bool kIsTestMode = false;
 
