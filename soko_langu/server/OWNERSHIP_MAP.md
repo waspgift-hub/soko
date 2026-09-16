@@ -151,6 +151,20 @@ Orders catch-all: participant cannot mutate `status` inline (state machine).
     set (pending/processing/completed) onto the legacy tile contract.
     DEPLOY NOTE: `prisma db push`/migrate must apply the new column before
     `kUseWalletApi` is flipped — `GET /api/v1/wallet/withdrawals` selects it.
+15. Legacy-balance cutover migration built (not yet run): a naive wallet flip
+    would hide every pre-flip Firestore `sellerBalance` — sellers would see an
+    empty wallet with no way to withdraw their old earnings. `scripts/
+    migrate-seller-balances.js` folds each seller's Firestore `sellerBalance`
+    (+ historical `totalWithdrawn` stat) into their Postgres wallet via
+    `wallet-service.creditLegacyBalance` — idempotent per-seller ledger key
+    (`LEGACY_BALANCE`, `legacy_balance_<sellerId>`). `pendingEscrow` is NOT
+    migrated on purpose: post-flip it settles through v1 `releaseEscrowAndSettle`
+    and would double-credit. Skips sellers with no SellerProfile yet (re-run
+    after they log in via v1). OPERATIONS: dry-run first, then `--commit` inside
+    the cutoff window, then flip `kUseOrdersApi` + `kUseWalletApi` together.
+    Payout pipeline verified: `finance.withdrawalProcess` (every 30 min) moves
+    PENDING → `processWithdrawal`; admin finalizes via `confirmPayout`
+    (`/api/v1/admin/...` route); stuck processing rows alert admins.
 
 ## 6. Next (Phase B) candidates, in dependency order
 
@@ -164,8 +178,10 @@ Orders catch-all: participant cannot mutate `status` inline (state machine).
 3. Payouts → Postgres with idempotency + audit. Server core already existed
    (`wallet-service` + `/api/v1/wallet`); this session: `ensureWallet` money-safety
    fix on both settle paths, OTP-issue authorization, destination-phone
-   persistence + payout fallback, and the flag-gated client bridge
-   (`kUseWalletApi`) incl. seller earnings screen, dashboard balance card, and
-   home-widget balance. Remaining: coordinated release+wallet flip (§5 items 8,
-   13–14), then legacy `/api/payouts/*` retirement.
+   persistence + payout fallback, flag-gated client bridge (`kUseWalletApi`)
+   incl. seller earnings screen, dashboard balance card, and home-widget balance,
+   and the legacy-balance cutover migration + idempotent `creditLegacyBalance`.
+   Remaining: OPS runs the migration (§5 item 15), then the coordinated
+   release+wallet flip (§5 items 8, 13–15), then legacy `/api/payouts/*`
+   retirement.
 4. Notifications → Postgres app-facing rows.

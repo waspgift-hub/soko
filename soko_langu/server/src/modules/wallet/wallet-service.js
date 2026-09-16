@@ -248,6 +248,61 @@ async function confirmPayout({ withdrawalId, providerPayoutId }) {
   }
 }
 
+/**
+ * Fold money the seller already earned under the legacy Firestore ledger into
+ * their Postgres wallet (cutover migration). `amount` is the Firestore
+ * sellerBalance (already released -> becomes spendable); `priorWithdrawn` is
+ * the legacy totalWithdrawn stat so the wallet's cumulative earned/withdrawn
+ * history stays consistent (totalEarned = available + totalWithdrawn). Safe to
+ * re-run: a stable ledger key per seller makes the second run a no-op.
+ * pendingEscrow must NOT be migrated this way — post-flip it settles through
+ * the normal v1 escrow release, so migrating it would double-credit the order.
+ */
+async function creditLegacyBalance({ sellerId, amount, priorWithdrawn = 0, db = getPrisma() }) {
+  const amt = Math.round(Number(amount));
+  const withdrawn = Math.round(Number(priorWithdrawn));
+  if (!Number.isFinite(amt) || amt <= 0) throw httpError(400, 'INVALID_AMOUNT');
+  const lock = await locked(`legacy:${sellerId}`, 60);
+
+  try {
+    return await db.$transaction(async (tx) => {
+      const prior = await tx.walletLedgerEntry.findFirst({
+        where: { type: 'LEGACY_BALANCE', referenceId: sellerId },
+        select: { id: true },
+      });
+      if (prior) return { alreadyMigrated: true, sellerId };
+
+      const wallet = await ensureWallet(tx, sellerId);
+      const balanceAfter = wallet.availableBalance + BigInt(amt);
+      const earned = BigInt(amt + withdrawn);
+
+      await postWalletEntryTx(tx, {
+        walletId: wallet.id,
+        type: 'LEGACY_BALANCE',
+        amount: amt,
+        balanceAfter,
+        referenceType: 'legacy_balance',
+        referenceId: sellerId,
+        idempotencyKey: `legacy_balance_${sellerId}`,
+        description: 'Firestore sellerBalance migrated at wallet cutover',
+      });
+
+      await tx.wallet.update({
+        where: { id: wallet.id },
+        data: {
+          availableBalance: balanceAfter,
+          totalWithdrawn: wallet.totalWithdrawn + BigInt(withdrawn),
+          totalEarned: wallet.totalEarned + earned,
+        },
+      });
+
+      return { alreadyMigrated: false, sellerId, amount: amt };
+    });
+  } finally {
+    if (!lock.skipped) await releaseLock(`legacy:${sellerId}`);
+  }
+}
+
 async function postWalletEntryTx(tx, data) {
   const existing = await tx.walletLedgerEntry.findUnique({
     where: { idempotencyKey: data.idempotencyKey },
@@ -278,5 +333,6 @@ module.exports = {
   requestWithdrawal,
   processWithdrawal,
   confirmPayout,
+  creditLegacyBalance,
   withdrawalPayoutPhone,
 };

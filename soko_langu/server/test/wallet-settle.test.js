@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { ensureWallet, withdrawalPayoutPhone } = require('../src/modules/wallet/wallet-service');
+const { ensureWallet, withdrawalPayoutPhone, creditLegacyBalance } = require('../src/modules/wallet/wallet-service');
 const { releaseEscrowAndSettle } = require('../src/modules/handover/handover-service');
 
 // Minimal in-memory Prisma-like client covering the subset of tx.* calls that
@@ -146,6 +146,85 @@ test('settlement with an existing wallet increments its balance, not a new row',
   assert.equal(tx._store.wallet.length, 1);
   assert.equal(tx._store.wallet[0].availableBalance, 90000);
   assert.equal(tx._store.wallet[0].totalEarned, 90000);
+});
+
+// Minimal Prisma-like client for creditLegacyBalance. Mirrors the released
+// subset of wallet.walletLedgerEntry / wallet.wallet queries on in-memory rows.
+function createCreditPrisma({ wallet = [], ledger = [] } = {}) {
+  const state = { wallet, walletLedgerEntry: ledger };
+
+  function match(row, where = {}) {
+    return Object.entries(where).every(([k, v]) => row[k] === v);
+  }
+
+  const api = {
+    walletLedgerEntry: {
+      findFirst: async ({ where = {} }) => state.walletLedgerEntry.find((r) => match(r, where)) ?? null,
+      findUnique: async ({ where = {} }) => state.walletLedgerEntry.find((r) => match(r, where)) ?? null,
+      create: async ({ data }) => {
+        const row = { ...data };
+        state.walletLedgerEntry.push(row);
+        return row;
+      },
+    },
+    wallet: {
+      findUnique: async ({ where }) => state.wallet.find((r) => r.sellerId === where.sellerId) ?? null,
+      create: async ({ data }) => {
+        const row = { sellerId: data.sellerId, availableBalance: BigInt(0), totalEarned: BigInt(0), totalWithdrawn: BigInt(0) };
+        state.wallet.push(row);
+        return row;
+      },
+      update: async ({ where, data }) => {
+        const row = state.wallet.find((r) => r.id === where.id);
+        Object.assign(row, data);
+        return row;
+      },
+    },
+  };
+  return { $transaction: async (fn) => fn(api), _state: state };
+}
+
+test('creditLegacyBalance folds sellerBalance + withdrawn into the wallet', async () => {
+  const prisma = createCreditPrisma();
+  const res = await creditLegacyBalance({ sellerId: 'sp-legacy-1', amount: 50000, priorWithdrawn: 25000, db: prisma });
+
+  assert.equal(res.alreadyMigrated, false);
+  const wallet = prisma._state.wallet[0];
+  assert.equal(wallet.availableBalance, BigInt(50000));
+  assert.equal(wallet.totalWithdrawn, BigInt(25000), 'legacy withdrawn history is folded in');
+  assert.equal(wallet.totalEarned, BigInt(75000), 'totalEarned = available + withdrawn stays consistent');
+
+  const entry = prisma._state.walletLedgerEntry.find((e) => e.idempotencyKey === 'legacy_balance_sp-legacy-1');
+  assert.ok(entry, 'legacy balance ledger entry must be posted');
+  assert.equal(entry.type, 'LEGACY_BALANCE');
+  assert.equal(entry.amount, 50000);
+  assert.equal(entry.balanceAfter, BigInt(50000));
+});
+
+test('creditLegacyBalance is a no-op once already migrated', async () => {
+  const prisma = createCreditPrisma({
+    wallet: [{ id: 'w-legacy', sellerId: 'sp-legacy-2', availableBalance: BigInt(50000), totalEarned: BigInt(75000), totalWithdrawn: BigInt(25000) }],
+    ledger: [{
+      id: 'le-legacy',
+      type: 'LEGACY_BALANCE',
+      referenceId: 'sp-legacy-2',
+      idempotencyKey: 'legacy_balance_sp-legacy-2',
+    }],
+  });
+
+  const res = await creditLegacyBalance({ sellerId: 'sp-legacy-2', amount: 90000, priorWithdrawn: 25000, db: prisma });
+  assert.equal(res.alreadyMigrated, true);
+  assert.equal(prisma._state.wallet[0].availableBalance, BigInt(50000), 'no double credit');
+  assert.equal(prisma._state.walletLedgerEntry.length, 1);
+});
+
+test('creditLegacyBalance rejects non-positive amounts without creating a wallet', async () => {
+  const prisma = createCreditPrisma();
+  await assert.rejects(
+    creditLegacyBalance({ sellerId: 'sp-x', amount: 0, db: prisma }),
+    (err) => err.status === 400
+  );
+  assert.equal(prisma._state.wallet.length, 0);
 });
 
 test('withdrawalPayoutPhone prefers the phone captured at request time', () => {
