@@ -12,6 +12,13 @@ class ApiConfig {
   /// until the Firestore→Postgres product backfill has run in production.
   static const bool kUseProductsApi = false;
 
+  /// Phase B/C order bridge switch: when true, lifecycle mutations go through
+  /// [OrderApiClient] to /api/v1/orders (Postgres state machine) instead of the
+  /// legacy Firestore compat handlers. Keep false until server-side mirror +
+  /// app-status-compat review is signed off (app orders start in
+  /// AWAITING_ESCROW_PAYMENT, which differs from the v1 createOrder chain).
+  static const bool kUseOrdersApi = false;
+
   /// Master test mode — false = production for all features (fraud, etc.)
   static const bool kIsTestMode = false;
 
