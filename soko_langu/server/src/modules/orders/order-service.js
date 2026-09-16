@@ -3,6 +3,7 @@ const { acquireLock, releaseLock } = require('../../config/redis');
 const { OrderStateMachine, ORDER_STATES } = require('./order-state-machine');
 const { computeSellerParity } = require('../../utils/commission-parity');
 const { syncLegacyOrderStatus } = require('../legacy-compat/presentation-mirror');
+const { ensureWallet } = require('../wallet/wallet-service');
 
 // Default timers (configurable)
 const DEFAULT_TIMERS = {
@@ -585,35 +586,32 @@ async function completeOrder({ orderId, actorId, method }) {
           },
         });
 
-        // Credit seller wallet via ledger
-        const wallet = await tx.wallet.findUnique({
-          where: { sellerId: order.sellerId },
+        // Credit seller wallet via ledger; wallet is created on first use so
+        // proceeds are never silently dropped for a seller without a wallet.
+        const wallet = await ensureWallet(tx, order.sellerId);
+
+        const balanceAfter = wallet.availableBalance + sellerEntitlement;
+
+        await tx.walletLedgerEntry.create({
+          data: {
+            walletId: wallet.id,
+            type: 'ORDER_SETTLEMENT',
+            amount: sellerEntitlement,
+            balanceAfter,
+            referenceType: 'order',
+            referenceId: order.id,
+            idempotencyKey: `settlement_${order.id}`,
+            description: 'Order settlement from escrow release',
+          },
         });
 
-        if (wallet) {
-          const balanceAfter = wallet.availableBalance + sellerEntitlement;
-          
-          await tx.walletLedgerEntry.create({
-            data: {
-              walletId: wallet.id,
-              type: 'ORDER_SETTLEMENT',
-              amount: sellerEntitlement,
-              balanceAfter,
-              referenceType: 'order',
-              referenceId: order.id,
-              idempotencyKey: `settlement_${order.id}`,
-              description: 'Order settlement from escrow release',
-            },
-          });
-
-          await tx.wallet.update({
-            where: { id: wallet.id },
-            data: {
-              availableBalance: balanceAfter,
-              totalEarned: wallet.totalEarned + sellerEntitlement,
-            },
-          });
-        }
+        await tx.wallet.update({
+          where: { id: wallet.id },
+          data: {
+            availableBalance: balanceAfter,
+            totalEarned: wallet.totalEarned + sellerEntitlement,
+          },
+        });
       }
 
       const updatedOrder = await tx.order.update({

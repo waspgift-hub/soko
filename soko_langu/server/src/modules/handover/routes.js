@@ -15,6 +15,7 @@ router.post(
     const result = await handoverService.issueOtp({
       orderId: req.params.orderId,
       issuedBy: req.user.id,
+      userRole: req.user.role,
     });
     res.status(201).json({ success: true, data: result });
   }

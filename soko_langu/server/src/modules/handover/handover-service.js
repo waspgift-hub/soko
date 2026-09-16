@@ -3,23 +3,26 @@ const { acquireLock, releaseLock } = require('../../config/redis');
 const { generateOtp, hashOtp, verifyOtp, generateQrPayload } = require('./otp-generator');
 const { OrderStateMachine, ORDER_STATES } = require('../orders/order-state-machine');
 const { DEFAULT_TIMERS } = require('../orders/order-service');
+const { ensureWallet } = require('../wallet/wallet-service');
 
 /**
  * Issue a new OTP credential for an order (active handover).
  * Only allowed when the order is in OTP_PENDING or INSPECTION_PERIOD.
  * Returns the plaintext OTP once (caller delivers it via SMS to the buyer).
  */
-async function issueOtp({ orderId, issuedBy }) {
+async function issueOtp({ orderId, issuedBy, userRole, order }) {
   const prisma = getPrisma();
   const lock = await acquireLock(`otp:${orderId}`, 60);
 
   try {
     return await prisma.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({ where: { id: orderId } });
-      if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
+      const current = order ?? (await tx.order.findUnique({ where: { id: orderId } }));
+      if (!current) throw httpError(404, 'ORDER_NOT_FOUND');
 
-      if (![ORDER_STATES.OTP_PENDING, ORDER_STATES.INSPECTION_PERIOD].includes(order.status)) {
-        throw httpError(409, `CANNOT_ISSUE_OTP_IN_STATE:${order.status}`);
+      assertCanIssueOtp(current, { userId: issuedBy, role: userRole });
+
+      if (![ORDER_STATES.OTP_PENDING, ORDER_STATES.INSPECTION_PERIOD].includes(current.status)) {
+        throw httpError(409, `CANNOT_ISSUE_OTP_IN_STATE:${current.status}`);
       }
 
       // Invalidate any prior active credentials for this order
@@ -46,8 +49,8 @@ async function issueOtp({ orderId, issuedBy }) {
       });
 
       const qr = generateQrPayload({
-        orderId: order.id,
-        orderNumber: order.orderNumber,
+        orderId: current.id,
+        orderNumber: current.orderNumber,
         token: `${credential.id}`,
         expiresAt,
       });
@@ -192,29 +195,27 @@ async function releaseEscrowAndSettle(tx, order) {
     },
   });
 
-  const wallet = await tx.wallet.findUnique({ where: { sellerId: order.sellerId } });
-  if (wallet) {
-    const balanceAfter = wallet.availableBalance + sellerEntitlement;
-    await tx.walletLedgerEntry.create({
-      data: {
-        walletId: wallet.id,
-        type: 'ORDER_SETTLEMENT',
-        amount: sellerEntitlement,
-        balanceAfter,
-        referenceType: 'order',
-        referenceId: order.id,
-        idempotencyKey: `settlement_${order.id}`,
-        description: 'Order settlement from escrow release',
-      },
-    });
-    await tx.wallet.update({
-      where: { id: wallet.id },
-      data: {
-        availableBalance: balanceAfter,
-        totalEarned: wallet.totalEarned + sellerEntitlement,
-      },
-    });
-  }
+  const wallet = await ensureWallet(tx, order.sellerId);
+  const balanceAfter = wallet.availableBalance + sellerEntitlement;
+  await tx.walletLedgerEntry.create({
+    data: {
+      walletId: wallet.id,
+      type: 'ORDER_SETTLEMENT',
+      amount: sellerEntitlement,
+      balanceAfter,
+      referenceType: 'order',
+      referenceId: order.id,
+      idempotencyKey: `settlement_${order.id}`,
+      description: 'Order settlement from escrow release',
+    },
+  });
+  await tx.wallet.update({
+    where: { id: wallet.id },
+    data: {
+      availableBalance: balanceAfter,
+      totalEarned: wallet.totalEarned + sellerEntitlement,
+    },
+  });
 }
 
 function httpError(status, message) {
@@ -223,4 +224,16 @@ function httpError(status, message) {
   return err;
 }
 
-module.exports = { issueOtp, verifyOtpAndComplete };
+/**
+ * Handover OTP may only be issued by the order's buyer (they confirm arrival
+ * and receive the credential, mirroring the legacy Firestore OTP visibility —
+ * the buyer alone sees it and shares it with the courier/seller) or by an
+ * admin. Pure so it can be unit-tested without a transaction.
+ */
+function assertCanIssueOtp(order, { userId, role }) {
+  if (order.buyerId === userId) return;
+  if (role === 'admin' || role === 'super_admin') return;
+  throw httpError(403, 'FORBIDDEN');
+}
+
+module.exports = { issueOtp, verifyOtpAndComplete, releaseEscrowAndSettle, assertCanIssueOtp };

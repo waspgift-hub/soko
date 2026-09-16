@@ -105,6 +105,31 @@ Orders catch-all: participant cannot mutate `status` inline (state machine).
    the Postgres wallet ledger only accrues from v2 `complete`. Flipping
    withdrawals to the v1 wallet before converging the RELEASE path would expose
    an empty wallet — withdrawal converge must come AFTER release converge.
+9. Money-safety fix done: order settlement (`completeOrder` + handover
+   `verifyOtpAndComplete` → `releaseEscrowAndSettle`) now calls `ensureWallet(tx)`
+   from `wallet-service` instead of the old `if (wallet)` guard. Previously a
+   seller with no wallet row completed the order with the credit silently
+   skipped — money effectively lost. `requestWithdrawal` also ensures the wallet
+   (reports INSUFFICIENT_BALANCE instead of 404). Tested in
+   `wallet-settle.test.js` (idempotency + no-wallet regression).
+10. Security fix done: handover `issueOtp` returned the plaintext OTP to any
+    authenticated caller who knew the order UUID (data exposure). Now gated by
+    `assertCanIssueOtp` — only the order buyer or admin may issue; buyer-only
+    mirrors legacy Firestore OTP visibility. Tested in `handover-auth.test.js`.
+11. Wallet client bridge done: `lib/models/wallet_model.dart` +
+    `lib/services/wallet_api.dart` (fetchWallet / fetchWithdrawals /
+    requestWithdrawal) behind `ApiConfig.kUseWalletApi = false`. 10 client tests.
+    Flip order for sellers: release converge FIRST (§5 item 8), then wallet UIs,
+    then retire `/api/payouts/*` legacy reads.
+12. Dispute wiring deferred: v1 `disputeOrder` has no evidence field; the app
+    record is in Firestore and `DisputeEvidence` is R2-first (blueprint media
+    rule). Wiring app dispute to v1 today would drop evidence — leave on legacy
+    until the R2 evidence upload path lands (Phase F), then wire and retire.
+13. Release-path wire (buyer OTP display) is now UNBLOCKED server-side:
+    `POST /api/v1/handover/:orderId/otp/issue` (buyer/admin-gated) + verify via
+    `POST /api/v1/orders/:orderId/complete { otp }`, and `completeOrder` credits
+    the wallet via `ensureWallet`. Client wiring of the buyer OTP display + the
+    money flip is a deliberate follow-up; sequencing per §5 item 8 still holds.
 
 ## 6. Next (Phase B) candidates, in dependency order
 
@@ -115,5 +140,10 @@ Orders catch-all: participant cannot mutate `status` inline (state machine).
    so app streams follow v2 status. Dispatch wired (client) behind
    `kUseOrdersApi`; next after wallet/payout converge: quote, complete/cancel/
    dispute off legacy-compat onto `/api/v1/orders`.
-3. Payouts → Postgres with idempotency + audit.
+3. Payouts → Postgres with idempotency + audit. Server core already existed
+   (`wallet-service` + `/api/v1/wallet`); this session: `ensureWallet` money-safety
+   fix on both settle paths, OTP-issue authorization, and the flag-gated client
+   bridge (`kUseWalletApi`). Remaining: buyer-OTP display wiring + release-path
+   flip (§5 item 13), then seller wallet/withdrawal UI flip, then legacy
+   `/api/payouts/*` retirement.
 4. Notifications → Postgres app-facing rows.

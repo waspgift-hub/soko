@@ -19,6 +19,12 @@ class ApiConfig {
   /// AWAITING_ESCROW_PAYMENT, which differs from the v1 createOrder chain).
   static const bool kUseOrdersApi = false;
 
+  /// Phase B/C wallet bridge switch: when true, seller withdrawal UIs read the
+  /// Postgres wallet (/api/v1/wallet) instead of legacy Firestore sellerBalance
+  /// payouts. Keep false until the release-path converge lands, otherwise app
+  /// sellers would see an empty wallet (their money still lives in Firestore).
+  static const bool kUseWalletApi = false;
+
   /// Master test mode — false = production for all features (fraud, etc.)
   static const bool kIsTestMode = false;
 

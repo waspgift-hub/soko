@@ -29,6 +29,20 @@ async function getWallet(sellerId) {
 }
 
 /**
+ * Return the seller's wallet inside an open transaction, creating it on first
+ * use. Order settlement must call this: a seller who never opened the wallet
+ * page would otherwise be silently skipped (no ledger row, money effectively
+ * lost) whenever the old `if (wallet)`-style guard was used.
+ */
+async function ensureWallet(tx, sellerId) {
+  let wallet = await tx.wallet.findUnique({ where: { sellerId } });
+  if (!wallet) {
+    wallet = await tx.wallet.create({ data: { sellerId } });
+  }
+  return wallet;
+}
+
+/**
  * Get wallet balances plus a paginated ledger history.
  */
 async function getWalletDetail(sellerId, { page = 1, limit = 20 } = {}) {
@@ -76,8 +90,7 @@ async function requestWithdrawal({ sellerId, amount, phoneNumber }) {
 
   try {
     return await prisma.$transaction(async (tx) => {
-      const wallet = await tx.wallet.findUnique({ where: { sellerId } });
-      if (!wallet) throw httpError(404, 'WALLET_NOT_FOUND');
+      const wallet = await ensureWallet(tx, sellerId);
       if (wallet.status !== 'active') throw httpError(409, 'WALLET_FROZEN');
 
       if (amount <= 0) throw httpError(400, 'INVALID_AMOUNT');
@@ -249,6 +262,7 @@ function httpError(status, message) {
 module.exports = {
   getWallet,
   getWalletDetail,
+  ensureWallet,
   requestWithdrawal,
   processWithdrawal,
   confirmPayout,
