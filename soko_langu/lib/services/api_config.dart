@@ -39,6 +39,14 @@ class ApiConfig {
   /// are live in production, otherwise passports show near-empty metrics.
   static const bool kUseTrustApi = false;
 
+  /// Phase C search bridge switch: when true, the search screen's product
+  /// results are fetched from /api/v1/search/products (Postgres) first,
+  /// with the legacy /api/search/global-search + Firestore fallback intact.
+  /// Keep false until the product backfill has run in production, otherwise
+  /// search would return zero Postgres rows while Firestore still holds the
+  /// catalog.
+  static const bool kUseSearchApi = false;
+
   /// Master test mode — false = production for all features (fraud, etc.)
   static const bool kIsTestMode = false;
 

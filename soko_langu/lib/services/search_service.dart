@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import 'api_config.dart';
+import 'search_api.dart';
 import '../models/product_model.dart';
 
 class SearchResult {
@@ -185,7 +186,11 @@ class MostRatedData {
 class SearchService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final SearchApiClient _v1Search;
   static const String _base = '${ApiConfig.baseUrl}/api/search';
+
+  SearchService({SearchApiClient? v1Search})
+      : _v1Search = v1Search ?? SearchApiClient();
 
   Future<Map<String, String>> _headers() async {
     final user = _auth.currentUser;
@@ -215,6 +220,40 @@ class SearchService {
     catch (_) { return 'Request failed'; }
   }
 
+  /// v1-Postgres search: GET /api/v1/search/products. Returns [SearchResponse]
+  /// with the product items (all under the "products" source bucket) or null
+  /// when the call fails / yields nothing so callers fall back to the legacy
+  /// global-search path. Invalid/failed responses never throw.
+  Future<SearchResponse?> _v1GlobalSearch({
+    required String query,
+    required int page,
+    required int pageSize,
+    Map<String, dynamic>? filters,
+  }) async {
+    final data = await _v1Search.fetchProducts(
+      query: query,
+      page: page + 1,
+      limit: pageSize,
+      sort: filters?['sort'] as String?,
+      minPrice: filters?['minPrice'] is num
+          ? (filters!['minPrice'] as num).toInt()
+          : null,
+      maxPrice: filters?['maxPrice'] is num
+          ? (filters!['maxPrice'] as num).toInt()
+          : null,
+    );
+    if (data == null || data.items.isEmpty) return null;
+    final results = data.items.map(SearchResult.fromProduct).toList();
+    return SearchResponse(
+      results: results,
+      sources: {'products': results},
+      total: data.total,
+      page: page,
+      hasMore: (page + 1) * pageSize < data.total,
+      query: query,
+    );
+  }
+
   Future<SearchResponse> globalSearch({
     required String query,
     String type = 'all',
@@ -222,6 +261,15 @@ class SearchService {
     int pageSize = 20,
     Map<String, dynamic>? filters,
   }) async {
+    if (ApiConfig.kUseSearchApi) {
+      final v1 = await _v1GlobalSearch(
+        query: query,
+        page: page,
+        pageSize: pageSize,
+        filters: filters,
+      );
+      if (v1 != null) return v1;
+    }
     try {
       final data = await _post('global-search', {
         'query': query,

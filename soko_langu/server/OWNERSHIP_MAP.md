@@ -217,3 +217,14 @@ Orders catch-all: participant cannot mutate `status` inline (state machine).
    to read /api/v1/trust/sellers/:id/passport behind the flag. 4 client unit
    tests + 2 server auth tests. Keep the flag false until product/order backfill
    + verification flows are live, otherwise passports show near-empty metrics.
+6. Search → Postgres: DONE (client bridge). The v1 search module
+   (`/api/v1/search/products`, `search-service.js` — ILIKE + trigram rank on
+   published products with price/category filters, category/sort/pagination)
+   already existed. `SearchService.globalSearch` now tries
+   `SearchApiClient` (`/api/v1/search/products`, new `kUseSearchApi` flag) first
+   and returns the "products" source bucket as a `SearchResponse`; on failure or
+   an empty Postgres catalog it falls back to the legacy `/api/search
+   /global-search` → Firestore path unchanged. Autocomplete, trending,
+   most-rated and record-click still use the legacy endpoints. 5 client unit
+   tests. Flag stays false until the product backfill has run, otherwise search
+   would return zero Postgres rows while Firestore still holds the catalog.
