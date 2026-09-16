@@ -55,6 +55,13 @@ class ApiConfig {
   /// reviews reference product ids that only exist in Firestore.
   static const bool kUseReviewsApi = false;
 
+  /// Phase D KYC bridge switch: when true, the seller KYC submission and status
+  /// reads go through /api/v1/kyc (Postgres) instead of the Firestore
+  /// users/{uid}.kyc embedded doc. Keep false until the users backfill has run
+  /// in production, otherwise status reads would return 'none' while Firestore
+  /// still holds the existing application.
+  static const bool kUseKycApi = false;
+
   /// Master test mode — false = production for all features (fraud, etc.)
   static const bool kIsTestMode = false;
 

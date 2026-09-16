@@ -241,6 +241,29 @@ Orders catch-all: participant cannot mutate `status` inline (state machine).
    become one-shot streams because v1 is HTTP, not realtime), with Firestore as
    the default. Self-review and invalid-rating are rejected server-side.
    7 client unit tests + 4 server auth tests. Flag stays false until the
-   product backfill has run (reviews reference product ids that only exist in
-   Firestore); the stream→poll read trade-off is acceptable inside the frozen
-   migration window.
+product backfill has run (reviews reference product ids that only exist in
+    Firestore); the stream→poll read trade-off is acceptable inside the frozen
+    migration window.
+8. KYC → Postgres: DONE (module + client bridge). New `KycApplication` Prisma
+   model (one row per user, opaque Firebase UID as `userId` — no FK, so rows
+   exist pre-backfill and mirror the embedded `users/{uid}.kyc` doc; status
+   workflow `pending`→`approved`/`rejected`/`revoked` + delete; indexes on
+   status). New `/api/v1/kyc` module (`kyc-service` + routes): `GET
+   /status/:userId` (owner or admin), `POST /submit` (authenticated caller is
+   always the subject; upserts back to `pending`, rejects if already approved;
+   validation mirrors the legacy compat handler byte-for-byte including the
+   idType-label switch that the app's `kyc_id_*` values skip, so behavior is
+   preserved), plus an `x-admin-secret` admin router: `GET /admin/applications`
+   (status-filtered, paginated), `POST /admin/:userId/review`, `POST
+   /admin/:userId/revoke`, `DELETE /admin/:userId`. Decisions fan out best-
+   effort: Postgres `Notification` row + OneSignal + Firestore notification,
+   Firestore `users/{uid}.kyc` mirror, and `products.sellerKycApproved` re-sync
+   so the legacy admin panel and Firestore rules stay consistent while the
+   bridge is on. Client: `KycApiClient` + `kUseKycApi` flag; `KycService`
+   routes through the API in flag mode with legacy Firestore as the fallback
+   (kyc_screen unchanged — the client returns legacy-shaped maps). 5 client
+   unit tests + 6 server auth tests. Flag stays false until the users backfill/
+   `prisma db push` has created `kyc_applications` in production, otherwise
+   status reads would return 'none' while Firestore still holds the existing
+   application; the Flutter admin panel is NOT wired here yet (it stays on
+   legacy `/api/admin/kyc/*` until it adopts x-admin-secret auth).
