@@ -28,7 +28,7 @@ Legend: **A** = authoritative, **M** = mirror/compat (to be retired), **C** = cl
 |---|---|---|---|---|
 | Products catalog | **A** (client reads/writes `products`) | M (`/api/v1/products`, `Product` model) | Firestore (client) | Postgres/API (Phase B/C) |
 | Sellers/store | **A** (`users`, `sellerName`) | M (`SellerProfile`) | Firestore | Postgres/API |
-| Orders | **A** (`orders`, legacy-compat state machine) | M (`Order` model + mirror) | Firestore (server) | Postgres/API |
+| Orders | **A** (`orders`, legacy-compat state machine) | M (`Order` model + presentation mirror) | Firestore (server) | Postgres/API |
 | Payments / transactions | **A** (`transactions` via orders-compat) | **A** (`Payment`, `PaymentAttempt`, `EscrowTransaction`, `WebhookEvent`) | Split: Firestore for app flows, Postgres for shop | Postgres/API |
 | Escrow | **A** (`orders/status` + finance jobs) | **A** (`EscrowHold`, `EscrowTransaction`) | Split | Postgres/API |
 | Wallet / ledger | — | **A** (`Wallet`, `WalletLedgerEntry`, `Withdrawal`) | Postgres | Postgres (already) |
@@ -87,5 +87,9 @@ Orders catch-all: participant cannot mutate `status` inline (state machine).
 
 1. Products catalog bridge: Firestore → Postgres backfill + client switch.
 2. Order lifecycle converge: app orders onto `/api/v1/orders` state machine.
+   Done (B/C): Postgres truth → Firestore presentation mirror after every
+   money-relevant transition (`legacy-status.js` + `presentation-mirror.js`),
+   so app streams follow v2 status. Next: move app lifecycle calls (quote,
+   dispatch, complete/cancel/dispute) off legacy-compat onto `/api/v1/orders`.
 3. Payouts → Postgres with idempotency + audit.
 4. Notifications → Postgres app-facing rows.

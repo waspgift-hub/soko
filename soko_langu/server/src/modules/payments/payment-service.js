@@ -5,6 +5,7 @@ const config = require('../../config');
 const { OrderStateMachine, ORDER_STATES } = require('../orders/order-state-machine');
 const { sameAmount } = require('../../utils/money');
 const outbox = require('./webhook-outbox');
+const { syncLegacyOrderStatus } = require('../legacy-compat/presentation-mirror');
 
 /**
  * Payment service.
@@ -96,8 +97,9 @@ async function confirmCollection({
   const prisma = getPrisma();
   const lock = await acquireLock(`collection:${orderReference}`, 60);
 
+  let result;
   try {
-    return await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx) => {
       const order = await tx.order.findFirst({
         where: { orderNumber: orderReference },
       });
@@ -111,7 +113,8 @@ async function confirmCollection({
 
       // Layer 4: status priority check
       if (order.status === ORDER_STATES.IN_ESCROW) {
-        return { status: 'ALREADY_IN_ESCROW', order };
+        result = { status: 'ALREADY_IN_ESCROW', order };
+        return;
       }
       if (![ORDER_STATES.PAYMENT_PENDING, ORDER_STATES.FAILED].includes(order.status) && !force) {
         throw httpError(409, `INVALID_ORDER_STATE:${order.status}`);
@@ -169,11 +172,18 @@ async function confirmCollection({
         },
       });
 
-      return { status: 'VERIFIED', order: updatedOrder, escrowHold };
+      result = { status: 'VERIFIED', order: updatedOrder, escrowHold };
     });
   } finally {
     if (!lock.skipped) await releaseLock(`collection:${orderReference}`);
   }
+
+  // Presentation mirror AFTER commit so the app's Firestore stream follows the
+  // authoritative Postgres truth; best-effort and never fails the response.
+  if (result && result.status === 'VERIFIED') {
+    await syncLegacyOrderStatus(result.order);
+  }
+  return result;
 }
 
 // Handle an incoming provider webhook.
@@ -239,14 +249,16 @@ async function handleWebhook({ providerName, payload, signature, headers }) {
 async function markPaymentFailed(orderReference) {
   const prisma = getPrisma();
   const lock = await acquireLock(`fail:${orderReference}`, 60);
+  let result;
   try {
-    return await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx) => {
       const order = await tx.order.findFirst({
         where: { orderNumber: orderReference },
       });
       if (!order) throw httpError(404, 'ORDER_NOT_FOUND');
       if (order.status !== ORDER_STATES.PAYMENT_PENDING) {
-        return { status: 'SKIPPED', order };
+        result = { status: 'SKIPPED', order };
+        return;
       }
       const machine = new OrderStateMachine(order.status);
       machine.transition(ORDER_STATES.FAILED, {
@@ -257,11 +269,16 @@ async function markPaymentFailed(orderReference) {
         where: { id: order.id },
         data: { status: ORDER_STATES.FAILED },
       });
-      return { status: 'FAILED', order: updated };
+      result = { status: 'FAILED', order: updated };
     });
   } finally {
     if (!lock.skipped) await releaseLock(`fail:${orderReference}`);
   }
+
+  if (result && result.status === 'FAILED') {
+    await syncLegacyOrderStatus(result.order);
+  }
+  return result;
 }
 
 // Commission calculation (platform fee on product price).

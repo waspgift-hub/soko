@@ -25,42 +25,13 @@ const { paymentService } = require('../payments/payment-service');
 const { generateOrderNumber } = require('../orders/order-service');
 const { ORDER_STATES } = require('../orders/order-state-machine');
 const { computeSellerParity } = require('../../utils/commission-parity');
+const { LEGACY_STATUS } = require('../legacy-compat/legacy-status');
 
 function httpError(status, message) {
   const err = new Error(message);
   err.status = status;
   return err;
 }
-
-const LEGACY_STATUS = {
-  payment_pending: 'pending',
-  pending_shipping_fee: 'pending',
-  awaiting_escrow_payment: 'pending',
-  in_escrow: 'escrow_hold',
-  ready_to_dispatch: 'escrow_hold',
-  dispatched: 'dispatched',
-  in_transit: 'dispatched',
-  out_for_delivery: 'dispatched',
-  delivery_attempted: 'delivered',
-  delivered: 'delivered',
-  inspection_period: 'delivered',
-  otp_pending: 'delivered',
-  completed: 'completed',
-  wallet_credited: 'completed',
-  payout_pending: 'completed',
-  payout_complete: 'completed',
-  disputed: 'disputed',
-  refund_pending: 'refunded',
-  refunded: 'refunded',
-  cancelled: 'cancelled',
-  failed: 'failed',
-  expired: 'failed',
-  draft: 'pending',
-  published: 'pending',
-  address_required: 'pending',
-  shipping_fee_submitted: 'pending',
-  shipping_fee_review: 'pending',
-};
 
 // Legacy (Firestore) doc shape for a mirrored order. Both the `orders` and
 // `transactions` collections use these exact field names in the Flutter app.

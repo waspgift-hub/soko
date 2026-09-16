@@ -2,6 +2,7 @@ const { getPrisma } = require('../../config/database');
 const { acquireLock, releaseLock } = require('../../config/redis');
 const { OrderStateMachine, ORDER_STATES } = require('./order-state-machine');
 const { computeSellerParity } = require('../../utils/commission-parity');
+const { syncLegacyOrderStatus } = require('../legacy-compat/presentation-mirror');
 
 // Default timers (configurable)
 const DEFAULT_TIMERS = {
@@ -380,8 +381,9 @@ async function verifyPayment({ paymentId, providerPaymentId, webhookBody }) {
 // one write; intermediate transitions are validated in-memory.
 async function markDispatched({ orderId, sellerId, courierName, trackingNumber }) {
   const prisma = getPrisma();
-  
-  return prisma.$transaction(async (tx) => {
+
+  let updated;
+  await prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({ where: { id: orderId } });
 
     if (!order) throw new Error('ORDER_NOT_FOUND');
@@ -431,7 +433,7 @@ async function markDispatched({ orderId, sellerId, courierName, trackingNumber }
     });
 
     const now = new Date();
-    return tx.order.update({
+    updated = await tx.order.update({
       where: { id: orderId },
       data: {
         status: ORDER_STATES.OTP_PENDING,
@@ -443,6 +445,9 @@ async function markDispatched({ orderId, sellerId, courierName, trackingNumber }
       },
     });
   });
+
+  if (updated) await syncLegacyOrderStatus(updated);
+  return updated;
 }
 
 // Mark as delivered
@@ -528,6 +533,7 @@ async function completeOrder({ orderId, actorId, method }) {
   const prisma = getPrisma();
   
   const lock = await acquireLock(`complete:${orderId}`, 30);
+  let updated;
   
   try {
     return await prisma.$transaction(async (tx) => {
@@ -618,20 +624,24 @@ async function completeOrder({ orderId, actorId, method }) {
         },
       });
 
-      return updatedOrder;
+      updated = updatedOrder;
     });
   } finally {
     if (!lock.skipped) {
       await releaseLock(`complete:${orderId}`);
     }
   }
+
+  if (updated) await syncLegacyOrderStatus(updated);
+  return updated;
 }
 
 // Cancel order
 async function cancelOrder({ orderId, actorId, reason }) {
   const prisma = getPrisma();
-  
-  return prisma.$transaction(async (tx) => {
+
+  let updated;
+  await prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({ where: { id: orderId } });
 
     if (!order) {
@@ -680,7 +690,7 @@ async function cancelOrder({ orderId, actorId, reason }) {
       reason,
     });
 
-    return tx.order.update({
+    updated = await tx.order.update({
       where: { id: orderId },
       data: {
         status: ORDER_STATES.CANCELLED,
@@ -689,13 +699,18 @@ async function cancelOrder({ orderId, actorId, reason }) {
       },
     });
   });
+
+  if (updated) await syncLegacyOrderStatus(updated);
+  return updated;
 }
 
 // Open dispute on order
 async function disputeOrder({ orderId, filedBy, reason, description }) {
   const prisma = getPrisma();
-  
-  return prisma.$transaction(async (tx) => {
+
+  let updated;
+  let dispute;
+  await prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({ where: { id: orderId } });
 
     if (!order) throw new Error('ORDER_NOT_FOUND');
@@ -713,7 +728,7 @@ async function disputeOrder({ orderId, filedBy, reason, description }) {
       reason: 'Dispute filed',
     });
 
-    const dispute = await tx.dispute.create({
+    dispute = await tx.dispute.create({
       data: {
         orderId,
         filedBy,
@@ -735,13 +750,14 @@ async function disputeOrder({ orderId, filedBy, reason, description }) {
       });
     }
 
-    await tx.order.update({
+    updated = await tx.order.update({
       where: { id: orderId },
       data: { status: ORDER_STATES.DISPUTED },
     });
-
-    return dispute;
   });
+
+  if (updated) await syncLegacyOrderStatus(updated);
+  return dispute;
 }
 
 // Audit helper
