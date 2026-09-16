@@ -112,11 +112,14 @@ async function main() {
     try {
       const payload = mapFirestoreProductToPrisma(data, { sellerProfileId, categoryId });
       if (COMMIT) {
+        const { categoryId: catId, ...rest } = payload;
         await prisma.product.create({
           data: {
-            ...payload,
-            price: Number(payload.price),
-            snapshot: payload.snapshot,
+            ...rest,
+            price: Number(rest.price),
+            snapshot: rest.snapshot,
+            seller: { connect: { id: sellerProfileId } },
+            category: catId ? { connect: { id: catId } } : undefined,
             media: { create: [] },
           },
         });
