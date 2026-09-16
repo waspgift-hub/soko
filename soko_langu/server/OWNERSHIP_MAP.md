@@ -203,7 +203,9 @@ Orders catch-all: participant cannot mutate `status` inline (state machine).
    retirement.
 4. Notifications → Postgres app-facing rows: DONE. Server module
    (`notification-service` + routes at `/api/v1/notifications`), Prisma indexes,
-   client `NotificationApiClient` + `kUseNotificationsApi` flag, screen wiring,
-   dual-use `markAllRead`/`deleteAll`, and auth-rejection + unit tests all
-   landed. Push delivery (OneSignal) is unchanged; only the persistent in-app
-   inbox migrated. Flag stays false until production cutover.
+   client `NotificationApiClient` + `kUseNotificationsApi` flag, screen + badge
+   wiring (badge, mark-read, mark-all, delete all route through the API in flag
+   mode; `markRelatedAsRead` no-ops with a badge refresh because v1 has no
+   "mark related" endpoint), dual-use service paths, and auth-rejection + unit
+   tests all landed. Push delivery (OneSignal) is unchanged; only the persistent
+   in-app inbox migrated. Flag stays false until production cutover.

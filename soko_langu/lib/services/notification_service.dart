@@ -9,6 +9,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'api_config.dart';
+import 'notification_api.dart';
 import 'localization_service.dart';
 import 'local_notification_service.dart';
 import 'notification_lang.dart';
@@ -371,13 +372,18 @@ class NotificationService {
     final user = _auth.currentUser;
     if (user == null) return;
     try {
-      final snap = await _db
-          .collection('notifications')
-          .where('userId', isEqualTo: user.uid)
-          .where('isRead', isEqualTo: false)
-          .count()
-          .get();
-      final count = snap.count ?? 0;
+      final int count;
+      if (ApiConfig.kUseNotificationsApi) {
+        count = await NotificationApiClient().fetchUnreadCount();
+      } else {
+        final snap = await _db
+            .collection('notifications')
+            .where('userId', isEqualTo: user.uid)
+            .where('isRead', isEqualTo: false)
+            .count()
+            .get();
+        count = snap.count ?? 0;
+      }
       _unreadController.add(count);
     } catch (_) {
       // non-critical
@@ -386,9 +392,13 @@ class NotificationService {
 
   Future<void> markAsRead(String notifId) async {
     try {
-      await _db.collection('notifications').doc(notifId).update({
-        'isRead': true,
-      });
+      if (ApiConfig.kUseNotificationsApi) {
+        await NotificationApiClient().markRead(notifId);
+      } else {
+        await _db.collection('notifications').doc(notifId).update({
+          'isRead': true,
+        });
+      }
     } catch (e) {
       debugPrint('markAsRead: $e');
     }
@@ -398,6 +408,10 @@ class NotificationService {
     final user = _auth.currentUser;
     if (user == null) return;
     try {
+      if (ApiConfig.kUseNotificationsApi) {
+        await NotificationApiClient().markAllRead();
+        return;
+      }
       DocumentSnapshot? lastDoc;
       while (true) {
         var query = _db
@@ -430,6 +444,13 @@ class NotificationService {
   ) async {
     final user = _auth.currentUser;
     if (user == null || type == null || type.isEmpty) return;
+    // Postgres-backed inbox: Firestore writes would target the wrong store, and
+    // the v1 API has no "mark related" endpoint, so nothing to write here — just
+    // refresh the badge (which already reads Postgres via the API in flag mode).
+    if (ApiConfig.kUseNotificationsApi) {
+      _syncBadge();
+      return;
+    }
     try {
       final snap = await _db
           .collection('notifications')
@@ -534,6 +555,9 @@ class NotificationService {
 
   Future<bool> deleteNotification(String notifId) async {
     try {
+      if (ApiConfig.kUseNotificationsApi) {
+        return await NotificationApiClient().delete(notifId);
+      }
       final user = _auth.currentUser;
       if (user == null) return false;
       final doc = await _db.collection('notifications').doc(notifId).get();
